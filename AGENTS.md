@@ -16,7 +16,7 @@ Never commit in `D:/00_Work/01_CaseLoad_Select/05_Product/caseload-select-app` (
 
 ## Readable prose measure
 
-Paragraph copy inside wide portal components must use a maximum readable measure of `65ch`. Put `readable-prose` on the component root so semantic paragraphs inherit the shared rule, and use `measure-readable` for long prose carried by a non-paragraph element or for an inner paragraph inside a full-width notice.
+Paragraph copy inside wide portal components must use a maximum readable measure of `65ch`, and long headings must use the shared `30ch` heading measure. Put `readable-prose` on the component root so semantic paragraphs and headings inherit the shared rules. Use `measure-readable` for long body copy carried by a non-paragraph element, and `measure-heading` for a heading outside a readable-prose scope.
 
 Do not bypass the shared measure with Tailwind `max-w-*` classes or inline `width`, `maxWidth`, or `maxInlineSize` styles on readable copy. Labels, tables, structured data, code and deliberately short lines may remain wide. When a semantic prose element genuinely needs an exception, add `data-readable-measure-exception="a concise reason"` to that element or an enclosing data region. The reason must be a non-empty string literal so the exception is reviewable.
 

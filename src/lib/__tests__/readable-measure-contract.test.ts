@@ -9,7 +9,8 @@ const targetFiles = [
   "src/components/portal/SecureImportRoom.tsx",
   "src/components/portal/SecureImportTrustGuide.tsx",
 ] as const;
-const semanticProseTags = new Set(["p", "li", "dd", "blockquote"]);
+const semanticBodyTags = new Set(["p", "li", "dd", "blockquote"]);
+const semanticHeadingTags = new Set(["h1", "h2", "h3"]);
 const prohibitedInlineSizeProperties = new Set(["width", "maxWidth", "maxInlineSize"]);
 const genericExceptionReasons = new Set(["exception", "needed", "layout", "todo"]);
 const nonProseTextTags = new Set([
@@ -176,9 +177,13 @@ describe("readable prose measure contract", () => {
   it("defines a zero-specificity 65ch utility scoped to opted-in prose surfaces", () => {
     const css = read("src/app/globals.css");
     expect(css).toContain("--measure-readable: 65ch;");
+    expect(css).toContain("--measure-heading: 30ch;");
     expect(css).toContain(":where(.measure-readable)");
+    expect(css).toContain(":where(.measure-heading)");
     expect(css).toContain(":where(.readable-prose) :where(p, li, dd, blockquote)");
+    expect(css).toContain(":where(.readable-prose) :where(h1, h2, h3)");
     expect(css).toContain("max-inline-size: var(--measure-readable);");
+    expect(css).toContain("max-inline-size: var(--measure-heading);");
     expect(css).toContain(":where([data-readable-measure-exception]:not([data-readable-measure-exception=\"\"]))");
     expect(css).not.toMatch(/(^|[,{]\s*)p\s*\{/m);
   });
@@ -206,9 +211,10 @@ describe("readable prose measure contract", () => {
           }
 
           const tokens = classTokens(opening);
-          const semanticProse = semanticProseTags.has(tagName(opening));
-          const explicitProse = tokens?.includes("measure-readable") === true;
-          if (semanticProse || explicitProse) {
+          const semanticBody = semanticBodyTags.has(tagName(opening));
+          const semanticHeading = semanticHeadingTags.has(tagName(opening));
+          const explicitMeasure = tokens?.some((token) => token === "measure-readable" || token === "measure-heading") === true;
+          if (semanticBody || semanticHeading || explicitMeasure) {
             const exempt = (enclosingExceptionReason(node)?.trim().length ?? 0) > 0;
             if (!exempt && tokens === null) {
               violations.push(`${jsxLocation(source, opening)} readable copy has a dynamic className`);
@@ -225,10 +231,11 @@ describe("readable prose measure contract", () => {
 
           if (
             ts.isJsxElement(node)
-            && !semanticProse
+            && !semanticBody
+            && !semanticHeading
             && !nonProseTextTags.has(tagName(opening))
             && directStaticTextLength(node) >= 120
-            && !explicitProse
+            && !explicitMeasure
             && !hasReviewableExceptionReason(opening)
           ) {
             violations.push(`${jsxLocation(source, opening)} has long direct text without measure-readable or a reasoned exception`);

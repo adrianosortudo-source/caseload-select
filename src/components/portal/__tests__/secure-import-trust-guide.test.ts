@@ -9,15 +9,25 @@ describe("Secure Import Room trust guide", () => {
   const guide = read("src", "components", "portal", "SecureImportTrustGuide.tsx");
   const room = read("src", "components", "portal", "SecureImportRoom.tsx");
   const page = read("src", "app", "portal", "[firmId]", "clients", "import", "page.tsx");
+  const clientsPage = read("src", "app", "portal", "[firmId]", "clients", "page.tsx");
+  const css = read("src", "app", "globals.css");
 
   it("opts both surfaces into the shared readable measure without narrowing data regions", () => {
     expect(guide).toContain('className="readable-prose space-y-6"');
     expect(room).toContain('className="readable-prose space-y-6"');
     expect(room).toContain('className="measure-readable"');
+    expect(css).toContain("--measure-readable: 65ch");
+    expect(css).toContain("--measure-heading: 30ch");
+    expect(guide.match(/measure-heading/g)?.length ?? 0).toBeGreaterThanOrEqual(6);
+    expect(room.match(/measure-heading/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
     expect(guide).toContain('data-readable-measure-exception="eight-column CSV data table"');
     expect(room).toContain('data-readable-measure-exception="compact import summary data"');
     expect(guide).not.toMatch(/<p className="[^"]*max-w-/);
     expect(room).not.toMatch(/<p(?:\s+id="[^"]+")? className="[^"]*max-w-/);
+    expect(guide).not.toMatch(/<h[1-3][^>]*max-w-/);
+    expect(room).not.toMatch(/<h[1-3][^>]*max-w-/);
+    expect(clientsPage).toContain('className="readable-prose mb-8');
+    expect(clientsPage).not.toContain("max-w-2xl");
   });
 
   it("states the transient processing boundary instead of claiming a direct browser-to-CRM upload", () => {
@@ -74,9 +84,25 @@ describe("Secure Import Room trust guide", () => {
     expect(guide).toContain("(opens in a new tab)");
   });
 
-  it("places the guide before the file-selection control", () => {
-    expect(room.indexOf("{trustGuide}")).toBeLessThan(room.indexOf('id="relationship-import-file"'));
+  it("keeps one upload control and the full action flow before the long trust guide", () => {
+    const uploadIndex = room.indexOf('id="relationship-import-file"');
+    const guideIndex = room.indexOf("{trustGuide}");
+    expect(room.match(/type="file"/g)).toHaveLength(1);
+    expect(uploadIndex).toBeGreaterThan(-1);
+    expect(uploadIndex).toBeLessThan(guideIndex);
+    expect(room.indexOf('id="import-status-heading"')).toBeLessThan(guideIndex);
+    expect(room.indexOf("{error && (")).toBeLessThan(guideIndex);
     expect(page).toContain("trustGuide={<SecureImportTrustGuide />}");
+  });
+
+  it("gives the operative panel restrained priority and protects narrow layouts", () => {
+    expect(room).toContain('className="border border-gold-on-light bg-highlight p-5 sm:p-6"');
+    expect(room).not.toContain("bg-gradient");
+    expect(room).not.toContain("border-l-");
+    expect(room).toContain("min-w-0 max-w-full");
+    expect(room).toContain("w-48 max-w-full");
+    expect(room).toContain("break-words text-sm");
+    expect(guide).toContain("overflow-x-auto");
   });
 
   it("associates the file requirements and progress updates with accessible controls", () => {
@@ -84,5 +110,6 @@ describe("Secure Import Room trust guide", () => {
     expect(room).toContain('aria-label="Import progress"');
     expect(room).toContain('role="status"');
     expect(room).toContain('aria-atomic="true"');
+    expect(room.match(/focus-visible:ring-2/g)?.length ?? 0).toBeGreaterThanOrEqual(8);
   });
 });
