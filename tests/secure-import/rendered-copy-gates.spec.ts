@@ -19,7 +19,7 @@ for (const width of VIEWPORT_WIDTHS) {
     await waitForStableLayout(page);
 
     await expect(page.locator("[data-copy-container]")).toHaveCount(2);
-    await expect(page.locator("[data-full-width-copy]")).toHaveCount(2);
+    await expect(page.locator("[data-full-width-copy]")).toHaveCount(4);
     await expect(page.locator("[data-copy-orphan-guard]")).toHaveCount(4);
     await expect(page.locator("#relationship-import-file")).toBeDisabled();
 
@@ -59,9 +59,10 @@ for (const width of VIEWPORT_WIDTHS) {
       }
 
       for (const guard of document.querySelectorAll<HTMLElement>("[data-copy-orphan-guard]")) {
-        const wordRects: Array<{ top: number; word: string }> = [];
+        const wordFragments: Array<{ top: number; left: number; right: number; word: string; wordId: number }> = [];
         const walker = document.createTreeWalker(guard, NodeFilter.SHOW_TEXT);
         let textNode = walker.nextNode();
+        let wordId = 0;
         while (textNode) {
           const text = textNode.textContent ?? "";
           for (const match of text.matchAll(/\S+/g)) {
@@ -69,22 +70,31 @@ for (const width of VIEWPORT_WIDTHS) {
             const range = document.createRange();
             range.setStart(textNode, start);
             range.setEnd(textNode, start + match[0].length);
-            const rect = range.getBoundingClientRect();
-            if (rect.width > 0 && rect.height > 0) wordRects.push({ top: rect.top, word: match[0] });
+            for (const rect of Array.from(range.getClientRects())) {
+              if (rect.width > 0 && rect.height > 0) {
+                wordFragments.push({ top: rect.top, left: rect.left, right: rect.right, word: match[0], wordId });
+              }
+            }
+            wordId += 1;
           }
           textNode = walker.nextNode();
         }
 
-        wordRects.sort((a, b) => a.top - b.top);
-        const lines: Array<Array<{ top: number; word: string }>> = [];
-        for (const wordRect of wordRects) {
-          const line = lines.find((candidate) => Math.abs(candidate[0].top - wordRect.top) <= tolerance);
-          if (line) line.push(wordRect);
-          else lines.push([wordRect]);
+        wordFragments.sort((a, b) => a.top - b.top || a.left - b.left);
+        const lines: Array<{ top: number; fragments: typeof wordFragments }> = [];
+        for (const fragment of wordFragments) {
+          const line = lines.find((candidate) => Math.abs(candidate.top - fragment.top) <= tolerance);
+          if (line) line.fragments.push(fragment);
+          else lines.push({ top: fragment.top, fragments: [fragment] });
         }
-        if (lines.length >= 2 && lines.at(-1)?.length === 1) {
+        const finalLine = lines.at(-1);
+        const finalLineWords = finalLine ? new Set(finalLine.fragments.map((fragment) => fragment.wordId)) : new Set<number>();
+        if (lines.length >= 2 && finalLine && finalLineWords.size === 1) {
+          const finalLineWidth = Math.max(...finalLine.fragments.map((fragment) => fragment.right))
+            - Math.min(...finalLine.fragments.map((fragment) => fragment.left));
           orphanFailures.push(
-            `${guard.getAttribute("data-copy-orphan-guard")}: final line contains only "${lines.at(-1)?.[0].word}"`,
+            `${guard.getAttribute("data-copy-orphan-guard")}: final line contains only `
+            + `"${finalLine.fragments[0].word}" across ${finalLineWidth.toFixed(2)}px`,
           );
         }
       }

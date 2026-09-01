@@ -257,13 +257,18 @@ export default function SecureImportRoom({
         data-copy-container="prepare-panel"
       >
         <div className="grid items-start gap-x-4 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <div className="min-w-0 sm:col-start-1 sm:row-start-1">
-            <p className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-navy">Prepare</p>
-            <h2 id="prepare-heading" className="mt-1 text-balance text-xl font-bold text-navy" data-copy-orphan-guard="heading">Select the completed relationship import CSV</h2>
-          </div>
+          <p className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-navy sm:col-start-1 sm:row-start-1">Prepare</p>
+          <h2
+            id="prepare-heading"
+            className="col-span-full text-balance text-xl font-bold text-navy sm:row-start-2"
+            data-full-width-copy="heading"
+            data-copy-orphan-guard="heading"
+          >
+            Select the completed relationship import CSV
+          </h2>
           <p
             id="prepare-description"
-            className="col-span-full text-pretty text-sm leading-6 text-black/60 sm:row-start-2"
+            className="col-span-full text-pretty text-sm leading-6 text-black/60 sm:row-start-3"
             data-full-width-copy="supporting"
             data-copy-orphan-guard="supporting"
           >

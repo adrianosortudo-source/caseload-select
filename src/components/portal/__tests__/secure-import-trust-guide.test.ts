@@ -10,7 +10,7 @@ describe("Secure Import Room trust guide", () => {
   const room = read("src", "components", "portal", "SecureImportRoom.tsx");
   const page = read("src", "app", "portal", "[firmId]", "clients", "import", "page.tsx");
   const clientsPage = read("src", "app", "portal", "[firmId]", "clients", "page.tsx");
-  const renderedFixture = read("src", "app", "test-screen", "secure-import", "page.tsx");
+  const renderedFixture = read("src", "app", "test-screen", "secure-import", "page.tsx");`n  const renderedBrowserTest = read("tests", "secure-import", "rendered-copy-gates.spec.ts");
   const css = read("src", "app", "globals.css");
 
   it("uses the full inner width for component copy and keeps data regions functional", () => {
@@ -126,13 +126,13 @@ describe("Secure Import Room trust guide", () => {
     for (const source of [room, guide]) {
       expect(source).not.toContain(oldActionReducedTrack);
       expect(source).toContain('data-copy-action="download-template"');
-      expect(source).toContain('data-full-width-copy="supporting"');
+      expect(source).toContain('data-full-width-copy="heading"');`n      expect(source).toContain('data-full-width-copy="supporting"');
       expect(source).toContain('data-copy-orphan-guard="supporting"');
-      expect(source).toContain("col-span-full text-pretty");
+      expect(source).toContain("col-span-full text-balance");`n      expect(source).toContain("col-span-full text-pretty");`n      expect(source.match(/data-full-width-copy=/g)).toHaveLength(2);`n      expect(source).toContain("sm:row-start-2");`n      expect(source).toContain("sm:row-start-3");
     }
     expect(room).toContain('data-copy-container="prepare-panel"');
     expect(guide).toContain('data-copy-container="template-preview-panel"');
-    expect(guide).toContain('data-secure-import-scroller="csv-preview"');
+    expect(guide).toContain('data-secure-import-scroller="csv-preview"');`n    expect(renderedBrowserTest).toContain('toHaveCount(4)');`n    expect(renderedBrowserTest).toContain("range.getClientRects()");`n    expect(renderedBrowserTest).not.toContain("range.getBoundingClientRect()");
   });
 
   it("associates the file requirements and progress updates with accessible controls", () => {

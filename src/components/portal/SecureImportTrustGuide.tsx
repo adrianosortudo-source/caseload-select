@@ -204,13 +204,16 @@ export default function SecureImportTrustGuide() {
         data-copy-container="template-preview-panel"
       >
         <div className="grid items-start gap-x-4 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto]">
-          <div className="min-w-0 sm:col-start-1 sm:row-start-1">
-            <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/65">Template preview</p>
-            <h2 id="template-preview-heading" className="mt-1 text-balance text-xl font-bold text-navy sm:text-2xl" data-copy-orphan-guard="heading">
-              Eight columns, contact and relationship facts only
-            </h2>
-          </div>
-          <p className="col-span-full text-pretty text-sm leading-6 text-black/60 sm:row-start-2" data-full-width-copy="supporting" data-copy-orphan-guard="supporting">
+          <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/65 sm:col-start-1 sm:row-start-1">Template preview</p>
+          <h2
+            id="template-preview-heading"
+            className="col-span-full text-balance text-xl font-bold text-navy sm:row-start-2 sm:text-2xl"
+            data-full-width-copy="heading"
+            data-copy-orphan-guard="heading"
+          >
+            Eight columns, contact and relationship facts only
+          </h2>
+          <p className="col-span-full text-pretty text-sm leading-6 text-black/60 sm:row-start-3" data-full-width-copy="supporting" data-copy-orphan-guard="supporting">
             This preview uses fictional people. Only these eight columns are used. Keep the names exactly as shown and
             remove every other column before importing.
           </p>
