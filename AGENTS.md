@@ -18,6 +18,6 @@ Never commit in `D:/00_Work/01_CaseLoad_Select/05_Product/caseload-select-app` (
 
 Text inside a UI component must use that component's full usable inner width and wrap only at the component padding or a real sibling layout boundary. Do not impose arbitrary reading measures on headings, paragraphs, list items, summaries, captions or other component copy with `max-w-*`, `maxWidth`, `maxInlineSize`, `ch` widths or legacy readable-measure classes and variables.
 
-Editorial and functional exceptions must be genuine, narrow and reviewable. Examples include long-form legal or article reading frames, structural page or form widths, modal geometry, tables, controls, chat bubbles and functional URL truncation. Record each exception by exact file and reason in the component-text width contract. Do not use directory-wide exclusions, and do not classify ordinary UI cards, panels, status copy or marketing sections as editorial content.
+Editorial and functional exceptions must be genuine, narrow and reviewable. Examples include long-form legal or article reading frames, structural page or form widths, modal geometry, tables, controls, chat bubbles and functional URL truncation. Record each exception by exact file and reason in the relevant scoped contract. Do not use directory-wide exclusions, and do not classify ordinary UI cards, panels or status copy as editorial content.
 
-Run `npm run check:component-text-width` after changing UI copy layout, shared component styles or an approved exception.
+Run `npm run check:secure-import-width` after changing the Clients or Secure Import component text layout or shared selectors used by that entry path.

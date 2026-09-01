@@ -13,7 +13,7 @@
     "lint": "eslint .",
     "check:em-dash-marketing": "node scripts/check-no-em-dash-marketing.mjs",
     "check:build-assets": "node scripts/check-self-contained-build-assets.mjs",
-    "check:component-text-width": "vitest run src/lib/__tests__/component-text-width-contract.test.ts",
+    "check:secure-import-width": "vitest run src/lib/__tests__/secure-import-width-contract.test.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "check:engine-sync": "bash scripts/check-engine-sync.sh",
