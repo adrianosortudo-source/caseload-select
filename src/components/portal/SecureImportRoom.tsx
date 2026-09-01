@@ -227,8 +227,8 @@ export default function SecureImportRoom({
   return (
     <div className="readable-prose space-y-6">
       <header>
-        <p className="font-display text-[0.72rem] uppercase tracking-[0.14em] text-[color:var(--portal-accent)]">Clients / Secure import</p>
-        <h1 className="mt-2 text-3xl font-extrabold text-navy">Secure Import Room</h1>
+        <p className="font-display text-[0.72rem] uppercase tracking-[0.14em] text-field-label">Clients / Secure import</p>
+        <h1 className="measure-heading mt-2 text-3xl font-extrabold text-navy">Secure Import Room</h1>
         <p className="mt-2 text-sm leading-6 text-black/60">
           Validate your firm&apos;s relationship database in this browser, then authorize a protected import into your firm&apos;s CRM.
         </p>
@@ -251,18 +251,16 @@ export default function SecureImportRoom({
         </div>
       )}
 
-      {trustGuide}
-
-      <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="prepare-heading">
+      <section className="border border-gold-on-light bg-highlight p-5 sm:p-6" aria-labelledby="prepare-heading">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/45">Prepare</p>
-            <h2 id="prepare-heading" className="mt-1 text-xl font-bold text-navy">Select the completed relationship import CSV</h2>
+          <div className="min-w-0">
+            <p className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-navy">Prepare</p>
+            <h2 id="prepare-heading" className="measure-heading mt-1 text-xl font-bold text-navy">Select the completed relationship import CSV</h2>
             <p id="prepare-description" className="mt-2 text-sm leading-6 text-black/60">
               The check happens in this browser. You will review the row count, suppression state and any corrections before authorization.
             </p>
           </div>
-          <a href="/templates/caseload-select-relationship-import.csv" download className="text-sm font-bold text-navy underline underline-offset-4">
+          <a href="/templates/caseload-select-relationship-import.csv" download className="shrink-0 text-sm font-bold text-navy underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2">
             Download CSV template
           </a>
         </div>
@@ -274,7 +272,7 @@ export default function SecureImportRoom({
           aria-describedby="prepare-description import-file-requirements"
           disabled={controlsDisabled}
           onChange={(event) => void chooseFile(event.target.files?.[0] ?? null)}
-          className="mt-2 block w-full border border-black/20 bg-parchment px-3 py-3 text-sm file:mr-4 file:border-0 file:bg-navy file:px-4 file:py-2 file:font-bold file:text-white disabled:opacity-50"
+          className="mt-2 block min-w-0 max-w-full border border-black/20 bg-white px-3 py-3 text-sm outline-none file:mr-4 file:border-0 file:bg-navy file:px-4 file:py-2 file:font-bold file:text-white focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 disabled:opacity-50"
         />
         <p id="import-file-requirements" className="mt-2 text-xs leading-5 text-black/65">
           CSV only, up to 5 MB and {maxRows.toLocaleString()} contacts. Use the template headers exactly as shown above.
@@ -283,8 +281,8 @@ export default function SecureImportRoom({
 
       {(rows.length > 0 || issues.length > 0) && (
         <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="check-heading">
-          <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/45">Check</p>
-          <h2 id="check-heading" className="mt-1 text-xl font-bold text-navy">Review before authorization</h2>
+          <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-field-label">Check</p>
+          <h2 id="check-heading" className="measure-heading mt-1 text-xl font-bold text-navy">Review before authorization</h2>
           {rows.length > 0 && (
             <div className="mt-4 grid grid-cols-2 gap-px bg-black/10 sm:grid-cols-4">
               <Summary label="Ready" value={rows.length} />
@@ -305,14 +303,14 @@ export default function SecureImportRoom({
           )}
           {rows.length > 0 && (
             <label className="mt-5 flex items-start gap-3 border border-black/10 bg-parchment p-4 text-sm leading-6 text-navy">
-              <input type="checkbox" checked={attested} disabled={controlsDisabled} onChange={(event) => setAttested(event.target.checked)} className="mt-1" />
+              <input type="checkbox" checked={attested} disabled={controlsDisabled} onChange={(event) => setAttested(event.target.checked)} className="mt-1 outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2" />
               <span className="measure-readable">
                 I am authorized by this firm to import this relationship database. I understand that importing a contact does not authorize marketing or client communications.
               </span>
             </label>
           )}
           {status === "prepare" && rows.length > 0 && (
-            <button type="button" onClick={() => void requestCode()} disabled={controlsDisabled || !attested} className="mt-5 bg-navy px-5 py-3 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-40">
+            <button type="button" onClick={() => void requestCode()} disabled={controlsDisabled || !attested} className="mt-5 bg-navy px-5 py-3 text-sm font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-40">
               {busy ? "Sending code..." : "Send authorization code"}
             </button>
           )}
@@ -321,12 +319,12 @@ export default function SecureImportRoom({
 
       {status === "authorize" && (
         <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="authorize-heading">
-          <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/45">Authorize</p>
-          <h2 id="authorize-heading" className="mt-1 text-xl font-bold text-navy">Confirm this sensitive action</h2>
+          <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-field-label">Authorize</p>
+          <h2 id="authorize-heading" className="measure-heading mt-1 text-xl font-bold text-navy">Confirm this sensitive action</h2>
           <p className="mt-2 text-sm text-black/60">Enter the six-digit code sent to {sentTo}.</p>
           <label htmlFor="secure-import-code" className="mt-4 block text-sm font-bold text-navy">Authorization code</label>
-          <input id="secure-import-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-2 w-48 border border-black/20 bg-parchment px-3 py-3 text-lg tracking-[0.3em]" />
-          <button type="button" onClick={() => void authorizeAndImport()} disabled={busy || code.length !== 6} className="mt-4 block bg-navy px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
+          <input id="secure-import-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-2 w-48 max-w-full border border-black/20 bg-parchment px-3 py-3 text-lg tracking-[0.3em] outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2" />
+          <button type="button" onClick={() => void authorizeAndImport()} disabled={busy || code.length !== 6} className="mt-4 block bg-navy px-5 py-3 text-sm font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 disabled:opacity-40">
             {busy ? "Starting securely..." : "Authorize and start import"}
           </button>
         </section>
@@ -334,9 +332,9 @@ export default function SecureImportRoom({
 
       {(status === "importing" || status === "results") && (
         <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="import-status-heading">
-          <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/45">{status === "results" ? "Results" : "Import"}</p>
-          <h2 id="import-status-heading" className="mt-1 text-xl font-bold text-navy">{status === "results" ? "Import receipt" : "Creating held contact records"}</h2>
-          <p className="mt-2 text-sm text-black/60" role="status" aria-live="polite" aria-atomic="true">
+          <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-field-label">{status === "results" ? "Results" : "Import"}</p>
+          <h2 id="import-status-heading" className="measure-heading mt-1 text-xl font-bold text-navy">{status === "results" ? "Import receipt" : "Creating held contact records"}</h2>
+          <p className="mt-2 break-words text-sm text-black/60" role="status" aria-live="polite" aria-atomic="true">
             Processed {counts.processed} of {rows.length}. Batch {batchId || "preparing"}.
           </p>
           <progress
@@ -353,7 +351,7 @@ export default function SecureImportRoom({
             <Summary label="Require reconciliation" value={counts.reconcile} />
           </div>
           {resumeReady && status === "importing" && (
-            <button type="button" onClick={() => void retryImport()} disabled={busy} className="mt-5 bg-navy px-5 py-3 text-sm font-bold text-white disabled:opacity-40">
+            <button type="button" onClick={() => void retryImport()} disabled={busy} className="mt-5 bg-navy px-5 py-3 text-sm font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 disabled:opacity-40">
               {busy ? "Resuming..." : "Resume this verified batch"}
             </button>
           )}
@@ -362,14 +360,16 @@ export default function SecureImportRoom({
 
       {error && (
         <div className="border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900" role="alert">
-          <p>Import paused: {error.replaceAll("_", " ")}. No uncertain row will be created again without a fresh duplicate check.</p>
+          <p className="break-words">Import paused: {error.replaceAll("_", " ")}. No uncertain row will be created again without a fresh duplicate check.</p>
           {batchId && status === "importing" && (
-            <button type="button" onClick={() => void retryImport()} disabled={busy} className="mt-3 border border-red-900 px-4 py-2 font-bold disabled:opacity-40">
+            <button type="button" onClick={() => void retryImport()} disabled={busy} className="mt-3 border border-red-900 px-4 py-2 font-bold outline-none focus-visible:ring-2 focus-visible:ring-red-900 focus-visible:ring-offset-2 disabled:opacity-40">
               {busy ? "Resuming..." : "Resume import"}
             </button>
           )}
         </div>
       )}
+
+      {trustGuide}
     </div>
   );
 }
@@ -380,8 +380,8 @@ function Summary({ label, value }: { label: string; value: string | number }) {
       className="bg-parchment px-4 py-3"
       data-readable-measure-exception="compact import summary data"
     >
-      <p className="font-display text-[0.65rem] uppercase tracking-[0.12em] text-black/45">{label}</p>
-      <p className="mt-1 text-lg font-extrabold text-navy">{value}</p>
+      <p className="font-display text-[0.65rem] uppercase tracking-[0.12em] text-field-label">{label}</p>
+      <p className="mt-1 break-words text-lg font-extrabold text-navy">{value}</p>
     </div>
   );
 }

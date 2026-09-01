@@ -1,5 +1,5 @@
 /**
- * Lawyer home — active clients (S8 Phase 1 Story 5).
+ * Lawyer home - active clients (S8 Phase 1 Story 5).
  *
  * URL: /portal/[firmId]/clients
  *
@@ -60,20 +60,20 @@ export default async function LawyerClientsHomePage({ params }: PageProps) {
         </p>
       </header>
 
-      <section className="mb-8 border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="relationship-import-heading">
-        <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-[color:var(--portal-accent)]">Relationship database</p>
+      <section className="readable-prose mb-8 border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="relationship-import-heading">
+        <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-field-label">Relationship database</p>
         <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 id="relationship-import-heading" className="text-xl font-extrabold text-navy">Bring your existing contacts into CaseLoad Select</h2>
-            <p className="mt-2 max-w-2xl text-sm leading-6 text-black/60">
+          <div className="min-w-0">
+            <h2 id="relationship-import-heading" className="measure-heading text-xl font-extrabold text-navy">Bring your existing contacts into CaseLoad Select</h2>
+            <p className="mt-2 text-sm leading-6 text-black/60">
               Prepare and review the import here. The original CSV stays in your browser, possible duplicates are held for review, and no messages are sent.
             </p>
           </div>
           <div className="flex shrink-0 flex-wrap gap-3">
-            <a href="/templates/caseload-select-relationship-import.csv" download className="border border-navy/20 px-4 py-2.5 text-sm font-bold text-navy hover:border-navy">
+            <a href="/templates/caseload-select-relationship-import.csv" download className="border border-navy/20 px-4 py-2.5 text-sm font-bold text-navy outline-none hover:border-navy focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2">
               Download CSV template
             </a>
-            <Link href={`/portal/${firmId}/clients/import`} className="bg-navy px-4 py-2.5 text-sm font-bold text-white">
+            <Link href={`/portal/${firmId}/clients/import`} className="bg-navy px-4 py-2.5 text-sm font-bold text-white outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2">
               {viewer.isOperator ? 'Inspect secure import room' : 'Open secure import room'}
             </Link>
           </div>

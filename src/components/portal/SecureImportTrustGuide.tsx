@@ -85,7 +85,7 @@ export default function SecureImportTrustGuide() {
     <div className="readable-prose space-y-6">
       <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="data-path-heading">
         <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/65">How your data moves</p>
-        <h2 id="data-path-heading" className="mt-1 max-w-3xl text-xl font-bold text-navy sm:text-2xl">
+        <h2 id="data-path-heading" className="measure-heading mt-1 text-xl font-bold text-navy sm:text-2xl">
           Your spreadsheet is never handed to CaseLoad Select staff
         </h2>
         <p className="mt-3 text-sm leading-6 text-black/65">
@@ -98,10 +98,10 @@ export default function SecureImportTrustGuide() {
         <ol className="mt-6 grid list-none gap-px border border-black/10 bg-black/10 p-0 md:grid-cols-2">
           {IMPORT_PATH.map((item) => (
             <li key={item.label} className="bg-parchment p-4 sm:p-5">
-              <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.12em] text-gold-on-light">
+              <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.12em] text-field-label">
                 {item.label}
               </p>
-              <h3 className="mt-2 text-base font-bold text-navy">{item.title}</h3>
+              <h3 className="measure-heading mt-2 text-base font-bold text-navy">{item.title}</h3>
               <p className="mt-2 text-sm leading-6 text-black/65">{item.body}</p>
             </li>
           ))}
@@ -120,7 +120,7 @@ export default function SecureImportTrustGuide() {
 
       <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="standards-heading">
         <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/65">Verified infrastructure</p>
-        <h2 id="standards-heading" className="mt-1 text-xl font-bold text-navy sm:text-2xl">
+        <h2 id="standards-heading" className="measure-heading mt-1 text-xl font-bold text-navy sm:text-2xl">
           Independently assessed controls, with the limits stated plainly
         </h2>
         <p className="mt-3 text-sm leading-6 text-black/65">
@@ -141,13 +141,13 @@ export default function SecureImportTrustGuide() {
         </p>
 
         <details className="mt-5 border border-black/10 bg-parchment open:bg-white">
-          <summary className="cursor-pointer px-4 py-4 text-sm font-bold text-navy outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-navy sm:px-5">
+          <summary className="measure-heading cursor-pointer px-4 py-4 text-sm font-bold text-navy outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-navy sm:px-5">
             Read the technical controls and privacy terms
           </summary>
           <div className="border-t border-black/10 px-4 py-5 sm:px-5">
             <div className="grid gap-5 text-sm leading-6 text-black/65 md:grid-cols-2">
               <div>
-                <h3 className="font-bold text-navy">Platform and application controls</h3>
+                <h3 className="measure-heading font-bold text-navy">Platform and application controls</h3>
                 <ul className="mt-2 list-disc space-y-2 pl-5">
                   <li>Logical tenant separation, firm-specific identifiers and authorization rules.</li>
                   <li>Role-based access control, two-factor authentication, audit logs and just-in-time staff access.</li>
@@ -158,7 +158,7 @@ export default function SecureImportTrustGuide() {
                 </ul>
               </div>
               <div>
-                <h3 className="font-bold text-navy">Privacy and processing controls</h3>
+                <h3 className="measure-heading font-bold text-navy">Privacy and processing controls</h3>
                 <ul className="mt-2 list-disc space-y-2 pl-5">
                   <li>HighLevel&apos;s DPA assigns customer and HighLevel roles as controller, processor or subprocessor according to the processing context. The firm must confirm the roles that apply to its use.</li>
                   <li>HighLevel&apos;s DPA includes confidentiality, access limitation, incident response and deletion obligations.</li>
@@ -170,10 +170,10 @@ export default function SecureImportTrustGuide() {
             </div>
             <div className="mt-5 border border-gold/40 bg-gold/10 px-4 py-3 text-sm leading-6 text-navy">
               <p>
-              Do not include medical records, financial information, government identifiers, legal advice, documents or
-              privileged matter facts. This room is not approved for protected health information. HighLevel is not HIPAA
-              compliant by default; its paid HIPAA package requires a Business Associate Agreement and enablement for each
-              applicable sub-account. This import room does not rely on that package.
+                Do not include medical records, financial information, government identifiers, legal advice, documents or
+                privileged matter facts. This room is not approved for protected health information. HighLevel is not HIPAA
+                compliant by default; its paid HIPAA package requires a Business Associate Agreement and enablement for each
+                applicable sub-account. This import room does not rely on that package.
               </p>
             </div>
             <div className="mt-5 text-xs leading-5 text-black/65">
@@ -202,7 +202,7 @@ export default function SecureImportTrustGuide() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-black/65">Template preview</p>
-            <h2 id="template-preview-heading" className="mt-1 text-xl font-bold text-navy sm:text-2xl">
+            <h2 id="template-preview-heading" className="measure-heading mt-1 text-xl font-bold text-navy sm:text-2xl">
               Eight columns, contact and relationship facts only
             </h2>
             <p className="mt-2 text-sm leading-6 text-black/60">
@@ -292,7 +292,7 @@ function ExampleRow({ values }: { values: readonly string[] }) {
     <tr className="bg-white">
       {values.map((value, index) => (
         <td key={`${index}-${value}`} className="border-b border-r border-black/10 px-3 py-2 last:border-r-0">
-          {value || <span className="text-black/25">blank</span>}
+          {value || <span className="text-field-label">blank</span>}
         </td>
       ))}
     </tr>
