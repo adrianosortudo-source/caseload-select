@@ -11,24 +11,49 @@ const semanticTextTags = new Set([
 const prohibitedInlineProperties = new Set(["maxWidth", "maxInlineSize"]);
 const contractPath = "src/lib/__tests__/component-text-width-contract.test.ts";
 
-const reviewedSemanticExceptions = new Map<string, string>([
-  [
-    "src/app/admin/prospecting-diagnostic/_components/ProspectingDiagnosticTool.tsx",
-    "Functional URL truncation prevents raw audit paths from widening diagnostic rows.",
-  ],
-  [
-    "src/app/admin/prospecting-diagnostic/_components/SavedDiagnosticDetail.tsx",
-    "Functional URL truncation prevents raw audit paths from widening diagnostic rows.",
-  ],
-  [
-    "src/app/portal/[firmId]/boards/BoardTabs.tsx",
-    "Compact channel and count data remains a deliberately bounded two-column summary row.",
-  ],
-  [
-    "src/app/widget-v3/[firmId]/ChatWidget.tsx",
-    "The centered completion copy belongs to the intentionally constrained chat-message surface.",
-  ],
-]);
+type SemanticWidthViolation = {
+  file: string;
+  tag: string;
+  kind: "class" | "style";
+  signature: string;
+  sourceLocation: string;
+};
+
+type ReviewedSemanticException = {
+  file: string;
+  tag: string;
+  kind: SemanticWidthViolation["kind"];
+  signature: string;
+  expectedMatches: number;
+  reason: string;
+};
+
+const reviewedSemanticExceptions: readonly ReviewedSemanticException[] = [
+  {
+    file: "src/app/admin/prospecting-diagnostic/_components/ProspectingDiagnosticTool.tsx",
+    tag: "li",
+    kind: "class",
+    signature: "max-w-full",
+    expectedMatches: 1,
+    reason: "Functional URL truncation prevents raw audit paths from widening diagnostic rows.",
+  },
+  {
+    file: "src/app/admin/prospecting-diagnostic/_components/SavedDiagnosticDetail.tsx",
+    tag: "li",
+    kind: "class",
+    signature: "max-w-full",
+    expectedMatches: 1,
+    reason: "Functional URL truncation prevents raw audit paths from widening diagnostic rows.",
+  },
+  {
+    file: "src/app/portal/[firmId]/boards/BoardTabs.tsx",
+    tag: "li",
+    kind: "style",
+    signature: "maxWidth: 240",
+    expectedMatches: 1,
+    reason: "Compact channel and count data remains a deliberately bounded two-column summary row.",
+  },
+] as const;
 
 const deletedFiles = new Set(execFileSync(
   "git",
@@ -84,9 +109,9 @@ function location(source: ts.SourceFile, node: ts.Node): string {
   return `${source.fileName}:${position.line + 1}`;
 }
 
-function hasProhibitedWidthUtility(attributeNode: ts.JsxAttribute | null): boolean {
-  if (!attributeNode?.initializer) return false;
-  return /(?:^|[\s"'`}:])(?:[a-z0-9-]+:)*!?max-w-[^\s"'`}]+/i.test(attributeNode.initializer.getText());
+function prohibitedWidthUtilities(attributeNode: ts.JsxAttribute | null): string[] {
+  if (!attributeNode?.initializer) return [];
+  return attributeNode.initializer.getText().match(/(?:[a-z0-9-]+:)*!?max-w-(?:\[[^\]]+\]|[a-z0-9.-]+)/gi) ?? [];
 }
 
 function prohibitedInlineStyles(attributeNode: ts.JsxAttribute | null): string[] {
@@ -96,21 +121,22 @@ function prohibitedInlineStyles(attributeNode: ts.JsxAttribute | null): string[]
   return expression.properties.flatMap((property) => {
     if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property)) return [];
     const name = property.name?.getText().replace(/["']/g, "");
-    return name && prohibitedInlineProperties.has(name) ? [name] : [];
+    return name && prohibitedInlineProperties.has(name) ? [property.getText()] : [];
   });
 }
 
-function semanticWidthViolations(relativePath: string): string[] {
+function semanticWidthViolations(relativePath: string): SemanticWidthViolation[] {
   const source = parse(relativePath);
-  const violations: string[] = [];
+  const violations: SemanticWidthViolation[] = [];
   function visit(node: ts.Node): void {
     const opening = openingElement(node);
     if (opening && semanticTextTags.has(opening.tagName.getText())) {
-      if (hasProhibitedWidthUtility(attribute(opening, "className"))) {
-        violations.push(`${location(source, opening)} uses a max-width utility on semantic component text`);
+      const tag = opening.tagName.getText();
+      for (const signature of prohibitedWidthUtilities(attribute(opening, "className"))) {
+        violations.push({ file: relativePath, tag, kind: "class", signature, sourceLocation: location(source, opening) });
       }
-      for (const property of prohibitedInlineStyles(attribute(opening, "style"))) {
-        violations.push(`${location(source, opening)} uses inline ${property} on semantic component text`);
+      for (const signature of prohibitedInlineStyles(attribute(opening, "style"))) {
+        violations.push({ file: relativePath, tag, kind: "style", signature, sourceLocation: location(source, opening) });
       }
     }
     ts.forEachChild(node, visit);
@@ -138,25 +164,37 @@ describe("component text width contract", () => {
     expect(violations).toEqual([]);
   });
 
-  it("does not cap semantic component text without a reviewed file-level reason", () => {
+  it("does not cap semantic component text without an exact reviewed node signature", () => {
     const violations: string[] = [];
-    const exercisedExceptions = new Set<string>();
+    const matchCounts = new Map(reviewedSemanticExceptions.map((exception) => [exception, 0]));
 
     for (const file of jsxFiles) {
-      const fileViolations = semanticWidthViolations(file);
-      if (fileViolations.length === 0) continue;
-      const reason = reviewedSemanticExceptions.get(file)?.trim();
-      if (reason) {
-        exercisedExceptions.add(file);
-        continue;
+      for (const violation of semanticWidthViolations(file)) {
+        const exception = reviewedSemanticExceptions.find((candidate) => (
+          candidate.file === violation.file
+          && candidate.tag === violation.tag
+          && candidate.kind === violation.kind
+          && candidate.signature === violation.signature
+        ));
+        if (exception) {
+          matchCounts.set(exception, (matchCounts.get(exception) ?? 0) + 1);
+        } else {
+          violations.push(
+            `${violation.sourceLocation} <${violation.tag}> uses unreviewed ${violation.kind} signature ${violation.signature}`,
+          );
+        }
       }
-      violations.push(...fileViolations);
     }
 
     expect(violations).toEqual([]);
-    expect([...reviewedSemanticExceptions.entries()].every(([file, reason]) => (
-      trackedTextFiles.includes(file) && reason.trim().length >= 20 && exercisedExceptions.has(file)
-    ))).toBe(true);
+    for (const exception of reviewedSemanticExceptions) {
+      expect(trackedTextFiles, `${exception.file} must remain a tracked source file`).toContain(exception.file);
+      expect(exception.reason.trim().length, `${exception.file} exception needs a reviewable reason`).toBeGreaterThanOrEqual(20);
+      expect(
+        matchCounts.get(exception),
+        `${exception.file} <${exception.tag}> ${exception.kind} signature ${exception.signature}`,
+      ).toBe(exception.expectedMatches);
+    }
   });
 
   it("does not use character-based max-width declarations in source or prototypes", () => {

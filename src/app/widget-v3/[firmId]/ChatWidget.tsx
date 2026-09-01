@@ -332,7 +332,7 @@ function DoneScreen({
       </div>
       <div className="space-y-1.5">
         <p className="text-[15px] font-semibold text-black/80">{heading}</p>
-        <p className="text-[12.5px] text-black/45 leading-relaxed max-w-[260px] mx-auto">{body}</p>
+        <p className="text-[12.5px] text-black/45 leading-relaxed">{body}</p>
       </div>
       {cta && bookingUrl && (
         <a

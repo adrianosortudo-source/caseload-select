@@ -30,7 +30,7 @@
 .ccp-eyebrow{font-size:11px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--ccp-ink-soft);margin-bottom:10px}
 /* Orphan words are banned. `balance` evens out short headings, `pretty` keeps
    a lone word off the last line of running copy. Both degrade to normal
-   wrapping, so the copy itself must also not orphan at these max-widths. */
+   wrapping, so the copy itself must avoid orphans as component width changes. */
 .ccp-head{font-family:var(--font-manrope),system-ui,sans-serif;font-weight:800;font-size:25px;line-height:1.18;color:var(--ccp-navy);letter-spacing:-.01em;text-wrap:balance}
 .ccp-sq{display:inline-block;width:.5em;height:.5em;background:var(--ccp-gold);margin-left:.12em;vertical-align:baseline;transform:translateY(-.02em)}
 .ccp-lede{margin-top:14px;font-size:15px;color:var(--ccp-ink);text-wrap:pretty}
