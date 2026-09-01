@@ -42,7 +42,7 @@ CREATE TABLE public.channel_conversation_events (
   CONSTRAINT channel_conversation_events_status_check
     CHECK (status IN ('received', 'pending', 'sent', 'failed')),
   CONSTRAINT channel_conversation_events_actor_check
-    CHECK (actor_type IN ('lead', 'system', 'operator')),
+    CHECK (actor_type IN ('lead', 'system', 'operator', 'lawyer')),
   CONSTRAINT channel_conversation_events_body_check
     CHECK (char_length(body) BETWEEN 1 AND 10000),
   CONSTRAINT channel_conversation_events_shape_check
@@ -57,7 +57,7 @@ CREATE TABLE public.channel_conversation_events (
       (direction = 'outbound'
         AND status IN ('pending', 'sent', 'failed')
         AND source IN ('intake_automation', 'operator', 'expiry_cron')
-        AND actor_type IN ('system', 'operator')
+        AND actor_type IN ('system', 'operator', 'lawyer')
         AND client_request_id IS NOT NULL)
     ),
   CONSTRAINT channel_conversation_events_authoritative_inbound_check

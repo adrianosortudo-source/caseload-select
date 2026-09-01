@@ -10,7 +10,7 @@ export type ConversationSource =
   | 'operator'
   | 'expiry_cron';
 export type ConversationStatus = 'received' | 'pending' | 'sent' | 'failed';
-export type ConversationActorType = 'lead' | 'system' | 'operator';
+export type ConversationActorType = 'lead' | 'system' | 'operator' | 'lawyer';
 
 /** Shared portal compose limit. Channel-specific limits can be stricter. */
 export const CHANNEL_PORTAL_TEXT_LIMIT = 2000;
