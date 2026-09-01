@@ -34,8 +34,10 @@ describe("Secure Import Room trust guide", () => {
     expect(guide).not.toContain("text-gold-on-light");
     expect(guide).not.toContain("text-black/25");
     expect(room).not.toContain("text-[color:var(--portal-accent)]");
+    expect(clientsPage).not.toContain("text-[color:var(--portal-accent)]");
     expect(guide).toContain('className="text-field-label">blank</span>');
     expect(room).toContain('tracking-[0.14em] text-field-label">Clients / Secure import</p>');
+    expect(clientsPage).toContain('tracking-[0.14em] text-field-label">Relationship database</p>');
   });
 
   it("states the transient processing boundary instead of claiming a direct browser-to-CRM upload", () => {

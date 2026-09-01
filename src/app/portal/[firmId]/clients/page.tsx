@@ -61,7 +61,7 @@ export default async function LawyerClientsHomePage({ params }: PageProps) {
       </header>
 
       <section className="readable-prose mb-8 border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="relationship-import-heading">
-        <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-[color:var(--portal-accent)]">Relationship database</p>
+        <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-field-label">Relationship database</p>
         <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <h2 id="relationship-import-heading" className="measure-heading text-xl font-extrabold text-navy">Bring your existing contacts into CaseLoad Select</h2>
