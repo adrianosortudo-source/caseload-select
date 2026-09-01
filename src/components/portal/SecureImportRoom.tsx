@@ -225,10 +225,10 @@ export default function SecureImportRoom({
   }
 
   return (
-    <div className="readable-prose space-y-6">
+    <div className="space-y-6">
       <header>
         <p className="font-display text-[0.72rem] uppercase tracking-[0.14em] text-field-label">Clients / Secure import</p>
-        <h1 className="measure-heading mt-2 text-3xl font-extrabold text-navy">Secure Import Room</h1>
+        <h1 className="mt-2 text-3xl font-extrabold text-navy">Secure Import Room</h1>
         <p className="mt-2 text-sm leading-6 text-black/60">
           Validate your firm&apos;s relationship database in this browser, then authorize a protected import into your firm&apos;s CRM.
         </p>
@@ -255,7 +255,7 @@ export default function SecureImportRoom({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <p className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-navy">Prepare</p>
-            <h2 id="prepare-heading" className="measure-heading mt-1 text-xl font-bold text-navy">Select the completed relationship import CSV</h2>
+            <h2 id="prepare-heading" className="mt-1 text-xl font-bold text-navy">Select the completed relationship import CSV</h2>
             <p id="prepare-description" className="mt-2 text-sm leading-6 text-black/60">
               The check happens in this browser. You will review the row count, suppression state and any corrections before authorization.
             </p>
@@ -282,7 +282,7 @@ export default function SecureImportRoom({
       {(rows.length > 0 || issues.length > 0) && (
         <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="check-heading">
           <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-field-label">Check</p>
-          <h2 id="check-heading" className="measure-heading mt-1 text-xl font-bold text-navy">Review before authorization</h2>
+          <h2 id="check-heading" className="mt-1 text-xl font-bold text-navy">Review before authorization</h2>
           {rows.length > 0 && (
             <div className="mt-4 grid grid-cols-2 gap-px bg-black/10 sm:grid-cols-4">
               <Summary label="Ready" value={rows.length} />
@@ -304,7 +304,7 @@ export default function SecureImportRoom({
           {rows.length > 0 && (
             <label className="mt-5 flex items-start gap-3 border border-black/10 bg-parchment p-4 text-sm leading-6 text-navy">
               <input type="checkbox" checked={attested} disabled={controlsDisabled} onChange={(event) => setAttested(event.target.checked)} className="mt-1 outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2" />
-              <span className="measure-readable">
+              <span>
                 I am authorized by this firm to import this relationship database. I understand that importing a contact does not authorize marketing or client communications.
               </span>
             </label>
@@ -320,7 +320,7 @@ export default function SecureImportRoom({
       {status === "authorize" && (
         <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="authorize-heading">
           <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-field-label">Authorize</p>
-          <h2 id="authorize-heading" className="measure-heading mt-1 text-xl font-bold text-navy">Confirm this sensitive action</h2>
+          <h2 id="authorize-heading" className="mt-1 text-xl font-bold text-navy">Confirm this sensitive action</h2>
           <p className="mt-2 text-sm text-black/60">Enter the six-digit code sent to {sentTo}.</p>
           <label htmlFor="secure-import-code" className="mt-4 block text-sm font-bold text-navy">Authorization code</label>
           <input id="secure-import-code" inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))} className="mt-2 w-48 max-w-full border border-black/20 bg-parchment px-3 py-3 text-lg tracking-[0.3em] outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2" />
@@ -333,7 +333,7 @@ export default function SecureImportRoom({
       {(status === "importing" || status === "results") && (
         <section className="border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="import-status-heading">
           <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-field-label">{status === "results" ? "Results" : "Import"}</p>
-          <h2 id="import-status-heading" className="measure-heading mt-1 text-xl font-bold text-navy">{status === "results" ? "Import receipt" : "Creating held contact records"}</h2>
+          <h2 id="import-status-heading" className="mt-1 text-xl font-bold text-navy">{status === "results" ? "Import receipt" : "Creating held contact records"}</h2>
           <p className="mt-2 break-words text-sm text-black/60" role="status" aria-live="polite" aria-atomic="true">
             Processed {counts.processed} of {rows.length}. Batch {batchId || "preparing"}.
           </p>
@@ -376,10 +376,7 @@ export default function SecureImportRoom({
 
 function Summary({ label, value }: { label: string; value: string | number }) {
   return (
-    <div
-      className="bg-parchment px-4 py-3"
-      data-readable-measure-exception="compact import summary data"
-    >
+    <div className="bg-parchment px-4 py-3">
       <p className="font-display text-[0.65rem] uppercase tracking-[0.12em] text-field-label">{label}</p>
       <p className="mt-1 break-words text-lg font-extrabold text-navy">{value}</p>
     </div>

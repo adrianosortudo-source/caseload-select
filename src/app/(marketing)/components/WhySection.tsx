@@ -111,7 +111,7 @@ export default function WhySection() {
         <div className="chapter-mark reveal">
           <span className="eyebrow">Why CaseLoad Select</span>
         </div>
-        <h2 className="section-headline reveal" style={{ maxWidth: 780 }}>
+        <h2 className="section-headline reveal">
           Built by one operator with fourteen years of marketing infrastructure work<span className="ts" />
         </h2>
         <p className="section-sub reveal" style={{ marginBottom: "var(--sp-7)" }}>

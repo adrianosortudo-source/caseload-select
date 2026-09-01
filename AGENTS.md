@@ -14,10 +14,10 @@ If you believe an emergency direct deploy is required, stop and ask the operator
 
 Never commit in `D:/00_Work/01_CaseLoad_Select/05_Product/caseload-select-app` (the main checkout) if it holds another branch's uncommitted work. Create a fresh worktree from `origin/main` on the D: drive under the CaseLoad Select worktree area instead. Do not clone or create a worktree for this repository on C:.
 
-## Readable prose measure
+## Full-width component text
 
-Paragraph copy inside wide portal components must use a maximum readable measure of `65ch`, and long headings must use the shared `30ch` heading measure. Put `readable-prose` on the component root so semantic paragraphs and headings inherit the shared rules. Use `measure-readable` for long body copy carried by a non-paragraph element, and `measure-heading` for a heading outside a readable-prose scope.
+Text inside a UI component must use that component's full usable inner width and wrap only at the component padding or a real sibling layout boundary. Do not impose arbitrary reading measures on headings, paragraphs, list items, summaries, captions or other component copy with `max-w-*`, `maxWidth`, `maxInlineSize`, `ch` widths or legacy readable-measure classes and variables.
 
-Do not bypass the shared measure with Tailwind `max-w-*` classes or inline `width`, `maxWidth`, or `maxInlineSize` styles on readable copy. Labels, tables, structured data, code and deliberately short lines may remain wide. When a semantic prose element genuinely needs an exception, add `data-readable-measure-exception="a concise reason"` to that element or an enclosing data region. The reason must be a non-empty string literal so the exception is reviewable.
+Editorial and functional exceptions must be genuine, narrow and reviewable. Examples include long-form legal or article reading frames, structural page or form widths, modal geometry, tables, controls, chat bubbles and functional URL truncation. Record each exception by exact file and reason in the component-text width contract. Do not use directory-wide exclusions, and do not classify ordinary UI cards, panels, status copy or marketing sections as editorial content.
 
-Run `npm run check:readable-measure` after changing a `readable-prose` surface or the shared measure styles.
+Run `npm run check:component-text-width` after changing UI copy layout, shared component styles or an approved exception.

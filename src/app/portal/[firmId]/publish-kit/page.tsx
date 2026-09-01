@@ -60,7 +60,7 @@ export default async function PublishKitIndexPage({
           Operator only
         </p>
         <h1 className="text-xl font-bold text-navy mt-1">Publish Kit</h1>
-        <p className="mt-1 text-sm text-black/60 max-w-2xl">
+        <p className="mt-1 text-sm text-black/60">
           Copy-ready text, downloadable assets, and provenance for one content week at a
           time. Approvals and comments stay on the deliverable pages; nothing here signs
           anything off.

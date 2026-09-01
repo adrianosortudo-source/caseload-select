@@ -2043,7 +2043,7 @@ export function IntakeWidget({
                   <p className="text-base font-semibold text-gray-800">
                     Hi, I&apos;m {assistantName}
                   </p>
-                  <p className="text-xs text-gray-500 mt-1.5 leading-relaxed max-w-[260px] mx-auto">
+                  <p className="text-xs text-gray-500 mt-1.5 leading-relaxed">
                     Let me get a few details from you so your lawyer comes better prepared to speak with you.
                   </p>
                   <p className="text-[11px] text-gray-400 mt-1">

@@ -131,7 +131,7 @@ export function OnboardingNotificationPanel({
         >
           {busy ? "Sending..." : status === "sent" ? "Send again" : "Send now"}
         </button>
-        <p className="text-[10px] text-black/40 max-w-md">
+        <p className="text-[10px] text-black/40">
           Re-sends the operator notification email for this submission. Uses
           the same builder as the original submit endpoint, with a [REPLAY]
           subject prefix and an in-body callout.

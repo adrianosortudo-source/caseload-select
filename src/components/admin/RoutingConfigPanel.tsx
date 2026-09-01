@@ -150,7 +150,7 @@ export default function RoutingConfigPanel({
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-black/60 max-w-3xl">
+      <p className="text-sm text-black/60">
         How a new matter is routed when a lead is taken for <strong>{firmName}</strong>. A matter&apos;s
         lead lawyer is the <strong>practice-area default</strong> if one is set, otherwise the{' '}
         <strong>firm fallback lead</strong>, otherwise no lead is assigned. Default assignees are added to

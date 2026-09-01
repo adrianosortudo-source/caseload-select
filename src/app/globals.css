@@ -6,8 +6,6 @@
   --font-caveat: "Caveat Variable", cursive;
   --font-dm-sans: "DM Sans Variable", system-ui, sans-serif;
   --font-source-serif-4: "Source Serif 4 Variable", Georgia, serif;
-  --measure-readable: 65ch;
-  --measure-heading: 30ch;
 }
 
 html, body { height: 100%; background: #F4F3EF; color: #0D1520; }
@@ -20,20 +18,3 @@ html, body { height: 100%; background: #F4F3EF; color: #0D1520; }
 .input { @apply w-full border border-border-brand bg-white px-3 py-2 text-sm focus:outline-none focus:border-gold; }
 .label { @apply text-[9px] font-display font-semibold uppercase tracking-widest text-field-label mb-1 block; }
 .badge { @apply inline-flex items-center px-2 py-0.5 text-[10px] font-display font-semibold; }
-
-@layer utilities {
-  :where(.measure-readable),
-  :where(.readable-prose) :where(p, li, dd, blockquote) {
-    max-inline-size: var(--measure-readable);
-  }
-
-  :where(.measure-heading),
-  :where(.readable-prose) :where(h1, h2, h3) {
-    max-inline-size: var(--measure-heading);
-  }
-
-  :where(.readable-prose) :where([data-readable-measure-exception]:not([data-readable-measure-exception=""])),
-  :where(.readable-prose) :where([data-readable-measure-exception]:not([data-readable-measure-exception=""])) :where(p, li, dd, blockquote, h1, h2, h3) {
-    max-inline-size: none;
-  }
-}

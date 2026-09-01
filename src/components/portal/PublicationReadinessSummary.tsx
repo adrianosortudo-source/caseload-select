@@ -157,7 +157,7 @@ export default function PublicationReadinessSummary({
           <p className="text-[10px] uppercase tracking-[0.16em] font-semibold text-[color:var(--portal-accent)]">
             Publication readiness
           </p>
-          <p className="text-xs text-black/50 mt-0.5 max-w-md">
+          <p className="text-xs text-black/50 mt-0.5">
             Whether each piece has what it needs to go out: approval, bound
             assets, and a route. Status only, nothing here generates,
             translates, or publishes anything.

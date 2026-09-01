@@ -208,7 +208,7 @@ export default function AgencyCrmClient({
       {/* Bulk import */}
       <details className={`${PANEL} p-4`}>
         <summary className="text-xs uppercase tracking-wider font-semibold text-gold cursor-pointer">Bulk import prospects</summary>
-        <p className="text-xs text-black/50 mt-2 max-w-3xl">
+        <p className="text-xs text-black/50 mt-2">
           Paste a JSON array or CSV with a header row. Recognized columns: firm_name (required), contact_name,
           contact_email, contact_phone, city, practice_area, source, stage, fit_score, notes. Duplicates (firm name plus
           city) are skipped. For the full toronto_law_firms export, run scripts/import-agency-prospects.mjs instead.

@@ -60,11 +60,11 @@ export default async function LawyerClientsHomePage({ params }: PageProps) {
         </p>
       </header>
 
-      <section className="readable-prose mb-8 border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="relationship-import-heading">
+      <section className="mb-8 border border-black/10 bg-white p-5 sm:p-6" aria-labelledby="relationship-import-heading">
         <p className="font-display text-[0.68rem] uppercase tracking-[0.14em] text-field-label">Relationship database</p>
-        <div className="mt-2 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="mt-2 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="min-w-0">
-            <h2 id="relationship-import-heading" className="measure-heading text-xl font-extrabold text-navy">Bring your existing contacts into CaseLoad Select</h2>
+            <h2 id="relationship-import-heading" className="text-xl font-extrabold text-navy">Bring your existing contacts into CaseLoad Select</h2>
             <p className="mt-2 text-sm leading-6 text-black/60">
               Prepare and review the import here. The original CSV stays in your browser, possible duplicates are held for review, and no messages are sent.
             </p>

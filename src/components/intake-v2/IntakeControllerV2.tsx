@@ -949,7 +949,7 @@ export function IntakeControllerV2({ firmId, firmName, mode = "standard", onScor
               Your matter review was submitted.
             </h2>
             {bandInfo && (
-              <p className="text-[15px] text-[#1E2F58]/75 leading-relaxed max-w-md" style={{ fontFamily: "DM Sans, sans-serif" }}>
+              <p className="text-[15px] text-[#1E2F58]/75 leading-relaxed" style={{ fontFamily: "DM Sans, sans-serif" }}>
                 {bandInfo.copy}
               </p>
             )}
