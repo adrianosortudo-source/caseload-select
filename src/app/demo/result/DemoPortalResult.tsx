@@ -940,7 +940,7 @@ export default function DemoPortalResult({ session }: { session: Record<string, 
             <h2 className="text-xl sm:text-2xl font-extrabold text-white leading-snug mb-2">
               This happens for every inquiry, automatically.
             </h2>
-            <p className="text-sm text-white/60">
+            <p className="text-sm text-white/60 max-w-md">
               Band scoring, SLA routing, CRM entry, and follow-up sequences fire
               within 90 seconds of submission. No one touches it manually.
             </p>

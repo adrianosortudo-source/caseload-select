@@ -59,7 +59,7 @@ export default async function AdminSeoCheckPage() {
         title="SEO and AI visibility check"
         subtitle="Canonical SEO audit for prospects and clients. Run a quick scan to triage a new site fast, or standard/deep for a full technical, content, and AI-visibility diagnostic. Save results here and revisit them for follow-up."
         right={
-          <p className="text-xs text-black/40 text-right leading-snug">
+          <p className="text-xs text-black/40 max-w-[260px] text-right leading-snug">
             Canonical SEO audit. Prospecting Diagnostic consumes SEO results separately.
           </p>
         }

@@ -350,7 +350,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
                   </li>
                 ))}
               </ul>
-              <p className="text-xs text-white/40 leading-relaxed">
+              <p className="text-xs text-white/40 leading-relaxed max-w-md">
                 This is a UI simulator for testing the script, not a live WhatsApp Business number. Hooking the same flow into a real WhatsApp Business API account is a separate switch.
               </p>
             </div>
@@ -387,7 +387,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-extrabold text-center mb-4" style={{ color: NAVY }}>How It Works</h2>
-          <p className="text-center text-gray-500 mb-14">
+          <p className="text-center text-gray-500 mb-14 max-w-xl mx-auto">
             Four steps. Your lawyer walks into the call already prepared.
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-10">
@@ -437,7 +437,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
       <section id="practice-areas" className="py-20" style={{ backgroundColor: "#F7F6F2" }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-extrabold text-center mb-4" style={{ color: NAVY }}>35 Practice Areas</h2>
-          <p className="text-center text-gray-500 mb-12">
+          <p className="text-center text-gray-500 mb-12 max-w-xl mx-auto">
             Our AI intake system covers virtually every area of Ontario law. If you have a legal matter, start a consultation.
           </p>
           <div className="flex flex-wrap gap-2 justify-center">
@@ -476,7 +476,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
       <section className="py-20 bg-white">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <h2 className="text-3xl font-extrabold text-center mb-4" style={{ color: NAVY }}>Reach Us Any Way You Prefer</h2>
-          <p className="text-center text-gray-500 mb-14">
+          <p className="text-center text-gray-500 mb-14 max-w-xl mx-auto">
             Every contact method routes to the same intake system. Your case is assessed regardless of channel.
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -636,7 +636,7 @@ export default function DemoLandingPage({ firmId, practiceAreaLabels, branding }
               <div className="w-7 h-7 rounded flex items-center justify-center text-white font-bold text-xs" style={{ backgroundColor: GOLD }}>H</div>
               <span className="text-white font-bold text-sm">HARTWELL LAW PC</span>
             </div>
-            <p className="text-white/40 text-xs text-center leading-relaxed">
+            <p className="text-white/40 text-xs text-center max-w-md leading-relaxed">
               This is a demonstration site. Hartwell Law PC is a fictional law firm created for sales demonstration purposes by CaseLoad Select.
               No legal advice is provided. Powered by{" "}
               <span style={{ color: GOLD }}>CaseLoad Select</span>.

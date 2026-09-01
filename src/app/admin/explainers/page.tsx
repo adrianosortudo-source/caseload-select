@@ -47,7 +47,7 @@ export default async function AdminExplainersPage() {
         </div>
       </div>
 
-      <p className="text-sm text-black/55">
+      <p className="text-sm text-black/55 max-w-3xl">
         Client-education articles assigned to matters. Edit a row to author its content and publish it.
         Unpublished articles are not shown to clients.
       </p>

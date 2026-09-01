@@ -560,7 +560,7 @@ export function ScreenEnginePublicWidget({
             {ws("done_heading", "Your matter review was submitted.")}
           </h2>
           <p
-            className="text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
+            className="max-w-[460px] text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
             style={{ fontFamily: fontBody }}
           >
             {doneBody}

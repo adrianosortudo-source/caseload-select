@@ -53,7 +53,7 @@ export default async function FirmOwnershipPage({
         <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator console</p>
         <h1 className="text-2xl font-bold text-navy mt-1">Asset ownership register</h1>
         <p className="mt-1 text-sm text-black/60">{firmDisplayName(f)}</p>
-        <p className="mt-2 text-sm text-black/50">
+        <p className="mt-2 text-sm text-black/50 max-w-2xl">
           Does the firm currently control the marketing assets its growth depends on. This
           records who controls each asset today, never a password or credential. See
           ACTS_Day1_OwnershipMatrix for the separate go-forward decision of who owns a

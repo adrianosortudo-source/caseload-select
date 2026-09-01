@@ -121,7 +121,7 @@ export default function ContentPlan({
             Content plan
           </p>
           <h1 className="text-2xl font-bold text-navy mt-1">This week&rsquo;s content</h1>
-          <p className="text-sm text-black/55 mt-1">
+          <p className="text-sm text-black/55 mt-1 max-w-xl">
             {isOperator
               ? "Plan the week, post the pieces, and place them by format. The firm reads the theme and approves each one."
               : "Read each piece and approve it, or ask for changes. Click any row to open the draft."}
@@ -430,7 +430,7 @@ export function ReviewOverview({
           Review overview
         </p>
         <h2 className="text-lg font-bold text-navy mt-0.5">Review and publication are tracked separately</h2>
-        <p className="text-sm text-black/55 mt-0.5 whitespace-pre-line">{askLine}</p>
+        <p className="text-sm text-black/55 mt-0.5 max-w-2xl whitespace-pre-line">{askLine}</p>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -805,7 +805,7 @@ function StrategyBriefSection({
   return (
     <section className="px-6 py-4 border-b border-border-brand/60 bg-parchment-2/20">
       <h3 className="text-sm font-bold text-navy">Weekly strategic record</h3>
-      <p className="text-[12px] text-black/65 leading-[1.45] mt-1">
+      <p className="text-[12px] text-black/65 leading-[1.45] mt-1 max-w-3xl">
         This brief records the strategic decision behind this week&rsquo;s {approved ? "approved" : "proposed"} content package. Every listed deliverable must support this approved reader, matter, and practical question.
       </p>
       {!complete && (
@@ -1248,7 +1248,7 @@ function PeriodForm({
             placeholder="3"
             className="text-sm border border-border-brand px-2 py-1.5 bg-white w-[110px]"
           />
-          <p className="text-[11px] text-muted mt-1">
+          <p className="text-[11px] text-muted mt-1 max-w-[240px]">
             Leave blank for standing assets or a review pass: those are not
             numbered weeks.
           </p>

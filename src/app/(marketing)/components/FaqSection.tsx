@@ -172,6 +172,7 @@ export default function FaqSection() {
           color: var(--text-muted);
           line-height: 1.7;
           padding: 0 0 24px;
+          max-width: 70ch;
         }
       `}</style>
     </section>

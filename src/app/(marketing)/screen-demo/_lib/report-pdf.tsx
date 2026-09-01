@@ -401,6 +401,7 @@ const s = StyleSheet.create({
     lineHeight: 1.5,
     textAlign: "center",
     marginBottom: 12,
+    maxWidth: 380,
   },
   ctaBtn: {
     fontFamily: "Manrope",

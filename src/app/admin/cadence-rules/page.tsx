@@ -39,7 +39,7 @@ export default async function AdminCadenceRulesPage() {
         <div>
           <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator console</p>
           <h1 className="text-2xl font-bold text-navy mt-1">Cadence rules</h1>
-          <p className="text-sm text-black/55 mt-2">
+          <p className="text-sm text-black/55 max-w-3xl mt-2">
             The journeys the shadow cadence engine runs. Edit steps, create firm overrides, or add a new
             journey. Everything here stays shadow-only until the real-send flip.
           </p>
