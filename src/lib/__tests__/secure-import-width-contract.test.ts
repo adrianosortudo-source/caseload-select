@@ -97,6 +97,23 @@ describe("Secure Import component width contract", () => {
     expect(room).toContain('className="bg-parchment px-4 py-3"');
   });
 
+  it("keeps both guarded headings and supporting paragraphs on full-width rows", () => {
+    for (const componentPath of targetComponentPaths.slice(1)) {
+      const source = read(componentPath);
+      expect(source.match(/data-full-width-copy=/g)).toHaveLength(2);
+      expect(source).toContain('data-full-width-copy="heading"');
+      expect(source).toContain('data-full-width-copy="supporting"');
+      expect(source).toContain("col-span-full text-balance");
+      expect(source).toContain("col-span-full text-pretty");
+      expect(source).toContain("sm:row-start-2");
+      expect(source).toContain("sm:row-start-3");
+    }
+
+    const renderedTest = read("tests/secure-import/rendered-copy-gates.spec.ts");
+    expect(renderedTest).toContain('toHaveCount(4)');
+    expect(renderedTest).toContain("range.getClientRects()");
+    expect(renderedTest).not.toContain("range.getBoundingClientRect()");
+  });
   it("keeps the Clients relationship copy useful until its action row genuinely fits", () => {
     const clients = read("src/app/portal/[firmId]/clients/page.tsx");
     expect(clients).toContain("lg:flex-row lg:items-end lg:justify-between");
