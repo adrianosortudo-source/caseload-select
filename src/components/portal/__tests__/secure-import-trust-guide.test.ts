@@ -12,22 +12,27 @@ describe("Secure Import Room trust guide", () => {
   const clientsPage = read("src", "app", "portal", "[firmId]", "clients", "page.tsx");
   const css = read("src", "app", "globals.css");
 
-  it("opts both surfaces into the shared readable measure without narrowing data regions", () => {
-    expect(guide).toContain('className="readable-prose space-y-6"');
-    expect(room).toContain('className="readable-prose space-y-6"');
-    expect(room).toContain('className="measure-readable"');
-    expect(css).toContain("--measure-readable: 65ch");
-    expect(css).toContain("--measure-heading: 30ch");
-    expect(guide.match(/measure-heading/g)?.length ?? 0).toBeGreaterThanOrEqual(6);
-    expect(room.match(/measure-heading/g)?.length ?? 0).toBeGreaterThanOrEqual(4);
-    expect(guide).toContain('data-readable-measure-exception="eight-column CSV data table"');
-    expect(room).toContain('data-readable-measure-exception="compact import summary data"');
+  it("uses the full inner width for component copy and keeps data regions functional", () => {
+    expect(guide).toContain('className="space-y-6"');
+    expect(room).toContain('className="space-y-6"');
+    const legacyIdentifiers = [
+      ["readable", "prose"].join("-"),
+      ["measure", "readable"].join("-"),
+      ["measure", "heading"].join("-"),
+      ["data", "readable", "measure", "exception"].join("-"),
+    ];
+    for (const source of [guide, room, clientsPage, css]) {
+      for (const identifier of legacyIdentifiers) expect(source).not.toContain(identifier);
+    }
     expect(guide).not.toMatch(/<p className="[^"]*max-w-/);
     expect(room).not.toMatch(/<p(?:\s+id="[^"]+")? className="[^"]*max-w-/);
     expect(guide).not.toMatch(/<h[1-3][^>]*max-w-/);
     expect(room).not.toMatch(/<h[1-3][^>]*max-w-/);
-    expect(clientsPage).toContain('className="readable-prose mb-8');
     expect(clientsPage).not.toContain("max-w-2xl");
+    expect(clientsPage).toContain("lg:flex-row lg:items-end lg:justify-between");
+    expect(clientsPage).not.toContain("sm:flex-row sm:items-end sm:justify-between");
+    expect(room).toContain('function Summary({ label, value }');
+    expect(room).toContain('className="bg-parchment px-4 py-3"');
   });
 
   it("uses stable contrast tokens for meaningful small text on light surfaces", () => {
