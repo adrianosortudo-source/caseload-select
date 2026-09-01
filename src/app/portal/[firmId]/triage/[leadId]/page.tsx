@@ -23,10 +23,15 @@ import { matterLabel, subtrackLabel } from "@/lib/screened-leads-labels";
 import { intakeLanguageLabel } from "@/lib/intake-language-label";
 import { channelLabel, channelBadgeClasses } from "@/lib/channel-labels";
 import { buildInboundContext } from "@/lib/inbound-context";
+import {
+  loadChannelConversation,
+  type ConversationChannel,
+} from "@/lib/channel-conversation";
 import DecisionTimer from "@/components/portal/DecisionTimer";
 import BriefLiveTimers from "@/components/portal/BriefLiveTimers";
 import ScoringPortPanel from "@/components/portal/ScoringPortPanel";
 import TriageActionBar from "@/components/portal/TriageActionBar";
+import ChannelConversationPanel from "@/components/portal/ChannelConversationPanel";
 import "./brief.css";
 
 interface LeadRow {
@@ -43,7 +48,14 @@ interface LeadRow {
   submitted_at: string;
   contact_name: string | null;
   intake_language: string | null;
-  slot_answers: { channel?: string; voice_meta?: { recording_url?: string | null } } | null;
+  raw_transcript: string | null;
+  slot_answers: {
+    channel?: string;
+    voice_meta?: { recording_url?: string | null };
+    messenger_meta?: { page_id?: string | null };
+    instagram_meta?: { ig_business_account_id?: string | null };
+    whatsapp_meta?: { phone_number_id?: string | null };
+  } | null;
   // Scoring-port columns (C3 phase 2). Null for pre-C3 rows and when not populated.
   score_confidence: string | null;
   score_completeness: number | string | null;
@@ -59,7 +71,7 @@ interface LeadRow {
   utm_term: string | null;
   utm_content: string | null;
   referrer: string | null;
-  intake_firms: { location: string | null; read_scoring_port: boolean } | null;
+  intake_firms: { name: string | null; location: string | null; read_scoring_port: boolean } | null;
 }
 
 export const dynamic = "force-dynamic";
@@ -92,12 +104,12 @@ export default async function TriageLeadPage({
     .select(`
       lead_id, firm_id, status, brief_html, brief_json,
       band, matter_type, whale_nurture, band_c_subtrack,
-      decision_deadline, submitted_at, contact_name, intake_language,
+      decision_deadline, submitted_at, contact_name, intake_language, raw_transcript,
       slot_answers,
       score_confidence, score_completeness, score_explanation,
       score_missing_fields, field_provenance, score_version,
       utm_source, utm_medium, utm_campaign, utm_term, utm_content, referrer,
-      intake_firms!inner(location, read_scoring_port)
+      intake_firms!inner(name, location, read_scoring_port)
     `)
     .eq("lead_id", leadId)
     .maybeSingle()
@@ -117,6 +129,14 @@ export default async function TriageLeadPage({
   const subtrack = subtrackLabel(row.band_c_subtrack);
   const channel = row.slot_answers?.channel ?? null;
   const recordingUrl = row.slot_answers?.voice_meta?.recording_url ?? null;
+  const conversationChannel = asConversationChannel(channel);
+  const conversation = conversationChannel
+    ? await loadChannelConversation({ firmId, screenedLeadId: row.lead_id }).catch(() => null)
+    : null;
+  const firmName = row.intake_firms?.name ?? "The firm";
+  const channelAssetId = conversationChannel
+    ? getChannelAssetId(conversationChannel, row.slot_answers)
+    : null;
 
   const langLabel = intakeLanguageLabel(row.intake_language);
 
@@ -199,10 +219,43 @@ export default async function TriageLeadPage({
         initialStatus={row.status}
         supportPreview={inSupportPreview}
       />
+      {conversationChannel && (
+        <ChannelConversationPanel
+          messages={conversation?.messages ?? []}
+          channel={conversationChannel}
+          firmName={firmName}
+          assetId={channelAssetId}
+          replyWindow={conversation?.replyWindow ?? {
+            isOpen: false,
+            closesAt: null,
+            reason: "no_authoritative_inbound",
+          }}
+          supportPreview={inSupportPreview}
+          replyEndpoint={`/api/portal/${firmId}/triage/${row.lead_id}/reply`}
+          intakeTranscript={row.raw_transcript}
+        />
+      )}
       {briefBottomHtml.length > 0 && <BriefFrame html={briefBottomHtml} />}
       <BriefLiveTimers />
     </div>
   );
+}
+
+function asConversationChannel(channel: string | null): ConversationChannel | null {
+  return channel === "facebook" || channel === "instagram" || channel === "whatsapp"
+    ? channel
+    : null;
+}
+
+function getChannelAssetId(
+  channel: ConversationChannel,
+  slotAnswers: LeadRow["slot_answers"],
+): string | null {
+  if (channel === "facebook") return slotAnswers?.messenger_meta?.page_id ?? null;
+  if (channel === "instagram") {
+    return slotAnswers?.instagram_meta?.ig_business_account_id ?? null;
+  }
+  return slotAnswers?.whatsapp_meta?.phone_number_id ?? null;
 }
 
 function BackLink({ firmId }: { firmId: string }) {
