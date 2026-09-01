@@ -12,7 +12,7 @@ async function waitForStableLayout(page: Page) {
 }
 
 for (const width of VIEWPORT_WIDTHS) {
-  test(`Secure Import copy gates pass at ${width}px`, async ({ page }) => {
+  test(`Secure Import copy gates pass at ${width}px`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
     const response = await page.goto("/test-screen/secure-import", { waitUntil: "networkidle" });
     expect(response?.status()).toBe(200);
@@ -106,6 +106,13 @@ for (const width of VIEWPORT_WIDTHS) {
         scrollers,
       };
     });
+
+    if (width === 1440 || width === 320) {
+      await page.screenshot({
+        path: testInfo.outputPath(`secure-import-${width}px.png`),
+        fullPage: true,
+      });
+    }
 
     expect(audit.fullWidthFailures).toEqual([]);
     expect(audit.orphanFailures).toEqual([]);

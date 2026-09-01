@@ -243,6 +243,14 @@ jobs:
         run: npx playwright install --with-deps chromium
       - name: Run Secure Import rendered copy gates
         run: npm run test:secure-import-rendered
+      - name: Upload Secure Import rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: secure-import-rendered-evidence
+          path: test-results/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7
 
   brief-equality-eval:
     name: DR-039 brief-equality eval (language parity)
