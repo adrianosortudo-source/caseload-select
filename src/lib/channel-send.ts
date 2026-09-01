@@ -13,12 +13,27 @@ import { sendWhatsappMessage } from '@/lib/whatsapp-send';
 import type { ChannelSender } from '@/lib/channel-intake-processor';
 import { getI18n } from '@/lib/screen-engine/i18n/loader';
 import type { SupportedLanguage } from '@/lib/screen-engine/types';
+import {
+  claimOutboundConversationEvent,
+  loadChannelConversation,
+  loadOutboundConversationResult,
+  recordOutboundConversationResult,
+  resolveScreenedLeadIdForFirm,
+  validateChannelText,
+  type OutboundLedgerContext,
+} from '@/lib/channel-conversation';
 
 export interface ChannelSendResult {
   sent: boolean;
   messageId?: string;
   reason?: string;
   status?: number;
+  code?:
+    | 'validation_failed'
+    | 'lead_not_found'
+    | 'reply_window_closed'
+    | 'duplicate_request'
+    | 'ledger_unavailable';
 }
 
 interface FirmTokens {
@@ -33,7 +48,7 @@ async function loadFirmTokens(firmId: string): Promise<FirmTokens | null> {
     .eq('id', firmId)
     .maybeSingle();
   if (error) {
-    console.error('[channel-send] firm token lookup failed:', error);
+    console.error('[channel-send] firm token lookup failed');
     return null;
   }
   if (!data) return null;
@@ -49,6 +64,8 @@ export interface SendChannelMessageArgs {
   firmId: string;
   sender: ChannelSender;
   text: string;
+  /** Required for operator sends and auditable post-finalization automation. */
+  ledger?: OutboundLedgerContext;
 }
 
 /**
@@ -62,45 +79,151 @@ export interface SendChannelMessageArgs {
 export async function sendChannelMessage(
   args: SendChannelMessageArgs,
 ): Promise<ChannelSendResult> {
+  const validation = validateChannelText(args.sender.channel, args.text);
+  if (!validation.valid) {
+    return { sent: false, reason: validation.reason, code: 'validation_failed' };
+  }
+
+  let ledger = args.ledger;
+  if (args.ledger) {
+    try {
+      const resolvedLeadId = await resolveScreenedLeadIdForFirm(
+        args.firmId,
+        args.ledger.screenedLeadId,
+      );
+      if (!resolvedLeadId) {
+        return {
+          sent: false,
+          reason: 'screened lead not found for firm',
+          code: 'lead_not_found',
+        };
+      }
+      ledger = { ...args.ledger, screenedLeadId: resolvedLeadId };
+      if (ledger.requireOpenWindow) {
+        const conversation = await loadChannelConversation({
+          firmId: args.firmId,
+          screenedLeadId: ledger.screenedLeadId,
+        });
+        if (!conversation?.replyWindow.isOpen) {
+          return {
+            sent: false,
+            reason: 'Meta reply window is closed',
+            code: 'reply_window_closed',
+          };
+        }
+      }
+
+      const claim = await claimOutboundConversationEvent({
+        firmId: args.firmId,
+        channel: args.sender.channel,
+        text: args.text,
+        ledger,
+      });
+      if (!claim.claimed) {
+        const prior = await loadOutboundConversationResult({
+          firmId: args.firmId,
+          clientRequestId: ledger.clientRequestId,
+        });
+        return {
+          sent: prior?.status === 'sent',
+          messageId: prior?.metaMessageId ?? undefined,
+          reason: prior
+            ? prior.failureReason ?? 'request already completed'
+            : 'request is already in progress',
+          code: 'duplicate_request',
+        };
+      }
+    } catch {
+      console.warn('[channel-send] outbound ledger claim failed');
+      return {
+        sent: false,
+        reason: 'conversation ledger unavailable',
+        code: 'ledger_unavailable',
+      };
+    }
+  }
+
+  const finish = async (result: ChannelSendResult): Promise<ChannelSendResult> => {
+    if (ledger) {
+      try {
+        await recordOutboundConversationResult({
+          firmId: args.firmId,
+          channel: args.sender.channel,
+          text: args.text,
+          ledger,
+          sent: result.sent,
+          metaMessageId: result.messageId,
+          failureReason: result.reason,
+        });
+      } catch {
+        console.warn('[channel-send] outbound result ledger write threw');
+      }
+    }
+    return result;
+  };
+
   const tokens = await loadFirmTokens(args.firmId);
   if (!tokens) {
-    return { sent: false, reason: 'firm tokens unavailable' };
+    return finish({ sent: false, reason: 'firm tokens unavailable' });
+  }
+
+  // Recheck immediately before the external side effect. Equality is closed.
+  if (ledger?.requireOpenWindow) {
+    try {
+      const conversation = await loadChannelConversation({
+        firmId: args.firmId,
+        screenedLeadId: ledger.screenedLeadId,
+      });
+      if (!conversation?.replyWindow.isOpen) {
+        return finish({
+          sent: false,
+          reason: 'Meta reply window is closed',
+          code: 'reply_window_closed',
+        });
+      }
+    } catch {
+      return finish({
+        sent: false,
+        reason: 'conversation ledger unavailable',
+        code: 'ledger_unavailable',
+      });
+    }
   }
 
   switch (args.sender.channel) {
     case 'facebook': {
       if (!tokens.facebook_page_access_token) {
-        return { sent: false, reason: 'no facebook_page_access_token configured' };
+        return finish({ sent: false, reason: 'no facebook_page_access_token configured' });
       }
-      return sendMessengerMessage({
+      return finish(await sendMessengerMessage({
         pageId: args.sender.pageId,
         pageAccessToken: tokens.facebook_page_access_token,
         recipientPsid: args.sender.senderPsid,
         text: args.text,
-      });
+      }));
     }
     case 'instagram': {
       // IG inherits the linked Page's access token. Same column.
       if (!tokens.facebook_page_access_token) {
-        return { sent: false, reason: 'no facebook_page_access_token configured (IG inherits)' };
+        return finish({ sent: false, reason: 'no facebook_page_access_token configured (IG inherits)' });
       }
-      return sendInstagramMessage({
+      return finish(await sendInstagramMessage({
         igBusinessAccountId: args.sender.igBusinessAccountId,
         pageAccessToken: tokens.facebook_page_access_token,
         recipientIgsid: args.sender.senderIgsid,
         text: args.text,
-      });
+      }));
     }
     case 'whatsapp': {
       if (!tokens.whatsapp_cloud_api_access_token) {
-        return { sent: false, reason: 'no whatsapp_cloud_api_access_token configured' };
+        return finish({ sent: false, reason: 'no whatsapp_cloud_api_access_token configured' });
       }
-      return sendWhatsappMessage({
+      return finish(await sendWhatsappMessage({
         phoneNumberId: args.sender.phoneNumberId,
         accessToken: tokens.whatsapp_cloud_api_access_token,
         recipientWaId: args.sender.senderWaId,
         text: args.text,
-      });
+      }));
     }
   }
 }

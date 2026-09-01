@@ -8,10 +8,25 @@ const mocks = vi.hoisted(() => ({
   sendMessengerMessage: vi.fn(),
   sendInstagramMessage: vi.fn(),
   sendWhatsappMessage: vi.fn(),
+  validateChannelText: vi.fn(),
+  resolveScreenedLeadIdForFirm: vi.fn(),
+  loadChannelConversation: vi.fn(),
+  claimOutboundConversationEvent: vi.fn(),
+  loadOutboundConversationResult: vi.fn(),
+  recordOutboundConversationResult: vi.fn(),
   firmRow: { facebook_page_access_token: null, whatsapp_cloud_api_access_token: null } as {
     facebook_page_access_token: string | null;
     whatsapp_cloud_api_access_token: string | null;
   },
+}));
+
+vi.mock('@/lib/channel-conversation', () => ({
+  validateChannelText: mocks.validateChannelText,
+  resolveScreenedLeadIdForFirm: mocks.resolveScreenedLeadIdForFirm,
+  loadChannelConversation: mocks.loadChannelConversation,
+  claimOutboundConversationEvent: mocks.claimOutboundConversationEvent,
+  loadOutboundConversationResult: mocks.loadOutboundConversationResult,
+  recordOutboundConversationResult: mocks.recordOutboundConversationResult,
 }));
 
 vi.mock('@/lib/messenger-send', () => ({
@@ -50,6 +65,21 @@ beforeEach(() => {
   mocks.sendMessengerMessage.mockReset();
   mocks.sendInstagramMessage.mockReset();
   mocks.sendWhatsappMessage.mockReset();
+  mocks.validateChannelText.mockReset();
+  mocks.validateChannelText.mockReturnValue({ valid: true });
+  mocks.resolveScreenedLeadIdForFirm.mockReset();
+  mocks.resolveScreenedLeadIdForFirm.mockResolvedValue('11111111-1111-4111-8111-111111111111');
+  mocks.loadChannelConversation.mockReset();
+  mocks.loadChannelConversation.mockResolvedValue({
+    messages: [],
+    replyWindow: { isOpen: true, reason: 'open' },
+  });
+  mocks.claimOutboundConversationEvent.mockReset();
+  mocks.claimOutboundConversationEvent.mockResolvedValue({ claimed: true, duplicate: false });
+  mocks.loadOutboundConversationResult.mockReset();
+  mocks.loadOutboundConversationResult.mockResolvedValue(null);
+  mocks.recordOutboundConversationResult.mockReset();
+  mocks.recordOutboundConversationResult.mockResolvedValue(true);
   mocks.firmRow = {
     facebook_page_access_token: null,
     whatsapp_cloud_api_access_token: null,
@@ -161,6 +191,68 @@ describe('sendChannelMessage', () => {
     });
     expect(r.sent).toBe(false);
     expect(r.reason).toMatch(/whatsapp_cloud_api_access_token/);
+  });
+
+  it('fails closed before dispatch when the authoritative reply window is closed', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    mocks.loadChannelConversation.mockResolvedValueOnce({
+      messages: [],
+      replyWindow: { isOpen: false, reason: 'expired' },
+    });
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook',
+        senderPsid: 'psid',
+        senderName: null,
+        messageMid: 'mid_in',
+        pageId: 'page-1',
+      },
+      text: 'hi',
+      ledger: {
+        screenedLeadId: 'L-2026-09-01-001',
+        source: 'operator',
+        actorType: 'operator',
+        actorId: 'operator-1',
+        clientRequestId: '22222222-2222-4222-8222-222222222222',
+        requireOpenWindow: true,
+      },
+    });
+    expect(r).toMatchObject({ sent: false, code: 'reply_window_closed' });
+    expect(mocks.sendMessengerMessage).not.toHaveBeenCalled();
+    expect(mocks.claimOutboundConversationEvent).not.toHaveBeenCalled();
+  });
+
+  it('claims an operator request and records the terminal send result', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    mocks.sendMessengerMessage.mockResolvedValueOnce({ sent: true, messageId: 'mid-out' });
+    const ledger = {
+      screenedLeadId: 'L-2026-09-01-001',
+      source: 'operator' as const,
+      actorType: 'operator' as const,
+      actorId: 'operator-1',
+      clientRequestId: '22222222-2222-4222-8222-222222222222',
+      requireOpenWindow: true,
+    };
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook',
+        senderPsid: 'psid',
+        senderName: null,
+        messageMid: 'mid_in',
+        pageId: 'page-1',
+      },
+      text: 'hi',
+      ledger,
+    });
+    expect(r).toMatchObject({ sent: true, messageId: 'mid-out' });
+    expect(mocks.claimOutboundConversationEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.recordOutboundConversationResult).toHaveBeenCalledWith(
+      expect.objectContaining({ sent: true, metaMessageId: 'mid-out' }),
+    );
+    // Window check before the claim and immediately before the external send.
+    expect(mocks.loadChannelConversation).toHaveBeenCalledTimes(2);
   });
 });
 
