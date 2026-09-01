@@ -226,6 +226,24 @@ jobs:
       - name: Run vitest
         run: npx vitest run
 
+  secure-import-rendered:
+    name: Secure Import rendered copy gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install fixed Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run Secure Import rendered copy gates
+        run: npm run test:secure-import-rendered
+
   brief-equality-eval:
     name: DR-039 brief-equality eval (language parity)
     runs-on: ubuntu-latest

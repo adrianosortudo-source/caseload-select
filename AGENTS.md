@@ -18,6 +18,10 @@ Never commit in `D:/00_Work/01_CaseLoad_Select/05_Product/caseload-select-app` (
 
 Text inside a UI component must use that component's full usable inner width and wrap only at the component padding or a real sibling layout boundary. Do not impose arbitrary reading measures on headings, paragraphs, list items, summaries, captions or other component copy with `max-w-*`, `maxWidth`, `maxInlineSize`, `ch` widths or legacy readable-measure classes and variables.
 
+An action, link, icon, badge or control must not reserve a horizontal track that narrows supporting copy. Put governed supporting copy in its own full-width row. If a natural mobile or card track cannot do that, document the exact rendered exception and its reason rather than relying on source layout alone.
+
+A rendered heading, paragraph or supporting-copy block that wraps to two or more lines must not finish with an avoidable single-word final line. Fix structure first, then use natural wrapping such as `text-pretty` when needed. Do not add manual line breaks, non-breaking spaces or copy-only width caps to hide an orphan.
+
 Editorial and functional exceptions must be genuine, narrow and reviewable. Examples include long-form legal or article reading frames, structural page or form widths, modal geometry, tables, controls, chat bubbles and functional URL truncation. Record each exception by exact file and reason in the relevant scoped contract. Do not use directory-wide exclusions, and do not classify ordinary UI cards, panels or status copy as editorial content.
 
-Run `npm run check:secure-import-width` after changing the Clients or Secure Import component text layout or shared selectors used by that entry path.
+Run `npm run check:secure-import-width` and `npm run test:secure-import-rendered` after changing the Clients or Secure Import component text layout or shared selectors used by that entry path.

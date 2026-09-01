@@ -10,6 +10,7 @@ describe("Secure Import Room trust guide", () => {
   const room = read("src", "components", "portal", "SecureImportRoom.tsx");
   const page = read("src", "app", "portal", "[firmId]", "clients", "import", "page.tsx");
   const clientsPage = read("src", "app", "portal", "[firmId]", "clients", "page.tsx");
+  const renderedFixture = read("src", "app", "test-screen", "secure-import", "page.tsx");
   const css = read("src", "app", "globals.css");
 
   it("uses the full inner width for component copy and keeps data regions functional", () => {
@@ -120,11 +121,33 @@ describe("Secure Import Room trust guide", () => {
     expect(guide).toContain("overflow-x-auto");
   });
 
+  it("keeps supporting copy on a full-width row separate from download actions", () => {
+    const oldActionReducedTrack = "flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between";
+    for (const source of [room, guide]) {
+      expect(source).not.toContain(oldActionReducedTrack);
+      expect(source).toContain('data-copy-action="download-template"');
+      expect(source).toContain('data-full-width-copy="supporting"');
+      expect(source).toContain('data-copy-orphan-guard="supporting"');
+      expect(source).toContain("col-span-full text-pretty");
+    }
+    expect(room).toContain('data-copy-container="prepare-panel"');
+    expect(guide).toContain('data-copy-container="template-preview-panel"');
+    expect(guide).toContain('data-secure-import-scroller="csv-preview"');
+  });
+
   it("associates the file requirements and progress updates with accessible controls", () => {
     expect(room).toContain('aria-describedby="prepare-description import-file-requirements"');
     expect(room).toContain('aria-label="Import progress"');
     expect(room).toContain('role="status"');
     expect(room).toContain('aria-atomic="true"');
     expect(room.match(/focus-visible:ring-2/g)?.length ?? 0).toBeGreaterThanOrEqual(8);
+  });
+
+  it("keeps the rendered fixture fictional, read-only and unavailable in production", () => {
+    expect(renderedFixture).toContain('process.env.NODE_ENV === "production"');
+    expect(renderedFixture).toContain("notFound()");
+    expect(renderedFixture).toContain('firmId="secure-import-rendered-fixture"');
+    expect(renderedFixture).toContain("readOnly");
+    expect(renderedFixture).not.toContain("fetch(");
   });
 });

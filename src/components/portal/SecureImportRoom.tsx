@@ -225,7 +225,7 @@ export default function SecureImportRoom({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" data-secure-import-root>
       <header>
         <p className="font-display text-[0.72rem] uppercase tracking-[0.14em] text-field-label">Clients / Secure import</p>
         <h1 className="mt-2 text-3xl font-extrabold text-navy">Secure Import Room</h1>
@@ -251,16 +251,25 @@ export default function SecureImportRoom({
         </div>
       )}
 
-      <section className="border border-gold-on-light bg-highlight p-5 sm:p-6" aria-labelledby="prepare-heading">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0">
+      <section
+        className="border border-gold-on-light bg-highlight p-5 sm:p-6"
+        aria-labelledby="prepare-heading"
+        data-copy-container="prepare-panel"
+      >
+        <div className="grid items-start gap-x-4 gap-y-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="min-w-0 sm:col-start-1 sm:row-start-1">
             <p className="font-display text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-navy">Prepare</p>
-            <h2 id="prepare-heading" className="mt-1 text-xl font-bold text-navy">Select the completed relationship import CSV</h2>
-            <p id="prepare-description" className="mt-2 text-sm leading-6 text-black/60">
-              The check happens in this browser. You will review the row count, suppression state and any corrections before authorization.
-            </p>
+            <h2 id="prepare-heading" className="mt-1 text-balance text-xl font-bold text-navy" data-copy-orphan-guard="heading">Select the completed relationship import CSV</h2>
           </div>
-          <a href="/templates/caseload-select-relationship-import.csv" download className="shrink-0 text-sm font-bold text-navy underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2">
+          <p
+            id="prepare-description"
+            className="col-span-full text-pretty text-sm leading-6 text-black/60 sm:row-start-2"
+            data-full-width-copy="supporting"
+            data-copy-orphan-guard="supporting"
+          >
+            The check happens in this browser. You will review the row count, suppression state and any corrections before authorization.
+          </p>
+          <a href="/templates/caseload-select-relationship-import.csv" download className="justify-self-start text-sm font-bold text-navy underline underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-navy focus-visible:ring-offset-2 sm:col-start-2 sm:row-start-1 sm:justify-self-end" data-copy-action="download-template">
             Download CSV template
           </a>
         </div>
