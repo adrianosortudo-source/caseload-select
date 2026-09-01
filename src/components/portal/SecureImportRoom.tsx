@@ -227,7 +227,7 @@ export default function SecureImportRoom({
   return (
     <div className="readable-prose space-y-6">
       <header>
-        <p className="font-display text-[0.72rem] uppercase tracking-[0.14em] text-[color:var(--portal-accent)]">Clients / Secure import</p>
+        <p className="font-display text-[0.72rem] uppercase tracking-[0.14em] text-field-label">Clients / Secure import</p>
         <h1 className="measure-heading mt-2 text-3xl font-extrabold text-navy">Secure Import Room</h1>
         <p className="mt-2 text-sm leading-6 text-black/60">
           Validate your firm&apos;s relationship database in this browser, then authorize a protected import into your firm&apos;s CRM.

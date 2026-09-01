@@ -98,7 +98,7 @@ export default function SecureImportTrustGuide() {
         <ol className="mt-6 grid list-none gap-px border border-black/10 bg-black/10 p-0 md:grid-cols-2">
           {IMPORT_PATH.map((item) => (
             <li key={item.label} className="bg-parchment p-4 sm:p-5">
-              <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.12em] text-gold-on-light">
+              <p className="font-display text-[0.64rem] font-semibold uppercase tracking-[0.12em] text-field-label">
                 {item.label}
               </p>
               <h3 className="measure-heading mt-2 text-base font-bold text-navy">{item.title}</h3>
@@ -292,7 +292,7 @@ function ExampleRow({ values }: { values: readonly string[] }) {
     <tr className="bg-white">
       {values.map((value, index) => (
         <td key={`${index}-${value}`} className="border-b border-r border-black/10 px-3 py-2 last:border-r-0">
-          {value || <span className="text-black/25">blank</span>}
+          {value || <span className="text-field-label">blank</span>}
         </td>
       ))}
     </tr>
