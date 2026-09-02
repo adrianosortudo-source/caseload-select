@@ -343,7 +343,10 @@ describe("POST /api/portal/[firmId]/triage/[leadId]/reply", () => {
     const response = await POST(request() as never, params());
 
     expect(response.status).toBe(503);
-    expect(await response.json()).toEqual({ error: "Conversation history is unavailable" });
+    expect(await response.json()).toEqual({
+      error: "Conversation history is unavailable",
+      code: "ledger_unavailable",
+    });
     expect(state.sendCalls).toHaveLength(0);
   });
 

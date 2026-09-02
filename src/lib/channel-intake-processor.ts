@@ -1523,9 +1523,9 @@ export async function finalizeChannelLead(
   // The lead is saved; surface a 1-2 sentence confirmation on the same
   // channel so the conversation closes cleanly. This is what fires the
   // first outbound `pages_messaging` / `whatsapp_business_messaging` /
-  // `instagram_basic` Send API call on single-turn intakes — App Review
-  // needs to see this exercised. Channel-aware: web and voice return
-  // empty (web has its own done page; voice closes verbally).
+  // `instagram_basic` Send API call on single-turn intakes after the
+  // conversation ledger is approved and enabled. Channel-aware: web and
+  // voice return empty (web has its own done page; voice closes verbally).
   //
   // Failure here MUST NOT unwind the persist. The brief is already in
   // screened_leads and the lawyer notification has already been queued.

@@ -26,6 +26,18 @@ describe("channel conversation ledger privilege contract", () => {
     expect(sql).toContain(
       "revoke all privileges on function public.reject_channel_conversation_event_mutation() from public, anon, authenticated, service_role",
     );
+    expect(sql).toContain(
+      "add column channel_conversation_ledger_enabled boolean not null default false",
+    );
+    expect(sql).toContain(
+      "create trigger channel_conversation_events_require_enabled_firm before insert on public.channel_conversation_events",
+    );
+    expect(sql).toContain("and firm.channel_conversation_ledger_enabled = true");
+    expect(sql).toContain("for share");
+    expect(sql).toContain(
+      "revoke all privileges on function public.require_channel_conversation_ledger_enabled() from public, anon, authenticated, service_role",
+    );
+    expect(sql).toContain("notify pgrst, 'reload schema'");
     expect(sql).not.toContain("grant all");
   });
 });

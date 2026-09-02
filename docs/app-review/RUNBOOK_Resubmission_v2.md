@@ -4,11 +4,17 @@ Owner: Adriano Domingues. Submission ID: `1016624077686960`. App ID: `1007304805
 
 This is an operator runbook. It does not authorize an agent to merge, deploy, record, upload, or submit.
 
-## Stop gate: the feature is not live merely because these files exist
+## Stop gate: the applied ledger remains default-off
 
-As of source commit `69505387998055d84f3c621f550d52423e71ae44`, Option B and migration `20260901231830_channel_conversation_ledger.sql` exist in a local branch. This does not prove merge, database application, Vercel deployment, or production behavior.
+Production migration ledger version `20260901231830` was confirmed applied on 2026-09-02, and its `channel_conversation_events` objects exist. This candidate does not remove, rename or rewrite that applied migration. It adds a later forward-only ACL and database-gate migration.
 
-PR #191 source is deployed while the ledger table is absent. In that current release, a history-load failure collapses to an empty thread with a closed reply-window fallback. Portal reply requests still return `503` before any Graph send. Any send that requires the ledger fails closed as `ledger_unavailable`; best-effort inbound ledger writes can fail without aborting core intake; and only non-ledger prompts with a current authoritative inbound timestamp can still send. This deferral PR replaces the ambiguous empty-thread display with a distinct unavailable state and disables its composer. Meta recording and resubmission remain blocked until the ledger is separately approved, applied and verified.
+Until message retention and erasure controls are approved, keep `CHANNEL_CONVERSATION_LEDGER_ENABLED` unset or set to `false`, and keep `intake_firms.channel_conversation_ledger_enabled` false for every firm. With either gate off, the portal renders message history as unavailable and disables the composer. Portal replies return `503` with `ledger_unavailable` before any Graph request. Ledger-dependent sends fail closed, inbound message-body recording is skipped without aborting core intake, and only non-ledger intake prompts backed by the current verified inbound timestamp remain available.
+
+The allowed non-ledger intake prompts are limited to current-window intake clarification, contact capture, contact-capture exhaustion, situation description and discovery questions. Portal replies, post-finalization replies, inbound ledger recording and closing acknowledgements remain blocked while the ledger gate is off.
+
+The unavailable panel is a fault state, not proof that a conversation is empty. Meta recording and resubmission remain blocked until the later ACL migration is applied and verified, retention and erasure controls are approved, the two gates are deliberately enabled for the test firm, and the production smoke test passes.
+
+Disabling an enabled firm is a drain operation, not an instantaneous cancellation of a provider request already in flight. Stop new operator activity, wait for active requests to settle, then turn off the firm flag before the global switch. If a request was already dispatched when disablement began and its terminal ledger write is blocked, preserve the request ID and route it to manual delivery reconciliation. Do not create a replacement message.
 
 Do not record or edit the Meta submission until all boxes below are confirmed:
 
@@ -17,6 +23,10 @@ Do not record or edit the Meta submission until all boxes below are confirmed:
 - [ ] The PR is merged to `main`.
 - [ ] GitHub's production deployment completes; no direct CLI production deploy is used.
 - [ ] Supabase shows migration ledger version `20260901231830` applied.
+- [ ] Supabase shows the later ACL migration applied, with `service_role` limited to `SELECT` and `INSERT` and browser roles holding no ledger privileges.
+- [ ] Message retention and erasure controls are approved.
+- [ ] `CHANNEL_CONVERSATION_LEDGER_ENABLED` is deliberately set to the exact literal `true`.
+- [ ] `intake_firms.channel_conversation_ledger_enabled` is deliberately true only for the approved test firm.
 - [ ] Production portal loads a new channel conversation and the reply API works on the test tenant.
 - [ ] The signed-in portal member has a UUID actor identity; if the UI asks for sign-in again, do that before recording.
 - [ ] Support preview is off. Preview is intentionally read-only.

@@ -230,7 +230,10 @@ export async function POST(
     });
   } catch {
     return NextResponse.json(
-      { error: "Conversation history is unavailable" },
+      {
+        error: "Conversation history is unavailable",
+        code: "ledger_unavailable",
+      },
       { status: 503 },
     );
   }

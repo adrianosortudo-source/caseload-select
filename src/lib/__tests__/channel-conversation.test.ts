@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/channel-conversation-gate', () => ({
+  requireChannelConversationLedger: () => Promise.resolve(),
+}));
 const db = vi.hoisted(() => ({
   timelineRows: [] as Record<string, unknown>[],
   latestInboundAt: null as string | null,

@@ -29,15 +29,20 @@ function parseDirectDatabaseUrl(url: string) {
 
 describe.skipIf(!DB_URL)("channel conversation ACL (real Postgres)", () => {
   let conn: import("pg").Client;
+  let connB: import("pg").Client;
   const firmId = randomUUID();
   const leadId = randomUUID();
+  const disabledFirmId = randomUUID();
+  const disabledLeadId = randomUUID();
   const pendingId = randomUUID();
   const requestId = randomUUID();
 
   beforeAll(async () => {
     const { Client } = await import("pg");
     conn = new Client(parseDirectDatabaseUrl(DB_URL!));
+    connB = new Client(parseDirectDatabaseUrl(DB_URL!));
     await conn.connect();
+    await connB.connect();
     await conn.query(
       "insert into intake_firms (id, name, custom_domain, subdomain) values ($1, 'Channel ACL Fixture', null, $2)",
       [firmId, `channel-acl-fixture-${firmId}`],
@@ -49,9 +54,21 @@ describe.skipIf(!DB_URL)("channel conversation ACL (real Postgres)", () => {
          'general_counsel_advisory', 'general_counsel_advisory', now() + interval '48 hours')`,
       [leadId, firmId, `channel-acl-fixture-${leadId}`],
     );
+    await conn.query(
+      "insert into intake_firms (id, name, custom_domain, subdomain) values ($1, 'Disabled Channel ACL Fixture', null, $2)",
+      [disabledFirmId, `channel-acl-disabled-${disabledFirmId}`],
+    );
+    await conn.query(
+      `insert into screened_leads
+         (id, firm_id, lead_id, brief_json, brief_html, slot_answers, matter_type, practice_area, decision_deadline)
+       values ($1, $2, $3, '{}'::jsonb, '<p></p>', '{}'::jsonb,
+         'general_counsel_advisory', 'general_counsel_advisory', now() + interval '48 hours')`,
+      [disabledLeadId, disabledFirmId, `channel-acl-disabled-${disabledLeadId}`],
+    );
   }, 30000);
 
   afterAll(async () => {
+    await connB.end();
     await conn.end();
   });
 
@@ -69,6 +86,65 @@ describe.skipIf(!DB_URL)("channel conversation ACL (real Postgres)", () => {
   }
 
   it("grants service_role exactly SELECT and INSERT while browser roles have none", async () => {
+    const flagColumn = await conn.query<{
+      not_null: boolean;
+      default_false: boolean;
+    }>(
+      `select columns.is_nullable = 'NO' as not_null,
+              columns.column_default in ('false', 'false::boolean') as default_false
+       from information_schema.columns
+       where columns.table_schema = 'public'
+         and columns.table_name = 'intake_firms'
+         and columns.column_name = 'channel_conversation_ledger_enabled'`,
+    );
+    expect(flagColumn.rows).toEqual([{ not_null: true, default_false: true }]);
+
+    const browserFlagPrivileges = await conn.query<{
+      role_name: string;
+      can_select: boolean;
+      can_update: boolean;
+    }>(
+      `select role_name,
+              has_column_privilege(
+                role_name,
+                'public.intake_firms',
+                'channel_conversation_ledger_enabled',
+                'SELECT'
+              ) as can_select,
+              has_column_privilege(
+                role_name,
+                'public.intake_firms',
+                'channel_conversation_ledger_enabled',
+                'UPDATE'
+              ) as can_update
+       from unnest(array['anon', 'authenticated']) as role_name
+       order by role_name`,
+    );
+    expect(browserFlagPrivileges.rows).toEqual([
+      { role_name: "anon", can_select: false, can_update: false },
+      { role_name: "authenticated", can_select: false, can_update: false },
+    ]);
+
+    const rls = await conn.query<{
+      rls_enabled: boolean;
+      rls_forced: boolean;
+      policy_count: number;
+    }>(
+      `select tables.relrowsecurity as rls_enabled,
+              tables.relforcerowsecurity as rls_forced,
+              (select count(*)::integer
+               from pg_policies policies
+               where policies.schemaname = 'public'
+                 and policies.tablename = 'channel_conversation_events') as policy_count
+       from pg_class tables
+       join pg_namespace namespaces on namespaces.oid = tables.relnamespace
+       where namespaces.nspname = 'public'
+         and tables.relname = 'channel_conversation_events'`,
+    );
+    expect(rls.rows).toEqual([
+      { rls_enabled: true, rls_forced: true, policy_count: 0 },
+    ]);
+
     const direct = await conn.query<{ grantee: string; privilege_type: string }>(
       `select case when acl.grantee = 0 then 'PUBLIC' else roles.rolname end as grantee,
               acl.privilege_type
@@ -154,6 +230,42 @@ describe.skipIf(!DB_URL)("channel conversation ACL (real Postgres)", () => {
   });
 
   it("denies direct trigger-function execution to every API role", async () => {
+    const functionSafety = await conn.query<{
+      function_name: string;
+      security_invoker: boolean;
+      empty_search_path: boolean;
+    }>(
+      `select functions.proname as function_name,
+              not functions.prosecdef as security_invoker,
+              functions.proconfig = array['search_path=""']::text[] as empty_search_path
+       from pg_proc functions
+       join pg_namespace namespaces on namespaces.oid = functions.pronamespace
+       where namespaces.nspname = 'public'
+         and functions.proname in (
+           'reject_channel_conversation_event_mutation',
+           'require_channel_conversation_ledger_enabled',
+           'validate_channel_conversation_terminal'
+         )
+       order by functions.proname`,
+    );
+    expect(functionSafety.rows).toEqual([
+      {
+        function_name: "reject_channel_conversation_event_mutation",
+        security_invoker: true,
+        empty_search_path: true,
+      },
+      {
+        function_name: "require_channel_conversation_ledger_enabled",
+        security_invoker: true,
+        empty_search_path: true,
+      },
+      {
+        function_name: "validate_channel_conversation_terminal",
+        security_invoker: true,
+        empty_search_path: true,
+      },
+    ]);
+
     const direct = await conn.query<{ function_name: string; grantee: string }>(
       `select functions.proname as function_name,
               case when acl.grantee = 0 then 'PUBLIC' else roles.rolname end as grantee
@@ -164,6 +276,7 @@ describe.skipIf(!DB_URL)("channel conversation ACL (real Postgres)", () => {
        where namespaces.nspname = 'public'
          and functions.proname in (
            'reject_channel_conversation_event_mutation',
+           'require_channel_conversation_ledger_enabled',
            'validate_channel_conversation_terminal'
          )
          and (acl.grantee = 0 or roles.rolname in ('anon', 'authenticated', 'service_role'))`,
@@ -175,6 +288,7 @@ describe.skipIf(!DB_URL)("channel conversation ACL (real Postgres)", () => {
               has_function_privilege(role_name, format('public.%I()', function_name), 'EXECUTE') as allowed
        from unnest(array[
          'reject_channel_conversation_event_mutation',
+         'require_channel_conversation_ledger_enabled',
          'validate_channel_conversation_terminal'
        ]) as function_name
        cross join unnest(array['anon', 'authenticated', 'service_role']) as role_name
@@ -184,6 +298,45 @@ describe.skipIf(!DB_URL)("channel conversation ACL (real Postgres)", () => {
   });
 
   it("keeps trigger enforcement active after direct function EXECUTE is revoked", async () => {
+    await expect(
+      asServiceRole(
+        `insert into channel_conversation_events
+           (id, screened_lead_id, firm_id, channel, direction, source, body, status,
+            client_request_id, actor_type, actor_id, occurred_at)
+         values ($1, $2, $3, 'facebook', 'outbound', 'operator', 'Blocked body',
+           'pending', $4, 'lawyer', 'fixture-lawyer', now())`,
+        [pendingId, leadId, firmId, requestId],
+      ),
+    ).rejects.toMatchObject({ code: "42501" });
+
+    const blockedRows = await conn.query<{ count: string }>(
+      "select count(*)::text as count from channel_conversation_events where firm_id = $1",
+      [firmId],
+    );
+    expect(blockedRows.rows[0].count).toBe("0");
+
+    await conn.query(
+      "update intake_firms set channel_conversation_ledger_enabled = true where id = $1",
+      [firmId],
+    );
+
+    await expect(
+      asServiceRole(
+        `insert into channel_conversation_events
+           (screened_lead_id, firm_id, channel, direction, source, body, status,
+            client_request_id, actor_type, actor_id, occurred_at)
+         values ($1, $2, 'facebook', 'outbound', 'operator', 'Other firm body',
+           'pending', $3, 'lawyer', 'fixture-lawyer', now())`,
+        [disabledLeadId, disabledFirmId, randomUUID()],
+      ),
+    ).rejects.toMatchObject({ code: "42501" });
+
+    const disabledFirmRows = await conn.query<{ count: string }>(
+      "select count(*)::text as count from channel_conversation_events where firm_id = $1",
+      [disabledFirmId],
+    );
+    expect(disabledFirmRows.rows[0].count).toBe("0");
+
     await asServiceRole(
       `insert into channel_conversation_events
          (id, screened_lead_id, firm_id, channel, direction, source, body, status,
@@ -221,5 +374,95 @@ describe.skipIf(!DB_URL)("channel conversation ACL (real Postgres)", () => {
     await expect(
       conn.query("delete from channel_conversation_events where id = $1", [pendingId]),
     ).rejects.toThrow("channel_conversation_events is append-only");
+  });
+
+  it("serializes ledger inserts with a concurrent firm disable in both lock orderings", async () => {
+    const startedBeforeDisableRequest = randomUUID();
+    const startedBeforeDisableBody = `Started before disable ${randomUUID()}`;
+
+    await conn.query(
+      "update intake_firms set channel_conversation_ledger_enabled = true where id = $1",
+      [firmId],
+    );
+
+    await conn.query("begin");
+    await conn.query("set local role service_role");
+    await conn.query(
+      `insert into channel_conversation_events
+         (screened_lead_id, firm_id, channel, direction, source, body, status,
+          client_request_id, actor_type, actor_id, occurred_at)
+       values ($1, $2, 'facebook', 'outbound', 'operator', $3,
+         'pending', $4, 'lawyer', 'fixture-lawyer', now())`,
+      [leadId, firmId, startedBeforeDisableBody, startedBeforeDisableRequest],
+    );
+
+    let disableSettled = false;
+    const disable = (async () => {
+      await connB.query("begin");
+      await connB.query(
+        "update intake_firms set channel_conversation_ledger_enabled = false where id = $1",
+        [firmId],
+      );
+      disableSettled = true;
+      await connB.query("commit");
+    })();
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(disableSettled).toBe(false);
+    await conn.query("commit");
+    await disable;
+
+    const committedBeforeDisable = await conn.query<{ count: string }>(
+      "select count(*)::text as count from channel_conversation_events where firm_id = $1 and body = $2",
+      [firmId, startedBeforeDisableBody],
+    );
+    expect(committedBeforeDisable.rows[0].count).toBe("1");
+
+    await conn.query(
+      "update intake_firms set channel_conversation_ledger_enabled = true where id = $1",
+      [firmId],
+    );
+    await connB.query("begin");
+    await connB.query(
+      "update intake_firms set channel_conversation_ledger_enabled = false where id = $1",
+      [firmId],
+    );
+
+    const blockedAfterDisableBody = `Blocked after disable ${randomUUID()}`;
+    await conn.query("begin");
+    await conn.query("set local role service_role");
+    let insertSettled = false;
+    const insertBehindDisable = conn
+      .query(
+        `insert into channel_conversation_events
+           (screened_lead_id, firm_id, channel, direction, source, body, status,
+            client_request_id, actor_type, actor_id, occurred_at)
+         values ($1, $2, 'facebook', 'outbound', 'operator', $3,
+           'pending', $4, 'lawyer', 'fixture-lawyer', now())`,
+        [leadId, firmId, blockedAfterDisableBody, randomUUID()],
+      )
+      .then(
+        () => ({ ok: true as const, error: null }),
+        (error: unknown) => ({ ok: false as const, error }),
+      )
+      .finally(() => {
+        insertSettled = true;
+      });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(insertSettled).toBe(false);
+    await connB.query("commit");
+    const blockedOutcome = await insertBehindDisable;
+    expect(blockedOutcome).toMatchObject({
+      ok: false,
+      error: { code: "42501" },
+    });
+    await conn.query("rollback");
+
+    const blockedAfterDisable = await conn.query<{ count: string }>(
+      "select count(*)::text as count from channel_conversation_events where firm_id = $1 and body = $2",
+      [firmId, blockedAfterDisableBody],
+    );
+    expect(blockedAfterDisable.rows[0].count).toBe("0");
   });
 });

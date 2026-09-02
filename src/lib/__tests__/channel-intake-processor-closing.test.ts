@@ -3,10 +3,9 @@
  *
  * After the persist insert lands a screened_lead, the processor must
  * emit a 1-2 sentence acknowledgment on the same channel via the
- * existing Send API path. This is what fires the first outbound
- * pages_messaging / whatsapp_business_messaging Send API call on
- * single-turn intakes — required by Meta App Review and necessary so
- * the lead doesn't see their message land in a void.
+ * existing Send API path after the conversation ledger is approved and
+ * enabled. While the ledger gate is off, this path fails closed without
+ * unwinding the already-persisted lead.
  *
  * Closing-message failure MUST NOT unwind the persist (the brief is
  * already saved). These tests lock both directions.
@@ -29,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   updateChannelSession: vi.fn(() => Promise.resolve()),
   finalizeChannelSession: vi.fn(() => Promise.resolve()),
   persistUnconfirmedInquiry: vi.fn(() => Promise.resolve()),
+  recordInboundConversationEvent: vi.fn(),
   insertedRow: {
     id: 'row-uuid',
     lead_id: 'L-test-1',
@@ -67,6 +67,11 @@ vi.mock('@/lib/channel-intake-session-store', () => ({
 
 vi.mock('@/lib/unconfirmed-inquiry', () => ({
   persistUnconfirmedInquiry: mocks.persistUnconfirmedInquiry,
+}));
+
+vi.mock('@/lib/channel-conversation', () => ({
+  normalizeAuthoritativeInboundAt: (value: string | null | undefined) => value ?? null,
+  recordInboundConversationEvent: mocks.recordInboundConversationEvent,
 }));
 
 vi.mock('@/lib/supabase-admin', () => {
@@ -136,6 +141,8 @@ beforeEach(() => {
   mocks.loadOpenChannelSession.mockResolvedValue(null);
   mocks.persistUnconfirmedInquiry.mockReset();
   mocks.persistUnconfirmedInquiry.mockResolvedValue(undefined);
+  mocks.recordInboundConversationEvent.mockReset();
+  mocks.recordInboundConversationEvent.mockResolvedValue({ ok: true });
   mocks.insertError = null;
   mocks.insertedRow = {
     id: 'row-uuid',
@@ -296,6 +303,34 @@ describe('processChannelInbound — closing message dispatch', () => {
 
     expect(r.persisted).toBe(true);
     expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the screened lead when the disabled ledger skips inbound storage and the closing send', async () => {
+    mocks.loadOpenChannelSession.mockResolvedValueOnce(
+      discoveryCapExhaustedSession('whatsapp') as never,
+    );
+    mocks.recordInboundConversationEvent.mockResolvedValueOnce({ ok: false });
+    mocks.sendChannelMessage.mockResolvedValueOnce({
+      sent: false,
+      reason: 'conversation ledger unavailable',
+      code: 'ledger_unavailable',
+    });
+
+    const r = await processChannelInbound({
+      firmId: FIRM_ID,
+      text: 'It was about 75k worth of product unpaid.',
+      sender: whatsappSenderWithContact(),
+      occurredAt: '2026-09-02T12:00:00.000Z',
+    });
+
+    expect(r.persisted).toBe(true);
+    expect(r.briefId).toBe('row-uuid');
+    expect(mocks.recordInboundConversationEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.sendChannelMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ledger: expect.objectContaining({ source: 'intake_automation' }),
+      }),
+    );
   });
 
   it('does not unwind the persist when the closing-message send throws', async () => {
