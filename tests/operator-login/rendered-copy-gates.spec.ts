@@ -80,6 +80,8 @@ for (const width of WIDTHS) {
     await assertRenderedCopyGates(page);
     await page.screenshot({ path: path.join(EVIDENCE, `${width}-operator-invalid.png`), fullPage: true });
 
+    await page.goto("/operator/login");
+    await settle(page);
     await page.route("**/api/operator/request-link", async (route) => {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
     });
@@ -94,6 +96,24 @@ for (const width of WIDTHS) {
     await settle(page);
     await expect(page.getByRole("heading", { name: "Lawyer portal" })).toBeVisible();
     await assertRenderedCopyGates(page);
-    await page.screenshot({ path: path.join(EVIDENCE, `${width}-lawyer-comparison.png`), fullPage: true });
+    await page.screenshot({ path: path.join(EVIDENCE, `${width}-lawyer-initial.png`), fullPage: true });
+
+    await page.goto("/portal/login?error=invalid");
+    await settle(page);
+    await expect(page.getByText("This link is invalid.", { exact: false })).toBeVisible();
+    await assertRenderedCopyGates(page);
+    await page.screenshot({ path: path.join(EVIDENCE, `${width}-lawyer-invalid.png`), fullPage: true });
+
+    await page.goto("/portal/login");
+    await settle(page);
+    await page.route("**/api/portal/request-link", async (route) => {
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+    });
+    await page.getByLabel("Email").fill("lawyer@example.test");
+    await page.getByRole("button", { name: "Send sign-in link" }).click();
+    await expect(page.getByText("Check your inbox")).toBeVisible();
+    await settle(page);
+    await assertRenderedCopyGates(page);
+    await page.screenshot({ path: path.join(EVIDENCE, `${width}-lawyer-confirmation.png`), fullPage: true });
   });
 }

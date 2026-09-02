@@ -88,12 +88,12 @@ beforeEach(() => {
 });
 
 describe("GET preview/enter: required test 3 (unauthorized entry rejected)", () => {
-  it("redirects to /portal/login and writes no audit event when there is no operator session", async () => {
+  it("redirects to /operator/login and writes no audit event when there is no operator session", async () => {
     state.operatorSession = null;
     const res = await GET(makeReq(FIRM, "?target=lawyer"), params(FIRM));
     expect(res.status).toBeGreaterThanOrEqual(300);
     expect(res.status).toBeLessThan(400);
-    expect(res.headers.get("location")).toContain("/portal/login");
+    expect(res.headers.get("location")).toContain("/operator/login?error=missing");
     expect(state.loggedOpens).toHaveLength(0);
   });
 });
