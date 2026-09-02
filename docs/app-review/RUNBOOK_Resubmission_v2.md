@@ -6,7 +6,7 @@ This is an operator runbook. It does not authorize an agent to merge, deploy, re
 
 ## Stop gate: the feature is not live merely because these files exist
 
-As of source commit `69505387998055d84f3c621f550d52423e71ae44`, Option B and migration `20260901231830_channel_conversation_ledger.sql` exist in a local branch. This does not prove merge, database application, Vercel deployment, or production behavior.
+Option B source exists, but `20260901231830_channel_conversation_ledger.sql` is deferred under `supabase/migrations-draft/`. It is not part of the active migration chain and has not been approved or applied. Privacy, deletion, retention and access-control review must be completed in a separate PR before the channel feature can be released.
 
 Do not record or edit the Meta submission until all boxes below are confirmed:
 
@@ -14,7 +14,7 @@ Do not record or edit the Meta submission until all boxes below are confirmed:
 - [ ] The branch is pushed and CI is green, including the real-Postgres migration job.
 - [ ] The PR is merged to `main`.
 - [ ] GitHub's production deployment completes; no direct CLI production deploy is used.
-- [ ] Supabase shows migration ledger version `20260901231830` applied.
+- [ ] A separately reviewed replacement or remediated channel-ledger migration is approved, promoted to `supabase/migrations/` and shown as applied in the Supabase migration ledger.
 - [ ] Production portal loads a new channel conversation and the reply API works on the test tenant.
 - [ ] The signed-in portal member has a UUID actor identity; if the UI asks for sign-in again, do that before recording.
 - [ ] Support preview is off. Preview is intentionally read-only.

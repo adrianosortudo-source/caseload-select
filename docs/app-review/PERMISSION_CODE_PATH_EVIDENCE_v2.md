@@ -39,9 +39,9 @@ They were approved in submission `1016624077686960`. The new evidence issue conc
 | Recheck immediately before the Graph side effect | `src/lib/channel-send.ts:258-273` |
 | Missing, malformed and unreasonable future inbound timestamps fail closed | `src/lib/channel-conversation.ts:84-108` |
 | Idempotent portal retries preserve one request ID for an unchanged draft | `src/components/portal/ChannelConversationPanel.tsx:117-190` |
-| Append-only, service-role-only event ledger | `supabase/migrations/20260901231830_channel_conversation_ledger.sql:15-151` |
+| Proposed append-only, service-role-only event ledger, deferred pending privacy, deletion, retention and access-control review | `supabase/migrations-draft/20260901231830_channel_conversation_ledger.sql:15-151` |
 | Expiry sweep suppresses the former after-window closing send | `src/app/api/cron/expire-channel-intake-sessions/route.ts:241-248` |
 
 ## Evidence boundary
 
-The migration and source changes are present on this branch only at the source basis above. This file does **not** claim that the migration has been applied, the branch has been merged, or the feature has been deployed. Recording and resubmission must wait until the PR is approved, merged, CI passes, production auto-deploy completes, and the production database ledger is verified.
+The channel-ledger SQL is preserved as a draft and is not part of the active migration chain. This file does **not** claim that the migration has been approved or applied, or that the feature has been deployed. Recording and resubmission must wait for a separate reviewed migration PR, explicit database-application approval, verified application, and production verification.
