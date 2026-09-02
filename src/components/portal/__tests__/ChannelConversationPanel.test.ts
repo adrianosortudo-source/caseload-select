@@ -69,9 +69,11 @@ describe("ChannelConversationPanel", () => {
       intakeTranscript: "Legacy intake answer",
     });
 
-    expect(screen.getByRole("heading", { name: "Instagram conversation" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Message thread" })).toBeTruthy();
+    const channelLabel = screen.getByText("Channel:");
     const workspaceLabel = screen.getByText("Firm workspace:");
     const assetLabel = screen.getByText("Configured Meta asset ID:");
+    expect(channelLabel.parentElement?.textContent).toContain("Instagram");
     expect(workspaceLabel.parentElement?.textContent).toContain("DRG Law");
     expect(assetLabel.parentElement?.textContent).toContain("page-123");
     expect(screen.queryByText(/Connected as/i)).toBeNull();

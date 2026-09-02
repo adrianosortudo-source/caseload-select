@@ -207,9 +207,12 @@ export default function ChannelConversationPanel({
           className="mt-1 w-full text-lg font-bold text-navy text-pretty sm:text-xl"
           data-ui-copy="heading"
         >
-          {CHANNEL_LABELS[channel]} conversation
+          Message thread
         </h2>
         <div className="mt-2 w-full space-y-1 text-xs text-black/55">
+          <p className="w-full">
+            <span className="font-semibold text-black/65">Channel:</span> {CHANNEL_LABELS[channel]}
+          </p>
           <p className="w-full">
             <span className="font-semibold text-black/65">Firm workspace:</span> {firmName}
           </p>
