@@ -7,56 +7,18 @@ import {
   type ClientImportIssue,
   type ClientImportRow,
 } from "@/lib/client-import-csv";
+import {
+  clearSecureImportResumeState,
+  isMatchingSecureImportResume,
+  loadSecureImportResumeState,
+  nextSecureImportResumeIndex,
+  saveSecureImportResumeState,
+  secureImportChunk,
+  SECURE_IMPORT_CHUNK_SIZE,
+  type SecureImportCounts,
+} from "./secure-import-resume";
 
-type Counts = {
-  processed: number;
-  created: number;
-  existing: number;
-  held: number;
-  invalid: number;
-  failed: number;
-  reconcile: number;
-};
-
-const EMPTY_COUNTS: Counts = { processed: 0, created: 0, existing: 0, held: 0, invalid: 0, failed: 0, reconcile: 0 };
-const RESUME_STORAGE_VERSION = "v1";
-
-type ResumeState = {
-  batchId: string;
-  fileHash: string;
-  rowCount: number;
-  resumeIndex: number;
-  counts?: Counts;
-};
-
-function resumeStorageKey(firmId: string): string {
-  return `secure-import:${RESUME_STORAGE_VERSION}:${firmId}`;
-}
-
-function loadResumeState(firmId: string): ResumeState | null {
-  try {
-    const value = localStorage.getItem(resumeStorageKey(firmId));
-    return value ? (JSON.parse(value) as ResumeState) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveResumeState(firmId: string, state: ResumeState): void {
-  try {
-    localStorage.setItem(resumeStorageKey(firmId), JSON.stringify(state));
-  } catch {
-    // Resumability is best-effort; import authorization and idempotency stay server-side.
-  }
-}
-
-function clearResumeState(firmId: string): void {
-  try {
-    localStorage.removeItem(resumeStorageKey(firmId));
-  } catch {
-    // Disabled storage must not prevent a securely authorized import.
-  }
-}
+const EMPTY_COUNTS: SecureImportCounts = { processed: 0, created: 0, existing: 0, held: 0, invalid: 0, failed: 0, reconcile: 0 };
 
 async function sha256Hex(file: File): Promise<string> {
   const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
@@ -100,7 +62,7 @@ export default function SecureImportRoom({
   const [batchId, setBatchId] = useState("");
   const [resumeIndex, setResumeIndex] = useState(0);
   const [resumeReady, setResumeReady] = useState(false);
-  const [counts, setCounts] = useState<Counts>(EMPTY_COUNTS);
+  const [counts, setCounts] = useState<SecureImportCounts>(EMPTY_COUNTS);
   const [status, setStatus] = useState<"prepare" | "authorize" | "importing" | "results">("prepare");
 
   const suppressedCount = useMemo(
@@ -134,8 +96,8 @@ export default function SecureImportRoom({
     setRows(parsed.rows);
     setFileHash(hash);
     try {
-      const saved = loadResumeState(firmId);
-      if (saved?.batchId && saved.fileHash === hash && saved.rowCount === parsed.rows.length) {
+      const saved = loadSecureImportResumeState(firmId);
+      if (isMatchingSecureImportResume(saved, hash, parsed.rows.length)) {
         setBatchId(saved.batchId);
         setResumeIndex(Number(saved.resumeIndex ?? 0));
         setCounts(saved.counts ?? EMPTY_COUNTS);
@@ -143,7 +105,7 @@ export default function SecureImportRoom({
         setStatus("importing");
       }
     } catch {
-      clearResumeState(firmId);
+      clearSecureImportResumeState(firmId);
     }
   }
 
@@ -178,7 +140,7 @@ export default function SecureImportRoom({
       });
       const newBatchId = String(start.batchId);
       setBatchId(newBatchId);
-      saveResumeState(firmId, { batchId: newBatchId, fileHash, rowCount: rows.length, resumeIndex: 0 });
+      saveSecureImportResumeState(firmId, { batchId: newBatchId, fileHash, rowCount: rows.length, resumeIndex: 0 });
       setStatus("importing");
       await runChunks(newBatchId, 0);
     } catch (caught) {
@@ -189,24 +151,25 @@ export default function SecureImportRoom({
   }
 
   async function runChunks(targetBatchId: string, startIndex: number) {
-    for (let index = startIndex; index < rows.length; index += 25) {
+    for (let index = startIndex; index < rows.length; index += SECURE_IMPORT_CHUNK_SIZE) {
       const payload = await jsonPost(`/api/portal/${firmId}/client-imports/${targetBatchId}/rows`, {
-        rows: rows.slice(index, index + 25),
+        rows: secureImportChunk(rows, index),
       });
-      const nextCounts = payload.counts as Counts;
+      const nextCounts = payload.counts as SecureImportCounts;
       setCounts(nextCounts);
       const chunkOutcomes = Array.isArray(payload.outcomes)
         ? payload.outcomes as Array<{ status?: unknown }>
         : [];
       if (chunkOutcomes.some((outcome) => outcome.status === "processing")) {
         setResumeIndex(index);
-        saveResumeState(firmId, { batchId: targetBatchId, fileHash, rowCount: rows.length, resumeIndex: index, counts: nextCounts });
+        saveSecureImportResumeState(firmId, { batchId: targetBatchId, fileHash, rowCount: rows.length, resumeIndex: index, counts: nextCounts });
         throw new Error("rows_still_processing");
       }
-      setResumeIndex(index + 25);
-      saveResumeState(firmId, { batchId: targetBatchId, fileHash, rowCount: rows.length, resumeIndex: index + 25, counts: nextCounts });
+      const nextResumeIndex = nextSecureImportResumeIndex(index);
+      setResumeIndex(nextResumeIndex);
+      saveSecureImportResumeState(firmId, { batchId: targetBatchId, fileHash, rowCount: rows.length, resumeIndex: nextResumeIndex, counts: nextCounts });
     }
-    clearResumeState(firmId);
+    clearSecureImportResumeState(firmId);
     setResumeReady(false);
     setStatus("results");
   }
