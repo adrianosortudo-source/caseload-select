@@ -90,6 +90,7 @@ vi.mock("@/lib/supabase-admin", () => ({
     rpc: async (name: string, params: Record<string, unknown>) => {
       const batch = database.secure_client_import_batches.find((row) => row.id === params.p_batch_id);
       if (!batch) return { data: name === "claim_secure_client_import_rows" ? [{ outcome: "batch_not_found" }] : { outcome: "batch_not_found" }, error: null };
+      const currentBatch = batch;
 
       function refresh() {
         const rows = database.secure_client_import_rows.filter((row) => row.batch_id === params.p_batch_id);
@@ -103,21 +104,21 @@ vi.mock("@/lib/supabase-admin", () => ({
           failed: final.filter((row) => row.status === "failed").length,
           reconcile: final.filter((row) => row.status === "reconcile_required").length,
         };
-        const complete = counts.processed === Number(batch.declared_row_count);
+        const complete = counts.processed === Number(currentBatch.declared_row_count);
         const exceptions = counts.held + counts.invalid + counts.failed + counts.reconcile > 0;
         const hasProcessing = rows.some((row) => row.status === "processing");
-        batch.processed_row_count = counts.processed;
-        batch.created_count = counts.created;
-        batch.existing_count = counts.existing;
-        batch.held_count = counts.held;
-        batch.invalid_count = counts.invalid;
-        batch.failed_count = counts.failed;
-        batch.reconcile_count = counts.reconcile;
-        batch.status = complete
+        currentBatch.processed_row_count = counts.processed;
+        currentBatch.created_count = counts.created;
+        currentBatch.existing_count = counts.existing;
+        currentBatch.held_count = counts.held;
+        currentBatch.invalid_count = counts.invalid;
+        currentBatch.failed_count = counts.failed;
+        currentBatch.reconcile_count = counts.reconcile;
+        currentBatch.status = complete
           ? (exceptions ? "completed_with_exceptions" : "completed")
           : (counts.processed || hasProcessing ? "processing" : "pending");
-        if (complete && !batch.completed_at) batch.completed_at = new Date().toISOString();
-        return { outcome: "ok", status: batch.status, counts };
+        if (complete && !currentBatch.completed_at) currentBatch.completed_at = new Date().toISOString();
+        return { outcome: "ok", status: currentBatch.status, counts };
       }
 
       if (name === "refresh_secure_client_import_batch") return { data: refresh(), error: null };
@@ -161,7 +162,7 @@ vi.mock("@/lib/supabase-admin", () => ({
           });
           return { row_number: item.row_number, outcome: "claimed", status: "processing", claim_token: token };
         });
-        batch.status = batch.status === "pending" ? "processing" : batch.status;
+        currentBatch.status = currentBatch.status === "pending" ? "processing" : currentBatch.status;
         return { data: claims, error: null };
       }
       if (name === "finalize_secure_client_import_row") {
