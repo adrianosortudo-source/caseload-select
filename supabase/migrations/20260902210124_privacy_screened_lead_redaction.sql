@@ -270,10 +270,10 @@ begin
        and old.occurred_at <= pg_catalog.clock_timestamp() - interval '3 years'
        and exists (
          select 1
-           from private.privacy_expiry_authorizations as authorization
-          where authorization.backend_pid = pg_catalog.pg_backend_pid()
-            and authorization.transaction_id = pg_catalog.pg_current_xact_id()::text
-            and authorization.deletion_request_id = old.privacy_deletion_request_id
+           from private.privacy_expiry_authorizations as expiry_auth
+          where expiry_auth.backend_pid = pg_catalog.pg_backend_pid()
+            and expiry_auth.transaction_id = pg_catalog.pg_current_xact_id()::text
+            and expiry_auth.deletion_request_id = old.privacy_deletion_request_id
        ) then
       return old;
     end if;
@@ -858,10 +858,10 @@ begin
        and old.captured_at <= pg_catalog.clock_timestamp() - interval '3 years'
        and exists (
          select 1
-           from private.privacy_expiry_authorizations as authorization
-          where authorization.backend_pid = pg_catalog.pg_backend_pid()
-            and authorization.transaction_id = pg_catalog.pg_current_xact_id()::text
-            and authorization.deletion_request_id = old.privacy_deletion_request_id
+           from private.privacy_expiry_authorizations as expiry_auth
+          where expiry_auth.backend_pid = pg_catalog.pg_backend_pid()
+            and expiry_auth.transaction_id = pg_catalog.pg_current_xact_id()::text
+            and expiry_auth.deletion_request_id = old.privacy_deletion_request_id
        ) then
       return old;
     end if;
@@ -986,10 +986,10 @@ begin
        and old.observed_at <= pg_catalog.clock_timestamp() - interval '3 years'
        and exists (
          select 1
-           from private.privacy_expiry_authorizations as authorization
-          where authorization.backend_pid = pg_catalog.pg_backend_pid()
-            and authorization.transaction_id = pg_catalog.pg_current_xact_id()::text
-            and authorization.deletion_request_id = old.privacy_deletion_request_id
+           from private.privacy_expiry_authorizations as expiry_auth
+          where expiry_auth.backend_pid = pg_catalog.pg_backend_pid()
+            and expiry_auth.transaction_id = pg_catalog.pg_current_xact_id()::text
+            and expiry_auth.deletion_request_id = old.privacy_deletion_request_id
        ) then
       return old;
     end if;
@@ -2218,9 +2218,9 @@ begin
        )
      );
 
-  delete from private.privacy_expiry_authorizations as authorization
-   where authorization.backend_pid = pg_catalog.pg_backend_pid()
-     and authorization.transaction_id = pg_catalog.pg_current_xact_id()::text;
+  delete from private.privacy_expiry_authorizations as expiry_auth
+   where expiry_auth.backend_pid = pg_catalog.pg_backend_pid()
+     and expiry_auth.transaction_id = pg_catalog.pg_current_xact_id()::text;
 
   return pg_catalog.jsonb_build_object(
     'ok', true,
