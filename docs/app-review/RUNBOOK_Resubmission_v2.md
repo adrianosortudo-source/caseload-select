@@ -6,13 +6,13 @@ This is an operator runbook. It does not authorize an agent to merge, deploy, re
 
 ## Stop gate: the applied ledger remains default-off
 
-Production migration ledger version `20260901231830` was confirmed applied on 2026-09-02, and its `channel_conversation_events` objects exist. This candidate does not remove, rename or rewrite that applied migration. It adds a later forward-only ACL and database-gate migration.
+Production migration ledger version `20260901231830` was confirmed applied on 2026-09-02, and its `channel_conversation_events` objects exist. This candidate does not remove, rename or rewrite that applied migration. The merged `20260902111504` ACL migration remains byte-identical, and this follow-up adds a separate later default-off database-gate migration.
 
 Until message retention and erasure controls are approved, keep `CHANNEL_CONVERSATION_LEDGER_ENABLED` unset or set to `false`, and keep `intake_firms.channel_conversation_ledger_enabled` false for every firm. With either gate off, the portal renders message history as unavailable and disables the composer. Portal replies return `503` with `ledger_unavailable` before any Graph request. Ledger-dependent sends fail closed, inbound message-body recording is skipped without aborting core intake, and only non-ledger intake prompts backed by the current verified inbound timestamp remain available.
 
 The allowed non-ledger intake prompts are limited to current-window intake clarification, contact capture, contact-capture exhaustion, situation description and discovery questions. Portal replies, post-finalization replies, inbound ledger recording and closing acknowledgements remain blocked while the ledger gate is off.
 
-The unavailable panel is a fault state, not proof that a conversation is empty. Meta recording and resubmission remain blocked until the later ACL migration is applied and verified, retention and erasure controls are approved, the two gates are deliberately enabled for the test firm, and the production smoke test passes.
+The unavailable panel is a fault state, not proof that a conversation is empty. Meta recording and resubmission remain blocked until both later migrations are applied and verified, retention and erasure controls are approved, the two gates are deliberately enabled for the test firm, and the production smoke test passes.
 
 Disabling an enabled firm is a drain operation, not an instantaneous cancellation of a provider request already in flight. Stop new operator activity, wait for active requests to settle, then turn off the firm flag before the global switch. If a request was already dispatched when disablement began and its terminal ledger write is blocked, preserve the request ID and route it to manual delivery reconciliation. Do not create a replacement message.
 
@@ -23,7 +23,8 @@ Do not record or edit the Meta submission until all boxes below are confirmed:
 - [ ] The PR is merged to `main`.
 - [ ] GitHub's production deployment completes; no direct CLI production deploy is used.
 - [ ] Supabase shows migration ledger version `20260901231830` applied.
-- [ ] Supabase shows the later ACL migration applied, with `service_role` limited to `SELECT` and `INSERT` and browser roles holding no ledger privileges.
+- [ ] Supabase shows migration `20260902111504` applied, with `service_role` limited to `SELECT` and `INSERT` and browser roles holding no ledger privileges.
+- [ ] Supabase shows migration `20260902123126` applied, with the default-false firm flag and insert guard verified.
 - [ ] Message retention and erasure controls are approved.
 - [ ] `CHANNEL_CONVERSATION_LEDGER_ENABLED` is deliberately set to the exact literal `true`.
 - [ ] `intake_firms.channel_conversation_ledger_enabled` is deliberately true only for the approved test firm.

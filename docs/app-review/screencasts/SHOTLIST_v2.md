@@ -16,7 +16,7 @@ Do not record until all of these are true:
 - Required CI, including real-Postgres migration validation, has passed.
 - GitHub/Vercel production deployment from merged `main` has completed.
 - `20260901231830_channel_conversation_ledger.sql` is confirmed applied with the matching ledger version.
-- The later channel-ledger ACL and firm-gate migration is confirmed applied and verified.
+- The later channel-ledger ACL and default-off firm-gate migrations are confirmed applied and verified.
 - Message retention and erasure controls are approved.
 - `CHANNEL_CONVERSATION_LEDGER_ENABLED` is the exact literal `true`, and the approved test firm's `channel_conversation_ledger_enabled` flag is true.
 - A fresh inbound message from the test user is visible and less than 24 hours old.

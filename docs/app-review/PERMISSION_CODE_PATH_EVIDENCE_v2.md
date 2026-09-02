@@ -1,6 +1,6 @@
 # Meta App Review permission-to-code-path evidence, v2
 
-Source basis: PR #191 plus forward-hardening candidate PR #195, reviewed on 2026-09-02.
+Source basis: PR #191, merged ACL PR #195 and the default-off follow-up candidate, reviewed on 2026-09-02.
 
 This table is deliberately narrower than the first submission. A permission is retained only when the application at this commit contains a concrete runtime operation that exercises it. A stored asset ID, a webhook payload field, a manually configured Meta asset, or a Business Manager screenshot is not treated as an application code path.
 
@@ -37,15 +37,15 @@ They were approved in submission `1016624077686960`. The new evidence issue conc
 | Support-preview write guard | `src/app/api/portal/[firmId]/triage/[leadId]/reply/route.ts:163-164` |
 | Strict 24-hour server-side gate | `src/lib/channel-send.ts:123-151` |
 | Recheck immediately before the Graph side effect | `src/lib/channel-send.ts:258-273` |
-| Exact-true global gate plus per-firm default-false approval | `src/lib/channel-conversation-gate.ts`; `supabase/migrations/20260902111504_harden_channel_conversation_acl.sql` |
-| Database insert guard blocks message bodies while a firm's approval flag is off | `supabase/migrations/20260902111504_harden_channel_conversation_acl.sql` |
+| Exact-true global gate plus per-firm default-false approval | `src/lib/channel-conversation-gate.ts`; `supabase/migrations/20260902123126_channel_conversation_default_off_gate.sql` |
+| Database insert guard blocks message bodies while a firm's approval flag is off | `supabase/migrations/20260902123126_channel_conversation_default_off_gate.sql` |
 | Missing, malformed and unreasonable future inbound timestamps fail closed | `src/lib/channel-conversation.ts:84-108` |
 | Idempotent portal retries preserve one request ID for an unchanged draft | `src/components/portal/ChannelConversationPanel.tsx:117-190` |
-| Applied append-only ledger with proposed forward ACL hardening; runtime use remains default-off pending privacy, retention and erasure approval | `supabase/migrations/20260901231830_channel_conversation_ledger.sql:15-151`; `supabase/migrations/20260902111504_harden_channel_conversation_acl.sql` |
+| Applied append-only ledger with pending forward ACL and default-off hardening; runtime use remains blocked pending privacy, retention and erasure approval | `supabase/migrations/20260901231830_channel_conversation_ledger.sql:15-151`; `supabase/migrations/20260902111504_harden_channel_conversation_acl.sql`; `supabase/migrations/20260902123126_channel_conversation_default_off_gate.sql` |
 | Expiry sweep suppresses the former after-window closing send | `src/app/api/cron/expire-channel-intake-sessions/route.ts:241-248` |
 
 ## Evidence boundary
 
-Migration `20260901231830_channel_conversation_ledger.sql` was confirmed applied in production on 2026-09-02, and the ledger objects exist. The later ACL migration, application gate, database insert guard and unavailable-state UI are candidate changes in PR #195. This document does **not** claim that those later controls are applied or deployed.
+Migration `20260901231830_channel_conversation_ledger.sql` was confirmed applied in production on 2026-09-02, and the ledger objects exist. Migration `20260902111504_harden_channel_conversation_acl.sql` is merged source but was not applied when this candidate was prepared. The new default-off migration, application gate, database insert guard and unavailable-state UI are follow-up candidate changes. This document does **not** claim that either later migration is applied or that the follow-up application controls are deployed.
 
-While either gate is off, an unavailable panel is a deliberate fault state, not evidence of an empty conversation. Meta recording and resubmission must wait until PR #195 is approved and merged, CI passes, production auto-deploy completes, the later ACL migration is applied and verified, retention and erasure controls are approved, both gates are deliberately enabled for the test firm, and a production smoke test passes.
+While either gate is off, an unavailable panel is a deliberate fault state, not evidence of an empty conversation. Meta recording and resubmission must wait until the follow-up PR is approved and merged, CI passes, production auto-deploy completes, both later migrations are applied and verified, retention and erasure controls are approved, both gates are deliberately enabled for the test firm, and a production smoke test passes.
