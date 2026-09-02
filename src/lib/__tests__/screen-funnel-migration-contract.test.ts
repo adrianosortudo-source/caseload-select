@@ -18,4 +18,20 @@ describe("screen funnel migration privacy contract", () => {
       expect(sql).not.toMatch(new RegExp(`^\\s*${forbiddenColumn}\\s+(?:uuid|text|jsonb|integer|smallint|boolean|timestamptz)\\b`, "m"));
     }
   });
+
+  it("restricts the service role to read-and-append privileges", () => {
+    const directory = join(process.cwd(), "supabase", "migrations");
+    const filename = readdirSync(directory).find((entry) =>
+      entry.endsWith("_restrict_screen_funnel_service_role_acl.sql"),
+    );
+    expect(filename).toBeTruthy();
+    const sql = readFileSync(join(directory, filename!), "utf8").toLowerCase();
+    expect(sql).toContain(
+      "revoke all privileges on table public.screen_funnel_events from service_role",
+    );
+    expect(sql).toContain(
+      "grant select, insert on table public.screen_funnel_events to service_role",
+    );
+    expect(sql).not.toContain("grant all");
+  });
 });
