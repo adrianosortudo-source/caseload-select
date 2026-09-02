@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { ChannelConversationMessage } from "@/lib/channel-conversation";
 
 vi.mock("server-only", () => ({}));
 
@@ -23,7 +24,7 @@ const openWindow = {
   reason: "open" as const,
 };
 
-const sentMessage = {
+const sentMessage: ChannelConversationMessage = {
   id: "event-sent",
   channel: "facebook" as const,
   direction: "outbound" as const,
@@ -49,7 +50,7 @@ const state = {
   },
   leadError: null as { message: string } | null,
   conversations: [] as Array<{
-    messages: typeof sentMessage[];
+    messages: ChannelConversationMessage[];
     replyWindow: {
       isOpen: boolean;
       lastInboundAt: string | null;

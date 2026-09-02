@@ -70,8 +70,10 @@ describe("ChannelConversationPanel", () => {
     });
 
     expect(screen.getByRole("heading", { name: "Instagram conversation" })).toBeTruthy();
-    expect(screen.getByText(/Firm workspace:/).textContent).toContain("DRG Law");
-    expect(screen.getByText(/Configured Meta asset ID:/).textContent).toContain("page-123");
+    const workspaceLabel = screen.getByText("Firm workspace:");
+    const assetLabel = screen.getByText("Configured Meta asset ID:");
+    expect(workspaceLabel.parentElement?.textContent).toContain("DRG Law");
+    expect(assetLabel.parentElement?.textContent).toContain("page-123");
     expect(screen.queryByText(/Connected as/i)).toBeNull();
     expect(screen.getByText("failed")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Inbound intake transcript" })).toBeTruthy();
