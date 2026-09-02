@@ -1,4 +1,6 @@
-# Reviewer instructions — paste-ready
+# Reviewer instructions, v1, superseded
+
+**Do not paste this version into the resubmission.** It requests unsupported and already approved permissions. Use `Reviewer_Instructions_Paste_v2.md` after Option B is merged, deployed, and production-verified.
 
 Paste this whole block (everything between the fences) into the textarea on the App Review submission page at:
 

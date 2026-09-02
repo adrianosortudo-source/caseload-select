@@ -87,6 +87,7 @@ function makeMessengerPayload(opts: {
   senderId?: string;
   text?: string;
   mid?: string;
+  isEcho?: boolean;
 }): string {
   return JSON.stringify({
     object: "page",
@@ -102,6 +103,7 @@ function makeMessengerPayload(opts: {
             message: {
               mid: opts.mid ?? "mid_abc",
               text: opts.text ?? "Hi, I need help with an immigration matter.",
+              is_echo: opts.isEcho,
             },
           },
         ],
@@ -224,6 +226,15 @@ describe("POST /api/messenger-intake", () => {
     const body = makeMessengerPayload({ pageId: "9999999999" });
     const res = await POST(makePostRequest(body, sign(body)) as never);
     expect(res.status).toBe(200);
+    expect(mocks.processChannelInbound).not.toHaveBeenCalled();
+  });
+
+  it("ACKs an outbound echo without resolving a firm or running intake", async () => {
+    const body = makeMessengerPayload({ isEcho: true, mid: "mid_outbound_echo" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    expect(mocks.resolveFirmByFacebookPageId).not.toHaveBeenCalled();
+    expect(mocks.claimChannelMessage).not.toHaveBeenCalled();
     expect(mocks.processChannelInbound).not.toHaveBeenCalled();
   });
 

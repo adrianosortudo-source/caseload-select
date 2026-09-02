@@ -250,7 +250,9 @@ Verification can take 1-3 business days. WhatsApp Cloud API approval requires ve
 
 ---
 
-### Step 16 · Submit each permission for App Review (45 min)
+### Step 16 · Resubmit the two source-supported permissions (45 min)
+
+**2026-09-01 resubmission override:** Follow `PERMISSION_CODE_PATH_EVIDENCE_v2.md` and `RUNBOOK_Resubmission_v2.md`. The original eight-permission list below is superseded. Do not resubmit approved permissions. There is no discard-all control; remove unwanted draft permissions with their individual trash icons.
 
 In the App dashboard, navigate to App Review → Permissions and Features. For each permission below:
 
@@ -259,16 +261,12 @@ In the App dashboard, navigate to App Review → Permissions and Features. For e
 3. Attach the matching screencast(s) per the table in `screencasts/README.md`.
 4. For test instructions, paste the matching reviewer instructions block from Section 2.
 
-Permissions to submit (8 total):
+Permissions to resubmit (2 total):
 
 - [ ] `pages_messaging` (Section 2.1)
-- [ ] `pages_show_list` (Section 2.2)
-- [ ] `pages_manage_metadata` (Section 2.3)
-- [ ] `business_management` (Section 2.4)
-- [ ] `instagram_business_basic` (Section 2.5; verify name in dashboard, may be legacy `instagram_basic`)
 - [ ] `instagram_business_manage_messages` (Section 2.6; may be legacy `instagram_manage_messages`)
-- [ ] `whatsapp_business_messaging` (Section 2.7)
-- [ ] `whatsapp_business_management` (Section 2.8)
+
+Remove or leave out `pages_show_list`, `pages_manage_metadata`, `business_management`, `instagram_basic`, and `pages_read_engagement`. Do not resubmit approved `whatsapp_business_messaging`, `whatsapp_business_management`, or `public_profile`.
 
 ---
 
@@ -304,13 +302,14 @@ The allowlist is the prerequisite for the reviewer's inbound test to reach `/api
 
 ### Step 19 · Final pre-submit sanity (5 min)
 
-- [ ] All 8 permissions have write-up, test instructions, and at least one screencast attached
+- [ ] Only the 2 source-supported messaging permissions are in the resubmission draft
+- [ ] Approved WhatsApp permissions and `public_profile` are absent
 - [ ] App Icon visible in the Basic settings page header
 - [ ] Privacy, Terms, Data Deletion URLs all save without validator errors
 - [ ] App Domain saves
 - [ ] Category and sub-category select cleanly
 - [ ] Business verification status is either "Verified" or in-progress (do not submit if rejected)
-- [ ] All four screencasts under 100 MB and under 3 min
+- [ ] Both v2 screencasts are under 100 MB and under 3 min
 
 Click **Submit for review**. Expected turnaround: 3-7 business days. First-time submitters often see 7-14.
 
@@ -341,13 +340,14 @@ Check the App Review status daily at `https://developers.facebook.com/apps/10073
 | Test IG Business | DONE — `17841411029834507`, linked to DRG Law Test Page |
 | Test WhatsApp WABA + phone | DONE — phone_number_id `1135653749626764`, test WABA provisioned |
 | Smoke tests | DONE — 8 real Meta-channel leads landed 2026-05-14 to 2026-05-16 (5 WhatsApp + 1 Instagram + 2 Facebook) |
-| Screencasts (4 clips) | NOT RECORDED — operator records following `screencasts/README.md` |
+| Screencasts (v1, 4 clips) | RECORDED 2026-08-13 and preserved under `docs/app-review/screencasts/`; rejected evidence, not for reuse in the v2 submission |
+| Screencasts (v2, 2 clips) | NOT RECORDED; operator records only after Option B is merged, migration is applied, and production is verified, following `screencasts/SHOTLIST_v2.md` |
 | **App Review submission** — Tech Provider gate | CONTINUE clicked. Per-permission "Add to App Review" path active. |
 | App Review · App settings step | ✓ green — App domain `caseloadselect.ca`, Website platform `https://app.caseloadselect.ca`, all URLs, app icon |
 | App Review · Allowed usage step (10 permissions) | DESCRIPTIONS + COMPLIANCE CHECKBOXES SAVED for all 10 (pages_messaging, pages_show_list, pages_manage_metadata, business_management, instagram_basic, instagram_manage_messages, whatsapp_business_messaging, whatsapp_business_management, pages_read_engagement, public_profile). SCREENCAST UPLOADS PENDING — operator uploads 4 MP4s after recording. |
 | App Review · Data handling step | ✓ GREEN — all questions answered. Processor list, responsible entity (Adriano Domingues sole prop, Canada), requests-3 No (no national-security data shares), requests-4 all 4 policies checked. |
 | App Review · Reviewer instructions step | ✓ GREEN — full reviewer instructions block saved (tenant separation, no-Facebook-Login disclaimer, per-channel reviewer steps, WhatsApp allowlist coordination, portal access path, operator contact, deletion of reviewer test data). |
-| App Review · Verification (Business + Access) | NEEDS DOCUMENT — prior submission rejected because the uploaded document didn't show both the business legal name AND phone `+16475492106`. Exact requirements + 3 paths in `docs/app-review/Business_Verification_Requirements.md`. Operator-only. |
+| App Review · Verification (Business + Access) | VERIFIED 2026-08-01 through D-U-N-S; this resubmission does not reopen verification |
 | Final Submit for review button | GRAYED until all above turn green |
 | Submission ID (for the App Review form URL) | `1016624077686960` |
 

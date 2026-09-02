@@ -86,6 +86,7 @@ interface MessengerEntry {
     message?: {
       mid: string;
       text?: string;
+      is_echo?: boolean;
       attachments?: Array<{ type: string; payload: { url?: string } }>;
     };
   }>;
@@ -137,6 +138,9 @@ export async function POST(req: NextRequest) {
 
   for (const entry of payload.entry ?? []) {
     for (const event of entry.messaging ?? []) {
+      // Outbound messages are echoed back by Meta. They are delivery evidence,
+      // not a lead inbound: never run intake or reopen the 24-hour clock.
+      if (event.message?.is_echo === true) continue;
       const text = event.message?.text;
       const mid = event.message?.mid;
       if (text && mid) {
@@ -164,16 +168,7 @@ export async function POST(req: NextRequest) {
   // Messenger Send API) is out of scope for the App Review demo and lands
   // in a separate `channel-send` patch.
   if (messageEvents.length > 0) {
-    console.log(
-      '[messenger-intake] received',
-      messageEvents.length,
-      'message event(s):',
-      messageEvents.map((e) => ({
-        page: e.pageId,
-        sender: e.senderId,
-        preview: e.text.slice(0, 80),
-      })),
-    );
+    console.log('[messenger-intake] received', messageEvents.length, 'message event(s)');
 
     for (const event of messageEvents) {
       // Resolve at the route boundary so we can decide whether to enqueue
@@ -217,6 +212,7 @@ export async function POST(req: NextRequest) {
           firmId: firm.firmId,
           text: event.text,
           sender,
+          occurredAt: new Date(event.timestamp).toISOString(),
         })
           .then((res) => {
             if (res.persisted) {

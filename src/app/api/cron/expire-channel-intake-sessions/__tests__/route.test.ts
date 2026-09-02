@@ -288,16 +288,9 @@ describe('GET /api/cron/expire-channel-intake-sessions', () => {
       contactName: 'Adriano',
     });
 
-    // Best-effort closing message on the reconstructed sender, dispatched
-    // with the firm's channel asset id.
-    expect(mocks.sendChannelMessage).toHaveBeenCalledTimes(1);
-    const sendArgs = mocks.sendChannelMessage.mock.calls[0][0];
-    expect(sendArgs.firmId).toBe(FIRM_ID);
-    expect(sendArgs.sender).toMatchObject({
-      channel: 'whatsapp',
-      senderWaId: '16475492106',
-      phoneNumberId: 'pn-1',
-    });
+    // The sweeper runs after 24h of silence, so it must not attempt a
+    // free-form closing message outside Meta's standard reply window.
+    expect(mocks.sendChannelMessage).not.toHaveBeenCalled();
   });
 
   it('still moves contact-incomplete sessions to unconfirmed_inquiries', async () => {
@@ -355,6 +348,7 @@ describe('GET /api/cron/expire-channel-intake-sessions', () => {
       'screened-row-uuid',
     );
     expect(mocks.notifyLawyersOfNewLead).toHaveBeenCalledTimes(1);
+    expect(mocks.sendChannelMessage).not.toHaveBeenCalled();
   });
 
   it('does not block the finalize when the closing send throws', async () => {
@@ -373,6 +367,7 @@ describe('GET /api/cron/expire-channel-intake-sessions', () => {
     });
     expect(mocks.screenedInserts).toHaveLength(1);
     expect(mocks.finalizeChannelSession).toHaveBeenCalledTimes(1);
+    expect(mocks.sendChannelMessage).not.toHaveBeenCalled();
   });
 
   it('leaves the session open for retry when the screened_leads insert fails', async () => {
