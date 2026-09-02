@@ -16,10 +16,16 @@ const mocks = vi.hoisted(() => ({
   claimOutboundConversationEvent: vi.fn(),
   loadOutboundConversationResult: vi.fn(),
   recordOutboundConversationResult: vi.fn(),
+  requireChannelConversationLedger: vi.fn(),
+  firmTokenReads: 0,
   firmRow: { facebook_page_access_token: null, whatsapp_cloud_api_access_token: null } as {
     facebook_page_access_token: string | null;
     whatsapp_cloud_api_access_token: string | null;
   },
+}));
+
+vi.mock('@/lib/channel-conversation-gate', () => ({
+  requireChannelConversationLedger: mocks.requireChannelConversationLedger,
 }));
 
 vi.mock('@/lib/channel-conversation', () => ({
@@ -49,10 +55,13 @@ vi.mock('@/lib/supabase-admin', () => ({
       select: (_cols: string) => ({
         eq: (_field: string, _v: unknown) => ({
           maybeSingle: () =>
-            Promise.resolve({
-              data: { ...mocks.firmRow },
-              error: null,
-            }),
+            {
+              mocks.firmTokenReads += 1;
+              return Promise.resolve({
+                data: { ...mocks.firmRow },
+                error: null,
+              });
+            },
         }),
       }),
     }),
@@ -91,6 +100,9 @@ beforeEach(() => {
     recorded: true,
     duplicate: false,
   });
+  mocks.requireChannelConversationLedger.mockReset();
+  mocks.requireChannelConversationLedger.mockResolvedValue(undefined);
+  mocks.firmTokenReads = 0;
   mocks.firmRow = {
     facebook_page_access_token: null,
     whatsapp_cloud_api_access_token: null,
@@ -98,6 +110,87 @@ beforeEach(() => {
 });
 
 describe('sendChannelMessage', () => {
+  it('stops a ledger-required send before ledger access, token loading, or provider use when disabled', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    mocks.requireChannelConversationLedger.mockRejectedValueOnce(
+      new Error('channel conversation ledger unavailable'),
+    );
+
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook', senderPsid: 'psid', senderName: null,
+        messageMid: 'mid_in', pageId: 'page-1',
+      },
+      text: 'hi',
+      authoritativeInboundAt: '2026-09-01T12:00:00.000Z',
+      ledger: {
+        screenedLeadId: 'L-2026-09-01-001', source: 'operator',
+        actorType: 'operator', actorId: 'operator-1',
+        clientRequestId: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+
+    expect(r).toMatchObject({ sent: false, code: 'ledger_unavailable' });
+    expect(mocks.resolveScreenedLeadIdForFirm).not.toHaveBeenCalled();
+    expect(mocks.loadChannelConversation).not.toHaveBeenCalled();
+    expect(mocks.claimOutboundConversationEvent).not.toHaveBeenCalled();
+    expect(mocks.recordOutboundConversationResult).not.toHaveBeenCalled();
+    expect(mocks.sendMessengerMessage).not.toHaveBeenCalled();
+    expect(mocks.firmTokenReads).toBe(0);
+  });
+
+  it('preserves a non-ledger intake prompt with current authoritative inbound evidence', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    mocks.requireChannelConversationLedger.mockRejectedValue(
+      new Error('channel conversation ledger unavailable'),
+    );
+    mocks.sendMessengerMessage.mockResolvedValueOnce({ sent: true, messageId: 'mid' });
+
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook', senderPsid: 'psid', senderName: null,
+        messageMid: 'mid_in', pageId: 'page-1',
+      },
+      text: 'Please share your name.',
+      authoritativeInboundAt: '2026-09-01T12:00:00.000Z',
+    });
+
+    expect(r).toMatchObject({ sent: true, messageId: 'mid' });
+    expect(mocks.requireChannelConversationLedger).not.toHaveBeenCalled();
+    expect(mocks.claimOutboundConversationEvent).not.toHaveBeenCalled();
+    expect(mocks.recordOutboundConversationResult).not.toHaveBeenCalled();
+    expect(mocks.sendMessengerMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('rechecks the gate immediately before dispatch and stops if it was disabled after the claim', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    mocks.requireChannelConversationLedger
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('channel conversation ledger unavailable'));
+
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook', senderPsid: 'psid', senderName: null,
+        messageMid: 'mid_in', pageId: 'page-1',
+      },
+      text: 'hi',
+      authoritativeInboundAt: '2026-09-01T12:00:00.000Z',
+      ledger: {
+        screenedLeadId: 'L-2026-09-01-001', source: 'operator',
+        actorType: 'operator', actorId: 'operator-1',
+        clientRequestId: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+
+    expect(r).toMatchObject({ sent: false, code: 'ledger_unavailable' });
+    expect(mocks.claimOutboundConversationEvent).toHaveBeenCalledTimes(1);
+    expect(mocks.requireChannelConversationLedger).toHaveBeenCalledTimes(2);
+    expect(mocks.sendMessengerMessage).not.toHaveBeenCalled();
+  });
+
   it('routes facebook to sendMessengerMessage with the Page token', async () => {
     mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
     mocks.sendMessengerMessage.mockResolvedValueOnce({ sent: true, messageId: 'mid' });

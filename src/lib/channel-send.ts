@@ -13,6 +13,7 @@ import { sendWhatsappMessage } from '@/lib/whatsapp-send';
 import type { ChannelSender } from '@/lib/channel-intake-processor';
 import { getI18n } from '@/lib/screen-engine/i18n/loader';
 import type { SupportedLanguage } from '@/lib/screen-engine/types';
+import { requireChannelConversationLedger } from '@/lib/channel-conversation-gate';
 import {
   claimOutboundConversationEvent,
   isChannelReplyWindowOpen,
@@ -98,6 +99,9 @@ export async function sendChannelMessage(
   let ledger = args.ledger;
   if (args.ledger) {
     try {
+      // Ledger-dependent sends are globally and per-firm default-off. Stop
+      // before ownership lookup, ledger access, token loading, or provider use.
+      await requireChannelConversationLedger(args.firmId);
       const resolvedLeadId = await resolveScreenedLeadIdForFirm(
         args.firmId,
         args.ledger.screenedLeadId,
@@ -270,6 +274,20 @@ export async function sendChannelMessage(
       reason: 'conversation ledger unavailable',
       code: 'ledger_unavailable',
     });
+  }
+
+  if (ledger) {
+    try {
+      // Recheck immediately before the external side effect. A firm or global
+      // switch turned off after the claim must stop the provider call.
+      await requireChannelConversationLedger(args.firmId);
+    } catch {
+      return {
+        sent: false,
+        reason: 'conversation ledger unavailable',
+        code: 'ledger_unavailable',
+      };
+    }
   }
 
   switch (args.sender.channel) {
