@@ -27,6 +27,7 @@ const MESSAGE: ChannelConversationMessage = {
 function renderPanel(
   overrides: Partial<{
     messages: ChannelConversationMessage[];
+    historyAvailable: boolean;
     channel: ReplyChannel;
     replyWindow: ChannelReplyWindow;
     supportPreview: boolean;
@@ -37,6 +38,7 @@ function renderPanel(
   return render(
     createElement(ChannelConversationPanel, {
       messages: overrides.messages ?? [MESSAGE],
+      historyAvailable: overrides.historyAvailable ?? true,
       channel: overrides.channel ?? "facebook",
       firmName: "DRG Law",
       assetId: "page-123",
@@ -101,6 +103,15 @@ describe("ChannelConversationPanel", () => {
 
     expect((screen.getByRole("textbox", { name: "Write a reply" }) as HTMLTextAreaElement).disabled).toBe(true);
     expect(screen.getByText(/no authoritative inbound message timestamp/i)).toBeTruthy();
+  });
+
+  it("shows a distinct unavailable state instead of an empty thread when history cannot load", () => {
+    renderPanel({ messages: [], historyAvailable: false });
+
+    expect(screen.getByText(/message history is temporarily unavailable/i)).toBeTruthy();
+    expect(screen.queryByText(/no conversation messages are available yet/i)).toBeNull();
+    expect((screen.getByRole("textbox", { name: "Write a reply" }) as HTMLTextAreaElement).disabled).toBe(true);
+    expect(screen.getByText(/history could not be loaded/i)).toBeTruthy();
   });
 
   it("disables replies when the 24-hour window is closed", () => {

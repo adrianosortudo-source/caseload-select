@@ -12,6 +12,75 @@ async function waitForStableLayout(page: Page) {
   });
 }
 
+async function auditUnavailableCopy(page: Page) {
+  return page.evaluate(() => {
+    const tolerance = 1;
+    const copies = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-ui-copy]"),
+    ).filter((copy) => copy.innerText.toLowerCase().includes("temporarily unavailable"));
+    const fullWidthFailures: string[] = [];
+    const orphanFailures: string[] = [];
+
+    for (const copy of copies) {
+      const container = copy.closest<HTMLElement>("[data-ui-component-content]");
+      if (!container) {
+        fullWidthFailures.push("unavailable copy has no component content ancestor");
+        continue;
+      }
+      const containerRect = container.getBoundingClientRect();
+      const copyRect = copy.getBoundingClientRect();
+      const style = getComputedStyle(container);
+      const innerLeft =
+        containerRect.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft);
+      const innerRight =
+        containerRect.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight);
+      if (
+        Math.abs(copyRect.left - innerLeft) > tolerance ||
+        Math.abs(copyRect.right - innerRight) > tolerance
+      ) {
+        fullWidthFailures.push(copy.innerText);
+      }
+
+      const words: Array<{ top: number; id: number; word: string }> = [];
+      const walker = document.createTreeWalker(copy, NodeFilter.SHOW_TEXT);
+      let textNode = walker.nextNode();
+      let wordId = 0;
+      while (textNode) {
+        const text = textNode.textContent ?? "";
+        for (const match of text.matchAll(/\S+/g)) {
+          const start = match.index ?? 0;
+          const range = document.createRange();
+          range.setStart(textNode, start);
+          range.setEnd(textNode, start + match[0].length);
+          for (const rect of Array.from(range.getClientRects())) {
+            if (rect.width > 0 && rect.height > 0) {
+              words.push({ top: rect.top, id: wordId, word: match[0] });
+            }
+          }
+          wordId += 1;
+        }
+        textNode = walker.nextNode();
+      }
+      const lines: Array<{ top: number; words: typeof words }> = [];
+      for (const word of words.sort((a, b) => a.top - b.top)) {
+        const line = lines.find((candidate) => Math.abs(candidate.top - word.top) <= tolerance);
+        if (line) line.words.push(word);
+        else lines.push({ top: word.top, words: [word] });
+      }
+      const finalLine = lines.at(-1);
+      if (
+        lines.length >= 2 &&
+        finalLine &&
+        new Set(finalLine.words.map((word) => word.id)).size === 1
+      ) {
+        orphanFailures.push(finalLine.words[0].word);
+      }
+    }
+
+    return { count: copies.length, fullWidthFailures, orphanFailures };
+  });
+}
+
 for (const width of VIEWPORT_WIDTHS) {
   test(`Channel Conversation copy gates pass at ${width}px`, async ({ page }, testInfo) => {
     let interceptedBody: {
@@ -170,5 +239,25 @@ for (const width of VIEWPORT_WIDTHS) {
     expect(audit.orphanFailures).toEqual([]);
     expect(audit.documentOverflow).toBeLessThanOrEqual(1);
     expect(audit.containsEmDash).toBe(false);
+
+    const unavailableResponse = await page.goto(
+      "/test-screen/channel-conversation?history=unavailable",
+      { waitUntil: "networkidle" },
+    );
+    expect(unavailableResponse?.status()).toBe(200);
+    await waitForStableLayout(page);
+    await expect(page.getByText(/message history is temporarily unavailable/i)).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Write a reply" })).toBeDisabled();
+    const unavailableAudit = await auditUnavailableCopy(page);
+    expect(unavailableAudit.count).toBe(2);
+    expect(unavailableAudit.fullWidthFailures).toEqual([]);
+    expect(unavailableAudit.orphanFailures).toEqual([]);
+
+    if (width === 1440 || width === 320) {
+      await page.screenshot({
+        path: testInfo.outputPath(`channel-conversation-unavailable-${width}px.png`),
+        fullPage: true,
+      });
+    }
   });
 }

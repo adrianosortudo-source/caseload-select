@@ -256,6 +256,55 @@ describe('sendChannelMessage', () => {
     expect(mocks.claimOutboundConversationEvent).not.toHaveBeenCalled();
   });
 
+  it('returns ledger_unavailable without a provider call when ledger history cannot load', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    mocks.loadChannelConversation.mockRejectedValueOnce(
+      new Error('relation channel_conversation_events does not exist'),
+    );
+
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook', senderPsid: 'psid', senderName: null,
+        messageMid: 'mid_in', pageId: 'page-1',
+      },
+      text: 'hi',
+      ledger: {
+        screenedLeadId: 'L-2026-09-01-001', source: 'operator',
+        actorType: 'operator', actorId: 'operator-1',
+        clientRequestId: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+
+    expect(r).toMatchObject({ sent: false, code: 'ledger_unavailable' });
+    expect(mocks.claimOutboundConversationEvent).not.toHaveBeenCalled();
+    expect(mocks.sendMessengerMessage).not.toHaveBeenCalled();
+  });
+
+  it('returns ledger_unavailable without a provider call when the ledger claim fails', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    mocks.claimOutboundConversationEvent.mockRejectedValueOnce(
+      new Error('relation channel_conversation_events does not exist'),
+    );
+
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook', senderPsid: 'psid', senderName: null,
+        messageMid: 'mid_in', pageId: 'page-1',
+      },
+      text: 'hi',
+      ledger: {
+        screenedLeadId: 'L-2026-09-01-001', source: 'operator',
+        actorType: 'operator', actorId: 'operator-1',
+        clientRequestId: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+
+    expect(r).toMatchObject({ sent: false, code: 'ledger_unavailable' });
+    expect(mocks.sendMessengerMessage).not.toHaveBeenCalled();
+  });
+
   it('claims an operator request and records the terminal send result', async () => {
     mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
     mocks.sendMessengerMessage.mockResolvedValueOnce({ sent: true, messageId: 'mid-out' });
