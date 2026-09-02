@@ -222,6 +222,7 @@ export default async function TriageLeadPage({
       {conversationChannel && (
         <ChannelConversationPanel
           messages={conversation?.messages ?? []}
+          historyAvailable={conversation !== null}
           channel={conversationChannel}
           firmName={firmName}
           assetId={channelAssetId}

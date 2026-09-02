@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import { requireChannelConversationLedger } from '@/lib/channel-conversation-gate';
 
 export type ConversationChannel = 'facebook' | 'instagram' | 'whatsapp';
 export type ConversationDirection = 'inbound' | 'outbound';
@@ -234,6 +235,7 @@ export async function loadChannelConversation(args: {
   screenedLeadId: string;
   now?: Date;
 }): Promise<ChannelConversation | null> {
+  await requireChannelConversationLedger(args.firmId);
   const resolvedLeadId = await resolveScreenedLeadIdForFirm(
     args.firmId,
     args.screenedLeadId,
@@ -288,6 +290,11 @@ export interface RecordInboundEventArgs {
 export async function recordInboundConversationEvent(
   args: RecordInboundEventArgs,
 ): Promise<{ ok: boolean; duplicate?: boolean }> {
+  try {
+    await requireChannelConversationLedger(args.firmId);
+  } catch {
+    return { ok: false };
+  }
   const occurredAt = normalizeAuthoritativeInboundAt(args.occurredAt);
   if (!occurredAt) {
     console.warn('[channel-conversation] rejected invalid authoritative inbound time');
@@ -327,6 +334,7 @@ export async function claimOutboundConversationEvent(args: {
   text: string;
   ledger: OutboundLedgerContext;
 }): Promise<{ claimed: boolean; duplicate: boolean }> {
+  await requireChannelConversationLedger(args.firmId);
   const { error } = await supabase.from('channel_conversation_events').insert({
     firm_id: args.firmId,
     screened_lead_id: args.ledger.screenedLeadId,
@@ -359,6 +367,11 @@ export async function recordOutboundConversationResult(args: {
   metaMessageId?: string | null;
   failureReason?: string | null;
 }): Promise<RecordOutboundConversationResult> {
+  try {
+    await requireChannelConversationLedger(args.firmId);
+  } catch {
+    return { recorded: false, duplicate: false };
+  }
   const failureReason = args.sent
     ? null
     : (args.failureReason?.slice(0, 500) || 'channel send failed');
@@ -387,6 +400,7 @@ export async function loadOutboundConversationResult(args: {
   firmId: string;
   clientRequestId: string;
 }): Promise<ChannelConversationMessage | null> {
+  await requireChannelConversationLedger(args.firmId);
   const { data, error } = await supabase
     .from('channel_conversation_events')
     .select(
