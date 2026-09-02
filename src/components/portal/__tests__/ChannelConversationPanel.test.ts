@@ -77,7 +77,7 @@ describe("ChannelConversationPanel", () => {
     expect(screen.queryByText(/Connected as/i)).toBeNull();
     expect(screen.getByText("failed")).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Inbound intake transcript" })).toBeTruthy();
-    expect(screen.getByText(/separate from the conversation history/i)).toBeTruthy();
+    expect(screen.getByText(/shown separately from message history/i)).toBeTruthy();
   });
 
   it("disables replies with a clear reason in support preview", () => {

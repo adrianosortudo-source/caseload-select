@@ -204,17 +204,17 @@ export default function ChannelConversationPanel({
         </p>
         <h2
           id="channel-conversation-heading"
-          className="mt-1 w-full text-xl font-bold text-navy text-pretty"
+          className="mt-1 w-full text-lg font-bold text-navy text-pretty sm:text-xl"
           data-ui-copy="heading"
         >
           {CHANNEL_LABELS[channel]} conversation
         </h2>
         <div className="mt-2 w-full space-y-1 text-xs text-black/55">
-          <p className="w-full" data-ui-copy="supporting">
+          <p className="w-full">
             <span className="font-semibold text-black/65">Firm workspace:</span> {firmName}
           </p>
           {assetId && (
-            <p className="w-full break-all" data-ui-copy="supporting">
+            <p className="w-full break-all">
               <span className="font-semibold text-black/65">Configured Meta asset ID:</span>{" "}
               {assetId}
             </p>
@@ -222,9 +222,15 @@ export default function ChannelConversationPanel({
         </div>
       </div>
 
-      <div className="space-y-3 bg-parchment px-4 py-4 sm:px-6" aria-label="Conversation history">
+      <div
+        className="space-y-3 bg-parchment px-4 py-4 sm:px-6"
+        aria-label="Conversation history"
+        data-ui-component-content="channel-conversation-history"
+      >
         {conversation.length === 0 ? (
-          <p className="w-full text-sm text-black/55">No conversation messages are available yet.</p>
+          <p className="w-full text-sm text-black/55" data-ui-copy="supporting">
+            No conversation messages are available yet.
+          </p>
         ) : (
           conversation.map((message) => {
             const failed = message.status.toLowerCase() === "failed";
@@ -265,8 +271,8 @@ export default function ChannelConversationPanel({
             className="mt-1 w-full text-xs text-black/55 text-pretty"
             data-ui-copy="supporting"
           >
-            This legacy transcript preserves intake text. It is separate from the conversation
-            history and may not contain every message.
+            Legacy intake text is shown separately from message history. Some exchanges may be
+            missing.
           </p>
           <div className="mt-3 whitespace-pre-wrap break-words border border-black/10 bg-parchment px-3 py-3 text-sm text-black/70">
             {intakeTranscript}
@@ -306,12 +312,12 @@ export default function ChannelConversationPanel({
           className="mt-2 min-h-[112px] w-full resize-y border border-black/15 bg-parchment px-3 py-2 text-sm text-deep-black focus:border-navy focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
         />
         <div className="mt-2 w-full space-y-1 text-xs text-black/50">
-          <p className="w-full" data-ui-copy="supporting">
+          <p className="w-full">
             {draft.length}/2000 characters
             {channel === "instagram" && ` · ${instagramByteCount}/1000 Instagram bytes`}
           </p>
           {replyWindow.isOpen && replyWindow.closesAt && !supportPreview && (
-            <p className="w-full" data-ui-copy="supporting">
+            <p className="w-full">
               Reply window closes {formatOccurredAt(replyWindow.closesAt)}
             </p>
           )}
@@ -335,11 +341,7 @@ export default function ChannelConversationPanel({
             {sending ? "Sending..." : "Send reply"}
           </button>
         </div>
-        <p
-          className="mt-2 min-h-5 w-full text-sm text-black/65"
-          aria-live="polite"
-          data-ui-copy="supporting"
-        >
+        <p className="mt-2 min-h-5 w-full text-sm text-black/65" aria-live="polite">
           {feedback}
         </p>
       </form>

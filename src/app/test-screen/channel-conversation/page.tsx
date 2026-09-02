@@ -5,7 +5,7 @@ export default function ChannelConversationRenderedFixturePage() {
   if (process.env.NODE_ENV === "production") notFound();
 
   return (
-    <main className="min-h-screen bg-parchment">
+    <main className="fixed inset-0 z-[100] overflow-y-auto bg-parchment">
       <div className="mx-auto w-full max-w-5xl px-4 py-6 sm:px-6 sm:py-8">
         <ChannelConversationPanel
           messages={[
