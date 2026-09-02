@@ -38,13 +38,13 @@ Do not add these approved scopes to the resubmission draft:
 | Firm-scoped lead lookup and server-derived destination | `src/app/api/portal/[firmId]/triage/[leadId]/reply/route.ts:194-215` |
 | Strict 24-hour gate | `src/lib/channel-send.ts:123-151` |
 | Window recheck immediately before the Graph side effect | `src/lib/channel-send.ts:258-273` |
-| Missing, malformed, or unreasonable future inbound timestamp fails closed | `src/lib/channel-conversation.ts:84-108` |
+| Missing, malformed, or unreasonable future inbound timestamp fails closed | `src/lib/channel-conversation.ts:72-108` |
 | Newest 500 timeline events and separate latest authoritative inbound query | `src/lib/channel-conversation.ts:232-275` |
 | Same request ID retained for an unchanged draft | `src/components/portal/ChannelConversationPanel.tsx:117-139` |
 | Unknown or pending delivery retains draft and warns against a new message | `src/components/portal/ChannelConversationPanel.tsx:145-186`; `src/app/api/portal/[firmId]/triage/[leadId]/reply/route.ts:291-340` |
 | Duplicate pending claim does not call Graph again | `src/lib/channel-send.ts:153-180` |
 | Only a verified terminal sent event produces success | `src/components/portal/ChannelConversationPanel.tsx:169-182`; `src/app/api/portal/[firmId]/triage/[leadId]/reply/route.ts:320-340` |
-| Append-only conversation ledger, forced RLS, pending and terminal uniqueness | `supabase/migrations/20260901231830_channel_conversation_ledger.sql:15-151` |
+| Append-only conversation ledger, forced RLS, pending and terminal uniqueness | `supabase/migrations/20260901231830_channel_conversation_ledger.sql:15-152` |
 | Ledger service role limited to SELECT and INSERT; API roles and PUBLIC denied | `supabase/migrations/20260902111504_harden_channel_conversation_acl.sql:1-18` |
 | Expiry sweep suppresses the former after-window closing send | `src/app/api/cron/expire-channel-intake-sessions/route.ts:231-248` |
 

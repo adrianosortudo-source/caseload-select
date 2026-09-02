@@ -19,6 +19,8 @@ Current release state:
 - Option B is shipped.
 - Remaining work is the live production rehearsal, two v2 recordings, live Meta draft inventory and cleanup, and Adriano's approved submission action.
 
+PRE-SUBMISSION BLOCKER: The public `/data-deletion` page promises broader erasure or anonymization, while `channel_conversation_events` retains message body and actor ID, rejects UPDATE and DELETE, and prevents parent-lead deletion. The May 2026 exercise predates this ledger. This does not block rehearsal or recording after the production send gates pass. Do not submit the Meta draft until Adriano chooses a resolution and a reviewed implementation or policy resolution is shipped and verified. This checklist does not choose or implement that resolution.
+
 The configured test assets use the DRG production workspace row, not a segregated test tenant. Use a fresh fictional conversation and frame the brief so no unrelated lead data is visible. Never resubmit the approved WhatsApp scopes or `public_profile`. Stop for Adriano's action-time approval before the final submission control.
 
 ## Historical record

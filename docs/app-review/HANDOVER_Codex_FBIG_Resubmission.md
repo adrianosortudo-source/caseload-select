@@ -100,6 +100,12 @@ If Meta displays a dependency or a different Instagram permission label, capture
 - The May 2026 deletion verification predates `channel_conversation_events`. It does not prove that append-only ledger content is erased or anonymized. Do not make that claim in reviewer copy.
 - Do not reset a recording with ad hoc DELETE statements. Start a fresh fictional inbound conversation instead.
 
+## Pre-submission blocker: deletion promise and conversation ledger
+
+The public `/data-deletion` page promises broader erasure or anonymization. The current `channel_conversation_events` table retains message `body` and `actor_id`, rejects UPDATE and DELETE, and uses `ON DELETE RESTRICT` for its parent lead. See `supabase/migrations/20260901231830_channel_conversation_ledger.sql:15-36` and `:134-152`.
+
+This blocker does not invalidate the shipped send surface or its recording evidence. The Messenger and Instagram flows may be rehearsed and recorded after the production send gates pass. Do not submit the Meta draft until Adriano chooses a resolution and a reviewed implementation or policy resolution is shipped and verified. This documentation PR neither proposes nor implements that resolution.
+
 ## Remaining sequence
 
 1. Adriano signs in to the production portal with a stable UUID member account and confirms support preview is off.
@@ -107,10 +113,11 @@ If Meta displays a dependency or a different Instagram permission label, capture
 3. Rehearse the full portal send and native receipt without recording.
 4. Record and verify the Messenger v2 clip.
 5. Record and verify the Instagram v2 clip.
-6. Inventory the live Meta draft. Remove unsupported and approved permissions one row at a time.
-7. Paste the v2 reviewer instructions and attach only the matching v2 clips.
-8. Stop for Adriano's action-time approval before the final submission control.
-9. Adriano submits and preserves screenshots of the final draft and confirmation.
+6. Resolve the pre-submission deletion-policy blocker through a separate reviewed change, then verify the shipped result.
+7. Inventory the live Meta draft. Remove unsupported and approved permissions one row at a time.
+8. Paste the then-current v2 reviewer instructions and attach only the matching v2 clips.
+9. Stop for Adriano's action-time approval before the final submission control.
+10. Adriano submits and preserves screenshots of the final draft and confirmation.
 
 ## Definition of ready to submit
 
@@ -120,6 +127,7 @@ If Meta displays a dependency or a different Instagram permission label, capture
 - [ ] Both fresh inbound messages are within 24 hours.
 - [ ] Both clips show Meta identity, portal send, `Reply sent.`, and the identical native receipt without a cut.
 - [ ] No real client or unrelated lead data is visible.
+- [ ] The deletion-policy and conversation-ledger conflict has a reviewed resolution that is shipped and verified.
 - [ ] Live draft contains only the two source-supported messaging permissions.
 - [ ] The three approved scopes are absent.
 - [ ] Reviewer instructions use the exact live Instagram permission label.

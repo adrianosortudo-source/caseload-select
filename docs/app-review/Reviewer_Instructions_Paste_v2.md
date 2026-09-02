@@ -1,6 +1,8 @@
 # Reviewer instructions, v2, paste-ready
 
-Use this version only after the production rehearsal passes and both v2 clips pass `screencasts/SHOTLIST_v2.md`. Confirm the live Instagram permission label before pasting.
+Use this version only after the production rehearsal passes, both v2 clips pass `screencasts/SHOTLIST_v2.md`, and the pre-submission blocker below is cleared. Confirm the live Instagram permission label before pasting.
+
+> PRE-SUBMISSION BLOCKER: The public `/data-deletion` page promises broader erasure or anonymization. The current `channel_conversation_events` ledger retains message `body` and `actor_id`, rejects UPDATE and DELETE, and prevents parent-lead deletion through `ON DELETE RESTRICT`. This does not invalidate rehearsal or recording after the production send gates pass. Do not submit a Meta draft using this copy until Adriano chooses a resolution and a reviewed implementation or policy resolution is shipped and verified. This documentation PR does not choose or implement that resolution.
 
 Release basis: PRs #191, #193, and #195 are merged; production commit `fa3e092983b274c96fd1d22b8fa0091988baeb25` is READY; migrations `20260901231830`, `20260902102620`, and `20260902111504` are applied and verified.
 
@@ -35,7 +37,7 @@ LIVE ACCESS: If live testing is required, coordinate through the App Review thre
 
 OPERATOR CONTACT: adriano@caseloadselect.ca. Privacy and data-deletion questions: privacy@caseloadselect.ca. Privacy policy: https://app.caseloadselect.ca/privacy. Terms: https://app.caseloadselect.ca/terms. Data-deletion instructions: https://app.caseloadselect.ca/data-deletion.
 
-TEST DATA SCOPE: The public deletion process applies to reviewer requests. The May 2026 exercised verification predates the channel conversation ledger. We do not claim that append-only channel ledger content is erased or anonymized by that prior procedure. The review recordings therefore use fictional data only.
+TEST DATA SCOPE: The May 2026 exercised deletion verification predates the channel conversation ledger. The current ledger retains message body and actor ID, rejects update and delete, and prevents parent-lead deletion. We do not claim that the prior procedure erases or anonymizes this ledger content. The review recordings therefore use fictional data only.
 ```
 
-Change only the Instagram permission label if the live form uses a different label. Do not add a login flow, segregated-tenant claim, deletion promise, or permission that the source does not support.
+Change only the Instagram permission label if the live form uses a different label. Do not add a login flow, segregated-tenant claim, deletion promise, or permission that the source does not support. Re-review this paste block after the separate deletion-policy resolution ships.

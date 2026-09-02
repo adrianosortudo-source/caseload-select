@@ -109,7 +109,15 @@ ffmpeg -i .\input.mp4 -c:v libx264 -preset medium -crf 24 -c:a aac -b:a 128k -mo
 
 Watch the full upload copy before attaching it.
 
-## 7. Clean the live Meta draft
+## 7. Pre-submission blocker: deletion promise and conversation ledger
+
+The public `/data-deletion` page promises broader erasure or anonymization. The current `channel_conversation_events` table retains message `body` and `actor_id`, rejects UPDATE and DELETE, and prevents parent-lead deletion through `ON DELETE RESTRICT`. The May 2026 deletion exercise predates this ledger and does not verify its treatment.
+
+This does not block rehearsal or recording after the production send gates pass. It does block final Meta submission.
+
+Do not submit the Meta draft until Adriano chooses a resolution and a reviewed implementation or policy resolution is shipped and verified. This documentation PR does not choose or implement that resolution.
+
+## 8. Clean the live Meta draft
 
 There is no discard-all control. Use each permission row's trash icon.
 
@@ -121,7 +129,7 @@ There is no discard-all control. Use each permission row's trash icon.
 
 Do not delete the submission itself.
 
-## 8. Complete the two permission entries
+## 9. Complete the two permission entries
 
 For each retained permission:
 
@@ -134,7 +142,7 @@ For each retained permission:
 
 Do not use `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, `screencasts/README.md`, the v1 clips, the WhatsApp clip, or the Business Manager configuration clip.
 
-## 9. Final audit and approval stop
+## 10. Final audit and approval stop
 
 - [ ] Draft contains only the two retained messaging permissions.
 - [ ] No approved scope is present.
@@ -144,6 +152,7 @@ Do not use `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, `s
 - [ ] Meta identity is visible in Meta UI in each clip.
 - [ ] Each clip shows `Message thread`, the correct `Channel:` row, `Send reply`, `Reply sent.`, and the identical native receipt.
 - [ ] No real or unrelated lead data is visible.
+- [ ] The deletion-policy and conversation-ledger conflict has a reviewed resolution that is shipped and verified.
 - [ ] Privacy, terms, and deletion URLs open publicly.
 - [ ] Operator contact is `adriano@caseloadselect.ca`.
 
