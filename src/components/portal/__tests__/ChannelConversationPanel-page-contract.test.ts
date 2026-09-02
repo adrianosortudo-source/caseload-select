@@ -38,6 +38,7 @@ describe("triage lead conversation integration", () => {
 
   it("passes the legacy raw transcript separately from ledger messages", () => {
     expect(pageSource).toContain("messages={conversation?.messages ?? []}");
+    expect(pageSource).toContain("historyAvailable={conversation !== null}");
     expect(pageSource).toContain("intakeTranscript={row.raw_transcript}");
   });
 

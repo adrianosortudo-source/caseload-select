@@ -22,6 +22,7 @@ export interface ChannelReplyWindow {
 
 interface Props {
   messages: ChannelConversationMessage[];
+  historyAvailable: boolean;
   channel: ReplyChannel;
   firmName: string;
   assetId?: string | null;
@@ -55,9 +56,16 @@ function formatOccurredAt(value: string): string {
 function replyUnavailableReason({
   supportPreview,
   actorIdentityAvailable,
+  historyAvailable,
   replyWindow,
-}: Pick<Props, "supportPreview" | "actorIdentityAvailable" | "replyWindow">): string | null {
+}: Pick<
+  Props,
+  "supportPreview" | "actorIdentityAvailable" | "historyAvailable" | "replyWindow"
+>): string | null {
   if (supportPreview) return SUPPORT_PREVIEW_READ_ONLY_MESSAGE;
+  if (!historyAvailable) {
+    return "Replying is temporarily unavailable because message history could not be loaded.";
+  }
   if (!actorIdentityAvailable) {
     return "Sign in again before sending a reply so this action can be attributed to your member account.";
   }
@@ -89,6 +97,7 @@ function isTerminalMessage(value: unknown): value is ChannelConversationMessage 
 
 export default function ChannelConversationPanel({
   messages,
+  historyAvailable,
   channel,
   firmName,
   assetId,
@@ -107,6 +116,7 @@ export default function ChannelConversationPanel({
   const unavailableReason = replyUnavailableReason({
     supportPreview,
     actorIdentityAvailable,
+    historyAvailable,
     replyWindow,
   });
   const instagramByteCount = channel === "instagram" ? new TextEncoder().encode(draft).length : 0;
@@ -230,7 +240,12 @@ export default function ChannelConversationPanel({
         aria-label="Conversation history"
         data-ui-component-content="channel-conversation-history"
       >
-        {conversation.length === 0 ? (
+        {!historyAvailable ? (
+          <p className="w-full text-sm text-red-700 text-pretty" data-ui-copy="supporting">
+            Message history is temporarily unavailable. Replies are disabled until the secure
+            message record is restored.
+          </p>
+        ) : conversation.length === 0 ? (
           <p className="w-full text-sm text-black/55" data-ui-copy="supporting">
             No conversation messages are available yet.
           </p>
