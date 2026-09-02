@@ -7,16 +7,29 @@ import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limi
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 
 const MAX_ROWS_PER_REQUEST = 25;
-const FINAL_STATUSES = new Set([
-  "created",
-  "existing_unchanged",
-  "held_for_review",
-  "invalid",
-  "failed",
-  "reconcile_required",
-]);
-
 type RowOutcome = { rowNumber: number; status: string; errorCode?: string };
+
+type ClaimResult = {
+  row_number?: number | null;
+  outcome?: string;
+  status?: string;
+  error_code?: string | null;
+  claim_token?: string | null;
+};
+
+type BatchResult = {
+  outcome?: string;
+  status?: string;
+  counts?: {
+    processed: number;
+    created: number;
+    existing: number;
+    held: number;
+    invalid: number;
+    failed: number;
+    reconcile: number;
+  };
+};
 
 function normalizeServerRow(value: unknown): ClientImportRow | null {
   if (!value || typeof value !== "object") return null;
@@ -46,6 +59,27 @@ function normalizeServerRow(value: unknown): ClientImportRow | null {
     matterClosedYear: closedYear,
     marketingPermission: marketingPermission as ClientImportRow["marketingPermission"],
   };
+}
+
+function invalidRowFingerprint(batchId: string, rowNumber: number, value: unknown): string {
+  const row = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const bounded = (field: string) => {
+    const candidate = row[field];
+    if (candidate === null || typeof candidate === "number" || typeof candidate === "boolean") return candidate;
+    return typeof candidate === "string" ? candidate.trim().slice(0, 500) : null;
+  };
+  return clientImportDigest("invalid-row", JSON.stringify({
+    batchId,
+    rowNumber,
+    firstName: bounded("firstName"),
+    lastName: bounded("lastName"),
+    email: bounded("email"),
+    phone: bounded("phone"),
+    relationshipType: bounded("relationshipType"),
+    practiceArea: bounded("practiceArea"),
+    matterClosedYear: bounded("matterClosedYear"),
+    marketingPermission: bounded("marketingPermission"),
+  }));
 }
 
 export async function POST(
@@ -103,178 +137,130 @@ export async function POST(
     return NextResponse.json({ error: "duplicate_row_number_in_request" }, { status: 409 });
   }
 
-  if (batch.status === "completed" || batch.status === "completed_with_exceptions") {
-    for (const input of body.rows) {
-      const normalized = normalizeServerRow(input);
-      const providedNumber = Number((input as { rowNumber?: unknown } | null)?.rowNumber);
-      if (!Number.isInteger(providedNumber) || providedNumber <= 1) {
-        return NextResponse.json({ error: "completed_batch_replay_must_match" }, { status: 409 });
-      }
-      const fingerprint = normalized
+  const preparedRows = body.rows.map((input) => {
+    const normalized = normalizeServerRow(input);
+    const rowNumber = Number((input as { rowNumber?: unknown } | null)?.rowNumber);
+    return {
+      normalized,
+      rowNumber,
+      fingerprint: normalized
         ? clientImportDigest("row", JSON.stringify({ batchId, ...normalized }))
-        : clientImportDigest("invalid-row", `${batchId}:${providedNumber}`);
-      const { data: existing } = await supabase
-        .from("secure_client_import_rows")
-        .select("status, row_fingerprint")
-        .eq("batch_id", batchId)
-        .eq("row_number", providedNumber)
-        .maybeSingle();
-      if (!existing || !FINAL_STATUSES.has(existing.status as string)) {
-        return NextResponse.json({ error: "completed_batch_cannot_accept_new_rows" }, { status: 409 });
-      }
-      if (existing.row_fingerprint !== fingerprint) {
-        return NextResponse.json({ error: "row_fingerprint_mismatch" }, { status: 409 });
-      }
-    }
+        : invalidRowFingerprint(batchId, rowNumber, input),
+    };
+  });
+  if (preparedRows.some((row) => !Number.isInteger(row.rowNumber) || row.rowNumber <= 1)) {
+    return NextResponse.json({ error: "invalid_row_number" }, { status: 400 });
+  }
+
+  const { data: rawClaims, error: claimError } = await supabase.rpc("claim_secure_client_import_rows", {
+    p_batch_id: batchId,
+    p_firm_id: firmId,
+    p_lawyer_id: guard.actor.id,
+    p_rows: preparedRows.map((row) => ({ row_number: row.rowNumber, row_fingerprint: row.fingerprint })),
+  });
+  if (claimError || !Array.isArray(rawClaims)) {
+    return NextResponse.json({ error: "row_claim_failed" }, { status: 500 });
+  }
+  const claims = rawClaims as ClaimResult[];
+  const fatalClaim = claims.find((claim) => [
+    "row_fingerprint_mismatch",
+    "invalid_row_claim",
+    "duplicate_row_number_in_request",
+    "duplicate_row_fingerprint_in_request",
+    "duplicate_row_identity",
+    "completed_batch_cannot_accept_new_rows",
+    "batch_cancelled",
+    "batch_not_found",
+  ].includes(String(claim.outcome)));
+  if (fatalClaim) {
+    const status = fatalClaim.outcome === "batch_not_found" ? 404 : 409;
+    return NextResponse.json({ error: fatalClaim.outcome }, { status });
   }
 
   const outcomes: RowOutcome[] = [];
-  for (const input of body.rows) {
-    const normalized = normalizeServerRow(input);
-    const providedNumber = Number((input as { rowNumber?: unknown } | null)?.rowNumber);
-    if (!normalized) {
-      if (Number.isInteger(providedNumber) && providedNumber > 1) {
-        const fingerprint = clientImportDigest("invalid-row", `${batchId}:${providedNumber}`);
-        await supabase.from("secure_client_import_rows").upsert(
-          {
-            batch_id: batchId,
-            firm_id: firmId,
-            row_number: providedNumber,
-            row_fingerprint: fingerprint,
-            status: "invalid",
-            error_code: "server_validation_failed",
-            processed_at: new Date().toISOString(),
-          },
-          { onConflict: "batch_id,row_number", ignoreDuplicates: true },
-        );
-      }
-      outcomes.push({ rowNumber: Number.isInteger(providedNumber) ? providedNumber : 0, status: "invalid", errorCode: "server_validation_failed" });
-      continue;
-    }
-
-    const fingerprint = clientImportDigest("row", JSON.stringify({ batchId, ...normalized }));
-    const { data: existing } = await supabase
-      .from("secure_client_import_rows")
-      .select("status, error_code, attempt_count, processed_at, row_fingerprint")
-      .eq("batch_id", batchId)
-      .eq("row_number", normalized.rowNumber)
-      .maybeSingle();
-    if (existing && FINAL_STATUSES.has(existing.status as string)) {
-      if (existing.row_fingerprint !== fingerprint) {
-        return NextResponse.json({ error: "row_fingerprint_mismatch" }, { status: 409 });
-      }
-      outcomes.push({ rowNumber: normalized.rowNumber, status: existing.status as string, errorCode: (existing.error_code as string | null) ?? undefined });
-      continue;
-    }
-    if (!existing) {
-      const { error: claimError } = await supabase.from("secure_client_import_rows").insert({
-        batch_id: batchId,
-        firm_id: firmId,
-        row_number: normalized.rowNumber,
-        row_fingerprint: fingerprint,
-        status: "processing",
+  for (const prepared of preparedRows) {
+    const claim = claims.find((item) => item.row_number === prepared.rowNumber);
+    if (!claim) return NextResponse.json({ error: "row_claim_failed" }, { status: 500 });
+    if (claim.outcome === "replay" || claim.outcome === "reconcile_required") {
+      outcomes.push({
+        rowNumber: prepared.rowNumber,
+        status: String(claim.status),
+        errorCode: claim.error_code ?? undefined,
       });
-      if (claimError) {
-        outcomes.push({ rowNumber: normalized.rowNumber, status: "invalid", errorCode: "duplicate_row_identity" });
-        continue;
-      }
-    } else {
-      const leaseStarted = new Date(existing.processed_at as string).getTime();
-      if (Number.isFinite(leaseStarted) && leaseStarted > Date.now() - 2 * 60 * 1000) {
-        outcomes.push({ rowNumber: normalized.rowNumber, status: "processing" });
-        continue;
-      }
-      const { data: reclaimed } = await supabase
-        .from("secure_client_import_rows")
-        .update({ attempt_count: Math.min(Number(existing.attempt_count ?? 1) + 1, 10), processed_at: new Date().toISOString() })
-        .eq("batch_id", batchId)
-        .eq("row_number", normalized.rowNumber)
-        .eq("status", "processing")
-        .eq("processed_at", existing.processed_at)
-        .select("id")
-        .maybeSingle();
-      if (!reclaimed) {
-        outcomes.push({ rowNumber: normalized.rowNumber, status: "processing" });
-        continue;
-      }
+      continue;
+    }
+    if (claim.outcome === "in_progress") {
+      outcomes.push({ rowNumber: prepared.rowNumber, status: "processing" });
+      continue;
+    }
+    if (claim.outcome !== "claimed" || !claim.claim_token) {
+      return NextResponse.json({ error: "row_claim_failed" }, { status: 500 });
     }
 
-    const result = await importContactCreateOnly({
-      locationId: guard.config.locationId,
-      token: guard.config.token,
-      batchId,
-      firstName: normalized.firstName,
-      lastName: normalized.lastName,
-      email: normalized.email,
-      phone: normalized.phone,
-      relationshipType: normalized.relationshipType,
-      marketingPermission: normalized.marketingPermission,
-      practiceArea: normalized.practiceArea,
-      matterClosedYear: normalized.matterClosedYear,
+    let status: string;
+    let errorCode: string | null;
+    let contactId: string | null;
+    let matchCount: number;
+    if (!prepared.normalized) {
+      status = "invalid";
+      errorCode = "server_validation_failed";
+      contactId = null;
+      matchCount = 0;
+    } else {
+      const normalized = prepared.normalized;
+      // HighLevel stays outside the short claim/finalize transactions. If
+      // this result becomes unknown, the claim expires into reconciliation;
+      // it is never automatically claimed for a second create attempt.
+      const result = await importContactCreateOnly({
+        locationId: guard.config.locationId,
+        token: guard.config.token,
+        batchId,
+        firstName: normalized.firstName,
+        lastName: normalized.lastName,
+        email: normalized.email,
+        phone: normalized.phone,
+        relationshipType: normalized.relationshipType,
+        marketingPermission: normalized.marketingPermission,
+        practiceArea: normalized.practiceArea,
+        matterClosedYear: normalized.matterClosedYear,
+      });
+      status = result.ok ? result.status : result.reconcileRequired ? "reconcile_required" : "failed";
+      errorCode = result.ok ? null : result.code;
+      contactId = result.ok && (result.status === "created" || result.status === "existing_unchanged") ? result.contactId : null;
+      matchCount = result.ok && result.status !== "created" ? result.matchCount : 0;
+    }
+    const { data: rawFinish, error: finishError } = await supabase.rpc("finalize_secure_client_import_row", {
+      p_batch_id: batchId,
+      p_firm_id: firmId,
+      p_lawyer_id: guard.actor.id,
+      p_row_number: prepared.rowNumber,
+      p_row_fingerprint: prepared.fingerprint,
+      p_claim_token: claim.claim_token,
+      p_status: status,
+      p_ghl_contact_id: contactId,
+      p_match_count: matchCount,
+      p_error_code: errorCode,
     });
-    const status = result.ok ? result.status : result.reconcileRequired ? "reconcile_required" : "failed";
-    const errorCode = result.ok ? null : result.code;
-    const contactId = result.ok && (result.status === "created" || result.status === "existing_unchanged") ? result.contactId : null;
-    const matchCount = result.ok && result.status !== "created" ? result.matchCount : 0;
-    const { error: finishError } = await supabase
-      .from("secure_client_import_rows")
-      .update({
-        status,
-        ghl_contact_id: contactId,
-        match_count: matchCount,
-        error_code: errorCode,
-        processed_at: new Date().toISOString(),
-      })
-      .eq("batch_id", batchId)
-      .eq("row_number", normalized.rowNumber)
-      .eq("status", "processing");
-    if (finishError) {
-      outcomes.push({ rowNumber: normalized.rowNumber, status: "reconcile_required", errorCode: "audit_finalize_failed" });
-    } else outcomes.push({ rowNumber: normalized.rowNumber, status, errorCode: errorCode ?? undefined });
+    const finish = (rawFinish ?? {}) as BatchResult;
+    if (finishError || finish.outcome !== "finalized") {
+      outcomes.push({ rowNumber: prepared.rowNumber, status: "reconcile_required", errorCode: "audit_finalize_failed" });
+    } else outcomes.push({ rowNumber: prepared.rowNumber, status, errorCode: errorCode ?? undefined });
   }
 
-  const { data: auditedRows } = await supabase
-    .from("secure_client_import_rows")
-    .select("status")
-    .eq("batch_id", batchId)
-    .eq("firm_id", firmId);
-  const counts = {
-    processed: 0,
-    created: 0,
-    existing: 0,
-    held: 0,
-    invalid: 0,
-    failed: 0,
-    reconcile: 0,
-  };
-  for (const row of auditedRows ?? []) {
-    const status = row.status as string;
-    if (status !== "processing") counts.processed += 1;
-    if (status === "created") counts.created += 1;
-    else if (status === "existing_unchanged") counts.existing += 1;
-    else if (status === "held_for_review") counts.held += 1;
-    else if (status === "invalid") counts.invalid += 1;
-    else if (status === "failed") counts.failed += 1;
-    else if (status === "reconcile_required") counts.reconcile += 1;
+  const { data: rawBatchResult, error: refreshError } = await supabase.rpc("refresh_secure_client_import_batch", {
+    p_batch_id: batchId,
+    p_firm_id: firmId,
+    p_lawyer_id: guard.actor.id,
+  });
+  const batchResult = (rawBatchResult ?? {}) as BatchResult;
+  if (refreshError || batchResult.outcome !== "ok" || !batchResult.counts || !batchResult.status) {
+    return NextResponse.json({ error: "batch_audit_refresh_failed" }, { status: 500 });
   }
-  const complete = counts.processed === declaredRowCount;
-  const hasExceptions = counts.held + counts.invalid + counts.failed + counts.reconcile > 0;
-  const batchStatus = complete ? (hasExceptions ? "completed_with_exceptions" : "completed") : "processing";
-  await supabase
-    .from("secure_client_import_batches")
-    .update({
-      processed_row_count: counts.processed,
-      created_count: counts.created,
-      existing_count: counts.existing,
-      held_count: counts.held,
-      invalid_count: counts.invalid,
-      failed_count: counts.failed,
-      reconcile_count: counts.reconcile,
-      status: batchStatus,
-      completed_at: complete ? ((batch.completed_at as string | null) ?? new Date().toISOString()) : null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq("id", batchId)
-    .eq("firm_id", firmId);
-  return NextResponse.json({ ok: true, batchId, status: batchStatus, counts, outcomes });
+  return NextResponse.json({
+    ok: true,
+    batchId,
+    status: batchResult.status,
+    counts: batchResult.counts,
+    outcomes,
+  });
 }
