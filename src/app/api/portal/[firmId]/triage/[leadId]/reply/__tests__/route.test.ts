@@ -59,6 +59,7 @@ const state = {
     };
   } | null>,
   conversationCalls: 0,
+  conversationError: null as Error | null,
   sendResult: { sent: true, messageId: "mid.sent" } as {
     sent: boolean;
     messageId?: string;
@@ -108,6 +109,7 @@ vi.mock("@/lib/channel-conversation", async (importOriginal) => {
     ...original,
     loadChannelConversation: () => {
       const index = state.conversationCalls++;
+      if (state.conversationError) return Promise.reject(state.conversationError);
       return Promise.resolve(state.conversations[index] ?? state.conversations.at(-1) ?? null);
     },
   };
@@ -172,6 +174,7 @@ beforeEach(() => {
   state.lead = messengerLead();
   state.leadError = null;
   state.conversationCalls = 0;
+  state.conversationError = null;
   state.sendResult = { sent: true, messageId: "mid.sent" };
   state.sendCalls = [];
   state.dbReads = 0;
@@ -331,6 +334,16 @@ describe("POST /api/portal/[firmId]/triage/[leadId]/reply", () => {
     const response = await POST(request() as never, params());
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ replyWindow: closedWindow });
+    expect(state.sendCalls).toHaveLength(0);
+  });
+
+  it("returns 503 without sending when the conversation ledger cannot be loaded", async () => {
+    state.conversationError = new Error("relation channel_conversation_events does not exist");
+
+    const response = await POST(request() as never, params());
+
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: "Conversation history is unavailable" });
     expect(state.sendCalls).toHaveLength(0);
   });
 

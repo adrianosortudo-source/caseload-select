@@ -8,6 +8,8 @@ This is an operator runbook. It does not authorize an agent to merge, deploy, re
 
 As of source commit `69505387998055d84f3c621f550d52423e71ae44`, Option B and migration `20260901231830_channel_conversation_ledger.sql` exist in a local branch. This does not prove merge, database application, Vercel deployment, or production behavior.
 
+PR #191 source is deployed while the ledger table is absent. In that current release, a history-load failure collapses to an empty thread with a closed reply-window fallback. Portal reply requests still return `503` before any Graph send. Any send that requires the ledger fails closed as `ledger_unavailable`; best-effort inbound ledger writes can fail without aborting core intake; and only non-ledger prompts with a current authoritative inbound timestamp can still send. This deferral PR replaces the ambiguous empty-thread display with a distinct unavailable state and disables its composer. Meta recording and resubmission remain blocked until the ledger is separately approved, applied and verified.
+
 Do not record or edit the Meta submission until all boxes below are confirmed:
 
 - [ ] The Option B PR has explicit approval for that PR.

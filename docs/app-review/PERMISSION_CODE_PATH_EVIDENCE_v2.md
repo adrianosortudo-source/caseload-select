@@ -39,7 +39,7 @@ They were approved in submission `1016624077686960`. The new evidence issue conc
 | Recheck immediately before the Graph side effect | `src/lib/channel-send.ts:258-273` |
 | Missing, malformed and unreasonable future inbound timestamps fail closed | `src/lib/channel-conversation.ts:84-108` |
 | Idempotent portal retries preserve one request ID for an unchanged draft | `src/components/portal/ChannelConversationPanel.tsx:117-190` |
-| Append-only, service-role-only event ledger | `supabase/migrations/20260901231830_channel_conversation_ledger.sql:15-151` |
+| Applied append-only ledger with proposed forward ACL hardening; runtime use remains default-off pending privacy, retention and erasure approval | `supabase/migrations/20260901231830_channel_conversation_ledger.sql:15-151`; `supabase/migrations/20260902111504_harden_channel_conversation_acl.sql` |
 | Expiry sweep suppresses the former after-window closing send | `src/app/api/cron/expire-channel-intake-sessions/route.ts:241-248` |
 
 ## Evidence boundary
