@@ -67,7 +67,7 @@ export async function POST(
 
   const { data: batch } = await supabase
     .from("secure_client_import_batches")
-    .select("id, declared_row_count, status")
+    .select("id, declared_row_count, processed_row_count, status, completed_at")
     .eq("id", batchId)
     .eq("firm_id", firmId)
     .eq("lawyer_id", guard.actor.id)
@@ -83,6 +83,49 @@ export async function POST(
   }
   if (!Array.isArray(body.rows) || body.rows.length < 1 || body.rows.length > MAX_ROWS_PER_REQUEST) {
     return NextResponse.json({ error: "rows_must_contain_1_to_25_items" }, { status: 400 });
+  }
+
+  const declaredRowCount = Number(batch.declared_row_count);
+  const processedRowCount = Number(batch.processed_row_count);
+  const lastDeclaredRowNumber = declaredRowCount + 1;
+  const providedRowNumbers = body.rows.map((input) => Number((input as { rowNumber?: unknown } | null)?.rowNumber));
+  if (!Number.isInteger(declaredRowCount) || declaredRowCount < 1) {
+    return NextResponse.json({ error: "invalid_declared_row_count" }, { status: 409 });
+  }
+  if (!Number.isInteger(processedRowCount) || processedRowCount < 0 || processedRowCount > declaredRowCount) {
+    return NextResponse.json({ error: "invalid_batch_progress" }, { status: 409 });
+  }
+  if (providedRowNumbers.some((rowNumber) => Number.isInteger(rowNumber) && rowNumber > lastDeclaredRowNumber)) {
+    return NextResponse.json({ error: "row_number_exceeds_declared_count" }, { status: 409 });
+  }
+  const validProvidedNumbers = providedRowNumbers.filter((rowNumber) => Number.isInteger(rowNumber) && rowNumber > 1);
+  if (new Set(validProvidedNumbers).size !== validProvidedNumbers.length) {
+    return NextResponse.json({ error: "duplicate_row_number_in_request" }, { status: 409 });
+  }
+
+  if (batch.status === "completed" || batch.status === "completed_with_exceptions") {
+    for (const input of body.rows) {
+      const normalized = normalizeServerRow(input);
+      const providedNumber = Number((input as { rowNumber?: unknown } | null)?.rowNumber);
+      if (!Number.isInteger(providedNumber) || providedNumber <= 1) {
+        return NextResponse.json({ error: "completed_batch_replay_must_match" }, { status: 409 });
+      }
+      const fingerprint = normalized
+        ? clientImportDigest("row", JSON.stringify({ batchId, ...normalized }))
+        : clientImportDigest("invalid-row", `${batchId}:${providedNumber}`);
+      const { data: existing } = await supabase
+        .from("secure_client_import_rows")
+        .select("status, row_fingerprint")
+        .eq("batch_id", batchId)
+        .eq("row_number", providedNumber)
+        .maybeSingle();
+      if (!existing || !FINAL_STATUSES.has(existing.status as string)) {
+        return NextResponse.json({ error: "completed_batch_cannot_accept_new_rows" }, { status: 409 });
+      }
+      if (existing.row_fingerprint !== fingerprint) {
+        return NextResponse.json({ error: "row_fingerprint_mismatch" }, { status: 409 });
+      }
+    }
   }
 
   const outcomes: RowOutcome[] = [];
@@ -112,11 +155,14 @@ export async function POST(
     const fingerprint = clientImportDigest("row", JSON.stringify({ batchId, ...normalized }));
     const { data: existing } = await supabase
       .from("secure_client_import_rows")
-      .select("status, error_code, attempt_count, processed_at")
+      .select("status, error_code, attempt_count, processed_at, row_fingerprint")
       .eq("batch_id", batchId)
       .eq("row_number", normalized.rowNumber)
       .maybeSingle();
     if (existing && FINAL_STATUSES.has(existing.status as string)) {
+      if (existing.row_fingerprint !== fingerprint) {
+        return NextResponse.json({ error: "row_fingerprint_mismatch" }, { status: 409 });
+      }
       outcomes.push({ rowNumber: normalized.rowNumber, status: existing.status as string, errorCode: (existing.error_code as string | null) ?? undefined });
       continue;
     }
@@ -211,7 +257,7 @@ export async function POST(
     else if (status === "failed") counts.failed += 1;
     else if (status === "reconcile_required") counts.reconcile += 1;
   }
-  const complete = counts.processed >= Number(batch.declared_row_count);
+  const complete = counts.processed === declaredRowCount;
   const hasExceptions = counts.held + counts.invalid + counts.failed + counts.reconcile > 0;
   const batchStatus = complete ? (hasExceptions ? "completed_with_exceptions" : "completed") : "processing";
   await supabase
@@ -225,7 +271,7 @@ export async function POST(
       failed_count: counts.failed,
       reconcile_count: counts.reconcile,
       status: batchStatus,
-      completed_at: complete ? new Date().toISOString() : null,
+      completed_at: complete ? ((batch.completed_at as string | null) ?? new Date().toISOString()) : null,
       updated_at: new Date().toISOString(),
     })
     .eq("id", batchId)
