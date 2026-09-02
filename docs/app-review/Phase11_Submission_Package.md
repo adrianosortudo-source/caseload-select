@@ -1,5 +1,7 @@
 # Meta App Review submission package: CaseLoad Select
 
+> ARCHIVE NOTICE: This is the first-submission package and is superseded for the Facebook and Instagram resubmission. Do not paste its permission blocks, reviewer instructions, or screencast mapping. Use `RUNBOOK_Resubmission_v2.md`, `PERMISSION_CODE_PATH_EVIDENCE_v2.md`, `Reviewer_Instructions_Paste_v2.md`, and `screencasts/SHOTLIST_v2.md`. This historical body is preserved for provenance.
+
 **App:** CaseLoad Select
 **App ID:** 1007304805285554
 **Business Portfolio ID:** 2191422434947205
