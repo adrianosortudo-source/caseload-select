@@ -67,6 +67,7 @@ const state = {
     code?:
       | "validation_failed"
       | "lead_not_found"
+      | "lead_redacted"
       | "reply_window_closed"
       | "duplicate_request"
       | "delivery_unknown"
@@ -393,6 +394,26 @@ describe("POST /api/portal/[firmId]/triage/[leadId]/reply", () => {
       expect(state.sendCalls).toHaveLength(1);
     },
   );
+
+  it("returns Gone when privacy erasure suppresses the lead", async () => {
+    state.sendResult = {
+      sent: false,
+      reason: "channel subject is suppressed following privacy erasure",
+      code: "lead_redacted",
+    };
+    state.conversations = [
+      { messages: [], replyWindow: openWindow },
+      { messages: [], replyWindow: openWindow },
+    ];
+
+    const response = await POST(request() as never, params());
+
+    expect(response.status).toBe(410);
+    expect(await response.json()).toMatchObject({
+      code: "lead_redacted",
+      error: expect.stringContaining("suppressed"),
+    });
+  });
 
   it("returns 502 with the failed ledger event after a Graph failure", async () => {
     const failedMessage = {

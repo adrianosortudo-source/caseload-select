@@ -21,7 +21,7 @@ Release evidence:
 - Migrations `20260901231830_channel_conversation_ledger`, `20260902102620_restrict_screen_funnel_service_role_acl`, and `20260902111504_harden_channel_conversation_acl` are applied and verified in production.
 - The conversation ledger is append-only. `service_role` has SELECT and INSERT only. Browser roles and PUBLIC have no table privileges. RLS is enabled and forced with no policies.
 
-The remaining work is operational: a live production rehearsal, two continuous recordings, live Meta draft cleanup, and Adriano's approved submission action.
+For the messaging-send evidence, the remaining work is operational: a live production rehearsal, two continuous recordings, live Meta draft cleanup, and Adriano's approved submission action. Final submission also remains blocked by the deletion implementation, counsel, processor, backup, and post-ledger verification gates below.
 
 ## Authority and scope
 
@@ -102,9 +102,9 @@ If Meta displays a dependency or a different Instagram permission label, capture
 
 ## Pre-submission blocker: deletion promise and conversation ledger
 
-The public `/data-deletion` page promises broader erasure or anonymization. The current `channel_conversation_events` table retains message `body` and `actor_id`, rejects UPDATE and DELETE, and uses `ON DELETE RESTRICT` for its parent lead. See `supabase/migrations/20260901231830_channel_conversation_ledger.sql:15-36` and `:134-152`.
+Adriano selected controlled, irreversible redaction as the resolution. The event envelope remains immutable, while the approved service-only operation removes message content and direct identifiers and records a redaction marker. Whether the retained fields and available joins are non-identifying remains a counsel and technical verification gate. The public copy and operator procedure are drafted alongside the implementation.
 
-This blocker does not invalidate the shipped send surface or its recording evidence. The Messenger and Instagram flows may be rehearsed and recorded after the production send gates pass. Do not submit the Meta draft until Adriano chooses a resolution and a reviewed implementation or policy resolution is shipped and verified. This documentation PR neither proposes nor implements that resolution.
+The blocker remains open until the reviewed migration, application path, and scheduled three-year expiry are deployed; privacy counsel approves the retained envelope and retention boundary; processor action evidence is recorded; backup-expiry schedules and restore replay are verified; and a fresh fictional post-ledger deletion rehearsal passes in production. This does not invalidate the shipped send surface or its recording evidence. The Messenger and Instagram flows may be rehearsed and recorded after the production send gates pass.
 
 ## Remaining sequence
 
@@ -113,7 +113,7 @@ This blocker does not invalidate the shipped send surface or its recording evide
 3. Rehearse the full portal send and native receipt without recording.
 4. Record and verify the Messenger v2 clip.
 5. Record and verify the Instagram v2 clip.
-6. Resolve the pre-submission deletion-policy blocker through a separate reviewed change, then verify the shipped result.
+6. Ship the controlled-redaction change, close the counsel and processor gates, and record the post-ledger fictional deletion rehearsal.
 7. Inventory the live Meta draft. Remove unsupported and approved permissions one row at a time.
 8. Paste the then-current v2 reviewer instructions and attach only the matching v2 clips.
 9. Stop for Adriano's action-time approval before the final submission control.
@@ -127,7 +127,8 @@ This blocker does not invalidate the shipped send surface or its recording evide
 - [ ] Both fresh inbound messages are within 24 hours.
 - [ ] Both clips show Meta identity, portal send, `Reply sent.`, and the identical native receipt without a cut.
 - [ ] No real client or unrelated lead data is visible.
-- [ ] The deletion-policy and conversation-ledger conflict has a reviewed resolution that is shipped and verified.
+- [ ] The controlled-redaction resolution is shipped and the post-ledger fictional deletion rehearsal is recorded as passed.
+- [ ] Counsel approval, processor action evidence, attachment coverage, audit expiry, and backup-restore replay gates are closed.
 - [ ] Live draft contains only the two source-supported messaging permissions.
 - [ ] The three approved scopes are absent.
 - [ ] Reviewer instructions use the exact live Instagram permission label.

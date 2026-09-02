@@ -222,6 +222,28 @@ export async function resolveScreenedLeadIdForFirm(
   return data ? (data.id as string) : null;
 }
 
+/**
+ * Fail-closed suppression check for a lead whose personal data has been
+ * irreversibly redacted.  This is intentionally a separate lookup from
+ * resolveScreenedLeadIdForFirm: ownership may still be true after redaction,
+ * but no application path may append another body or provider identifier to
+ * that lead's conversation ledger.
+ */
+export async function isScreenedLeadPrivacyRedactedForFirm(
+  firmId: string,
+  screenedLeadRef: string,
+): Promise<boolean> {
+  const column = UUID_PATTERN.test(screenedLeadRef) ? 'id' : 'lead_id';
+  const { data, error } = await supabase
+    .from('screened_leads')
+    .select('privacy_redacted_at')
+    .eq(column, screenedLeadRef)
+    .eq('firm_id', firmId)
+    .maybeSingle();
+  if (error) throw new Error('conversation lead privacy lookup failed');
+  return !!data?.privacy_redacted_at;
+}
+
 export async function screenedLeadBelongsToFirm(
   firmId: string,
   screenedLeadRef: string,
@@ -287,11 +309,19 @@ export interface RecordInboundEventArgs {
 
 export async function recordInboundConversationEvent(
   args: RecordInboundEventArgs,
-): Promise<{ ok: boolean; duplicate?: boolean }> {
+): Promise<{ ok: boolean; duplicate?: boolean; redacted?: boolean }> {
   const occurredAt = normalizeAuthoritativeInboundAt(args.occurredAt);
   if (!occurredAt) {
     console.warn('[channel-conversation] rejected invalid authoritative inbound time');
     return { ok: false };
+  }
+  if (
+    await isScreenedLeadPrivacyRedactedForFirm(
+      args.firmId,
+      args.screenedLeadId,
+    )
+  ) {
+    return { ok: false, redacted: true };
   }
   const { error } = await supabase.from('channel_conversation_events').insert({
     firm_id: args.firmId,
@@ -326,7 +356,15 @@ export async function claimOutboundConversationEvent(args: {
   channel: ConversationChannel;
   text: string;
   ledger: OutboundLedgerContext;
-}): Promise<{ claimed: boolean; duplicate: boolean }> {
+}): Promise<{ claimed: boolean; duplicate: boolean; redacted?: boolean }> {
+  if (
+    await isScreenedLeadPrivacyRedactedForFirm(
+      args.firmId,
+      args.ledger.screenedLeadId,
+    )
+  ) {
+    return { claimed: false, duplicate: false, redacted: true };
+  }
   const { error } = await supabase.from('channel_conversation_events').insert({
     firm_id: args.firmId,
     screened_lead_id: args.ledger.screenedLeadId,
@@ -348,6 +386,7 @@ export async function claimOutboundConversationEvent(args: {
 export interface RecordOutboundConversationResult {
   recorded: boolean;
   duplicate: boolean;
+  redacted?: boolean;
 }
 
 export async function recordOutboundConversationResult(args: {
@@ -359,6 +398,17 @@ export async function recordOutboundConversationResult(args: {
   metaMessageId?: string | null;
   failureReason?: string | null;
 }): Promise<RecordOutboundConversationResult> {
+  // A deletion may win the race after a pending claim but before the provider
+  // returns. Never reintroduce the text, actor or provider message id as a
+  // terminal event after the lead has been redacted.
+  if (
+    await isScreenedLeadPrivacyRedactedForFirm(
+      args.firmId,
+      args.ledger.screenedLeadId,
+    )
+  ) {
+    return { recorded: false, duplicate: false, redacted: true };
+  }
   const failureReason = args.sent
     ? null
     : (args.failureReason?.slice(0, 500) || 'channel send failed');

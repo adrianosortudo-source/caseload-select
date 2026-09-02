@@ -21,11 +21,11 @@ export default function PrivacyPage() {
   return (
     <div className="bg-parchment min-h-screen">
       <Header />
-      <main className="max-w-3xl mx-auto px-6 py-10 space-y-8 text-black/80">
+      <main className="max-w-3xl mx-auto px-3 py-10 space-y-8 text-black/80 sm:px-6">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] font-semibold text-gold">CaseLoad Select</p>
           <h1 className="text-3xl font-bold text-navy mt-2">Privacy Policy</h1>
-          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-24</p>
+          <p className="mt-2 text-sm text-black/50">Last updated: 2026-09-02</p>
         </div>
 
         <Section title="Who we are">
@@ -135,7 +135,7 @@ export default function PrivacyPage() {
 
         <Section title="How long we keep it">
           <p>
-            Retention follows the priority band assigned to the matter at intake. The system anonymizes records past these limits; it does not delete the row, so historical reporting (counts, timing, conversion) remains correct without retaining personal information.
+            Identifying intake information follows the priority band assigned to the matter. At the end of the applicable period, or after a verified deletion request, CaseLoad Select irreversibly removes message content and direct identifiers from its active operational systems. The system may retain a de-identified row so aggregate reporting remains accurate.
           </p>
           <table className="w-full text-sm border border-black/10 mt-2">
             <thead className="bg-parchment-2 border-b border-black/10">
@@ -155,11 +155,14 @@ export default function PrivacyPage() {
           <p>
             If you become a client of the firm, the firm&rsquo;s own retention rules govern your file from that point on, separate from this policy.
           </p>
+          <p>
+            A minimal audit envelope may remain for system security, delivery-integrity checks, proof that deletion was completed, and non-identifying operational counts. The release target is to remove each retained channel audit event within three years of when it occurred. Privacy counsel must approve the retention boundary and the assessment that the retained fields and available joins do not reasonably identify a person before this revised commitment is released.
+          </p>
         </Section>
 
         <Section title="Where it lives">
           <p>
-            Your data is stored on Supabase infrastructure in Montreal, Canada (AWS ca-central-1), encrypted at rest. Access requires a service-role key held only by the application and by the operator. Backups are retained per Supabase&rsquo;s standard policy. We use TLS for every connection.
+            Your data is stored on Supabase infrastructure in Montreal, Canada (AWS ca-central-1), encrypted at rest. Access requires a service-role key held only by the application and by the operator. We use TLS for every connection. Encrypted backup copies follow the provider&rsquo;s documented expiry schedule. Backup-expiry evidence and a production rehearsal proving that completed deletion requests are reapplied after restoration remain release gates for this revised commitment.
           </p>
         </Section>
 
@@ -170,7 +173,7 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 space-y-1.5">
             <li>Ask what information we hold about you.</li>
             <li>Ask us to correct inaccurate information.</li>
-            <li>Ask us to delete your record outside the regular retention schedule. Note that if the firm took on your matter, the firm&rsquo;s own record of the matter is governed by the firm&rsquo;s policy, not ours.</li>
+            <li>Ask us to irreversibly remove message content and direct identifiers outside the regular retention schedule. A minimal non-identifying audit envelope may remain. If the firm took on your matter, the firm&rsquo;s own record is governed by its policy, not ours.</li>
             <li>Withdraw consent at any time, subject to legal or contractual restrictions.</li>
           </ul>
           <p>
@@ -194,12 +197,12 @@ export default function PrivacyPage() {
         </Section>
 
         <Section title="Contact">
-          <p>
-            CaseLoad Select<br />
-            Adriano Domingues, Operator<br />
-            Toronto, Ontario, Canada<br />
+          <address className="not-italic">
+            <span className="block">CaseLoad Select</span>
+            <span className="block">Adriano Domingues, Operator</span>
+            <span className="block">Toronto, Ontario, Canada</span>
             <a href="mailto:privacy@caseloadselect.ca" className="text-navy underline underline-offset-2">privacy@caseloadselect.ca</a>
-          </p>
+          </address>
           <p className="text-sm text-black/60">
             If you cannot resolve a privacy concern with us directly, you may file a complaint with the Office of the Privacy Commissioner of Canada at <a href="https://www.priv.gc.ca" rel="noopener" target="_blank" className="underline underline-offset-2">priv.gc.ca</a>.
           </p>
@@ -214,7 +217,7 @@ export default function PrivacyPage() {
 function Header() {
   return (
     <header className="bg-[#0D1520] border-b-2 border-gold px-6 py-4">
-      <div className="max-w-3xl mx-auto flex items-center justify-between">
+      <div className="max-w-3xl mx-auto flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link href="/" className="font-mono text-[11px] uppercase tracking-[0.18em] font-semibold text-gold hover:text-white transition-colors">
           CaseLoad Select
         </Link>
@@ -229,7 +232,7 @@ function Header() {
 
 function Footer() {
   return (
-    <footer className="pt-8 mt-8 border-t border-black/10 text-xs text-black/50 flex items-center justify-between">
+    <footer className="pt-8 mt-8 border-t border-black/10 text-xs text-black/50 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
       <span>caseloadselect.ca</span>
       <Link href="/terms" className="hover:text-navy transition-colors">Terms of Service</Link>
     </footer>
@@ -238,9 +241,9 @@ function Footer() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-bold text-navy">{title}</h2>
-      <div className="text-sm leading-relaxed space-y-3">{children}</div>
+    <section className="space-y-3" data-ui-component-content={`privacy-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}>
+      <h2 className="w-full text-lg font-bold text-navy text-balance" data-ui-copy="heading">{title}</h2>
+      <div className="w-full text-sm leading-relaxed space-y-3 [&>p]:text-pretty [&>ul>li]:text-pretty" data-ui-copy="body">{children}</div>
     </section>
   );
 }

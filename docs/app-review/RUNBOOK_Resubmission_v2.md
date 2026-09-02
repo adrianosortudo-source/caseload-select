@@ -111,11 +111,21 @@ Watch the full upload copy before attaching it.
 
 ## 7. Pre-submission blocker: deletion promise and conversation ledger
 
-The public `/data-deletion` page promises broader erasure or anonymization. The current `channel_conversation_events` table retains message `body` and `actor_id`, rejects UPDATE and DELETE, and prevents parent-lead deletion through `ON DELETE RESTRICT`. The May 2026 deletion exercise predates this ledger and does not verify its treatment.
+Adriano selected controlled, irreversible redaction as the resolution. The non-identifying event envelope remains immutable, while message content and direct identifiers must be removed through one service-only, tenant-scoped operation. The public copy and operator procedure are drafted in this change, but they are not proof that the database path is shipped or that production data reaches the promised end state.
 
 This does not block rehearsal or recording after the production send gates pass. It does block final Meta submission.
 
-Do not submit the Meta draft until Adriano chooses a resolution and a reviewed implementation or policy resolution is shipped and verified. This documentation PR does not choose or implement that resolution.
+Do not submit the Meta draft until all of these checks pass:
+
+- [ ] The redaction migration and application path are reviewed, merged, and deployed.
+- [ ] The scheduled three-year audit-envelope expiry is deployed and its production invocation is verified.
+- [ ] Privacy counsel approves the audit envelope, reidentification assessment, and retention period.
+- [ ] Processor handling in `docs/privacy/DELETION_OPERATIONS.md` is confirmed with action evidence; a `provider_managed` status alone does not clear this gate.
+- [ ] Backup-expiry schedules are documented and a restore rehearsal proves completed deletions are reapplied before restored data returns to use.
+- [ ] Retained keys cannot join the audit envelope to an identifying firm matter, or privacy counsel approves the documented residual risk.
+- [ ] Every in-scope attachment location and retained audit ledger is included in deletion and expiry verification.
+- [ ] A fresh fictional post-ledger deletion rehearsal passes and is appended to `deletion-flow-verification.md`.
+- [ ] The production `/privacy` and `/data-deletion` pages match the verified implementation.
 
 ## 8. Clean the live Meta draft
 
@@ -152,7 +162,7 @@ Do not use `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, `s
 - [ ] Meta identity is visible in Meta UI in each clip.
 - [ ] Each clip shows `Message thread`, the correct `Channel:` row, `Send reply`, `Reply sent.`, and the identical native receipt.
 - [ ] No real or unrelated lead data is visible.
-- [ ] The deletion-policy and conversation-ledger conflict has a reviewed resolution that is shipped and verified.
+- [ ] The controlled-redaction resolution is shipped and the post-ledger fictional deletion rehearsal is recorded as passed.
 - [ ] Privacy, terms, and deletion URLs open publicly.
 - [ ] Operator contact is `adriano@caseloadselect.ca`.
 

@@ -30,7 +30,7 @@ vi.mock("@/lib/supabase-admin", () => ({
   supabaseAdmin: {
     from: (table: string) => ({
       upsert: (payload: Record<string, unknown>, opts: Record<string, unknown>) => ({
-        select: (_cols: string) => mocks.upsert(table, payload, opts),
+        select: () => mocks.upsert(table, payload, opts),
       }),
       delete: () => ({
         eq: (c1: string, v1: unknown) => ({
@@ -61,6 +61,7 @@ describe("claimChannelMessage", () => {
     const result = await claimChannelMessage({
       firmId: "11111111-1111-1111-1111-111111111111",
       channel: "whatsapp",
+      senderId: "16475550101",
       messageMid: "wamid.first",
     });
     expect(result).toEqual({ duplicate: false, reason: "claimed" });
@@ -74,6 +75,7 @@ describe("claimChannelMessage", () => {
     expect(payload).toEqual({
       firm_id: "11111111-1111-1111-1111-111111111111",
       channel: "whatsapp",
+      sender_id: "16475550101",
       message_mid: "wamid.first",
     });
     expect(opts).toEqual({
@@ -87,6 +89,7 @@ describe("claimChannelMessage", () => {
     const result = await claimChannelMessage({
       firmId: "11111111-1111-1111-1111-111111111111",
       channel: "facebook",
+      senderId: "psid-test",
       messageMid: "mid.redelivered",
     });
     expect(result).toEqual({ duplicate: true, reason: "duplicate" });
@@ -100,9 +103,79 @@ describe("claimChannelMessage", () => {
     const result = await claimChannelMessage({
       firmId: "11111111-1111-1111-1111-111111111111",
       channel: "instagram",
+      senderId: "igsid-test",
       messageMid: "mid.race-loser",
     });
     expect(result).toEqual({ duplicate: true, reason: "duplicate" });
+  });
+
+  it("fails closed when the database rejects a claim for a privacy-suppressed sender", async () => {
+    mocks.upsert.mockResolvedValue({
+      data: null,
+      error: {
+        code: "P0001",
+        message: "privacy-suppressed channel subject cannot be claimed",
+      },
+    });
+    const result = await claimChannelMessage({
+      firmId: "11111111-1111-1111-1111-111111111111",
+      channel: "instagram",
+      senderId: "igsid-suppressed",
+      messageMid: "mid.after-redaction",
+    });
+    expect(result).toEqual({
+      duplicate: true,
+      reason: "privacy_suppressed",
+    });
+    expect(mocks.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries the legacy claim shape only when sender_id is missing before migration", async () => {
+    mocks.upsert
+      .mockResolvedValueOnce({
+        data: null,
+        error: {
+          code: "PGRST204",
+          message:
+            "Could not find the 'sender_id' column of 'processed_channel_messages' in the schema cache",
+        },
+      })
+      .mockResolvedValueOnce({ data: [{ id: "legacy-row" }], error: null });
+
+    const result = await claimChannelMessage({
+      firmId: "11111111-1111-1111-1111-111111111111",
+      channel: "facebook",
+      senderId: "psid-transition",
+      messageMid: "mid.transition",
+    });
+
+    expect(result).toEqual({ duplicate: false, reason: "claimed" });
+    expect(mocks.upsert).toHaveBeenCalledTimes(2);
+    expect(mocks.upsert.mock.calls[0]?.[1]).toMatchObject({
+      sender_id: "psid-transition",
+    });
+    expect(mocks.upsert.mock.calls[1]?.[1]).toEqual({
+      firm_id: "11111111-1111-1111-1111-111111111111",
+      channel: "facebook",
+      message_mid: "mid.transition",
+    });
+  });
+
+  it("does not retry the legacy shape for a generic database error", async () => {
+    mocks.upsert.mockResolvedValueOnce({
+      data: null,
+      error: { code: "57014", message: "statement timeout mentioning sender_id" },
+    });
+
+    const result = await claimChannelMessage({
+      firmId: "11111111-1111-1111-1111-111111111111",
+      channel: "instagram",
+      senderId: "igsid-generic-error",
+      messageMid: "mid.generic-error",
+    });
+
+    expect(result).toEqual({ duplicate: false, reason: "claim_error" });
+    expect(mocks.upsert).toHaveBeenCalledTimes(1);
   });
 
   it("fails open on any other DB error (process, reason claim_error)", async () => {
@@ -113,6 +186,7 @@ describe("claimChannelMessage", () => {
     const result = await claimChannelMessage({
       firmId: "11111111-1111-1111-1111-111111111111",
       channel: "whatsapp",
+      senderId: "16475550101",
       messageMid: "wamid.timeout",
     });
     expect(result).toEqual({ duplicate: false, reason: "claim_error" });
@@ -127,6 +201,7 @@ describe("claimChannelMessage", () => {
     const result = await claimChannelMessage({
       firmId: "11111111-1111-1111-1111-111111111111",
       channel: "whatsapp",
+      senderId: "16475550101",
       messageMid: mid,
     });
     expect(result).toEqual({ duplicate: false, reason: "no_mid" });
@@ -138,11 +213,13 @@ describe("claimChannelMessage", () => {
     await claimChannelMessage({
       firmId: "11111111-1111-1111-1111-111111111111",
       channel: "whatsapp",
+      senderId: "16475550101",
       messageMid: "wamid.one",
     });
     await claimChannelMessage({
       firmId: "11111111-1111-1111-1111-111111111111",
       channel: "whatsapp",
+      senderId: "16475550101",
       messageMid: "wamid.two",
     });
     expect(mocks.upsert).toHaveBeenCalledTimes(2);
