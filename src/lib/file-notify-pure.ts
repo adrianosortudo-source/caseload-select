@@ -48,6 +48,7 @@ function renderHtml(input: FileEmailInput): string {
   const body = isOperator
     ? `${escapeHtml(input.uploaderLabel)} just added a ${noun} to the portal for ${escapeHtml(input.firmName)}.`
     : `${escapeHtml(input.uploaderLabel)} at ${escapeHtml(input.firmName)} just added a ${noun}.`;
+  const actionLabel = isOperator ? "Open in the portal" : "Open in the operator console";
 
   const metaRight = input.kind === "link"
     ? "Link"
@@ -101,7 +102,7 @@ function renderHtml(input: FileEmailInput): string {
                 ${body}
               </p>
               <p style="margin:0;">
-                <a href="${escapeAttr(input.filesUrl)}" style="display:inline-block;background:#1E2F58;color:#FFFFFF;text-decoration:none;font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;padding:13px 24px;">Open in the portal</a>
+                <a href="${escapeAttr(input.filesUrl)}" style="display:inline-block;background:#1E2F58;color:#FFFFFF;text-decoration:none;font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;padding:13px 24px;">${actionLabel}</a>
               </p>
             </td>
           </tr>

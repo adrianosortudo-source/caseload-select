@@ -15,7 +15,7 @@ describe("magic-link role routing", () => {
       "https://app.caseloadselect.ca/api/portal/login?token=lawyer.sig",
     );
     expect(buildMagicLinkUrl("operator.sig", "operator")).toBe(
-      "https://app.caseloadselect.ca/api/operator/login?token=operator.sig",
+      "https://admin.caseloadselect.ca/api/operator/login?token=operator.sig",
     );
   });
 

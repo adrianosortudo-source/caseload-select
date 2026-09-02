@@ -10,19 +10,13 @@
 import "server-only";
 import { generatePortalToken } from "@/lib/portal-auth";
 import { sendEmail } from "@/lib/email";
+import { roleAwareOrigin } from "@/lib/app-origins";
 
 export function buildMagicLinkUrl(
   token: string,
   role: "lawyer" | "operator" = "lawyer",
 ): string {
-  const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
-  const previewOrigin = process.env.VERCEL_ENV === "preview" && process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : null;
-  const origin =
-    previewOrigin ??
-    (appDomain ? `https://app.${appDomain}` : null) ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const origin = roleAwareOrigin(role);
   const consumer = role === "operator" ? "/api/operator/login" : "/api/portal/login";
   return `${origin}${consumer}?token=${encodeURIComponent(token)}`;
 }

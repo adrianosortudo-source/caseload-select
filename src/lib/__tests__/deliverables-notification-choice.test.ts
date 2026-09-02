@@ -13,7 +13,7 @@
  * deliverables.ts rather than just recording call arguments.
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
@@ -126,6 +126,8 @@ const OPERATOR = { role: "operator" as const, id: null, name: "Operator", email:
 const LAWYER = { role: "lawyer" as const, id: "law-1", name: "Damaris", email: "damaris@firm.ca" };
 
 beforeEach(() => {
+  vi.stubEnv("NEXT_PUBLIC_APP_DOMAIN", "caseloadselect.ca");
+  vi.stubEnv("VERCEL_ENV", "production");
   db.deliverable_versions = freshTable();
   db.content_deliverables = freshTable();
   db.deliverable_comments = freshTable();
@@ -136,8 +138,12 @@ beforeEach(() => {
     { id: DELIV, firm_id: FIRM, title: "Journal article", status: "in_review" },
   ];
   db.firm_lawyers.rows = [
-    { firm_id: FIRM, email: "damaris@firm.ca", email_notifications_enabled: true, disabled: false },
+    { firm_id: FIRM, email: "damaris@firm.ca", role: "lawyer", email_notifications_enabled: true, disabled: false },
   ];
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 function versionInput(overrides: Partial<Parameters<typeof addVersion>[0]> = {}) {
@@ -184,6 +190,9 @@ describe("addVersion: client-notification choice", () => {
     expect(result.notification).toEqual({ requested: true, status: "sent" });
     expect(db.notification_outbox.rows).toHaveLength(1);
     expect(db.notification_outbox.rows[0].recipient_email).toBe("damaris@firm.ca");
+    expect(db.notification_outbox.rows[0].event_payload).toMatchObject({
+      deliverable_url: `https://app.caseloadselect.ca/portal/${FIRM}/deliverables/${DELIV}`,
+    });
     expect(db.content_deliverables.rows[0].review_notified_at).toBeTruthy();
   });
 
@@ -266,6 +275,9 @@ describe("addComment: lawyer/client-authored comments are unchanged (out of scop
     if (!result.ok) return;
     expect(db.notification_outbox.rows).toHaveLength(1);
     expect(db.notification_outbox.rows[0].recipient_email).toBe(OPERATOR_EMAIL);
+    expect(db.notification_outbox.rows[0].event_payload).toMatchObject({
+      deliverable_url: `https://admin.caseloadselect.ca/portal/${FIRM}/deliverables/${DELIV}`,
+    });
     // Scoped to the CLIENT-notification feature: nothing was "requested" on
     // that axis even though the pre-existing operator ping still fired.
     expect(result.notification).toEqual({ requested: false, status: "not_requested" });

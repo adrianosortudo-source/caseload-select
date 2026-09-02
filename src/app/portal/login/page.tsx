@@ -12,6 +12,7 @@
 
 import Link from "next/link";
 import RequestLinkForm from "@/components/portal/RequestLinkForm";
+import { operatorOrigin } from "@/lib/app-origins";
 
 export default async function PortalLoginPage({
   searchParams,
@@ -57,7 +58,7 @@ export default async function PortalLoginPage({
 
           <p className="border-t border-black/8 pt-4 text-sm text-black/60 text-pretty" data-ui-copy="supporting">
             Need the operator console?{" "}
-            <Link href="/operator/login" className="font-semibold text-navy underline underline-offset-2 hover:text-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2">
+            <Link href={`${operatorOrigin()}/operator/login`} className="font-semibold text-navy underline underline-offset-2 hover:text-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2">
               Use operator sign in.
             </Link>
           </p>
