@@ -77,6 +77,10 @@ import {
   buildContactCaptureFollowUp,
   buildContactCaptureExhaustedMessage,
 } from '@/lib/channel-send';
+import {
+  normalizeAuthoritativeInboundAt,
+  recordInboundConversationEvent,
+} from '@/lib/channel-conversation';
 import { applyContactExtractionToState } from '@/lib/contact-extraction';
 import {
   applyNumericAnswerMapping,
@@ -201,6 +205,8 @@ export interface ProcessChannelInboundArgs {
   firmId: string;
   text: string;
   sender: ChannelSender;
+  /** Authoritative provider event time supplied by the verified webhook. */
+  occurredAt?: string;
 }
 
 export interface ProcessChannelInboundResult {
@@ -329,6 +335,7 @@ export async function processChannelInbound(
   const channel = sender.channel;
   const trimmed = text.trim();
   const senderId = getSenderId(sender);
+  const authoritativeInboundAt = normalizeAuthoritativeInboundAt(args.occurredAt);
 
   if (!trimmed) {
     return { persisted: false, reason: 'empty inbound text' };
@@ -397,10 +404,30 @@ export async function processChannelInbound(
         const reply = isNewIntent
           ? buildPostFinalizationDisambiguationMessage(recentFinalized.engine_state)
           : buildPostFinalizationFollowUpMessage(recentFinalized.engine_state);
+        const screenedLeadId = recentFinalized.screened_lead_id as string;
+        if (authoritativeInboundAt) {
+          await recordInboundConversationEvent({
+            firmId,
+            screenedLeadId,
+            channel,
+            body: trimmed,
+            metaMessageId: sender.messageMid,
+            occurredAt: authoritativeInboundAt,
+          });
+        }
         const sendResult = await sendChannelMessage({
           firmId,
           sender,
           text: reply,
+          authoritativeInboundAt,
+          ledger: {
+            screenedLeadId,
+            source: 'intake_automation',
+            actorType: 'system',
+            actorId: 'channel-intake-processor',
+            clientRequestId: crypto.randomUUID(),
+            requireOpenWindow: true,
+          },
         });
         console.log(
           `[channel-intake] post-finalization ${isNewIntent ? 'disambiguation' : 'follow-up'} firm=${firmId} channel=${channel} prior_session=${recentFinalized.id} sent=${sendResult.sent}`,
@@ -524,6 +551,7 @@ export async function processChannelInbound(
         firmId,
         sender,
         text: clarificationText,
+        authoritativeInboundAt,
       });
       // Persist state UNCHANGED so the next inbound resumes from the
       // same getNextStep slot. follow_up_count is NOT incremented —
@@ -828,6 +856,7 @@ export async function processChannelInbound(
           firmId,
           sender,
           text: exhaustedText,
+          authoritativeInboundAt,
         });
         if (!exhaustedSend.sent) {
           console.warn(
@@ -875,6 +904,7 @@ export async function processChannelInbound(
       firmId,
       sender,
       text: followUpText,
+      authoritativeInboundAt,
     });
 
     if (!sendResult.sent) {
@@ -1040,6 +1070,7 @@ export async function processChannelInbound(
         firmId,
         sender,
         text: openingQuestion,
+        authoritativeInboundAt,
       });
       if (sendResult.sent) {
         const persistedState: EngineState = {
@@ -1187,6 +1218,7 @@ export async function processChannelInbound(
         firmId,
         sender,
         text: questionText,
+        authoritativeInboundAt,
       });
 
       if (sendResult.sent) {
@@ -1259,6 +1291,13 @@ export async function processChannelInbound(
     priorFollowUpCount,
     isResume,
     fallbackTranscript: trimmed,
+    inboundEvent: sender.messageMid && authoritativeInboundAt
+      ? {
+          body: trimmed,
+          metaMessageId: sender.messageMid,
+          occurredAt: authoritativeInboundAt,
+        }
+      : undefined,
   });
 }
 
@@ -1283,6 +1322,14 @@ export interface FinalizeChannelLeadArgs {
    * passes '' (state.input always carries the transcript on resume).
    */
   fallbackTranscript: string;
+  /** Present only when finalization is driven by a verified live webhook. */
+  inboundEvent?: {
+    body: string;
+    metaMessageId: string;
+    occurredAt: string;
+  };
+  /** Expiry sweeps must not create a free-form send after 24h of silence. */
+  sendClosingMessage?: boolean;
 }
 
 /**
@@ -1318,6 +1365,8 @@ export async function finalizeChannelLead(
     priorFollowUpCount,
     isResume,
     fallbackTranscript,
+    inboundEvent,
+    sendClosingMessage = true,
   } = args;
   const channel = sender.channel;
   const axes = report.four_axis;
@@ -1432,6 +1481,20 @@ export async function finalizeChannelLead(
     await finalizeChannelSession(sessionId, inserted.id as string);
   }
 
+  // Start the auditable ledger at finalization. Earlier history cannot be
+  // reconstructed from legacy transcripts, so only verified events observed
+  // by this code path are authoritative for the 24-hour reply window.
+  if (inboundEvent) {
+    await recordInboundConversationEvent({
+      firmId,
+      screenedLeadId: inserted.id as string,
+      channel,
+      body: inboundEvent.body,
+      metaMessageId: inboundEvent.metaMessageId,
+      occurredAt: inboundEvent.occurredAt,
+    });
+  }
+
   // ── Lead notification (best-effort) ────────────────────────────────────
   // Doctrine (2026-05-15): "The engine sorts attention, the lawyer decides
   // outcome." OOS leads now carry band='D' and status='triaging'; the
@@ -1468,11 +1531,22 @@ export async function finalizeChannelLead(
   // screened_leads and the lawyer notification has already been queued.
   try {
     const closing = buildClosingMessage(state);
-    if (closing) {
+    if (closing && sendClosingMessage) {
       const sendResult = await sendChannelMessage({
         firmId,
         sender,
         text: closing,
+        authoritativeInboundAt: inboundEvent?.occurredAt ?? null,
+        ledger: inboundEvent
+          ? {
+              screenedLeadId: inserted.id as string,
+              source: 'intake_automation',
+              actorType: 'system',
+              actorId: 'channel-intake-processor',
+              clientRequestId: crypto.randomUUID(),
+              requireOpenWindow: true,
+            }
+          : undefined,
       });
       if (!sendResult.sent) {
         console.warn(

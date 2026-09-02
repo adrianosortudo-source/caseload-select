@@ -242,6 +242,9 @@ export async function GET(req: NextRequest) {
         priorFollowUpCount: row.follow_up_count,
         isResume: true,
         fallbackTranscript: state.input ?? '',
+        // This branch runs only after 24h of silence. A free-form Meta
+        // acknowledgment would be outside the standard response window.
+        sendClosingMessage: false,
       });
 
       // 'duplicate lead_id' means the lead row already exists and the

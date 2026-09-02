@@ -67,6 +67,7 @@ function makeIgPayload(opts: {
   senderId?: string;
   text?: string;
   mid?: string;
+  isEcho?: boolean;
 }): string {
   return JSON.stringify({
     object: "instagram",
@@ -82,6 +83,7 @@ function makeIgPayload(opts: {
             message: {
               mid: opts.mid ?? "mid_ig_abc",
               text: opts.text ?? "Quick question about employment law",
+              is_echo: opts.isEcho,
             },
           },
         ],
@@ -191,6 +193,15 @@ describe("POST /api/instagram-intake", () => {
     const body = makeIgPayload({ igUserId: "11111111111" });
     const res = await POST(makePostRequest(body, sign(body)) as never);
     expect(res.status).toBe(200);
+    expect(mocks.processChannelInbound).not.toHaveBeenCalled();
+  });
+
+  it("ACKs an outbound echo without resolving a firm or running intake", async () => {
+    const body = makeIgPayload({ isEcho: true, mid: "mid_ig_outbound_echo" });
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+    expect(res.status).toBe(200);
+    expect(mocks.resolveFirmByInstagramBusinessAccountId).not.toHaveBeenCalled();
+    expect(mocks.claimChannelMessage).not.toHaveBeenCalled();
     expect(mocks.processChannelInbound).not.toHaveBeenCalled();
   });
 });
