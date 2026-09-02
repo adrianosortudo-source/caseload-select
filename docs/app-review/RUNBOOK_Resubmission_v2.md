@@ -1,99 +1,95 @@
 # Meta App Review resubmission operator runbook, v2
 
-Owner: Adriano Domingues. Submission ID: `1016624077686960`. App ID: `1007304805285554`.
+Owner: Adriano Domingues
 
-This is an operator runbook. It does not authorize an agent to merge, deploy, record, upload, or submit.
+Submission ID: `1016624077686960`
 
-## Stop gate: the feature is not live merely because these files exist
+App ID: `1007304805285554`
 
-As of source commit `69505387998055d84f3c621f550d52423e71ae44`, Option B and migration `20260901231830_channel_conversation_ledger.sql` exist in a local branch. This does not prove merge, database application, Vercel deployment, or production behavior.
+This runbook does not authorize an agent to access Meta, record, upload, submit, merge, deploy, change production configuration, or delete production data.
 
-Do not record or edit the Meta submission until all boxes below are confirmed:
+## 1. Confirm the shipped baseline
 
-- [ ] The Option B PR has explicit approval for that PR.
-- [ ] The branch is pushed and CI is green, including the real-Postgres migration job.
-- [ ] The PR is merged to `main`.
-- [ ] GitHub's production deployment completes; no direct CLI production deploy is used.
-- [ ] Supabase shows migration ledger version `20260901231830` applied.
-- [ ] Production portal loads a new channel conversation and the reply API works on the test tenant.
-- [ ] The signed-in portal member has a UUID actor identity; if the UI asks for sign-in again, do that before recording.
-- [ ] Support preview is off. Preview is intentionally read-only.
+The release gates are complete:
 
-## 1. Confirm the permission set before touching the draft
+- [x] PRs #191, #193, and #195 merged.
+- [x] Required CI passed.
+- [x] Production commit `fa3e092983b274c96fd1d22b8fa0091988baeb25` is READY.
+- [x] Migration `20260901231830_channel_conversation_ledger` is applied and verified.
+- [x] Migration `20260902102620_restrict_screen_funnel_service_role_acl` is applied and verified.
+- [x] Migration `20260902111504_harden_channel_conversation_acl` is applied and verified.
 
-Open `PERMISSION_CODE_PATH_EVIDENCE_v2.md` and use this exact decision:
+The following operator gates remain open:
 
-Re-request:
+- [ ] Production portal member has a stable UUID actor identity.
+- [ ] Support preview is off.
+- [ ] Fresh fictional Messenger and Instagram inbound events are visible and less than 24 hours old.
+- [ ] A live rehearsal confirms portal send and native receipt for each channel.
+- [ ] No unrelated lead data is visible in the planned recording frame.
 
-- `pages_messaging`
-- `instagram_manage_messages`, or the exact equivalent label Meta displays for this app
+On the test brief, confirm there is no support-preview banner or read-only notice. Confirm `Send reply` is enabled after a non-empty valid draft is entered. If the panel asks the member to sign in again, the session lacks a stable UUID actor identity. Sign in again and reopen the brief before rehearsal.
 
-Do not re-request:
+## 2. Lock the permission set
 
-- `pages_show_list`
-- `pages_manage_metadata`
-- `business_management`
-- `instagram_basic`
-- `pages_read_engagement`
+Re-request only:
 
-Do not resubmit these approved permissions:
+- `pages_messaging`;
+- the exact Instagram messaging permission label shown in the live Meta draft. The source-supported name in this package is `instagram_manage_messages`.
 
-- `whatsapp_business_messaging`
-- `whatsapp_business_management`
-- `public_profile`
+Do not re-request `pages_show_list`, `pages_manage_metadata`, `business_management`, `instagram_basic`, or `pages_read_engagement`.
 
-If Meta makes one of the two retained messaging permissions depend on another scope, stop and capture the exact form text. Do not invent a supporting code path or silently widen the submission.
+Never resubmit `whatsapp_business_messaging`, `whatsapp_business_management`, or `public_profile`. Those three scopes are already approved.
 
-## 2. Clean the existing draft carefully
+If Meta requires another dependency or shows an unclear Instagram label, capture the exact form text and stop.
 
-There is no discard-draft or discard-all button.
+## 3. Prepare one fresh fictional conversation per channel
 
-1. Open the existing App Review submission draft.
-2. Inventory every permission currently in the draft.
-3. Use the trash icon on each unwanted permission row, one at a time.
-4. Remove the three approved permissions if the draft contains them. Approval already exists; resubmitting them creates needless risk.
-5. Remove all five unsupported rejected permissions listed above.
-6. Confirm that only the two retained messaging permissions remain.
-7. Save the draft and reload the page to verify the list persisted.
+The configured test assets use the DRG production workspace row. This is not a segregated test tenant.
 
-Do not delete the submission itself. Do not assume there is a hidden global reset.
+For Messenger and then Instagram:
 
-## 3. Prepare a fresh test conversation
+1. Use the authorized test user and the intended test asset.
+2. Send a fresh inbound message containing fictional names and facts only.
+3. Complete enough intake turns for a new brief to appear.
+4. Open that exact brief directly. Avoid showing the broader triage queue.
+5. Confirm the panel heading is `Message thread`.
+6. Confirm the separate `Channel:` row names the expected channel.
+7. Confirm the recent inbound message is visible.
+8. Treat `Firm workspace:` and `Configured Meta asset ID:` as configuration context only. Neither proves the Page name or Instagram handle.
+9. Confirm the composer is enabled and the 24-hour window is open.
 
-Repeat separately for Messenger and Instagram:
+If no authoritative inbound exists or the window is closed, start another fresh signed inbound flow. Do not edit the database or delete production rows to reset a take.
 
-1. Use the authorized test user and test asset only.
-2. Send a fresh inbound test message to `DRG Law Test` or `@drg_law_test`.
-3. Complete enough intake turns for a brief to appear in the DRG test portal.
-4. Open that exact brief and confirm the conversation panel shows the recent inbound event.
-5. Confirm the configured asset ID matches the intended test asset.
-6. Confirm the composer is enabled and shows an open reply window.
-7. If the composer says no authoritative inbound exists, do not improvise a database edit. Start a fresh signed inbound flow after verifying deployment and webhook health.
-8. If the composer says the 24-hour window is closed, send a new inbound from the test user and use the resulting lead/conversation.
+## 4. Rehearse before recording
 
-## 4. Record the two v2 clips
+For each channel, complete the full sequence once with a unique rehearsal message:
+
+1. Show the authoritative Page name or Instagram handle in Meta UI.
+2. Show the recent inbound in the native thread.
+3. Move to the matching CaseLoad Select brief.
+4. Type the rehearsal message.
+5. Click `Send reply` once.
+6. Wait for `Reply sent.`.
+7. Return to the native thread and confirm the identical message arrived.
+
+If the portal says delivery is not verified or the request is still in progress:
+
+1. Do not edit the draft, refresh the page, close the tab, or navigate away. Those actions can discard the in-memory request ID.
+2. Check the native thread once for the proof text.
+3. Return to the same portal tab and wait until `Send reply` is enabled.
+4. Click `Send reply` once with the unchanged draft. The app reuses the same idempotency request ID and does not call Graph twice for the same pending claim.
+5. If the outcome is still non-terminal, stop that take and capture the exact portal text. Do not loop or create another message.
+
+## 5. Record the two v2 clips
 
 Follow `screencasts/SHOTLIST_v2.md` exactly.
 
-- Messenger filename: `caseload-select-messenger-resubmission-v2.mp4`
-- Instagram filename: `caseload-select-instagram-resubmission-v2.mp4`
+- Messenger: `caseload-select-messenger-resubmission-v2.mp4`
+- Instagram: `caseload-select-instagram-resubmission-v2.mp4`
 
-For each clip:
+Each clip must be one continuous take from authoritative Meta identity, through the portal send, to the identical native receipt. Use a fresh proof string that includes the actual recording date and time.
 
-1. Start with authoritative identity in Meta UI.
-2. Show the recent inbound in the native thread.
-3. Move to the corresponding CaseLoad Select brief without stopping recording.
-4. Type a unique proof message on camera.
-5. Click **Send reply** once.
-6. Wait for **Reply sent.**
-7. Move to the native client without a cut.
-8. Hold on the identical delivered message and exact Page name or Instagram handle.
-
-If delivery is not verified, keep the draft unchanged and retry it. Do not edit the text, because changing the draft intentionally creates a new idempotency request.
-
-## 5. Validate and compress
-
-Check each file:
+## 6. Validate and compress
 
 - [ ] H.264 MP4
 - [ ] 1920 x 1080 or better
@@ -101,61 +97,56 @@ Check each file:
 - [ ] Under three minutes
 - [ ] Under 100 MB
 - [ ] English UI
-- [ ] No cuts between identity, send and receipt
-- [ ] No secrets, real-client data, personal inboxes or unrelated tenants
-- [ ] Identical proof message in portal and native client
+- [ ] No cuts between identity, send, and receipt
+- [ ] No secrets, real-client data, personal inboxes, or unrelated leads
+- [ ] Identical proof message in the portal and native client
 
-If compression is required, preserve the original and create a separate upload copy:
+If compression is needed, preserve the original and make a separate upload copy:
 
 ```powershell
-ffmpeg -i .\input.mp4 -c:v libx264 -preset medium -crf 24 -c:a aac -b:a 128k .\upload.mp4
+ffmpeg -i .\input.mp4 -c:v libx264 -preset medium -crf 24 -c:a aac -b:a 128k -movflags +faststart .\upload.mp4
 ```
 
-Watch the complete compressed copy before upload. Compression must not make the Meta identity, cursor action, portal status, or delivered text unreadable.
+Watch the full upload copy before attaching it.
 
-## 6. Fill the two permission entries
+## 7. Clean the live Meta draft
+
+There is no discard-all control. Use each permission row's trash icon.
+
+1. Inventory the live draft before changing it.
+2. Remove every unsupported permission.
+3. Remove the three already-approved scopes if they appear.
+4. Confirm only the two retained messaging permissions remain.
+5. Save and reload the draft to confirm the list persisted.
+
+Do not delete the submission itself.
+
+## 8. Complete the two permission entries
 
 For each retained permission:
 
-1. Use the corresponding row in `PERMISSION_CODE_PATH_EVIDENCE_v2.md` for the factual justification.
-2. Paste `Reviewer_Instructions_Paste_v2.md` into the reviewer-instructions field.
-3. Attach the matching v2 clip only.
-4. Confirm the clip preview plays from beginning to end.
-5. Confirm the permission name in the written text matches the form's exact label.
-6. Save before moving to the next permission.
+1. Use `PERMISSION_CODE_PATH_EVIDENCE_v2.md` for the factual justification.
+2. Paste the fenced block from `Reviewer_Instructions_Paste_v2.md`.
+3. Attach only the matching v2 clip.
+4. Play the uploaded clip from beginning to end.
+5. Confirm the written Instagram permission label exactly matches the live form.
+6. Save before moving to the other permission.
 
-Do not attach:
+Do not use `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, `screencasts/README.md`, the v1 clips, the WhatsApp clip, or the Business Manager configuration clip.
 
-- the old v1 Messenger or Instagram clip;
-- the WhatsApp clip;
-- the Business Manager configuration clip as evidence for a dropped permission.
+## 9. Final audit and approval stop
 
-## 7. Final pre-submit audit
+- [ ] Draft contains only the two retained messaging permissions.
+- [ ] No approved scope is present.
+- [ ] Messenger has the Messenger v2 clip.
+- [ ] Instagram has the Instagram v2 clip.
+- [ ] Reviewer instructions disclose the server-to-server architecture and absence of Facebook Login.
+- [ ] Meta identity is visible in Meta UI in each clip.
+- [ ] Each clip shows `Message thread`, the correct `Channel:` row, `Send reply`, `Reply sent.`, and the identical native receipt.
+- [ ] No real or unrelated lead data is visible.
+- [ ] Privacy, terms, and deletion URLs open publicly.
+- [ ] Operator contact is `adriano@caseloadselect.ca`.
 
-- [ ] Draft contains only the two retained messaging permissions
-- [ ] No approved permission is present
-- [ ] Every permission has a direct runtime code path
-- [ ] Messenger entry has the Messenger v2 clip
-- [ ] Instagram entry has the Instagram v2 clip
-- [ ] Reviewer instructions disclose server-to-server architecture and no Facebook Login
-- [ ] The Page/account identity is visible in Meta UI in each clip
-- [ ] The live portal send and native receipt are one continuous take
-- [ ] Privacy, terms and deletion URLs open publicly
-- [ ] Operator contact is `adriano@caseloadselect.ca`
-- [ ] No test data from a production firm is visible
+Stop here. Final submission is Adriano's action and requires action-time approval.
 
-## 8. Submit and preserve evidence
-
-Submission is Adriano's action.
-
-Immediately before clicking **Request again** or the equivalent final submission button:
-
-1. Recheck the permission list one last time.
-2. Confirm the three approved permissions are absent.
-3. Confirm there are no unsupported permissions left behind.
-4. Capture screenshots of the final permission list, each attachment, and reviewer instructions.
-5. Click the final submission control.
-6. Capture the confirmation and new status.
-7. Record the submission time and any new submission identifier in the system register.
-
-If Meta rejects or blocks the form, capture the exact label and full error text before changing OAuth settings, permissions, or assets. A field identifier such as `fblogin-web-1` names a form section, not necessarily a product configuration problem.
+After approval, Adriano should capture the final permission list, attachments, and reviewer instructions before clicking the final submission control. Capture the confirmation, time, and any new submission identifier afterward.

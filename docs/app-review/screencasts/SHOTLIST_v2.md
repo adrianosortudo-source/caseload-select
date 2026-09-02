@@ -1,92 +1,100 @@
 # Meta App Review resubmission shot list, v2
 
-These clips answer the reviewer's three requested beats literally:
+Record one continuous take per permission. Each clip must show:
 
-1. the authoritative Meta asset identity is visible in Meta's own UI;
-2. a live send action is performed in the CaseLoad Select portal;
-3. the identical message appears in the native Messenger or Instagram conversation.
+1. authoritative asset identity in Meta UI;
+2. a live send from the CaseLoad Select portal;
+3. the identical delivered message in the native client.
 
-Record one continuous take per permission. Do not splice, pause, replace the cursor, or cover a failed attempt with a cut.
+Do not splice, pause, or cover a failed attempt with a cut.
 
 ## Recording gate
 
-Do not record until all of these are true:
+Release gates are complete: PRs #191, #193, and #195 are merged; production commit `fa3e092983b274c96fd1d22b8fa0091988baeb25` is READY; migrations `20260901231830`, `20260902102620`, and `20260902111504` are applied and verified.
 
-- PR for Option B has been approved and merged.
-- Required CI, including real-Postgres migration validation, has passed.
-- GitHub/Vercel production deployment from merged `main` has completed.
-- `20260901231830_channel_conversation_ledger.sql` is confirmed applied with the matching ledger version.
-- A fresh inbound message from the test user is visible and less than 24 hours old.
-- The portal account has an attributable member UUID; a legacy generic session will be told to sign in again.
-- The operator is not in support preview, which is intentionally read-only.
+Before each take, confirm:
 
-The portal shows the configured Meta asset ID, not an authoritative Page display name or Instagram handle. Therefore the identity beat must be filmed in Meta UI. Do not caption the portal's firm workspace name as if Meta supplied it.
+- a fresh fictional inbound message is visible and less than 24 hours old;
+- the portal member has a stable UUID actor identity;
+- support preview is off;
+- the portal frame contains only the test brief and no unrelated lead data;
+- the intended native thread and authoritative Meta identity view are ready.
 
-## Shared recording setup
+The portal's `Firm workspace:` and `Configured Meta asset ID:` rows are context only. The numeric ID is not identity proof. Show the exact Page name or Instagram handle in Meta UI.
 
-- Use English UI in Meta and CaseLoad Select.
-- Use only the test Facebook Page `DRG Law Test` and test Instagram account `@drg_law_test`.
-- Arrange the Meta identity view, portal brief, and native conversation as adjacent browser tabs or side-by-side windows before recording.
+## Shared setup
+
+- Use English UI.
+- Use the authorized test Facebook Page `DRG Law Test` and Instagram account `@drg_law_test`.
+- The test assets are associated with the DRG production workspace row. Use fictional facts only and isolate the recording frame from all unrelated leads.
+- Arrange Meta identity, the portal brief, and the native conversation before recording.
 - Keep the same test conversation open throughout.
-- Use a unique, visually unmistakable message for each take. Suggested format: `App Review Messenger proof 2026-09-01 8:41 PM ET.` Replace the time with the actual recording time.
-- Keep the message plain text and under the portal limit. Instagram must also remain at or below 1,000 UTF-8 bytes.
-- Show the cursor entering the message and clicking **Send reply**.
-- Wait for **Reply sent.** in the portal, then reveal the native thread and the identical text. Do not stop recording while delivery is pending.
-- If the portal says delivery is not verified, keep the draft unchanged and retry it. The app will reuse the same idempotency key. Do not edit the message or create a second message during that take.
-- Capture at 1920 x 1080 or better, H.264 MP4, 30 fps, under three minutes and under 100 MB.
-- Do not expose cookies, access tokens, API keys, personal inboxes, real client data, or unrelated production tenants.
+- Use these distinct proof formats and replace each placeholder with the actual recording time:
+  - Messenger: `App Review Messenger proof [YYYY-MM-DD HH:MM ET].`
+  - Instagram: `App Review Instagram proof [YYYY-MM-DD HH:MM ET].`
+- Type the proof text on camera. Do not prefill it.
+- Instagram text must remain at or below 1,000 UTF-8 bytes.
+- If delivery is not verified or is still pending, keep the draft unchanged and retry it. Do not edit the text or create a second message.
+- Capture at 1920 x 1080 or better, H.264, 30 fps, under three minutes, and under 100 MB.
+- Do not expose cookies, tokens, secrets, personal inboxes, real client data, or unrelated leads.
 
-## Clip 1: `caseload-select-messenger-resubmission-v2.mp4`
+## Messenger clip
 
-Target permission: `pages_messaging`.
+Filename: `caseload-select-messenger-resubmission-v2.mp4`
 
-| Time | On screen | Operator action | Required evidence |
-|---|---|---|---|
-| 0:00 | Meta Business Suite/Page selector or Messenger Page surface | Select or open `DRG Law Test`. Pause with the exact Page name visible. | Authoritative Page identity from Meta UI. |
-| 0:10 | The same Messenger thread | Show the recent inbound message from the test user. | User-initiated conversation and open response window. |
-| 0:20 | CaseLoad Select brief for that same Messenger lead | Show **Facebook Messenger conversation**, the configured Meta asset ID, the recent inbound ledger message, and the enabled composer. | App surface and server-resolved channel context. |
-| 0:35 | Portal composer | Type the unique proof sentence in real time. | Live app-authored action, not an automatic webhook reply. |
-| 0:45 | Portal composer | Click **Send reply** once. Keep recording until **Reply sent.** appears. | Literal send action from the app UI. |
-| 0:55 | Native Messenger conversation | Switch without a cut and show the identical proof sentence delivered from `DRG Law Test`. | Same message in the native client. |
-| 1:10 | Native conversation and Page header | Hold for at least five seconds with both message text and Page name readable. | Reviewer can compare identity and text. |
+Permission: `pages_messaging`
 
-Suggested on-screen caption, visible during the portal send:
+| Time | On screen and action | Required evidence |
+|---|---|---|
+| 0:00 | In Meta UI, select or open `DRG Law Test`. Hold the exact Page name. | Authoritative Page identity. |
+| 0:10 | Show the recent fictional inbound message in the same Messenger thread. | User-initiated conversation and open response window. |
+| 0:20 | Open the matching CaseLoad Select brief. Show `Message thread`, `Channel: Facebook Messenger`, the recent inbound, and the enabled composer. | Correct app surface and channel context. |
+| 0:35 | Type the Messenger proof string. | Live operator-authored action. |
+| 0:45 | Click `Send reply` once and wait for `Reply sent.`. | Verified send from the app UI. |
+| 0:55 | Without a cut, show the identical delivered text in the native Messenger thread. | Native receipt. |
+| 1:10 | Hold the Page name and delivered text for five seconds. | Readable identity and message comparison. |
+
+Optional caption:
 
 `CaseLoad Select sends this operator-authored reply through the Messenger Send API using the configured Page access token.`
 
-## Clip 2: `caseload-select-instagram-resubmission-v2.mp4`
+## Instagram clip
 
-Target permission: `instagram_manage_messages` or the exact equivalent label displayed for this app.
+Filename: `caseload-select-instagram-resubmission-v2.mp4`
 
-| Time | On screen | Operator action | Required evidence |
-|---|---|---|---|
-| 0:00 | Instagram account switcher, profile header, or Meta Business Suite Instagram asset view | Select or open `@drg_law_test`. Pause with the exact handle visible. | Authoritative Instagram identity from Meta UI. |
-| 0:10 | The same Instagram DM thread | Show the recent inbound message from the test user. | User-initiated conversation and open response window. |
-| 0:20 | CaseLoad Select brief for that same Instagram lead | Show **Instagram conversation**, configured Meta asset ID, recent inbound ledger message, and enabled composer. | App surface and server-resolved channel context. |
-| 0:35 | Portal composer | Type a unique proof sentence in real time. Keep the byte counter below 1,000. | Live app-authored action. |
-| 0:45 | Portal composer | Click **Send reply** once. Keep recording until **Reply sent.** appears. | Literal send action from the app UI. |
-| 0:55 | Native Instagram DM | Switch without a cut and show the identical proof sentence delivered from `@drg_law_test`. | Same message in the native client. |
-| 1:10 | Native thread and profile header | Hold for at least five seconds with both handle and message readable. | Reviewer can compare identity and text. |
+Permission: exact live Meta label for Instagram messaging
 
-Suggested on-screen caption, visible during the portal send:
+| Time | On screen and action | Required evidence |
+|---|---|---|
+| 0:00 | In Meta or Instagram UI, select or open `@drg_law_test`. Hold the exact handle. | Authoritative Instagram identity. |
+| 0:10 | Show the recent fictional inbound message in the same DM thread. | User-initiated conversation and open response window. |
+| 0:20 | Open the matching CaseLoad Select brief. Show `Message thread`, `Channel: Instagram`, the recent inbound, and the enabled composer. | Correct app surface and channel context. |
+| 0:35 | Type the Instagram proof string and keep the byte counter at or below 1,000. | Live operator-authored action. |
+| 0:45 | Click `Send reply` once and wait for `Reply sent.`. | Verified send from the app UI. |
+| 0:55 | Without a cut, show the identical delivered text in the native Instagram DM. | Native receipt. |
+| 1:10 | Hold the handle and delivered text for five seconds. | Readable identity and message comparison. |
+
+Optional caption:
 
 `CaseLoad Select sends this operator-authored reply through the Instagram Messaging API using the linked Page access token.`
 
 ## Do not record or attach
 
-- Do not re-record or resubmit WhatsApp. Both WhatsApp permissions are already approved.
-- Do not attach the old Business Manager configuration clip to justify `business_management` or `pages_manage_metadata`; this source does not exercise those permissions.
-- Do not reuse the v1 Messenger or Instagram clips. They show inbound automation, not the required live portal send.
+- Do not re-record or resubmit WhatsApp.
+- Do not attach Business Manager configuration as proof of a dropped permission.
+- Do not reuse v1 Messenger or Instagram clips. They show inbound automation rather than the required portal send.
 
 ## Clip verification
 
-- [ ] One continuous take; no cut between Meta identity, portal send and native receipt
-- [ ] Exact Meta identity is readable in Meta UI
-- [ ] Recent inbound message is visible
-- [ ] Portal conversation matches the channel and test lead
-- [ ] Unique proof text is readable before send
-- [ ] Cursor click on **Send reply** is visible
-- [ ] Portal reports **Reply sent.**
-- [ ] Identical text is readable in the native thread
-- [ ] No secrets, personal data or production-client material is exposed
-- [ ] English UI, H.264 MP4, at least 1080p, under three minutes, under 100 MB
+- [ ] One continuous take from Meta identity through native receipt.
+- [ ] Exact Meta identity is readable in Meta UI.
+- [ ] Recent fictional inbound is visible.
+- [ ] Portal shows `Message thread` and the correct `Channel:` row.
+- [ ] Unique proof text is typed on camera.
+- [ ] Click on `Send reply` is visible.
+- [ ] Portal reports `Reply sent.`.
+- [ ] Identical text is readable in the native thread.
+- [ ] No secret, personal data, or unrelated production material is visible.
+- [ ] H.264, 30 fps, at least 1080p, under three minutes, under 100 MB.
+
+If compression is required, use the active runbook's CRF 24 command and watch the complete upload copy.

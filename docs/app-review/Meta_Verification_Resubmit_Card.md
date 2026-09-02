@@ -1,5 +1,7 @@
 # Meta Business Verification — resubmit card
 
+> ARCHIVE NOTICE: Business verification cleared on 2026-08-01. Do not execute this resubmission card for the current Facebook and Instagram evidence resubmission. The historical body is preserved for provenance.
+
 Single-page execution card for the chosen path: CRA profile PDF with operating name added. Use this once the CRA PDF (`CRA_BusinessProfile_with_OperatingName.pdf`) is saved to disk.
 
 For the why and the rejected-document analysis, see `Business_Verification_Requirements.md`. This card is for the click-by-click resubmit.
