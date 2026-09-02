@@ -91,6 +91,7 @@ interface InstagramEntry {
     message?: {
       mid: string;
       text?: string;
+      is_echo?: boolean;
       attachments?: Array<{ type: string; payload: { url?: string } }>;
     };
   }>;
@@ -145,6 +146,7 @@ export async function POST(req: NextRequest) {
   for (const entry of payload.entry ?? []) {
     // Messaging-style entries (the most common shape for IG Business DMs)
     for (const event of entry.messaging ?? []) {
+      if (event.message?.is_echo === true) continue;
       const text = event.message?.text;
       const mid = event.message?.mid;
       if (text && mid) {
@@ -162,10 +164,8 @@ export async function POST(req: NextRequest) {
     // engineering work out the canonical mapping when real samples arrive.
     for (const change of entry.changes ?? []) {
       if (change.field === 'messages') {
-        console.log('[instagram-intake] changes-format message event:', {
-          igUserId: entry.id,
-          value: change.value,
-        });
+        // Do not log the raw value: it may contain sender identifiers and text.
+        console.log('[instagram-intake] changes-format message event received');
       }
     }
   }
@@ -179,16 +179,7 @@ export async function POST(req: NextRequest) {
   //      IG account the App is connected to, including ones not yet
   //      mapped to a firm in our system.
   if (messageEvents.length > 0) {
-    console.log(
-      '[instagram-intake] received',
-      messageEvents.length,
-      'message event(s):',
-      messageEvents.map((e) => ({
-        ig: e.igUserId,
-        sender: e.senderId,
-        preview: e.text.slice(0, 80),
-      })),
-    );
+    console.log('[instagram-intake] received', messageEvents.length, 'message event(s)');
 
     for (const event of messageEvents) {
       const firm = await resolveFirmByInstagramBusinessAccountId(event.igUserId);
@@ -229,6 +220,7 @@ export async function POST(req: NextRequest) {
           firmId: firm.firmId,
           text: event.text,
           sender,
+          occurredAt: new Date(event.timestamp).toISOString(),
         })
           .then((res) => {
             if (res.persisted) {

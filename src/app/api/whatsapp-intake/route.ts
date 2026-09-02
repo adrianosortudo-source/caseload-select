@@ -212,7 +212,7 @@ export async function POST(req: NextRequest) {
           // so we can size the build later without scaffolding the
           // full media-fetch path tonight.
           console.log(
-            `[whatsapp-intake] non-text inbound type=${m.type} from=${m.from} mid=${m.id}`,
+            `[whatsapp-intake] non-text inbound type=${m.type} received`,
           );
         }
       }
@@ -231,19 +231,7 @@ export async function POST(req: NextRequest) {
   }
 
   if (messageEvents.length > 0) {
-    console.log(
-      '[whatsapp-intake] received',
-      messageEvents.length,
-      'message event(s):',
-      messageEvents.map((e) => ({
-        waba: e.wabaId,
-        phone: e.phoneNumberId,
-        from: e.senderWaId,
-        name: e.senderName,
-        type: e.messageType,
-        preview: e.text.slice(0, 80),
-      })),
-    );
+    console.log('[whatsapp-intake] received', messageEvents.length, 'message event(s)');
 
     // Engine integration. For each inbound text message:
     //   1. Resolve phoneNumberId → firm via
@@ -298,6 +286,7 @@ export async function POST(req: NextRequest) {
           firmId: firm.firmId,
           text: event.text,
           sender,
+          occurredAt: new Date(Number(event.timestamp) * 1000).toISOString(),
         })
           .then((res) => {
             if (res.persisted) {
@@ -334,12 +323,12 @@ export async function POST(req: NextRequest) {
     // outbound path is wired we want these surfaced in /admin/health.
     const failures = statusEvents.filter((s) => s.status === 'failed');
     if (failures.length > 0) {
-      console.warn('[whatsapp-intake] outbound failures:', failures);
-    } else {
-      console.log(
-        '[whatsapp-intake] status events:',
-        statusEvents.map((s) => `${s.mid}=${s.status}`).join(' '),
+      console.warn(
+        '[whatsapp-intake] outbound failure event(s)',
+        failures.map((failure) => failure.error?.code ?? 'unknown'),
       );
+    } else {
+      console.log('[whatsapp-intake] status event(s)', statusEvents.length);
     }
   }
 
