@@ -17,24 +17,47 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyPortalToken, createSessionCookie } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import {
+  appOrigin,
+  isAppHost,
+  isLocalOrPreviewHost,
+  operatorOrigin,
+} from "@/lib/app-origins";
+
+function appUrl(req: NextRequest, pathname: string): URL {
+  const base = isLocalOrPreviewHost(req.nextUrl.hostname) ? req.nextUrl.origin : appOrigin();
+  return new URL(pathname, base);
+}
 
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   if (!token) {
-    return NextResponse.redirect(new URL("/portal/login?error=missing", req.url));
+    return NextResponse.redirect(appUrl(req, "/portal/login?error=missing"));
   }
 
   const payload = verifyPortalToken(token);
   if (!payload) {
-    return NextResponse.redirect(new URL("/portal/login?error=invalid", req.url));
+    return NextResponse.redirect(appUrl(req, "/portal/login?error=invalid"));
   }
   if (payload.role === "operator") {
     // Preserve unexpired operator links issued before the routes were split.
     // The dedicated consumer performs current membership revalidation before
     // granting the cross-firm session.
-    const operatorConsumer = new URL("/api/operator/login", req.url);
+    const operatorBase = isLocalOrPreviewHost(req.nextUrl.hostname)
+      ? req.nextUrl.origin
+      : operatorOrigin();
+    const operatorConsumer = new URL("/api/operator/login", operatorBase);
     operatorConsumer.searchParams.set("token", token);
     return NextResponse.redirect(operatorConsumer);
+  }
+
+  // A lawyer/client token that reaches the operator origin must not write a
+  // firm session cookie there. Re-run the same callback on the app origin so
+  // the host-only cookie is scoped to the portal that owns it.
+  if (!isLocalOrPreviewHost(req.nextUrl.hostname) && !isAppHost(req.nextUrl.hostname)) {
+    const appConsumer = new URL("/api/portal/login", appOrigin());
+    appConsumer.searchParams.set("token", token);
+    return NextResponse.redirect(appConsumer);
   }
 
   // Record the sign-in moment on the firm_lawyers row if we have one. This must
@@ -51,7 +74,7 @@ export async function GET(req: NextRequest) {
       .eq("id", payload.lawyer_id);
   }
 
-  const landingUrl = new URL(`/portal/${payload.firm_id}/triage`, req.url);
+  const landingUrl = appUrl(req, `/portal/${payload.firm_id}/triage`);
 
   const { name, value, options } = createSessionCookie(payload.firm_id, {
     role: payload.role,

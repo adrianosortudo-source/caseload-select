@@ -37,6 +37,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import {
+  appOrigin,
+  isAppHost,
+  isLocalOrPreviewHost,
+  isOperatorHost,
+  isOperatorUiPath,
+  operatorOrigin,
+} from "@/lib/app-origins";
 
 const APP_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "caseloadselect.ca";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
@@ -125,11 +133,36 @@ function rewriteForFirm(req: NextRequest, firmId: string): NextResponse {
 }
 
 export async function middleware(req: NextRequest): Promise<NextResponse> {
-  const hostname = req.headers.get("host")?.split(":")[0] ?? "";
+  const hostname = req.nextUrl.hostname;
+  const { pathname, search } = req.nextUrl;
 
   // Local dev + Vercel preview URLs → pass through
-  if (hostname === "localhost" || hostname.endsWith(".vercel.app")) {
+  if (isLocalOrPreviewHost(hostname)) {
     return NextResponse.next();
+  }
+
+  // Keep browser navigation on the origin that owns its host-only session.
+  // Only UI GET/HEAD surfaces redirect here: cookie-writing POST routes enforce
+  // their host in the route handler so a redirect can never replay a body or
+  // turn an unsafe cross-origin request into an authenticated mutation.
+  if (req.method === "GET" || req.method === "HEAD") {
+    if (isAppHost(hostname) && isOperatorUiPath(pathname)) {
+      return NextResponse.redirect(new URL(`${pathname}${search}`, operatorOrigin()));
+    }
+    if (isOperatorHost(hostname) && pathname === "/") {
+      return NextResponse.redirect(new URL(`/admin${search}`, operatorOrigin()));
+    }
+    if (isOperatorHost(hostname) && pathname === "/portal/login") {
+      return NextResponse.redirect(new URL(`${pathname}${search}`, appOrigin()));
+    }
+  }
+
+  // The operator origin is deliberately noindex, including portal previews
+  // and shared API responses that cannot be represented in robots.txt alone.
+  if (isOperatorHost(hostname)) {
+    const response = NextResponse.next();
+    response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    return response;
   }
 
   // Apex of the main app domain → pass through (marketing site)
