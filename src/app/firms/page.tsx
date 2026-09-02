@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function FirmsPage() {
   const session = await getOperatorSession();
-  if (!session) redirect("/portal/login?error=missing");
+  if (!session) redirect("/operator/login?error=missing");
 
   const [firmsRes, leadsRes] = await Promise.all([
     supabase.from("law_firm_clients").select("*").order("created_at", { ascending: false }),

@@ -7,7 +7,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 export async function GET(req: NextRequest, { params }: { params: Promise<{ firmId: string }> }) {
   const { firmId } = await params;
   const session = await getOperatorSession();
-  if (!session) return NextResponse.redirect(new URL("/portal/login", req.url));
+  if (!session) return NextResponse.redirect(new URL("/operator/login?error=missing", req.url));
 
   const { data: firm } = await supabase.from("intake_firms").select("id").eq("id", firmId).maybeSingle();
   if (!firm) return NextResponse.json({ error: "firm not found" }, { status: 404 });

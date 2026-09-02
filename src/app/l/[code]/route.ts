@@ -32,7 +32,10 @@ export async function GET(
     lawyer_id: target.lawyerId ?? undefined,
   });
 
-  const loginUrl = new URL("/api/portal/login", req.url);
+  const loginUrl = new URL(
+    target.role === "operator" ? "/api/operator/login" : "/api/portal/login",
+    req.url,
+  );
   loginUrl.searchParams.set("token", token);
   return NextResponse.redirect(loginUrl);
 }

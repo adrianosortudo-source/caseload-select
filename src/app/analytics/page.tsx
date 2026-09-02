@@ -57,7 +57,7 @@ function Bar({ label, count, max, colorClass }: { label: string; count: number; 
 
 export default async function AnalyticsPage() {
   const session = await getOperatorSession();
-  if (!session) redirect("/portal/login?error=missing");
+  if (!session) redirect("/operator/login?error=missing");
 
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();

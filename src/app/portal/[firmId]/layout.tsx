@@ -112,7 +112,11 @@ export default async function PortalLayout({
             <div className="text-white/50 text-xs">Lawyer portal</div>
           </div>
         </div>
-        <form action={`/api/portal/logout?firm_id=${firmId}`} method="POST" className="shrink-0">
+        <form
+          action={isOperator ? "/api/operator/logout" : `/api/portal/logout?firm_id=${firmId}`}
+          method="POST"
+          className="shrink-0"
+        >
           <button
             type="submit"
             className="text-xs text-white/60 hover:text-white transition px-3 py-1.5 border border-white/20 hover:border-white/40"

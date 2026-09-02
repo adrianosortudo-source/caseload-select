@@ -11,12 +11,20 @@ import "server-only";
 import { generatePortalToken } from "@/lib/portal-auth";
 import { sendEmail } from "@/lib/email";
 
-export function buildMagicLinkUrl(token: string): string {
+export function buildMagicLinkUrl(
+  token: string,
+  role: "lawyer" | "operator" = "lawyer",
+): string {
   const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
+  const previewOrigin = process.env.VERCEL_ENV === "preview" && process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : null;
   const origin =
+    previewOrigin ??
     (appDomain ? `https://app.${appDomain}` : null) ??
     (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-  return `${origin}/api/portal/login?token=${encodeURIComponent(token)}`;
+  const consumer = role === "operator" ? "/api/operator/login" : "/api/portal/login";
+  return `${origin}${consumer}?token=${encodeURIComponent(token)}`;
 }
 
 export function renderMagicLinkEmail(args: {
@@ -28,6 +36,8 @@ export function renderMagicLinkEmail(args: {
   const heading = role === "operator"
     ? "Operator sign-in link"
     : `Sign-in link for ${escapeHtml(firmName)}`;
+  const destination = role === "operator" ? "operator console" : "lawyer portal";
+  const actionLabel = role === "operator" ? "Open the operator console" : "Open the portal";
   return `<!doctype html>
 <html>
 <body style="margin:0;padding:0;background:#F4F3EF;font-family:'DM Sans',Arial,sans-serif;color:#0D1520;">
@@ -48,10 +58,10 @@ export function renderMagicLinkEmail(args: {
           <tr>
             <td style="padding:8px 28px 24px;">
               <p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#3F3C36;">
-                Click the link below to access the lawyer portal. The link is valid for 48 hours and signs you in for 30 days on this device.
+                Click the link below to access the ${destination}. The link is valid for 48 hours and signs you in for 30 days on this device.
               </p>
               <p style="margin:0 0 24px;">
-                <a href="${magicLink}" style="display:inline-block;background:#1E2F58;color:#FFFFFF;text-decoration:none;font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;padding:12px 22px;">Open the portal</a>
+                <a href="${magicLink}" style="display:inline-block;background:#1E2F58;color:#FFFFFF;text-decoration:none;font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;padding:12px 22px;">${actionLabel}</a>
               </p>
               <p style="margin:0;font-size:12px;line-height:1.5;color:#5C5850;">
                 If you did not request this link, you can ignore this email. The link does not grant access until clicked.
@@ -86,7 +96,7 @@ export async function sendPortalMagicLink(args: {
 }): Promise<{ sent: boolean }> {
   const role: "lawyer" | "operator" = args.role === "operator" ? "operator" : "lawyer";
   const token = generatePortalToken(args.firmId, { role, lawyer_id: args.lawyerId });
-  const magicLink = buildMagicLinkUrl(token);
+  const magicLink = buildMagicLinkUrl(token, role);
   const subject = role === "operator"
     ? "CaseLoad Select operator sign-in link"
     : "CaseLoad Select sign-in link";

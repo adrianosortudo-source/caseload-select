@@ -17,6 +17,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const isWidget = path.startsWith("/widget");
   const isDemo = path.startsWith("/demo");
   const isOperatorConsole = path.startsWith("/admin");
+  const isOperatorAuth = path.startsWith("/operator");
   const isPrivacy = path === "/privacy";
   const isTerms = path === "/terms";
   const isFirmOnboarding = path.startsWith("/firm-onboarding");
@@ -44,6 +45,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     isWidget ||
     isDemo ||
     isOperatorConsole ||
+    isOperatorAuth ||
     isPrivacy ||
     isTerms ||
     isFirmOnboarding ||

@@ -20,6 +20,11 @@ export async function POST(req: NextRequest) {
     maxAge: 0,
   };
   response.cookies.set("portal_session", "", { ...baseOptions, path: "/" });
-  response.cookies.set("portal_session", "", { ...baseOptions, path: "/portal" });
+  response.headers.append(
+    "Set-Cookie",
+    `portal_session=; Path=/portal; Max-Age=0; HttpOnly; SameSite=Lax${
+      process.env.NODE_ENV === "production" ? "; Secure" : ""
+    }`,
+  );
   return response;
 }

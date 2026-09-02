@@ -18,6 +18,8 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
+vi.mock("server-only", () => ({}));
+
 const mocks = vi.hoisted(() => ({
   checkRateLimit: vi.fn(),
   ipFromRequest: vi.fn(() => "203.0.113.9"),
@@ -29,6 +31,9 @@ const state = vi.hoisted(() => ({
   // firm_lawyers query result
   lawyerRows: null as unknown[] | null,
   lawyerError: null as { message: string } | null,
+  canonicalRows: null as unknown[] | null,
+  canonicalError: null as { message: string } | null,
+  filters: [] as Array<[string, unknown]>,
   // legacy intake_firms query result
   legacyFirms: null as unknown[] | null,
   legacyError: null as { message: string } | null,
@@ -50,16 +55,33 @@ vi.mock("@/lib/portal-auth", () => ({
 vi.mock("@/lib/supabase-admin", () => {
   const from = (table: string) => {
     if (table === "firm_lawyers") {
-      // .select(...).ilike(...).eq(...).order(...).limit(...).returns<T>()
       const builder = {
         ilike: () => builder,
-        eq: () => builder,
+        eq: (column: string, value: unknown) => {
+          state.filters.push([column, value]);
+          return builder;
+        },
+        in: (column: string, value: unknown) => {
+          state.filters.push([column, value]);
+          return builder;
+        },
         order: () => builder,
         limit: () => builder,
         returns: () =>
           Promise.resolve({ data: state.lawyerRows, error: state.lawyerError }),
       };
-      return { select: () => builder };
+      return {
+        select: (columns: string) => columns === "id"
+          ? {
+              ilike: () => ({
+                limit: () => Promise.resolve({
+                  data: state.canonicalRows,
+                  error: state.canonicalError,
+                }),
+              }),
+            }
+          : builder,
+      };
     }
     if (table === "intake_firms") {
       // .select(...).filter(...)
@@ -98,6 +120,9 @@ beforeEach(() => {
   mocks.generatePortalToken.mockReturnValue("tok.sig");
   state.lawyerRows = null;
   state.lawyerError = null;
+  state.canonicalRows = [];
+  state.canonicalError = null;
+  state.filters = [];
   state.legacyFirms = null;
   state.legacyError = null;
   consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
@@ -189,7 +214,60 @@ describe("POST /api/portal/request-link", () => {
     expect(json).toEqual({ ok: true });
 
     expect(mocks.sendEmail).toHaveBeenCalledTimes(1);
+    expect(state.filters).toContainEqual(["disabled", false]);
+    expect(state.filters).toContainEqual(["role", ["lawyer", "admin", "staff"]]);
+    expect(mocks.generatePortalToken).toHaveBeenCalledWith("firm-1", {
+      role: "lawyer",
+      lawyer_id: "lawyer-1",
+    });
     expect(consoleErrorSpy).not.toHaveBeenCalled();
+  });
+
+  it("accepts admin/staff memberships but always mints a firm-scoped lawyer token", async () => {
+    state.lawyerRows = [
+      {
+        id: "admin-1",
+        firm_id: "firm-1",
+        email: "admin@example.com",
+        role: "admin",
+        intake_firms: { id: "firm-1", name: "Test Firm", branding: null },
+      },
+    ];
+
+    await POST(makeRequest({ email: "admin@example.com" }));
+
+    expect(mocks.generatePortalToken).toHaveBeenCalledWith("firm-1", {
+      role: "lawyer",
+      lawyer_id: "admin-1",
+    });
+  });
+
+  it("suppresses stale branding fallback when any canonical membership exists", async () => {
+    state.lawyerRows = [];
+    state.canonicalRows = [{ id: "operator-1" }];
+    state.legacyFirms = [
+      { id: "legacy-firm", name: "Legacy", branding: { lawyer_email: "operator@example.com" } },
+    ];
+
+    const res = await POST(makeRequest({ email: "operator@example.com" }));
+
+    expect(await res.json()).toEqual({ ok: true });
+    expect(mocks.generatePortalToken).not.toHaveBeenCalled();
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("fails closed and stays generic when canonical membership lookup fails", async () => {
+    state.lawyerRows = [];
+    state.canonicalRows = null;
+    state.canonicalError = { message: "membership timeout" };
+
+    const res = await POST(makeRequest({ email: "operator@example.com" }));
+
+    expect(await res.json()).toEqual({ ok: true });
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
+    const messages = consoleErrorSpy.mock.calls.map((call) => call.join(" "));
+    expect(messages.some((m) => m.includes("canonical membership lookup"))).toBe(true);
+    expect(messages.some((m) => m.includes("operator@example.com"))).toBe(false);
   });
 
   it("rate-limited request still returns { ok: true } (unchanged behavior)", async () => {

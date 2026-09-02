@@ -9,7 +9,7 @@ export default async function AdminLayout({
 }) {
   const session = await getOperatorSession();
   if (!session) {
-    redirect("/portal/login?error=missing");
+    redirect("/operator/login?error=missing");
   }
 
   return (

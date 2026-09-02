@@ -4,7 +4,7 @@ import { getOperatorSession } from "@/lib/portal-auth";
 
 export default async function SettingsPage() {
   const session = await getOperatorSession();
-  if (!session) redirect("/portal/login?error=missing");
+  if (!session) redirect("/operator/login?error=missing");
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const hasResend = !!process.env.RESEND_API_KEY;

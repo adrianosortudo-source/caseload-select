@@ -20,7 +20,7 @@ export default async function FirmAccessPage({
   params: Promise<{ firmId: string }>;
 }) {
   const session = await getOperatorSession();
-  if (!session) redirect("/portal/login?error=missing");
+  if (!session) redirect("/operator/login?error=missing");
 
   const { firmId } = await params;
 
