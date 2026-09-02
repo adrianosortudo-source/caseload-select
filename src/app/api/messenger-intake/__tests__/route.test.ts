@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
   processChannelInbound: vi.fn(),
   claimChannelMessage: vi.fn(),
   releaseChannelMessageClaim: vi.fn(),
+  isChannelSubjectPrivacySuppressed: vi.fn(),
   // Promises handed to waitUntil, captured so tests can flush the
   // background pipeline (including the crash-path claim release).
   waited: [] as Promise<unknown>[],
@@ -59,6 +60,10 @@ vi.mock("@/lib/channel-intake-processor", () => ({
 vi.mock("@/lib/channel-message-dedup", () => ({
   claimChannelMessage: mocks.claimChannelMessage,
   releaseChannelMessageClaim: mocks.releaseChannelMessageClaim,
+}));
+
+vi.mock("@/lib/screened-lead-erasure", () => ({
+  isChannelSubjectPrivacySuppressed: mocks.isChannelSubjectPrivacySuppressed,
 }));
 
 // Stub waitUntil to capture the promise (so async side effects land in-test).
@@ -149,6 +154,7 @@ beforeEach(() => {
   mocks.claimChannelMessage.mockResolvedValue({ duplicate: false, reason: "claimed" });
   mocks.releaseChannelMessageClaim.mockReset();
   mocks.releaseChannelMessageClaim.mockResolvedValue(undefined);
+  mocks.isChannelSubjectPrivacySuppressed.mockReset().mockResolvedValue(false);
   mocks.waited.length = 0;
 });
 
@@ -181,6 +187,26 @@ describe("GET /api/messenger-intake", () => {
 });
 
 describe("POST /api/messenger-intake", () => {
+  it("drops an inbound from a privacy-suppressed subject before claiming it", async () => {
+    mocks.resolveFirmByFacebookPageId.mockResolvedValue({
+      firmId: "eec1d25e-a047-4827-8e4a-6eb96becca2b",
+      firmName: "DRG Law Test",
+    });
+    mocks.isChannelSubjectPrivacySuppressed.mockResolvedValueOnce(true);
+    const body = makeMessengerPayload({ senderId: "psid_suppressed" });
+
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+
+    expect(res.status).toBe(200);
+    expect(mocks.isChannelSubjectPrivacySuppressed).toHaveBeenCalledWith({
+      firmId: "eec1d25e-a047-4827-8e4a-6eb96becca2b",
+      channel: "facebook",
+      senderId: "psid_suppressed",
+    });
+    expect(mocks.claimChannelMessage).not.toHaveBeenCalled();
+    expect(mocks.processChannelInbound).not.toHaveBeenCalled();
+  });
+
   it("returns 401 when X-Hub-Signature-256 header is missing", async () => {
     const body = makeMessengerPayload({});
     const res = await POST(makePostRequest(body, null) as never);
@@ -257,6 +283,7 @@ describe("POST /api/messenger-intake mid dedup (launch audit H1)", () => {
     expect(mocks.claimChannelMessage).toHaveBeenCalledWith({
       firmId: FIRM.firmId,
       channel: "facebook",
+      senderId: "psid_abc",
       messageMid: "mid_claim_check",
     });
     expect(mocks.processChannelInbound).toHaveBeenCalledTimes(1);

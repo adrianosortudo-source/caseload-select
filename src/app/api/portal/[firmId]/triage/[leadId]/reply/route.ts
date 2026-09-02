@@ -117,6 +117,8 @@ function sendFailureStatus(result: ChannelSendResult): number {
       return 400;
     case "lead_not_found":
       return 404;
+    case "lead_redacted":
+      return 410;
     case "reply_window_closed":
       return 409;
     case "duplicate_request":

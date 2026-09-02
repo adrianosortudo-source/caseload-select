@@ -46,6 +46,7 @@ import {
   claimChannelMessage,
   releaseChannelMessageClaim,
 } from '@/lib/channel-message-dedup';
+import { isChannelSubjectPrivacySuppressed } from '@/lib/screened-lead-erasure';
 import {
   processChannelInbound,
   type InstagramSender,
@@ -185,8 +186,18 @@ export async function POST(req: NextRequest) {
       const firm = await resolveFirmByInstagramBusinessAccountId(event.igUserId);
       if (!firm) {
         console.warn(
-          `[instagram-intake] no firm mapped to instagram_business_account_id=${event.igUserId}; dropping mid=${event.mid}`,
+          `[instagram-intake] no firm mapped to instagram_business_account_id=${event.igUserId}; dropping inbound event`,
         );
+        continue;
+      }
+
+      if (
+        await isChannelSubjectPrivacySuppressed({
+          firmId: firm.firmId,
+          channel: 'instagram',
+          senderId: event.senderId,
+        })
+      ) {
         continue;
       }
 
@@ -197,11 +208,12 @@ export async function POST(req: NextRequest) {
       const claim = await claimChannelMessage({
         firmId: firm.firmId,
         channel: 'instagram',
+        senderId: event.senderId,
         messageMid: event.mid,
       });
       if (claim.duplicate) {
         console.log(
-          `[instagram-intake] duplicate delivery mid=${event.mid} firm=${firm.firmName}; skipping`,
+          `[instagram-intake] duplicate delivery firm=${firm.firmName}; skipping`,
         );
         continue;
       }
@@ -235,7 +247,7 @@ export async function POST(req: NextRequest) {
           })
           .catch(async (err) => {
             console.error(
-              `[instagram-intake] processChannelInbound threw firm=${firm.firmName} mid=${event.mid}:`,
+              `[instagram-intake] processChannelInbound threw firm=${firm.firmName}:`,
               err,
             );
             // The crashed run produced no lead, so release the claim and

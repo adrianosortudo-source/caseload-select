@@ -120,8 +120,34 @@ export async function POST(req: Request) {
       });
 
     if (uploadErr) {
-      console.error("[screen/upload] Storage error:", uploadErr);
+      console.error("[screen/upload] Storage upload failed");
       return NextResponse.json({ error: "Upload failed" }, { status: 500 });
+    }
+
+    // A deletion request can race this upload after the first OTP check. The
+    // erasure path flips otp_verified off before listing this session's Storage
+    // prefix. Recheck after upload and remove the object if suppression won, so
+    // a late write cannot recreate an attachment after cleanup.
+    const { data: currentSession, error: recheckError } = await supabase
+      .from("intake_sessions")
+      .select("otp_verified")
+      .eq("id", sessionId)
+      .maybeSingle();
+    if (recheckError || currentSession?.otp_verified !== true) {
+      const { error: rollbackError } = await supabase.storage
+        .from(BUCKET)
+        .remove([storagePath]);
+      if (rollbackError) {
+        console.error("[screen/upload] Suppressed upload cleanup failed");
+        return NextResponse.json(
+          { error: "Upload suppressed but cleanup requires operator attention" },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json(
+        { error: "Session is no longer eligible for uploads" },
+        { status: 410 },
+      );
     }
 
     // The bucket is private (F9). Return an authorized self-signing route URL
@@ -136,8 +162,8 @@ export async function POST(req: Request) {
       path: storagePath,
       filename: file.name,
     });
-  } catch (err) {
-    console.error("[screen/upload] Error:", err);
+  } catch {
+    console.error("[screen/upload] Unexpected upload failure");
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }
 }

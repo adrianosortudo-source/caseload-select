@@ -23,25 +23,25 @@ export default function DataDeletionPage() {
   return (
     <div className="bg-parchment min-h-screen">
       <Header />
-      <main className="max-w-3xl mx-auto px-6 py-10 space-y-8 text-black/80">
+      <main className="max-w-3xl mx-auto px-3 py-10 space-y-8 text-black/80 sm:px-6">
         <div>
           <p className="text-xs uppercase tracking-[0.18em] font-semibold text-gold">CaseLoad Select</p>
           <h1 className="text-3xl font-bold text-navy mt-2">Data Deletion<span className="text-gold">▪</span></h1>
-          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-24</p>
+          <p className="mt-2 text-sm text-black/50">Last updated: 2026-09-02</p>
         </div>
 
-        <Section title="What this page is">
+        <Section title="What this page covers">
           <p>
             CaseLoad Select operates intake-screening tools on behalf of Canadian law firms. When you submit an inquiry through a firm&rsquo;s intake form, web widget, Facebook Messenger, Instagram DM, WhatsApp, SMS, or voice channel, we store the information you provided so the firm can review it.
           </p>
           <p>
-            This page explains how to request deletion of that information from CaseLoad Select&rsquo;s systems. Your rights under the federal Personal Information Protection and Electronic Documents Act (PIPEDA) and applicable provincial law are described in full in our <Link href="/privacy" className="text-navy underline underline-offset-2">Privacy Policy</Link>.
+            This page explains how to request removal of identifying information from the operational systems CaseLoad Select controls. Our <Link href="/privacy" className="text-navy underline underline-offset-2">Privacy Policy</Link> describes how we handle personal information more broadly.
           </p>
         </Section>
 
         <Section title="How to request deletion">
           <p>
-            Send a written request to <a href="mailto:privacy@caseloadselect.ca" className="text-navy underline underline-offset-2">privacy@caseloadselect.ca</a> with the subject line <code>Data Deletion Request</code>. Include:
+            Send a written request to <a href="mailto:privacy@caseloadselect.ca" className="text-navy underline underline-offset-2">privacy@caseloadselect.ca</a> with the subject line <code className="whitespace-nowrap">Data Deletion Request</code>. Include:
           </p>
           <ul className="list-disc pl-5 space-y-1.5">
             <li>Your full name.</li>
@@ -50,41 +50,53 @@ export default function DataDeletionPage() {
             <li>The approximate date of the inquiry, if you remember.</li>
           </ul>
           <p>
-            We will confirm receipt within 5 business days and complete the deletion within 30 days, in line with PIPEDA response timelines.
+            We will confirm receipt within 5 business days. We aim to complete a verified request within 30 days or explain why more time is needed.
           </p>
         </Section>
 
-        <Section title="What happens after we receive your request">
+        <Section title="What happens after a verified request">
           <p>
-            We anonymize the lead record on our side. This replaces your name, contact details, and free-text description with redacted placeholders, while preserving non-identifying counts (timing, scoring band, stage history) so the firm&rsquo;s aggregate reporting remains accurate. After anonymization, the record no longer identifies you.
+            For screened leads, CaseLoad Select uses a restricted database operation to irreversibly remove message content and direct identifiers from the active records linked to the inquiry. This includes names, contact details, channel identifiers, message identifiers, transcripts, and free-text descriptions. The matched fields are deleted or replaced with redacted markers and cannot be restored through the application.
           </p>
           <p>
-            If you prefer full deletion of the row, ask for it in your message. We will honor the request unless we are required to retain the record by law (for example, a regulatory or court order).
-          </p>
-        </Section>
-
-        <Section title="What we cannot delete">
-          <p>
-            If the firm took on your matter and opened a file with you as a client, the firm&rsquo;s own copy of that file is governed by the firm&rsquo;s record-retention policy, not ours. CaseLoad Select deletes its operational copy; the firm&rsquo;s case management system, accounting records, and any documents you signed remain with the firm. Direct deletion requests for those records to the firm.
+            Older intake records follow a separate recovery-aware process that clears the matched lead, its linked intake session, queued payloads, and its intake-attachment folder. We keep a request open if any required cleanup or verification step fails.
           </p>
           <p>
-            We may keep audit logs (timestamps and action types, with no personal content) for security and dispute-resolution purposes. These logs do not contain the substance of your inquiry.
+            We do not promise that every database row will be physically deleted. We may preserve a minimal audit envelope for system security, delivery-integrity checks, proof that deletion was completed, and non-identifying operational counts. The release target is to remove each retained channel audit event within three years of when it occurred. That limit, the retained-field assessment, and production expiry evidence must be approved before this revised commitment is released.
+          </p>
+          <p>
+            If a legal obligation prevents us from removing a specific item, we will explain the item, the reason, and the expected retention period when we respond.
           </p>
         </Section>
 
-        <Section title="Messages received through Meta channels">
+        <Section title="Records controlled by the law firm">
           <p>
-            If you contacted the firm through Facebook Messenger, Instagram Direct, or WhatsApp, the messages also exist on Meta&rsquo;s servers under Meta&rsquo;s own retention rules. Deleting your record on our side does not delete it from Meta. To remove the conversation from Meta, use the in-app delete option on the relevant Meta product, or contact Meta directly through their help center.
+            The law firm controls its own legal files. If the firm took on your matter or copied information into its case-management, accounting, email, or document systems, its retention duties and policies apply to those copies. Direct a request about those records to the firm.
+          </p>
+          <p>
+            Removing the CaseLoad Select operational copy does not authorize us to erase a firm&rsquo;s legal file. We will identify the relevant firm when we can so you can contact it directly.
+          </p>
+        </Section>
+
+        <Section title="Processors, external platforms, and backups">
+          <p>
+            When a service provider may hold an active copy on our behalf, we record the provider-specific deletion or escalation step separately. A provider-managed status is not, by itself, proof that the provider deleted its copy. We do not tell you that external cleanup is complete until the required action and evidence have been checked.
+          </p>
+          <p>
+            A provider may retain encrypted backup copies until its documented backup cycle expires. The production restore procedure must prove that completed deletion requests are reapplied before restored data returns to use. That procedure and the applicable provider schedules remain release gates for this revised commitment.
+          </p>
+          <p>
+            Facebook Messenger, Instagram Direct, WhatsApp, Google, and other communication platforms control copies created in their own products before the information reaches CaseLoad Select. Deleting the CaseLoad Select copy does not delete those platform-controlled copies. Use the platform&rsquo;s deletion controls or contact the platform directly.
           </p>
         </Section>
 
         <Section title="Contact">
-          <p>
-            CaseLoad Select<br />
-            Adriano Domingues, Operator<br />
-            Toronto, Ontario, Canada<br />
+          <address className="not-italic">
+            <span className="block">CaseLoad Select</span>
+            <span className="block">Adriano Domingues, Operator</span>
+            <span className="block">Toronto, Ontario, Canada</span>
             <a href="mailto:privacy@caseloadselect.ca" className="text-navy underline underline-offset-2">privacy@caseloadselect.ca</a>
-          </p>
+          </address>
           <p className="text-sm text-black/60">
             If you cannot resolve a deletion request with us directly, you may file a complaint with the Office of the Privacy Commissioner of Canada at <a href="https://www.priv.gc.ca" rel="noopener" target="_blank" className="underline underline-offset-2">priv.gc.ca</a>.
           </p>
@@ -99,7 +111,7 @@ export default function DataDeletionPage() {
 function Header() {
   return (
     <header className="bg-[#0D1520] border-b-2 border-gold px-6 py-4">
-      <div className="max-w-3xl mx-auto flex items-center justify-between">
+      <div className="max-w-3xl mx-auto flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Link href="/" className="font-mono text-[11px] uppercase tracking-[0.18em] font-semibold text-gold hover:text-white transition-colors">
           CaseLoad Select
         </Link>
@@ -115,7 +127,7 @@ function Header() {
 
 function Footer() {
   return (
-    <footer className="pt-8 mt-8 border-t border-black/10 text-xs text-black/50 flex items-center justify-between">
+    <footer className="pt-8 mt-8 border-t border-black/10 text-xs text-black/50 flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
       <span>caseloadselect.ca</span>
       <Link href="/privacy" className="hover:text-navy transition-colors">Privacy Policy</Link>
     </footer>
@@ -124,9 +136,9 @@ function Footer() {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-bold text-navy">{title}</h2>
-      <div className="text-sm leading-relaxed space-y-3">{children}</div>
+    <section className="space-y-3" data-ui-component-content={`data-deletion-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`}>
+      <h2 className="w-full text-lg font-bold text-navy text-balance" data-ui-copy="heading">{title}</h2>
+      <div className="w-full text-sm leading-relaxed space-y-3 [&>p]:text-pretty [&>ul>li]:text-pretty" data-ui-copy="body">{children}</div>
     </section>
   );
 }
