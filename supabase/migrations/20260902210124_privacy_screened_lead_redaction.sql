@@ -1394,7 +1394,7 @@ begin
   end if;
 
   if v_lead.lead_id ~* '^L-S1-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
-    v_legacy_session_id := pg_catalog.substring(v_lead.lead_id from 6)::uuid;
+    v_legacy_session_id := pg_catalog.substring(v_lead.lead_id, 6)::uuid;
     perform 1
       from public.intake_sessions as legacy_session
      where legacy_session.id = v_legacy_session_id
