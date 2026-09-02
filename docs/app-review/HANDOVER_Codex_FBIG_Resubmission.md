@@ -2,9 +2,9 @@
 
 **For:** Codex, executing in `05_Product/caseload-select-app`
 **From:** Claude session 2b1b96f2, 2026-09-01
-**Status of task:** open. WhatsApp is approved and shipped. Facebook and Instagram were rejected on evidence quality and need a second submission.
+**Status of task:** Option B selected by Adriano on 2026-09-01. The implementation and migration exist on local source commit `69505387998055d84f3c621f550d52423e71ae44`. They are not claimed merged, applied, deployed, or production-verified. WhatsApp is approved and must not be resubmitted. Facebook Messenger and Instagram need a narrower evidence resubmission after the release gates pass.
 
-You have no prior context on this task. Everything you need is in this file. Read it top to bottom before acting. Section 3 carries a decision that changes what you build, so do not start work at section 5 without resolving it.
+You have no prior context on this task. Everything you need is in this file. Read it top to bottom before acting. Section 3 records the selected decision; do not reopen it unless Adriano asks.
 
 ---
 
@@ -66,36 +66,43 @@ Meta's boilerplate also included this, which the first submission never answered
 
 ---
 
-## 2. The architectural fact that blocks a naive re-record
+## 2. Architecture and current Option B state
 
-Before planning anything, understand this. Every Meta-channel outbound message in this codebase is issued server-side. Most sends are reached from an inbound webhook, but the expiry cron also enters the shared finalization path and can issue a closing message without a new inbound event.
+Every Meta-channel outbound message in this codebase is issued server-side. Option B adds an operator/lawyer compose surface while keeping destination selection, access tokens, firm ownership, window evidence, delivery and audit work on the server.
 
 - `src/lib/channel-send.ts` exports `sendChannelMessage`, the channel-agnostic dispatcher.
-- Its seven production call sites are inside `src/lib/channel-intake-processor.ts` as of this writing.
+- Its automated production call sites are inside `src/lib/channel-intake-processor.ts`; the portal reply route is the new human-triggered entry point.
 - The processor runs from the three webhook receivers: `/api/messenger-intake`, `/api/instagram-intake`, `/api/whatsapp-intake`.
-- `src/app/api/cron/expire-channel-intake-sessions/route.ts` also calls the exported `finalizeChannelLead` path. That path can reach the closing-message send after the cron selects a session whose sliding 24-hour expiry has passed.
+- `src/app/api/cron/expire-channel-intake-sessions/route.ts` still finalizes expired sessions but now passes `sendClosingMessage: false`, so it does not attempt a free-form closing send after 24 hours of silence.
 - `src/lib/messenger-send.ts` and `src/lib/instagram-send.ts` are the per-channel Graph clients.
 
-**Existing enforcement gap.** Neither `sendChannelMessage` nor the shared closing-message path enforces Meta's 24-hour customer-service window before dispatch. The expiry cron can therefore attempt a closing send after 24 hours of silence and rely on Graph to reject it. Option B must add server-side enforcement for every send path, including suppression of that expired-session closing send, rather than treating the UI's disabled state as the compliance control.
+**Current enforcement.** `sendChannelMessage` now requires authoritative inbound evidence for every free-form send, checks `now < inbound + 24 hours`, and checks again immediately before the Graph request. Missing, malformed, or unreasonable future timestamps fail closed. The UI's disabled state is guidance; the server remains the control.
 
-There is no button, form, or compose box anywhere in the product that an operator or lawyer clicks to send a message on a Meta channel. The triage portal shows the resulting brief. It does not show the conversation and it does not show the app's outbound reply.
+The channel-sourced brief page now has a Conversation panel and plain-text composer. The API excludes client sessions, requires a matching firm lawyer or operator session with an attributable UUID member ID, applies the read-only support-preview guard, resolves the recipient from the firm-owned lead, and writes an append-only conversation ledger.
 
-So the reviewer's beat 2, "a live send action from your app," has nothing to film today. This is the whole problem, and it is why a re-record with better captions may fail again on the same ground.
+Known limits are deliberate:
+
+- No historical message backfill is possible. The separate legacy intake transcript may not contain every message.
+- The displayed ledger timeline is bounded to the newest 500 events. The reply-window query is separate and always reads the latest authoritative inbound.
+- The portal displays a configured numeric Meta asset ID, not a Page display name or Instagram handle read from Meta. Record authoritative asset identity in Meta UI.
+- Replies are plain text only. The shared portal cap is 2,000 characters; Instagram also uses a 1,000 UTF-8-byte limit.
+- A delivery-unknown response preserves the same request ID for an unchanged draft. The operator must retry the unchanged draft instead of composing a second message.
+- The source and migration are not live until the PR, CI, merge, database and production-deployment gates complete.
 
 ---
 
-## 3. Decision the operator must make before you build
+## 3. Decision record
 
-Two routes to satisfying beat 2. Present both, recommend B, and wait for the operator's answer.
+**Decision: Option B selected by Adriano on 2026-09-01.** Build and release the Conversation panel, then record the live portal send and native receipt. Option A is closed unless Adriano explicitly reopens it.
 
-### Option A: document-only, no code
+### Rejected alternative: Option A, document-only
 
 Re-record with the existing behaviour and add an on-screen caption during the automatic reply that names the app as the sender, plus the server-to-server disclosure in the reviewer notes.
 
 - Cost: one operator recording session, roughly 45 minutes. No engineering.
 - Risk: the reviewer asked in plain words for a send from the app UI. A caption over an automatic reply asserts what they asked to see demonstrated. Their server-to-server boilerplate excuses a missing login flow, not a missing send action. Moderate chance of a second evidence rejection.
 
-### Option B: ship a channel reply panel, then record (recommended)
+### Selected: Option B, ship a channel reply panel, then record
 
 Add a Conversation panel to the channel-sourced brief page in the triage portal: the message history for the session, plus a compose box that sends through the existing `sendChannelMessage` dispatcher inside the 24 hour customer-service window.
 
@@ -104,9 +111,7 @@ Add a Conversation panel to the channel-sourced brief page in the triage portal:
 - Independent merit: a lawyer replying to a Messenger or Instagram lead from the portal is a real product gap. The app already messages the lead automatically during contact capture, so a human-composed reply on the same thread is the same capability with the lawyer in control. It is not a review prop.
 - Product decision the operator owns: whether a lawyer-composed reply on a public social channel is something DRG should have at all, given LSO Rule 4.2-1. The panel sends plain text into an existing conversation, so the compliance surface is the same one the automatic replies already occupy, but the operator makes this call, not you.
 
-**Recommendation: Option B.** The reviewer told you what would pass. Option B produces exactly that artifact and leaves a real feature behind. Option A spends an operator recording session on a bet against the reviewer's own words.
-
-If the operator picks A, skip WP-1 and use the Option A caption text in WP-2.
+The implementation at source commit `69505387998055d84f3c621f550d52423e71ae44` is release-candidate source, not production evidence. Do not record or edit the Meta submission until the release gates in `RUNBOOK_Resubmission_v2.md` pass.
 
 ---
 
@@ -116,17 +121,17 @@ Do not trust this document on live state. It was written from a session transcri
 
 1. **Build a permission-to-code-path evidence table.** For each permission you intend to re-request, cite the file and line of the code that actually exercises it. `pages_read_engagement` was rejected precisely because no such path exists. Any permission you cannot evidence gets dropped from the request, not defended.
 
-   Expected result, to be verified not assumed:
+   Verified result at source commit `69505387998055d84f3c621f550d52423e71ae44`:
 
    | Permission | Expected justification |
    |---|---|
    | `pages_messaging` | `messenger-send.ts` posts to `/{page_id}/messages` |
-   | `pages_manage_metadata` | Page webhook subscription (`subscribed_apps`). Find the call. If the operator does this by hand in the dashboard and no code path exists, say so. |
-   | `business_management` | System User token access to portfolio assets |
-   | `instagram_basic` | IG account identity on the webhook payload |
+   | `pages_manage_metadata` | No runtime code path. Drop. |
+   | `business_management` | No runtime code path. Drop. |
+   | `instagram_basic` | No identity-read code path. Drop. |
    | `instagram_manage_messages` | `instagram-send.ts` posts to `/me/messages` |
 
-2. **Recommend the reduced set.** Current thinking is 5 permissions, down from the 7 rejected: drop `pages_read_engagement` (conceded) and `pages_show_list` (the app never enumerates a user's Pages, because there is no Facebook Login flow and the operator sets `facebook_page_id` on `intake_firms` by hand). Confirm or correct this from the code.
+2. **Use the reduced set.** Re-request only `pages_messaging` and `instagram_manage_messages`, using the exact Instagram label displayed for this app. Drop `pages_show_list`, `pages_manage_metadata`, `business_management`, `instagram_basic`, and `pages_read_engagement`. See `PERMISSION_CODE_PATH_EVIDENCE_v2.md`.
 
 3. **Verify the send paths still work.** `instagram-send.ts` carries a fix from 2026-08-13: the endpoint must be Page-scoped `/me/messages`, never `/<ig_business_account_id>/messages`, which returns Graph error #3 with a Page token. Confirm the fix is still in place on `main` before anyone records.
 
@@ -138,7 +143,7 @@ Do not trust this document on live state. It was written from a session transcri
 
 ## 5. Work packages
 
-### WP-1 (Option B only): channel reply panel
+### WP-1: channel reply panel, selected and implemented in branch source
 
 Build the smallest honest surface that makes beat 2 filmable.
 
@@ -154,7 +159,7 @@ Branch naming in this repo follows `codex/<slug>`. Open a PR; do not push to `ma
 
 ### WP-2: v2 shot lists
 
-Author `docs/app-review/screencasts/SHOTLIST_v2.md`. Three clips: Messenger, Instagram, Business Manager configuration. Do not re-record WhatsApp; it is approved and must not be resubmitted.
+`docs/app-review/screencasts/SHOTLIST_v2.md` defines two clips: Messenger and Instagram. Do not re-record WhatsApp. Do not use the old Business Manager clip to defend permissions with no runtime code path.
 
 Every clip follows the reviewer's three beats in one continuous take where possible:
 
@@ -266,10 +271,10 @@ Test message body used in the v1 recordings, calibrated to land in-scope for DRG
 ## 8. Definition of done
 
 1. WP-0 evidence table exists and the requested permission set is justified line by line against code.
-2. The operator has answered the Option A or B question, and if B, the panel is merged and deployed to production.
+2. Option B remains selected, the PR has explicit approval, CI passes, the panel is merged, migration version `20260901231830` is applied, and production is verified.
 3. `SHOTLIST_v2.md`, `Reviewer_Instructions_Paste_v2.md`, and `RUNBOOK_Resubmission_v2.md` are committed.
 4. The stale checklist rows are corrected.
-5. The operator has everything needed to record, compress, attach, and click Request again without asking a further question.
+5. The operator has everything needed to record, compress, attach, and click Request again without a further question.
 
 Submission itself is the operator's action. Your task ends when he can execute it unaided.
 
@@ -277,6 +282,6 @@ Submission itself is the operator's action. Your task ends when he can execute i
 
 | Date | Source | Flag | Priority | Touches | Suggested next action | Owner | Status |
 |---|---|---|---|---|---|---|---|
-| 2026-09-01 | Meta App Review verdict | FB and IG advanced access still pending on evidence resubmission | High | `05_Product/caseload-select-app/docs/app-review/` | Execute WP-0 through WP-6 in this handover | Codex, then operator | Open |
-| 2026-09-01 | WP-1 scoping | No operator-facing send surface exists for any Meta channel | Medium | `src/lib/channel-send.ts`, `src/app/portal/[firmId]/triage/` | Operator decides Option A or B before build starts | Adriano | Open |
+| 2026-09-01 | Meta App Review verdict | FB and IG advanced access still pending on evidence resubmission | High | `05_Product/caseload-select-app/docs/app-review/` | Release Option B, record two v2 clips, then operator resubmits two supported permissions | Codex, then operator | Open |
+| 2026-09-01 | WP-1 decision | Option B selected; implementation exists only in branch source at `69505387` | High | `src/lib/channel-send.ts`, `src/app/portal/[firmId]/triage/`, migration `20260901231830` | Push PR, pass CI, obtain PR-specific merge approval, merge, verify migration and production | Codex, then Adriano approval | Open |
 | 2026-09-01 | Doc audit | `Operator_Execution_Checklist.md` state table is stale on screencasts and verification | Low | `docs/app-review/Operator_Execution_Checklist.md` | Correct in WP-6 | Codex | Open |

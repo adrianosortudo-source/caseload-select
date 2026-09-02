@@ -1,4 +1,6 @@
-# Meta App Review screencasts
+# Meta App Review screencasts, v1 archive
+
+**Do not use these v1 shot lists or clips for the Facebook and Instagram resubmission.** They do not show the live portal send Meta requested. Use `SHOTLIST_v2.md`. WhatsApp is approved and must not be resubmitted. The Business Manager clip does not prove a runtime code path for the dropped permissions.
 
 This directory holds the demo screencasts the App Review form requires. Each clip shows a single Meta permission being exercised end-to-end on the test assets created in Block 2 of the Meta App Creation runbook.
 
