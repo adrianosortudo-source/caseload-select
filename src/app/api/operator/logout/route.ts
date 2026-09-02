@@ -7,9 +7,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { clearOperatorWorkspaceCookie } from "@/lib/operator-workspace";
 import { clearPreviewCookieValue } from "@/lib/preview-mode";
+import { isLocalOrPreviewHost, isOperatorHost, operatorOrigin } from "@/lib/app-origins";
 
 export async function POST(req: NextRequest) {
-  const response = NextResponse.redirect(new URL("/operator/login", req.url));
+  const hostname = req.nextUrl.hostname;
+  if (!isLocalOrPreviewHost(hostname) && !isOperatorHost(hostname)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const base = isLocalOrPreviewHost(hostname) ? req.nextUrl.origin : operatorOrigin();
+  const response = NextResponse.redirect(new URL("/operator/login", base));
   const baseOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",

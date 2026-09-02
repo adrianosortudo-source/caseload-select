@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   ipFromRequest: vi.fn(() => "203.0.113.10"),
   sendEmail: vi.fn(),
   generatePortalToken: vi.fn(() => "operator-token.sig"),
-  buildMagicLinkUrl: vi.fn(() => "https://app.caseloadselect.ca/api/operator/login?token=operator-token.sig"),
+  buildMagicLinkUrl: vi.fn(() => "https://admin.caseloadselect.ca/api/operator/login?token=operator-token.sig"),
   renderMagicLinkEmail: vi.fn(() => "<html>operator</html>"),
 }));
 
@@ -47,7 +47,7 @@ import { POST } from "../route";
 import type { NextRequest } from "next/server";
 
 function request(body: unknown): NextRequest {
-  return new Request("https://app.caseloadselect.ca/api/operator/request-link", {
+  return new Request("https://admin.caseloadselect.ca/api/operator/request-link", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -132,5 +132,18 @@ describe("POST /api/operator/request-link", () => {
     expect(await res.json()).toEqual({ ok: true });
     const messages = consoleErrorSpy.mock.calls.map((call) => call.join(" "));
     expect(messages.some((m) => m.includes("email send failed"))).toBe(true);
+  });
+
+  it("rejects a wrong-host POST before rate limiting or account lookup", async () => {
+    const req = new Request("https://app.caseloadselect.ca/api/operator/request-link", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "operator@example.com" }),
+    }) as unknown as NextRequest;
+    const res = await POST(req);
+    expect(res.status).toBe(404);
+    expect(mocks.checkRateLimit).not.toHaveBeenCalled();
+    expect(state.filters).toEqual([]);
+    expect(mocks.sendEmail).not.toHaveBeenCalled();
   });
 });

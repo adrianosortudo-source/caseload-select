@@ -40,6 +40,9 @@ function req(token = "signed-token"): NextRequest {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("VERCEL_ENV", "production");
+  vi.stubEnv("NEXT_PUBLIC_APP_DOMAIN", "caseloadselect.ca");
   state.payload = null;
 });
 
@@ -55,7 +58,7 @@ describe("GET /api/portal/login role separation", () => {
     const res = await GET(req("old-operator-token"));
 
     expect(res.headers.get("location")).toBe(
-      "https://app.caseloadselect.ca/api/operator/login?token=old-operator-token",
+      "https://admin.caseloadselect.ca/api/operator/login?token=old-operator-token",
     );
     expect(res.headers.get("set-cookie")).toBeNull();
     expect(mocks.createSessionCookie).not.toHaveBeenCalled();
@@ -75,9 +78,28 @@ describe("GET /api/portal/login role separation", () => {
       "https://app.caseloadselect.ca/portal/firm-1/triage",
     );
     expect(res.headers.get("set-cookie")).toContain("portal_session=firm-session");
+    expect(res.headers.get("set-cookie")).not.toMatch(/\bDomain=/i);
     expect(mocks.createSessionCookie).toHaveBeenCalledWith("firm-1", {
       role: "lawyer",
       lawyer_id: "lawyer-1",
     });
+  });
+
+  it("returns a lawyer callback on the admin host to the app before setting a cookie", async () => {
+    state.payload = {
+      firm_id: "firm-1",
+      role: "lawyer",
+      lawyer_id: "lawyer-1",
+      exp: Date.now() + 1_000,
+    };
+    const adminRequest = new NextRequest(
+      "https://admin.caseloadselect.ca/api/portal/login?token=lawyer-token",
+    );
+    const res = await GET(adminRequest);
+    expect(res.headers.get("location")).toBe(
+      "https://app.caseloadselect.ca/api/portal/login?token=lawyer-token",
+    );
+    expect(res.headers.get("set-cookie")).toBeNull();
+    expect(mocks.createSessionCookie).not.toHaveBeenCalled();
   });
 });

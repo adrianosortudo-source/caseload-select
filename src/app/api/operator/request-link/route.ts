@@ -14,6 +14,7 @@ import { buildMagicLinkUrl, renderMagicLinkEmail } from "@/lib/portal-magic-link
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 import { checkRateLimit, ipFromRequest } from "@/lib/rate-limit";
+import { isLocalOrPreviewHost, isOperatorHost } from "@/lib/app-origins";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -31,6 +32,11 @@ interface OperatorRow {
 }
 
 export async function POST(req: NextRequest) {
+  const hostname = req.nextUrl?.hostname ?? new URL(req.url).hostname;
+  if (!isLocalOrPreviewHost(hostname) && !isOperatorHost(hostname)) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
   const ip = ipFromRequest(req);
   const rl = await checkRateLimit("requestLink", ip);
   if (!rl.ok) {

@@ -45,11 +45,14 @@ vi.mock("@/lib/supabase-admin", () => ({
 import { GET } from "../route";
 
 function req(query = "?token=signed-token"): NextRequest {
-  return new NextRequest(`https://app.caseloadselect.ca/api/operator/login${query}`);
+  return new NextRequest(`https://admin.caseloadselect.ca/api/operator/login${query}`);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv("NODE_ENV", "production");
+  vi.stubEnv("VERCEL_ENV", "production");
+  vi.stubEnv("NEXT_PUBLIC_APP_DOMAIN", "caseloadselect.ca");
   state.payload = null;
   state.member = null;
   state.dbError = null;
@@ -93,9 +96,22 @@ describe("GET /api/operator/login", () => {
       role: "operator",
       lawyer_id: "operator-1",
     });
-    expect(res.headers.get("location")).toBe("https://app.caseloadselect.ca/admin");
+    expect(res.headers.get("location")).toBe("https://admin.caseloadselect.ca/admin");
     expect(res.headers.get("set-cookie")).toContain("portal_session=signed-session");
     expect(res.headers.get("set-cookie")).toContain("Max-Age=2592000");
+    expect(res.headers.get("set-cookie")).not.toMatch(/\bDomain=/i);
+  });
+
+  it("canonicalizes a wrong-host callback before consuming the token", async () => {
+    const wrongHost = new NextRequest(
+      "https://app.caseloadselect.ca/api/operator/login?token=operator-token&next=%2Fadmin%2Ftriage",
+    );
+    const res = await GET(wrongHost);
+    expect(res.headers.get("location")).toBe(
+      "https://admin.caseloadselect.ca/api/operator/login?token=operator-token&next=%2Fadmin%2Ftriage",
+    );
+    expect(res.headers.get("set-cookie")).toBeNull();
+    expect(state.filters).toEqual([]);
   });
 
   it.each(["disabled", "removed", "wrong role", "wrong firm"])(
