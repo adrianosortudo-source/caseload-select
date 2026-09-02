@@ -9,6 +9,9 @@ const PORTAL_PAGE = "src/app/portal/login/page.tsx";
 const FORM = "src/components/portal/RequestLinkForm.tsx";
 const SHELL = "src/components/AdminShell.tsx";
 const SIDEBAR = "src/components/admin/AdminSidebar.tsx";
+const PRIVACY = "src/app/privacy/page.tsx";
+const PACKAGE_JSON = "package.json";
+const CI = ".github/workflows/ci.yml";
 
 describe("operator sign-in UI contracts", () => {
   it("has a distinct, role-explicit surface and reciprocal lawyer link", () => {
@@ -47,8 +50,26 @@ describe("operator sign-in UI contracts", () => {
     expect(read(SIDEBAR)).toContain('action="/api/operator/logout"');
   });
 
+  it("documents host-scoped lawyer and operator sessions accurately", () => {
+    const privacy = read(PRIVACY);
+    expect(privacy).toContain("Each cookie is limited to its own host");
+    expect(privacy).toContain("do not overwrite one another");
+  });
+
+  it("keeps the stable rendered login matrix in PR CI", () => {
+    const packageJson = JSON.parse(read(PACKAGE_JSON)) as {
+      scripts: Record<string, string>;
+    };
+    expect(packageJson.scripts["test:operator-login-rendered"]).toBe(
+      "playwright test --config=playwright.operator-login.config.ts",
+    );
+    const ci = read(CI);
+    expect(ci).toContain("operator-login-rendered:");
+    expect(ci).toContain("npm run test:operator-login-rendered");
+  });
+
   it("contains no em dash in the new user-facing sign-in sources", () => {
-    for (const file of [OPERATOR_PAGE, PORTAL_PAGE, FORM]) {
+    for (const file of [OPERATOR_PAGE, PORTAL_PAGE, FORM, PRIVACY]) {
       expect(read(file), `${file} contains an em dash`).not.toContain("—");
     }
   });

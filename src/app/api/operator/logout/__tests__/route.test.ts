@@ -24,10 +24,11 @@ describe("POST /api/operator/logout", () => {
     expect(cookies).not.toMatch(/\bDomain=/i);
   });
 
-  it("fails closed without clearing cookies on the app host", async () => {
-    const req = new NextRequest("https://app.caseloadselect.ca/api/operator/logout", {
-      method: "POST",
-    });
+  it.each([
+    "https://app.caseloadselect.ca/api/operator/logout",
+    "https://production-alias.vercel.app/api/operator/logout",
+  ])("fails closed without clearing cookies on another production host: %s", async (url) => {
+    const req = new NextRequest(url, { method: "POST" });
     const res = await POST(req);
     expect(res.status).toBe(403);
     expect(res.headers.get("location")).toBeNull();

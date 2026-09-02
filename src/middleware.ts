@@ -146,7 +146,7 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   // their host in the route handler so a redirect can never replay a body or
   // turn an unsafe cross-origin request into an authenticated mutation.
   if (req.method === "GET" || req.method === "HEAD") {
-    if (isAppHost(hostname) && isOperatorUiPath(pathname)) {
+    if (!isOperatorHost(hostname) && isOperatorUiPath(pathname)) {
       return NextResponse.redirect(new URL(`${pathname}${search}`, operatorOrigin()));
     }
     if (isOperatorHost(hostname) && pathname === "/") {

@@ -1,8 +1,11 @@
 /**
  * Portal authentication utilities.
  *
- * Magic links and session cookies are signed HMAC-SHA256 tokens. No DB row
- * is needed to verify; the signature IS the authorisation. Two role tiers:
+ * Magic links and session cookies are signed HMAC-SHA256 tokens. Lawyer and
+ * client sessions are authorized by the signed scope. Operator sessions also
+ * require a live, exact firm_lawyers membership on every authorization check,
+ * so disabling, deleting, moving, or re-roling the member revokes access.
+ * Two role tiers:
  *
  *   role='lawyer'    — firm-scoped. The token's firm_id must match the
  *                      requested route's firmId. Lands at /portal/[firmId].
@@ -23,9 +26,10 @@
  */
 
 import { createHmac, timingSafeEqual } from "crypto";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getPreviewIntent, type PreviewIntent } from "./preview-mode";
+import { isLocalOrPreviewHost, isOperatorHost } from "./app-origins";
 
 const COOKIE_NAME = "portal_session";
 const LINK_TTL_HOURS = 48;
@@ -190,13 +194,69 @@ export async function getPortalSession(): Promise<PortalSession | null> {
 }
 
 /**
- * Convenience: return the session ONLY if it has operator role. Used by
- * /admin/* layouts to gate cross-firm access.
+ * Resolve the exact active database row behind an operator identity.
+ *
+ * HMAC verification proves that CaseLoad Select issued the cookie or link; it
+ * does not prove the member is still entitled to operator access. Keeping this
+ * lookup in one place ensures link consumption and every later request apply
+ * the same id, firm, role, and disabled-state boundary.
+ */
+export async function revalidateOperatorMembership(
+  session: PortalSession,
+  options: { recordSignIn?: boolean } = {},
+): Promise<{ id: string } | null> {
+  if (session.role !== "operator" || !session.lawyer_id) return null;
+
+  try {
+    // Dynamic import keeps token-only consumers from initializing the
+    // privileged Supabase client when they do not perform operator auth.
+    const { supabaseAdmin } = await import("./supabase-admin");
+    const table = supabaseAdmin.from("firm_lawyers");
+    const query = options.recordSignIn
+      ? table
+        .update({ last_signed_in_at: new Date().toISOString() })
+        .eq("id", session.lawyer_id)
+        .eq("firm_id", session.firm_id)
+        .eq("role", "operator")
+        .eq("disabled", false)
+        .select("id")
+      : table
+        .select("id")
+        .eq("id", session.lawyer_id)
+        .eq("firm_id", session.firm_id)
+        .eq("role", "operator")
+        .eq("disabled", false);
+
+    const { data, error } = await query.maybeSingle<{ id: string }>();
+    if (error) {
+      console.error(`[portal-auth] operator membership revalidation failed: ${error.message}`);
+      return null;
+    }
+    return data;
+  } catch (error) {
+    console.error(
+      `[portal-auth] operator membership revalidation failed: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+    return null;
+  }
+}
+
+/**
+ * Return a live operator session only on the origin that owns the host-only
+ * operator cookie. Legacy operator cookies on app.caseloadselect.ca are
+ * intentionally rejected; users must complete the operator sign-in flow on
+ * the admin origin to establish the new session boundary.
  */
 export async function getOperatorSession(): Promise<PortalSession | null> {
+  const requestHeaders = await headers();
+  const hostname = requestHeaders.get("host") ?? "";
+  if (!isLocalOrPreviewHost(hostname) && !isOperatorHost(hostname)) return null;
+
   const session = await getPortalSession();
   if (!session || session.role !== "operator") return null;
-  return session;
+  return await revalidateOperatorMembership(session) ? session : null;
 }
 
 /**

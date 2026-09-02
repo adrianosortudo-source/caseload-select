@@ -8,9 +8,6 @@ const state = vi.hoisted(() => ({
     lawyer_id?: string;
     exp: number;
   },
-  member: null as { id: string } | null,
-  dbError: null as { message: string } | null,
-  filters: [] as Array<[string, unknown]>,
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -19,27 +16,13 @@ const mocks = vi.hoisted(() => ({
     value: "signed-session",
     options: { httpOnly: true, path: "/", maxAge: 2592000 },
   })),
+  revalidateOperatorMembership: vi.fn(),
 }));
 
 vi.mock("@/lib/portal-auth", () => ({
   verifyPortalToken: () => state.payload,
   createSessionCookie: mocks.createSessionCookie,
-}));
-
-vi.mock("@/lib/supabase-admin", () => ({
-  supabaseAdmin: {
-    from: () => {
-      const builder = {
-        eq: (column: string, value: unknown) => {
-          state.filters.push([column, value]);
-          return builder;
-        },
-        select: () => builder,
-        maybeSingle: () => Promise.resolve({ data: state.member, error: state.dbError }),
-      };
-      return { update: () => builder };
-    },
-  },
+  revalidateOperatorMembership: mocks.revalidateOperatorMembership,
 }));
 
 import { GET } from "../route";
@@ -54,9 +37,7 @@ beforeEach(() => {
   vi.stubEnv("VERCEL_ENV", "production");
   vi.stubEnv("NEXT_PUBLIC_APP_DOMAIN", "caseloadselect.ca");
   state.payload = null;
-  state.member = null;
-  state.dbError = null;
-  state.filters = [];
+  mocks.revalidateOperatorMembership.mockResolvedValue(null);
 });
 
 describe("GET /api/operator/login", () => {
@@ -82,16 +63,13 @@ describe("GET /api/operator/login", () => {
       lawyer_id: "operator-1",
       exp: Date.now() + 1_000,
     };
-    state.member = { id: "operator-1" };
+    mocks.revalidateOperatorMembership.mockResolvedValue({ id: "operator-1" });
 
     const res = await GET(req());
 
-    expect(state.filters).toEqual([
-      ["id", "operator-1"],
-      ["firm_id", "firm-1"],
-      ["role", "operator"],
-      ["disabled", false],
-    ]);
+    expect(mocks.revalidateOperatorMembership).toHaveBeenCalledWith(state.payload, {
+      recordSignIn: true,
+    });
     expect(mocks.createSessionCookie).toHaveBeenCalledWith("firm-1", {
       role: "operator",
       lawyer_id: "operator-1",
@@ -111,44 +89,37 @@ describe("GET /api/operator/login", () => {
       "https://admin.caseloadselect.ca/api/operator/login?token=operator-token&next=%2Fadmin%2Ftriage",
     );
     expect(res.headers.get("set-cookie")).toBeNull();
-    expect(state.filters).toEqual([]);
+    expect(mocks.revalidateOperatorMembership).not.toHaveBeenCalled();
   });
 
   it.each(["disabled", "removed", "wrong role", "wrong firm"])(
     "rejects a signed operator token when membership is %s",
     async () => {
-    state.payload = {
-      firm_id: "firm-1",
-      role: "operator",
-      lawyer_id: "operator-1",
-      exp: Date.now() + 1_000,
-    };
-    state.member = null;
+      state.payload = {
+        firm_id: "firm-1",
+        role: "operator",
+        lawyer_id: "operator-1",
+        exp: Date.now() + 1_000,
+      };
+      const res = await GET(req());
 
-    const res = await GET(req());
-
-    expect(res.headers.get("location")).toContain("/operator/login?error=invalid");
-    expect(res.headers.get("set-cookie")).toBeNull();
+      expect(res.headers.get("location")).toContain("/operator/login?error=invalid");
+      expect(res.headers.get("set-cookie")).toBeNull();
     },
   );
 
-  it("fails closed on membership lookup errors", async () => {
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("fails closed when centralized membership revalidation rejects the identity", async () => {
     state.payload = {
       firm_id: "firm-1",
       role: "operator",
       lawyer_id: "operator-1",
       exp: Date.now() + 1_000,
     };
-    state.dbError = { message: "database unavailable" };
+    mocks.revalidateOperatorMembership.mockResolvedValue(null);
 
     const res = await GET(req());
 
     expect(res.headers.get("location")).toContain("/operator/login?error=invalid");
     expect(res.headers.get("set-cookie")).toBeNull();
-    expect(consoleError).toHaveBeenCalledWith(
-      expect.stringContaining("membership revalidation failed"),
-    );
-    consoleError.mockRestore();
   });
 });

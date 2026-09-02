@@ -53,8 +53,16 @@ describe("operator origin middleware policy", () => {
   });
 
   it("preserves single-origin Vercel preview behavior", async () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
     const res = await middleware(request("https://operator-origin-git-example.vercel.app/admin"));
     expect(res.headers.get("location")).toBeNull();
     expect(res.headers.get("x-middleware-next")).toBe("1");
+  });
+
+  it("does not let a production Vercel alias bypass the canonical operator origin", async () => {
+    const res = await middleware(request("https://production-alias.vercel.app/admin/triage?firm=firm-1"));
+    expect(res.headers.get("location")).toBe(
+      "https://admin.caseloadselect.ca/admin/triage?firm=firm-1",
+    );
   });
 });

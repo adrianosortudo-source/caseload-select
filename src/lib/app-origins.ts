@@ -65,10 +65,17 @@ export function isAppHost(hostname: string): boolean {
 /** Hosts where app and operator surfaces intentionally remain on one origin. */
 export function isLocalOrPreviewHost(hostname: string): boolean {
   const normalized = normalizeHostname(hostname);
-  return normalized === "localhost"
+  const isLocal = normalized === "localhost"
     || normalized === "127.0.0.1"
-    || normalized === "[::1]"
-    || normalized.endsWith(".vercel.app");
+    || normalized === "[::1]";
+  if (isLocal) return true;
+
+  // A *.vercel.app hostname is a single-origin exception only on a real
+  // Vercel preview deployment. Production aliases must use the canonical
+  // app/admin split, otherwise an arbitrary production alias could bypass the
+  // host-only operator-session boundary.
+  return process.env.VERCEL_ENV === "preview"
+    && normalized.endsWith(".vercel.app");
 }
 
 const LEGACY_OPERATOR_ROOTS = [

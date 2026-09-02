@@ -49,12 +49,21 @@ describe("application origins", () => {
     expect(isOperatorHost("admin.caseloadselect.ca.attacker.test")).toBe(false);
   });
 
-  it("recognizes local and Vercel preview hosts", () => {
+  it("recognizes local hosts without treating production Vercel aliases as previews", () => {
     expect(isLocalOrPreviewHost("localhost:3000")).toBe(true);
     expect(isLocalOrPreviewHost("127.0.0.1:3000")).toBe(true);
     expect(isLocalOrPreviewHost("[::1]:3000")).toBe(true);
-    expect(isLocalOrPreviewHost("branch-name.vercel.app")).toBe(true);
+    expect(isLocalOrPreviewHost("branch-name.vercel.app")).toBe(false);
     expect(isLocalOrPreviewHost("app.caseloadselect.ca")).toBe(false);
+  });
+
+  it("allows Vercel deployment hosts only when VERCEL_ENV is preview", () => {
+    vi.stubEnv("VERCEL_ENV", "preview");
+    expect(isLocalOrPreviewHost("branch-name.vercel.app")).toBe(true);
+
+    vi.stubEnv("VERCEL_ENV", "production");
+    expect(isLocalOrPreviewHost("branch-name.vercel.app")).toBe(false);
+    expect(isLocalOrPreviewHost("admin-alias.vercel.app")).toBe(false);
   });
 
   it("limits operator navigation classification to UI surfaces", () => {

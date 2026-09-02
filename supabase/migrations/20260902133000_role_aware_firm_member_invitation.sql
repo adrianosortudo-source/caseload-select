@@ -10,20 +10,19 @@ set search_path = ''
 as $$
 declare
   request_id bigint;
-  base_url text := 'https://app.caseloadselect.ca';
-  request_path text;
+  request_url text;
 begin
   if NEW.invitation_sent_at is not null then
     return NEW;
   end if;
 
-  request_path := case
-    when NEW.role = 'operator' then '/api/operator/request-link'
-    else '/api/portal/request-link'
+  request_url := case
+    when NEW.role = 'operator' then 'https://admin.caseloadselect.ca/api/operator/request-link'
+    else 'https://app.caseloadselect.ca/api/portal/request-link'
   end;
 
   select net.http_post(
-    url := base_url || request_path,
+    url := request_url,
     headers := jsonb_build_object(
       'Content-Type', 'application/json',
       'User-Agent', 'pg_net/CaseLoadSelect-invitation'
@@ -32,6 +31,13 @@ begin
     timeout_milliseconds := 30000
   ) into request_id;
 
+  if request_id is null then
+    raise exception 'pg_net did not queue the invitation request';
+  end if;
+
+  -- This timestamp records successful enqueueing by pg_net, not downstream
+  -- email delivery. The role-specific URL must therefore be routable before
+  -- this migration is released.
   update public.firm_lawyers
      set invitation_sent_at = now()
    where id = NEW.id;
@@ -45,5 +51,13 @@ $$;
 
 revoke all on function public.fn_firm_lawyers_send_invitation() from public, anon, authenticated;
 
+-- Recreate the trigger idempotently so fresh-database CI and existing
+-- environments both converge on the role-aware function.
+drop trigger if exists trg_firm_lawyers_invite on public.firm_lawyers;
+create trigger trg_firm_lawyers_invite
+after insert on public.firm_lawyers
+for each row
+execute function public.fn_firm_lawyers_send_invitation();
+
 comment on function public.fn_firm_lawyers_send_invitation() is
-  'Sends role-aware magic-link invitations after firm_lawyers insert: operators use /api/operator/request-link; firm-side members use /api/portal/request-link.';
+  'Queues role-aware magic-link invitations after firm_lawyers insert: operators use the admin origin; firm-side members use the app origin.';

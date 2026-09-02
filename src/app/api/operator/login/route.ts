@@ -6,8 +6,11 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createSessionCookie, verifyPortalToken } from "@/lib/portal-auth";
-import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import {
+  createSessionCookie,
+  revalidateOperatorMembership,
+  verifyPortalToken,
+} from "@/lib/portal-auth";
 import { isLocalOrPreviewHost, isOperatorHost, operatorOrigin } from "@/lib/app-origins";
 
 function operatorUrl(req: NextRequest, pathname: string): URL {
@@ -34,22 +37,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(operatorUrl(req, "/operator/login?error=invalid"));
   }
 
-  // Revalidate the signed identity at consumption time. A valid HMAC proves
-  // the link was issued by us, but the member may have been disabled or moved
-  // to another role/firm after issuance. Cross-firm access is granted only to
-  // a currently active, exact operator membership.
-  const { data: operator, error: operatorError } = await supabase
-    .from("firm_lawyers")
-    .update({ last_signed_in_at: new Date().toISOString() })
-    .eq("id", payload.lawyer_id)
-    .eq("firm_id", payload.firm_id)
-    .eq("role", "operator")
-    .eq("disabled", false)
-    .select("id")
-    .maybeSingle<{ id: string }>();
-  if (operatorError) {
-    console.error(`[operator-login] membership revalidation failed: ${operatorError.message}`);
-  }
+  const operator = await revalidateOperatorMembership(payload, { recordSignIn: true });
   if (!operator) {
     return NextResponse.redirect(operatorUrl(req, "/operator/login?error=invalid"));
   }
