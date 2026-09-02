@@ -14,9 +14,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { createSigninCode } from "@/lib/portal-signin-codes";
+import { roleAwareOrigin } from "@/lib/app-origins";
 
 export async function POST(
-  req: NextRequest,
+  _req: NextRequest,
   { params }: { params: Promise<{ firmId: string; memberId: string }> },
 ) {
   const { firmId, memberId } = await params;
@@ -56,6 +57,6 @@ export async function POST(
     return NextResponse.json({ error: result.error }, { status: 500 });
   }
 
-  const url = new URL(`/l/${result.code}`, req.url).toString();
+  const url = new URL(`/l/${result.code}`, roleAwareOrigin(role)).toString();
   return NextResponse.json({ ok: true, url, expiresAt: result.expiresAt });
 }

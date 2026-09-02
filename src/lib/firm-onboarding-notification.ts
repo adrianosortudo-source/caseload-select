@@ -32,6 +32,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
+import { operatorOrigin } from "@/lib/app-origins";
 
 // Canonical operator inbox for CaseLoad Select. If you change this, also
 // update the Vercel env var OPERATOR_NOTIFICATION_EMAIL across Production /
@@ -241,7 +242,7 @@ function renderHtml(
   const submittedFmt = new Date(r.submitted_at).toLocaleString("en-CA", {
     timeZone: "America/Toronto",
   });
-  const adminUrl = `https://app.caseloadselect.ca/admin/onboarding-submissions/${encodeURIComponent(r.id)}`;
+  const adminUrl = `${operatorOrigin()}/admin/onboarding-submissions/${encodeURIComponent(r.id)}`;
 
   const clientListLabel =
     r.client_list_path === "share_with_us"

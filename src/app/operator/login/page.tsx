@@ -10,6 +10,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import RequestLinkForm from "@/components/portal/RequestLinkForm";
 import { getOperatorSession } from "@/lib/portal-auth";
+import { appOrigin } from "@/lib/app-origins";
 
 export default async function OperatorLoginPage({
   searchParams,
@@ -50,7 +51,7 @@ export default async function OperatorLoginPage({
               Operator access
             </h1>
             <p className="mt-2 text-sm text-black/60 text-pretty" data-ui-copy="supporting">
-              Enter your operator email to receive a secure sign-in link.
+              Enter your operator email to receive a secure sign-in link. Once you use it, this trusted browser stays signed in for 30 days unless you sign out or clear browser data.
             </p>
           </div>
 
@@ -71,7 +72,7 @@ export default async function OperatorLoginPage({
 
           <p className="border-t border-black/8 pt-4 text-sm text-black/60 text-pretty" data-ui-copy="supporting">
             Looking for your firm workspace?{" "}
-            <Link href="/portal/login" className="font-semibold text-navy underline underline-offset-2 hover:text-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2">
+            <Link href={`${appOrigin()}/portal/login`} className="font-semibold text-navy underline underline-offset-2 hover:text-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2">
               Use lawyer sign in.
             </Link>
           </p>

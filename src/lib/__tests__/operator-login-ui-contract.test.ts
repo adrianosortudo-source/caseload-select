@@ -15,13 +15,16 @@ describe("operator sign-in UI contracts", () => {
     const operator = read(OPERATOR_PAGE);
     expect(operator).toContain("Operator access");
     expect(operator).toContain('endpoint="/api/operator/request-link"');
-    expect(operator).toContain('href="/portal/login"');
+    expect(operator).toContain("appOrigin");
+    expect(operator).toContain('href={`${appOrigin()}/portal/login`}');
+    expect(operator).toContain("this trusted browser stays signed in for 30 days");
     expect(operator).toContain("getOperatorSession");
     expect(operator).toContain('redirect("/admin")');
 
     const portal = read(PORTAL_PAGE);
     expect(portal).toContain("Lawyer portal");
-    expect(portal).toContain('href="/operator/login"');
+    expect(portal).toContain("operatorOrigin");
+    expect(portal).toContain('href={`${operatorOrigin()}/operator/login`}');
   });
 
   it("keeps operator auth outside the console sidebar shell", () => {

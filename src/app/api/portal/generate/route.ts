@@ -13,6 +13,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generatePortalToken } from "@/lib/portal-auth";
 import { isCronAuthorized } from "@/lib/cron-auth";
+import { appOrigin } from "@/lib/app-origins";
 
 export async function POST(req: NextRequest) {
   if (!isCronAuthorized(req)) {
@@ -25,10 +26,7 @@ export async function POST(req: NextRequest) {
   }
 
   const token = generatePortalToken(firm_id);
-  const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
-  const defaultOrigin = base_url
-    ?? (appDomain ? `https://app.${appDomain}` : null)
-    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+  const defaultOrigin = base_url ?? appOrigin();
   const magic_link = `${defaultOrigin}/api/portal/login?token=${encodeURIComponent(token)}`;
 
   return NextResponse.json({ magic_link, expires_in_hours: 48 });

@@ -13,6 +13,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import Link from "next/link";
 import OnboardingFormLink from "@/components/admin/OnboardingFormLink";
 import { clientListStatusLabel } from "@/lib/firm-onboarding-client-list";
+import { appOrigin } from "@/lib/app-origins";
 
 interface SubmissionRow {
   id: string;
@@ -64,7 +65,7 @@ export default async function OnboardingSubmissionsListPage() {
     <div className="space-y-5">
       <Header total={items.length} />
 
-      <OnboardingFormLink />
+      <OnboardingFormLink appOrigin={appOrigin()} />
 
       {items.length === 0 ? (
         <EmptyState />
