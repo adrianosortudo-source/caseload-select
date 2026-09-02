@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   sendInstagramMessage: vi.fn(),
   sendWhatsappMessage: vi.fn(),
   validateChannelText: vi.fn(),
+  normalizeAuthoritativeInboundAt: vi.fn(),
+  isChannelReplyWindowOpen: vi.fn(),
   resolveScreenedLeadIdForFirm: vi.fn(),
   loadChannelConversation: vi.fn(),
   claimOutboundConversationEvent: vi.fn(),
@@ -22,6 +24,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/channel-conversation', () => ({
   validateChannelText: mocks.validateChannelText,
+  normalizeAuthoritativeInboundAt: mocks.normalizeAuthoritativeInboundAt,
+  isChannelReplyWindowOpen: mocks.isChannelReplyWindowOpen,
   resolveScreenedLeadIdForFirm: mocks.resolveScreenedLeadIdForFirm,
   loadChannelConversation: mocks.loadChannelConversation,
   claimOutboundConversationEvent: mocks.claimOutboundConversationEvent,
@@ -67,6 +71,10 @@ beforeEach(() => {
   mocks.sendWhatsappMessage.mockReset();
   mocks.validateChannelText.mockReset();
   mocks.validateChannelText.mockReturnValue({ valid: true });
+  mocks.normalizeAuthoritativeInboundAt.mockReset();
+  mocks.normalizeAuthoritativeInboundAt.mockImplementation((value) => value ?? null);
+  mocks.isChannelReplyWindowOpen.mockReset();
+  mocks.isChannelReplyWindowOpen.mockImplementation((value) => !!value);
   mocks.resolveScreenedLeadIdForFirm.mockReset();
   mocks.resolveScreenedLeadIdForFirm.mockResolvedValue('11111111-1111-4111-8111-111111111111');
   mocks.loadChannelConversation.mockReset();
@@ -79,7 +87,10 @@ beforeEach(() => {
   mocks.loadOutboundConversationResult.mockReset();
   mocks.loadOutboundConversationResult.mockResolvedValue(null);
   mocks.recordOutboundConversationResult.mockReset();
-  mocks.recordOutboundConversationResult.mockResolvedValue(true);
+  mocks.recordOutboundConversationResult.mockResolvedValue({
+    recorded: true,
+    duplicate: false,
+  });
   mocks.firmRow = {
     facebook_page_access_token: null,
     whatsapp_cloud_api_access_token: null,
@@ -101,6 +112,7 @@ describe('sendChannelMessage', () => {
         pageId: 'page-1',
       },
       text: 'hi',
+      authoritativeInboundAt: '2026-09-01T12:00:00.000Z',
     });
     expect(r.sent).toBe(true);
     expect(mocks.sendMessengerMessage).toHaveBeenCalledWith({
@@ -125,6 +137,7 @@ describe('sendChannelMessage', () => {
         igBusinessAccountId: 'iga-1',
       },
       text: 'hi',
+      authoritativeInboundAt: '2026-09-01T12:00:00.000Z',
     });
     expect(r.sent).toBe(true);
     expect(mocks.sendInstagramMessage).toHaveBeenCalledWith({
@@ -149,6 +162,7 @@ describe('sendChannelMessage', () => {
         phoneNumberId: 'pnid',
       },
       text: 'hi',
+      authoritativeInboundAt: '2026-09-01T12:00:00.000Z',
     });
     expect(r.sent).toBe(true);
     expect(mocks.sendWhatsappMessage).toHaveBeenCalledWith({
@@ -171,6 +185,7 @@ describe('sendChannelMessage', () => {
         pageId: 'page-1',
       },
       text: 'hi',
+      authoritativeInboundAt: '2026-09-01T12:00:00.000Z',
     });
     expect(r.sent).toBe(false);
     expect(r.reason).toMatch(/facebook_page_access_token/);
@@ -188,9 +203,27 @@ describe('sendChannelMessage', () => {
         phoneNumberId: 'pnid',
       },
       text: 'hi',
+      authoritativeInboundAt: '2026-09-01T12:00:00.000Z',
     });
     expect(r.sent).toBe(false);
     expect(r.reason).toMatch(/whatsapp_cloud_api_access_token/);
+  });
+
+  it('fails closed without authoritative inbound evidence', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook',
+        senderPsid: 'psid',
+        senderName: null,
+        messageMid: 'mid_in',
+        pageId: 'page-1',
+      },
+      text: 'hi',
+    });
+    expect(r).toMatchObject({ sent: false, code: 'reply_window_closed' });
+    expect(mocks.sendMessengerMessage).not.toHaveBeenCalled();
   });
 
   it('fails closed before dispatch when the authoritative reply window is closed', async () => {
@@ -253,6 +286,84 @@ describe('sendChannelMessage', () => {
     );
     // Window check before the claim and immediately before the external send.
     expect(mocks.loadChannelConversation).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns delivery_unknown after Graph success when terminal recording fails', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    mocks.sendMessengerMessage.mockResolvedValueOnce({ sent: true, messageId: 'mid-out' });
+    mocks.recordOutboundConversationResult.mockResolvedValueOnce({
+      recorded: false,
+      duplicate: false,
+    });
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook', senderPsid: 'psid', senderName: null,
+        messageMid: 'mid_in', pageId: 'page-1',
+      },
+      text: 'hi',
+      ledger: {
+        screenedLeadId: 'L-2026-09-01-001', source: 'operator',
+        actorType: 'operator', actorId: 'operator-1',
+        clientRequestId: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+    expect(r).toEqual({
+      sent: false,
+      deliveryUnknown: true,
+      messageId: 'mid-out',
+      reason: 'delivery occurred but the audit result could not be confirmed',
+      code: 'delivery_unknown',
+    });
+  });
+
+  it('does not call Graph for a duplicate pending claim', async () => {
+    mocks.claimOutboundConversationEvent.mockResolvedValueOnce({
+      claimed: false, duplicate: true,
+    });
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook', senderPsid: 'psid', senderName: null,
+        messageMid: 'mid_in', pageId: 'page-1',
+      },
+      text: 'hi',
+      ledger: {
+        screenedLeadId: 'L-2026-09-01-001', source: 'operator',
+        actorType: 'operator', actorId: 'operator-1',
+        clientRequestId: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+    expect(r).toMatchObject({
+      sent: false, deliveryUnknown: true, code: 'request_in_progress',
+    });
+    expect(mocks.sendMessengerMessage).not.toHaveBeenCalled();
+  });
+
+  it('returns a reconciled terminal on same-key replay without Graph', async () => {
+    mocks.claimOutboundConversationEvent.mockResolvedValueOnce({
+      claimed: false, duplicate: true,
+    });
+    mocks.loadOutboundConversationResult.mockResolvedValueOnce({
+      status: 'sent', metaMessageId: 'mid-reconciled', failureReason: null,
+    });
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook', senderPsid: 'psid', senderName: null,
+        messageMid: 'mid_in', pageId: 'page-1',
+      },
+      text: 'hi',
+      ledger: {
+        screenedLeadId: 'L-2026-09-01-001', source: 'operator',
+        actorType: 'operator', actorId: 'operator-1',
+        clientRequestId: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+    expect(r).toMatchObject({
+      sent: true, messageId: 'mid-reconciled', code: 'duplicate_request',
+    });
+    expect(mocks.sendMessengerMessage).not.toHaveBeenCalled();
   });
 });
 

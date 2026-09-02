@@ -121,6 +121,9 @@ function sendFailureStatus(result: ChannelSendResult): number {
       return 409;
     case "duplicate_request":
       return 409;
+    case "delivery_unknown":
+    case "request_in_progress":
+      return 409;
     case "ledger_unavailable":
       return 503;
     default:
@@ -143,6 +146,18 @@ export async function POST(
     (session.role !== "operator" && session.firm_id !== firmId)
   ) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const actorId = nonEmptyString(session.lawyer_id);
+  if (!actorId || !UUID_PATTERN.test(actorId)) {
+    return NextResponse.json(
+      {
+        error:
+          "Sign in again before sending a reply so this action can be attributed to your member account.",
+        code: "reauth_required",
+      },
+      { status: 403 },
+    );
   }
 
   const previewDenied = await denyWriteIfPreview(firmId);
@@ -258,10 +273,6 @@ export async function POST(
   }
 
   const actorType = session.role === "operator" ? "operator" : "lawyer";
-  const actorId =
-    session.role === "operator"
-      ? (session.lawyer_id ?? "operator")
-      : (session.lawyer_id ?? "lawyer");
 
   const sendResult = await sendChannelMessage({
     firmId,
@@ -285,12 +296,25 @@ export async function POST(
     });
   } catch {
     return NextResponse.json(
-      { error: "Reply result could not be verified" },
-      { status: 503 },
+      {
+        error:
+          "Delivery is not yet verified. Keep this draft unchanged and retry it. Do not create a new message.",
+        code: "delivery_unknown",
+        deliveryUnknown: true,
+      },
+      { status: 409 },
     );
   }
   if (!conversation) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+    return NextResponse.json(
+      {
+        error:
+          "Delivery is not yet verified. Keep this draft unchanged and retry it. Do not create a new message.",
+        code: "delivery_unknown",
+        deliveryUnknown: true,
+      },
+      { status: 409 },
+    );
   }
 
   const message = terminalMessageForRequest(conversation, clientRequestId);
@@ -298,10 +322,33 @@ export async function POST(
     return NextResponse.json({ message, replyWindow: conversation.replyWindow });
   }
 
+  if (
+    !message &&
+    (sendResult.code === "delivery_unknown" ||
+      sendResult.code === "request_in_progress" ||
+      sendResult.code === "duplicate_request")
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          "Delivery is not yet verified. Keep this draft unchanged and retry it. Do not create a new message.",
+        code: sendResult.code,
+        deliveryUnknown: true,
+        replyWindow: conversation.replyWindow,
+      },
+      { status: 409 },
+    );
+  }
+
   const error =
     message?.failureReason ?? sendResult.reason ?? "The reply could not be sent";
   return NextResponse.json(
-    { error, ...(message ? { message } : {}), replyWindow: conversation.replyWindow },
+    {
+      error,
+      ...(sendResult.code ? { code: sendResult.code } : {}),
+      ...(message ? { message } : {}),
+      replyWindow: conversation.replyWindow,
+    },
     { status: sendFailureStatus(sendResult) },
   );
 }

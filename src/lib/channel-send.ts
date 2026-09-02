@@ -15,8 +15,10 @@ import { getI18n } from '@/lib/screen-engine/i18n/loader';
 import type { SupportedLanguage } from '@/lib/screen-engine/types';
 import {
   claimOutboundConversationEvent,
+  isChannelReplyWindowOpen,
   loadChannelConversation,
   loadOutboundConversationResult,
+  normalizeAuthoritativeInboundAt,
   recordOutboundConversationResult,
   resolveScreenedLeadIdForFirm,
   validateChannelText,
@@ -25,6 +27,8 @@ import {
 
 export interface ChannelSendResult {
   sent: boolean;
+  /** True when delivery may have occurred but its immutable outcome is unresolved. */
+  deliveryUnknown?: boolean;
   messageId?: string;
   reason?: string;
   status?: number;
@@ -33,6 +37,8 @@ export interface ChannelSendResult {
     | 'lead_not_found'
     | 'reply_window_closed'
     | 'duplicate_request'
+    | 'request_in_progress'
+    | 'delivery_unknown'
     | 'ledger_unavailable';
 }
 
@@ -64,6 +70,8 @@ export interface SendChannelMessageArgs {
   firmId: string;
   sender: ChannelSender;
   text: string;
+  /** Verified provider event time for the inbound currently being handled. */
+  authoritativeInboundAt?: string | null;
   /** Required for operator sends and auditable post-finalization automation. */
   ledger?: OutboundLedgerContext;
 }
@@ -84,6 +92,9 @@ export async function sendChannelMessage(
     return { sent: false, reason: validation.reason, code: 'validation_failed' };
   }
 
+  const authoritativeInboundAt = normalizeAuthoritativeInboundAt(
+    args.authoritativeInboundAt,
+  );
   let ledger = args.ledger;
   if (args.ledger) {
     try {
@@ -99,20 +110,48 @@ export async function sendChannelMessage(
         };
       }
       ledger = { ...args.ledger, screenedLeadId: resolvedLeadId };
-      if (ledger.requireOpenWindow) {
-        const conversation = await loadChannelConversation({
-          firmId: args.firmId,
-          screenedLeadId: ledger.screenedLeadId,
-        });
-        if (!conversation?.replyWindow.isOpen) {
-          return {
-            sent: false,
-            reason: 'Meta reply window is closed',
-            code: 'reply_window_closed',
-          };
-        }
-      }
+    } catch {
+      console.warn('[channel-send] outbound ledger claim failed');
+      return {
+        sent: false,
+        reason: 'conversation ledger unavailable',
+        code: 'ledger_unavailable',
+      };
+    }
+  }
 
+  const hasOpenReplyWindow = async (): Promise<boolean> => {
+    if (authoritativeInboundAt && isChannelReplyWindowOpen(authoritativeInboundAt)) {
+      return true;
+    }
+    if (!ledger) return false;
+    const conversation = await loadChannelConversation({
+      firmId: args.firmId,
+      screenedLeadId: ledger.screenedLeadId,
+    });
+    return conversation?.replyWindow.isOpen === true;
+  };
+
+  // Dispatcher invariant: every free-form send requires authoritative inbound
+  // evidence. A caller cannot opt out by omitting a ledger flag.
+  try {
+    if (!(await hasOpenReplyWindow())) {
+      return {
+        sent: false,
+        reason: 'Meta reply window is closed or has no authoritative inbound evidence',
+        code: 'reply_window_closed',
+      };
+    }
+  } catch {
+    return {
+      sent: false,
+      reason: 'conversation ledger unavailable',
+      code: 'ledger_unavailable',
+    };
+  }
+
+  if (ledger) {
+    try {
       const claim = await claimOutboundConversationEvent({
         firmId: args.firmId,
         channel: args.sender.channel,
@@ -124,13 +163,19 @@ export async function sendChannelMessage(
           firmId: args.firmId,
           clientRequestId: ledger.clientRequestId,
         });
+        if (prior) {
+          return {
+            sent: prior.status === 'sent',
+            messageId: prior.metaMessageId ?? undefined,
+            reason: prior.failureReason ?? 'request already completed',
+            code: 'duplicate_request',
+          };
+        }
         return {
-          sent: prior?.status === 'sent',
-          messageId: prior?.metaMessageId ?? undefined,
-          reason: prior
-            ? prior.failureReason ?? 'request already completed'
-            : 'request is already in progress',
-          code: 'duplicate_request',
+          sent: false,
+          deliveryUnknown: true,
+          reason: 'request is already in progress or awaiting delivery reconciliation',
+          code: 'request_in_progress',
         };
       }
     } catch {
@@ -146,7 +191,7 @@ export async function sendChannelMessage(
   const finish = async (result: ChannelSendResult): Promise<ChannelSendResult> => {
     if (ledger) {
       try {
-        await recordOutboundConversationResult({
+        const record = await recordOutboundConversationResult({
           firmId: args.firmId,
           channel: args.sender.channel,
           text: args.text,
@@ -155,8 +200,51 @@ export async function sendChannelMessage(
           metaMessageId: result.messageId,
           failureReason: result.reason,
         });
+        if (record.recorded) return result;
+        if (record.duplicate) {
+          const prior = await loadOutboundConversationResult({
+            firmId: args.firmId,
+            clientRequestId: ledger.clientRequestId,
+          });
+          if (prior) {
+            return {
+              sent: prior.status === 'sent',
+              messageId: prior.metaMessageId ?? undefined,
+              reason: prior.failureReason ?? 'request already completed',
+              code: 'duplicate_request',
+            };
+          }
+        }
+        if (result.sent) {
+          return {
+            sent: false,
+            deliveryUnknown: true,
+            messageId: result.messageId,
+            reason: 'delivery occurred but the audit result could not be confirmed',
+            code: 'delivery_unknown',
+          };
+        }
+        return {
+          ...result,
+          reason: result.reason ?? 'send failed and the audit result could not be confirmed',
+          code: result.code ?? 'ledger_unavailable',
+        };
       } catch {
         console.warn('[channel-send] outbound result ledger write threw');
+        if (result.sent) {
+          return {
+            sent: false,
+            deliveryUnknown: true,
+            messageId: result.messageId,
+            reason: 'delivery occurred but the audit result could not be confirmed',
+            code: 'delivery_unknown',
+          };
+        }
+        return {
+          ...result,
+          reason: result.reason ?? 'send failed and the audit result could not be confirmed',
+          code: result.code ?? 'ledger_unavailable',
+        };
       }
     }
     return result;
@@ -168,26 +256,20 @@ export async function sendChannelMessage(
   }
 
   // Recheck immediately before the external side effect. Equality is closed.
-  if (ledger?.requireOpenWindow) {
-    try {
-      const conversation = await loadChannelConversation({
-        firmId: args.firmId,
-        screenedLeadId: ledger.screenedLeadId,
-      });
-      if (!conversation?.replyWindow.isOpen) {
-        return finish({
-          sent: false,
-          reason: 'Meta reply window is closed',
-          code: 'reply_window_closed',
-        });
-      }
-    } catch {
+  try {
+    if (!(await hasOpenReplyWindow())) {
       return finish({
         sent: false,
-        reason: 'conversation ledger unavailable',
-        code: 'ledger_unavailable',
+        reason: 'Meta reply window is closed or has no authoritative inbound evidence',
+        code: 'reply_window_closed',
       });
     }
+  } catch {
+    return finish({
+      sent: false,
+      reason: 'conversation ledger unavailable',
+      code: 'ledger_unavailable',
+    });
   }
 
   switch (args.sender.channel) {

@@ -4,9 +4,10 @@
 -- messages cannot be reconstructed from screened_leads or the intake session
 -- transcript, so they are intentionally not backfilled.
 --
--- Each outbound attempt is represented by a pending event followed by one
--- terminal sent/failed event. Rows are never updated. client_request_id makes
--- the initial pending insert a race-safe server idempotency claim.
+-- Each outbound attempt is represented by exactly one pending event followed
+-- by at most one terminal sent/failed event. Rows are never updated or deleted.
+-- client_request_id makes the initial pending insert a race-safe server
+-- idempotency claim.
 
 ALTER TABLE public.screened_leads
   ADD CONSTRAINT screened_leads_id_firm_unique UNIQUE (id, firm_id);
@@ -32,7 +33,7 @@ CREATE TABLE public.channel_conversation_events (
   CONSTRAINT channel_conversation_events_lead_firm_fk
     FOREIGN KEY (screened_lead_id, firm_id)
     REFERENCES public.screened_leads (id, firm_id)
-    ON DELETE CASCADE,
+    ON DELETE RESTRICT,
   CONSTRAINT channel_conversation_events_channel_check
     CHECK (channel IN ('facebook', 'instagram', 'whatsapp')),
   CONSTRAINT channel_conversation_events_direction_check
@@ -70,9 +71,13 @@ CREATE UNIQUE INDEX channel_conversation_events_meta_mid_unique
   ON public.channel_conversation_events (firm_id, channel, meta_message_id)
   WHERE meta_message_id IS NOT NULL;
 
-CREATE UNIQUE INDEX channel_conversation_events_request_status_unique
-  ON public.channel_conversation_events (firm_id, client_request_id, status)
-  WHERE client_request_id IS NOT NULL;
+CREATE UNIQUE INDEX channel_conversation_events_request_pending_unique
+  ON public.channel_conversation_events (firm_id, client_request_id)
+  WHERE client_request_id IS NOT NULL AND status = 'pending';
+
+CREATE UNIQUE INDEX channel_conversation_events_request_terminal_unique
+  ON public.channel_conversation_events (firm_id, client_request_id)
+  WHERE client_request_id IS NOT NULL AND status IN ('sent', 'failed');
 
 CREATE INDEX channel_conversation_events_lead_timeline
   ON public.channel_conversation_events (screened_lead_id, occurred_at, created_at);
@@ -88,11 +93,43 @@ ALTER TABLE public.channel_conversation_events FORCE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.channel_conversation_events FROM anon, authenticated;
 
 COMMENT ON TABLE public.channel_conversation_events IS
-  'Append-only, service-role-only Messenger, Instagram DM, and WhatsApp conversation ledger tied to screened leads. No historical backfill is possible.';
+  'Append-only, service-role-only Messenger, Instagram DM, and WhatsApp conversation ledger tied to screened leads. No historical backfill is possible. Retention and any later privileged purge procedure are intentionally out of scope for this migration.';
 COMMENT ON COLUMN public.channel_conversation_events.authoritative_inbound IS
   'True only for a verified non-echo inbound webhook event. The strict Meta reply window is derived exclusively from the latest such event.';
 COMMENT ON COLUMN public.channel_conversation_events.client_request_id IS
   'Server idempotency key for an outbound attempt. A pending event claims the key; a sent or failed event records the immutable outcome.';
+
+CREATE OR REPLACE FUNCTION public.validate_channel_conversation_terminal()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF NEW.status IN ('sent', 'failed') AND NOT EXISTS (
+    SELECT 1
+    FROM public.channel_conversation_events AS pending
+    WHERE pending.firm_id = NEW.firm_id
+      AND pending.client_request_id = NEW.client_request_id
+      AND pending.status = 'pending'
+      AND pending.screened_lead_id = NEW.screened_lead_id
+      AND pending.channel = NEW.channel
+      AND pending.source = NEW.source
+      AND pending.body = NEW.body
+      AND pending.actor_type = NEW.actor_type
+      AND pending.actor_id IS NOT DISTINCT FROM NEW.actor_id
+  ) THEN
+    RAISE EXCEPTION 'terminal channel conversation event has no matching pending claim'
+      USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.validate_channel_conversation_terminal() FROM PUBLIC;
+
+CREATE TRIGGER channel_conversation_events_validate_terminal
+  BEFORE INSERT ON public.channel_conversation_events
+  FOR EACH ROW EXECUTE FUNCTION public.validate_channel_conversation_terminal();
 
 CREATE OR REPLACE FUNCTION public.reject_channel_conversation_event_mutation()
 RETURNS trigger
@@ -108,6 +145,10 @@ REVOKE ALL ON FUNCTION public.reject_channel_conversation_event_mutation() FROM 
 
 CREATE TRIGGER channel_conversation_events_reject_update
   BEFORE UPDATE ON public.channel_conversation_events
+  FOR EACH ROW EXECUTE FUNCTION public.reject_channel_conversation_event_mutation();
+
+CREATE TRIGGER channel_conversation_events_reject_delete
+  BEFORE DELETE ON public.channel_conversation_events
   FOR EACH ROW EXECUTE FUNCTION public.reject_channel_conversation_event_mutation();
 
 NOTIFY pgrst, 'reload schema';

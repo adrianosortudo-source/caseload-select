@@ -7,6 +7,8 @@ const OTHER_FIRM_ID = "22222222-2222-4222-8222-222222222222";
 const LEAD_ID = "L-2026-09-01-META";
 const SCREENED_ID = "33333333-3333-4333-8333-333333333333";
 const REQUEST_ID = "44444444-4444-4444-8444-444444444444";
+const LAWYER_ID = "55555555-5555-4555-8555-555555555555";
+const OPERATOR_ID = "66666666-6666-4666-8666-666666666666";
 
 type Session = {
   firm_id: string;
@@ -31,7 +33,7 @@ const sentMessage = {
   metaMessageId: "mid.sent",
   clientRequestId: REQUEST_ID,
   actorType: "lawyer" as const,
-  actorId: "lawyer-1",
+  actorId: LAWYER_ID,
   occurredAt: "2026-09-01T13:00:00.000Z",
   failureReason: null,
 };
@@ -60,11 +62,14 @@ const state = {
     sent: boolean;
     messageId?: string;
     reason?: string;
+    deliveryUnknown?: boolean;
     code?:
       | "validation_failed"
       | "lead_not_found"
       | "reply_window_closed"
       | "duplicate_request"
+      | "delivery_unknown"
+      | "request_in_progress"
       | "ledger_unavailable";
   },
   sendCalls: [] as unknown[],
@@ -161,7 +166,7 @@ function params() {
 }
 
 beforeEach(() => {
-  state.session = { firm_id: FIRM_ID, role: "lawyer", lawyer_id: "lawyer-1" };
+  state.session = { firm_id: FIRM_ID, role: "lawyer", lawyer_id: LAWYER_ID };
   state.previewResponse = null;
   state.lead = messengerLead();
   state.leadError = null;
@@ -192,15 +197,29 @@ describe("POST /api/portal/[firmId]/triage/[leadId]/reply", () => {
     expect(state.sendCalls).toHaveLength(0);
   });
 
+  it("requires a stable member UUID instead of recording a role placeholder", async () => {
+    state.session = { firm_id: FIRM_ID, role: "lawyer" };
+    let response = await POST(request() as never, params());
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: "reauth_required" });
+
+    state.session = { firm_id: FIRM_ID, role: "lawyer", lawyer_id: "lawyer" };
+    response = await POST(request() as never, params());
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: "reauth_required" });
+    expect(state.dbReads).toBe(0);
+    expect(state.sendCalls).toHaveLength(0);
+  });
+
   it("allows an operator across firms and records the operator identity", async () => {
-    state.session = { firm_id: OTHER_FIRM_ID, role: "operator", lawyer_id: "operator-7" };
+    state.session = { firm_id: OTHER_FIRM_ID, role: "operator", lawyer_id: OPERATOR_ID };
     const response = await POST(request() as never, params());
     expect(response.status).toBe(200);
     expect(state.sendCalls).toHaveLength(1);
     expect(state.sendCalls[0]).toMatchObject({
       ledger: {
         actorType: "operator",
-        actorId: "operator-7",
+        actorId: OPERATOR_ID,
         source: "operator",
         requireOpenWindow: true,
       },
@@ -282,7 +301,7 @@ describe("POST /api/portal/[firmId]/triage/[leadId]/reply", () => {
         screenedLeadId: SCREENED_ID,
         clientRequestId: REQUEST_ID,
         actorType: "lawyer",
-        actorId: "lawyer-1",
+        actorId: LAWYER_ID,
       },
     });
     const body = await response.json();
@@ -347,6 +366,32 @@ describe("POST /api/portal/[firmId]/triage/[leadId]/reply", () => {
     });
     expect(state.sendCalls).toHaveLength(0);
   });
+
+  it.each(["delivery_unknown", "request_in_progress"] as const)(
+    "returns a non-terminal %s result without inventing a message",
+    async (code) => {
+      state.sendResult = {
+        sent: false,
+        deliveryUnknown: true,
+        reason: "request is awaiting delivery reconciliation",
+        code,
+      };
+      state.conversations = [
+        { messages: [], replyWindow: openWindow },
+        { messages: [], replyWindow: openWindow },
+      ];
+
+      const response = await POST(request() as never, params());
+
+      expect(response.status).toBe(409);
+      expect(await response.json()).toMatchObject({
+        code,
+        deliveryUnknown: true,
+        replyWindow: openWindow,
+      });
+      expect(state.sendCalls).toHaveLength(1);
+    },
+  );
 
   it("returns 502 with the failed ledger event after a Graph failure", async () => {
     const failedMessage = {

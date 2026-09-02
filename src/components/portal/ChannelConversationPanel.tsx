@@ -27,6 +27,7 @@ interface Props {
   assetId?: string | null;
   replyWindow: ChannelReplyWindow;
   supportPreview: boolean;
+  actorIdentityAvailable: boolean;
   replyEndpoint: string;
   intakeTranscript?: string | null;
 }
@@ -53,9 +54,13 @@ function formatOccurredAt(value: string): string {
 
 function replyUnavailableReason({
   supportPreview,
+  actorIdentityAvailable,
   replyWindow,
-}: Pick<Props, "supportPreview" | "replyWindow">): string | null {
+}: Pick<Props, "supportPreview" | "actorIdentityAvailable" | "replyWindow">): string | null {
   if (supportPreview) return SUPPORT_PREVIEW_READ_ONLY_MESSAGE;
+  if (!actorIdentityAvailable) {
+    return "Sign in again before sending a reply so this action can be attributed to your member account.";
+  }
   if (replyWindow.isOpen) return null;
   if (replyWindow.reason === "expired") {
     return "The 24-hour response window has closed. Wait for a new inbound message before replying.";
@@ -69,7 +74,7 @@ function replyUnavailableReason({
   );
 }
 
-function isMessage(value: unknown): value is ChannelConversationMessage {
+function isTerminalMessage(value: unknown): value is ChannelConversationMessage {
   if (!value || typeof value !== "object") return false;
   const candidate = value as Partial<ChannelConversationMessage>;
   return (
@@ -77,7 +82,7 @@ function isMessage(value: unknown): value is ChannelConversationMessage {
     (candidate.direction === "inbound" || candidate.direction === "outbound") &&
     typeof candidate.source === "string" &&
     typeof candidate.body === "string" &&
-    typeof candidate.status === "string" &&
+    (candidate.status === "sent" || candidate.status === "failed") &&
     typeof candidate.occurredAt === "string"
   );
 }
@@ -89,6 +94,7 @@ export default function ChannelConversationPanel({
   assetId,
   replyWindow,
   supportPreview,
+  actorIdentityAvailable,
   replyEndpoint,
   intakeTranscript,
 }: Props) {
@@ -97,7 +103,12 @@ export default function ChannelConversationPanel({
   const [sending, setSending] = useState(false);
   const [feedback, setFeedback] = useState("");
   const sendInFlight = useRef(false);
-  const unavailableReason = replyUnavailableReason({ supportPreview, replyWindow });
+  const pendingRequest = useRef<{ body: string; id: string } | null>(null);
+  const unavailableReason = replyUnavailableReason({
+    supportPreview,
+    actorIdentityAvailable,
+    replyWindow,
+  });
   const instagramByteCount = channel === "instagram" ? new TextEncoder().encode(draft).length : 0;
   const exceedsChannelLimit = channel === "instagram" && instagramByteCount > 1000;
   const sendDisabled =
@@ -111,7 +122,11 @@ export default function ChannelConversationPanel({
     sendInFlight.current = true;
     setSending(true);
     setFeedback("Sending reply.");
-    const clientRequestId = crypto.randomUUID();
+    const request =
+      pendingRequest.current?.body === body
+        ? pendingRequest.current
+        : { body, id: crypto.randomUUID() };
+    pendingRequest.current = request;
 
     try {
       const response = await fetch(replyEndpoint, {
@@ -119,34 +134,56 @@ export default function ChannelConversationPanel({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           body,
-          client_request_id: clientRequestId,
+          client_request_id: request.id,
         }),
       });
       const payload = (await response.json().catch(() => ({}))) as {
         error?: string;
+        code?: string;
         message?: unknown;
       };
+      const terminalMessage = isTerminalMessage(payload.message) ? payload.message : null;
 
       if (!response.ok) {
-        throw new Error(payload.error ?? "The reply could not be sent. Try again.");
+        if (terminalMessage) {
+          setConversation((current) => [
+            ...current.filter((message) => message.id !== terminalMessage.id),
+            terminalMessage,
+          ]);
+        }
+        if (
+          !terminalMessage &&
+          (payload.code === "delivery_unknown" ||
+            payload.code === "request_in_progress" ||
+            payload.code === "duplicate_request")
+        ) {
+          setFeedback(
+            "Delivery is not yet verified. Keep this draft unchanged and retry it. Do not create a new message.",
+          );
+          return;
+        }
+        setFeedback(payload.error ?? "The reply could not be sent. Try again.");
+        return;
       }
 
-      const sentMessage: ChannelConversationMessage = isMessage(payload.message)
-        ? payload.message
-        : {
-            id: clientRequestId,
-            direction: "outbound",
-            source: "portal",
-            body,
-            status: "sent",
-            occurredAt: new Date().toISOString(),
-          };
+      if (!terminalMessage || terminalMessage.status !== "sent") {
+        setFeedback(
+          "Delivery is not yet verified. Keep this draft unchanged and retry it. Do not create a new message.",
+        );
+        return;
+      }
 
-      setConversation((current) => [...current, sentMessage]);
+      setConversation((current) => [
+        ...current.filter((message) => message.id !== terminalMessage.id),
+        terminalMessage,
+      ]);
       setDraft("");
+      pendingRequest.current = null;
       setFeedback("Reply sent.");
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "The reply could not be sent. Try again.");
+    } catch {
+      setFeedback(
+        "The connection ended before delivery could be verified. Keep this draft unchanged and retry it. Do not create a new message.",
+      );
     } finally {
       sendInFlight.current = false;
       setSending(false);
@@ -170,11 +207,18 @@ export default function ChannelConversationPanel({
           className="mt-1 w-full text-xl font-bold text-navy text-pretty"
           data-ui-copy="heading"
         >
-          {CHANNEL_LABELS[channel]} with {firmName}
+          {CHANNEL_LABELS[channel]} conversation
         </h2>
-        <div className="mt-2 flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-xs text-black/55">
-          <span>Connected as {firmName}</span>
-          {assetId && <span>Meta asset {assetId}</span>}
+        <div className="mt-2 w-full space-y-1 text-xs text-black/55">
+          <p className="w-full" data-ui-copy="supporting">
+            <span className="font-semibold text-black/65">Firm workspace:</span> {firmName}
+          </p>
+          {assetId && (
+            <p className="w-full break-all" data-ui-copy="supporting">
+              <span className="font-semibold text-black/65">Configured Meta asset ID:</span>{" "}
+              {assetId}
+            </p>
+          )}
         </div>
       </div>
 
@@ -217,8 +261,12 @@ export default function ChannelConversationPanel({
           <h3 className="w-full text-sm font-bold text-navy" data-ui-copy="heading">
             Inbound intake transcript
           </h3>
-          <p className="mt-1 w-full text-xs text-black/55 text-pretty" data-ui-copy="supporting">
-            This legacy transcript preserves intake text. It is separate from the conversation history and may not contain every message.
+          <p
+            className="mt-1 w-full text-xs text-black/55 text-pretty"
+            data-ui-copy="supporting"
+          >
+            This legacy transcript preserves intake text. It is separate from the conversation
+            history and may not contain every message.
           </p>
           <div className="mt-3 whitespace-pre-wrap break-words border border-black/10 bg-parchment px-3 py-3 text-sm text-black/70">
             {intakeTranscript}
@@ -231,26 +279,41 @@ export default function ChannelConversationPanel({
         className="border-t border-black/10 px-4 py-4 sm:px-6"
         data-ui-component-content="channel-reply-composer"
       >
-        <label htmlFor="channel-reply-body" className="block w-full text-sm font-bold text-navy" data-ui-copy="heading">
-          Reply as {firmName}
+        <label
+          htmlFor="channel-reply-body"
+          className="block w-full text-sm font-bold text-navy"
+          data-ui-copy="heading"
+        >
+          Write a reply
         </label>
         <textarea
           id="channel-reply-body"
           rows={4}
           maxLength={2000}
           value={draft}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            const nextDraft = event.target.value;
+            if (
+              pendingRequest.current &&
+              pendingRequest.current.body !== nextDraft.trim()
+            ) {
+              pendingRequest.current = null;
+            }
+            setDraft(nextDraft);
+          }}
           disabled={unavailableReason !== null || sending}
           placeholder="Write a plain-text reply"
           className="mt-2 min-h-[112px] w-full resize-y border border-black/15 bg-parchment px-3 py-2 text-sm text-deep-black focus:border-navy focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
         />
-        <div className="mt-2 flex w-full items-center justify-between gap-3 text-xs text-black/50">
-          <span>
+        <div className="mt-2 w-full space-y-1 text-xs text-black/50">
+          <p className="w-full" data-ui-copy="supporting">
             {draft.length}/2000 characters
             {channel === "instagram" && ` · ${instagramByteCount}/1000 Instagram bytes`}
-          </span>
+          </p>
           {replyWindow.isOpen && replyWindow.closesAt && !supportPreview && (
-            <span>Reply window closes {formatOccurredAt(replyWindow.closesAt)}</span>
+            <p className="w-full" data-ui-copy="supporting">
+              Reply window closes {formatOccurredAt(replyWindow.closesAt)}
+            </p>
           )}
         </div>
         {unavailableReason && (
@@ -272,7 +335,11 @@ export default function ChannelConversationPanel({
             {sending ? "Sending..." : "Send reply"}
           </button>
         </div>
-        <p className="mt-2 min-h-5 w-full text-sm text-black/65" aria-live="polite" data-ui-copy="supporting">
+        <p
+          className="mt-2 min-h-5 w-full text-sm text-black/65"
+          aria-live="polite"
+          data-ui-copy="supporting"
+        >
           {feedback}
         </p>
       </form>

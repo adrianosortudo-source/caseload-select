@@ -15,6 +15,8 @@ export type ConversationActorType = 'lead' | 'system' | 'operator' | 'lawyer';
 /** Shared portal compose limit. Channel-specific limits can be stricter. */
 export const CHANNEL_PORTAL_TEXT_LIMIT = 2000;
 export const CHANNEL_REPLY_WINDOW_MS = 24 * 60 * 60 * 1000;
+/** Provider and application clocks may differ slightly; larger future drift is not evidence. */
+export const CHANNEL_INBOUND_CLOCK_SKEW_MS = 5 * 60 * 1000;
 export const INSTAGRAM_TEXT_BYTE_LIMIT = 1000;
 export const WHATSAPP_TEXT_LIMIT = 4096;
 
@@ -67,10 +69,29 @@ interface ConversationEventRow {
   created_at: string;
 }
 
-function validTimestamp(value: string | null | undefined): number | null {
+function validTimestamp(
+  value: string | null | undefined,
+  now: Date,
+): number | null {
   if (!value) return null;
   const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? timestamp : null;
+  const nowMs = now.getTime();
+  if (!Number.isFinite(timestamp) || !Number.isFinite(nowMs)) return null;
+  if (timestamp > nowMs + CHANNEL_INBOUND_CLOCK_SKEW_MS) return null;
+  return timestamp;
+}
+
+/**
+ * Normalize verified provider time without manufacturing evidence. Missing,
+ * malformed, or unreasonably future values return null; callers may continue
+ * processing the inbound, but free-form outbound messaging must fail closed.
+ */
+export function normalizeAuthoritativeInboundAt(
+  value: string | null | undefined,
+  now: Date = new Date(),
+): string | null {
+  const timestamp = validTimestamp(value, now);
+  return timestamp === null ? null : new Date(timestamp).toISOString();
 }
 
 /**
@@ -81,7 +102,7 @@ export function isChannelReplyWindowOpen(
   lastInboundAt: string | null | undefined,
   now: Date = new Date(),
 ): boolean {
-  const inboundMs = validTimestamp(lastInboundAt);
+  const inboundMs = validTimestamp(lastInboundAt, now);
   const nowMs = now.getTime();
   if (inboundMs === null || !Number.isFinite(nowMs)) return false;
   return nowMs < inboundMs + CHANNEL_REPLY_WINDOW_MS;
@@ -91,7 +112,7 @@ export function getChannelReplyWindow(
   lastInboundAt: string | null | undefined,
   now: Date = new Date(),
 ): ChannelReplyWindow {
-  const inboundMs = validTimestamp(lastInboundAt);
+  const inboundMs = validTimestamp(lastInboundAt, now);
   if (inboundMs === null) {
     return {
       isOpen: false,
@@ -218,21 +239,37 @@ export async function loadChannelConversation(args: {
     args.screenedLeadId,
   );
   if (!resolvedLeadId) return null;
-  const { data, error } = await supabase
+  const timelineQuery = supabase
     .from('channel_conversation_events')
     .select(
       'id, channel, direction, source, body, status, meta_message_id, client_request_id, actor_type, actor_id, authoritative_inbound, occurred_at, failure_reason, created_at',
     )
     .eq('firm_id', args.firmId)
     .eq('screened_lead_id', resolvedLeadId)
-    .order('occurred_at', { ascending: true })
-    .order('created_at', { ascending: true })
+    .order('occurred_at', { ascending: false })
+    .order('created_at', { ascending: false })
     .limit(500);
-  if (error) throw new Error('conversation ledger lookup failed');
-  const rows = (data ?? []) as ConversationEventRow[];
-  const lastInboundAt = rows
-    .filter((row) => row.authoritative_inbound)
-    .at(-1)?.occurred_at ?? null;
+  const latestInboundQuery = supabase
+    .from('channel_conversation_events')
+    .select('occurred_at')
+    .eq('firm_id', args.firmId)
+    .eq('screened_lead_id', resolvedLeadId)
+    .eq('authoritative_inbound', true)
+    .order('occurred_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const [timeline, latestInbound] = await Promise.all([
+    timelineQuery,
+    latestInboundQuery,
+  ]);
+  if (timeline.error || latestInbound.error) {
+    throw new Error('conversation ledger lookup failed');
+  }
+  // The database returns the newest page. Reverse only that bounded page for
+  // chronological projection; do not derive the reply window from it.
+  const rows = ((timeline.data ?? []) as ConversationEventRow[]).slice().reverse();
+  const lastInboundAt =
+    (latestInbound.data?.occurred_at as string | null | undefined) ?? null;
   return {
     messages: collapseConversationEvents(rows),
     replyWindow: getChannelReplyWindow(lastInboundAt, args.now),
@@ -251,6 +288,11 @@ export interface RecordInboundEventArgs {
 export async function recordInboundConversationEvent(
   args: RecordInboundEventArgs,
 ): Promise<{ ok: boolean; duplicate?: boolean }> {
+  const occurredAt = normalizeAuthoritativeInboundAt(args.occurredAt);
+  if (!occurredAt) {
+    console.warn('[channel-conversation] rejected invalid authoritative inbound time');
+    return { ok: false };
+  }
   const { error } = await supabase.from('channel_conversation_events').insert({
     firm_id: args.firmId,
     screened_lead_id: args.screenedLeadId,
@@ -262,7 +304,7 @@ export async function recordInboundConversationEvent(
     meta_message_id: args.metaMessageId,
     actor_type: 'lead',
     authoritative_inbound: true,
-    occurred_at: args.occurredAt,
+    occurred_at: occurredAt,
   });
   if (!error) return { ok: true };
   if (error.code === '23505') return { ok: true, duplicate: true };
@@ -303,6 +345,11 @@ export async function claimOutboundConversationEvent(args: {
   throw new Error('outbound ledger claim failed');
 }
 
+export interface RecordOutboundConversationResult {
+  recorded: boolean;
+  duplicate: boolean;
+}
+
 export async function recordOutboundConversationResult(args: {
   firmId: string;
   channel: ConversationChannel;
@@ -311,7 +358,7 @@ export async function recordOutboundConversationResult(args: {
   sent: boolean;
   metaMessageId?: string | null;
   failureReason?: string | null;
-}): Promise<boolean> {
+}): Promise<RecordOutboundConversationResult> {
   const failureReason = args.sent
     ? null
     : (args.failureReason?.slice(0, 500) || 'channel send failed');
@@ -330,9 +377,10 @@ export async function recordOutboundConversationResult(args: {
     occurred_at: new Date().toISOString(),
     failure_reason: failureReason,
   });
-  if (!error || error.code === '23505') return true;
+  if (!error) return { recorded: true, duplicate: false };
+  if (error.code === '23505') return { recorded: false, duplicate: true };
   console.warn('[channel-conversation] outbound result ledger write failed');
-  return false;
+  return { recorded: false, duplicate: false };
 }
 
 export async function loadOutboundConversationResult(args: {

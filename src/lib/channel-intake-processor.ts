@@ -77,7 +77,10 @@ import {
   buildContactCaptureFollowUp,
   buildContactCaptureExhaustedMessage,
 } from '@/lib/channel-send';
-import { recordInboundConversationEvent } from '@/lib/channel-conversation';
+import {
+  normalizeAuthoritativeInboundAt,
+  recordInboundConversationEvent,
+} from '@/lib/channel-conversation';
 import { applyContactExtractionToState } from '@/lib/contact-extraction';
 import {
   applyNumericAnswerMapping,
@@ -231,11 +234,6 @@ function getSenderId(sender: ChannelSender): string {
   }
 }
 
-function normalizeInboundOccurredAt(value?: string): string {
-  const parsed = value ? Date.parse(value) : NaN;
-  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : new Date().toISOString();
-}
-
 /** Channel-specific metadata blob persisted with screened_leads / unconfirmed_inquiries. */
 function buildChannelMeta(sender: ChannelSender): Record<string, unknown> {
   switch (sender.channel) {
@@ -337,6 +335,7 @@ export async function processChannelInbound(
   const channel = sender.channel;
   const trimmed = text.trim();
   const senderId = getSenderId(sender);
+  const authoritativeInboundAt = normalizeAuthoritativeInboundAt(args.occurredAt);
 
   if (!trimmed) {
     return { persisted: false, reason: 'empty inbound text' };
@@ -406,18 +405,21 @@ export async function processChannelInbound(
           ? buildPostFinalizationDisambiguationMessage(recentFinalized.engine_state)
           : buildPostFinalizationFollowUpMessage(recentFinalized.engine_state);
         const screenedLeadId = recentFinalized.screened_lead_id as string;
-        await recordInboundConversationEvent({
-          firmId,
-          screenedLeadId,
-          channel,
-          body: trimmed,
-          metaMessageId: sender.messageMid,
-          occurredAt: normalizeInboundOccurredAt(args.occurredAt),
-        });
+        if (authoritativeInboundAt) {
+          await recordInboundConversationEvent({
+            firmId,
+            screenedLeadId,
+            channel,
+            body: trimmed,
+            metaMessageId: sender.messageMid,
+            occurredAt: authoritativeInboundAt,
+          });
+        }
         const sendResult = await sendChannelMessage({
           firmId,
           sender,
           text: reply,
+          authoritativeInboundAt,
           ledger: {
             screenedLeadId,
             source: 'intake_automation',
@@ -549,6 +551,7 @@ export async function processChannelInbound(
         firmId,
         sender,
         text: clarificationText,
+        authoritativeInboundAt,
       });
       // Persist state UNCHANGED so the next inbound resumes from the
       // same getNextStep slot. follow_up_count is NOT incremented —
@@ -853,6 +856,7 @@ export async function processChannelInbound(
           firmId,
           sender,
           text: exhaustedText,
+          authoritativeInboundAt,
         });
         if (!exhaustedSend.sent) {
           console.warn(
@@ -900,6 +904,7 @@ export async function processChannelInbound(
       firmId,
       sender,
       text: followUpText,
+      authoritativeInboundAt,
     });
 
     if (!sendResult.sent) {
@@ -1065,6 +1070,7 @@ export async function processChannelInbound(
         firmId,
         sender,
         text: openingQuestion,
+        authoritativeInboundAt,
       });
       if (sendResult.sent) {
         const persistedState: EngineState = {
@@ -1212,6 +1218,7 @@ export async function processChannelInbound(
         firmId,
         sender,
         text: questionText,
+        authoritativeInboundAt,
       });
 
       if (sendResult.sent) {
@@ -1284,11 +1291,11 @@ export async function processChannelInbound(
     priorFollowUpCount,
     isResume,
     fallbackTranscript: trimmed,
-    inboundEvent: sender.messageMid
+    inboundEvent: sender.messageMid && authoritativeInboundAt
       ? {
           body: trimmed,
           metaMessageId: sender.messageMid,
-          occurredAt: normalizeInboundOccurredAt(args.occurredAt),
+          occurredAt: authoritativeInboundAt,
         }
       : undefined,
   });
@@ -1529,6 +1536,7 @@ export async function finalizeChannelLead(
         firmId,
         sender,
         text: closing,
+        authoritativeInboundAt: inboundEvent?.occurredAt ?? null,
         ledger: inboundEvent
           ? {
               screenedLeadId: inserted.id as string,

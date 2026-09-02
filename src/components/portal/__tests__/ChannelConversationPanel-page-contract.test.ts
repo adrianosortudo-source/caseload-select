@@ -40,4 +40,11 @@ describe("triage lead conversation integration", () => {
     expect(pageSource).toContain("messages={conversation?.messages ?? []}");
     expect(pageSource).toContain("intakeTranscript={row.raw_transcript}");
   });
+
+  it("fails the composer closed when the portal session lacks a stable actor UUID", () => {
+    expect(pageSource).toContain(
+      "actorIdentityAvailable={isStableActorId(session?.lawyer_id)}",
+    );
+    expect(pageSource).toMatch(/function isStableActorId[\s\S]*?\^\[0-9a-f\]/);
+  });
 });
