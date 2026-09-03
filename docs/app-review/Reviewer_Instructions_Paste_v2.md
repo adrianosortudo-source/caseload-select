@@ -2,7 +2,7 @@
 
 Use this version only after the production rehearsal passes, both v2 clips pass `screencasts/SHOTLIST_v2.md`, and the pre-submission blocker below is cleared. Confirm the live Instagram permission label before pasting.
 
-> PRE-SUBMISSION BLOCKER: Controlled, irreversible redaction is the selected resolution, but this paste block is not authorized until the database and application path are deployed, counsel approves the retained envelope and retention boundary, processor action evidence and backup-restore controls are verified, and a fresh fictional post-ledger deletion rehearsal passes in production. A `provider_managed` status is not deletion evidence. Rehearsal and recording may continue after the production send gates pass. Final Meta submission may not.
+> PRE-SUBMISSION BLOCKER: Controlled, irreversible redaction is the selected resolution, but this paste block is not authorized until the database and application path are deployed, counsel approves the retained envelope and retention boundary, backup-restore controls are verified, and a fresh fictional post-ledger deletion rehearsal passes in production. The deployed path must prove that `provider_managed` alone cannot mark cleanup complete. Provider support responses from Resend, HighLevel, or Supabase are separate follow-up work and are not required for this Meta submission. Rehearsal and recording may continue after the production send gates pass. Final Meta submission may not.
 
 Release basis: PRs #191, #193, and #195 are merged; production commit `fa3e092983b274c96fd1d22b8fa0091988baeb25` is READY; migrations `20260901231830`, `20260902102620`, and `20260902111504` are applied and verified.
 

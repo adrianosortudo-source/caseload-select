@@ -97,6 +97,8 @@ Each clip must be one continuous take from authoritative Meta identity, through 
 - [ ] H.264 MP4
 - [ ] 1920 x 1080 or better
 - [ ] 30 fps
+- [ ] Video only, with no audio stream
+- [ ] Required on-screen caption is readable
 - [ ] Under three minutes
 - [ ] Under 100 MB
 - [ ] English UI
@@ -107,7 +109,7 @@ Each clip must be one continuous take from authoritative Meta identity, through 
 If compression is needed, preserve the original and make a separate upload copy:
 
 ```powershell
-ffmpeg -i .\input.mp4 -c:v libx264 -preset medium -crf 24 -c:a aac -b:a 128k -movflags +faststart .\upload.mp4
+ffmpeg -i .\input.mp4 -c:v libx264 -preset medium -crf 24 -an -movflags +faststart .\upload.mp4
 ```
 
 Watch the full upload copy before attaching it.
@@ -116,7 +118,9 @@ Watch the full upload copy before attaching it.
 
 Adriano selected controlled, irreversible redaction as the resolution. PRs #198 and #199 shipped the service-only, tenant-scoped operation and migration. The fresh fictional production rehearsal passed the database, application, Storage, authorization, idempotency, tenant-isolation, append-only, pending-message, and expiry-invocation checks recorded in `deletion-flow-verification.md`.
 
-That rehearsal does not clear the four open release gates below. It also identified a completion-semantics defect: the current application and database can mark external cleanup complete when Meta or Resend is recorded only as `provider_managed`. That location status is not action evidence and does not satisfy the public commitment. The completion path must be corrected and reverified before submission.
+That rehearsal did not clear the remaining Meta-relevant release gates below. It also identified a completion-semantics defect: the application and database could mark external cleanup complete when Meta or Resend was recorded only as `provider_managed`. PR #202 corrects that contract; the merged change must be deployed, migrated, and reverified before submission.
+
+After deployment, treat `completed` and `not_applicable` as privileged-operator attestations, not provider-issued evidence. Record either status only after the operator checks the applicable disposition. Treat `provider_managed` only as a routing marker; it cannot close external cleanup by itself.
 
 This does not block rehearsal or recording after the production send gates pass. It does block final Meta submission.
 
@@ -126,12 +130,13 @@ Do not submit the Meta draft until all of these checks pass:
 - [x] The scheduled three-year audit-envelope expiry is deployed and its production invocation is verified.
 - [x] Every in-scope attachment location and retained audit ledger in the fictional fixture is included in deletion and expiry verification.
 - [x] A fresh fictional post-ledger deletion rehearsal is appended to `deletion-flow-verification.md`.
-- [ ] Correct the completion path so `provider_managed` alone cannot produce `external_cleanup_status: complete` or a successful completion notice, then rerun the affected checks.
-- [ ] Close the pending legacy-backfill GHL disposition recorded in `deletion-flow-verification.md`.
-- [ ] Confirm processor handling with request-specific action or retention evidence for Meta, Resend, GHL, and Supabase. A `provider_managed` status alone does not clear this gate.
+- [ ] Deploy PR #202 and migration `20260903011450`, then reverify that `provider_managed` alone cannot produce `external_cleanup_status: complete` or a successful completion notice.
+- [ ] Verify with Meta-specific application evidence that the deployed deletion path removes direct identifiers and message content from the operational copies created from Messenger and Instagram intake. A Meta support response is required only if an app-specific deletion question remains unresolved.
 - [ ] Document account-specific backup-expiry schedules and complete a safe restore rehearsal proving completed deletions are reapplied before restored data returns to use.
 - [ ] Obtain privacy-counsel approval of the audit envelope, retained-key reidentification assessment, and three-year retention period.
 - [ ] Reconfirm that production `/privacy` and `/data-deletion` wording matches the verified end state after the completion-semantics correction and counsel review.
+
+The legacy HighLevel disposition and any Resend, HighLevel, or Supabase support requests are separate privacy-compliance follow-up work. They do not block this Meta submission. Do not send a provider support draft without separate provider-specific approval.
 
 ## 8. Clean the live Meta draft
 
@@ -169,7 +174,7 @@ Do not use `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, `s
 - [ ] Each clip shows `Message thread`, the correct `Channel:` row, `Send reply`, `Reply sent.`, and the identical native receipt.
 - [ ] No real or unrelated lead data is visible.
 - [x] The controlled-redaction resolution is shipped and the post-ledger fictional deletion rehearsal is recorded as passed for the tested CaseLoad Select stores and controls.
-- [ ] The provider-managed completion-semantics defect and all four remaining privacy release gates in Section 7 are closed.
+- [ ] The PR #202 completion-semantics correction and the remaining Meta-relevant privacy gates in Section 7 are closed.
 - [ ] Privacy, terms, and deletion URLs open publicly.
 - [ ] Operator contact is `adriano@caseloadselect.ca`.
 

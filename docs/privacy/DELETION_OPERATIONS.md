@@ -72,17 +72,19 @@ Use fictional data only. Do not place secrets, access tokens, real client detail
 
 ## Release gates
 
-The following decisions remain open and block release of the public copy and final Meta submission:
+The following decisions remain open for the privacy release and public deletion wording. Apply them to the Meta submission only where they directly affect the deployed handling of Meta-derived data:
 
 - Privacy counsel approves the three-year provisional audit-envelope limit or supplies a replacement period.
 - Privacy counsel confirms that the retained fields and available joins do not create a reasonable reidentification path.
 - Engineering disconnects or otherwise proves safe every retained screened-lead key that can join to a firm-controlled matter or another identifying record.
 - The operator confirms the actual backup-expiry schedules for every processor and documents how deletion requests are replayed after restoration.
-- The operator confirms the deletion or escalation procedure for each downstream processor and records evidence beyond a `provider_managed` status.
+- The operator confirms the deletion or escalation procedure for each downstream processor and records evidence beyond a `provider_managed` status. This is broader privacy-compliance follow-up; support responses from Resend, HighLevel, and Supabase do not block Meta App Review.
 - Engineering inventories every in-scope attachment location and proves that the matched deletion workflow removes it or records a recoverable failure.
 - Engineering applies the approved expiry boundary to every retained audit ledger in scope, including consent and attribution evidence where applicable.
 - Engineering ships the database and application changes through an approved pull request and production migration.
 - Engineering verifies that the scheduled expiry drains boundary and backlog cases within the approved maximum and records production invocation evidence.
 - The post-ledger fictional deletion rehearsal passes in production and is recorded in `docs/app-review/deletion-flow-verification.md`.
 
-Until every gate is complete, the Meta draft may be prepared but must not be submitted.
+For Meta submission, verify the deployed deletion/redaction path for the operational copies created from Messenger and Instagram intake, the public privacy and deletion URLs, and the Meta-specific reviewer evidence. A provider support response is optional and should be pursued only when a Meta-specific question cannot otherwise be resolved. The drafts in `PROVIDER_SUPPORT_REQUEST_DRAFTS.md` remain unsent follow-up material.
+
+Until every Meta-relevant gate is complete, the Meta draft may be prepared but must not be submitted. Separate downstream-provider support work does not control that determination.

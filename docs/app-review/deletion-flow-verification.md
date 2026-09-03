@@ -142,16 +142,16 @@ The new rehearsal must use one fresh fictional Meta conversation and prove:
 - unauthorized roles cannot invoke redaction;
 - normal conversation-ledger updates and deletes remain blocked;
 - pending delivery work cannot reintroduce the removed data;
-- processor action evidence is recorded; a `provider_managed` status alone is not deletion proof; and
+- the deployed application removes Meta-derived direct identifiers and message content from its controlled operational copies, and `provider_managed` alone cannot mark cleanup complete; and
 - a backup-restore rehearsal proves deleted data cannot return to operational use without replaying the deletion request.
 
 Record the production commit, migration ledger version, execution time, fictional lead ID, sanitized before-and-after field inventory, and operator sign-off. Keep the Meta submission blocker open if any check is incomplete.
 
 ---
 
-## Post-ledger production rehearsal — 2026-09-03
+## Post-ledger production rehearsal: 2026-09-03
 
-**Status:** Database, application, Storage, authorization, idempotency, tenant-isolation, append-only, and pending-message checks passed. External-provider, backup-restore, and privacy-counsel gates remain open; this rehearsal does not authorize Meta submission.
+**Status:** Database, application, Storage, authorization, idempotency, tenant-isolation, append-only, and pending-message checks passed. Deployment of the later completion-semantics correction, backup-restore, and privacy-counsel gates remain open; this rehearsal does not authorize Meta submission. Multi-provider support responses are tracked separately and are not Meta submission gates.
 
 **Production commit:** `fde4f307f34eb12a74f06a57d2af9c6fdc9611eb` (PR #199 merge commit)
 
@@ -186,7 +186,7 @@ The request was executed through the same production operator endpoint intended 
 
 `POST /api/admin/leads/L-S1-963449d3-b679-4556-9a4a-8c62c8f5ccee/purge`
 
-The endpoint returned HTTP `200`, the expected deletion-request UUID, `external_cleanup_status: complete`, and the irreversible-redaction confirmation. The Storage coordinator reported one deleted attachment object. The fictional data never entered GHL, Meta, or Resend, so GHL was recorded `not_applicable`; the database contract recorded the Meta and Resend locations as `provider_managed` pending the separate provider-policy release gate described below.
+The endpoint returned HTTP `200`, the expected deletion-request UUID, `external_cleanup_status: complete`, and the irreversible-redaction confirmation. The Storage coordinator reported one deleted attachment object. The fictional data never entered GHL, Meta, or Resend, so GHL was recorded `not_applicable`; the database contract recorded the Meta and Resend locations as `provider_managed`, which prompted the later PR #202 completion-semantics correction described below.
 
 ### Sanitized after-state
 
@@ -227,23 +227,29 @@ The retained deletion tombstone contains the firm and screened-lead coordinator 
 
 Supabase's post-DDL security advisor reported no new warning tied to the privacy migration. Its `RLS enabled, no policy` information messages for the locked ledgers are expected deny-by-default behavior. Existing unrelated warnings remain outside this release.
 
-### Open gates — Meta submission remains blocked
+### Open Meta-relevant gates: submission remains blocked
 
-1. **Legacy backfill external cleanup:** one migration-created request remains pending. Its manifest has no Storage object, no Meta sender ID, and no email or phone selector, but it retains a non-personal lead-reference selector that requires an actual GHL disposition before the request can be closed.
-2. **Provider evidence:** `provider_managed` is a location/disposition marker, not proof of provider deletion or an approved retention period. Current Meta, Resend, GHL, and Supabase evidence must be attached to the release record.
+1. **Completion semantics:** PR #202 must be deployed with migration `20260903011450` and reverified so `provider_managed` alone cannot mark external cleanup complete.
+2. **Meta-derived operational copies:** the final fictional verification must provide Meta-specific application evidence that direct identifiers and message content originating from Messenger or Instagram are removed from the CaseLoad Select stores in scope. A Meta support response is required only if an app-specific deletion question remains unresolved.
 3. **Backup expiry and restore replay:** account-level verification confirmed that the production Supabase organization is on the Free plan. The Supabase CLI reported WAL-G enabled, PITR disabled, no enumerated backup snapshots, and no physical-backup metadata. There is therefore no account-visible production restore point or provider-backed expiry schedule to rehearse. A fictional local logical-restore rehearsal proved that the redaction RPC can reapply an externally retained request, but also proved that restoring a pre-deletion snapshot removes the in-database request tombstone and leaves the database recovery list empty. An external durable deletion registry and a restore procedure that replays it before restored data returns to use remain required. No production restore was attempted.
 4. **Privacy counsel:** counsel has not yet approved the provisional three-year audit-envelope period or confirmed that the retained keys and joins do not reasonably reidentify a person.
 
-### Provider-document review — observed 2026-09-03
+### Separate privacy-compliance follow-up, not a Meta gate
 
-This review records public provider statements; it does not substitute for account-specific confirmation or execution evidence.
+- One migration-created legacy request remains pending with a non-personal HighLevel lead-reference selector. Resolve it through the controlled workflow when separately authorized.
+- Preserve the Resend, HighLevel, and Supabase retention and deletion questions in the provider evidence record. Do not send support drafts without provider-specific approval.
+- Provider support responses from Resend, HighLevel, or Supabase are not required for this Meta submission.
+
+### Provider-document review: observed 2026-09-03
+
+This review records public provider statements for the broader privacy program. It does not substitute for account-specific confirmation or execution evidence, and responses from Resend, HighLevel, or Supabase are not Meta submission gates.
 
 - [Supabase database backups](https://supabase.com/docs/guides/platform/backups) states that Pro, Team, and Enterprise projects receive daily database backups, retained for 7 days on Pro, 14 days on Team, and up to 30 days on Enterprise. It also states that database backups do not include Storage objects, so restoring a database backup does not restore a deleted Storage object. Account verification on 2026-09-03 identified the production organization as Free, while `supabase backups list --project-ref ssxryjxifwiivghglqer --output json` returned `walg_enabled: true`, `pitr_enabled: false`, `backups: []`, and an empty `physical_backup_data` object. WAL-G enablement alone is not evidence of a retained, restorable backup.
 - [Resend's GDPR page](https://resend.com/security/gdpr) states that email and log data is retained for 30 days on Free, Pro, and Scale plans, backups persist for 7 days, and a customer can contact Resend when a specific message must be removed sooner. No request-specific Resend confirmation has been obtained for this release.
 - [HighLevel's contact-deletion guidance](https://help.gohighlevel.com/support/solutions/articles/155000000583) states that a deleted contact can be restored for 60 days, while associated conversations, notes, tasks, and activity history are not restored. The pending legacy selector must be searched and, if matched, deleted through the account before the migration-created request is closed.
 - Meta's account-specific retention/deletion evidence remains unverified. The release record must not infer it from the local `provider_managed` marker.
 
-### Fictional local restore/replay rehearsal — 2026-09-03
+### Fictional local restore/replay rehearsal: 2026-09-03
 
 This rehearsal used an ephemeral local Supabase/Postgres database containing only fictional data. Repository migrations were applied through `20260902210124`; production was not changed and no paid Supabase resource was created.
 
@@ -257,4 +263,4 @@ The logical restore emitted warnings for Supabase-managed `pg_cron`, Realtime, a
 
 **Rehearsal conclusion:** replay is idempotent and effective when an outstanding request is supplied from outside the restored database. Automatic replay is not implemented because the only current tombstone is part of the database being restored. Before release, completed and pending deletion request identifiers must be durably retained outside the database backup boundary, and the production restore runbook must block operational access until that external registry has been replayed and verified.
 
-**Engineering sign-off:** The shipped implementation and fictional production deletion path passed the controls listed above. Final privacy/release sign-off remains withheld until all four open gates are supported by evidence.
+**Engineering sign-off:** The shipped implementation and fictional production deletion path passed the controls listed above. Final Meta submission sign-off remains withheld until the Meta-relevant gates above are supported. Broader privacy-program follow-up remains separately open and does not control Meta App Review readiness.
