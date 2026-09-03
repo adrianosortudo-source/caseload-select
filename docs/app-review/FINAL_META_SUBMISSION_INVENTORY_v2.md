@@ -33,6 +33,7 @@ Use these repository documents as the active package:
 5. `docs/app-review/deletion-flow-verification.md`
 6. `docs/privacy/PROVIDER_ACCOUNT_EVIDENCE_2026-09-02.md`
 7. `docs/privacy/PRIVACY_COUNSEL_APPROVAL_REQUEST.md`
+8. `docs/privacy/PROVIDER_SUPPORT_REQUEST_DRAFTS.md`
 
 Treat `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, and `screencasts/README.md` as historical first-submission material. Do not paste or execute them for this resubmission.
 

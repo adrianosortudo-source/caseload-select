@@ -60,9 +60,19 @@ HighLevel's public [Restore Deleted Contacts](https://help.gohighlevel.com/suppo
 
 ## Other provider evidence status
 
+### Authenticated Meta configuration
+
+Read-only inspection of App Settings > Basic for App ID `1007304805285554` under Business ID `2191422434947205` showed these configured public endpoints:
+
+- Privacy policy URL: `https://app.caseloadselect.ca/privacy`
+- Terms of service URL: `https://app.caseloadselect.ca/terms`
+- Data deletion instructions URL: `https://app.caseloadselect.ca/data-deletion`
+
+This proves that the three public endpoints are configured on the identified app. It does not prove that Meta applied a request-specific deletion, establish a Meta retention schedule, or clear the provider-evidence gate.
+
 | Provider | Account-specific evidence captured | Current conclusion |
 |---|---|---|
-| Meta | An authenticated App Review tab was observed for App ID `1007304805285554` under Business ID `2191422434947205`; retention/deletion settings were not captured | Open. App-review access does not establish request-specific deletion or retention behavior |
+| Meta | Authenticated App Settings > Basic confirms the privacy, terms, and data-deletion URLs listed above | Open. Configured endpoints do not establish request-specific deletion or retention behavior |
 | Resend | None | Open. Public policy statements in `docs/app-review/deletion-flow-verification.md` are not account-specific evidence |
 | Supabase | Account verification identifies the production organization as Free. The project backup API/CLI returned `walg_enabled: true`, `pitr_enabled: false`, `backups: []`, and `physical_backup_data: {}` | Open. There is no account-visible restore point or expiry schedule. PR #203 proves manual replay from an external request, not automatic replay or an external durable registry |
 | GHL | Current-record API evidence plus two completed Bulk Actions Delete jobs dated 2026-08-20 and 2026-08-10 | Open. View details did not expose deleted-contact identities, and Restore was not authorized |
@@ -77,6 +87,7 @@ HighLevel's public [Restore Deleted Contacts](https://help.gohighlevel.com/suppo
 4. If equivalent provider evidence establishes that neither job contains the selector, preserve that evidence and record a narrowly worded not-found disposition. Do not characterize the result as provider-confirmed permanent deletion.
 5. Capture the production account's applicable retention settings for Resend, Meta, and GHL where their authenticated dashboards expose them. Supabase account state is now recorded, but the external durable deletion registry and restore-blocking replay procedure proven necessary by PR #203 remain open.
 6. Keep deletion request `a932fae3-479d-400c-a94a-ca510c281879` pending until the controlled workflow accepts the supported disposition with durable evidence.
+7. If provider support is needed, use the exact drafts in `PROVIDER_SUPPORT_REQUEST_DRAFTS.md` only after Adriano approves the named provider, destination, and final text at action time.
 
 ## Evidence boundary
 
