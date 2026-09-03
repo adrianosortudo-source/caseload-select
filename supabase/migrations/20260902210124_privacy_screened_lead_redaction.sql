@@ -1405,7 +1405,7 @@ begin
     end if;
   end if;
 
-  select pg_catalog.coalesce(
+  select coalesce(
            pg_catalog.jsonb_agg(
              pg_catalog.jsonb_build_object(
                'channel', subjects.channel,
@@ -2000,7 +2000,7 @@ begin
     );
   end if;
 
-  select pg_catalog.coalesce(
+  select coalesce(
            pg_catalog.jsonb_agg(
              pg_catalog.jsonb_build_object(
                'deletion_request_id', pending.id,
@@ -2126,7 +2126,7 @@ begin
        limit p_limit
     ) as eligible;
 
-  v_request_count := pg_catalog.coalesce(pg_catalog.array_length(v_request_ids, 1), 0);
+  v_request_count := coalesce(pg_catalog.array_length(v_request_ids, 1), 0);
 
   if v_request_count = 0 then
     return pg_catalog.jsonb_build_object(
