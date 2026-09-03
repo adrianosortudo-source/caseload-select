@@ -10,7 +10,7 @@
 import 'server-only';
 
 import { supabaseAdmin as supabase } from './supabase-admin';
-import { registerDeletionIntent } from './privacy-deletion-registry';
+import { registerDeletionAppliedReceipt, registerDeletionIntent } from './privacy-deletion-registry';
 
 const INTAKE_ATTACHMENTS_BUCKET = 'intake-attachments';
 const STORAGE_REMOVE_BATCH = 1000;
@@ -333,6 +333,21 @@ export async function eraseScreenedLead(
       pending_cleanup_categories: [],
       error: payload.error ?? 'screened lead redaction refused',
     };
+  }
+
+  // If this second immutable write fails, do not report success: the intent
+  // remains replayable and a retry can safely record the receipt.
+  try {
+    await registerDeletionAppliedReceipt({
+      deletionRequestId: requestId,
+      redactedCount: payload.redacted_count ?? 0,
+      appliedAt: payload.privacy_redacted_at ?? new Date().toISOString(),
+    });
+  } catch {
+    return { ok: false, database_redacted: true, redacted_count: payload.redacted_count ?? 0,
+      deletion_request_id: requestId, privacy_redacted_at: payload.privacy_redacted_at ?? null,
+      external_cleanup_status: payload.external_cleanup_status ?? 'pending', storage_objects_removed: 0,
+      pending_cleanup_categories: ['external_deletion_registry_receipt'], error: 'external privacy registry receipt is unavailable' };
   }
 
   const base = {

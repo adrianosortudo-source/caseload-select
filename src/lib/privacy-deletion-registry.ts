@@ -10,6 +10,7 @@ import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { Redis } from '@upstash/redis';
 
 const PREFIX = 'privacy:deletion-registry:v1:';
+const APPLIED_PREFIX = 'privacy:deletion-registry-applied:v1:';
 const VERSION = 1;
 
 export type RegistryIntent = Readonly<{
@@ -72,5 +73,22 @@ export async function registerDeletionIntent(intent: RegistryIntent): Promise<'c
   if (inserted === 'OK') return 'created';
   const existing = await redis.get<string>(registryKey);
   if (!existing || !sameIntent(decryptRegistryIntent(existing, intent.deletionRequestId), intent)) throw new Error('privacy registry request collision');
+  return 'existing';
+}
+
+/** A separate immutable receipt makes the crash boundary observable without
+ * mutating the original intent record. */
+export async function registerDeletionAppliedReceipt(input: {
+  deletionRequestId: string; redactedCount: number; appliedAt: string;
+}): Promise<'created' | 'existing'> {
+  if (!Number.isInteger(input.redactedCount) || input.redactedCount < 0) throw new Error('privacy registry receipt is invalid');
+  const redis = Redis.fromEnv();
+  const keyName = `${APPLIED_PREFIX}${input.deletionRequestId}`;
+  const body = encryptRegistryIntent({ deletionRequestId: input.deletionRequestId, firmId: 'receipt', leadId: String(input.redactedCount), reason: 'internal_test_record', recordedAt: input.appliedAt });
+  const inserted = await redis.set(keyName, body, { nx: true });
+  if (inserted === 'OK') return 'created';
+  const existing = await redis.get<string>(keyName);
+  const decoded = existing && decryptRegistryIntent(existing, input.deletionRequestId);
+  if (!decoded || decoded.firmId !== 'receipt' || decoded.leadId !== String(input.redactedCount)) throw new Error('privacy registry receipt collision');
   return 'existing';
 }
