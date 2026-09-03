@@ -32,11 +32,16 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  return NextResponse.json({
-    ok: true,
-    ...result,
-    channel_message_dedup_cleanup: dedupError
-      ? { ok: false, error: dedupError.message }
-      : { ok: true },
-  });
+  const retentionOk = result.errors.length === 0;
+
+  return NextResponse.json(
+    {
+      ok: retentionOk,
+      ...result,
+      channel_message_dedup_cleanup: dedupError
+        ? { ok: false, error: dedupError.message }
+        : { ok: true },
+    },
+    { status: retentionOk ? 200 : 500 },
+  );
 }

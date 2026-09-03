@@ -46,6 +46,7 @@ import {
   claimChannelMessage,
   releaseChannelMessageClaim,
 } from '@/lib/channel-message-dedup';
+import { isChannelSubjectPrivacySuppressed } from '@/lib/screened-lead-erasure';
 import {
   processChannelInbound,
   type MessengerSender,
@@ -177,8 +178,18 @@ export async function POST(req: NextRequest) {
       const firm = await resolveFirmByFacebookPageId(event.pageId);
       if (!firm) {
         console.warn(
-          `[messenger-intake] no firm mapped to facebook_page_id=${event.pageId}; dropping mid=${event.mid}`,
+          `[messenger-intake] no firm mapped to facebook_page_id=${event.pageId}; dropping inbound event`,
         );
+        continue;
+      }
+
+      if (
+        await isChannelSubjectPrivacySuppressed({
+          firmId: firm.firmId,
+          channel: 'facebook',
+          senderId: event.senderId,
+        })
+      ) {
         continue;
       }
 
@@ -189,11 +200,12 @@ export async function POST(req: NextRequest) {
       const claim = await claimChannelMessage({
         firmId: firm.firmId,
         channel: 'facebook',
+        senderId: event.senderId,
         messageMid: event.mid,
       });
       if (claim.duplicate) {
         console.log(
-          `[messenger-intake] duplicate delivery mid=${event.mid} firm=${firm.firmName}; skipping`,
+          `[messenger-intake] duplicate delivery firm=${firm.firmName}; skipping`,
         );
         continue;
       }
@@ -227,7 +239,7 @@ export async function POST(req: NextRequest) {
           })
           .catch(async (err) => {
             console.error(
-              `[messenger-intake] processChannelInbound threw firm=${firm.firmName} mid=${event.mid}:`,
+              `[messenger-intake] processChannelInbound threw firm=${firm.firmName}:`,
               err,
             );
             // The crashed run produced no lead, so release the claim and

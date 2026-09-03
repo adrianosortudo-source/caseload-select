@@ -13,8 +13,10 @@ import { sendWhatsappMessage } from '@/lib/whatsapp-send';
 import type { ChannelSender } from '@/lib/channel-intake-processor';
 import { getI18n } from '@/lib/screen-engine/i18n/loader';
 import type { SupportedLanguage } from '@/lib/screen-engine/types';
+import { isChannelSubjectPrivacySuppressed } from '@/lib/screened-lead-erasure';
 import {
   claimOutboundConversationEvent,
+  isScreenedLeadPrivacyRedactedForFirm,
   isChannelReplyWindowOpen,
   loadChannelConversation,
   loadOutboundConversationResult,
@@ -35,6 +37,7 @@ export interface ChannelSendResult {
   code?:
     | 'validation_failed'
     | 'lead_not_found'
+    | 'lead_redacted'
     | 'reply_window_closed'
     | 'duplicate_request'
     | 'request_in_progress'
@@ -92,6 +95,34 @@ export async function sendChannelMessage(
     return { sent: false, reason: validation.reason, code: 'validation_failed' };
   }
 
+  const channelSubjectId =
+    args.sender.channel === 'facebook'
+      ? args.sender.senderPsid
+      : args.sender.channel === 'instagram'
+        ? args.sender.senderIgsid
+        : args.sender.senderWaId;
+  try {
+    if (
+      await isChannelSubjectPrivacySuppressed({
+        firmId: args.firmId,
+        channel: args.sender.channel,
+        senderId: channelSubjectId,
+      })
+    ) {
+      return {
+        sent: false,
+        reason: 'channel subject is suppressed following privacy erasure',
+        code: 'lead_redacted',
+      };
+    }
+  } catch {
+    return {
+      sent: false,
+      reason: 'privacy suppression register unavailable',
+      code: 'ledger_unavailable',
+    };
+  }
+
   const authoritativeInboundAt = normalizeAuthoritativeInboundAt(
     args.authoritativeInboundAt,
   );
@@ -110,6 +141,18 @@ export async function sendChannelMessage(
         };
       }
       ledger = { ...args.ledger, screenedLeadId: resolvedLeadId };
+      if (
+        await isScreenedLeadPrivacyRedactedForFirm(
+          args.firmId,
+          resolvedLeadId,
+        )
+      ) {
+        return {
+          sent: false,
+          reason: 'screened lead personal data has been redacted',
+          code: 'lead_redacted',
+        };
+      }
     } catch {
       console.warn('[channel-send] outbound ledger claim failed');
       return {
@@ -158,6 +201,13 @@ export async function sendChannelMessage(
         text: args.text,
         ledger,
       });
+      if (claim.redacted) {
+        return {
+          sent: false,
+          reason: 'screened lead personal data has been redacted',
+          code: 'lead_redacted',
+        };
+      }
       if (!claim.claimed) {
         const prior = await loadOutboundConversationResult({
           firmId: args.firmId,
@@ -200,6 +250,17 @@ export async function sendChannelMessage(
           metaMessageId: result.messageId,
           failureReason: result.reason,
         });
+        if (record.redacted) {
+          return {
+            sent: false,
+            deliveryUnknown: result.sent || undefined,
+            messageId: result.messageId,
+            reason: result.sent
+              ? 'delivery may have occurred after the lead was redacted; terminal personal data was not persisted'
+              : 'screened lead personal data has been redacted',
+            code: 'lead_redacted',
+          };
+        }
         if (record.recorded) return result;
         if (record.duplicate) {
           const prior = await loadOutboundConversationResult({
@@ -262,6 +323,19 @@ export async function sendChannelMessage(
         sent: false,
         reason: 'Meta reply window is closed or has no authoritative inbound evidence',
         code: 'reply_window_closed',
+      });
+    }
+    if (
+      ledger &&
+      (await isScreenedLeadPrivacyRedactedForFirm(
+        args.firmId,
+        ledger.screenedLeadId,
+      ))
+    ) {
+      return finish({
+        sent: false,
+        reason: 'screened lead personal data has been redacted',
+        code: 'lead_redacted',
       });
     }
   } catch {

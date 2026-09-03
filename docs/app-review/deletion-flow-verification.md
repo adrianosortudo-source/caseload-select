@@ -2,6 +2,8 @@
 
 > SCOPE NOTICE: This May 2026 exercise predates `channel_conversation_events`. It verifies the fields and tables named below only. It does not establish that append-only channel conversation ledger content is erased or anonymized, and it must not be used to make that claim in the v2 reviewer package.
 
+> CURRENT RELEASE GATE: A new post-ledger fictional deletion rehearsal is required after the redaction implementation is shipped. Until that rehearsal passes, this historical record does not clear the Meta submission blocker.
+
 This file records the timestamped, end-to-end deletion exercise run before App Review submission. Required by `Phase11_Submission_Package.md` Section 6.3 so the deletion claim on the App Review form rests on a real recent exercise.
 
 Meta's reviewer can request a re-run; the operator can repeat the procedure live in a screen-share if needed.
@@ -33,7 +35,7 @@ For the verification run, the deletion request was self-initiated by the operato
 
 **Sender:** Operator-simulated
 **Received at:** `2026-05-24T22:07Z` (within the same minute as the purge)
-**Subject:** `Data deletion request — lead ID L-2026-05-14-5EQ`
+**Subject:** `Data deletion request: lead ID L-2026-05-14-5EQ`
 **Body:** `Please delete the personal information associated with this lead.`
 
 ---
@@ -52,7 +54,7 @@ POST https://app.caseloadselect.ca/api/admin/leads/L-2026-05-14-5EQ/purge
 Authorization: Bearer $CRON_SECRET
 ```
 
-**Note on the identifier:** the route's `purgeLeadPii` matches `screened_leads.lead_id` (text format `L-YYYY-MM-DD-XXX`), not the table's UUID `id`. The verification run first attempted with the UUID — route returned `ok:true` but the row was unchanged (enumeration-defence no-op). Re-running with the text `lead_id` produced the expected anonymization.
+**Note on the identifier:** the route's `purgeLeadPii` matches `screened_leads.lead_id` (text format `L-YYYY-MM-DD-XXX`), not the table's UUID `id`. The verification run first attempted with the UUID; the route returned `ok:true` but the row was unchanged (enumeration-defence no-op). Re-running with the text `lead_id` produced the expected anonymization.
 
 **Response:**
 ```json
@@ -106,9 +108,9 @@ Skipped for this internal verification run. In a real subject-initiated flow, th
 
 ---
 
-## Sign-off
+## Historical sign-off
 
-The flow produces the expected end state. The deletion claim in the App Review submission package (`Phase11_Submission_Package.md` Section 6) rests on this exercise. The route is wired through both the legacy `leads` table (uuid id) and the `screened_leads` Screen 2.0 table (text `lead_id`).
+The flow produced the expected end state for the pre-ledger fields listed above. It does not verify current conversation-ledger redaction, secondary-store coverage, backup replay, or the current public commitment.
 
 **Operator signature:** Adriano Domingues
 **Date of sign-off:** `2026-05-24`
@@ -118,8 +120,29 @@ The flow produces the expected end state. The deletion claim in the App Review s
 ## Notes
 
 - The implementation anonymises rather than deletes the row (per `lib/data-retention.ts` `purgeLeadPii`). Meta accepts this approach when the policy discloses it, which `/data-deletion` does.
-- `brief_html` and `brief_json` are replaced with sentinel placeholders, not nulled — historical reporting (counts, timing, conversion) remains correct without retaining personal information.
+- `brief_html` and `brief_json` are replaced with sentinel placeholders, not nulled. Historical reporting (counts, timing, conversion) remains correct without retaining personal information.
 - Meta's own copy of any Messenger / IG / WhatsApp conversation stays on Meta's servers under Meta's retention rules; that disclosure is in `/data-deletion` under "Messages received through Meta channels". The platform's deletion procedure has no control over Meta's retention.
 - The `webhook_outbox` `sanitizeOutboxPayload` helper also strips contact + brief from any delivered/queued GHL outbox rows for the same `lead_id`; that path runs in the same purge call.
 - Identifier note for future runs: the purge route accepts EITHER a uuid (matched against legacy `leads.id`) OR a text `lead_id` (matched against `screened_leads.lead_id`). For Screen 2.0 / Meta-channel rows, use the text `L-YYYY-MM-DD-XXX` value.
 - If the reviewer asks for proof beyond this file, the operator can re-run the flow with the reviewer observing in real time over Loom or Zoom.
+
+---
+
+## Required post-ledger rehearsal
+
+Do not replace the historical evidence above. Append a new timestamped section after the privacy-redaction release is deployed and use the approved operator procedure in `docs/privacy/DELETION_OPERATIONS.md`.
+
+The new rehearsal must use one fresh fictional Meta conversation and prove:
+
+- message content, names, contact details, sender IDs, Meta message IDs, transcripts, attachments, and free-text failure details are absent from every in-scope store;
+- every in-scope attachment location was inventoried; an empty manifest is not accepted as proof that no attachment exists;
+- the retained audit envelope contains no direct identifier or message content and has the expected redaction marker;
+- retained keys and active views cannot join the audit envelope to an identifying firm matter or another personal record;
+- the operation is idempotent and tenant-scoped;
+- unauthorized roles cannot invoke redaction;
+- normal conversation-ledger updates and deletes remain blocked;
+- pending delivery work cannot reintroduce the removed data;
+- processor action evidence is recorded; a `provider_managed` status alone is not deletion proof; and
+- a backup-restore rehearsal proves deleted data cannot return to operational use without replaying the deletion request.
+
+Record the production commit, migration ledger version, execution time, fictional lead ID, sanitized before-and-after field inventory, and operator sign-off. Keep the Meta submission blocker open if any check is incomplete.

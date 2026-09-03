@@ -19,6 +19,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const isOperatorConsole = path.startsWith("/admin");
   const isOperatorAuth = path.startsWith("/operator");
   const isPrivacy = path === "/privacy";
+  const isDataDeletion = path === "/data-deletion";
   const isTerms = path === "/terms";
   const isFirmOnboarding = path.startsWith("/firm-onboarding");
   // Public per-firm booking page (WP-6): client-facing, must render without
@@ -47,6 +48,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     isOperatorConsole ||
     isOperatorAuth ||
     isPrivacy ||
+    isDataDeletion ||
     isTerms ||
     isFirmOnboarding ||
     isBooking ||

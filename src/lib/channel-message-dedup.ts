@@ -12,8 +12,10 @@
  * constraint makes the claim race-safe; losing the race means another
  * delivery already owns the mid, so the loser ACKs 200 and skips.
  *
- * Fail-open on infrastructure errors: a missed dedup re-processes a message
- * (annoying), while a wrongly-skipped message drops a lead (unacceptable).
+ * Fail-open on generic infrastructure errors: a missed dedup re-processes a
+ * message (annoying), while a wrongly-skipped message drops a lead
+ * (unacceptable). The database's exact privacy-suppression rejection is the
+ * exception and fails closed so a deletion race cannot retain or process PII.
  *
  * Rows are transient; the daily data-retention cron sweeps claims older
  * than 7 days. Service-role only, same posture as channel_intake_sessions.
@@ -26,13 +28,31 @@ export type MetaChannel = 'facebook' | 'instagram' | 'whatsapp';
 export interface ClaimChannelMessageResult {
   /** True when another delivery already claimed this mid; skip processing. */
   duplicate: boolean;
-  reason: 'claimed' | 'duplicate' | 'no_mid' | 'claim_error';
+  reason:
+    | 'claimed'
+    | 'duplicate'
+    | 'privacy_suppressed'
+    | 'no_mid'
+    | 'claim_error';
 }
 
 export interface ClaimChannelMessageArgs {
   firmId: string;
   channel: MetaChannel;
+  senderId: string;
   messageMid: string | null | undefined;
+}
+
+function isPreMigrationMissingSenderColumn(error: {
+  code?: string;
+  message?: string;
+}): boolean {
+  if (error.code !== 'PGRST204' && error.code !== '42703') return false;
+  const message = error.message ?? '';
+  return (
+    message.includes('sender_id') &&
+    (message.includes('processed_channel_messages') || error.code === '42703')
+  );
 }
 
 export async function claimChannelMessage(
@@ -45,22 +65,47 @@ export async function claimChannelMessage(
     return { duplicate: false, reason: 'no_mid' };
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('processed_channel_messages')
     .upsert(
-      { firm_id: args.firmId, channel: args.channel, message_mid: mid },
+      {
+        firm_id: args.firmId,
+        channel: args.channel,
+        sender_id: args.senderId,
+        message_mid: mid,
+      },
       { onConflict: 'firm_id,channel,message_mid', ignoreDuplicates: true },
     )
     .select('id');
 
+  if (error && isPreMigrationMissingSenderColumn(error)) {
+    // Deploy compatibility only: the app may land shortly before the pushed
+    // migration is applied. Retry the exact legacy claim shape only for the
+    // database/PostgREST undefined-column signal. Privacy suppression and all
+    // generic failures continue through the normal handling below.
+    ({ data, error } = await supabase
+      .from('processed_channel_messages')
+      .upsert(
+        { firm_id: args.firmId, channel: args.channel, message_mid: mid },
+        { onConflict: 'firm_id,channel,message_mid', ignoreDuplicates: true },
+      )
+      .select('id'));
+  }
+
   if (error) {
+    if (
+      error.code === 'P0001' &&
+      error.message === 'privacy-suppressed channel subject cannot be claimed'
+    ) {
+      return { duplicate: true, reason: 'privacy_suppressed' };
+    }
     // 23505 means the unique constraint surfaced before ignoreDuplicates
     // could swallow it; same meaning as losing the claim race.
     if (error.code === '23505') {
       return { duplicate: true, reason: 'duplicate' };
     }
     console.error(
-      `[channel-message-dedup] claim failed channel=${args.channel} mid=${mid}:`,
+      `[channel-message-dedup] claim failed channel=${args.channel}:`,
       error.message,
     );
     return { duplicate: false, reason: 'claim_error' };
@@ -109,13 +154,13 @@ export async function releaseChannelMessageClaim(
 
     if (error) {
       console.error(
-        `[channel-message-dedup] release failed channel=${args.channel} mid=${mid}:`,
+        `[channel-message-dedup] release failed channel=${args.channel}:`,
         error.message,
       );
     }
   } catch (err) {
     console.error(
-      `[channel-message-dedup] release threw channel=${args.channel} mid=${mid}:`,
+      `[channel-message-dedup] release threw channel=${args.channel}:`,
       err,
     );
   }

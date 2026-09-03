@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   processChannelInbound: vi.fn(),
   claimChannelMessage: vi.fn(),
   releaseChannelMessageClaim: vi.fn(),
+  isChannelSubjectPrivacySuppressed: vi.fn(),
   // Promises handed to waitUntil, captured so tests can flush the
   // background pipeline (including the crash-path claim release).
   waited: [] as Promise<unknown>[],
@@ -49,6 +50,10 @@ vi.mock("@/lib/channel-intake-processor", () => ({
 vi.mock("@/lib/channel-message-dedup", () => ({
   claimChannelMessage: mocks.claimChannelMessage,
   releaseChannelMessageClaim: mocks.releaseChannelMessageClaim,
+}));
+
+vi.mock("@/lib/screened-lead-erasure", () => ({
+  isChannelSubjectPrivacySuppressed: mocks.isChannelSubjectPrivacySuppressed,
 }));
 
 vi.mock("@vercel/functions", () => ({
@@ -174,6 +179,7 @@ beforeEach(() => {
   mocks.claimChannelMessage.mockResolvedValue({ duplicate: false, reason: "claimed" });
   mocks.releaseChannelMessageClaim.mockReset();
   mocks.releaseChannelMessageClaim.mockResolvedValue(undefined);
+  mocks.isChannelSubjectPrivacySuppressed.mockReset().mockResolvedValue(false);
   mocks.waited.length = 0;
 });
 
@@ -199,6 +205,26 @@ describe("GET /api/whatsapp-intake", () => {
 });
 
 describe("POST /api/whatsapp-intake", () => {
+  it("drops an inbound from a privacy-suppressed subject before claiming it", async () => {
+    mocks.resolveFirmByWhatsappPhoneNumberId.mockResolvedValue({
+      firmId: "eec1d25e-a047-4827-8e4a-6eb96becca2b",
+      firmName: "DRG Law Test",
+    });
+    mocks.isChannelSubjectPrivacySuppressed.mockResolvedValueOnce(true);
+    const body = makeWaPayload({ senderWaId: "16475550101" });
+
+    const res = await POST(makePostRequest(body, sign(body)) as never);
+
+    expect(res.status).toBe(200);
+    expect(mocks.isChannelSubjectPrivacySuppressed).toHaveBeenCalledWith({
+      firmId: "eec1d25e-a047-4827-8e4a-6eb96becca2b",
+      channel: "whatsapp",
+      senderId: "16475550101",
+    });
+    expect(mocks.claimChannelMessage).not.toHaveBeenCalled();
+    expect(mocks.processChannelInbound).not.toHaveBeenCalled();
+  });
+
   it("returns 401 on missing signature", async () => {
     const body = makeWaPayload({});
     const res = await POST(makePostRequest(body, null) as never);
@@ -287,6 +313,7 @@ describe("POST /api/whatsapp-intake mid dedup (launch audit H1)", () => {
     expect(mocks.claimChannelMessage).toHaveBeenCalledWith({
       firmId: FIRM.firmId,
       channel: "whatsapp",
+      senderId: "16475492106",
       messageMid: "wamid.claim-check",
     });
     expect(mocks.processChannelInbound).toHaveBeenCalledTimes(1);

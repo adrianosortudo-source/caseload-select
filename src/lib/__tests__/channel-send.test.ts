@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   normalizeAuthoritativeInboundAt: vi.fn(),
   isChannelReplyWindowOpen: vi.fn(),
   resolveScreenedLeadIdForFirm: vi.fn(),
+  isScreenedLeadPrivacyRedactedForFirm: vi.fn(),
+  isChannelSubjectPrivacySuppressed: vi.fn(),
   loadChannelConversation: vi.fn(),
   claimOutboundConversationEvent: vi.fn(),
   loadOutboundConversationResult: vi.fn(),
@@ -27,6 +29,7 @@ vi.mock('@/lib/channel-conversation', () => ({
   normalizeAuthoritativeInboundAt: mocks.normalizeAuthoritativeInboundAt,
   isChannelReplyWindowOpen: mocks.isChannelReplyWindowOpen,
   resolveScreenedLeadIdForFirm: mocks.resolveScreenedLeadIdForFirm,
+  isScreenedLeadPrivacyRedactedForFirm: mocks.isScreenedLeadPrivacyRedactedForFirm,
   loadChannelConversation: mocks.loadChannelConversation,
   claimOutboundConversationEvent: mocks.claimOutboundConversationEvent,
   loadOutboundConversationResult: mocks.loadOutboundConversationResult,
@@ -42,12 +45,15 @@ vi.mock('@/lib/instagram-send', () => ({
 vi.mock('@/lib/whatsapp-send', () => ({
   sendWhatsappMessage: mocks.sendWhatsappMessage,
 }));
+vi.mock('@/lib/screened-lead-erasure', () => ({
+  isChannelSubjectPrivacySuppressed: mocks.isChannelSubjectPrivacySuppressed,
+}));
 
 vi.mock('@/lib/supabase-admin', () => ({
   supabaseAdmin: {
-    from: (_table: string) => ({
-      select: (_cols: string) => ({
-        eq: (_field: string, _v: unknown) => ({
+    from: () => ({
+      select: () => ({
+        eq: () => ({
           maybeSingle: () =>
             Promise.resolve({
               data: { ...mocks.firmRow },
@@ -77,6 +83,9 @@ beforeEach(() => {
   mocks.isChannelReplyWindowOpen.mockImplementation((value) => !!value);
   mocks.resolveScreenedLeadIdForFirm.mockReset();
   mocks.resolveScreenedLeadIdForFirm.mockResolvedValue('11111111-1111-4111-8111-111111111111');
+  mocks.isScreenedLeadPrivacyRedactedForFirm.mockReset();
+  mocks.isScreenedLeadPrivacyRedactedForFirm.mockResolvedValue(false);
+  mocks.isChannelSubjectPrivacySuppressed.mockReset().mockResolvedValue(false);
   mocks.loadChannelConversation.mockReset();
   mocks.loadChannelConversation.mockResolvedValue({
     messages: [],
@@ -98,6 +107,28 @@ beforeEach(() => {
 });
 
 describe('sendChannelMessage', () => {
+  it('blocks every outbound to a privacy-suppressed channel subject', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    mocks.isChannelSubjectPrivacySuppressed.mockResolvedValueOnce(true);
+
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook', senderPsid: 'psid', senderName: null,
+        messageMid: 'mid_in', pageId: 'page-1',
+      },
+      text: 'hi',
+      authoritativeInboundAt: '2026-09-01T12:00:00.000Z',
+    });
+
+    expect(r).toMatchObject({ sent: false, code: 'lead_redacted' });
+    expect(mocks.isChannelSubjectPrivacySuppressed).toHaveBeenCalledWith({
+      firmId: 'firm-1', channel: 'facebook', senderId: 'psid',
+    });
+    expect(mocks.sendMessengerMessage).not.toHaveBeenCalled();
+    expect(mocks.claimOutboundConversationEvent).not.toHaveBeenCalled();
+  });
+
   it('routes facebook to sendMessengerMessage with the Page token', async () => {
     mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
     mocks.sendMessengerMessage.mockResolvedValueOnce({ sent: true, messageId: 'mid' });
@@ -209,6 +240,29 @@ describe('sendChannelMessage', () => {
     expect(r.reason).toMatch(/whatsapp_cloud_api_access_token/);
   });
 
+  it('blocks an operator send before claiming the ledger when the lead is redacted', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    mocks.isScreenedLeadPrivacyRedactedForFirm.mockResolvedValueOnce(true);
+
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook', senderPsid: 'psid', senderName: null,
+        messageMid: 'mid_in', pageId: 'page-1',
+      },
+      text: 'hi',
+      ledger: {
+        screenedLeadId: 'L-2026-09-01-001', source: 'operator',
+        actorType: 'operator', actorId: 'operator-1',
+        clientRequestId: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+
+    expect(r).toMatchObject({ sent: false, code: 'lead_redacted' });
+    expect(mocks.claimOutboundConversationEvent).not.toHaveBeenCalled();
+    expect(mocks.sendMessengerMessage).not.toHaveBeenCalled();
+  });
+
   it('fails closed without authoritative inbound evidence', async () => {
     mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
     const r = await sendChannelMessage({
@@ -315,6 +369,37 @@ describe('sendChannelMessage', () => {
       reason: 'delivery occurred but the audit result could not be confirmed',
       code: 'delivery_unknown',
     });
+  });
+
+  it('does not persist a terminal payload when redaction wins after provider dispatch', async () => {
+    mocks.firmRow.facebook_page_access_token = 'PAGE_TOK';
+    mocks.sendMessengerMessage.mockResolvedValueOnce({ sent: true, messageId: 'mid-out' });
+    mocks.recordOutboundConversationResult.mockResolvedValueOnce({
+      recorded: false,
+      duplicate: false,
+      redacted: true,
+    });
+
+    const r = await sendChannelMessage({
+      firmId: 'firm-1',
+      sender: {
+        channel: 'facebook', senderPsid: 'psid', senderName: null,
+        messageMid: 'mid_in', pageId: 'page-1',
+      },
+      text: 'hi',
+      ledger: {
+        screenedLeadId: 'L-2026-09-01-001', source: 'operator',
+        actorType: 'operator', actorId: 'operator-1',
+        clientRequestId: '22222222-2222-4222-8222-222222222222',
+      },
+    });
+
+    expect(r).toMatchObject({
+      sent: false,
+      deliveryUnknown: true,
+      code: 'lead_redacted',
+    });
+    expect(mocks.sendMessengerMessage).toHaveBeenCalledTimes(1);
   });
 
   it('does not call Graph for a duplicate pending claim', async () => {
