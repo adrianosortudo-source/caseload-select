@@ -37,7 +37,10 @@ describe("privacy provider evidence migration contract", () => {
 
     for (const provider of ["ghl", "meta", "resend"]) {
       expect(sql).toContain(
-        `p_cleanup_summary->>'${provider}_status' not in ('completed', 'not_applicable')`,
+        `jsonb_typeof(p_cleanup_summary->'${provider}_status'), '' ) <> 'string'`,
+      );
+      expect(sql).toContain(
+        `coalesce(p_cleanup_summary->>'${provider}_status', '') not in ('completed', 'not_applicable')`,
       );
     }
     expect(sql).toContain(
@@ -45,7 +48,7 @@ describe("privacy provider evidence migration contract", () => {
     );
   });
 
-  it("reopens completions previously recorded with provider-managed only", () => {
+  it("reopens every completion lacking three valid provider dispositions", () => {
     const sql = migrationSql();
 
     expect(sql).toContain("set external_cleanup_status = 'pending'");
@@ -54,11 +57,13 @@ describe("privacy provider evidence migration contract", () => {
     expect(sql).toContain(
       "where request.external_cleanup_status = 'complete'",
     );
-    expect(sql).toContain(
-      "request.cleanup_summary->>'meta_status' = 'provider_managed'",
-    );
-    expect(sql).toContain(
-      "request.cleanup_summary->>'resend_status' = 'provider_managed'",
-    );
+    for (const provider of ["ghl", "meta", "resend"]) {
+      expect(sql).toContain(
+        `jsonb_typeof(request.cleanup_summary->'${provider}_status'), '' ) = 'string'`,
+      );
+      expect(sql).toContain(
+        `coalesce(request.cleanup_summary->>'${provider}_status', '') in ('completed', 'not_applicable')`,
+      );
+    }
   });
 });
