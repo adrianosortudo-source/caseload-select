@@ -21,7 +21,7 @@ export type RegistryIntent = Readonly<{
   recordedAt: string;
 }>;
 
-type Envelope = { v: 1; kid: string; iv: string; tag: string; ciphertext: string };
+type Envelope = { v: 1; kind: 'intent' | 'applied' | 'backfill-seal' | 'replay-run'; kid: string; iv: string; tag: string; ciphertext: string };
 
 function key(): Buffer {
   const encoded = process.env.PRIVACY_DELETION_REGISTRY_ENCRYPTION_KEY;
@@ -31,27 +31,27 @@ function key(): Buffer {
   return value;
 }
 
-function aad(intent: Pick<RegistryIntent, 'deletionRequestId'>): Buffer {
-  return Buffer.from(`caseload-select:privacy-registry:${VERSION}:${intent.deletionRequestId}`, 'utf8');
+function aad(intent: Pick<RegistryIntent, 'deletionRequestId'>, kind: Envelope['kind']): Buffer {
+  return Buffer.from(`caseload-select:privacy-registry:${VERSION}:${kind}:${intent.deletionRequestId}`, 'utf8');
 }
 
 export function encryptRegistryIntent(intent: RegistryIntent): string {
   const iv = randomBytes(12);
   const cipher = createCipheriv('aes-256-gcm', key(), iv);
-  cipher.setAAD(aad(intent));
+  cipher.setAAD(aad(intent, 'intent'));
   const ciphertext = Buffer.concat([cipher.update(JSON.stringify(intent), 'utf8'), cipher.final()]);
-  const envelope: Envelope = { v: 1, kid: 'v1', iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), ciphertext: ciphertext.toString('base64') };
+  const envelope: Envelope = { v: 1, kind: 'intent', kid: 'v1', iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), ciphertext: ciphertext.toString('base64') };
   return JSON.stringify(envelope);
 }
 
 export function decryptRegistryIntent(serialized: string, requestId: string): RegistryIntent {
   let envelope: Envelope;
   try { envelope = JSON.parse(serialized) as Envelope; } catch { throw new Error('privacy registry record is malformed'); }
-  if (envelope?.v !== 1 || envelope.kid !== 'v1' || !envelope.iv || !envelope.tag || !envelope.ciphertext) throw new Error('privacy registry envelope is invalid');
+  if (envelope?.v !== 1 || envelope.kind !== 'intent' || envelope.kid !== 'v1' || !envelope.iv || !envelope.tag || !envelope.ciphertext) throw new Error('privacy registry envelope is invalid');
   try {
     const decipher = createDecipheriv('aes-256-gcm', key(), Buffer.from(envelope.iv, 'base64'));
     const candidate = { deletionRequestId: requestId };
-    decipher.setAAD(aad(candidate));
+    decipher.setAAD(aad(candidate, 'intent'));
     decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
     const raw = Buffer.concat([decipher.update(Buffer.from(envelope.ciphertext, 'base64')), decipher.final()]);
     const intent = JSON.parse(raw.toString('utf8')) as RegistryIntent;
