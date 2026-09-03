@@ -35,7 +35,8 @@ The portal's `Firm workspace:` and `Configured Meta asset ID:` rows are context 
 - Type the proof text on camera. Do not prefill it.
 - Instagram text must remain at or below 1,000 UTF-8 bytes.
 - If delivery is not verified or is still pending, keep the draft unchanged and retry it. Do not edit the text or create a second message.
-- Capture at 1920 x 1080 or better, H.264, 30 fps, under three minutes, and under 100 MB.
+- App-specific reviewer feedback requires readable on-screen captions for this resubmission.
+- Follow Meta's recording guidance: omit audio and capture at 1920 x 1080 or better, H.264, 30 fps, under three minutes, and under 100 MB.
 - Do not expose cookies, tokens, secrets, personal inboxes, real client data, or unrelated leads.
 
 ## Messenger clip
@@ -44,17 +45,17 @@ Filename: `caseload-select-messenger-resubmission-v2.mp4`
 
 Permission: `pages_messaging`
 
-| Time | On screen and action | Required evidence |
+| Sequence | On screen and action | Required evidence |
 |---|---|---|
-| 0:00 | In Meta UI, select or open `DRG Law Test`. Hold the exact Page name. | Authoritative Page identity. |
-| 0:10 | Show the recent fictional inbound message in the same Messenger thread. | User-initiated conversation and open response window. |
-| 0:20 | Open the matching CaseLoad Select brief. Show `Message thread`, `Channel: Facebook Messenger`, the recent inbound, and the enabled composer. | Correct app surface and channel context. |
-| 0:35 | Type the Messenger proof string. | Live operator-authored action. |
-| 0:45 | Click `Send reply` once and wait for `Reply sent.`. | Verified send from the app UI. |
-| 0:55 | Without a cut, show the identical delivered text in the native Messenger thread. | Native receipt. |
-| 1:10 | Hold the Page name and delivered text for five seconds. | Readable identity and message comparison. |
+| 1 | In Meta UI, select or open `DRG Law Test`. Hold the exact Page name. | Authoritative Page identity. |
+| 2 | Show the recent fictional inbound message in the same Messenger thread. | User-initiated conversation and open response window. |
+| 3 | Open the matching CaseLoad Select brief. Show `Message thread`, `Channel: Facebook Messenger`, the recent inbound, and the enabled composer. | Correct app surface and channel context. |
+| 4 | Type the Messenger proof string. | Live operator-authored action. |
+| 5 | Click `Send reply` once and wait for `Reply sent.`. | Verified send from the app UI. |
+| 6 | Without a cut, show the identical delivered text in the native Messenger thread. | Native receipt. |
+| 7 | Hold the Page name and delivered text long enough to read. | Readable identity and message comparison. |
 
-Optional caption:
+Required on-screen caption:
 
 `CaseLoad Select sends this operator-authored reply through the Messenger Send API using the configured Page access token.`
 
@@ -64,17 +65,17 @@ Filename: `caseload-select-instagram-resubmission-v2.mp4`
 
 Permission: exact live Meta label for Instagram messaging
 
-| Time | On screen and action | Required evidence |
+| Sequence | On screen and action | Required evidence |
 |---|---|---|
-| 0:00 | In Meta or Instagram UI, select or open `@drg_law_test`. Hold the exact handle. | Authoritative Instagram identity. |
-| 0:10 | Show the recent fictional inbound message in the same DM thread. | User-initiated conversation and open response window. |
-| 0:20 | Open the matching CaseLoad Select brief. Show `Message thread`, `Channel: Instagram`, the recent inbound, and the enabled composer. | Correct app surface and channel context. |
-| 0:35 | Type the Instagram proof string and keep the byte counter at or below 1,000. | Live operator-authored action. |
-| 0:45 | Click `Send reply` once and wait for `Reply sent.`. | Verified send from the app UI. |
-| 0:55 | Without a cut, show the identical delivered text in the native Instagram DM. | Native receipt. |
-| 1:10 | Hold the handle and delivered text for five seconds. | Readable identity and message comparison. |
+| 1 | In Meta or Instagram UI, select or open `@drg_law_test`. Hold the exact handle. | Authoritative Instagram identity. |
+| 2 | Show the recent fictional inbound message in the same DM thread. | User-initiated conversation and open response window. |
+| 3 | Open the matching CaseLoad Select brief. Show `Message thread`, `Channel: Instagram`, the recent inbound, and the enabled composer. | Correct app surface and channel context. |
+| 4 | Type the Instagram proof string and keep the byte counter at or below 1,000. | Live operator-authored action. |
+| 5 | Click `Send reply` once and wait for `Reply sent.`. | Verified send from the app UI. |
+| 6 | Without a cut, show the identical delivered text in the native Instagram DM. | Native receipt. |
+| 7 | Hold the handle and delivered text long enough to read. | Readable identity and message comparison. |
 
-Optional caption:
+Required on-screen caption:
 
 `CaseLoad Select sends this operator-authored reply through the Instagram Messaging API using the linked Page access token.`
 
@@ -94,7 +95,8 @@ Optional caption:
 - [ ] Click on `Send reply` is visible.
 - [ ] Portal reports `Reply sent.`.
 - [ ] Identical text is readable in the native thread.
+- [ ] The required on-screen caption is readable.
 - [ ] No secret, personal data, or unrelated production material is visible.
-- [ ] H.264, 30 fps, at least 1080p, under three minutes, under 100 MB.
+- [ ] H.264 video only, no audio stream, 30 fps, at least 1080p, under three minutes, under 100 MB.
 
 If compression is required, use the active runbook's CRF 24 command and watch the complete upload copy.

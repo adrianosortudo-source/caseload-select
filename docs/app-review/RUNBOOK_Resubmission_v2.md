@@ -97,6 +97,8 @@ Each clip must be one continuous take from authoritative Meta identity, through 
 - [ ] H.264 MP4
 - [ ] 1920 x 1080 or better
 - [ ] 30 fps
+- [ ] Video only, with no audio stream
+- [ ] Required on-screen caption is readable
 - [ ] Under three minutes
 - [ ] Under 100 MB
 - [ ] English UI
@@ -107,7 +109,7 @@ Each clip must be one continuous take from authoritative Meta identity, through 
 If compression is needed, preserve the original and make a separate upload copy:
 
 ```powershell
-ffmpeg -i .\input.mp4 -c:v libx264 -preset medium -crf 24 -c:a aac -b:a 128k -movflags +faststart .\upload.mp4
+ffmpeg -i .\input.mp4 -c:v libx264 -preset medium -crf 24 -an -movflags +faststart .\upload.mp4
 ```
 
 Watch the full upload copy before attaching it.

@@ -19,7 +19,9 @@ PRs #198 and #199 shipped a service-only, tenant-scoped, idempotent redaction wo
 
 For the screened lead and linked operational stores, the workflow removes or replaces names, email addresses, phone numbers, message bodies, transcripts, attachments, channel sender IDs, Meta message IDs, IP addresses, user agents, advertising identifiers, provider selectors, free-text errors, and free-text notes. Ordinary ledger updates and deletes remain prohibited. The deletion function permits one irreversible redaction transition.
 
-This rehearsal did not prove external-provider deletion, an account-specific backup-expiry schedule, safe restore replay, or legal sufficiency of the retained envelope.
+This rehearsal did not prove external-provider deletion, safe restore replay, or legal sufficiency of the retained envelope. Account verification later identified the production Supabase organization as Free, with WAL-G enabled, PITR disabled, no listed backups, and no physical-backup metadata.
+
+PR #203 records a separate fictional local restore/replay rehearsal. It proved that redaction is idempotently reapplied when a deletion request is supplied from outside the restored database. It also proved that restoring a pre-deletion snapshot removes an in-database request tombstone and leaves the database recovery list empty. An external durable deletion registry and a restore procedure that blocks operational access until replay is verified remain release gates.
 
 ## Retained audit envelope
 

@@ -46,21 +46,20 @@ Read-only HTTP checks on 2026-09-02 returned status 200 for:
 
 Before submission, re-open each URL in a signed-out session and confirm the rendered copy matches the merged source and exposes no operator-only controls.
 
-## Video candidates
+## Verified v2 video files
 
-Two edited files currently exist outside the repository:
+Two edited v2 files currently exist outside the repository:
 
-| Candidate | Technical observation | SHA-256 |
+| File | Verified technical observation | SHA-256 |
 |---|---|---|
-| `D:\caseload-select-messenger-demo.mp4` | H.264, 1280 x 720, 30 fps, 30.506 seconds, 1,418,640 bytes | `FEDA5651DAF443AF3358253F3433F4E7FEC90ECB0F66B207898FD2A012639E2E` |
-| `D:\caseload-select-instagram-demo.mp4` | H.264, 1280 x 720, 30 fps, 31.018 seconds, 1,678,257 bytes | `03675350A58C6EDA0F208EB6068F4A7714F25280090859BC22A0014BE3E2C595` |
+| `D:\caseload-select-messenger-resubmission-v2.mp4` | H.264 video only, 1920 x 1080, 30 fps, 30.500 seconds, 1,456,807 bytes | `C729EE8BBB5729EAF5A740B0505106D440A71E10F457AFAC38C37F0D8ACC6DBC` |
+| `D:\caseload-select-instagram-resubmission-v2.mp4` | H.264 video only, 1920 x 1080, 30 fps, 31.000 seconds, 1,836,714 bytes | `FFB75B3AA059349511DA09EB8927E8CD8F57295C4AA5AF24DD7B62AC5182780D` |
 
-These are candidates, not approved uploads. They fail the current shot-list requirement of at least 1920 x 1080. Their filenames also do not match the required v2 upload names:
+Both files passed a full decode with no reported error. Content review verified the continuous identity, portal action, native-receipt proof, and required on-screen captions. They have not been uploaded to Meta.
 
-- `caseload-select-messenger-resubmission-v2.mp4`
-- `caseload-select-instagram-resubmission-v2.mp4`
+App-specific reviewer feedback requires on-screen captions for this resubmission. Meta's recording guidance also requires 1080p or better and says to omit audio. These files are video-only and meet the verified technical and content requirements. Before upload, recheck each SHA-256 value so the reviewed file and the uploaded file are identical.
 
-Do not merely rename the candidates. First watch each complete file and prove that it is one continuous take containing authoritative asset identity, the recent fictional inbound message, the matching portal thread, proof text typed on camera, one visible `Send reply` action, `Reply sent.`, and the identical native receipt. Re-record at 1920 x 1080 or better if any requirement is absent. Captions are optional and do not replace visible product evidence.
+Required captions do not replace visible product evidence. The final watch must still confirm that each file is one continuous take containing authoritative asset identity, the recent fictional inbound message, the matching portal thread, proof text typed on camera, one visible `Send reply` action, `Reply sent.`, and the identical native receipt.
 
 Do not upload the repository's v1 Messenger, Instagram, WhatsApp, or Business Manager videos as proof for these two permissions.
 
@@ -72,7 +71,7 @@ All of the following must be closed before final submission:
 - [ ] If a recoverable GHL record exists, obtain Adriano's action-time confirmation naming the exact contact before deletion, then record the provider action result.
 - [ ] Correct and reverify the completion semantics so a `provider_managed` marker cannot by itself produce successful external-cleanup completion.
 - [ ] Attach account-specific provider action or retention evidence for Meta, Resend, GHL, and Supabase. Public documentation alone is insufficient.
-- [ ] Confirm the applicable backup-expiry schedules and complete a safe restore/replay rehearsal before restored data returns to operational use.
+- [ ] Preserve the verified Supabase Free-plan result and PR #203 restore evidence, then implement the external durable deletion registry and a restore procedure that blocks operational access until replay is verified. No account-visible Supabase restore point or expiry schedule is currently available.
 - [ ] Obtain written privacy-counsel approval for the retained envelope, available joins, three-year per-event maximum, deletion-tombstone retention, and suppression-hash retention.
 - [ ] Close or correctly disposition deletion request `a932fae3-479d-400c-a94a-ca510c281879` through the controlled workflow with evidence.
 
@@ -82,7 +81,8 @@ The September fictional production rehearsal passed the tested CaseLoad Select o
 
 - [ ] The live permission list contains only the two supported messaging permissions.
 - [ ] The exact Instagram permission label is copied from the live form into the reviewer instructions.
-- [ ] Both v2 clips pass every item in `screencasts/SHOTLIST_v2.md` and are watched after any final compression.
+- [x] Both local v2 clips passed the content proof and technical checks in `screencasts/SHOTLIST_v2.md`, including required captions, video-only output, 1080p, and a full decode.
+- [ ] Recheck both documented SHA-256 values immediately before upload.
 - [ ] Each clip is uploaded to the matching permission slot and plays completely in Meta's preview.
 - [ ] `Reviewer_Instructions_Paste_v2.md` is re-reviewed after all privacy gates close, then pasted without historical or unsupported claims.
 - [ ] Public privacy, terms, and data-deletion URLs render successfully in a signed-out session.

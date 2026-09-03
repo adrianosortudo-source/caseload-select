@@ -53,7 +53,7 @@ HighLevel's public [Restore Deleted Contacts](https://help.gohighlevel.com/suppo
 |---|---|---|
 | Meta | An authenticated App Review tab was observed for App ID `1007304805285554` under Business ID `2191422434947205`; retention/deletion settings were not captured | Open. App-review access does not establish request-specific deletion or retention behavior |
 | Resend | None | Open. Public policy statements in `docs/app-review/deletion-flow-verification.md` are not account-specific evidence |
-| Supabase | Production rehearsal and CLI state are recorded, including WAL-G enabled, PITR disabled, and no enumerated physical snapshots; account plan and backup-expiry settings were not captured | Open. The observed CLI state does not establish the applicable backup-expiry schedule or restore replay |
+| Supabase | Account verification identifies the production organization as Free. The project backup API/CLI returned `walg_enabled: true`, `pitr_enabled: false`, `backups: []`, and `physical_backup_data: {}` | Open. There is no account-visible restore point or expiry schedule. PR #203 proves manual replay from an external request, not automatic replay or an external durable registry |
 | GHL | Current-record API evidence above | Open until Contacts > Restore is checked and documented |
 
 `provider_managed` is a location/disposition marker. It is not deletion evidence, an account-specific retention schedule, or proof that a deletion request was applied by a provider.
@@ -64,7 +64,7 @@ HighLevel's public [Restore Deleted Contacts](https://help.gohighlevel.com/suppo
 2. Capture a timestamped screenshot showing the account identity, the exact query, and either the matching recoverable record or a no-result state. Do not expose unrelated contacts.
 3. If a recoverable record is found, record its HighLevel contact ID and stop before deletion. Obtain Adriano's action-time confirmation naming that exact cloud record before deleting it.
 4. If no recoverable record is found, preserve the screenshot and record a narrowly worded not-found disposition. Do not characterize the result as provider-confirmed permanent deletion.
-5. Capture the production account's applicable backup and retention settings for Supabase, Resend, Meta, and GHL where their authenticated dashboards expose them.
+5. Capture the production account's applicable retention settings for Resend, Meta, and GHL where their authenticated dashboards expose them. Supabase account state is now recorded, but the external durable deletion registry and restore-blocking replay procedure proven necessary by PR #203 remain open.
 6. Keep deletion request `a932fae3-479d-400c-a94a-ca510c281879` pending until the controlled workflow accepts the supported disposition with durable evidence.
 
 ## Evidence boundary
