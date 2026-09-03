@@ -293,8 +293,8 @@ describe('purgeLeadPii privacy scope', () => {
       deletionRequestId: REQUEST_ID,
       externalCleanup: {
         ghlStatus: 'completed',
-        metaStatus: 'provider_managed',
-        resendStatus: 'provider_managed',
+        metaStatus: 'completed',
+        resendStatus: 'not_applicable',
       },
     });
 

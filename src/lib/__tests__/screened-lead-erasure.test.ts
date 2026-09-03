@@ -31,9 +31,9 @@ import {
 
 const FIRM_ID = '11111111-1111-4111-8111-111111111111';
 const REQUEST_ID = '22222222-2222-4222-8222-222222222222';
-const PROVIDER_DISPOSITIONS = {
-  metaStatus: 'provider_managed' as const,
-  resendStatus: 'provider_managed' as const,
+const PROVIDER_EVIDENCE = {
+  metaStatus: 'completed' as const,
+  resendStatus: 'not_applicable' as const,
 };
 
 function pendingPayload(overrides: Record<string, unknown> = {}) {
@@ -168,7 +168,7 @@ describe('eraseScreenedLead', () => {
     expect(mocks.rpc).toHaveBeenCalledTimes(1);
   });
 
-  it('does not treat provider-managed copies as completed without an explicit operator disposition', async () => {
+  it('does not treat provider-managed location markers as completion evidence', async () => {
     mocks.rpc.mockResolvedValueOnce(
       pendingPayload({
         external_cleanup_manifest: {
@@ -188,6 +188,10 @@ describe('eraseScreenedLead', () => {
       leadId: 'L-2026-09-02-001',
       reason: 'subject_request',
       deletionRequestId: REQUEST_ID,
+      externalCleanup: {
+        metaStatus: 'provider_managed',
+        resendStatus: 'provider_managed',
+      } as unknown as NonNullable<Parameters<typeof eraseScreenedLead>[0]['externalCleanup']>,
     });
 
     expect(result).toMatchObject({
@@ -225,7 +229,7 @@ describe('eraseScreenedLead', () => {
       deletionRequestId: REQUEST_ID,
       externalCleanup: {
         ghlStatus: 'completed',
-        ...PROVIDER_DISPOSITIONS,
+        ...PROVIDER_EVIDENCE,
       },
     });
 
@@ -241,8 +245,8 @@ describe('eraseScreenedLead', () => {
         p_cleanup_summary: {
           storage_deleted_count: 1,
           ghl_status: 'completed',
-          meta_status: 'provider_managed',
-          resend_status: 'provider_managed',
+          meta_status: 'completed',
+          resend_status: 'not_applicable',
         },
       },
     );
@@ -284,7 +288,7 @@ describe('eraseScreenedLead', () => {
       leadId: 'L-S1-22222222-2222-4222-8222-222222222222',
       reason: 'subject_request',
       deletionRequestId: REQUEST_ID,
-      externalCleanup: PROVIDER_DISPOSITIONS,
+      externalCleanup: PROVIDER_EVIDENCE,
     });
 
     expect(mocks.list).toHaveBeenCalledWith(
@@ -327,7 +331,7 @@ describe('eraseScreenedLead', () => {
       reason: 'subject_request',
       deletionRequestId: REQUEST_ID,
       externalCleanup: {
-        ...PROVIDER_DISPOSITIONS,
+        ...PROVIDER_EVIDENCE,
       },
     });
 
@@ -362,7 +366,7 @@ describe('eraseScreenedLead', () => {
       reason: 'subject_request',
       deletionRequestId: REQUEST_ID,
       externalCleanup: {
-        ...PROVIDER_DISPOSITIONS,
+        ...PROVIDER_EVIDENCE,
       },
     });
 
@@ -397,7 +401,7 @@ describe('eraseScreenedLead', () => {
       reason: 'subject_request',
       deletionRequestId: REQUEST_ID,
       externalCleanup: {
-        ...PROVIDER_DISPOSITIONS,
+        ...PROVIDER_EVIDENCE,
       },
     });
 

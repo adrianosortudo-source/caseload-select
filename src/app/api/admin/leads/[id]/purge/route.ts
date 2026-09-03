@@ -24,7 +24,6 @@ const REASONS = new Set([
 const CLEANUP_STATUSES = new Set([
   "completed",
   "not_applicable",
-  "provider_managed",
 ]);
 
 export async function POST(
@@ -73,8 +72,8 @@ export async function POST(
   let externalCleanup:
     | {
         ghlStatus?: "completed" | "not_applicable";
-        metaStatus?: "completed" | "not_applicable" | "provider_managed";
-        resendStatus?: "completed" | "not_applicable" | "provider_managed";
+        metaStatus?: "completed" | "not_applicable";
+        resendStatus?: "completed" | "not_applicable";
       }
     | undefined;
   if (body.external_cleanup !== undefined) {
@@ -104,12 +103,6 @@ export async function POST(
         );
       }
     }
-    if (cleanup.ghl_status === "provider_managed") {
-      return NextResponse.json(
-        { error: "ghl_status must record completed or not_applicable manual cleanup" },
-        { status: 400 },
-      );
-    }
     externalCleanup = {
       ghlStatus: cleanup.ghl_status as
         | "completed"
@@ -118,12 +111,10 @@ export async function POST(
       metaStatus: cleanup.meta_status as
         | "completed"
         | "not_applicable"
-        | "provider_managed"
         | undefined,
       resendStatus: cleanup.resend_status as
         | "completed"
         | "not_applicable"
-        | "provider_managed"
         | undefined,
     };
   }
