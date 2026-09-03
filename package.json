@@ -38,6 +38,7 @@
     "@supabase/supabase-js": "^2.45.4",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
+    "@vercel/analytics": "^2.0.1",
     "@vercel/functions": "^3.5.1",
     "next": "^16.2.3",
     "openai": "^6.34.0",
