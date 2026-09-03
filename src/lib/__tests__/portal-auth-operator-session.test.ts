@@ -11,6 +11,12 @@ const state = vi.hoisted(() => ({
   updates: [] as Array<Record<string, unknown>>,
 }));
 
+const navigation = vi.hoisted(() => ({
+  redirect: vi.fn((pathname: string) => {
+    throw new Error(`redirect:${pathname}`);
+  }),
+}));
+
 vi.mock("next/headers", () => ({
   headers: async () => ({
     get: (name: string) => name.toLowerCase() === "host" ? state.host : null,
@@ -46,9 +52,13 @@ vi.mock("@/lib/supabase-admin", () => ({
   },
 }));
 
+vi.mock("next/navigation", () => ({ redirect: navigation.redirect }));
+
 import {
   createSessionCookie,
+  getPortalSession,
   getOperatorSession,
+  requirePortalViewer,
   revalidateOperatorMembership,
   type PortalSession,
 } from "../portal-auth";
@@ -184,5 +194,45 @@ describe("live operator session authorization", () => {
     ]);
     expect(state.updates).toHaveLength(1);
     expect(state.updates[0]).toHaveProperty("last_signed_in_at");
+  });
+
+  it.each(["lawyer", "client"] as const)(
+    "leaves a signed %s session unchanged on the app host",
+    async (role) => {
+      state.host = "app.caseloadselect.ca";
+      state.cookie = createSessionCookie("firm-1", {
+        role,
+        matter_id: role === "client" ? "matter-1" : undefined,
+      }).value;
+
+      expect(await getPortalSession()).toMatchObject({ role, firm_id: "firm-1" });
+      expect(state.tables).toEqual([]);
+    },
+  );
+
+  it("rejects an app-host legacy operator cookie through requirePortalViewer", async () => {
+    state.host = "app.caseloadselect.ca";
+    setOperatorCookie();
+
+    await expect(requirePortalViewer("other-firm")).rejects.toThrow(
+      "redirect:/portal/login",
+    );
+    expect(state.tables).toEqual([]);
+  });
+
+  it("rejects a disabled operator through requirePortalViewer", async () => {
+    setOperatorCookie();
+    state.row = null;
+
+    await expect(requirePortalViewer("other-firm")).rejects.toThrow(
+      "redirect:/portal/login",
+    );
+    expect(state.filters).toContainEqual(["disabled", false]);
+  });
+
+  it("preserves active cross-firm operator viewing on the admin host", async () => {
+    setOperatorCookie();
+    const viewer = await requirePortalViewer("other-firm");
+    expect(viewer).toMatchObject({ isOperator: true, isLawyer: false, isPreview: false });
   });
 });

@@ -186,11 +186,17 @@ export function createSessionCookie(
   };
 }
 
-export async function getPortalSession(): Promise<PortalSession | null> {
+async function getRawPortalSession(): Promise<PortalSession | null> {
   const cookieStore = await cookies();
   const raw = cookieStore.get(COOKIE_NAME)?.value;
   if (!raw) return null;
   return verifyPortalToken(raw);
+}
+
+async function isTrustedOperatorRequestHost(): Promise<boolean> {
+  const requestHeaders = await headers();
+  const hostname = requestHeaders.get("host") ?? "";
+  return isLocalOrPreviewHost(hostname) || isOperatorHost(hostname);
 }
 
 /**
@@ -244,19 +250,31 @@ export async function revalidateOperatorMembership(
 }
 
 /**
+ * Return the signed portal session after applying role-specific live checks.
+ *
+ * Lawyer and client cookies remain self-contained and scoped by their signed
+ * firm or matter identifiers. Every operator-valued cookie, regardless of the
+ * page or API that consumes it, must be on the trusted operator origin and map
+ * to a currently active database membership. This is the public session
+ * boundary; callers must not decode the cookie independently.
+ */
+export async function getPortalSession(): Promise<PortalSession | null> {
+  const session = await getRawPortalSession();
+  if (!session || session.role !== "operator") return session;
+  if (!await isTrustedOperatorRequestHost()) return null;
+  return await revalidateOperatorMembership(session) ? session : null;
+}
+
+/**
  * Return a live operator session only on the origin that owns the host-only
  * operator cookie. Legacy operator cookies on app.caseloadselect.ca are
  * intentionally rejected; users must complete the operator sign-in flow on
  * the admin origin to establish the new session boundary.
  */
 export async function getOperatorSession(): Promise<PortalSession | null> {
-  const requestHeaders = await headers();
-  const hostname = requestHeaders.get("host") ?? "";
-  if (!isLocalOrPreviewHost(hostname) && !isOperatorHost(hostname)) return null;
-
   const session = await getPortalSession();
   if (!session || session.role !== "operator") return null;
-  return await revalidateOperatorMembership(session) ? session : null;
+  return session;
 }
 
 /**
