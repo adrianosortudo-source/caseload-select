@@ -59,7 +59,7 @@ describe('registry backfill', () => {
 describe('bounded encrypted registry source', () => {
   it('scans only the intent prefix and decrypts a bounded key batch', async () => {
     const scan = vi.fn(async () => [0, [`privacy:deletion-registry:v2:intent:${intent.deletionRequestId}`]] as [number, string[]]);
-    const get = vi.fn(async () => 'encrypted-intent');
+    const get = async <T,>(_key: string): Promise<T | null> => 'encrypted-intent' as T;
     const source = new RedisRegistryIntentSource({ scan, get });
     await expect(source.take(1)).resolves.toEqual([intent]);
     expect(scan).toHaveBeenCalledWith(0, { match: 'privacy:deletion-registry:v2:intent:*', count: 1 });
