@@ -10,7 +10,12 @@
 import 'server-only';
 
 import { supabaseAdmin as supabase } from './supabase-admin';
-import { registerDeletionAppliedReceipt, registerDeletionIntent } from './privacy-deletion-registry';
+import {
+  isPrivacyDeletionRegistryEnabled,
+  registerDeletionAppliedReceipt,
+  registerDeletionIntent,
+} from './privacy-deletion-registry';
+import { assertPrivacyOperationsOpen, assertPrivacyRecoveryReplaying } from './privacy-recovery-gate';
 
 const INTAKE_ATTACHMENTS_BUCKET = 'intake-attachments';
 const STORAGE_REMOVE_BATCH = 1000;
@@ -32,6 +37,19 @@ export interface ScreenedLeadErasureInput {
     metaStatus?: CleanupCompletionStatus;
     resendStatus?: CleanupCompletionStatus;
   };
+  /**
+   * Service-only adapter. When the external registry feature is enabled, its
+   * deletion/disposition must succeed before the database terminal mutation.
+   * It must return status evidence only: never provider selectors or bodies.
+   */
+  externalDeletion?: {
+    erase(input: Pick<ScreenedLeadErasureInput, 'firmId' | 'leadId' | 'reason' | 'deletionRequestId'>): Promise<{
+      ok: boolean;
+      cleanup: Required<NonNullable<ScreenedLeadErasureInput['externalCleanup']>>;
+    }>;
+  };
+  /** Internal restore coordinator capability; never accept from a request body. */
+  recoveryReplay?: boolean;
 }
 
 export type CleanupCompletionStatus =
@@ -273,30 +291,39 @@ export async function removeIntakeSessionAttachments(
 export async function eraseScreenedLead(
   input: ScreenedLeadErasureInput,
 ): Promise<ScreenedLeadErasureResult> {
-  // This is intentionally before the database RPC. A database restore must
-  // have an independent replay source; if Redis or its key is unavailable we
-  // refuse the destructive transition rather than creating an unrecoverable
-  // tombstone solely inside Supabase.
-  try {
-    await registerDeletionIntent({
-      deletionRequestId: input.deletionRequestId,
-      firmId: input.firmId,
-      leadId: input.leadId,
-      reason: input.reason,
-      recordedAt: new Date().toISOString(),
-    });
-  } catch {
-    return {
-      ok: false,
-      database_redacted: false,
-      redacted_count: 0,
-      deletion_request_id: input.deletionRequestId,
-      privacy_redacted_at: null,
-      external_cleanup_status: 'not_started',
-      storage_objects_removed: 0,
-      pending_cleanup_categories: ['external_deletion_registry'],
-      error: 'external privacy registry is unavailable',
-    };
+  const registryEnabled = isPrivacyDeletionRegistryEnabled();
+  let externalCleanup = input.externalCleanup;
+  if (registryEnabled) {
+    // Register intent and complete the external provider step before the
+    // irreversible local redaction. Any unavailable registry, closed restore
+    // circuit, missing adapter, or provider failure stops here.
+    try {
+      if (input.recoveryReplay) await assertPrivacyRecoveryReplaying();
+      else await assertPrivacyOperationsOpen();
+      await registerDeletionIntent({
+        deletionRequestId: input.deletionRequestId,
+        firmId: input.firmId,
+        leadId: input.leadId,
+        reason: input.reason,
+        recordedAt: new Date().toISOString(),
+      });
+      if (!input.externalDeletion) throw new Error('external deletion adapter is required');
+      const external = await input.externalDeletion.erase(input);
+      if (!external.ok) throw new Error('external deletion did not complete');
+      externalCleanup = external.cleanup;
+    } catch {
+      return {
+        ok: false,
+        database_redacted: false,
+        redacted_count: 0,
+        deletion_request_id: input.deletionRequestId,
+        privacy_redacted_at: null,
+        external_cleanup_status: 'not_started',
+        storage_objects_removed: 0,
+        pending_cleanup_categories: ['external_deletion_registry'],
+        error: 'external privacy deletion saga is unavailable',
+      };
+    }
   }
   const { data, error } = await supabase.rpc('redact_screened_lead_subject', {
     p_firm_id: input.firmId,
@@ -338,7 +365,7 @@ export async function eraseScreenedLead(
   // If this second immutable write fails, do not report success: the intent
   // remains replayable and a retry can safely record the receipt.
   try {
-    await registerDeletionAppliedReceipt({
+    if (registryEnabled) await registerDeletionAppliedReceipt({
       deletionRequestId: requestId,
       redactedCount: payload.redacted_count ?? 0,
       appliedAt: payload.privacy_redacted_at ?? new Date().toISOString(),
@@ -371,7 +398,7 @@ export async function eraseScreenedLead(
   }
 
   const manifest = parseCleanupManifest(payload.external_cleanup_manifest);
-  const completion = input.externalCleanup;
+  const completion = externalCleanup;
   const completionStatuses: Record<'ghl' | 'meta' | 'resend', CleanupCompletionStatus> = {
     ghl: 'not_applicable',
     meta: 'not_applicable',

@@ -7,6 +7,22 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(),
   list: vi.fn(),
   storageBuckets: [] as string[],
+  registryEnabled: false,
+  registerIntent: vi.fn(),
+  registerReceipt: vi.fn(),
+  assertOpen: vi.fn(),
+  assertReplaying: vi.fn(),
+}));
+
+vi.mock('../privacy-deletion-registry', () => ({
+  isPrivacyDeletionRegistryEnabled: () => mocks.registryEnabled,
+  registerDeletionIntent: mocks.registerIntent,
+  registerDeletionAppliedReceipt: mocks.registerReceipt,
+}));
+
+vi.mock('../privacy-recovery-gate', () => ({
+  assertPrivacyOperationsOpen: mocks.assertOpen,
+  assertPrivacyRecoveryReplaying: mocks.assertReplaying,
 }));
 
 vi.mock('@/lib/supabase-admin', () => ({
@@ -65,9 +81,50 @@ beforeEach(() => {
   mocks.remove.mockReset().mockResolvedValue({ data: [], error: null });
   mocks.list.mockReset().mockResolvedValue({ data: [], error: null });
   mocks.storageBuckets = [];
+  mocks.registryEnabled = false;
+  mocks.registerIntent.mockReset().mockResolvedValue('created');
+  mocks.registerReceipt.mockReset().mockResolvedValue('created');
+  mocks.assertOpen.mockReset().mockResolvedValue(undefined);
+  mocks.assertReplaying.mockReset().mockResolvedValue(undefined);
 });
 
 describe('eraseScreenedLead', () => {
+  it('fails before the local mutation when the enabled registry is unavailable', async () => {
+    mocks.registryEnabled = true;
+    mocks.registerIntent.mockRejectedValueOnce(new Error('registry unavailable'));
+
+    const result = await eraseScreenedLead({
+      firmId: FIRM_ID, leadId: 'L-2026-09-02-001', reason: 'subject_request', deletionRequestId: REQUEST_ID,
+      externalDeletion: { erase: vi.fn() },
+    });
+
+    expect(result).toMatchObject({ ok: false, database_redacted: false, error: 'external privacy deletion saga is unavailable' });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+  });
+
+  it('completes the external adapter before the local terminal mutation', async () => {
+    mocks.registryEnabled = true;
+    const sequence: string[] = [];
+    mocks.registerIntent.mockImplementationOnce(async () => { sequence.push('intent'); return 'created'; });
+    mocks.registerReceipt.mockImplementationOnce(async () => { sequence.push('receipt'); return 'created'; });
+    mocks.rpc.mockImplementationOnce(async () => {
+      sequence.push('database');
+      return pendingPayload({ external_cleanup_status: 'complete' });
+    });
+    const adapter = { erase: vi.fn(async () => {
+      sequence.push('external');
+      return { ok: true, cleanup: { ghlStatus: 'completed' as const, metaStatus: 'completed' as const, resendStatus: 'not_applicable' as const } };
+    }) };
+
+    const result = await eraseScreenedLead({
+      firmId: FIRM_ID, leadId: 'L-2026-09-02-001', reason: 'subject_request', deletionRequestId: REQUEST_ID,
+      externalDeletion: adapter,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(sequence).toEqual(['intent', 'external', 'database', 'receipt']);
+  });
+
   it('calls the atomic primitive with the exact firm and lead scope', async () => {
     mocks.rpc.mockResolvedValueOnce(pendingPayload());
 
