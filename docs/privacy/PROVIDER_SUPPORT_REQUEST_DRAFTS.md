@@ -2,6 +2,8 @@
 
 **UNSENT. Do not paste, upload, or send any draft without Adriano's action-time approval naming the provider, destination, and final text.**
 
+**Scope decision, 2026-09-03:** These drafts are separate privacy-compliance follow-up material. Responses from Resend, HighLevel, or Supabase are not Meta App Review release gates. Meta-specific application evidence of the implemented deletion path remains required. The Meta support draft is optional and should be used only if an app-specific deletion question cannot be resolved from the app configuration, implemented path, or Meta's published requirements.
+
 These drafts request account-specific retention and deletion evidence. They do not authorize a provider to restore, delete, change, or disclose unrelated records. Replace bracketed placeholders only from the authenticated account immediately before approved transmission.
 
 ## Meta

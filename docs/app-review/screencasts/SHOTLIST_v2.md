@@ -10,7 +10,7 @@ Do not splice, pause, or cover a failed attempt with a cut.
 
 ## Recording gate
 
-Release gates are complete: PRs #191, #193, and #195 are merged; production commit `fa3e092983b274c96fd1d22b8fa0091988baeb25` is READY; migrations `20260901231830`, `20260902102620`, and `20260902111504` are applied and verified.
+The recording and send gates are complete: PRs #191, #193, and #195 are merged; production commit `fa3e092983b274c96fd1d22b8fa0091988baeb25` is READY; migrations `20260901231830`, `20260902102620`, and `20260902111504` are applied and verified. Separate Meta submission privacy gates remain open in `../RUNBOOK_Resubmission_v2.md`.
 
 Before each take, confirm:
 

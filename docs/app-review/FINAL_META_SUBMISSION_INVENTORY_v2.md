@@ -31,9 +31,9 @@ Use these repository documents as the active package:
 3. `docs/app-review/PERMISSION_CODE_PATH_EVIDENCE_v2.md`
 4. `docs/app-review/screencasts/SHOTLIST_v2.md`
 5. `docs/app-review/deletion-flow-verification.md`
-6. `docs/privacy/PROVIDER_ACCOUNT_EVIDENCE_2026-09-02.md`
-7. `docs/privacy/PRIVACY_COUNSEL_APPROVAL_REQUEST.md`
-8. `docs/privacy/PROVIDER_SUPPORT_REQUEST_DRAFTS.md`
+6. `docs/privacy/PRIVACY_COUNSEL_APPROVAL_REQUEST.md`
+
+Keep `docs/privacy/PROVIDER_ACCOUNT_EVIDENCE_2026-09-02.md` and `docs/privacy/PROVIDER_SUPPORT_REQUEST_DRAFTS.md` as separate privacy-compliance follow-up records. They are not active Meta submission package files.
 
 Treat `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, and `screencasts/README.md` as historical first-submission material. Do not paste or execute them for this resubmission.
 
@@ -64,19 +64,22 @@ Required captions do not replace visible product evidence. The final watch must 
 
 Do not upload the repository's v1 Messenger, Instagram, WhatsApp, or Business Manager videos as proof for these two permissions.
 
-## Privacy release gates
+## Meta submission privacy gates
 
-All of the following must be closed before final submission:
+The following Meta-relevant checks must be closed before final submission:
 
-- [ ] Check the DRG HighLevel Contacts > Restore surface for `L-2026-05-14-5EQ` and attach the timestamped account-specific evidence. Current-record API searches are no-match, but the recycle-bin check remains open.
-- [ ] If a recoverable GHL record exists, obtain Adriano's action-time confirmation naming the exact contact before deletion, then record the provider action result.
 - [ ] Correct and reverify the completion semantics so a `provider_managed` marker cannot by itself produce successful external-cleanup completion.
-- [ ] Attach account-specific provider action or retention evidence for Meta, Resend, GHL, and Supabase. Public documentation alone is insufficient.
+- [ ] Verify with Meta-specific application evidence that the deployed CaseLoad Select deletion path removes direct identifiers and message content from the operational copies created from Messenger and Instagram intake. A Meta support response is required only if an app-specific deletion question remains unresolved.
 - [ ] Preserve the verified Supabase Free-plan result and PR #203 restore evidence, then implement the external durable deletion registry and a restore procedure that blocks operational access until replay is verified. No account-visible Supabase restore point or expiry schedule is currently available.
 - [ ] Obtain written privacy-counsel approval for the retained envelope, available joins, three-year per-event maximum, deletion-tombstone retention, and suppression-hash retention.
-- [ ] Close or correctly disposition deletion request `a932fae3-479d-400c-a94a-ca510c281879` through the controlled workflow with evidence.
 
-The September fictional production rehearsal passed the tested CaseLoad Select operational-store and control checks. It did not clear the provider, backup, counsel, or legacy GHL gates above.
+The September fictional production rehearsal passed the tested CaseLoad Select operational-store and control checks. It did not clear the remaining deployment, backup, or counsel gates above.
+
+### Separate follow-up, not a Meta submission gate
+
+- Resolve the legacy HighLevel selector and deletion request `a932fae3-479d-400c-a94a-ca510c281879` through the controlled workflow when separately authorized.
+- Preserve the Resend, HighLevel, and Supabase account-evidence questions in `docs/privacy/PROVIDER_ACCOUNT_EVIDENCE_2026-09-02.md`.
+- Do not send any provider support draft without separate provider-specific approval. Responses from Resend, HighLevel, and Supabase are not required for this Meta submission.
 
 ## Upload and paste checks
 

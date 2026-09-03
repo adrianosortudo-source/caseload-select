@@ -63,7 +63,7 @@ Please answer each question expressly rather than approving the design only in g
 6. Should the clock instead run from the verified deletion request, first inquiry, conversation close, or another event?
 7. What maximum applies to the deletion tombstone and channel-suppression hashes? If indefinite retention is required, what purpose and authority support it?
 8. Which fixed reasons and status counts may remain without becoming identifying when combined with timestamps or firm-level counts?
-9. Does proof of deletion require provider request-specific evidence, account-specific retention evidence, or both for Meta, Resend, GHL, and Supabase?
+9. For the broader privacy-compliance program, what provider request-specific or account-specific retention evidence should be retained for Meta, Resend, HighLevel, and Supabase? Responses from Resend, HighLevel, and Supabase are tracked as separate follow-up and are not Meta App Review gates.
 10. What backup-expiry and restore-replay evidence is required before the public commitment can be released?
 
 ## Public wording for review

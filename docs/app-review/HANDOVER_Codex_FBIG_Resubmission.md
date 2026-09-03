@@ -23,7 +23,7 @@ Release evidence:
 - The conversation ledger is append-only. `service_role` has SELECT and INSERT only. Browser roles and PUBLIC have no table privileges. RLS is enabled and forced with no policies.
 - The fresh fictional post-ledger deletion rehearsal passed the CaseLoad Select database, application, Storage, authorization, idempotency, tenant-isolation, append-only, pending-message, and expiry-invocation checks recorded in `deletion-flow-verification.md`.
 
-For the messaging-send evidence, the remaining work is operational: a live production rehearsal, two continuous recordings, live Meta draft cleanup, and Adriano's approved submission action. Final submission remains blocked by the four open privacy gates and the provider-managed completion-semantics defect below.
+For the messaging-send evidence, the remaining work is operational: a live production rehearsal, two continuous recordings, live Meta draft cleanup, and Adriano's approved submission action. Final submission remains blocked by the Meta-relevant privacy gates and deployment of the provider-managed completion-semantics correction described below.
 
 ## Authority and scope
 
@@ -99,14 +99,14 @@ If Meta displays a dependency or a different Instagram permission label, capture
 - Frame the portal tightly around a fresh fictional test brief. Do not expose the triage queue, unrelated lead names, personal inboxes, or other production data.
 - The conversation timeline displays the newest 500 events. The reply-window check separately reads the latest authoritative inbound event.
 - Portal replies are plain text. The shared limit is 2,000 characters; Instagram is also limited to 1,000 UTF-8 bytes.
-- The May 2026 deletion verification remains historical and predates `channel_conversation_events`. Use the September 2026 post-ledger rehearsal for the tested controlled-redaction claims, while preserving its documented provider, backup, counsel, and legacy-cleanup limits.
+- The May 2026 deletion verification remains historical and predates `channel_conversation_events`. Use the September 2026 post-ledger rehearsal for the tested controlled-redaction claims, while preserving its documented backup, counsel, and legacy-cleanup limits. Multi-provider support evidence is tracked separately and does not block Meta submission.
 - Do not reset a recording with ad hoc DELETE statements. Start a fresh fictional inbound conversation instead.
 
 ## Pre-submission blocker: deletion promise and conversation ledger
 
 Adriano selected controlled, irreversible redaction as the resolution. PRs #198 and #199 shipped the service-only operation and production migration. The September 2026 fictional production rehearsal verified the tested CaseLoad Select stores and controls. Whether the retained fields and available joins are non-identifying remains a counsel decision.
 
-The blocker remains open for four recorded gates: the pending legacy-backfill GHL disposition; provider-specific action or retention evidence; account-specific backup expiry plus a safe restore/replay rehearsal; and privacy-counsel approval of the retained audit envelope and three-year period. In addition, the completion path currently allows Meta or Resend `provider_managed` status to be recorded as complete without action evidence. Correct and reverify that semantic mismatch before submission. This does not invalidate the shipped send surface or its recording evidence. The Messenger and Instagram flows may be rehearsed and recorded after the production send gates pass.
+The blocker remains open for the Meta-relevant gates recorded in the runbook: deployment and verification of the PR #202 completion-semantics correction, backup expiry plus safe restore/replay controls, privacy-counsel approval of the retained audit envelope and three-year period, and accurate public deletion wording. The Messenger and Instagram flows may be rehearsed and recorded after the production send gates pass. The legacy HighLevel disposition and Resend, HighLevel, or Supabase support responses remain separate privacy-compliance follow-up work and do not block Meta submission.
 
 ## Remaining sequence
 
@@ -115,7 +115,7 @@ The blocker remains open for four recorded gates: the pending legacy-backfill GH
 3. Rehearse the full portal send and native receipt without recording.
 4. Record and verify the Messenger v2 clip.
 5. Record and verify the Instagram v2 clip.
-6. Correct the provider-managed completion semantics and close the four open privacy gates recorded above.
+6. Deploy and verify the provider-managed completion correction, then close the remaining Meta-relevant privacy gates recorded above.
 7. Inventory the live Meta draft. Remove unsupported and approved permissions one row at a time.
 8. Paste the then-current v2 reviewer instructions and attach only the matching v2 clips.
 9. Stop for Adriano's action-time approval before the final submission control.
@@ -131,11 +131,12 @@ The blocker remains open for four recorded gates: the pending legacy-backfill GH
 - [ ] No real client or unrelated lead data is visible.
 - [x] The controlled-redaction resolution is shipped and the post-ledger fictional deletion rehearsal is recorded as passed for the tested CaseLoad Select stores and controls.
 - [ ] `provider_managed` alone cannot mark external cleanup complete or produce a successful completion notice.
-- [ ] The pending legacy-backfill GHL disposition is closed.
-- [ ] Provider action or retention evidence is recorded for Meta, Resend, GHL, and Supabase.
+- [ ] The deployed deletion path removes direct identifiers and message content from the operational copies created from Meta Messenger and Instagram intake.
 - [ ] Account-specific backup expiry and a safe restore/replay rehearsal are verified.
 - [ ] Privacy counsel approves the retained audit envelope, available joins, and three-year period.
 - [ ] Live draft contains only the two source-supported messaging permissions.
 - [ ] The three approved scopes are absent.
 - [ ] Reviewer instructions use the exact live Instagram permission label.
 - [ ] Adriano has reviewed the final draft and explicitly approved submission.
+
+Separate follow-up: resolve the pending legacy HighLevel disposition and pursue any Resend, HighLevel, or Supabase support questions only under separate provider-specific approval. Those responses are not part of the Meta readiness definition.
