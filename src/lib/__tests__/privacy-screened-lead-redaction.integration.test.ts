@@ -5,6 +5,8 @@
  * the mutation guards being tested prohibit ordinary cleanup DELETEs.
  */
 import { randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 const DB_URL = process.env.DIRECT_DATABASE_URL;
@@ -615,22 +617,61 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
   });
 
   it("completes external cleanup idempotently with a closed non-PII summary", async () => {
-    const falseDisposition = await serviceRpc<CleanupCompletionRpcResult>(
-      `select public.complete_screened_lead_external_cleanup($1, $2, $3::jsonb) as result`,
-      [firmId, requestId, JSON.stringify({
+    const invalidSummaries = [
+      null,
+      [],
+      "scalar cleanup summary",
+      {
         storage_deleted_count: 0,
-        ghl_status: "provider_managed",
+        ghl_status: "completed",
         meta_status: "provider_managed",
-        resend_status: "provider_managed",
-      })],
+        resend_status: "completed",
+      },
+      {
+        storage_deleted_count: 0,
+        ghl_status: "completed",
+        meta_status: null,
+        resend_status: "completed",
+      },
+      {
+        storage_deleted_count: 0,
+        ghl_status: "completed",
+        resend_status: "completed",
+      },
+      {
+        storage_deleted_count: 0,
+        ghl_status: "completed",
+        meta_status: "unknown",
+        resend_status: "completed",
+      },
+    ];
+    for (const invalidSummary of invalidSummaries) {
+      const rejected = await serviceRpc<CleanupCompletionRpcResult>(
+        `select public.complete_screened_lead_external_cleanup($1, $2, $3::jsonb) as result`,
+        [firmId, requestId, JSON.stringify(invalidSummary)],
+      );
+      expect(rejected).toMatchObject({
+        ok: false,
+        external_cleanup_status: "pending",
+      });
+    }
+    const stillPending = await conn.query(
+      `select external_cleanup_status, external_cleanup_manifest, cleanup_summary
+         from privacy_deletion_requests
+        where id = $1`,
+      [requestId],
     );
-    expect(falseDisposition).toMatchObject({ ok: false });
+    expect(stillPending.rows[0]).toMatchObject({
+      external_cleanup_status: "pending",
+      cleanup_summary: null,
+    });
+    expect(stillPending.rows[0].external_cleanup_manifest).not.toEqual({});
 
     const summary = {
       storage_deleted_count: 0,
       ghl_status: "completed",
-      meta_status: "provider_managed",
-      resend_status: "provider_managed",
+      meta_status: "completed",
+      resend_status: "not_applicable",
     };
     const first = await serviceRpc<CleanupCompletionRpcResult>(
       `select public.complete_screened_lead_external_cleanup($1, $2, $3::jsonb) as result`,
@@ -655,6 +696,86 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
     expect(pending.requests).not.toContainEqual(
       expect.objectContaining({ deletion_request_id: requestId }),
     );
+  });
+
+  it("reopens legacy complete requests with null, missing, or invalid provider evidence", async () => {
+    const legacyLeadIds = [randomUUID(), randomUUID(), randomUUID()];
+    const legacyRequestIds = [randomUUID(), randomUUID(), randomUUID()];
+    const legacySummaries = [
+      {
+        storage_deleted_count: 0,
+        ghl_status: null,
+        meta_status: "completed",
+        resend_status: "completed",
+      },
+      {
+        storage_deleted_count: 0,
+        ghl_status: "completed",
+        resend_status: "not_applicable",
+      },
+      {
+        storage_deleted_count: 0,
+        ghl_status: "completed",
+        meta_status: "completed",
+        resend_status: "unknown",
+      },
+    ];
+
+    for (let index = 0; index < legacyLeadIds.length; index += 1) {
+      await conn.query(
+        `insert into screened_leads
+           (id, firm_id, lead_id, brief_json, brief_html, slot_answers,
+            matter_type, practice_area, decision_deadline)
+         values ($1, $2, $3, '{}'::jsonb, '<p>Legacy fixture</p>', '{}'::jsonb,
+           'employment', 'employment', now() + interval '48 hours')`,
+        [legacyLeadIds[index], firmId, `legacy-privacy-${randomUUID()}`],
+      );
+      await conn.query(
+        `insert into privacy_deletion_requests
+           (id, firm_id, screened_lead_id, subject_key_hash, reason,
+            database_redacted_at, external_cleanup_status,
+            external_cleanup_manifest, external_cleanup_completed_at,
+            cleanup_summary)
+         values ($1, $2, $3, $4, 'subject_request', now(), 'complete',
+           '{}'::jsonb, now(), $5::jsonb)`,
+        [
+          legacyRequestIds[index],
+          firmId,
+          legacyLeadIds[index],
+          `legacy-subject-${randomUUID()}`,
+          JSON.stringify(legacySummaries[index]),
+        ],
+      );
+    }
+
+    const migration = readFileSync(
+      join(
+        process.cwd(),
+        "supabase",
+        "migrations",
+        "20260903011450_privacy_provider_evidence_required.sql",
+      ),
+      "utf8",
+    );
+    await conn.query(migration);
+
+    const reopened = await conn.query(
+      `select id, external_cleanup_status, external_cleanup_completed_at,
+              cleanup_summary, external_cleanup_manifest
+         from privacy_deletion_requests
+        where id = any($1::uuid[])
+        order by id`,
+      [legacyRequestIds],
+    );
+    expect(reopened.rows).toHaveLength(3);
+    for (const request of reopened.rows) {
+      expect(request).toMatchObject({
+        external_cleanup_status: "pending",
+        external_cleanup_completed_at: null,
+        cleanup_summary: null,
+      });
+      expect(request.external_cleanup_manifest).not.toEqual({});
+    }
   });
 
   it("purges only already-redacted events that reached three years from occurred_at", async () => {
