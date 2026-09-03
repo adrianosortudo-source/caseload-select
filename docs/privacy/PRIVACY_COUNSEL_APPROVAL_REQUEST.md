@@ -15,11 +15,13 @@ Meta submission remains blocked until these decisions are recorded and the other
 
 ## Implemented and rehearsed outcome
 
-PRs #198 and #199 shipped a service-only, tenant-scoped, idempotent redaction workflow. The fictional production rehearsal recorded in `docs/app-review/deletion-flow-verification.md` verified the tested CaseLoad Select database, Storage, authorization, tenant-isolation, append-only, pending-message, suppression, and expiry-invocation controls.
+PRs #198 and #199 shipped a service-only, tenant-scoped, idempotent redaction workflow. PR #202 shipped strict completion semantics, PR #203 recorded the fictional local restore/replay rehearsal and external-registry gap, and PR #204 aligned the release record, this counsel request, and the public deletion wording with those boundaries. Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` is READY, and migrations through `20260903011450_privacy_provider_evidence_required` are applied. The fictional production rehearsal recorded in `docs/app-review/deletion-flow-verification.md` verified the tested CaseLoad Select database, Storage, authorization, tenant-isolation, append-only, pending-message, suppression, and expiry-invocation controls.
+
+After `20260903011450` was applied, a second fictional production verification ran entirely inside one rollback-only transaction. It verified the live production functions and triggers without exposing the fixture to application workers: `provider_managed` was rejected as completion evidence and left the request pending; a complete/not-applicable disposition completed the request idempotently; Messenger-style direct identifiers and content were removed from the screened lead, conversation event, channel session, unconfirmed inquiry, and processed-message claim; suppression prevented those Meta-derived CaseLoad Select operational copies from being recreated; and rollback left zero fixture rows. No external provider send or deletion was attempted. This closes the strict-completion and Meta-derived CaseLoad Select operational-copy engineering gates only.
 
 For the screened lead and linked operational stores, the workflow removes or replaces names, email addresses, phone numbers, message bodies, transcripts, attachments, channel sender IDs, Meta message IDs, IP addresses, user agents, advertising identifiers, provider selectors, free-text errors, and free-text notes. Ordinary ledger updates and deletes remain prohibited. The deletion function permits one irreversible redaction transition.
 
-This rehearsal did not prove external-provider deletion, safe restore replay, or legal sufficiency of the retained envelope. Account verification later identified the production Supabase organization as Free, with WAL-G enabled, PITR disabled, no listed backups, and no physical-backup metadata.
+Neither production verification proves external-provider deletion, account-specific backup expiry, safe restore replay from an external durable registry, legal sufficiency of the retained envelope, or final supportability of the public wording. Account verification identified the production Supabase organization as Free, with WAL-G enabled, PITR disabled, no listed backups, and no physical-backup metadata.
 
 PR #203 records a separate fictional local restore/replay rehearsal. It proved that redaction is idempotently reapplied when a deletion request is supplied from outside the restored database. It also proved that restoring a pre-deletion snapshot removes an in-database request tombstone and leaves the database recovery list empty. An external durable deletion registry and a restore procedure that blocks operational access until replay is verified remain release gates.
 
@@ -70,14 +72,14 @@ For the Meta-focused approval, please answer questions 1 through 8 and question 
 
 The current release-target wording says that, after a verified request, CaseLoad Select irreversibly removes message content and direct identifiers from its operational systems. It says that a minimal audit envelope may remain for system security, delivery-integrity checks, proof that deletion was completed, and non-identifying operational counts. It states a target of removing each retained channel audit event within three years of when it occurred.
 
-The wording also distinguishes:
+The merged wording also distinguishes:
 
 - CaseLoad Select operational copies;
 - firm-controlled legal files that the firm may need to retain under its own duties;
 - processor and external-platform copies, including the distinction between privileged-operator attestations and provider-issued evidence; and
 - encrypted backups that require an applicable expiry schedule and deletion replay before restored data returns to use.
 
-It does not promise physical deletion of every database row. Please confirm whether the wording is accurate, sufficiently specific, and supportable after the operational gates close.
+It does not promise physical deletion of every database row. This wording is still an open approval and release gate, not a counsel-approved assurance. Please confirm whether it is accurate, sufficiently specific, and supportable after the backup/registry and other operational gates close.
 
 ## Meta-focused approval record requested
 
@@ -92,7 +94,7 @@ Please return a dated written decision that includes:
 - any required change to the public privacy or deletion wording; and
 - counsel name, capacity, and approval date.
 
-Until this Meta-focused record exists, mark counsel approval **open** and do not submit the Meta App Review package. A separate answer to question 9 may remain open and does not prevent the Meta-focused approval or submission readiness once every other Meta gate is closed.
+Until this Meta-focused record exists, mark counsel approval **open** and do not submit the Meta App Review package. A separate answer to question 9 may remain open and does not prevent the Meta-focused approval or submission readiness once every other Meta gate is closed. Even after counsel approval, final submission remains subject to Adriano's explicit action-time approval.
 
 ## Broader privacy-program follow-up
 

@@ -2,7 +2,7 @@
 
 > SCOPE NOTICE: This May 2026 exercise predates `channel_conversation_events`. It verifies the fields and tables named below only. It does not establish that append-only channel conversation ledger content is erased or anonymized, and it must not be used to make that claim in the v2 reviewer package.
 
-> CURRENT RELEASE GATE: A new post-ledger fictional deletion rehearsal is required after the redaction implementation is shipped. Until that rehearsal passes, this historical record does not clear the Meta submission blocker.
+> CURRENT RELEASE STATUS: The post-ledger fictional rehearsal and the final rollback-only production verification recorded below passed the tested CaseLoad Select controls, strict completion semantics, and Meta-derived operational-copy checks. Backup and restore-replay controls, privacy-counsel approval, and final public-copy reconciliation remain open, so this record does not authorize Meta submission.
 
 This file records the timestamped, end-to-end deletion exercise run before App Review submission. Required by `Phase11_Submission_Package.md` Section 6.3 so the deletion claim on the App Review form rests on a real recent exercise.
 
@@ -227,12 +227,36 @@ The retained deletion tombstone contains the firm and screened-lead coordinator 
 
 Supabase's post-DDL security advisor reported no new warning tied to the privacy migration. Its `RLS enabled, no policy` information messages for the locked ledgers are expected deny-by-default behavior. Existing unrelated warnings remain outside this release.
 
-### Open Meta-relevant gates: submission remains blocked
+## Final rollback-only production verification: 2026-09-03
 
-1. **Completion semantics:** PR #202 must be deployed with migration `20260903011450` and reverified so `provider_managed` alone cannot mark external cleanup complete.
-2. **Meta-derived operational copies:** the final fictional verification must provide Meta-specific application evidence that direct identifiers and message content originating from Messenger or Instagram are removed from the CaseLoad Select stores in scope. A Meta support response is required only if an app-specific deletion question remains unresolved.
-3. **Backup expiry and restore replay:** account-level verification confirmed that the production Supabase organization is on the Free plan. The Supabase CLI reported WAL-G enabled, PITR disabled, no enumerated backup snapshots, and no physical-backup metadata. There is therefore no account-visible production restore point or provider-backed expiry schedule to rehearse. A fictional local logical-restore rehearsal proved that the redaction RPC can reapply an externally retained request, but also proved that restoring a pre-deletion snapshot removes the in-database request tombstone and leaves the database recovery list empty. An external durable deletion registry and a restore procedure that replays it before restored data returns to use remain required. No production restore was attempted.
-4. **Privacy counsel:** counsel has not yet approved the provisional three-year audit-envelope period or confirmed that the retained keys and joins do not reasonably reidentify a person.
+**Status:** Strict completion semantics and redaction of the tested Meta-derived CaseLoad Select operational copies passed. The execution window ended by 2026-09-03 12:42 UTC. The database transaction was rolled back, leaving no persistent fictional fixture. This verification did not call Meta, another external provider, or Storage, and it is not evidence that data was deleted from Meta's systems.
+
+**Production commit:** `a05520e3b9d08d82bd81c42779907cbd2c807757`
+
+**Production migration ledger version:** `20260903011450` (`privacy_provider_evidence_required`)
+
+**Channel and fixture:** A fictional Facebook Messenger and Meta-derived operational-copy fixture exercised the deployed CaseLoad Select deletion path without sending data to a real person or external provider.
+
+### Passed checks
+
+- A wrong-tenant invocation was a no-op.
+- The lead, channel intake session, unconfirmed inquiry, and channel conversation event were redacted in the transaction; the matching processed-message claim was deleted.
+- The event body became `[redacted]`; the Meta message ID and actor or sender ID became `NULL`.
+- A `provider_managed` cleanup result was rejected. The request remained pending, and no completion summary was recorded.
+- Submitting `meta_status: provider_managed` through the authenticated production application path returned HTTP `400` with `{"error":"meta_status has an invalid status"}`.
+- A truthful all-`not_applicable` acknowledgement completed the uncommitted fixture only after every provider disposition passed the strict summary check.
+- Idempotent replay, tenant isolation, suppression, and reintroduction guards passed.
+- The exact fictional PII marker scan returned zero matches after redaction.
+- The transaction rollback left zero fixture residue in every checked table.
+
+This closes the strict completion-semantics and Meta-derived CaseLoad Select operational-copy gates only. It does not close backup and restore replay, privacy-counsel review, public-copy reconciliation, provider-account follow-up, or final Meta submission controls.
+
+### Meta-relevant gate status: submission remains blocked
+
+1. **Completion semantics, passed:** production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` and migration `20260903011450` were verified. A `provider_managed` marker alone cannot complete external cleanup or produce a successful completion summary.
+2. **Meta-derived operational copies, passed:** the final rollback-only fictional verification proved that the deployed path removes the tested direct identifiers and message content from CaseLoad Select operational copies derived from Facebook Messenger intake. This does not claim deletion from Meta's systems.
+3. **Backup expiry and restore replay, open:** account-level verification confirmed that the production Supabase organization is on the Free plan. The Supabase CLI reported WAL-G enabled, PITR disabled, no enumerated backup snapshots, and no physical-backup metadata. There is therefore no account-visible production restore point or provider-backed expiry schedule to rehearse. A fictional local logical-restore rehearsal proved that the redaction RPC can reapply an externally retained request, but also proved that restoring a pre-deletion snapshot removes the in-database request tombstone and leaves the database recovery list empty. An external durable deletion registry and a restore procedure that replays it before restored data returns to use remain required. No production restore was attempted.
+4. **Privacy counsel, open:** counsel has not yet approved the provisional three-year audit-envelope period or confirmed that the retained keys and joins do not reasonably reidentify a person.
 
 ### Separate privacy-compliance follow-up, not a Meta gate
 
@@ -263,4 +287,4 @@ The logical restore emitted warnings for Supabase-managed `pg_cron`, Realtime, a
 
 **Rehearsal conclusion:** replay is idempotent and effective when an outstanding request is supplied from outside the restored database. Automatic replay is not implemented because the only current tombstone is part of the database being restored. Before release, completed and pending deletion request identifiers must be durably retained outside the database backup boundary, and the production restore runbook must block operational access until that external registry has been replayed and verified.
 
-**Engineering sign-off:** The shipped implementation and fictional production deletion path passed the controls listed above. Final Meta submission sign-off remains withheld until the Meta-relevant gates above are supported. Broader privacy-program follow-up remains separately open and does not control Meta App Review readiness.
+**Engineering sign-off:** The shipped implementation and fictional production deletion path passed the controls listed above, including strict completion semantics and the tested Meta-derived CaseLoad Select operational copies. Final Meta submission sign-off remains withheld until the open backup and restore-replay, privacy-counsel, and public-copy reconciliation gates above are supported. Broader privacy-program follow-up remains separately open and does not control Meta App Review readiness.

@@ -14,21 +14,24 @@ The shipped messaging and privacy-redaction baseline is complete:
 
 - [x] PRs #191, #193, and #195 merged.
 - [x] Required CI passed.
-- [x] PR #198 merged the controlled-redaction implementation and PR #199 corrected the migration runtime failure.
-- [x] Production commit `fde4f307f34eb12a74f06a57d2af9c6fdc9611eb` is READY.
+- [x] PR #198 merged the controlled-redaction implementation, PR #199 corrected the migration runtime failure, and PR #202 corrected the provider-cleanup completion semantics.
+- [x] PR #204 updated the release-target public wording and active Meta evidence package for the corrected implementation; counsel-backed final public-copy reconciliation remains open.
+- [x] Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` is READY.
 - [x] Migration `20260901231830_channel_conversation_ledger` is applied and verified.
 - [x] Migration `20260902102620_restrict_screen_funnel_service_role_acl` is applied and verified.
 - [x] Migration `20260902111504_harden_channel_conversation_acl` is applied and verified.
 - [x] Migration `20260902210124_privacy_screened_lead_redaction` is applied and verified.
+- [x] Migration `20260903011450_privacy_provider_evidence_required` is applied and verified.
 - [x] The fictional post-ledger production deletion rehearsal is recorded in `deletion-flow-verification.md`.
+- [x] The final rollback-only production verification of strict completion semantics and Meta-derived CaseLoad Select operational copies is recorded in `deletion-flow-verification.md`.
 
-The following operator gates remain open:
+The following operator gates passed for both verified local v2 clips. Reconfirm them only if either clip must be recorded again:
 
-- [ ] Production portal member has a stable UUID actor identity.
-- [ ] Support preview is off.
-- [ ] Fresh fictional Messenger and Instagram inbound events are visible and less than 24 hours old.
-- [ ] A live rehearsal confirms portal send and native receipt for each channel.
-- [ ] No unrelated lead data is visible in the planned recording frame.
+- [x] Production portal member has a stable UUID actor identity.
+- [x] Support preview is off.
+- [x] Fresh fictional Messenger and Instagram inbound events were visible and less than 24 hours old.
+- [x] A live rehearsal confirmed portal send and native receipt for each channel.
+- [x] No unrelated lead data is visible in either recording frame.
 
 On the test brief, confirm there is no support-preview banner or read-only notice. Confirm `Send reply` is enabled after a non-empty valid draft is entered. If the panel asks the member to sign in again, the session lacks a stable UUID actor identity. Sign in again and reopen the brief before rehearsal.
 
@@ -118,9 +121,9 @@ Watch the full upload copy before attaching it.
 
 Adriano selected controlled, irreversible redaction as the resolution. PRs #198 and #199 shipped the service-only, tenant-scoped operation and migration. The fresh fictional production rehearsal passed the database, application, Storage, authorization, idempotency, tenant-isolation, append-only, pending-message, and expiry-invocation checks recorded in `deletion-flow-verification.md`.
 
-That rehearsal did not clear the remaining Meta-relevant release gates below. It also identified a completion-semantics defect: the application and database could mark external cleanup complete when Meta or Resend was recorded only as `provider_managed`. PR #202 corrects that contract; the merged change must be deployed, migrated, and reverified before submission.
+That rehearsal identified a completion-semantics defect: the application and database could mark external cleanup complete when Meta or Resend was recorded only as `provider_managed`. PR #202 corrected that contract. Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` and migration `20260903011450` were then verified in a final rollback-only fictional production exercise. The exercise proved that `provider_managed` remains pending, cannot produce a completion summary, and that the tested Meta-derived CaseLoad Select operational copies are redacted.
 
-After deployment, treat `completed` and `not_applicable` as privileged-operator attestations, not provider-issued evidence. Record either status only after the operator checks the applicable disposition. Treat `provider_managed` only as a routing marker; it cannot close external cleanup by itself.
+Treat `completed` and `not_applicable` as privileged-operator attestations, not provider-issued evidence. Record either status only after the operator checks the applicable disposition. Treat `provider_managed` only as a routing marker; it cannot close external cleanup by itself.
 
 This does not block rehearsal or recording after the production send gates pass. It does block final Meta submission.
 
@@ -130,8 +133,8 @@ Do not submit the Meta draft until all of these checks pass:
 - [x] The scheduled three-year audit-envelope expiry is deployed and its production invocation is verified.
 - [x] Every in-scope attachment location and retained audit ledger in the fictional fixture is included in deletion and expiry verification.
 - [x] A fresh fictional post-ledger deletion rehearsal is appended to `deletion-flow-verification.md`.
-- [ ] Deploy PR #202 and migration `20260903011450`, then reverify that `provider_managed` alone cannot produce `external_cleanup_status: complete` or a successful completion notice.
-- [ ] Verify with Meta-specific application evidence that the deployed deletion path removes direct identifiers and message content from the operational copies created from Messenger and Instagram intake. A Meta support response is required only if an app-specific deletion question remains unresolved.
+- [x] Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` and migration `20260903011450` are deployed and verified: `provider_managed` alone cannot produce `external_cleanup_status: complete` or a successful completion notice.
+- [x] The final rollback-only fictional production verification proves that the deployed deletion path removes the tested direct identifiers and message content from Meta-derived CaseLoad Select operational copies. It does not claim deletion from Meta's systems.
 - [ ] Document account-specific backup-expiry schedules and complete a safe restore rehearsal proving completed deletions are reapplied before restored data returns to use.
 - [ ] Obtain privacy-counsel approval of the audit envelope, retained-key reidentification assessment, and three-year retention period.
 - [ ] Reconfirm that production `/privacy` and `/data-deletion` wording matches the verified end state after the completion-semantics correction and counsel review.
@@ -174,7 +177,8 @@ Do not use `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, `s
 - [ ] Each clip shows `Message thread`, the correct `Channel:` row, `Send reply`, `Reply sent.`, and the identical native receipt.
 - [ ] No real or unrelated lead data is visible.
 - [x] The controlled-redaction resolution is shipped and the post-ledger fictional deletion rehearsal is recorded as passed for the tested CaseLoad Select stores and controls.
-- [ ] The PR #202 completion-semantics correction and the remaining Meta-relevant privacy gates in Section 7 are closed.
+- [x] The PR #202 completion-semantics correction and Meta-derived CaseLoad Select operational-copy gates in Section 7 are closed.
+- [ ] The remaining backup and restore-replay, privacy-counsel, and public-copy reconciliation gates in Section 7 are closed.
 - [ ] Privacy, terms, and deletion URLs open publicly.
 - [ ] Operator contact is `adriano@caseloadselect.ca`.
 
