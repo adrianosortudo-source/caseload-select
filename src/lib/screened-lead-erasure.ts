@@ -329,7 +329,10 @@ export async function eraseScreenedLead(
             database_redacted: false,
             redacted_count: 0,
             deletion_request_id: input.deletionRequestId,
+            privacy_redacted_at: null,
             external_cleanup_status: 'not_applicable',
+            storage_objects_removed: 0,
+            pending_cleanup_categories: [],
           };
         }
         if (stableScreenedLeadId && !UUID_RE.test(stableScreenedLeadId)) {

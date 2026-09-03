@@ -133,7 +133,16 @@ describe('eraseScreenedLead', () => {
     mocks.rpc.mockResolvedValueOnce({ data: { ok: true, found: false }, error: null });
     await expect(eraseScreenedLead({
       firmId: FIRM_ID, leadId: 'L-missing', reason: 'subject_request', deletionRequestId: REQUEST_ID,
-    })).resolves.toMatchObject({ ok: true, database_redacted: false, redacted_count: 0 });
+    })).resolves.toEqual({
+      ok: true,
+      database_redacted: false,
+      redacted_count: 0,
+      deletion_request_id: REQUEST_ID,
+      privacy_redacted_at: null,
+      external_cleanup_status: 'not_applicable',
+      storage_objects_removed: 0,
+      pending_cleanup_categories: [],
+    });
     expect(mocks.rpc).toHaveBeenCalledTimes(1);
     expect(mocks.registerIntent).not.toHaveBeenCalled();
   });
