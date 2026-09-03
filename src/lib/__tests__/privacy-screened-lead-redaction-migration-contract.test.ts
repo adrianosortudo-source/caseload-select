@@ -79,6 +79,9 @@ describe("screened-lead privacy redaction migration contract", () => {
   it("backfills only explicit legacy anonymization sentinels", () => {
     const sql = migrationSql();
 
+    // COALESCE is SQL syntax, not a pg_catalog function. Schema-qualifying it
+    // defers a runtime failure until one of these privacy RPCs is executed.
+    expect(sql).not.toContain("pg_catalog.coalesce(");
     expect(sql).toContain("lead.contact_name = '[anonymized]'");
     expect(sql).toContain("lead.brief_json @> '{\"anonymized\":true}'::jsonb");
     expect(sql).toContain("lead.slot_answers @> '{\"anonymized\":true}'::jsonb");
