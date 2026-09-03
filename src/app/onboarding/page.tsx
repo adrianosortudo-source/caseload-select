@@ -183,7 +183,7 @@ async function getFirmChecklists(): Promise<FirmChecklist[]> {
 
 export default async function OnboardingPage() {
   const session = await getOperatorSession();
-  if (!session) redirect("/portal/login?error=missing");
+  if (!session) redirect("/operator/login?error=missing");
 
   const firms = await getFirmChecklists();
 

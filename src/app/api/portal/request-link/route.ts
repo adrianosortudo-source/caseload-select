@@ -2,9 +2,9 @@
  * POST /api/portal/request-link
  *
  * Lawyer-initiated magic-link request. Lawyer enters their email at
- * /portal/login; this endpoint resolves email → firmId via the firm record's
- * branding.lawyer_email field, generates a 48h HMAC token via the existing
- * portal-auth utilities, and emails the link via Resend.
+ * /portal/login; this endpoint resolves only lawyer memberships, generates a
+ * 48h HMAC token via the existing portal-auth utilities, and emails the link
+ * via Resend. Operators use the separate /operator/login flow.
  *
  * Body: { email: string }
  *
@@ -21,6 +21,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { generatePortalToken } from "@/lib/portal-auth";
+import { buildMagicLinkUrl, renderMagicLinkEmail } from "@/lib/portal-magic-link";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 import { checkRateLimit, ipFromRequest } from "@/lib/rate-limit";
@@ -37,7 +38,7 @@ interface FirmLawyerRow {
   id: string;
   firm_id: string;
   email: string;
-  role: "lawyer" | "operator";
+  role: "lawyer" | "admin" | "staff" | "operator";
   intake_firms: FirmRow | null;
 }
 
@@ -66,15 +67,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true }); // silent
   }
 
-  // Resolve email → firm + role. Two paths:
+  // Resolve email → firm. Two paths:
   //
-  //   1. firm_lawyers (canonical, multi-lawyer + role-aware). Picks the most
-  //      recently signed-in row when an email belongs to multiple firms.
+  //   1. firm_lawyers (canonical, multi-member + role-aware). Picks the most
+  //      recently signed-in firm-side row when an email belongs to multiple
+  //      firms. Lawyer, admin and staff all mint the same firm-scoped lawyer
+  //      session role.
   //   2. intake_firms.branding.lawyer_email (legacy, backward compat).
   //      One-firm-per-email; defaults role='lawyer'.
   //
-  // First match wins. Operator-role rows in firm_lawyers issue tokens that
-  // unlock /admin/* surfaces; lawyer-role rows behave as before.
+  // The role filter is deliberate. An email may belong to both an operator and
+  // a firm-side row; this surface must never choose between them by sign-in
+  // time. Any canonical membership suppresses the legacy fallback, so an
+  // operator-only member cannot gain a lawyer token through stale branding.
   //
   // Embed hint (2026-06-05 fix): PostgREST detects TWO foreign-key
   // relationships between firm_lawyers and intake_firms:
@@ -89,8 +94,6 @@ export async function POST(req: NextRequest) {
   let firmId: string | null = null;
   let firmRow: FirmRow | null = null;
   let lawyerId: string | undefined;
-  let role: "lawyer" | "operator" = "lawyer";
-
   const { data: lawyerRows, error: lawyerLookupError } = await supabase
     .from("firm_lawyers")
     .select(
@@ -98,6 +101,7 @@ export async function POST(req: NextRequest) {
     )
     .ilike("email", email)
     .eq("disabled", false)
+    .in("role", ["lawyer", "admin", "staff"])
     .order("last_signed_in_at", { ascending: false, nullsFirst: false })
     .limit(1)
     .returns<FirmLawyerRow[]>();
@@ -115,8 +119,24 @@ export async function POST(req: NextRequest) {
     firmId = row.firm_id;
     firmRow = row.intake_firms;
     lawyerId = row.id;
-    role = row.role;
   } else {
+    // Only records with no canonical membership may use the legacy branding
+    // field. Disabled rows and operator-only rows both suppress fallback.
+    const { data: canonicalRows, error: canonicalLookupError } = await supabase
+      .from("firm_lawyers")
+      .select("id")
+      .ilike("email", email)
+      .limit(1);
+    if (canonicalLookupError) {
+      console.error(
+        `[request-link] canonical membership lookup failed: ${canonicalLookupError.message}`,
+      );
+      return NextResponse.json({ ok: true });
+    }
+    if (canonicalRows && canonicalRows.length > 0) {
+      return NextResponse.json({ ok: true });
+    }
+
     // Legacy fallback: branding.lawyer_email
     const { data: firms, error: legacyLookupError } = await supabase
       .from("intake_firms")
@@ -138,25 +158,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true }); // silent
   }
 
-  const token = generatePortalToken(firmId, { role, lawyer_id: lawyerId });
-  const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
-  const previewOrigin = process.env.VERCEL_ENV === "preview" && process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : null;
-  const origin =
-    previewOrigin ??
-    (appDomain ? `https://app.${appDomain}` : null) ??
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-  const magicLink = `${origin}/api/portal/login?token=${encodeURIComponent(token)}`;
+  const token = generatePortalToken(firmId, { role: "lawyer", lawyer_id: lawyerId });
+  const magicLink = buildMagicLinkUrl(token, "lawyer");
 
   const firmName = firmRow.branding?.firm_name ?? firmRow.name ?? "your firm";
-  const subject = role === "operator"
-    ? "CaseLoad Select operator sign-in link"
-    : "CaseLoad Select sign-in link";
-  const html = renderMagicLinkEmail({ firmName, magicLink, role });
+  const html = renderMagicLinkEmail({ firmName, magicLink, role: "lawyer" });
 
   try {
-    await sendEmail(email, subject, html);
+    await sendEmail(email, "CaseLoad Select sign-in link", html);
   } catch (err) {
     // Don't surface email failures to the caller. Operator can re-send via
     // /api/portal/generate if needed. Still log internally so a broken
@@ -167,58 +176,4 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true });
-}
-
-function renderMagicLinkEmail(args: { firmName: string; magicLink: string; role: "lawyer" | "operator" }): string {
-  const { firmName, magicLink, role } = args;
-  const heading = role === "operator"
-    ? "Operator sign-in link"
-    : `Sign-in link for ${escapeHtml(firmName)}`;
-  return `<!doctype html>
-<html>
-<body style="margin:0;padding:0;background:#F4F3EF;font-family:'DM Sans',Arial,sans-serif;color:#0D1520;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#F4F3EF;padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="520" cellpadding="0" cellspacing="0" style="background:#FFFFFF;border:1px solid #E4E2DB;">
-          <tr>
-            <td style="background:#0D1520;padding:18px 28px;border-bottom:2px solid #C4B49A;">
-              <div style="font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.14em;text-transform:uppercase;color:#C4B49A;">CaseLoad Select</div>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:32px 28px 8px;">
-              <div style="font-family:'Manrope',Arial,sans-serif;font-weight:800;font-size:22px;line-height:1.25;color:#1E2F58;">${heading}</div>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:8px 28px 24px;">
-              <p style="margin:0 0 16px;font-size:15px;line-height:1.5;color:#3F3C36;">
-                Click the link below to access the lawyer portal. The link is valid for 48 hours and signs you in for 30 days on this device.
-              </p>
-              <p style="margin:0 0 24px;">
-                <a href="${magicLink}" style="display:inline-block;background:#1E2F58;color:#FFFFFF;text-decoration:none;font-family:'Oxanium',Arial,sans-serif;font-weight:700;font-size:13px;letter-spacing:0.12em;text-transform:uppercase;padding:12px 22px;">Open the portal</a>
-              </p>
-              <p style="margin:0;font-size:12px;line-height:1.5;color:#5C5850;">
-                If you did not request this link, you can ignore this email. The link does not grant access until clicked.
-              </p>
-            </td>
-          </tr>
-          <tr>
-            <td style="background:#EFEDE6;padding:14px 28px;border-top:1px solid #E4E2DB;font-size:11px;color:#9B9690;font-family:'Oxanium',Arial,sans-serif;letter-spacing:0.1em;text-transform:uppercase;">
-              caseloadselect.ca
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-}
-
-function escapeHtml(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => ({
-    "&": "&amp;", "<": "&lt;", ">": "&gt;", "\"": "&quot;", "'": "&#39;",
-  }[c]!));
 }

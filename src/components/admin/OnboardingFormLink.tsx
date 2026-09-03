@@ -9,24 +9,19 @@
  *   Firm profile                    /firm-profile/[token]     (alongside / after kickoff)
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 type Which = "registration" | "profile";
 
-export default function OnboardingFormLink() {
+export default function OnboardingFormLink({ appOrigin }: { appOrigin: string }) {
   const [token, setToken] = useState("PREVIEW");
-  const [origin, setOrigin] = useState("");
   const [copied, setCopied] = useState<Which | null>(null);
-
-  useEffect(() => {
-    setOrigin(window.location.origin);
-  }, []);
 
   const cleanToken = token.trim().replace(/\s+/g, "-") || "PREVIEW";
   const regPath = `/firm-onboarding/${encodeURIComponent(cleanToken)}`;
   const profilePath = `/firm-profile/${encodeURIComponent(cleanToken)}`;
-  const regUrl = origin ? `${origin}${regPath}` : regPath;
-  const profileUrl = origin ? `${origin}${profilePath}` : profilePath;
+  const regUrl = `${appOrigin}${regPath}`;
+  const profileUrl = `${appOrigin}${profilePath}`;
   const valid = token.trim().length > 0;
 
   async function copy(which: Which, url: string) {
@@ -62,7 +57,6 @@ export default function OnboardingFormLink() {
       <FormLinkRow
         title="Registration and integrations"
         badge="Send first"
-        path={regPath}
         url={regUrl}
         valid={valid}
         copied={copied === "registration"}
@@ -71,7 +65,6 @@ export default function OnboardingFormLink() {
       <FormLinkRow
         title="Firm profile"
         badge="Alongside / after kickoff"
-        path={profilePath}
         url={profileUrl}
         valid={valid}
         copied={copied === "profile"}
@@ -88,7 +81,6 @@ export default function OnboardingFormLink() {
 function FormLinkRow({
   title,
   badge,
-  path,
   url,
   valid,
   copied,
@@ -96,7 +88,6 @@ function FormLinkRow({
 }: {
   title: string;
   badge: string;
-  path: string;
   url: string;
   valid: boolean;
   copied: boolean;
@@ -112,7 +103,7 @@ function FormLinkRow({
           </span>
         </div>
         <a
-          href={path}
+          href={url}
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1.5 text-xs uppercase tracking-wider font-semibold px-3 py-1.5 bg-navy text-white hover:bg-navy-deep transition-colors"

@@ -78,7 +78,7 @@ interface DeliverableRow {
 
 export default async function AdminHomePage() {
   const session = await getOperatorSession();
-  if (!session) redirect("/portal/login?error=missing");
+  if (!session) redirect("/operator/login?error=missing");
 
   const nowMs = Date.now();
   const sevenDaysAgoIso = new Date(nowMs - SEVEN_DAYS_MS).toISOString();

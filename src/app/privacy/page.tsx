@@ -192,7 +192,7 @@ export default function PrivacyPage() {
 
         <Section title="Cookies">
           <p>
-            The intake form does not use tracking cookies. The lawyer portal uses one functional cookie called <code>portal_session</code> that signs in a lawyer or operator for 30 days. The cookie is HMAC-signed, HTTP-only, and not used for analytics or advertising.
+            The intake form does not use tracking cookies. The lawyer portal and operator console each use a functional cookie called <code>portal_session</code> for up to 30 days. Each cookie is limited to its own host, so a lawyer session on the app host and an operator session on the admin host do not overwrite one another. These cookies are HMAC-signed, HTTP-only, and not used for analytics or advertising.
           </p>
         </Section>
 

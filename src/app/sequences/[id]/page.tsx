@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function SequenceDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await getOperatorSession();
-  if (!session) redirect("/portal/login?error=missing");
+  if (!session) redirect("/operator/login?error=missing");
 
   const { id } = await params;
 

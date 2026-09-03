@@ -14,6 +14,7 @@
 import "server-only";
 import { randomUUID } from "crypto";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
+import { roleAwareOrigin } from "@/lib/app-origins";
 import type {
   ContentDeliverable,
   ContentPeriod,
@@ -41,7 +42,6 @@ import { loadPeriodPublicationReadiness } from "@/lib/publication-readiness-load
 
 const ASSET_BUCKET = "firm-files";
 const SIGNED_URL_TTL = 3600; // 1 hour; review pages stay open a while
-const APP_BASE = "https://app.caseloadselect.ca";
 const OPERATOR_EMAIL =
   process.env.OPERATOR_NOTIFICATION_EMAIL || "adriano@caseloadselect.ca";
 
@@ -1122,18 +1122,18 @@ async function enqueueDeliverableNotification(input: {
   actor: DeliverableActor;
   bodyPreview: string;
 }): Promise<void> {
-  const recipients = new Set<string>();
+  const recipients = new Map<string, "lawyer" | "operator">();
 
   if (input.audience === "operator") {
-    recipients.add(OPERATOR_EMAIL);
+    recipients.set(OPERATOR_EMAIL, "operator");
   } else {
     const { data: lawyers } = await supabase
       .from("firm_lawyers")
-      .select("email, email_notifications_enabled, disabled")
+      .select("email, role, email_notifications_enabled, disabled")
       .eq("firm_id", input.firmId);
     for (const l of lawyers ?? []) {
       if (l.email && l.email_notifications_enabled !== false && l.disabled !== true) {
-        recipients.add(l.email);
+        recipients.set(l.email, l.role === "operator" ? "operator" : "lawyer");
       }
     }
   }
@@ -1146,8 +1146,7 @@ async function enqueueDeliverableNotification(input: {
     .eq("id", input.deliverableId)
     .maybeSingle();
 
-  const url = `${APP_BASE}/portal/${input.firmId}/deliverables/${input.deliverableId}`;
-  const rows = Array.from(recipients).map((email) => ({
+  const rows = Array.from(recipients).map(([email, role]) => ({
     recipient_email: email,
     firm_id: input.firmId,
     matter_id: null,
@@ -1155,7 +1154,8 @@ async function enqueueDeliverableNotification(input: {
     event_payload: {
       deliverable_id: input.deliverableId,
       deliverable_title: deliverable?.title ?? "a deliverable",
-      deliverable_url: url,
+      deliverable_url: `${roleAwareOrigin(role)}/portal/${input.firmId}/deliverables/${input.deliverableId}`,
+      recipient_role: role,
       actor_role: input.actor.role,
       body: input.bodyPreview,
       body_preview: input.bodyPreview.slice(0, 240),

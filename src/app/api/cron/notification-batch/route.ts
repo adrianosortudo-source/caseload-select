@@ -18,8 +18,9 @@
  *
  * Phase 1 grouping: simple email-grouped digest. Each digest body
  * lists the events grouped by matter, with the full message body and
- * a deep link to the matter. Lawyers link to the matter-detail page;
- * clients link to the matter-home page.
+ * a deep link to the matter. Lawyers link to the matter-detail page,
+ * operators link to the operator console origin, and clients link to the
+ * matter-home page.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -27,11 +28,24 @@ import { createHash } from 'crypto';
 import { isCronAuthorized } from '@/lib/cron-auth';
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
 import { sendEmail } from '@/lib/email';
+import { roleAwareOrigin } from '@/lib/app-origins';
 
 const BATCH_WINDOW_MIN = 5;
 const MAX_ROWS_PER_DRAIN = 500;
 const MAX_NOTIFY_ATTEMPTS = 5;
-const APP_BASE = 'https://app.caseloadselect.ca';
+
+type RecipientRole = 'lawyer' | 'operator' | 'client';
+
+interface FirmMemberDelivery {
+  enabled: boolean;
+  role: 'lawyer' | 'operator';
+}
+
+interface RecipientGroup {
+  email: string;
+  role: RecipientRole;
+  rows: OutboxRow[];
+}
 
 interface OutboxRow {
   id: string;
@@ -49,6 +63,7 @@ interface OutboxRow {
     deliverable_id?: string;
     deliverable_title?: string;
     deliverable_url?: string;
+    recipient_role?: string;
     [key: string]: unknown;
   };
   created_at: string;
@@ -79,15 +94,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, drained: 0, message: 'no rows due' });
   }
 
-  const byRecipient = new Map<string, OutboxRow[]>();
-  for (const row of queued) {
-    const list = byRecipient.get(row.recipient_email) ?? [];
-    list.push(row);
-    byRecipient.set(row.recipient_email, list);
-  }
-
-  const lawyerEmailMap = await resolveLawyerEmailEnabledMap(
-    Array.from(byRecipient.keys()),
+  const firmMemberMap = await resolveFirmMemberDeliveryMap(
+    Array.from(new Set(queued.map((row) => row.recipient_email))),
   );
 
   const batchId = crypto.randomUUID();
@@ -96,17 +104,32 @@ export async function GET(req: NextRequest) {
   const droppedIds: string[] = [];
   const failedRows: OutboxRow[] = [];
 
-  for (const [email, recipientRows] of byRecipient.entries()) {
-    stats.recipients++;
-    const enabled = lawyerEmailMap.get(email) ?? true;
-    if (!enabled) {
-      stats.dropped += recipientRows.length;
-      for (const r of recipientRows) droppedIds.push(r.id);
+  // One inbox can legitimately hold a lawyer membership for one firm and an
+  // operator membership for another. Group by resolved role as well as email
+  // so one digest never mixes links whose session cookies live on different
+  // origins.
+  const recipientGroups = new Map<string, RecipientGroup>();
+  for (const row of queued) {
+    const member = firmMemberMap.get(memberKey(row.recipient_email, row.firm_id));
+    const recipientRole = inferRecipientRole(row, member);
+    if (member?.enabled === false) {
+      stats.dropped += 1;
+      droppedIds.push(row.id);
       continue;
     }
+    const key = `${row.recipient_email.toLowerCase()}\u0000${recipientRole}`;
+    const group = recipientGroups.get(key) ?? {
+      email: row.recipient_email,
+      role: recipientRole,
+      rows: [],
+    };
+    group.rows.push(row);
+    recipientGroups.set(key, group);
+  }
 
-    const isLawyer = lawyerEmailMap.has(email);
-    const digest = buildDigest(email, recipientRows, isLawyer);
+  for (const { email, role: recipientRole, rows: recipientRows } of recipientGroups.values()) {
+    stats.recipients++;
+    const digest = buildDigest(email, recipientRows, recipientRole);
     const ids = recipientRows.map((r) => r.id);
     // Content-stable idempotency key: same recipient + same row set produces
     // the same key, so a crash-after-send followed by a replay is deduped by
@@ -184,25 +207,48 @@ export async function GET(req: NextRequest) {
   });
 }
 
-async function resolveLawyerEmailEnabledMap(
+async function resolveFirmMemberDeliveryMap(
   emails: string[],
-): Promise<Map<string, boolean>> {
+): Promise<Map<string, FirmMemberDelivery>> {
   if (emails.length === 0) return new Map();
   const { data } = await supabase
     .from('firm_lawyers')
-    .select('email, email_notifications_enabled')
+    .select('email, firm_id, role, email_notifications_enabled')
     .in('email', emails);
-  const m = new Map<string, boolean>();
+  const m = new Map<string, FirmMemberDelivery>();
   for (const row of data ?? []) {
-    if (row.email) m.set(row.email, row.email_notifications_enabled !== false);
+    if (row.email && row.firm_id) {
+      m.set(memberKey(row.email, row.firm_id), {
+        enabled: row.email_notifications_enabled !== false,
+        role: row.role === 'operator' ? 'operator' : 'lawyer',
+      });
+    }
   }
   return m;
 }
 
-function buildDigest(
+function memberKey(email: string, firmId: string | null): string {
+  return `${email.toLowerCase()}\u0000${firmId ?? ''}`;
+}
+
+function inferRecipientRole(
+  row: OutboxRow,
+  member: FirmMemberDelivery | undefined,
+): RecipientRole {
+  const explicit = row.event_payload?.recipient_role;
+  if (explicit === 'operator' || explicit === 'lawyer' || explicit === 'client') {
+    return explicit;
+  }
+  if (row.event_type === 'firm_message_new') {
+    return row.event_payload?.sender_role === 'lawyer' ? 'operator' : 'lawyer';
+  }
+  return member?.role ?? 'client';
+}
+
+export function buildDigest(
   _email: string,
   rows: OutboxRow[],
-  isLawyer: boolean,
+  recipientRole: RecipientRole,
 ): { subject: string; html: string } {
   // Group by matter, or by deliverable when the event has no matter (content
   // approval events), or a single catch-all bucket otherwise.
@@ -239,7 +285,10 @@ function buildDigest(
     const first = groupRows[0];
     const matterName = first?.event_payload?.primary_name ?? null;
     const deliverableTitle = first?.event_payload?.deliverable_title ?? null;
-    const deliverableUrl = first?.event_payload?.deliverable_url ?? null;
+    const deliverableId = first?.event_payload?.deliverable_id ?? null;
+    const deliverableUrl = deliverableId && first?.firm_id
+      ? `${roleAwareOrigin(recipientRole)}/portal/${first.firm_id}/deliverables/${deliverableId}`
+      : first?.event_payload?.deliverable_url ?? null;
 
     const isFirmMessage = first?.event_type === 'firm_message_new';
 
@@ -254,18 +303,19 @@ function buildDigest(
           : 'Updates';
 
     const portalUrl = isFirmMessage && first?.firm_id
-      ? isLawyer
-        ? `${APP_BASE}/portal/${first.firm_id}/messages`
-        : `${APP_BASE}/admin/firms/${first.firm_id}/messages`
+      ? recipientRole === 'operator'
+        ? `${roleAwareOrigin(recipientRole)}/admin/firms/${first.firm_id}/messages`
+        : `${roleAwareOrigin(recipientRole)}/portal/${first.firm_id}/messages`
       : deliverableUrl
       ? deliverableUrl
       : first?.matter_id && first?.firm_id
-        ? isLawyer
-          ? `${APP_BASE}/portal/${first.firm_id}/matters/${first.matter_id}`
-          : `${APP_BASE}/portal/${first.firm_id}/m/${first.matter_id}`
+        ? recipientRole === 'lawyer'
+          ? `${roleAwareOrigin(recipientRole)}/portal/${first.firm_id}/matters/${first.matter_id}`
+          : `${roleAwareOrigin(recipientRole)}/portal/${first.firm_id}/m/${first.matter_id}`
         : null;
 
-    const eventBlocks = groupRows.map((r) => eventBlockHtml(r, portalUrl)).join('');
+    const linkLabel = recipientRole === 'operator' ? 'Open in operator console' : 'Open in portal';
+    const eventBlocks = groupRows.map((r) => eventBlockHtml(r, portalUrl, linkLabel)).join('');
     sections.push(`
       <section style="margin-bottom: 20px;">
         <p style="margin: 0 0 8px 0; color: #888; font-size: 13px;">${groupLabel}</p>
@@ -287,7 +337,7 @@ function buildDigest(
   return { subject, html };
 }
 
-function eventBlockHtml(row: OutboxRow, portalUrl: string | null): string {
+function eventBlockHtml(row: OutboxRow, portalUrl: string | null, linkLabel: string): string {
   const label = describeEvent(row.event_type);
   const fullBody = row.event_payload?.body ?? row.event_payload?.body_preview;
   const bodyText = fullBody
@@ -297,7 +347,7 @@ function eventBlockHtml(row: OutboxRow, portalUrl: string | null): string {
     ? `<p style="margin: 6px 0 0 0; color: #333; font-size: 14px; white-space: pre-wrap; line-height: 1.5;">${escapeHtml(bodyText)}${fullBody && fullBody.length > 800 ? '...' : ''}</p>`
     : '';
   const linkHtml = portalUrl
-    ? `<p style="margin: 8px 0 0 0;"><a href="${portalUrl}" style="color: #1E2F58; font-size: 13px; font-weight: 700;">Open in portal</a></p>`
+    ? `<p style="margin: 8px 0 0 0;"><a href="${portalUrl}" style="color: #1E2F58; font-size: 13px; font-weight: 700;">${linkLabel}</a></p>`
     : '';
   return `
     <div style="padding: 12px 14px; background: #F4F3EF; border-radius: 4px; margin-bottom: 8px;">
