@@ -401,7 +401,7 @@ jobs:
           supabase status -o env --override-name db.url=DIRECT_DATABASE_URL >> "$GITHUB_ENV"
 
       - name: Verify DIRECT_DATABASE_URL was exported
-        # Both integration test files gate on `describe.skipIf(!DIRECT_DATABASE_URL)`
+        # The integration test files gate on `describe.skipIf(!DIRECT_DATABASE_URL)`
         # -- correct for local dev, but it means a silent provisioning
         # hiccup here (e.g. an --override-name key that stopped matching
         # after a CLI upgrade) would make the next step pass green having
@@ -414,8 +414,8 @@ jobs:
           fi
           echo "DIRECT_DATABASE_URL is set; integration tests will run for real."
 
-      - name: Run publication concurrency integration tests
-        run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts src/lib/__tests__/drg-manifest-deployment.integration.test.ts src/lib/__tests__/channel-conversation-acl.integration.test.ts
+      - name: Run publication and privacy integration tests
+        run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts src/lib/__tests__/drg-manifest-deployment.integration.test.ts src/lib/__tests__/channel-conversation-acl.integration.test.ts src/lib/__tests__/privacy-screened-lead-redaction.integration.test.ts
 
       - name: Stop local Supabase stack
         if: always()
