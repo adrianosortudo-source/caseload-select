@@ -140,7 +140,7 @@ for (const route of ROUTES) {
         .first()
         .evaluate((element) => element.closest("main")?.innerText ?? "");
       if (route === "/data-deletion") {
-        expect(renderedText).toContain("A completed or not-applicable status is the operator's attestation, not provider-issued evidence.");
+        expect(renderedText).toContain("A completed or not-applicable status is the operator’s attestation, not provider-issued evidence.");
         expect(renderedText).toContain("A provider-managed status is only a routing marker and cannot, by itself, close external cleanup.");
         expect(renderedText).toContain("remain release gates for this revised commitment");
         expect(renderedText).not.toContain("We apply the request to active copies held by service providers");
