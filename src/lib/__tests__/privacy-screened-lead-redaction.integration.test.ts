@@ -4,7 +4,7 @@
  * applied. This test intentionally leaves fixtures for stack teardown because
  * the mutation guards being tested prohibit ordinary cleanup DELETEs.
  */
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -240,6 +240,89 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
     });
   });
 
+  it("exposes operational recovery RPCs only to service_role", async () => {
+    const privileges = await conn.query(
+      `with recovery_functions(signature) as (values
+         ('public.resolve_screened_lead_privacy_coordinate(uuid,text,uuid)'),
+         ('public.redact_screened_lead_subject_by_id(uuid,uuid,text,uuid)'),
+         ('public.list_privacy_deletion_registry_backfill_firms(uuid,uuid,integer)'),
+         ('public.list_privacy_deletion_registry_backfill_candidates(uuid,uuid,timestamptz,uuid,timestamptz,integer)'),
+         ('public.begin_privacy_registry_reconciliation(text,boolean)'),
+         ('public.mark_privacy_registry_reconciliation_complete(text,uuid,uuid,uuid)'),
+         ('public.open_privacy_recovery(uuid,uuid)')
+       )
+       select signature,
+              has_function_privilege('anon', signature, 'execute') as anon_execute,
+              has_function_privilege('authenticated', signature, 'execute') as authenticated_execute,
+              has_function_privilege('service_role', signature, 'execute') as service_execute
+         from recovery_functions`,
+    );
+    expect(privileges.rows).toHaveLength(7);
+    for (const privilege of privileges.rows) {
+      expect(privilege).toMatchObject({
+        anon_execute: false,
+        authenticated_execute: false,
+        service_execute: true,
+      });
+    }
+  });
+
+  it("freezes initial backfill at activation time and refuses direct first replay", async () => {
+    const lateLeadPk = randomUUID();
+    const lateRequestId = randomUUID();
+    const oldCycleId = randomUUID();
+    await conn.query("begin");
+    try {
+      await conn.query(
+        `update private.privacy_recovery_control
+            set state = 'locked', schema_version = '20260903183915',
+                cycle_id = $1, cycle_started_at = now() - interval '1 day',
+                initial_backfill_started_at = null, required_operation = null,
+                reconciliation_operation_id = null, reconciliation_completed_at = null
+          where singleton`,
+        [oldCycleId],
+      );
+      await conn.query(
+        `insert into screened_leads
+           (id, firm_id, lead_id, brief_json, brief_html, slot_answers,
+            matter_type, practice_area, decision_deadline)
+         values ($1, $2, $3, '{}'::jsonb, '<p>Late fixture</p>', '{}'::jsonb,
+           'employment', 'employment', now() + interval '48 hours')`,
+        [lateLeadPk, firmId, `privacy-late-${randomUUID()}`],
+      );
+      await conn.query(
+        `insert into privacy_deletion_requests
+           (id, firm_id, screened_lead_id, subject_key_hash, reason,
+            requested_at, database_redacted_at)
+         values ($1, $2, $3, $4, 'internal_test_record', now(), now())`,
+        [lateRequestId, firmId, lateLeadPk, `late-subject-${randomUUID()}`],
+      );
+
+      await conn.query("set local role service_role");
+      const refusedReplay = await conn.query(
+        `select public.begin_privacy_registry_reconciliation('replay', false) as result`,
+      );
+      expect(refusedReplay.rows[0].result).toMatchObject({
+        ok: false,
+        error: "initial registry backfill is not initialized",
+      });
+
+      const begun = await conn.query(
+        `select public.begin_privacy_registry_reconciliation('backfill', false) as result`,
+      );
+      expect(begun.rows[0].result).toMatchObject({ ok: true, operation: "backfill" });
+      expect(begun.rows[0].result.cycle_id).not.toBe(oldCycleId);
+      const firms = await conn.query(
+        `select public.list_privacy_deletion_registry_backfill_firms($1, null, 100) as result`,
+        [begun.rows[0].result.cycle_id],
+      );
+      expect(firms.rows[0].result).toMatchObject({ ok: true });
+      expect(firms.rows[0].result.firm_ids).toContain(firmId);
+    } finally {
+      await conn.query("rollback");
+    }
+  });
+
   it("is tenant-scoped and enumeration-safe", async () => {
     const result = await serviceRpc(
       `select public.redact_screened_lead_subject($1, $2, 'subject_request', $3) as result`,
@@ -249,6 +332,67 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
 
     const row = await conn.query(`select privacy_redacted_at from screened_leads where id = $1`, [leadPk]);
     expect(row.rows[0].privacy_redacted_at).toBeNull();
+  });
+
+  it("rejects a deletion-request UUID bound to a different public lead", async () => {
+    const boundLeadPk = randomUUID();
+    const boundRequestId = randomUUID();
+    const boundPublicLeadId = `privacy-bound-${randomUUID()}`;
+    await conn.query(
+      `insert into screened_leads
+         (id, firm_id, lead_id, brief_json, brief_html, slot_answers,
+          matter_type, practice_area, decision_deadline)
+       values ($1, $2, $3, '{}'::jsonb, '<p>Bound fixture</p>', '{}'::jsonb,
+         'employment', 'employment', now() + interval '48 hours')`,
+      [boundLeadPk, firmId, boundPublicLeadId],
+    );
+    await conn.query(
+      `insert into privacy_deletion_requests
+         (id, firm_id, screened_lead_id, subject_key_hash, reason, database_redacted_at)
+       values ($1, $2, $3, $4, 'internal_test_record', now())`,
+      [boundRequestId, firmId, boundLeadPk, `bound-subject-${randomUUID()}`],
+    );
+
+    const mismatch = await serviceRpc<RedactionRpcResult>(
+      `select public.resolve_screened_lead_privacy_coordinate($1, $2, $3) as result`,
+      [firmId, otherPublicLeadId, boundRequestId],
+    );
+    expect(mismatch).toMatchObject({ ok: false, error: "deletion request coordinate mismatch" });
+
+    const matching = await serviceRpc<{ ok: boolean; found: boolean; screened_lead_id: string }>(
+      `select public.resolve_screened_lead_privacy_coordinate($1, $2, $3) as result`,
+      [firmId, boundPublicLeadId, boundRequestId],
+    );
+    expect(matching).toMatchObject({ ok: true, found: true, screened_lead_id: boundLeadPk });
+  });
+
+  it("resolves an already-redacted lead when retried with its original public lead ID", async () => {
+    const redactedLeadPk = randomUUID();
+    const redactedRequestId = randomUUID();
+    const originalPublicLeadId = `privacy-original-${randomUUID()}`;
+    const subjectKeyHash = createHash("sha256")
+      .update(`${firmId}:${originalPublicLeadId}:${redactedRequestId}`, "utf8")
+      .digest("hex");
+    await conn.query(
+      `insert into screened_leads
+         (id, firm_id, lead_id, brief_json, brief_html, slot_answers,
+          matter_type, practice_area, decision_deadline)
+       values ($1, $2, $3, '{}'::jsonb, '<p>Redacted fixture</p>', '{}'::jsonb,
+         'employment', 'employment', now() + interval '48 hours')`,
+      [redactedLeadPk, firmId, `privacy-redacted:${redactedLeadPk}`],
+    );
+    await conn.query(
+      `insert into privacy_deletion_requests
+         (id, firm_id, screened_lead_id, subject_key_hash, reason, database_redacted_at)
+       values ($1, $2, $3, $4, 'internal_test_record', now())`,
+      [redactedRequestId, firmId, redactedLeadPk, subjectKeyHash],
+    );
+
+    const retry = await serviceRpc<{ ok: boolean; found: boolean; screened_lead_id: string }>(
+      `select public.resolve_screened_lead_privacy_coordinate($1, $2, $3) as result`,
+      [firmId, originalPublicLeadId, redactedRequestId],
+    );
+    expect(retry).toMatchObject({ ok: true, found: true, screened_lead_id: redactedLeadPk });
   });
 
   it("atomically redacts direct identifiers and returns the external manifest", async () => {

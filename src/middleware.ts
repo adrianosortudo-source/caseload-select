@@ -45,10 +45,40 @@ import {
   isOperatorUiPath,
   operatorOrigin,
 } from "@/lib/app-origins";
+import {
+  isPrivacyRecoveryProtectedPath,
+  PRIVACY_RECOVERY_ROUTE,
+  recoveryCircuitIsOpen,
+} from "@/lib/privacy-recovery-edge";
 
 const APP_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "caseloadselect.ca";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+/** Edge-compatible mirror of the server recovery gate. Once the feature is
+ * enabled, an absent/malformed breaker response is closed, never assumed open.
+ * This catches operational APIs before their route code can enqueue a send or
+ * mutate a tenant during restore replay. */
+export async function privacyRecoveryApiGate(pathname: string): Promise<NextResponse | null> {
+  if (!isPrivacyRecoveryProtectedPath(pathname)) return null;
+  if (process.env.PRIVACY_DELETION_REGISTRY_ENABLED !== "true") return null;
+  const baseUrl = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!baseUrl || !token) {
+    return NextResponse.json({ error: "privacy recovery circuit is closed" }, { status: 503 });
+  }
+  try {
+    const response = await fetch(
+      `${baseUrl.replace(/\/$/, "")}/get/${encodeURIComponent("privacy:deletion-registry:v2:recovery-circuit")}`,
+      { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" },
+    );
+    if (!response.ok) throw new Error("registry unavailable");
+    const body = await response.json() as { result?: unknown };
+    if (recoveryCircuitIsOpen(body.result)) return null;
+  } catch {
+    // The protected default is a 503; do not disclose Redis errors.
+  }
+  return NextResponse.json({ error: "privacy recovery circuit is closed" }, { status: 503 });
+}
 
 // Subdomains under APP_DOMAIN that are NOT firm portals. Anything else under
 // APP_DOMAIN is treated as a firm subdomain and looked up against intake_firms.
@@ -135,6 +165,9 @@ function rewriteForFirm(req: NextRequest, firmId: string): NextResponse {
 export async function middleware(req: NextRequest): Promise<NextResponse> {
   const hostname = req.nextUrl.hostname;
   const { pathname, search } = req.nextUrl;
+
+  const recoveryGate = await privacyRecoveryApiGate(pathname);
+  if (recoveryGate) return recoveryGate;
 
   // Local dev + Vercel preview URLs → pass through
   if (isLocalOrPreviewHost(hostname)) {

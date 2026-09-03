@@ -7,6 +7,23 @@ const mocks = vi.hoisted(() => ({
   remove: vi.fn(),
   list: vi.fn(),
   storageBuckets: [] as string[],
+  registryEnabled: false,
+  registerIntent: vi.fn(),
+  registerReceipt: vi.fn(),
+  assertOpen: vi.fn(),
+  assertReplaying: vi.fn(),
+}));
+
+vi.mock('../privacy-deletion-registry', () => ({
+  isPrivacyDeletionRegistryEnabled: () => mocks.registryEnabled,
+  registerDeletionIntent: mocks.registerIntent,
+  registerDeletionIntentWhenOpen: mocks.registerIntent,
+  registerDeletionAppliedReceipt: mocks.registerReceipt,
+}));
+
+vi.mock('../privacy-recovery-gate', () => ({
+  assertPrivacyOperationsOpen: mocks.assertOpen,
+  assertPrivacyRecoveryReplaying: mocks.assertReplaying,
 }));
 
 vi.mock('@/lib/supabase-admin', () => ({
@@ -31,6 +48,7 @@ import {
 
 const FIRM_ID = '11111111-1111-4111-8111-111111111111';
 const REQUEST_ID = '22222222-2222-4222-8222-222222222222';
+const SCREENED_LEAD_ID = '44444444-4444-4444-8444-444444444444';
 const PROVIDER_EVIDENCE = {
   metaStatus: 'completed' as const,
   resendStatus: 'not_applicable' as const,
@@ -65,9 +83,92 @@ beforeEach(() => {
   mocks.remove.mockReset().mockResolvedValue({ data: [], error: null });
   mocks.list.mockReset().mockResolvedValue({ data: [], error: null });
   mocks.storageBuckets = [];
+  mocks.registryEnabled = false;
+  mocks.registerIntent.mockReset().mockResolvedValue('created');
+  mocks.registerReceipt.mockReset().mockResolvedValue('created');
+  mocks.assertOpen.mockReset().mockResolvedValue(undefined);
+  mocks.assertReplaying.mockReset().mockResolvedValue(undefined);
 });
 
 describe('eraseScreenedLead', () => {
+  it('fails before the local mutation when the enabled registry is unavailable', async () => {
+    mocks.registryEnabled = true;
+    mocks.rpc.mockResolvedValueOnce({ data: { ok: true, found: true, screened_lead_id: SCREENED_LEAD_ID }, error: null });
+    mocks.registerIntent.mockRejectedValueOnce(new Error('registry unavailable'));
+
+    const result = await eraseScreenedLead({
+      firmId: FIRM_ID, leadId: 'L-2026-09-02-001', reason: 'subject_request', deletionRequestId: REQUEST_ID,
+    });
+
+    expect(result).toMatchObject({ ok: false, database_redacted: false, error: 'external privacy deletion registry is unavailable' });
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+  });
+
+  it('gates local redaction on the registry without requiring a provider adapter', async () => {
+    mocks.registryEnabled = true;
+    const sequence: string[] = [];
+    mocks.registerIntent.mockImplementationOnce(async () => { sequence.push('intent'); return 'created'; });
+    mocks.registerReceipt.mockImplementationOnce(async () => { sequence.push('receipt'); return 'created'; });
+    mocks.rpc.mockResolvedValueOnce({ data: { ok: true, found: true, screened_lead_id: SCREENED_LEAD_ID }, error: null });
+    mocks.rpc.mockImplementationOnce(async () => {
+      sequence.push('database');
+      return pendingPayload({ external_cleanup_status: 'complete' });
+    });
+    const result = await eraseScreenedLead({
+      firmId: FIRM_ID, leadId: 'L-2026-09-02-001', reason: 'subject_request', deletionRequestId: REQUEST_ID,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(sequence).toEqual(['intent', 'database', 'receipt']);
+    expect(mocks.rpc).toHaveBeenNthCalledWith(2, 'redact_screened_lead_subject_by_id', {
+      p_firm_id: FIRM_ID,
+      p_screened_lead_id: SCREENED_LEAD_ID,
+      p_reason: 'subject_request',
+      p_deletion_request_id: REQUEST_ID,
+    });
+  });
+
+  it('returns an enumeration-safe no-op when the stable coordinate is absent', async () => {
+    mocks.registryEnabled = true;
+    mocks.rpc.mockResolvedValueOnce({ data: { ok: true, found: false }, error: null });
+    await expect(eraseScreenedLead({
+      firmId: FIRM_ID, leadId: 'L-missing', reason: 'subject_request', deletionRequestId: REQUEST_ID,
+    })).resolves.toEqual({
+      ok: true,
+      database_redacted: false,
+      redacted_count: 0,
+      deletion_request_id: REQUEST_ID,
+      privacy_redacted_at: null,
+      external_cleanup_status: 'not_applicable',
+      storage_objects_removed: 0,
+      pending_cleanup_categories: [],
+    });
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.registerIntent).not.toHaveBeenCalled();
+  });
+
+  it('seals the same terminal receipt for first redaction and a zero-count database retry', async () => {
+    mocks.registryEnabled = true;
+    mocks.rpc
+      .mockResolvedValueOnce({ data: { ok: true, found: true, screened_lead_id: SCREENED_LEAD_ID }, error: null })
+      .mockResolvedValueOnce(pendingPayload({ external_cleanup_status: 'complete' }))
+      .mockResolvedValueOnce({ data: { ok: true, found: true, screened_lead_id: SCREENED_LEAD_ID }, error: null })
+      .mockResolvedValueOnce(pendingPayload({ redacted_count: 0, external_cleanup_status: 'complete' }));
+
+    const input = {
+      firmId: FIRM_ID, leadId: 'L-2026-09-02-001', reason: 'subject_request' as const, deletionRequestId: REQUEST_ID,
+    };
+    await expect(eraseScreenedLead(input)).resolves.toMatchObject({ ok: true, redacted_count: 1 });
+    await expect(eraseScreenedLead(input)).resolves.toMatchObject({ ok: true, redacted_count: 0 });
+
+    expect(mocks.registerReceipt).toHaveBeenNthCalledWith(1, {
+      deletionRequestId: REQUEST_ID, redactedCount: 1, appliedAt: '2026-09-02T20:00:00.000Z',
+    });
+    expect(mocks.registerReceipt).toHaveBeenNthCalledWith(2, {
+      deletionRequestId: REQUEST_ID, redactedCount: 1, appliedAt: '2026-09-02T20:00:00.000Z',
+    });
+  });
+
   it('calls the atomic primitive with the exact firm and lead scope', async () => {
     mocks.rpc.mockResolvedValueOnce(pendingPayload());
 
