@@ -676,7 +676,10 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
            'received', $3, 'lead', $4, true, now())`,
         [leadPk, firmId, `late-mid-${randomUUID()}`, senderId],
       ),
-    ).rejects.toThrow(/privacy-redacted/i);
+    ).rejects.toMatchObject({
+      code: "23514",
+      message: "channel conversation event rejected: channel subject is privacy-suppressed",
+    });
     await expect(
       conn.query(
         `insert into webhook_outbox

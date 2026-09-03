@@ -1,8 +1,9 @@
 # Encrypted deletion registry: operator runbook and threat model
 
-Status: implementation candidate. It is disabled by default. This document is
-not authorization to configure Redis, change a plan, deploy, apply a migration,
-contact counsel, or perform a deletion/backfill/replay.
+Status: implementation merged; production activation pending. Activation
+remains incomplete until the approval-gated rollout completes. This document
+is not authorization to configure Redis, change a plan, deploy, apply a
+migration, contact counsel, or perform a deletion/backfill/replay.
 
 ## Purpose and boundary
 
@@ -70,6 +71,25 @@ read the external activation marker, so only this endpoint may supply the
 
 The database owns `cycleId` and `cycleStartedAt`; operators must copy both from
 the begin response. A client timestamp never defines certified coverage.
+
+## Required preflight before production migration
+
+The sensitive production environment variables are captured when Vercel builds
+a deployment. After configuring them, merge an approved Git PR and use only the
+resulting Git-integrated production deployment. Do not use a direct production
+deploy. Confirm that this deployment has the registry enabled and that the
+operational routes fail closed while the external circuit is locked before
+applying any database migration. If the first lock call cannot persist the
+database state because the control RPC does not exist yet, the external circuit
+must still remain locked; apply the pushed migrations in order, call lock again,
+and then verify both locks before continuing.
+
+The disposable real-Postgres CI job must also execute
+`src/lib/__tests__/privacy-screened-lead-redaction.integration.test.ts` against
+the fresh local Supabase stack and report 14 passed tests with 0 skipped. Never
+run that fixture suite against production: its terminal-mutation fixtures are
+removed only when the disposable stack is torn down. A skipped or failed suite
+blocks migration and activation.
 
 ## Initial activation (approval-gated)
 
