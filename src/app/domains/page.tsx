@@ -23,7 +23,7 @@ type FirmRow = {
 
 export default async function DomainsPage() {
   const session = await getOperatorSession();
-  if (!session) redirect("/portal/login?error=missing");
+  if (!session) redirect("/operator/login?error=missing");
 
   const { data } = await supabase
     .from("intake_firms")

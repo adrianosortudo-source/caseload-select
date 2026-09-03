@@ -23,7 +23,7 @@ export default function TermsPage() {
         <div>
           <p className="text-xs uppercase tracking-[0.18em] font-semibold text-gold">CaseLoad Select</p>
           <h1 className="text-3xl font-bold text-navy mt-2">Terms of Service</h1>
-          <p className="mt-2 text-sm text-black/50">Last updated: 2026-05-24</p>
+          <p className="mt-2 text-sm text-black/50">Last updated: 2026-09-02</p>
         </div>
 
         <Section title="What CaseLoad Select is">
@@ -62,12 +62,12 @@ export default function TermsPage() {
           </p>
         </Section>
 
-        <Section title="Lawyer and operator portal">
+        <Section title="Lawyer portal and operator console">
           <p>
-            The portal at <code>app.caseloadselect.ca</code> is reserved for lawyers and operators who have been authorised by their firm or by CaseLoad Select. Access requires a magic link sent to a registered email address. Sharing the link, the resulting session, or your credentials with anyone else violates these terms.
+            The lawyer portal at <code>app.caseloadselect.ca</code> is reserved for authorised firm members. The operator console at <code>admin.caseloadselect.ca</code> is reserved for authorised CaseLoad Select operators. Access requires a role-specific magic link sent to a registered email address. Sharing the link, the resulting session, or your credentials with anyone else violates these terms.
           </p>
           <p>
-            Lawyers may take, pass, or annotate the leads visible to them. Operators may view triage queues and webhook delivery logs across firms for support and quality control. All actions are logged.
+            Lawyers may take, pass, or annotate the leads visible to them. Operators may view triage queues and webhook delivery logs across firms for support and quality control. A trusted browser remains signed in for up to 30 days unless the user signs out or clears browser data. Access is tied to the role-specific browser session, not to an IP address. All actions are logged.
           </p>
         </Section>
 

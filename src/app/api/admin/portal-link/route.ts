@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { generatePortalToken } from "@/lib/portal-auth";
 import { requireOperator } from "@/lib/admin-auth";
+import { appOrigin } from "@/lib/app-origins";
 
 export async function GET(req: NextRequest) {
   const denied = await requireOperator();
@@ -28,14 +29,7 @@ export async function GET(req: NextRequest) {
   }
 
   const token = generatePortalToken(firmId);
-  const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
-  const origin = appDomain
-    ? `https://app.${appDomain}`
-    : process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : req.nextUrl.origin;
-
-  const magic_link = `${origin}/api/portal/login?token=${encodeURIComponent(token)}`;
+  const magic_link = `${appOrigin()}/api/portal/login?token=${encodeURIComponent(token)}`;
 
   return NextResponse.json({ magic_link, expires_in_hours: 48 });
 }

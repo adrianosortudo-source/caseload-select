@@ -18,6 +18,7 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sendEmail } from "@/lib/email";
 import { buildFileEmail } from "@/lib/file-notify-pure";
 import type { FirmFileRow, ActorContext } from "@/lib/firm-files";
+import { roleAwareOrigin } from "@/lib/app-origins";
 
 interface FirmRow {
   id: string;
@@ -48,13 +49,6 @@ export interface NotifyResult {
   sent: number;
   skipped: number;
   errors: string[];
-}
-
-function resolveAppOrigin(): string {
-  const appDomain = process.env.NEXT_PUBLIC_APP_DOMAIN;
-  if (appDomain) return `https://app.${appDomain}`;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return "http://localhost:3000";
 }
 
 async function loadFirm(firmId: string): Promise<FirmRow | null> {
@@ -128,7 +122,8 @@ export async function notifyOnFirmFileUpload(args: NotifyArgs): Promise<NotifyRe
   }
 
   const firmName = firm.branding?.firm_name ?? firm.name ?? "your firm";
-  const filesUrl = `${resolveAppOrigin()}/portal/${args.firmId}/files`;
+  const recipientRole = args.actor.role === "operator" ? "lawyer" : "operator";
+  const filesUrl = `${roleAwareOrigin(recipientRole)}/portal/${args.firmId}/files`;
   const uploaderLabel = await loadActorLabel(args.actor);
 
   const email = buildFileEmail({

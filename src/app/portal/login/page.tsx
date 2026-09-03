@@ -10,7 +10,9 @@
  * existing flow). The status messaging covers both paths.
  */
 
+import Link from "next/link";
 import RequestLinkForm from "@/components/portal/RequestLinkForm";
+import { operatorOrigin } from "@/lib/app-origins";
 
 export default async function PortalLoginPage({
   searchParams,
@@ -25,17 +27,24 @@ export default async function PortalLoginPage({
     : null;
 
   return (
-    <div className="min-h-screen bg-parchment flex items-center justify-center p-6">
+    <div className="min-h-screen bg-parchment flex items-center justify-center p-4 sm:p-6">
       <div className="max-w-sm w-full space-y-4">
         <div className="text-center font-display font-semibold text-lg text-navy tracking-wide">CaseLoad Select</div>
 
-        <div className="bg-white border border-black/8 p-8 space-y-5">
+        <div
+          className="bg-white border border-black/8 p-6 sm:p-8 space-y-5"
+          data-ui-component-content="portal-login-card"
+        >
           <div>
-            <h1 className="text-2xl font-bold text-navy" style={{ lineHeight: "1.2" }}>
-              Sign in
+            <h1
+              className="text-2xl font-bold text-navy"
+              style={{ lineHeight: "1.2" }}
+              data-ui-copy="heading"
+            >
+              Lawyer portal
             </h1>
-            <p className="mt-2 text-sm text-black/60">
-              Enter the email associated with your firm. A sign-in link will be sent to your inbox.
+            <p className="mt-2 text-sm text-black/60 text-pretty" data-ui-copy="supporting">
+              Enter your firm email to receive a secure sign-in link.
             </p>
           </div>
 
@@ -46,6 +55,13 @@ export default async function PortalLoginPage({
           )}
 
           <RequestLinkForm />
+
+          <p className="border-t border-black/8 pt-4 text-sm text-black/60 text-pretty" data-ui-copy="supporting">
+            Need the operator console?{" "}
+            <Link href={`${operatorOrigin()}/operator/login`} className="font-semibold text-navy underline underline-offset-2 hover:text-teal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal/40 focus-visible:ring-offset-2">
+              Use operator sign in.
+            </Link>
+          </p>
         </div>
 
         <div className="flex items-center justify-center gap-3 text-xs text-black/40">

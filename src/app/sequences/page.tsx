@@ -27,7 +27,7 @@ const TRIGGER_LABELS: Record<string, string> = {
 
 export default async function SequencesPage() {
   const session = await getOperatorSession();
-  if (!session) redirect("/portal/login?error=missing");
+  if (!session) redirect("/operator/login?error=missing");
 
   const { data: sequences, error } = await supabase
     .from("sequence_templates")

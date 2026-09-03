@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export default async function PipelinePage() {
   const session = await getOperatorSession();
-  if (!session) redirect("/portal/login?error=missing");
+  if (!session) redirect("/operator/login?error=missing");
 
   const [leadsRes, firmsRes] = await Promise.all([
     supabase.from("leads").select("*").order("updated_at", { ascending: false }),

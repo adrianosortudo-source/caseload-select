@@ -10,9 +10,16 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { appOrigin, isAppHost, isLocalOrPreviewHost } from "@/lib/app-origins";
 
 export async function POST(req: NextRequest) {
-  const response = NextResponse.redirect(new URL("/portal/login", req.url));
+  const hostname = req.nextUrl.hostname;
+  if (!isLocalOrPreviewHost(hostname) && !isAppHost(hostname)) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  const base = isLocalOrPreviewHost(hostname) ? req.nextUrl.origin : appOrigin();
+  const response = NextResponse.redirect(new URL("/portal/login", base));
   const baseOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -20,6 +27,11 @@ export async function POST(req: NextRequest) {
     maxAge: 0,
   };
   response.cookies.set("portal_session", "", { ...baseOptions, path: "/" });
-  response.cookies.set("portal_session", "", { ...baseOptions, path: "/portal" });
+  response.headers.append(
+    "Set-Cookie",
+    `portal_session=; Path=/portal; Max-Age=0; HttpOnly; SameSite=Lax${
+      process.env.NODE_ENV === "production" ? "; Secure" : ""
+    }`,
+  );
   return response;
 }

@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { resolveSigninCode } from "@/lib/portal-signin-codes";
 import { generatePortalToken } from "@/lib/portal-auth";
+import { appOrigin, isOperatorHost, operatorOrigin, roleAwareOrigin } from "@/lib/app-origins";
 
 export async function GET(
   req: NextRequest,
@@ -24,7 +25,12 @@ export async function GET(
   const { code } = await params;
   const target = await resolveSigninCode(code);
   if (!target) {
-    return NextResponse.redirect(new URL("/portal/login?error=expired", req.url));
+    const operatorRequest = isOperatorHost(req.nextUrl.hostname);
+    const loginOrigin = operatorRequest ? operatorOrigin() : appOrigin();
+    const loginPath = operatorRequest
+      ? "/operator/login?error=expired"
+      : "/portal/login?error=expired";
+    return NextResponse.redirect(new URL(loginPath, loginOrigin));
   }
 
   const token = generatePortalToken(target.firmId, {
@@ -32,7 +38,10 @@ export async function GET(
     lawyer_id: target.lawyerId ?? undefined,
   });
 
-  const loginUrl = new URL("/api/portal/login", req.url);
+  const loginUrl = new URL(
+    target.role === "operator" ? "/api/operator/login" : "/api/portal/login",
+    roleAwareOrigin(target.role),
+  );
   loginUrl.searchParams.set("token", token);
   return NextResponse.redirect(loginUrl);
 }

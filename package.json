@@ -15,6 +15,7 @@
     "check:build-assets": "node scripts/check-self-contained-build-assets.mjs",
     "check:secure-import-width": "vitest run src/lib/__tests__/secure-import-width-contract.test.ts",
     "test:secure-import-rendered": "playwright test --config=playwright.secure-import.config.ts",
+    "test:operator-login-rendered": "playwright test --config=playwright.operator-login.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "check:engine-sync": "bash scripts/check-engine-sync.sh",

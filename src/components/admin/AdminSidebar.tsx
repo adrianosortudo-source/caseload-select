@@ -35,7 +35,7 @@ export default async function AdminSidebar() {
 
       {/* Sign out */}
       <div className="px-3 pb-5 pt-4 border-t border-white/5 shrink-0">
-        <form action="/api/portal/logout" method="POST">
+        <form action="/api/operator/logout" method="POST">
           <button
             type="submit"
             className="w-full text-left text-[10px] font-display font-semibold uppercase tracking-widest text-white/40 hover:text-white/60 px-2 py-1.5 transition"

@@ -22,7 +22,7 @@ export async function GET(
   const { firmId } = await params;
   const session = await getOperatorSession();
   if (!session) {
-    return NextResponse.redirect(new URL("/portal/login", req.url));
+    return NextResponse.redirect(new URL("/operator/login?error=missing", req.url));
   }
 
   const targetParam = req.nextUrl.searchParams.get("target");

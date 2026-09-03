@@ -55,7 +55,7 @@ export default async function ConflictRegisterPage({
   searchParams: Promise<{ q?: string; firm?: string }>;
 }) {
   const session = await getOperatorSession();
-  if (!session) redirect("/portal/login?error=missing");
+  if (!session) redirect("/operator/login?error=missing");
 
   const { q: rawQ, firm: firmFilter } = await searchParams;
   const q = rawQ?.trim() ?? "";

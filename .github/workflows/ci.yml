@@ -252,6 +252,32 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  operator-login-rendered:
+    name: Operator login rendered copy gates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - name: Install dependencies
+        run: npm ci
+      - name: Install fixed Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Run operator login rendered copy gates
+        run: npm run test:operator-login-rendered
+      - name: Upload operator login rendered evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-login-rendered-evidence
+          path: test-results/operator-login-evidence/**/*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
   brief-equality-eval:
     name: DR-039 brief-equality eval (language parity)
     runs-on: ubuntu-latest
