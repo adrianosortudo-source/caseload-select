@@ -21,13 +21,14 @@ is missing, malformed, or unreachable is closed by design.
 
 1. The service creates an immutable encrypted `intent` record using the request
    UUID, tenant UUID, surrogate lead identifier, fixed reason, and timestamp.
-2. A service-only provider adapter completes or dispositions external deletion
-   first and returns status-only evidence. There is no built-in provider call.
-3. Only then may the tenant-scoped Supabase redaction RPC make the local
-   terminal mutation and suppress pending sends/outbox work.
-4. The service writes an immutable `applied` receipt. Storage cleanup and the
-   existing completion RPC clear the transient database manifest while retaining
-   only an aggregate count/status summary.
+2. The tenant-scoped Supabase redaction RPC may then make the local terminal
+   mutation and suppress pending sends/outbox work.
+3. The service writes an immutable `applied` receipt. Provider cleanup remains
+   in the existing pending durable-manifest/evidence workflow; this registry
+   neither requires nor invokes a provider adapter.
+4. Storage cleanup and the existing completion RPC clear the transient database
+   manifest only after the established completion evidence is present, while
+   retaining only an aggregate count/status summary.
 
 If any step fails, the coordinator reports failure. It must not substitute a
 database-only success or log raw candidate data.

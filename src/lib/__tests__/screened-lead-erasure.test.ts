@@ -95,14 +95,13 @@ describe('eraseScreenedLead', () => {
 
     const result = await eraseScreenedLead({
       firmId: FIRM_ID, leadId: 'L-2026-09-02-001', reason: 'subject_request', deletionRequestId: REQUEST_ID,
-      externalDeletion: { erase: vi.fn() },
     });
 
-    expect(result).toMatchObject({ ok: false, database_redacted: false, error: 'external privacy deletion saga is unavailable' });
+    expect(result).toMatchObject({ ok: false, database_redacted: false, error: 'external privacy deletion registry is unavailable' });
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
-  it('completes the external adapter before the local terminal mutation', async () => {
+  it('gates local redaction on the registry without requiring a provider adapter', async () => {
     mocks.registryEnabled = true;
     const sequence: string[] = [];
     mocks.registerIntent.mockImplementationOnce(async () => { sequence.push('intent'); return 'created'; });
@@ -111,18 +110,12 @@ describe('eraseScreenedLead', () => {
       sequence.push('database');
       return pendingPayload({ external_cleanup_status: 'complete' });
     });
-    const adapter = { erase: vi.fn(async () => {
-      sequence.push('external');
-      return { ok: true, cleanup: { ghlStatus: 'completed' as const, metaStatus: 'completed' as const, resendStatus: 'not_applicable' as const } };
-    }) };
-
     const result = await eraseScreenedLead({
       firmId: FIRM_ID, leadId: 'L-2026-09-02-001', reason: 'subject_request', deletionRequestId: REQUEST_ID,
-      externalDeletion: adapter,
     });
 
     expect(result.ok).toBe(true);
-    expect(sequence).toEqual(['intent', 'external', 'database', 'receipt']);
+    expect(sequence).toEqual(['intent', 'database', 'receipt']);
   });
 
   it('calls the atomic primitive with the exact firm and lead scope', async () => {

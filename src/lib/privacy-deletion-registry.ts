@@ -214,7 +214,15 @@ async function registerImmutable<K extends RegistryRecordKind>(kind: K, value: R
   const existing = await store.get<string>(key);
   if (!existing) throw new Error('privacy registry immutable write could not be verified');
   const prior = decryptRegistryRecord(existing, kind, id);
-  if (JSON.stringify(prior) !== JSON.stringify(value)) throw new Error('privacy registry record collision');
+  // The initial timestamp is evidence of when an intent first entered the
+  // registry, not an idempotency input. Retried redaction calls naturally
+  // produce a fresh clock value and must reuse the immutable original record.
+  const sameIntent = kind === 'intent' &&
+    (prior as RegistryIntent).deletionRequestId === (value as RegistryIntent).deletionRequestId &&
+    (prior as RegistryIntent).firmId === (value as RegistryIntent).firmId &&
+    (prior as RegistryIntent).leadId === (value as RegistryIntent).leadId &&
+    (prior as RegistryIntent).reason === (value as RegistryIntent).reason;
+  if (!sameIntent && JSON.stringify(prior) !== JSON.stringify(value)) throw new Error('privacy registry record collision');
   return 'existing';
 }
 

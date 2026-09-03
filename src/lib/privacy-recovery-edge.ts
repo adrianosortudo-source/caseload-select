@@ -1,12 +1,15 @@
 /** Edge-safe recovery gate primitives. This module intentionally avoids Node
  * APIs so middleware can protect SSR routes before their handlers execute. */
+import { isOperatorUiPath } from '@/lib/app-origins';
+
 export const PRIVACY_RECOVERY_ROUTE = '/api/internal/privacy-recovery';
-const OPERATIONAL_PREFIXES = ['/admin', '/analytics', '/portal', '/onboarding'];
 
 export function isPrivacyRecoveryProtectedPath(pathname: string): boolean {
   if (pathname === PRIVACY_RECOVERY_ROUTE || pathname.startsWith('/_next/') || pathname === '/favicon.ico') return false;
   if (pathname.startsWith('/api/')) return true;
-  return OPERATIONAL_PREFIXES.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+  // Keep every operator SSR surface aligned with the host-routing policy.
+  // Portal is deliberately separate: it is PII-bearing but user-facing.
+  return pathname === '/portal' || pathname.startsWith('/portal/') || isOperatorUiPath(pathname);
 }
 
 /** Accept object and REST-string serializations, never a bare state string. */

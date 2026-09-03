@@ -37,17 +37,6 @@ export interface ScreenedLeadErasureInput {
     metaStatus?: CleanupCompletionStatus;
     resendStatus?: CleanupCompletionStatus;
   };
-  /**
-   * Service-only adapter. When the external registry feature is enabled, its
-   * deletion/disposition must succeed before the database terminal mutation.
-   * It must return status evidence only: never provider selectors or bodies.
-   */
-  externalDeletion?: {
-    erase(input: Pick<ScreenedLeadErasureInput, 'firmId' | 'leadId' | 'reason' | 'deletionRequestId'>): Promise<{
-      ok: boolean;
-      cleanup: Required<NonNullable<ScreenedLeadErasureInput['externalCleanup']>>;
-    }>;
-  };
   /** Internal restore coordinator capability; never accept from a request body. */
   recoveryReplay?: boolean;
 }
@@ -292,11 +281,10 @@ export async function eraseScreenedLead(
   input: ScreenedLeadErasureInput,
 ): Promise<ScreenedLeadErasureResult> {
   const registryEnabled = isPrivacyDeletionRegistryEnabled();
-  let externalCleanup = input.externalCleanup;
   if (registryEnabled) {
-    // Register intent and complete the external provider step before the
-    // irreversible local redaction. Any unavailable registry, closed restore
-    // circuit, missing adapter, or provider failure stops here.
+    // Register intent before the irreversible local redaction. Provider
+    // cleanup deliberately remains the existing pending durable-manifest and
+    // evidence workflow; the registry must not require an unshipped adapter.
     try {
       if (input.recoveryReplay) await assertPrivacyRecoveryReplaying();
       else await assertPrivacyOperationsOpen();
@@ -307,10 +295,6 @@ export async function eraseScreenedLead(
         reason: input.reason,
         recordedAt: new Date().toISOString(),
       });
-      if (!input.externalDeletion) throw new Error('external deletion adapter is required');
-      const external = await input.externalDeletion.erase(input);
-      if (!external.ok) throw new Error('external deletion did not complete');
-      externalCleanup = external.cleanup;
     } catch {
       return {
         ok: false,
@@ -321,7 +305,7 @@ export async function eraseScreenedLead(
         external_cleanup_status: 'not_started',
         storage_objects_removed: 0,
         pending_cleanup_categories: ['external_deletion_registry'],
-        error: 'external privacy deletion saga is unavailable',
+        error: 'external privacy deletion registry is unavailable',
       };
     }
   }
@@ -398,7 +382,7 @@ export async function eraseScreenedLead(
   }
 
   const manifest = parseCleanupManifest(payload.external_cleanup_manifest);
-  const completion = externalCleanup;
+  const completion = input.externalCleanup;
   const completionStatuses: Record<'ghl' | 'meta' | 'resend', CleanupCompletionStatus> = {
     ghl: 'not_applicable',
     meta: 'not_applicable',

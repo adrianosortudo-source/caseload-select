@@ -11,7 +11,7 @@ import {
   type RegistryIntent,
 } from './privacy-deletion-registry';
 import { assertPrivacyOperationsOpen, assertPrivacyRecoveryReplaying } from './privacy-recovery-gate';
-import { eraseScreenedLead, type ScreenedLeadErasureInput } from './screened-lead-erasure';
+import { eraseScreenedLead } from './screened-lead-erasure';
 
 const MAX_BATCH = 100;
 const INTENT_KEY_PREFIX = 'privacy:deletion-registry:v2:intent:';
@@ -95,22 +95,19 @@ export class RedisRegistryIntentSource implements RegistryIntentSource {
   }
 }
 
-export type ExternalFirstAdapter = NonNullable<ScreenedLeadErasureInput['externalDeletion']>;
-
-async function applyIntent(intent: RegistryIntent, externalDeletion: ExternalFirstAdapter): Promise<'applied' | 'skipped' | 'failed'> {
+async function applyIntent(intent: RegistryIntent): Promise<'applied' | 'skipped' | 'failed'> {
   const outcome = await eraseScreenedLead({
     firmId: intent.firmId,
     leadId: intent.leadId,
     reason: intent.reason,
     deletionRequestId: intent.deletionRequestId,
-    externalDeletion,
     recoveryReplay: true,
   });
   if (!outcome.ok) return 'failed';
   return outcome.redacted_count > 0 ? 'applied' : 'skipped';
 }
 
-async function runBounded(source: RegistryIntentSource, externalDeletion: ExternalFirstAdapter, limit: number): Promise<RecoveryAggregate> {
+async function runBounded(source: RegistryIntentSource, limit: number): Promise<RecoveryAggregate> {
   if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_BATCH) throw new Error(`limit must be between 1 and ${MAX_BATCH}`);
   const values = await source.take(limit);
   if (!Array.isArray(values) || values.length > limit) throw new Error('recovery source returned an invalid batch');
@@ -119,7 +116,7 @@ async function runBounded(source: RegistryIntentSource, externalDeletion: Extern
     const intent = asIntent(value);
     if (!intent) { result.failedCount += 1; continue; }
     try {
-      const state = await applyIntent(intent, externalDeletion);
+      const state = await applyIntent(intent);
       if (state === 'applied') result.appliedCount += 1;
       else if (state === 'skipped') result.skippedCount += 1;
       else result.failedCount += 1;
@@ -134,11 +131,11 @@ async function runBounded(source: RegistryIntentSource, externalDeletion: Extern
 /**
  * Replay after a restore. The caller must set the recovery state to
  * `replaying` first; replay never opens the circuit. Each original request id
- * is reused, so database and provider retry paths remain idempotent.
+ * is reused, so database redaction replay remains idempotent. Provider
+ * cleanup remains in the durable manifest/evidence workflow.
  */
 export async function replayDeletionRegistry(args: {
   source: RegistryIntentSource;
-  externalDeletion: ExternalFirstAdapter;
   limit?: number;
   now?: () => string;
 }): Promise<RecoveryAggregate & { replayRunId: string }> {
@@ -146,7 +143,7 @@ export async function replayDeletionRegistry(args: {
   await assertPrivacyRecoveryReplaying();
   const now = args.now ?? (() => new Date().toISOString());
   const replayRunId = randomUUID();
-  const result = await runBounded(args.source, args.externalDeletion, args.limit ?? MAX_BATCH);
+  const result = await runBounded(args.source, args.limit ?? MAX_BATCH);
   await registerReplayRun({
     replayRunId,
     startedAt: now(),

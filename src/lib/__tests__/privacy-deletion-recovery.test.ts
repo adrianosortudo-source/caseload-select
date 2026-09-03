@@ -24,7 +24,7 @@ vi.mock('../privacy-recovery-gate', () => ({
 }));
 vi.mock('../screened-lead-erasure', () => ({ eraseScreenedLead: mocks.erase }));
 
-import { backfillDeletionRegistry, RedisRegistryIntentSource } from '../privacy-deletion-recovery';
+import { backfillDeletionRegistry, RedisRegistryIntentSource, replayDeletionRegistry } from '../privacy-deletion-recovery';
 
 const intent = {
   deletionRequestId: '3dc07b21-525f-4ce1-b0c5-31d2ee2c07fe',
@@ -37,8 +37,10 @@ const intent = {
 beforeEach(() => {
   mocks.registerIntent.mockReset().mockResolvedValue('created');
   mocks.registerSeal.mockReset().mockResolvedValue('created');
+  mocks.registerReplay.mockReset().mockResolvedValue('created');
   mocks.decrypt.mockReset().mockReturnValue(intent);
   mocks.assertOpen.mockReset().mockResolvedValue(undefined);
+  mocks.assertReplaying.mockReset().mockResolvedValue(undefined);
   mocks.erase.mockReset();
 });
 
@@ -65,5 +67,20 @@ describe('bounded encrypted registry source', () => {
     expect(scan).toHaveBeenCalledWith(0, { match: 'privacy:deletion-registry:v2:intent:*', count: 1 });
     expect(mocks.decrypt).toHaveBeenCalledWith('encrypted-intent', 'intent', intent.deletionRequestId);
     await expect(source.take(1)).resolves.toEqual([]);
+  });
+});
+
+describe('registry replay', () => {
+  it('reapplies local redaction from the registry without requiring a provider adapter', async () => {
+    mocks.erase.mockResolvedValue({ ok: true, redacted_count: 1 });
+    await expect(replayDeletionRegistry({
+      source: { take: async () => [intent] },
+      now: () => '2026-09-03T15:00:00.000Z',
+    })).resolves.toMatchObject({ scannedCount: 1, appliedCount: 1, failedCount: 0 });
+    expect(mocks.erase).toHaveBeenCalledWith(expect.objectContaining({
+      deletionRequestId: intent.deletionRequestId,
+      recoveryReplay: true,
+    }));
+    expect(mocks.erase.mock.calls[0]?.[0]).not.toHaveProperty('externalDeletion');
   });
 });

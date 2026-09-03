@@ -67,6 +67,13 @@ describe('privacy deletion registry crypto', () => {
     await expect(registerDeletionIntent({ ...intent, leadId: 'other-lead' }, store)).rejects.toThrow('collision');
   });
 
+  it('treats a retry with a fresh recordedAt timestamp as the same intent', async () => {
+    process.env.PRIVACY_DELETION_REGISTRY_ENCRYPTION_KEY = key;
+    const store = memoryStore();
+    await expect(registerDeletionIntent(intent, store)).resolves.toBe('created');
+    await expect(registerDeletionIntent({ ...intent, recordedAt: '2026-09-03T14:01:00.000Z' }, store)).resolves.toBe('existing');
+  });
+
   it('adds a keyed digest to aggregate backfill evidence before sealing it', async () => {
     process.env.PRIVACY_DELETION_REGISTRY_ENCRYPTION_KEY = key;
     const store = memoryStore();
