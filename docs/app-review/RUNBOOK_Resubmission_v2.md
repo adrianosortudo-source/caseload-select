@@ -10,14 +10,17 @@ This runbook does not authorize an agent to access Meta, record, upload, submit,
 
 ## 1. Confirm the shipped baseline
 
-The release gates are complete:
+The shipped messaging and privacy-redaction baseline is complete:
 
 - [x] PRs #191, #193, and #195 merged.
 - [x] Required CI passed.
-- [x] Production commit `fa3e092983b274c96fd1d22b8fa0091988baeb25` is READY.
+- [x] PR #198 merged the controlled-redaction implementation and PR #199 corrected the migration runtime failure.
+- [x] Production commit `fde4f307f34eb12a74f06a57d2af9c6fdc9611eb` is READY.
 - [x] Migration `20260901231830_channel_conversation_ledger` is applied and verified.
 - [x] Migration `20260902102620_restrict_screen_funnel_service_role_acl` is applied and verified.
 - [x] Migration `20260902111504_harden_channel_conversation_acl` is applied and verified.
+- [x] Migration `20260902210124_privacy_screened_lead_redaction` is applied and verified.
+- [x] The fictional post-ledger production deletion rehearsal is recorded in `deletion-flow-verification.md`.
 
 The following operator gates remain open:
 
@@ -111,21 +114,24 @@ Watch the full upload copy before attaching it.
 
 ## 7. Pre-submission blocker: deletion promise and conversation ledger
 
-Adriano selected controlled, irreversible redaction as the resolution. The non-identifying event envelope remains immutable, while message content and direct identifiers must be removed through one service-only, tenant-scoped operation. The public copy and operator procedure are drafted in this change, but they are not proof that the database path is shipped or that production data reaches the promised end state.
+Adriano selected controlled, irreversible redaction as the resolution. PRs #198 and #199 shipped the service-only, tenant-scoped operation and migration. The fresh fictional production rehearsal passed the database, application, Storage, authorization, idempotency, tenant-isolation, append-only, pending-message, and expiry-invocation checks recorded in `deletion-flow-verification.md`.
+
+That rehearsal does not clear the four open release gates below. It also identified a completion-semantics defect: the current application and database can mark external cleanup complete when Meta or Resend is recorded only as `provider_managed`. That location status is not action evidence and does not satisfy the public commitment. The completion path must be corrected and reverified before submission.
 
 This does not block rehearsal or recording after the production send gates pass. It does block final Meta submission.
 
 Do not submit the Meta draft until all of these checks pass:
 
-- [ ] The redaction migration and application path are reviewed, merged, and deployed.
-- [ ] The scheduled three-year audit-envelope expiry is deployed and its production invocation is verified.
-- [ ] Privacy counsel approves the audit envelope, reidentification assessment, and retention period.
-- [ ] Processor handling in `docs/privacy/DELETION_OPERATIONS.md` is confirmed with action evidence; a `provider_managed` status alone does not clear this gate.
-- [ ] Backup-expiry schedules are documented and a restore rehearsal proves completed deletions are reapplied before restored data returns to use.
-- [ ] Retained keys cannot join the audit envelope to an identifying firm matter, or privacy counsel approves the documented residual risk.
-- [ ] Every in-scope attachment location and retained audit ledger is included in deletion and expiry verification.
-- [ ] A fresh fictional post-ledger deletion rehearsal passes and is appended to `deletion-flow-verification.md`.
-- [ ] The production `/privacy` and `/data-deletion` pages match the verified implementation.
+- [x] The redaction migration and application path are reviewed, merged, and deployed.
+- [x] The scheduled three-year audit-envelope expiry is deployed and its production invocation is verified.
+- [x] Every in-scope attachment location and retained audit ledger in the fictional fixture is included in deletion and expiry verification.
+- [x] A fresh fictional post-ledger deletion rehearsal is appended to `deletion-flow-verification.md`.
+- [ ] Correct the completion path so `provider_managed` alone cannot produce `external_cleanup_status: complete` or a successful completion notice, then rerun the affected checks.
+- [ ] Close the pending legacy-backfill GHL disposition recorded in `deletion-flow-verification.md`.
+- [ ] Confirm processor handling with request-specific action or retention evidence for Meta, Resend, GHL, and Supabase. A `provider_managed` status alone does not clear this gate.
+- [ ] Document account-specific backup-expiry schedules and complete a safe restore rehearsal proving completed deletions are reapplied before restored data returns to use.
+- [ ] Obtain privacy-counsel approval of the audit envelope, retained-key reidentification assessment, and three-year retention period.
+- [ ] Reconfirm that production `/privacy` and `/data-deletion` wording matches the verified end state after the completion-semantics correction and counsel review.
 
 ## 8. Clean the live Meta draft
 
@@ -162,7 +168,8 @@ Do not use `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, `s
 - [ ] Meta identity is visible in Meta UI in each clip.
 - [ ] Each clip shows `Message thread`, the correct `Channel:` row, `Send reply`, `Reply sent.`, and the identical native receipt.
 - [ ] No real or unrelated lead data is visible.
-- [ ] The controlled-redaction resolution is shipped and the post-ledger fictional deletion rehearsal is recorded as passed.
+- [x] The controlled-redaction resolution is shipped and the post-ledger fictional deletion rehearsal is recorded as passed for the tested CaseLoad Select stores and controls.
+- [ ] The provider-managed completion-semantics defect and all four remaining privacy release gates in Section 7 are closed.
 - [ ] Privacy, terms, and deletion URLs open publicly.
 - [ ] Operator contact is `adriano@caseloadselect.ca`.
 

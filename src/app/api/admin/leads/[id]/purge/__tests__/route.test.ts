@@ -96,6 +96,10 @@ describe('POST /api/admin/leads/[id]/purge', () => {
     );
 
     expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      external_cleanup_status: 'complete',
+      note: 'Operational database redaction and required application-coordinated cleanup completed. Provider-managed copies may remain subject to their own retention and deletion procedures.',
+    });
     expect(mocks.purgeLeadPii).toHaveBeenCalledWith(
       'L-2026-09-02-001',
       expect.objectContaining({
