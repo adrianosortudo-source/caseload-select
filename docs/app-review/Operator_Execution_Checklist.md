@@ -13,13 +13,14 @@ Use these active v2 files:
 
 Current release state:
 
-- PRs #191, #193, and #195 are merged.
-- Production commit `fa3e092983b274c96fd1d22b8fa0091988baeb25` is READY.
-- Migrations `20260901231830`, `20260902102620`, and `20260902111504` are applied and verified.
+- PRs #191, #193, #195, #198, #199, #202, #203, and #204 are merged.
+- Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` is READY.
+- Migrations through `20260903011450_privacy_provider_evidence_required` are applied and verified.
 - Option B is shipped.
-- Remaining work is the live production rehearsal, two v2 recordings, live Meta draft inventory and cleanup, and Adriano's approved submission action.
+- The post-ledger and strict-completion production verifications passed, including Meta-derived CaseLoad Select operational-copy checks.
+- Remaining Meta gates are the backup-expiry and durable-registry restore/replay control, privacy-counsel approval, public-copy reconciliation, live Meta draft/upload checks, and Adriano's approved submission action.
 
-PRE-SUBMISSION BLOCKER: The public `/data-deletion` page promises broader erasure or anonymization, while `channel_conversation_events` retains message body and actor ID, rejects UPDATE and DELETE, and prevents parent-lead deletion. The May 2026 exercise predates this ledger. This does not block rehearsal or recording after the production send gates pass. Do not submit the Meta draft until Adriano chooses a resolution and a reviewed implementation or policy resolution is shipped and verified. This checklist does not choose or implement that resolution.
+PRE-SUBMISSION BLOCKER: Controlled, irreversible redaction and strict external-cleanup semantics are deployed and verified for the tested CaseLoad Select operational copies. This does not prove external-provider deletion, backup-safe replay, or the legal sufficiency of the retained audit envelope. Do not submit the Meta draft until the remaining backup/registry, privacy-counsel, public-copy, and live Meta gates close and Adriano gives explicit action-time approval.
 
 The configured test assets use the DRG production workspace row, not a segregated test tenant. Use a fresh fictional conversation and frame the brief so no unrelated lead data is visible. Never resubmit the approved WhatsApp scopes or `public_profile`. Stop for Adriano's action-time approval before the final submission control.
 

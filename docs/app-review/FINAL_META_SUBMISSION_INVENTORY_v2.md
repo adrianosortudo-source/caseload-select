@@ -68,12 +68,13 @@ Do not upload the repository's v1 Messenger, Instagram, WhatsApp, or Business Ma
 
 The following Meta-relevant checks must be closed before final submission:
 
-- [ ] Correct and reverify the completion semantics so a `provider_managed` marker cannot by itself produce successful external-cleanup completion.
-- [ ] Verify with Meta-specific application evidence that the deployed CaseLoad Select deletion path removes direct identifiers and message content from the operational copies created from Messenger and Instagram intake. A Meta support response is required only if an app-specific deletion question remains unresolved.
+- [x] Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` and migration `20260903011450` passed the final rollback-only production verification: a `provider_managed` marker cannot by itself produce successful external-cleanup completion.
+- [x] The same fictional verification proved that the deployed deletion path removes the tested direct identifiers and message content from Meta-derived CaseLoad Select operational copies. This does not claim deletion from Meta's systems.
 - [ ] Preserve the verified Supabase Free-plan result and PR #203 restore evidence, then implement the external durable deletion registry and a restore procedure that blocks operational access until replay is verified. No account-visible Supabase restore point or expiry schedule is currently available.
 - [ ] Obtain written privacy-counsel approval for the retained envelope, available joins, three-year per-event maximum, deletion-tombstone retention, and suppression-hash retention.
+- [ ] Reconcile the public privacy and data-deletion wording with the final backup/registry controls and counsel-approved retention boundary.
 
-The September fictional production rehearsal passed the tested CaseLoad Select operational-store and control checks. It did not clear the remaining completion-semantics deployment, Meta-derived operational-copy verification, backup, or counsel gates above.
+The September fictional production rehearsal and final rollback-only verification passed the tested CaseLoad Select operational-store, strict completion-semantics, and Meta-derived operational-copy checks. They did not clear the remaining backup and restore-replay, privacy-counsel, or public-copy reconciliation gates.
 
 ### Separate follow-up, not a Meta submission gate
 

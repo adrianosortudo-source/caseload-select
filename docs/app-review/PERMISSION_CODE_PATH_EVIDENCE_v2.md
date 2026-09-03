@@ -1,8 +1,8 @@
 # Meta App Review permission-to-code-path evidence, v2
 
-Source basis: production commit `fa3e092983b274c96fd1d22b8fa0091988baeb25`, READY on 2026-09-02.
+Source basis: production commit `a05520e3b9d08d82bd81c42779907cbd2c807757`, READY on 2026-09-03.
 
-PRs #191, #193, and #195 are merged. Production migrations `20260901231830`, `20260902102620`, and `20260902111504` are applied and verified.
+PRs #191, #193, #195, #198, #199, #202, #203, and #204 are merged. Production migrations through `20260903011450_privacy_provider_evidence_required` are applied and verified.
 
 A permission is retained only when the application contains a concrete runtime operation that exercises it. A configured asset ID, webhook field, manually configured Meta asset, or Business Manager screenshot is not an application code path.
 

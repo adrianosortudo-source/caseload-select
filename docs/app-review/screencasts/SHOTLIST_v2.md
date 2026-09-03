@@ -10,7 +10,7 @@ Do not splice, pause, or cover a failed attempt with a cut.
 
 ## Recording gate
 
-The recording and send gates are complete: PRs #191, #193, and #195 are merged; production commit `fa3e092983b274c96fd1d22b8fa0091988baeb25` is READY; migrations `20260901231830`, `20260902102620`, and `20260902111504` are applied and verified. Separate Meta submission privacy gates remain open in `../RUNBOOK_Resubmission_v2.md`.
+The deployment prerequisites for recording and send are complete: PRs #191, #193, #195, #198, #199, #202, #203, and #204 are merged; production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` is READY; migrations through `20260903011450_privacy_provider_evidence_required` are applied and verified. Both local v2 clips passed these checks. Reapply the per-session checks below only if a clip must be recorded again. Separate Meta submission privacy gates remain open in `../RUNBOOK_Resubmission_v2.md`.
 
 Before each take, confirm:
 
