@@ -6,6 +6,14 @@ const migration = readFileSync(
   join(process.cwd(), 'supabase/migrations/20260903144312_privacy_deletion_registry_saga_hardening.sql'),
   'utf8',
 );
+const recoveryControl = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20260903140551_privacy_external_deletion_registry_recovery_control.sql'),
+  'utf8',
+);
+const operational = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20260903183915_privacy_deletion_registry_operational_completeness.sql'),
+  'utf8',
+);
 
 describe('privacy deletion registry migration ACL contract', () => {
   it('keeps recovery and coordinator RPCs service-only', () => {
@@ -49,5 +57,40 @@ describe('privacy deletion registry migration ACL contract', () => {
     expect(original).toContain('pg_advisory_xact_lock');
     expect(original).toContain('update public.webhook_outbox as outbox');
     expect(original).toContain("consent_block_reason = 'privacy_redacted'");
+  });
+
+  it('applies fail-closed and binds recovery evidence to the current DB cycle', () => {
+    expect(recoveryControl).toContain("values (true, 'locked'");
+    expect(operational).toContain("schema_version = '20260903183915'");
+    expect(operational).toContain('v_control.cycle_id is distinct from p_cycle_id');
+    expect(operational).toContain('v_control.cycle_started_at is distinct from p_before_or_at');
+    expect(operational).toContain("p_operation = 'backfill'");
+    expect(operational).toContain('v_control.initial_backfill_started_at is null');
+    expect(operational).toContain("'initial registry backfill is not initialized'");
+    expect(operational).toContain('cycle_started_at = v_now');
+    expect(operational).toContain("p_operation = 'replay' and not p_registry_activated and exists");
+    expect(operational).toContain('initial registry backfill is incomplete');
+    expect(operational).not.toContain('delete from private.privacy_recovery_firm_completions');
+  });
+
+  it('uses stable tenant UUID coordinates and an indexed DB-owned keyset source', () => {
+    expect(operational).toContain('references public.intake_firms(id)');
+    expect(operational).toContain('privacy_deletion_requests_registry_backfill_keyset_idx');
+    expect(operational).toContain('(firm_id, requested_at, id)');
+    expect(operational).toContain('redact_screened_lead_subject_by_id_impl');
+    expect(operational).toContain('deletion request coordinate mismatch');
+    expect(operational).toContain('lead.id = p_screened_lead_id and lead.firm_id = p_firm_id');
+    expect(operational).toContain('for update;');
+    expect(operational).toContain('list_privacy_deletion_registry_backfill_firms_impl');
+    expect(operational).toContain("select distinct request.firm_id");
+    expect(operational).toContain("revoke all on function public.list_privacy_deletion_registry_backfill_firms");
+  });
+
+  it('permits opening only after a global replay and makes same-cycle retry idempotent', () => {
+    expect(operational).toContain("v_control.required_operation <> 'replay'");
+    expect(operational).toContain("if v_control.state = 'open' then");
+    expect(operational).toContain("reconciliation_operation_id is distinct from p_operation_id");
+    expect(operational).toContain("revoke all on function public.open_privacy_recovery(uuid, uuid)");
+    expect(operational).toContain('from public, anon, authenticated, service_role');
   });
 });

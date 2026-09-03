@@ -17,47 +17,126 @@ valid 32-byte base64 encryption key plus the existing Upstash credentials are
 provided through the approved secret-management path. An enabled registry that
 is missing, malformed, or unreachable is closed by design.
 
+The required secret names are `PRIVACY_DELETION_REGISTRY_ENCRYPTION_KEY` and
+`PRIVACY_RECOVERY_CONTROL_TOKEN`, plus the existing Upstash REST credentials.
+Never place their values in this runbook, a request body, a ticket, or logs.
+
 ## Normal deletion sequence
 
-1. The service creates an immutable encrypted `intent` record using the request
-   UUID, tenant UUID, surrogate lead identifier, fixed reason, and timestamp.
-2. The tenant-scoped Supabase redaction RPC may then make the local terminal
-   mutation and suppress pending sends/outbox work.
-3. The service writes an immutable `applied` receipt. Provider cleanup remains
+1. The service resolves the public lead reference to the tenant-scoped stable
+   `screened_leads.id` UUID. If it is absent, the request returns an
+   enumeration-safe no-op. The public reference is never stored externally.
+2. In one Redis script, the service verifies the external circuit is `open`
+   and creates the immutable encrypted `intent` with `SET NX`. This closes the
+   lock/SCAN admission race.
+3. The tenant-scoped stable-UUID Supabase redaction RPC then makes the local
+   terminal mutation and suppresses pending sends/outbox work.
+4. The service writes an immutable `applied` receipt. Provider cleanup remains
    in the existing pending durable-manifest/evidence workflow; this registry
    neither requires nor invokes a provider adapter.
-4. Storage cleanup and the existing completion RPC clear the transient database
+5. Storage cleanup and the existing completion RPC clear the transient database
    manifest only after the established completion evidence is present, while
    retaining only an aggregate count/status summary.
 
 If any step fails, the coordinator reports failure. It must not substitute a
 database-only success or log raw candidate data.
 
-## Restore/replay procedure (approval-gated)
+## Service-only endpoint contract
+
+All calls use `POST /api/internal/privacy-recovery` and the dedicated
+`x-privacy-recovery-token` header. Worker responses contain aggregate counts;
+firm discovery returns tenant UUIDs used only to coordinate complete backfill.
+The endpoint never returns subject/candidate identifiers. Unknown fields are
+rejected.
+
+The endpoint is the sole supported authority for these transitions. Direct
+invocation of the service-role recovery RPCs is prohibited: the database cannot
+read the external activation marker, so only this endpoint may supply the
+`p_registry_activated` assertion after reading Upstash.
+
+- Lock: `{ "action": "lock" }`
+- Begin: `{ "action": "begin", "operation": "backfill" | "replay" }`
+- Discover initial-backfill firms: `{ "action": "listBackfillFirms",
+  "cycleId": "<begin response>", "afterFirmId": "<optional last UUID>",
+  "limit": 100 }`. Continue with the returned last firm UUID until
+  `exhausted` is true.
+- Run replay: `{ "action": "run", "operation": "replay", "operationId":
+  "<new UUID>", "cycleId": "<begin response>", "cycleStartedAt":
+  "<begin response>", "limit": 100 }`
+- Run initial backfill: the same payload with `operation: "backfill"` and one
+  required `firmId`. Reuse one operation UUID until it is terminal.
+- Open: `{ "action": "open", "operation": "replay", "operationId":
+  "<completed replay UUID>", "cycleId": "<same cycle>" }`
+
+The database owns `cycleId` and `cycleStartedAt`; operators must copy both from
+the begin response. A client timestamp never defines certified coverage.
+
+## Initial activation (approval-gated)
+
+1. Lock first. Apply the current pushed migrations before any backfill. The
+   migration itself forces the database control row to `locked` and starts a
+   new recovery cycle.
+2. Begin `backfill`, paginate `listBackfillFirms` to exhaustion, and run one
+   backfill operation to completion for every returned firm. This cycle-bound
+   database function discovers the authoritative eligible set; operators must
+   not construct or omit the list manually. Backfill uses the database keyset
+   `(requested_at, id)`, frozen at the DB cycle start, and the stable internal
+   lead UUID. Its encrypted per-intent and cursor state is resumable in Upstash.
+3. Keep the database and external circuit in `replaying/backfill` while those
+   firm operations run sequentially. Firm completion proofs accumulate for the
+   same cycle. After every discovered firm is complete, lock once and then
+   begin the global `replay` operation.
+4. Before the permanent external activation marker
+   exists, the DB refuses replay if any eligible historical firm lacks a
+   completed backfill. Exhaust the entire Redis SCAN to cursor `0` with an
+   empty buffer and zero unresolved failures.
+5. Open only with the completed replay operation and matching cycle. The DB
+   opens idempotently, the permanent external activation marker is persisted,
+   and only then does the external circuit open. Backfill alone can never open.
+
+## Restore/replay procedure after activation (approval-gated)
 
 1. Obtain written approval for the exact restore and replay scope. Do not start
    a backup restore from this code or runbook.
 2. Use the separately authenticated recovery endpoint to set `locked`. The
    external circuit is written before the durable database state. Confirm that
    operational API/webhook/cron/admin routes return the closed response.
-3. Restore only under the separately approved recovery procedure. Move the
-   state from `locked` to `replaying`.
-4. Run the approved service-only coordinator in batches of at most 100. It
-   reuses original request UUIDs, treats malformed registry values as aggregate
-   failures, and writes an immutable aggregate `replay-run` record. Do not copy
-   candidate output into tickets or logs.
+3. Restore only under the separately approved recovery procedure. Immediately
+   call the lock endpoint again because the restored database may contain an
+   old `open` control row. If that RPC is unavailable because the backup
+   predates the control schema, apply the current pushed migrations while the
+   external circuit remains locked, then call lock. In every case, apply and
+   verify the pushed migrations and confirm both locks before continuing. The
+   permanent external activation marker rejects backfill; begin a global
+   replay and retain the returned cycle coordinates.
+4. Run one operation UUID in batches of at most 100 until terminal. Redis
+   `SCAN COUNT` is only a hint: the worker buffers oversized pages, continues
+   through empty pages, deduplicates keys, and is exhausted only at cursor `0`
+   with an empty buffer. The defensive ceiling is 10,000 keys per returned
+   page. Checkpoints store only stable UUID suffixes and the encrypted record
+   has an 800,000-character application cap; the tested worst-case page drains
+   without skipped keys and round-trips below that cap. A larger provider page
+   fails closed before its cursor is checkpointed. Every mutable write is
+   lease-token conditional, and terminal progress plus aggregate accounting
+   commits atomically.
 5. Reconcile aggregate totals and every provider exception through the approved
    evidence process. Keep the circuit locked if any batch fails.
 6. Only after documented reconciliation and a distinct approval may recovery
    move from `replaying` to `open`.
 
-## Legacy backfill
+## Initial historical backfill details
 
-Backfill has no discovery query or automatic cron. An approved, tenant-scoped
-candidate source supplies no more than 100 existing intents per run. The
-coordinator uses normal idempotent request UUIDs and writes a sanitized
-`backfill-seal` aggregate. A failed backfill stays failed; it must not open the
-circuit or create a broad scan.
+The service-only database function
+`list_privacy_deletion_registry_backfill_firms` discovers every eligible firm
+through a cycle-bound UUID keyset. For each discovered firm,
+`list_privacy_deletion_registry_backfill_candidates` is the authoritative,
+tenant-scoped candidate source. It returns no more than 100 stable coordinates,
+requires the current cycle UUID and exact DB-owned upper bound, and uses a
+`(requested_at, id)` keyset cursor. The worker persists cursor, retry, and
+per-intent progress in encrypted Upstash records and writes a sanitized
+`backfill-seal` aggregate. The database refuses first replay if any discovered
+firm lacks a completion proof. There is no automatic cron. Failed or incomplete
+backfill remains closed.
 
 ## Threat model
 
@@ -65,11 +144,14 @@ circuit or create a broad scan.
 | --- | --- |
 | Redis value swapping or kind confusion | AES-256-GCM AAD binds envelope version, record kind, and stable ID; schemas validate after decrypt. |
 | Restore resurrects a subject | Intent is written before external/local mutation; circuit blocks operational API paths until replay reconciliation. |
+| Lock begins while a deletion is admitted | Circuit check and normal intent creation are one Redis operation; stable-ID DB mutation requires DB `open`. |
 | Registry outage silently permits a deletion | Enabled registry fails closed before the local terminal mutation. |
 | Replay leaks or amplifies PII | Replay/backfill batches are capped at 100 and write aggregate-only evidence; malformed values are counted, not logged. |
 | Tenant crossover | Intent contains tenant/lead coordinates; local coordinator calls tenant-scoped RPCs; recovery candidate RPC requires a firm UUID. |
 | Public RPC invocation | Tables/functions explicitly revoke `PUBLIC`, `anon`, and `authenticated`; only `service_role` receives execute. |
 | Recovery endpoint reuse | It has a distinct timing-safe token and returns no state read/candidate data. |
+| Stale or concurrent recovery worker | Single-operation lease is renewed, and every mutable/evidence checkpoint is conditional on the current lease token. |
+| Old cycle checkpoint reused | DB cycle UUID and DB-owned start time are embedded in encrypted state and validated by source, completion, and open RPCs. |
 | Send/outbox race | Existing redaction transaction suppresses pending outbox/message work and database guards reject linked late inserts; the recovery circuit blocks routes before handlers run. |
 
 Residual risks requiring review: provider deletion guarantees, Redis retention

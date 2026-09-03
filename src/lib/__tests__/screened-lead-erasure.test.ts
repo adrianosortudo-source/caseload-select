@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../privacy-deletion-registry', () => ({
   isPrivacyDeletionRegistryEnabled: () => mocks.registryEnabled,
   registerDeletionIntent: mocks.registerIntent,
+  registerDeletionIntentWhenOpen: mocks.registerIntent,
   registerDeletionAppliedReceipt: mocks.registerReceipt,
 }));
 
@@ -47,6 +48,7 @@ import {
 
 const FIRM_ID = '11111111-1111-4111-8111-111111111111';
 const REQUEST_ID = '22222222-2222-4222-8222-222222222222';
+const SCREENED_LEAD_ID = '44444444-4444-4444-8444-444444444444';
 const PROVIDER_EVIDENCE = {
   metaStatus: 'completed' as const,
   resendStatus: 'not_applicable' as const,
@@ -91,6 +93,7 @@ beforeEach(() => {
 describe('eraseScreenedLead', () => {
   it('fails before the local mutation when the enabled registry is unavailable', async () => {
     mocks.registryEnabled = true;
+    mocks.rpc.mockResolvedValueOnce({ data: { ok: true, found: true, screened_lead_id: SCREENED_LEAD_ID }, error: null });
     mocks.registerIntent.mockRejectedValueOnce(new Error('registry unavailable'));
 
     const result = await eraseScreenedLead({
@@ -98,7 +101,7 @@ describe('eraseScreenedLead', () => {
     });
 
     expect(result).toMatchObject({ ok: false, database_redacted: false, error: 'external privacy deletion registry is unavailable' });
-    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
   });
 
   it('gates local redaction on the registry without requiring a provider adapter', async () => {
@@ -106,6 +109,7 @@ describe('eraseScreenedLead', () => {
     const sequence: string[] = [];
     mocks.registerIntent.mockImplementationOnce(async () => { sequence.push('intent'); return 'created'; });
     mocks.registerReceipt.mockImplementationOnce(async () => { sequence.push('receipt'); return 'created'; });
+    mocks.rpc.mockResolvedValueOnce({ data: { ok: true, found: true, screened_lead_id: SCREENED_LEAD_ID }, error: null });
     mocks.rpc.mockImplementationOnce(async () => {
       sequence.push('database');
       return pendingPayload({ external_cleanup_status: 'complete' });
@@ -116,12 +120,30 @@ describe('eraseScreenedLead', () => {
 
     expect(result.ok).toBe(true);
     expect(sequence).toEqual(['intent', 'database', 'receipt']);
+    expect(mocks.rpc).toHaveBeenNthCalledWith(2, 'redact_screened_lead_subject_by_id', {
+      p_firm_id: FIRM_ID,
+      p_screened_lead_id: SCREENED_LEAD_ID,
+      p_reason: 'subject_request',
+      p_deletion_request_id: REQUEST_ID,
+    });
+  });
+
+  it('returns an enumeration-safe no-op when the stable coordinate is absent', async () => {
+    mocks.registryEnabled = true;
+    mocks.rpc.mockResolvedValueOnce({ data: { ok: true, found: false }, error: null });
+    await expect(eraseScreenedLead({
+      firmId: FIRM_ID, leadId: 'L-missing', reason: 'subject_request', deletionRequestId: REQUEST_ID,
+    })).resolves.toMatchObject({ ok: true, database_redacted: false, redacted_count: 0 });
+    expect(mocks.rpc).toHaveBeenCalledTimes(1);
+    expect(mocks.registerIntent).not.toHaveBeenCalled();
   });
 
   it('seals the same terminal receipt for first redaction and a zero-count database retry', async () => {
     mocks.registryEnabled = true;
     mocks.rpc
+      .mockResolvedValueOnce({ data: { ok: true, found: true, screened_lead_id: SCREENED_LEAD_ID }, error: null })
       .mockResolvedValueOnce(pendingPayload({ external_cleanup_status: 'complete' }))
+      .mockResolvedValueOnce({ data: { ok: true, found: true, screened_lead_id: SCREENED_LEAD_ID }, error: null })
       .mockResolvedValueOnce(pendingPayload({ redacted_count: 0, external_cleanup_status: 'complete' }));
 
     const input = {

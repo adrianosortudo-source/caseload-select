@@ -12,8 +12,11 @@ create table if not exists private.privacy_recovery_control (
   changed_by text not null default 'migration'
 );
 revoke all on table private.privacy_recovery_control from public, anon, authenticated, service_role;
+-- The migration never opens processing. A newly introduced or restored
+-- control plane starts locked until the service-only reconciliation proves
+-- current migrations, historical enrollment/replay, and all-tenant coverage.
 insert into private.privacy_recovery_control (singleton, state, changed_by)
-values (true, 'open', 'migration') on conflict (singleton) do nothing;
+values (true, 'locked', 'migration') on conflict (singleton) do nothing;
 
 create or replace function private.set_privacy_recovery_state_impl(p_state text)
 returns jsonb language plpgsql security definer set search_path = '' as $$

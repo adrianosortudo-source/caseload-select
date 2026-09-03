@@ -14,6 +14,7 @@ import {
   isPrivacyDeletionRegistryEnabled,
   registerDeletionAppliedReceipt,
   registerDeletionIntent,
+  registerDeletionIntentWhenOpen,
 } from './privacy-deletion-registry';
 import { assertPrivacyOperationsOpen, assertPrivacyRecoveryReplaying } from './privacy-recovery-gate';
 
@@ -29,6 +30,8 @@ export type ScreenedLeadRedactionReason =
 export interface ScreenedLeadErasureInput {
   firmId: string;
   leadId: string;
+  /** Stable internal UUID used only by the recovery worker. */
+  screenedLeadId?: string;
   reason: ScreenedLeadRedactionReason;
   deletionRequestId: string;
   /** Explicit operator record after any non-API cleanup has actually occurred. */
@@ -77,7 +80,17 @@ interface RedactionRpcPayload {
   privacy_redacted_at?: string | null;
   external_cleanup_status?: string;
   external_cleanup_manifest?: unknown;
+  screened_lead_id?: string;
 }
+
+interface PrivacyCoordinatePayload {
+  ok?: boolean;
+  found?: boolean;
+  screened_lead_id?: string;
+  deletion_request_id?: string;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function nonEmpty(value: unknown): boolean {
   if (value === null || value === undefined || value === false) return false;
@@ -281,6 +294,7 @@ export async function eraseScreenedLead(
   input: ScreenedLeadErasureInput,
 ): Promise<ScreenedLeadErasureResult> {
   const registryEnabled = isPrivacyDeletionRegistryEnabled();
+  let stableScreenedLeadId = input.screenedLeadId;
   if (registryEnabled) {
     // Register intent before the irreversible local redaction. Provider
     // cleanup deliberately remains the existing pending durable-manifest and
@@ -288,13 +302,55 @@ export async function eraseScreenedLead(
     try {
       if (input.recoveryReplay) await assertPrivacyRecoveryReplaying();
       else await assertPrivacyOperationsOpen();
-      await registerDeletionIntent({
-        deletionRequestId: input.deletionRequestId,
-        firmId: input.firmId,
-        leadId: input.leadId,
-        reason: input.reason,
-        recordedAt: new Date().toISOString(),
-      });
+
+      if (input.recoveryReplay) {
+        if (!stableScreenedLeadId || !UUID_RE.test(stableScreenedLeadId)) {
+          throw new Error('stable recovery coordinate is required');
+        }
+      } else {
+        const { data: coordinateData, error: coordinateError } = await supabase.rpc(
+          'resolve_screened_lead_privacy_coordinate',
+          {
+            p_firm_id: input.firmId,
+            p_lead_id: input.leadId,
+            p_deletion_request_id: input.deletionRequestId,
+          },
+        );
+        if (coordinateError) throw new Error('privacy coordinate lookup failed');
+        const coordinate = (coordinateData ?? {}) as PrivacyCoordinatePayload;
+        if (coordinate.ok !== true) throw new Error('privacy coordinate lookup refused');
+        stableScreenedLeadId = coordinate.found === true ? coordinate.screened_lead_id : undefined;
+        if (coordinate.found !== true) {
+          // Do not call the public-id redaction RPC after an empty lookup. A
+          // lead inserted between lookup and mutation would otherwise be
+          // redacted without first receiving a durable registry intent.
+          return {
+            ok: true,
+            database_redacted: false,
+            redacted_count: 0,
+            deletion_request_id: input.deletionRequestId,
+            external_cleanup_status: 'not_applicable',
+          };
+        }
+        if (stableScreenedLeadId && !UUID_RE.test(stableScreenedLeadId)) {
+          throw new Error('privacy coordinate lookup returned an invalid coordinate');
+        }
+      }
+
+      // Missing subjects are enumeration-safe no-ops and have no irreversible
+      // local mutation to protect. Every existing subject is registered using
+      // the stable internal UUID before the redaction RPC.
+      if (stableScreenedLeadId) {
+        const intent = {
+          deletionRequestId: input.deletionRequestId,
+          firmId: input.firmId,
+          screenedLeadId: stableScreenedLeadId,
+          reason: input.reason,
+          recordedAt: new Date().toISOString(),
+        };
+        if (input.recoveryReplay) await registerDeletionIntent(intent);
+        else await registerDeletionIntentWhenOpen(intent);
+      }
     } catch {
       return {
         ok: false,
@@ -309,12 +365,23 @@ export async function eraseScreenedLead(
       };
     }
   }
-  const { data, error } = await supabase.rpc('redact_screened_lead_subject', {
-    p_firm_id: input.firmId,
-    p_lead_id: input.leadId,
-    p_reason: input.reason,
-    p_deletion_request_id: input.deletionRequestId,
-  });
+  const redactionById = registryEnabled;
+  const { data, error } = await supabase.rpc(
+    redactionById ? 'redact_screened_lead_subject_by_id' : 'redact_screened_lead_subject',
+    redactionById
+      ? {
+          p_firm_id: input.firmId,
+          p_screened_lead_id: stableScreenedLeadId,
+          p_reason: input.reason,
+          p_deletion_request_id: input.deletionRequestId,
+        }
+      : {
+          p_firm_id: input.firmId,
+          p_lead_id: input.leadId,
+          p_reason: input.reason,
+          p_deletion_request_id: input.deletionRequestId,
+        },
+  );
 
   if (error) {
     return {
