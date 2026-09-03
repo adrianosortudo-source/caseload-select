@@ -10,6 +10,7 @@
 import 'server-only';
 
 import { supabaseAdmin as supabase } from './supabase-admin';
+import { registerDeletionIntent } from './privacy-deletion-registry';
 
 const INTAKE_ATTACHMENTS_BUCKET = 'intake-attachments';
 const STORAGE_REMOVE_BATCH = 1000;
@@ -272,6 +273,31 @@ export async function removeIntakeSessionAttachments(
 export async function eraseScreenedLead(
   input: ScreenedLeadErasureInput,
 ): Promise<ScreenedLeadErasureResult> {
+  // This is intentionally before the database RPC. A database restore must
+  // have an independent replay source; if Redis or its key is unavailable we
+  // refuse the destructive transition rather than creating an unrecoverable
+  // tombstone solely inside Supabase.
+  try {
+    await registerDeletionIntent({
+      deletionRequestId: input.deletionRequestId,
+      firmId: input.firmId,
+      leadId: input.leadId,
+      reason: input.reason,
+      recordedAt: new Date().toISOString(),
+    });
+  } catch {
+    return {
+      ok: false,
+      database_redacted: false,
+      redacted_count: 0,
+      deletion_request_id: input.deletionRequestId,
+      privacy_redacted_at: null,
+      external_cleanup_status: 'not_started',
+      storage_objects_removed: 0,
+      pending_cleanup_categories: ['external_deletion_registry'],
+      error: 'external privacy registry is unavailable',
+    };
+  }
   const { data, error } = await supabase.rpc('redact_screened_lead_subject', {
     p_firm_id: input.firmId,
     p_lead_id: input.leadId,
