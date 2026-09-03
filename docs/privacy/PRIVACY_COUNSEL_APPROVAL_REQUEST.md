@@ -53,7 +53,7 @@ A private channel-suppression record retains the deletion-request UUID, firm UUI
 
 ## Reidentification questions
 
-Please answer each question expressly rather than approving the design only in general:
+For the Meta-focused approval, please answer questions 1 through 8 and question 10 expressly rather than approving the design only in general. Question 9 is broader privacy-program follow-up and may remain open without withholding the Meta-focused approval.
 
 1. Are the firm UUID, screened-lead UUID, deletion-request UUID, exact timestamps, and persistent salted hashes reasonably non-identifying when considered with other CaseLoad Select tables, logs, provider records, and firm knowledge?
 2. Must the firm or lead coordinator keys be severed, rotated, replaced, or separately access-controlled after operational cleanup completes?
@@ -63,7 +63,7 @@ Please answer each question expressly rather than approving the design only in g
 6. Should the clock instead run from the verified deletion request, first inquiry, conversation close, or another event?
 7. What maximum applies to the deletion tombstone and channel-suppression hashes? If indefinite retention is required, what purpose and authority support it?
 8. Which fixed reasons and status counts may remain without becoming identifying when combined with timestamps or firm-level counts?
-9. For the broader privacy-compliance program, what provider request-specific or account-specific retention evidence should be retained for Meta, Resend, HighLevel, and Supabase? Responses from Resend, HighLevel, and Supabase are tracked as separate follow-up and are not Meta App Review gates.
+9. For the broader privacy-compliance program, what provider request-specific or account-specific retention evidence should be retained for Meta, Resend, HighLevel, and Supabase? This question may be answered separately. Responses from Resend, HighLevel, and Supabase are not Meta App Review gates.
 10. What backup-expiry and restore-replay evidence is required before the public commitment can be released?
 
 ## Public wording for review
@@ -74,12 +74,12 @@ The wording also distinguishes:
 
 - CaseLoad Select operational copies;
 - firm-controlled legal files that the firm may need to retain under its own duties;
-- processor and external-platform copies that require provider-specific action or expiry evidence; and
+- processor and external-platform copies, including the distinction between privileged-operator attestations and provider-issued evidence; and
 - encrypted backups that require an applicable expiry schedule and deletion replay before restored data returns to use.
 
 It does not promise physical deletion of every database row. Please confirm whether the wording is accurate, sufficiently specific, and supportable after the operational gates close.
 
-## Approval record requested
+## Meta-focused approval record requested
 
 Please return a dated written decision that includes:
 
@@ -87,8 +87,13 @@ Please return a dated written decision that includes:
 - approved retention clock and maximum for each retained record class;
 - required changes, if any, to identifiers, hashes, timestamps, or joins;
 - approved treatment of deletion tombstones and suppression records;
-- minimum acceptable provider and backup evidence;
+- minimum acceptable backup and restore-replay evidence;
+- any Meta-specific application deletion evidence counsel requires;
 - any required change to the public privacy or deletion wording; and
 - counsel name, capacity, and approval date.
 
-Until that record exists, mark counsel approval **open** and do not submit the Meta App Review package.
+Until this Meta-focused record exists, mark counsel approval **open** and do not submit the Meta App Review package. A separate answer to question 9 may remain open and does not prevent the Meta-focused approval or submission readiness once every other Meta gate is closed.
+
+## Broader privacy-program follow-up
+
+Counsel may provide a separate record identifying the minimum provider-specific action, retention, or escalation evidence to preserve for Meta, Resend, HighLevel, and Supabase. That broader record remains desirable privacy-compliance guidance, but responses from Resend, HighLevel, and Supabase are not prerequisites for Meta App Review.

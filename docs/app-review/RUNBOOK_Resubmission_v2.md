@@ -120,6 +120,8 @@ Adriano selected controlled, irreversible redaction as the resolution. PRs #198 
 
 That rehearsal did not clear the remaining Meta-relevant release gates below. It also identified a completion-semantics defect: the application and database could mark external cleanup complete when Meta or Resend was recorded only as `provider_managed`. PR #202 corrects that contract; the merged change must be deployed, migrated, and reverified before submission.
 
+After deployment, treat `completed` and `not_applicable` as privileged-operator attestations, not provider-issued evidence. Record either status only after the operator checks the applicable disposition. Treat `provider_managed` only as a routing marker; it cannot close external cleanup by itself.
+
 This does not block rehearsal or recording after the production send gates pass. It does block final Meta submission.
 
 Do not submit the Meta draft until all of these checks pass:

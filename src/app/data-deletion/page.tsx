@@ -27,7 +27,7 @@ export default function DataDeletionPage() {
         <div>
           <p className="text-xs uppercase tracking-[0.18em] font-semibold text-gold">CaseLoad Select</p>
           <h1 className="text-3xl font-bold text-navy mt-2">Data Deletion<span className="text-gold">▪</span></h1>
-          <p className="mt-2 text-sm text-black/50">Last updated: 2026-09-02</p>
+          <p className="mt-2 text-sm text-black/50">Last updated: 2026-09-03</p>
         </div>
 
         <Section title="What this page covers">
@@ -80,7 +80,7 @@ export default function DataDeletionPage() {
 
         <Section title="Processors, external platforms, and backups">
           <p>
-            When a service provider may hold an active copy on our behalf, we record the provider-specific deletion or escalation step separately. A provider-managed status is not, by itself, proof that the provider deleted its copy. We do not tell you that external cleanup is complete until the required action and evidence have been checked.
+            When a service provider may hold an active copy on our behalf, a privileged operator records the provider-specific disposition after checking the applicable deletion or escalation step. A completed or not-applicable status is the operator&rsquo;s attestation, not provider-issued evidence. A provider-managed status is only a routing marker and cannot, by itself, close external cleanup.
           </p>
           <p>
             A provider may retain encrypted backup copies until its documented backup cycle expires. The production restore procedure must prove that completed deletion requests are reapplied before restored data returns to use. That procedure and the applicable provider schedules remain release gates for this revised commitment.

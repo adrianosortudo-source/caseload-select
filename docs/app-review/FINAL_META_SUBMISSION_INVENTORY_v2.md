@@ -73,7 +73,7 @@ The following Meta-relevant checks must be closed before final submission:
 - [ ] Preserve the verified Supabase Free-plan result and PR #203 restore evidence, then implement the external durable deletion registry and a restore procedure that blocks operational access until replay is verified. No account-visible Supabase restore point or expiry schedule is currently available.
 - [ ] Obtain written privacy-counsel approval for the retained envelope, available joins, three-year per-event maximum, deletion-tombstone retention, and suppression-hash retention.
 
-The September fictional production rehearsal passed the tested CaseLoad Select operational-store and control checks. It did not clear the remaining deployment, backup, or counsel gates above.
+The September fictional production rehearsal passed the tested CaseLoad Select operational-store and control checks. It did not clear the remaining completion-semantics deployment, Meta-derived operational-copy verification, backup, or counsel gates above.
 
 ### Separate follow-up, not a Meta submission gate
 
