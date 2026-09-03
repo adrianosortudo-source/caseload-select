@@ -38,23 +38,23 @@ update public.privacy_deletion_requests as request
        updated_at = pg_catalog.clock_timestamp()
  where request.external_cleanup_status = 'complete'
    and not (
-     pg_catalog.coalesce(
+     coalesce(
        pg_catalog.jsonb_typeof(request.cleanup_summary->'ghl_status'),
        ''
      ) = 'string'
-     and pg_catalog.coalesce(request.cleanup_summary->>'ghl_status', '')
+     and coalesce(request.cleanup_summary->>'ghl_status', '')
        in ('completed', 'not_applicable')
-     and pg_catalog.coalesce(
+     and coalesce(
        pg_catalog.jsonb_typeof(request.cleanup_summary->'meta_status'),
        ''
      ) = 'string'
-     and pg_catalog.coalesce(request.cleanup_summary->>'meta_status', '')
+     and coalesce(request.cleanup_summary->>'meta_status', '')
        in ('completed', 'not_applicable')
-     and pg_catalog.coalesce(
+     and coalesce(
        pg_catalog.jsonb_typeof(request.cleanup_summary->'resend_status'),
        ''
      ) = 'string'
-     and pg_catalog.coalesce(request.cleanup_summary->>'resend_status', '')
+     and coalesce(request.cleanup_summary->>'resend_status', '')
        in ('completed', 'not_applicable')
    );
 
@@ -89,23 +89,23 @@ begin
      or not (p_cleanup_summary ? 'resend_status')
      or pg_catalog.jsonb_typeof(p_cleanup_summary->'storage_deleted_count') <> 'number'
      or (p_cleanup_summary->>'storage_deleted_count') !~ '^[0-9]+$'
-     or pg_catalog.coalesce(
+     or coalesce(
        pg_catalog.jsonb_typeof(p_cleanup_summary->'ghl_status'),
        ''
      ) <> 'string'
-     or pg_catalog.coalesce(p_cleanup_summary->>'ghl_status', '')
+     or coalesce(p_cleanup_summary->>'ghl_status', '')
        not in ('completed', 'not_applicable')
-     or pg_catalog.coalesce(
+     or coalesce(
        pg_catalog.jsonb_typeof(p_cleanup_summary->'meta_status'),
        ''
      ) <> 'string'
-     or pg_catalog.coalesce(p_cleanup_summary->>'meta_status', '')
+     or coalesce(p_cleanup_summary->>'meta_status', '')
        not in ('completed', 'not_applicable')
-     or pg_catalog.coalesce(
+     or coalesce(
        pg_catalog.jsonb_typeof(p_cleanup_summary->'resend_status'),
        ''
      ) <> 'string'
-     or pg_catalog.coalesce(p_cleanup_summary->>'resend_status', '')
+     or coalesce(p_cleanup_summary->>'resend_status', '')
        not in ('completed', 'not_applicable') then
     return pg_catalog.jsonb_build_object(
       'ok', false,
