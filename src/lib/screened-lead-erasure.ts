@@ -27,7 +27,7 @@ export interface ScreenedLeadErasureInput {
   deletionRequestId: string;
   /** Explicit operator record after any non-API cleanup has actually occurred. */
   externalCleanup?: {
-    ghlStatus?: ManualCleanupCompletionStatus;
+    ghlStatus?: CleanupCompletionStatus;
     metaStatus?: CleanupCompletionStatus;
     resendStatus?: CleanupCompletionStatus;
   };
@@ -35,13 +35,9 @@ export interface ScreenedLeadErasureInput {
 
 export type CleanupCompletionStatus =
   | 'completed'
-  | 'not_applicable'
-  | 'provider_managed';
+  | 'not_applicable';
 
-export type ManualCleanupCompletionStatus = Exclude<
-  CleanupCompletionStatus,
-  'provider_managed'
->;
+export type ManualCleanupCompletionStatus = CleanupCompletionStatus;
 
 export interface ScreenedLeadErasureResult {
   ok: boolean;
@@ -351,18 +347,12 @@ export async function eraseScreenedLead(
     if (manifestStatus === 'completed' || manifestStatus === 'not_applicable') {
       completionStatuses[system] = manifestStatus;
     } else if (
-      manifestStatus === 'manual_required' &&
+      (manifestStatus === 'manual_required' || manifestStatus === 'provider_managed') &&
       (confirmedStatus === 'completed' || confirmedStatus === 'not_applicable')
     ) {
-      completionStatuses[system] = confirmedStatus;
-    } else if (
-      manifestStatus === 'provider_managed' &&
-      confirmedStatus === 'provider_managed'
-    ) {
-      // "Provider managed" describes where the copy lives; it is not proof
-      // that an operator reviewed the provider's retention/deletion handling.
-      // Require an explicit disposition on every retry before the durable
-      // request can be completed.
+      // A provider-managed entry identifies where another copy may live. Only
+      // an evidence-backed completed/not-applicable disposition can close it;
+      // the location marker itself is never completion evidence.
       completionStatuses[system] = confirmedStatus;
     } else if (
       manifestStatus === 'manual_required' ||

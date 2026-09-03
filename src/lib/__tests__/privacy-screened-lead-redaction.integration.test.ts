@@ -619,18 +619,32 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
       `select public.complete_screened_lead_external_cleanup($1, $2, $3::jsonb) as result`,
       [firmId, requestId, JSON.stringify({
         storage_deleted_count: 0,
-        ghl_status: "provider_managed",
+        ghl_status: "completed",
         meta_status: "provider_managed",
-        resend_status: "provider_managed",
+        resend_status: "completed",
       })],
     );
-    expect(falseDisposition).toMatchObject({ ok: false });
+    expect(falseDisposition).toMatchObject({
+      ok: false,
+      external_cleanup_status: "pending",
+    });
+    const stillPending = await conn.query(
+      `select external_cleanup_status, external_cleanup_manifest, cleanup_summary
+         from privacy_deletion_requests
+        where id = $1`,
+      [requestId],
+    );
+    expect(stillPending.rows[0]).toMatchObject({
+      external_cleanup_status: "pending",
+      cleanup_summary: null,
+    });
+    expect(stillPending.rows[0].external_cleanup_manifest).not.toEqual({});
 
     const summary = {
       storage_deleted_count: 0,
       ghl_status: "completed",
-      meta_status: "provider_managed",
-      resend_status: "provider_managed",
+      meta_status: "completed",
+      resend_status: "not_applicable",
     };
     const first = await serviceRpc<CleanupCompletionRpcResult>(
       `select public.complete_screened_lead_external_cleanup($1, $2, $3::jsonb) as result`,

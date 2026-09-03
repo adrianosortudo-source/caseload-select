@@ -81,15 +81,15 @@ describe('POST /api/admin/leads/[id]/purge', () => {
     expect(mocks.purgeLeadPii).not.toHaveBeenCalled();
   });
 
-  it('accepts explicit external cleanup evidence for a retry', async () => {
+  it('accepts completed or not-applicable external cleanup evidence for a retry', async () => {
     const response = await POST(
       request({
         firm_id: FIRM_ID,
         deletion_request_id: REQUEST_ID,
         external_cleanup: {
           ghl_status: 'completed',
-          meta_status: 'provider_managed',
-          resend_status: 'provider_managed',
+          meta_status: 'completed',
+          resend_status: 'not_applicable',
         },
       }),
       params(),
@@ -106,8 +106,8 @@ describe('POST /api/admin/leads/[id]/purge', () => {
         firmId: FIRM_ID,
         externalCleanup: {
           ghlStatus: 'completed',
-          metaStatus: 'provider_managed',
-          resendStatus: 'provider_managed',
+          metaStatus: 'completed',
+          resendStatus: 'not_applicable',
         },
       }),
     );
@@ -128,21 +128,24 @@ describe('POST /api/admin/leads/[id]/purge', () => {
     expect(mocks.purgeLeadPii).not.toHaveBeenCalled();
   });
 
-  it('does not allow provider-managed to stand in for required GHL cleanup', async () => {
+  it('rejects provider-managed as completion evidence', async () => {
     const response = await POST(
       request({
         firm_id: FIRM_ID,
         deletion_request_id: REQUEST_ID,
         external_cleanup: {
-          ghl_status: 'provider_managed',
+          ghl_status: 'completed',
           meta_status: 'provider_managed',
-          resend_status: 'provider_managed',
+          resend_status: 'completed',
         },
       }),
       params(),
     );
 
     expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({
+      error: 'meta_status has an invalid status',
+    });
     expect(mocks.purgeLeadPii).not.toHaveBeenCalled();
   });
 
