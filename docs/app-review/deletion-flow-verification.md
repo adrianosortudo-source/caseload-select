@@ -146,3 +146,101 @@ The new rehearsal must use one fresh fictional Meta conversation and prove:
 - a backup-restore rehearsal proves deleted data cannot return to operational use without replaying the deletion request.
 
 Record the production commit, migration ledger version, execution time, fictional lead ID, sanitized before-and-after field inventory, and operator sign-off. Keep the Meta submission blocker open if any check is incomplete.
+
+---
+
+## Post-ledger production rehearsal — 2026-09-03
+
+**Status:** Database, application, Storage, authorization, idempotency, tenant-isolation, append-only, and pending-message checks passed. External-provider, backup-restore, and privacy-counsel gates remain open; this rehearsal does not authorize Meta submission.
+
+**Production commit:** `fde4f307f34eb12a74f06a57d2af9c6fdc9611eb` (PR #199 merge commit)
+
+**Production migration ledger version:** `20260902210124` (`privacy_screened_lead_redaction`)
+
+**Execution time:** `2026-09-03T00:27:14.224Z`
+
+**Operator:** Codex, under Adriano Domingues's explicit release authorization
+
+**Channel and fixture:** Fresh fictional Facebook Messenger data, created directly in the production database only for this controlled rehearsal. It was not sent to a real person or external messaging provider.
+
+- Screened-lead UUID: `f8f27434-6572-4d8c-8549-801680e6f65d`
+- Original fictional lead reference: `L-S1-963449d3-b679-4556-9a4a-8c62c8f5ccee`
+- Deletion-request UUID: `77fcb0b5-0b28-4dfa-b711-00cea41577fc`
+- Reason: `internal_test_record`
+
+### Before inventory
+
+The atomic seed transaction established the following fictional personal-data surfaces before deletion:
+
+- one unredacted screened lead with a fictional name, email, phone number, transcript, IP address, user agent, brief, and slot answer;
+- two conversation-ledger events containing fictional message bodies and direct Meta-style identifiers;
+- one linked channel intake session and one processed-message deduplication row;
+- five linked secondary-store categories across unconfirmed inquiry, webhook outbox, consent, attribution, and conflict-check storage; and
+- one real object in the private `intake-attachments` bucket under the fixture's exact firm/session prefix.
+
+No production client or prospect data was used.
+
+### Authorized operation
+
+The request was executed through the same production operator endpoint intended for a real verified request:
+
+`POST /api/admin/leads/L-S1-963449d3-b679-4556-9a4a-8c62c8f5ccee/purge`
+
+The endpoint returned HTTP `200`, the expected deletion-request UUID, `external_cleanup_status: complete`, and the irreversible-redaction confirmation. The Storage coordinator reported one deleted attachment object. The fictional data never entered GHL, Meta, or Resend, so GHL was recorded `not_applicable`; the database contract recorded the Meta and Resend locations as `provider_managed` pending the separate provider-policy release gate described below.
+
+### Sanitized after-state
+
+Production verification found:
+
+- the screened lead archived and terminally marked `internal_test_record`;
+- name replaced with the fixed anonymization sentinel;
+- email, phone, transcript, IP address, user agent, free-text status/error fields, UTM/referrer values, and advertising identifier removed;
+- brief and answer payloads replaced with fixed anonymization sentinels;
+- every conversation body replaced by `[redacted]`;
+- Meta message IDs, actor/sender IDs, authoritative-inbound flags, and free-text failure details removed or neutralized;
+- the channel session sender replaced by a non-identifying redaction key and its engine state replaced by the fixed anonymization marker;
+- the legacy intake conversation, contact, entities, summary, memo, and OTP fields cleared;
+- the unconfirmed inquiry identifiers, sender metadata, and transcript cleared;
+- the processed-message deduplication row removed;
+- webhook payload, destination URL, idempotency key, and pending delivery state neutralized;
+- consent and attribution payloads replaced by fixed redaction markers, with notes, IP address, and user agent removed;
+- conflict notes removed and party names replaced by `[redacted]`;
+- the attachment-prefix object count reduced from one to zero; and
+- the transitional cleanup manifest cleared after the application completed Storage cleanup.
+
+An exact-marker scan across the seeded lead, conversation, session, intake, outbox, consent, and attribution fields returned zero matches for the fictional name, contact details, message fragments, Meta-style IDs, IP address, or user agent.
+
+The retained deletion tombstone contains the firm and screened-lead coordinator keys, timestamps, fixed reason, completion state, and the closed count/status summary. The reidentification assessment for those retained keys remains subject to privacy-counsel approval and is therefore still a release gate.
+
+### Control verification
+
+- **Service-only access:** `anon` and `authenticated` cannot execute the four public privacy RPC wrappers; `service_role` can. Direct table access to the deletion-request ledger remains revoked.
+- **RLS:** `privacy_deletion_requests` has RLS enabled and forced, with no browser-access policy.
+- **Unauthorized endpoint call:** the production purge endpoint returned HTTP `401` without its operator credential.
+- **Idempotency:** replaying the same request returned HTTP `200` and the unchanged completed request.
+- **Tenant isolation:** the original lead reference under a different firm scope returned the enumeration-safe no-op and did not alter the redacted record.
+- **Ledger immutability:** ordinary `UPDATE` and `DELETE` attempts were rejected as append-only.
+- **Suppression:** a new processed-message claim and a new inbound event for the redacted subject were rejected.
+- **Pending-message race:** a late terminal outbound event correlated to the pre-redaction pending request was accepted only as a redacted envelope; its body was `[redacted]`, identifiers were `NULL`, and the deletion-request marker was preserved.
+- **Retention expiry:** the service-only three-year expiry RPC was invoked in production. It returned `ok: true`, `has_more: false`, and zero currently eligible envelopes.
+- **Migration backfill:** the pre-existing sentinel-anonymized row was converted to the controlled redaction state; zero legacy sentinel rows remain outside that state.
+
+Supabase's post-DDL security advisor reported no new warning tied to the privacy migration. Its `RLS enabled, no policy` information messages for the locked ledgers are expected deny-by-default behavior. Existing unrelated warnings remain outside this release.
+
+### Open gates — Meta submission remains blocked
+
+1. **Legacy backfill external cleanup:** one migration-created request remains pending. Its manifest has no Storage object, no Meta sender ID, and no email or phone selector, but it retains a non-personal lead-reference selector that requires an actual GHL disposition before the request can be closed.
+2. **Provider evidence:** `provider_managed` is a location/disposition marker, not proof of provider deletion or an approved retention period. Current Meta, Resend, GHL, and Supabase evidence must be attached to the release record.
+3. **Backup expiry and restore replay:** the Supabase CLI reported WAL-G enabled, PITR disabled, and no enumerated physical-backup snapshots. That output does not establish a backup-expiry schedule. No production restore was attempted because it would be destructive. A provider-confirmed expiry schedule and a safe restore/replay rehearsal remain required.
+4. **Privacy counsel:** counsel has not yet approved the provisional three-year audit-envelope period or confirmed that the retained keys and joins do not reasonably reidentify a person.
+
+### Provider-document review — observed 2026-09-03
+
+This review records public provider statements; it does not substitute for account-specific confirmation or execution evidence.
+
+- [Supabase database backups](https://supabase.com/docs/guides/platform/backups) states that paid projects receive daily database backups, retained for 7 days on Pro, 14 days on Team, and up to 30 days on Enterprise. It also states that database backups do not include Storage objects, so restoring a database backup does not restore a deleted Storage object. The production account's plan and available restore point still require account-specific confirmation.
+- [Resend's GDPR page](https://resend.com/security/gdpr) states that email and log data is retained for 30 days on Free, Pro, and Scale plans, backups persist for 7 days, and a customer can contact Resend when a specific message must be removed sooner. No request-specific Resend confirmation has been obtained for this release.
+- [HighLevel's contact-deletion guidance](https://help.gohighlevel.com/support/solutions/articles/155000000583) states that a deleted contact can be restored for 60 days, while associated conversations, notes, tasks, and activity history are not restored. The pending legacy selector must be searched and, if matched, deleted through the account before the migration-created request is closed.
+- Meta's account-specific retention/deletion evidence remains unverified. The release record must not infer it from the local `provider_managed` marker.
+
+**Engineering sign-off:** The shipped implementation and fictional production deletion path passed the controls listed above. Final privacy/release sign-off remains withheld until all four open gates are supported by evidence.
