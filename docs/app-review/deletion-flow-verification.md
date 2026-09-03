@@ -214,7 +214,7 @@ The retained deletion tombstone contains the firm and screened-lead coordinator 
 
 ### Control verification
 
-- **Service-only access:** `anon` and `authenticated` cannot execute the four public privacy RPC wrappers; `service_role` can. Direct table access to the deletion-request ledger remains revoked.
+- **Service-only access:** `anon` and `authenticated` cannot execute the five public privacy RPC wrappers; `service_role` can. Direct table access to the deletion-request ledger remains revoked.
 - **RLS:** `privacy_deletion_requests` has RLS enabled and forced, with no browser-access policy.
 - **Unauthorized endpoint call:** the production purge endpoint returned HTTP `401` without its operator credential.
 - **Idempotency:** replaying the same request returned HTTP `200` and the unchanged completed request.

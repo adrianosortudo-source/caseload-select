@@ -158,6 +158,6 @@ export async function POST(
     deletion_request_id: result.deletion_request_id,
     external_cleanup_status: result.external_cleanup_status,
     purged_at: new Date().toISOString(),
-    note: "Personal data irreversibly redacted; only the permitted non-identifying audit envelope remains.",
+    note: "Operational database redaction and required application-coordinated cleanup completed. Provider-managed copies may remain subject to their own retention and deletion procedures.",
   });
 }
