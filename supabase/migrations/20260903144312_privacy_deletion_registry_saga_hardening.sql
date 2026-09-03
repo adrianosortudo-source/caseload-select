@@ -146,51 +146,9 @@ grant execute on function private.list_pending_screened_lead_privacy_cleanups_im
 revoke all on function public.list_pending_screened_lead_privacy_cleanups(integer) from public, anon, authenticated, service_role;
 grant execute on function public.list_pending_screened_lead_privacy_cleanups(integer) to service_role;
 
--- Completion still admits legacy provider_managed evidence, but enabled
--- external-first operations can now record completed/not_applicable evidence.
-create or replace function private.complete_screened_lead_external_cleanup_impl(
-  p_firm_id uuid, p_deletion_request_id uuid, p_cleanup_summary jsonb
-)
-returns jsonb
-language plpgsql
-security definer
-set search_path = ''
-as $$
-declare
-  v_request public.privacy_deletion_requests%rowtype;
-  v_now timestamptz := pg_catalog.clock_timestamp();
-begin
-  if p_firm_id is null or p_deletion_request_id is null or p_cleanup_summary is null
-     or pg_catalog.jsonb_typeof(p_cleanup_summary) <> 'object'
-     or exists (
-       select 1 from pg_catalog.jsonb_object_keys(p_cleanup_summary) as supplied(key)
-        where not (supplied.key = any(array['storage_deleted_count', 'ghl_status', 'meta_status', 'resend_status']))
-     )
-     or not (p_cleanup_summary ?& array['storage_deleted_count', 'ghl_status', 'meta_status', 'resend_status'])
-     or pg_catalog.jsonb_typeof(p_cleanup_summary->'storage_deleted_count') <> 'number'
-     or (p_cleanup_summary->>'storage_deleted_count') !~ '^[0-9]+$'
-     or p_cleanup_summary->>'ghl_status' not in ('completed', 'not_applicable', 'provider_managed')
-     or p_cleanup_summary->>'meta_status' not in ('completed', 'not_applicable', 'provider_managed')
-     or p_cleanup_summary->>'resend_status' not in ('completed', 'not_applicable', 'provider_managed') then
-    return pg_catalog.jsonb_build_object('ok', false, 'error', 'cleanup_summary must contain only required non-identifying count/status fields');
-  end if;
-  select request.* into v_request from public.privacy_deletion_requests as request
-   where request.id = p_deletion_request_id and request.firm_id = p_firm_id for update;
-  if not found then return pg_catalog.jsonb_build_object('ok', false, 'error', 'deletion request not found'); end if;
-  if v_request.external_cleanup_status = 'complete' then
-    return pg_catalog.jsonb_build_object('ok', true, 'deletion_request_id', v_request.id, 'external_cleanup_status', 'complete', 'cleanup_summary', v_request.cleanup_summary);
-  end if;
-  update public.privacy_deletion_requests
-     set external_cleanup_status = 'complete', external_cleanup_manifest = '{}'::jsonb,
-         external_cleanup_completed_at = v_now, cleanup_summary = p_cleanup_summary, updated_at = v_now
-   where id = p_deletion_request_id and firm_id = p_firm_id;
-  return pg_catalog.jsonb_build_object('ok', true, 'deletion_request_id', p_deletion_request_id, 'external_cleanup_status', 'complete', 'external_cleanup_completed_at', v_now, 'cleanup_summary', p_cleanup_summary);
-end;
-$$;
-
-revoke all on function private.complete_screened_lead_external_cleanup_impl(uuid, uuid, jsonb) from public, anon, authenticated, service_role;
-grant execute on function private.complete_screened_lead_external_cleanup_impl(uuid, uuid, jsonb) to service_role;
-revoke all on function public.complete_screened_lead_external_cleanup(uuid, uuid, jsonb) from public, anon, authenticated, service_role;
-grant execute on function public.complete_screened_lead_external_cleanup(uuid, uuid, jsonb) to service_role;
+-- Do not redefine complete_screened_lead_external_cleanup_impl here. The
+-- immediately preceding provider-evidence migration deliberately rejects
+-- provider_managed as completion evidence and validates the durable manifest
+-- before clearing it; a registry migration must preserve that contract.
 
 commit;

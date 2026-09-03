@@ -13,13 +13,26 @@ describe('privacy deletion registry migration ACL contract', () => {
       'set_privacy_recovery_state',
       'list_privacy_recovery_candidates',
       'list_pending_screened_lead_privacy_cleanups',
-      'complete_screened_lead_external_cleanup',
     ]) {
       expect(migration).toContain(`revoke all on function public.${name}`);
       expect(migration).toContain(`from public, anon, authenticated, service_role`);
       expect(migration).toContain(`grant execute on function public.${name}`);
       expect(migration).toContain('to service_role');
     }
+  });
+
+  it('does not override provider-evidence completion hardening', () => {
+    const providerEvidence = readFileSync(
+      join(process.cwd(), 'supabase/migrations/20260903011450_privacy_provider_evidence_required.sql'),
+      'utf8',
+    );
+    // The later registry migration must leave this hardened implementation in
+    // force rather than replacing it with a permissive acknowledgement.
+    expect(migration).not.toContain('create or replace function private.complete_screened_lead_external_cleanup_impl');
+    expect(providerEvidence).toContain('provider_managed is not completion evidence');
+    expect(providerEvidence).toContain("not in ('completed', 'not_applicable')");
+    expect(providerEvidence).toContain('cleanup_summary status does not satisfy the durable cleanup manifest');
+    expect(providerEvidence).toContain("external_cleanup_manifest = '{}'::jsonb");
   });
 
   it('bounds recovery sources and keeps their public wrappers as invokers', () => {
