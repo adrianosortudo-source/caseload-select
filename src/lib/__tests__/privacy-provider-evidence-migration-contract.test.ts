@@ -48,6 +48,20 @@ describe("privacy provider evidence migration contract", () => {
     );
   });
 
+  it("rejects non-object summaries before enumerating object keys", () => {
+    const sql = migrationSql();
+    const objectTypeGuard = sql.indexOf(
+      "jsonb_typeof(p_cleanup_summary) <> 'object' then",
+    );
+    const keyEnumeration = sql.indexOf(
+      "jsonb_object_keys(p_cleanup_summary)",
+    );
+
+    expect(objectTypeGuard).toBeGreaterThan(-1);
+    expect(keyEnumeration).toBeGreaterThan(objectTypeGuard);
+    expect(sql.slice(objectTypeGuard, keyEnumeration)).toContain("end if");
+  });
+
   it("reopens every completion lacking three valid provider dispositions", () => {
     const sql = migrationSql();
 

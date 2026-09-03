@@ -618,6 +618,9 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
 
   it("completes external cleanup idempotently with a closed non-PII summary", async () => {
     const invalidSummaries = [
+      null,
+      [],
+      "scalar cleanup summary",
       {
         storage_deleted_count: 0,
         ghl_status: "completed",

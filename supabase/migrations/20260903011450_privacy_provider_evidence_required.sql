@@ -77,8 +77,15 @@ declare
 begin
   if p_firm_id is null or p_deletion_request_id is null
      or p_cleanup_summary is null
-     or pg_catalog.jsonb_typeof(p_cleanup_summary) <> 'object'
-     or exists (
+     or pg_catalog.jsonb_typeof(p_cleanup_summary) <> 'object' then
+    return pg_catalog.jsonb_build_object(
+      'ok', false,
+      'external_cleanup_status', 'pending',
+      'error', 'cleanup_summary requires completed or not_applicable evidence for every provider; provider_managed is not completion evidence'
+    );
+  end if;
+
+  if exists (
        select 1
          from pg_catalog.jsonb_object_keys(p_cleanup_summary) as supplied(key)
         where not (supplied.key = any(v_allowed_keys))
