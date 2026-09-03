@@ -118,6 +118,26 @@ describe('eraseScreenedLead', () => {
     expect(sequence).toEqual(['intent', 'database', 'receipt']);
   });
 
+  it('seals the same terminal receipt for first redaction and a zero-count database retry', async () => {
+    mocks.registryEnabled = true;
+    mocks.rpc
+      .mockResolvedValueOnce(pendingPayload({ external_cleanup_status: 'complete' }))
+      .mockResolvedValueOnce(pendingPayload({ redacted_count: 0, external_cleanup_status: 'complete' }));
+
+    const input = {
+      firmId: FIRM_ID, leadId: 'L-2026-09-02-001', reason: 'subject_request' as const, deletionRequestId: REQUEST_ID,
+    };
+    await expect(eraseScreenedLead(input)).resolves.toMatchObject({ ok: true, redacted_count: 1 });
+    await expect(eraseScreenedLead(input)).resolves.toMatchObject({ ok: true, redacted_count: 0 });
+
+    expect(mocks.registerReceipt).toHaveBeenNthCalledWith(1, {
+      deletionRequestId: REQUEST_ID, redactedCount: 1, appliedAt: '2026-09-02T20:00:00.000Z',
+    });
+    expect(mocks.registerReceipt).toHaveBeenNthCalledWith(2, {
+      deletionRequestId: REQUEST_ID, redactedCount: 1, appliedAt: '2026-09-02T20:00:00.000Z',
+    });
+  });
+
   it('calls the atomic primitive with the exact firm and lead scope', async () => {
     mocks.rpc.mockResolvedValueOnce(pendingPayload());
 

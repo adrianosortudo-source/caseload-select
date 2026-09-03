@@ -349,11 +349,17 @@ export async function eraseScreenedLead(
   // If this second immutable write fails, do not report success: the intent
   // remains replayable and a retry can safely record the receipt.
   try {
-    if (registryEnabled) await registerDeletionAppliedReceipt({
-      deletionRequestId: requestId,
-      redactedCount: payload.redacted_count ?? 0,
-      appliedAt: payload.privacy_redacted_at ?? new Date().toISOString(),
-    });
+    if (registryEnabled) {
+      // The single-lead RPC returns 1 on its first terminal mutation and 0 on
+      // a successful retry, while preserving privacy_redacted_at. Seal the
+      // stable terminal fact rather than the per-call mutation count.
+      const terminalRedaction = !!payload.privacy_redacted_at || (payload.redacted_count ?? 0) > 0;
+      await registerDeletionAppliedReceipt({
+        deletionRequestId: requestId,
+        redactedCount: terminalRedaction ? 1 : 0,
+        appliedAt: payload.privacy_redacted_at ?? new Date().toISOString(),
+      });
+    }
   } catch {
     return { ok: false, database_redacted: true, redacted_count: payload.redacted_count ?? 0,
       deletion_request_id: requestId, privacy_redacted_at: payload.privacy_redacted_at ?? null,
