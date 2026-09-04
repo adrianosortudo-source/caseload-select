@@ -49,7 +49,8 @@ action merely to close the gate.
 
 - [x] The two v2 local videos exist, match the documented SHA-256 values, decode fully, and remain unuploaded.
 - [ ] Inventory the live Meta draft without submitting it.
-- [ ] Confirm the live draft contains only `pages_messaging` and the exact displayed Instagram messaging permission label.
+- [ ] Confirm the live draft contains `pages_messaging`, the exact displayed Instagram messaging permission label, and the four unique Meta-required technical dependencies `instagram_basic`, `pages_read_engagement`, `pages_show_list`, and `pages_manage_metadata`, with no unrelated or already-approved scope.
+- [ ] Meta Data Handling currently shows `Needs your review`. Obtain owner and privacy-counsel approval of the final live attestations; do not infer answers from this package.
 - [ ] Recompute both video hashes immediately before upload, attach each file to the matching permission, and watch each Meta preview completely.
 - [ ] Paste the final reviewed instructions, verify the signed-out public URLs, and capture the full draft with app identity and draft identifier.
 - [ ] Stop for Adriano's explicit action-time approval before selecting **Submit for review**.

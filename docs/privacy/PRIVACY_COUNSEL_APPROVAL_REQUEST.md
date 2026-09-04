@@ -9,7 +9,8 @@ Please review the controlled-redaction design and provide a written decision on:
 1. whether the retained fields and available joins can reasonably identify or single out a person;
 2. whether the proposed maximum of three years from each retained event's original event time is appropriate;
 3. how long the deletion tombstone and salted channel-suppression hashes may remain; and
-4. whether the public deletion wording accurately describes CaseLoad Select's obligations across operational data, processors, firm-controlled legal files, and backups.
+4. whether the public deletion wording accurately describes CaseLoad Select's obligations across operational data, processors, firm-controlled legal files, and backups; and
+5. the final answers to Meta's live Data Handling questions, which currently show `Needs your review` and are not pre-answered in this dossier.
 
 Meta submission remains blocked until these decisions are recorded and the other operational gates are closed.
 
@@ -92,6 +93,7 @@ Please return a dated written decision that includes:
 - minimum acceptable backup and restore-replay evidence;
 - any Meta-specific application deletion evidence counsel requires;
 - any required change to the public privacy or deletion wording; and
+- approval or correction of the owner's proposed answers to Meta's live Data Handling questions;
 - counsel name, capacity, and approval date.
 
 Until this Meta-focused record exists, mark counsel approval **open** and do not submit the Meta App Review package. Even after counsel approval, final submission remains subject to Adriano's explicit action-time approval. Resend, HighLevel, and Supabase provider-support questions are outside this Meta-focused dossier and do not block this review.

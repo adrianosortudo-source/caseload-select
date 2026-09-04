@@ -70,18 +70,14 @@ The workspace name and numeric asset ID are not authoritative Meta identity proo
 
 ## Permission decision
 
-Re-request only:
+The two business capabilities under review are:
 
 - `pages_messaging`;
 - the exact live Meta dashboard label for Instagram messaging. The source-supported capability is currently documented as `instagram_manage_messages`.
 
-Do not re-request:
+Also include the four unique Meta-declared technical dependencies: `instagram_basic`, `pages_read_engagement`, and `pages_show_list` for legacy `instagram_manage_messages`; and `pages_manage_metadata` plus `pages_show_list` for `pages_messaging`. Describe them only as dependencies of the related recorded messaging flow, not standalone product capabilities.
 
-- `pages_show_list`;
-- `pages_manage_metadata`;
-- `business_management`;
-- `instagram_basic`;
-- `pages_read_engagement`.
+Do not re-request `business_management` unless the live form identifies another mandatory dependency and that change is separately reviewed.
 
 Never resubmit the three approved scopes:
 
@@ -141,7 +137,8 @@ The strict-completion gate, tested Meta-derived CaseLoad Select operational-copy
 - [x] The bounded current-registry audit and activation/open postflight are complete; PR #219 is the final fictional end-to-end exercise.
 - [ ] Privacy counsel approves the retained audit envelope, available joins, and three-year period.
 - [ ] Public deletion wording is approved as accurate and supportable after counsel decides the retained-envelope and backup-language questions.
-- [ ] Live draft contains only the two source-supported messaging permissions.
+- [ ] Live draft contains the two source-supported messaging capabilities and exactly the four unique Meta-required technical dependencies.
+- [ ] Meta Data Handling no longer shows `Needs your review`; the owner and privacy counsel approved the final live attestations.
 - [ ] The three approved scopes are absent.
 - [ ] Reviewer instructions use the exact live Instagram permission label.
 - [ ] Adriano has reviewed the final draft and explicitly approved submission.

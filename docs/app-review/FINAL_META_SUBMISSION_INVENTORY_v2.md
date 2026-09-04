@@ -15,12 +15,17 @@
 
 ## Permission scope
 
-Request only:
+The two business capabilities under review are:
 
 - `pages_messaging`; and
 - the exact live Instagram messaging permission label displayed for this app, expected to be `instagram_manage_messages` or its current equivalent.
 
-Do not add `public_profile`, approved WhatsApp permissions, `pages_show_list`, `pages_manage_metadata`, `business_management`, `instagram_basic`, or `pages_read_engagement` unless a later source-supported runtime requirement is separately approved.
+Meta's current [Permissions Reference](https://developers.facebook.com/docs/permissions) lists mandatory technical dependencies for both capabilities. Include these dependency permissions in the draft even though CaseLoad Select does not present them as separate product features:
+
+- legacy `instagram_manage_messages`: `instagram_basic`, `pages_read_engagement`, and `pages_show_list`;
+- `pages_messaging`: `pages_manage_metadata` and `pages_show_list`.
+
+The unique dependency set is `instagram_basic`, `pages_read_engagement`, `pages_show_list`, and `pages_manage_metadata`. Request them only as Meta-declared dependencies of the two messaging capabilities. Do not claim a standalone identity, engagement-reading, Page-listing, or Page-management feature. Do not add `public_profile`, approved WhatsApp permissions, `business_management`, or another unrelated scope unless the live form identifies another mandatory dependency and that change is separately reviewed.
 
 ## Active package files
 
@@ -78,6 +83,7 @@ The following Meta-relevant checks must be closed before final submission:
 - [x] The bounded current-registry audit and controlled production activation/open postflight passed. PR #219 remains the final fictional end-to-end exercise; closeout created no persistent production fixture.
 - [ ] Obtain written privacy-counsel approval for the retained envelope, available joins, three-year per-event maximum, deletion-tombstone retention, and suppression-hash retention.
 - [ ] Obtain counsel's decision on the candidate public-copy changes in `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`, apply any required revision, merge with explicit approval, and verify the released pages signed out.
+- [ ] Meta Data Handling currently shows `Needs your review`. The owner and privacy counsel must review the live questions and approve the final attestations; this package does not infer or pre-answer them.
 
 The tested CaseLoad Select redaction and recovery controls are materially implemented, audited, and activated. Candidate public-copy source changes are prepared but not approved or released. Final submission remains blocked by privacy-counsel approval, the resulting public-copy release and signed-out verification, live Meta draft checks, and Adriano's action-time approval. No evidence claims deletion from Meta's own systems, and the two Meta provider dispositions remain pending.
 
@@ -89,7 +95,7 @@ The tested CaseLoad Select redaction and recovery controls are materially implem
 
 ## Upload and paste checks
 
-- [ ] The live permission list contains only the two supported messaging permissions.
+- [ ] The live permission list contains the two supported messaging capabilities and the four unique Meta-required technical dependencies listed above, with no unrelated or already-approved scopes.
 - [ ] The exact Instagram permission label is copied from the live form into the reviewer instructions.
 - [x] Both local v2 clips passed the content proof and technical checks in `screencasts/SHOTLIST_v2.md`, including required captions, video-only output, 1080p, and a full decode.
 - [ ] Recheck both documented SHA-256 values immediately before upload.

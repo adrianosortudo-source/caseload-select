@@ -4,7 +4,7 @@ Source basis: production merge `fbb6aac6712b28191de5aee79d0d4511aaaf4b59`, deplo
 
 The runtime messaging paths remain unchanged from the reviewed v2 evidence. Production migrations through `20260904125000_privacy_recovery_open_from_locked` are applied; the completed technical privacy closeout and remaining counsel/public-copy gates are tracked separately in `META_READINESS_CLOSEOUT_2026-09-04.md`.
 
-A permission is retained only when the application contains a concrete runtime operation that exercises it. A configured asset ID, webhook field, manually configured Meta asset, or Business Manager screenshot is not an application code path.
+The two business capabilities are retained because the application contains concrete runtime operations that exercise them. Meta-declared technical dependencies are included only when the current [Permissions Reference](https://developers.facebook.com/docs/permissions) requires them for one of those capabilities. A configured asset ID, webhook field, manually configured Meta asset, or Business Manager screenshot is not an application code path and must not be presented as standalone use of a dependency.
 
 ## Resubmission decision
 
@@ -12,11 +12,11 @@ A permission is retained only when the application contains a concrete runtime o
 |---|---|---|---|
 | `pages_messaging` | Retain and re-request | `src/lib/messenger-send.ts:50-66`; portal entry `src/app/api/portal/[firmId]/triage/[leadId]/reply/route.ts:277-289` | The server posts plain text to `/{page_id}/messages` with the configured Page token. The portal route derives channel, recipient, firm, actor, and reply-window evidence server-side. |
 | Exact live Meta label for Instagram messaging, documented in source as `instagram_manage_messages` | Retain and re-request | `src/lib/instagram-send.ts:57-71`; portal entry `src/app/api/portal/[firmId]/triage/[leadId]/reply/route.ts:277-289` | The server posts a plain-text Instagram reply to the Page-scoped `/me/messages` endpoint with the linked Page token. Use the exact permission label displayed for this app. |
-| `pages_manage_metadata` | Drop | No `subscribed_apps` or Page webhook-subscription Graph call exists under `src/`. | Manual Page webhook configuration is external state, not an exercised runtime operation. |
+| `pages_manage_metadata` | Include as a Meta-required technical dependency | No standalone `subscribed_apps` or Page-management product flow exists under `src/`. | Meta's current Permissions Reference lists this as a dependency of `pages_messaging`. It is requested only to support that messaging capability, not a separate Page-management feature. |
 | `business_management` | Drop | No Business Portfolio or Business Manager Graph operation exists under `src/`. | The app consumes configured asset IDs and server-side tokens. It does not enumerate or manage portfolio assets. |
-| `instagram_basic` | Drop | No Instagram identity-read operation exists under `src/`. | `src/app/api/instagram-intake/route.ts:146-155` receives an account identifier in a signed webhook. Receiving an identifier is not an identity read. |
-| `pages_show_list` | Drop | No `/me/accounts` or Page-enumeration operation exists under `src/`. | The product has no Facebook Login or Page picker. |
-| `pages_read_engagement` | Drop | No Page content or engagement read exists under `src/`. | The source supports Meta's conclusion that this scope is not required for the core use case. |
+| `instagram_basic` | Include as a Meta-required technical dependency | No standalone Instagram identity-read operation exists under `src/`. | Meta's current Permissions Reference lists this as a dependency of legacy `instagram_manage_messages`. It is requested only to support that messaging capability, not a separate identity product feature. |
+| `pages_show_list` | Include as a Meta-required technical dependency | No `/me/accounts` or Page-enumeration product flow exists under `src/`. | Meta's current Permissions Reference lists this as a dependency of legacy `instagram_manage_messages`. It is requested only to support that messaging capability, not broad Page enumeration. |
+| `pages_read_engagement` | Include as a Meta-required technical dependency | No standalone Page-content or engagement-reading product flow exists under `src/`. | Meta's current Permissions Reference lists this as a dependency of legacy `instagram_manage_messages`. It is requested only to support that messaging capability, not analytics or content access. |
 
 ## Approved permissions
 
@@ -50,4 +50,4 @@ Do not add these approved scopes to the resubmission draft:
 
 ## Evidence boundary
 
-This file supports only the two messaging operations above. It does not claim that CaseLoad Select reads a Page display name or Instagram handle from Meta. The numeric ID displayed in the portal is configured context, not identity proof. The recording must show the authoritative Page name or Instagram handle in Meta UI.
+This file supports only the two messaging operations above plus the four unique Meta-declared technical dependencies required across those capabilities. It does not claim standalone use of those dependencies or that CaseLoad Select reads a Page display name or Instagram handle from Meta. The numeric ID displayed in the portal is configured context, not identity proof. The recording must show the authoritative Page name or Instagram handle in Meta UI.

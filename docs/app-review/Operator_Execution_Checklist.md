@@ -283,12 +283,21 @@ In the App dashboard, navigate to App Review → Permissions and Features. For e
 3. Attach the matching screencast(s) per the table in `screencasts/README.md`.
 4. For test instructions, paste the matching reviewer instructions block from Section 2.
 
-Permissions to resubmit (2 total):
+Business capabilities to resubmit (2):
 
 - [ ] `pages_messaging` (Section 2.1)
 - [ ] Historical label variant: `instagram_business_manage_messages` (do not copy; confirm the exact live Meta label under the active v2 runbook)
 
-Remove or leave out `pages_show_list`, `pages_manage_metadata`, `business_management`, `instagram_basic`, and `pages_read_engagement`. Do not resubmit approved `whatsapp_business_messaging`, `whatsapp_business_management`, or `public_profile`.
+Mandatory technical dependencies across the two messaging capabilities (4 unique scopes):
+
+- [ ] `instagram_basic`
+- [ ] `pages_read_engagement`
+- [ ] `pages_show_list`
+- [ ] `pages_manage_metadata`
+
+`instagram_basic`, `pages_read_engagement`, and `pages_show_list` support legacy Instagram messaging; `pages_manage_metadata` and `pages_show_list` support Messenger. Request the four unique scopes only as Meta-declared dependencies, not standalone product features. Remove or leave out `business_management` unless the live form identifies another mandatory dependency and that change is separately reviewed. Do not resubmit approved `whatsapp_business_messaging`, `whatsapp_business_management`, or `public_profile`.
+
+- [ ] Meta Data Handling no longer shows `Needs your review`; the owner and privacy counsel approved the final live attestations. Do not infer answers from this checklist.
 
 ---
 

@@ -43,12 +43,19 @@ On the test brief, confirm there is no support-preview banner or read-only notic
 
 ## 2. Lock the permission set
 
-Re-request only:
+The two business capabilities under review are:
 
 - `pages_messaging`;
 - the exact Instagram messaging permission label shown in the live Meta draft. The source-supported name in this package is `instagram_manage_messages`.
 
-Do not re-request `pages_show_list`, `pages_manage_metadata`, `business_management`, `instagram_basic`, or `pages_read_engagement`.
+Include the technical dependency permissions that Meta's current Permissions Reference lists across the two messaging capabilities:
+
+- `instagram_basic`;
+- `pages_read_engagement`;
+- `pages_show_list`; and
+- `pages_manage_metadata`.
+
+`instagram_basic`, `pages_read_engagement`, and `pages_show_list` support legacy `instagram_manage_messages`; `pages_manage_metadata` and `pages_show_list` support `pages_messaging`. Request the four unique scopes only as technical dependencies. Do not describe them as standalone CaseLoad Select identity, engagement-reading, Page-listing, or Page-management features. Do not re-request `business_management` unless the live form identifies another mandatory dependency and that change is separately reviewed.
 
 Never resubmit `whatsapp_business_messaging`, `whatsapp_business_management`, or `public_profile`. Those three scopes are already approved.
 
@@ -144,7 +151,8 @@ Do not submit the Meta draft until all of these checks pass:
 - [x] The encrypted external registry, historical backfill, controlled production replay, and PR #219 fictional transactional logical-restore simulation are complete within their documented evidence boundaries.
 - [x] The bounded current-registry audit and controlled production activation/open postflight passed. PR #219 remains the final fictional end-to-end exercise; no fresh persistent production fixture was added.
 - [ ] Obtain privacy-counsel approval of the audit envelope, retained-key reidentification assessment, and three-year retention period.
-- [ ] Resolve `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md` after counsel review, release any approved source correction through a PR, and verify `/privacy`, `/terms`, and `/data-deletion` signed out.
+ - [ ] Resolve `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md` after counsel review, release any approved source correction through a PR, and verify `/privacy`, `/terms`, and `/data-deletion` signed out.
+- [ ] Resolve the live Meta Data Handling `Needs your review` gate through owner and privacy-counsel review. Do not infer or pre-answer the attestation questions in this runbook.
 
 The legacy HighLevel disposition and any Resend, HighLevel, or Supabase support requests are separate privacy-compliance follow-up work. They do not block this Meta submission. Do not send a provider support draft without separate provider-specific approval.
 
@@ -155,14 +163,14 @@ There is no discard-all control. Use each permission row's trash icon.
 1. Inventory the live draft before changing it.
 2. Remove every unsupported permission.
 3. Remove the three already-approved scopes if they appear.
-4. Confirm only the two retained messaging permissions remain.
+4. Confirm the draft contains the two messaging capabilities and exactly the four unique required technical dependencies, with no unrelated permission.
 5. Save and reload the draft to confirm the list persisted.
 
 Do not delete the submission itself.
 
-## 9. Complete the two permission entries
+## 9. Complete the two capability entries and four dependency entries
 
-For each retained permission:
+For each business-capability permission:
 
 1. Use `PERMISSION_CODE_PATH_EVIDENCE_v2.md` for the factual justification.
 2. Paste the fenced block from `Reviewer_Instructions_Paste_v2.md`.
@@ -171,11 +179,19 @@ For each retained permission:
 5. Confirm the written Instagram permission label exactly matches the live form.
 6. Save before moving to the other permission.
 
+For `instagram_basic`, `pages_read_engagement`, `pages_show_list`, and `pages_manage_metadata`:
+
+1. Explain which messaging capability lists the permission as a dependency in Meta's current Permissions Reference.
+2. State that it supports the recorded Messenger or Instagram messaging flow and is not a separate product capability.
+3. If the form requires a recording for the dependency row, use the reviewed clip for the related messaging capability and do not invent an unsupported identity, engagement, Page-listing, or Page-management workflow.
+4. Save and reload the draft to confirm all six entries persist.
+
 Do not use `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, `screencasts/README.md`, the v1 clips, the WhatsApp clip, or the Business Manager configuration clip.
 
 ## 10. Final audit and approval stop
 
-- [ ] Draft contains only the two retained messaging permissions.
+- [ ] Draft contains the two retained messaging capabilities and exactly the four unique required technical dependencies.
+- [ ] Meta Data Handling no longer shows `Needs your review`; the owner and privacy counsel approved the submitted attestations.
 - [ ] No approved scope is present.
 - [ ] Messenger has the Messenger v2 clip.
 - [ ] Instagram has the Instagram v2 clip.
