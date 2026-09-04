@@ -26,8 +26,8 @@ This is the current Meta-only gate ledger. It supersedes older readiness stateme
 ## Owner decision and public-copy gates
 
 - [x] Adriano waived external privacy-counsel review for this release, accepted the residual risk as owner, and approved the candidate public copy and current controller wording. The dated decision and its evidence limits are recorded in `../privacy/OWNER_PRIVACY_AND_META_DATA_HANDLING_DECISION_2026-09-04.md`. This is not counsel approval or legal advice.
-- [ ] Merge the exact owner-approved public-copy PR only with Adriano's explicit approval. Owner approval of the wording does not itself authorize the merge or release it.
-- [ ] Recheck the three public URLs signed out after any copy release and preserve rendered evidence.
+- [x] PR #223 merged the exact owner-approved public copy with Adriano's explicit approval.
+- [x] Signed-out checks on 2026-09-04 returned HTTP 200 for `https://caseloadselect.ca/privacy`, `https://caseloadselect.ca/terms`, and `https://caseloadselect.ca/data-deletion`; key approved privacy and deletion statements were present in the released HTML.
 
 ## Meta-controlled-copy evidence
 

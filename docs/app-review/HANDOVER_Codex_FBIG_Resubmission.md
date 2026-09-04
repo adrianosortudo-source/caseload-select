@@ -27,7 +27,7 @@ Release evidence:
 - The fresh fictional post-ledger deletion rehearsal passed the CaseLoad Select database, application, Storage, authorization, idempotency, tenant-isolation, append-only, pending-message, and expiry-invocation checks recorded in `deletion-flow-verification.md`.
 - After deployment of `20260903011450`, a second fictional production verification ran entirely inside one rollback-only transaction. It confirmed that `provider_managed` is rejected as completion evidence and leaves the request pending; a complete/not-applicable disposition closes the request idempotently; Messenger-style direct identifiers and content are removed from the screened lead, conversation event, channel session, unconfirmed inquiry, and processed-message claim; suppression prevents those Meta-derived operational copies from being recreated; and rollback left zero fixture rows. No external provider send or deletion was attempted.
 
-The live Messenger and Instagram rehearsals passed, and both continuous local v2 clips passed content and technical verification. The current-registry audit and production activation closeout also passed. Adriano's owner approval, counsel waiver, and Meta Data Handling decisions are recorded in `../privacy/OWNER_PRIVACY_AND_META_DATA_HANDLING_DECISION_2026-09-04.md`. Remaining work is limited to the exact public-copy merge and signed-out verification, live Meta draft and Data Handling changes, immediate pre-upload hash and playback checks, final draft evidence, and Adriano's approved submission action.
+The live Messenger and Instagram rehearsals passed, and both continuous local v2 clips passed content and technical verification. The current-registry audit and production activation closeout also passed. Adriano's owner approval, counsel waiver, and Meta Data Handling decisions are recorded in `../privacy/OWNER_PRIVACY_AND_META_DATA_HANDLING_DECISION_2026-09-04.md`. PR #223 merged the owner-approved public copy, and signed-out checks confirmed the canonical `caseloadselect.ca` policy URLs and key approved wording. Remaining work is limited to live Meta draft and Data Handling changes, immediate pre-upload hash and playback checks, final draft evidence, and Adriano's approved submission action.
 
 ## Authority and scope
 
@@ -39,7 +39,7 @@ These are the active files for the resubmission:
 4. `Reviewer_Instructions_Paste_v2.md`: text for the reviewer-instructions field.
 5. `FINAL_META_SUBMISSION_INVENTORY_v2.md`: final package and upload inventory.
 6. `META_READINESS_CLOSEOUT_2026-09-04.md`: current Meta-only gate ledger.
-7. `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`: owner-approved candidate and publication sequence.
+7. `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`: published owner-approved copy and verification record.
 8. `deletion-flow-verification.md`: append-only engineering evidence.
 9. `../privacy/OWNER_PRIVACY_AND_META_DATA_HANDLING_DECISION_2026-09-04.md`: owner decision, counsel waiver, and Meta Data Handling answers.
 10. `../privacy/PRIVACY_COUNSEL_APPROVAL_REQUEST.md`: unsent historical counsel dossier; review was waived for this release.
@@ -112,17 +112,16 @@ If Meta displays a dependency or a different Instagram permission label, capture
 
 Adriano selected controlled, irreversible redaction as the resolution. The production system now includes the service-only operation, strict completion semantics, encrypted external registry, historical backfill, controlled replay, and fail-closed recovery circuit. PR #219 added a passing fictional transactional logical-restore simulation. The retained fields and available joins carry documented residual risk; Adriano accepted that risk as owner and waived external privacy-counsel review. They are not described as legally de-identified or independently approved.
 
-The strict-completion gate, tested Meta-derived CaseLoad Select operational-copy gate, current-registry audit, and activation/open postflight are closed. PR #219 remains the final fictional end-to-end exercise; no fresh persistent production fixture was created for closeout. The owner approved the candidate public copy and waived counsel review, but its exact PR merge and signed-out verification remain open. Meta support evidence is conditional only if the live review form requires Meta-side disposition proof. The legacy HighLevel work and Resend, HighLevel, or Supabase support responses remain separate and do not block Meta submission.
+The strict-completion gate, tested Meta-derived CaseLoad Select operational-copy gate, current-registry audit, activation/open postflight, PR #223 public-copy merge, and signed-out canonical-URL verification are closed. PR #219 remains the final fictional end-to-end exercise; no fresh persistent production fixture was created for closeout. Meta support evidence is conditional only if the live review form requires Meta-side disposition proof. The legacy HighLevel work and Resend, HighLevel, or Supabase support responses remain separate and do not block Meta submission.
 
 ## Remaining sequence
 
-1. Merge the owner-approved public copy only after Adriano approves the exact PR, then verify the three public URLs signed out.
-2. Inventory the live Meta draft. Remove unsupported and approved permissions one row at a time.
-3. Apply the recorded Meta Data Handling answers and confirm `Needs your review` clears.
-4. Recheck the documented clip hashes, attach only the matching v2 clips, and play each completely in Meta's preview.
-5. Re-review and paste the then-current v2 reviewer instructions, verify the public URLs signed out, and preserve a final draft screenshot.
-6. Stop for Adriano's action-time approval before the final submission control.
-7. Adriano submits and preserves screenshots of the submission confirmation.
+1. Inventory the live Meta draft. Remove unsupported and approved permissions one row at a time.
+2. Apply the recorded Meta Data Handling answers and confirm `Needs your review` clears.
+3. Recheck the documented clip hashes, attach only the matching v2 clips, and play each completely in Meta's preview.
+4. Re-review and paste the then-current v2 reviewer instructions, recheck the canonical public URLs signed out, and preserve a final draft screenshot.
+5. Stop for Adriano's action-time approval before the final submission control.
+6. Adriano submits and preserves screenshots of the submission confirmation.
 
 ## Definition of ready to submit
 
@@ -138,8 +137,8 @@ The strict-completion gate, tested Meta-derived CaseLoad Select operational-copy
 - [x] The external encrypted registry, backfill/replay flow, and fictional transactional logical-restore simulation are verified within their recorded boundaries.
 - [x] The bounded current-registry audit and activation/open postflight are complete; PR #219 is the final fictional end-to-end exercise.
 - [x] Adriano accepted the retained-envelope, join, and three-year-period risks as owner and waived external privacy-counsel review; no counsel approval is claimed.
-- [x] Adriano approved the candidate public deletion wording as owner.
-- [ ] The exact public-copy PR is merged with Adriano's explicit approval and the released pages pass signed-out verification.
+- [x] Adriano approved the public deletion wording as owner.
+- [x] PR #223 merged with Adriano's explicit approval, and the released canonical pages passed signed-out HTTP and key-copy verification on 2026-09-04.
 - [ ] Live draft contains the two source-supported messaging capabilities and exactly the four unique Meta-required technical dependencies.
 - [x] The owner-approved Meta Data Handling answers are recorded without implying counsel approval.
 - [ ] The live Meta Data Handling step reflects those exact answers and no longer shows `Needs your review`.

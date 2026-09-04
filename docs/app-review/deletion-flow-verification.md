@@ -2,7 +2,7 @@
 
 > SCOPE NOTICE: This May 2026 exercise predates `channel_conversation_events`. It verifies the fields and tables named below only. It does not establish that append-only channel conversation ledger content is erased or anonymized, and it must not be used to make that claim in the v2 reviewer package.
 
-> CURRENT RELEASE STATUS: The post-ledger fictional rehearsal and final rollback-only production verification passed the tested CaseLoad Select controls, strict completion semantics, and Meta-derived operational-copy checks. The encrypted-registry and restore/replay controls are complete within the documented application-level and transactional logical-restore boundaries. Adriano approved the candidate public copy and accepted the documented privacy risks as owner while waiving external counsel review. The exact public-copy merge and verification, live Meta gates, and action-time submission approval remain open, so this record does not authorize Meta submission.
+> CURRENT RELEASE STATUS: The post-ledger fictional rehearsal and final rollback-only production verification passed the tested CaseLoad Select controls, strict completion semantics, and Meta-derived operational-copy checks. The encrypted-registry and restore/replay controls are complete within the documented application-level and transactional logical-restore boundaries. Adriano approved the public copy and accepted the documented privacy risks as owner while waiving external counsel review. PR #223 merged that copy, and the canonical public pages passed signed-out verification. The live Meta gates and action-time submission approval remain open, so this record does not authorize Meta submission.
 
 This file records the timestamped, end-to-end deletion exercise run before App Review submission. Required by `Phase11_Submission_Package.md` Section 6.3 so the deletion claim on the App Review form rests on a real recent exercise.
 
@@ -417,13 +417,13 @@ transactional logical-restore boundary.
 **Technical closeout conclusion:** the encrypted registry, recovery replay,
 current-registry audit, and controlled activation gates are complete for the
 tested CaseLoad Select copies. This does not prove deletion inside Meta, managed
-backup/PITR expiry, legal sufficiency of the retained audit envelope, or final
-supportability of the live public wording. Those gates remain expressly open.
+backup/PITR expiry, or legal sufficiency of the retained audit envelope. Those
+evidence boundaries remain expressly open.
 
 ### Owner decision supersession: 2026-09-04
 
-After the technical closeout above, Adriano approved the PR #223 candidate
-public wording and accepted the documented retained-envelope, join, retention,
+After the technical closeout above, Adriano approved PR #223's public wording,
+which merged on 2026-09-04. He accepted the documented retained-envelope, join, retention,
 and managed-backup evidence limits as owner. He waived external privacy-counsel
 review for this release. This closes the internal counsel-decision gate by owner
 risk acceptance; it does not convert the engineering evidence into a legal
@@ -431,5 +431,6 @@ opinion or prove deletion inside Meta or managed-backup/PITR expiry.
 
 The exact owner decision and Meta Data Handling attestations are recorded in
 `../privacy/OWNER_PRIVACY_AND_META_DATA_HANDLING_DECISION_2026-09-04.md`.
-The public-copy merge and signed-out verification, live Meta changes, upload
-checks, and final action-time submission approval remain open.
+Signed-out checks of the canonical public pages returned HTTP 200 and confirmed
+the key approved wording. The live Meta changes, upload checks, and final
+action-time submission approval remain open.
