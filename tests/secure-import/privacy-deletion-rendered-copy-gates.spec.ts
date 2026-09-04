@@ -142,7 +142,7 @@ for (const route of ROUTES) {
       if (route === "/data-deletion") {
         expect(renderedText).toContain("A completed or not-applicable status is the operator’s attestation, not provider-issued evidence.");
         expect(renderedText).toContain("A provider-managed status is only a routing marker and cannot, by itself, close external cleanup.");
-        expect(renderedText).toContain("CaseLoad Select irreversibly removes message content and direct identifiers from the operational copies it controls.");
+        expect(renderedText).toContain("CaseLoad Select uses a restricted database operation to irreversibly remove message content and direct identifiers from the operational copies it controls.");
         expect(renderedText).toContain("This was not a managed Supabase backup or point-in-time recovery rehearsal.");
         expect(renderedText).not.toContain("We apply the request to active copies held by service providers");
         expect(renderedText).not.toContain("Backup copies are not returned to operational use without reapplying completed deletion requests");
