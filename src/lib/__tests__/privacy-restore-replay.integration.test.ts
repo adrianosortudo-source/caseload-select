@@ -404,6 +404,13 @@ describe.skipIf(!DB_URL || !SERVER_IPS)(
         )).toMatchObject({ ok: true, state: 'locked' });
         await conn.query('rollback to savepoint pre_deletion_snapshot');
 
+        // The snapshot restores its former open control row. Re-lock it as
+        // the first database operation after restore, before inspecting any
+        // resurrected application data.
+        expect(await serviceRpc<{ ok: boolean; state: string }>(
+          `select public.set_privacy_recovery_state('locked') as result`,
+        )).toMatchObject({ ok: true, state: 'locked' });
+
         const restored = await conn.query(
           `select contact_name, contact_email, contact_phone, raw_transcript
              from screened_leads where id=$1`,
@@ -430,12 +437,8 @@ describe.skipIf(!DB_URL || !SERVER_IPS)(
         expect([...store.values.keys()].some((key) => key.startsWith(`${registryPrefix}intent:`))).toBe(true);
         expect(await isPrivacyDeletionRegistryActivated(store)).toBe(true);
 
-        // A restored snapshot may say open. Re-lock immediately and prove a
-        // normal operational deletion cannot pass while the external circuit
-        // is closed.
-        expect(await serviceRpc<{ ok: boolean; state: string }>(
-          `select public.set_privacy_recovery_state('locked') as result`,
-        )).toMatchObject({ ok: true, state: 'locked' });
+        // Prove a normal operational deletion cannot pass while the external
+        // circuit is closed.
         const refused = await eraseScreenedLead({
           firmId,
           leadId: publicLeadId,
