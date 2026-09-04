@@ -442,8 +442,14 @@ export type PrivacyRegistryStorageDiagnostic = Readonly<{
  * secret-derived value, ciphertext, key, or raw exception leaves this helper.
  */
 export async function diagnosePrivacyRegistryStorage(
-  store: RegistryAtomicStore = Redis.fromEnv() as unknown as RegistryAtomicStore,
+  suppliedStore?: RegistryAtomicStore,
 ): Promise<PrivacyRegistryStorageDiagnostic> {
+  let store: RegistryAtomicStore;
+  try {
+    store = suppliedStore ?? Redis.fromEnv() as unknown as RegistryAtomicStore;
+  } catch {
+    return { redisLeaseEval: false, encryptionCheckpoint: false, failedStage: 'redis_lease_eval' };
+  }
   const operationId = randomUUID();
   const cycleId = randomUUID();
   const leaseToken = randomUUID();

@@ -67,7 +67,8 @@ read the external activation marker, so only this endpoint may supply the
   bounded check reads at most one already-redacted candidate and exercises
   random 60-second Redis lease/checkpoint keys. Its response contains only
   fixed readiness booleans and one of `control`, `database_candidate_read`,
-  `redis_lease_eval`, or `encryption_checkpoint`; it never returns raw errors,
+  `redis_lease_eval` (including Redis client construction), or
+  `encryption_checkpoint`; it never returns raw errors,
   coordinates, URLs, tokens, plaintext, or ciphertext. Re-lock after any
   failed diagnostic and remediate before retrying a worker.
 - Run replay: `{ "action": "run", "operation": "replay", "operationId":
