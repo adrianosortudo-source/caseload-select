@@ -172,6 +172,10 @@ blocks migration and activation.
    fails closed before its cursor is checkpointed. Every mutable write is
    lease-token conditional, and terminal progress plus aggregate accounting
    commits atomically.
+   Recovery replay stops after the tenant-scoped database redaction and durable
+   registry receipt succeed. It does not inspect, delete, acknowledge, or mark
+   complete any provider or Storage cleanup; those records remain in their
+   separate pending evidence workflow.
 5. Reconcile aggregate totals and every provider exception through the approved
    evidence process. Keep the circuit locked if any batch fails.
 6. Only after documented reconciliation and a distinct approval may recovery
