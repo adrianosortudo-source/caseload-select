@@ -102,6 +102,20 @@ read the external activation marker, so only this endpoint may supply the
   proves the expected intent, seal, terminal operation, and progress records
   share the supplied cycle and operation and that every non-control value is
   an authenticated encrypted envelope.
+- Audit the complete durable namespace after the global replay while both
+  circuits are locked: `{ "action": "auditReplayedRegistry", "cycleId":
+  "<same DB cycle>", "backfillOperationId": "<completed backfill UUID>",
+  "replayOperationId": "<DB reconciliation operation UUID>",
+  "expectedIntentCount": <aggregate DB count> }`. This second read-only action
+  recognizes the durable `intent`, `applied`, `backfill-seal`, `replay-run`,
+  `operation-state`, and `intent-progress` namespaces plus the exact circuit
+  and optional activation markers. It rejects transient leases, diagnostics,
+  unknown keys, plaintext values, malformed ciphertext, or linkage/accounting
+  drift. Historical interrupted-operation checkpoints may remain encrypted,
+  but only the supplied replay operation can satisfy the terminal current-run
+  proof. Output is limited to fixed counts and booleans; keys, coordinates,
+  ciphertext, decrypted records, provider metadata, and raw errors are never
+  returned.
 - Run replay: `{ "action": "run", "operation": "replay", "operationId":
   "<new UUID>", "cycleId": "<begin response>", "cycleStartedAt":
   "<begin response>", "limit": 100 }`
