@@ -100,7 +100,7 @@ function makeIgPayload(opts: {
 function makePostRequest(body: string, signature: string | null): Request {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (signature) headers["x-hub-signature-256"] = signature;
-  return new Request("https://app.caseloadselect.ca/api/instagram-intake", {
+  return new Request("https://caseloadselect.ca/api/instagram-intake", {
     method: "POST",
     headers,
     body,
@@ -117,7 +117,7 @@ function makeGetRequest(params: {
   if (params.token !== undefined) qs.set("hub.verify_token", params.token);
   if (params.challenge !== undefined) qs.set("hub.challenge", params.challenge);
   return new Request(
-    `https://app.caseloadselect.ca/api/instagram-intake?${qs.toString()}`,
+    `https://caseloadselect.ca/api/instagram-intake?${qs.toString()}`,
     { method: "GET" },
   );
 }

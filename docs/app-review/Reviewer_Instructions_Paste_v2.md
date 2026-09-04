@@ -35,7 +35,7 @@ MESSAGING SAFEGUARDS: Free-form replies require an authoritative inbound webhook
 
 LIVE ACCESS: If live testing is required, coordinate through the App Review thread or adriano@caseloadselect.ca. Access and timing must be arranged with the operator. Do not enter real client information. Use fictional test facts only.
 
-OPERATOR CONTACT: adriano@caseloadselect.ca. Privacy and data-deletion questions: privacy@caseloadselect.ca. Privacy policy: https://app.caseloadselect.ca/privacy. Terms: https://app.caseloadselect.ca/terms. Data-deletion instructions: https://app.caseloadselect.ca/data-deletion.
+OPERATOR CONTACT: adriano@caseloadselect.ca. Privacy and data-deletion questions: privacy@caseloadselect.ca. Privacy policy: https://caseloadselect.ca/privacy. Terms: https://caseloadselect.ca/terms. Data-deletion instructions: https://caseloadselect.ca/data-deletion.
 
 TEST DATA SCOPE: The review recordings use fictional data only. The May 2026 deletion exercise is historical and predates the channel conversation ledger. Current evidence consists of the September 2026 post-ledger production exercises, encrypted-registry backfill/replay, and PR #219's fictional real-Postgres transactional restore simulation. These checks did not send to, delete from, or mark cleanup complete at Meta.
 ```

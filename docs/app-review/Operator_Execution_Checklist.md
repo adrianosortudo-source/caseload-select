@@ -129,11 +129,11 @@ Path B (fresh account, cleaner):
 2. Add to Vercel Production env: `META_WHATSAPP_VERIFY_TOKEN=<your token>`. Redeploy.
 3. Wait for deploy (~2 min). Verify the endpoint now accepts the token:
    ```bash
-   curl -sw "\nHTTP %{http_code}\n" "https://app.caseloadselect.ca/api/whatsapp-intake?hub.mode=subscribe&hub.verify_token=<your-token>&hub.challenge=verify-test"
+   curl -sw "\nHTTP %{http_code}\n" "https://caseloadselect.ca/api/whatsapp-intake?hub.mode=subscribe&hub.verify_token=<your-token>&hub.challenge=verify-test"
    ```
    Expect HTTP 200 + the challenge string echoed.
 4. App use-cases page → WhatsApp → **Configuration** → Webhook section.
-5. Callback URL: `https://app.caseloadselect.ca/api/whatsapp-intake`
+5. Callback URL: `https://caseloadselect.ca/api/whatsapp-intake`
 6. Verify token: the value you just generated.
 7. Click **Verify and Save**. Subscribe to `messages`.
 
@@ -222,9 +222,9 @@ Required by Section 6.3 of `Phase11_Submission_Package.md`. Lets the deletion cl
 ### Step 12 · Re-verify policy pages live (5 min)
 
 ```bash
-curl -sI https://app.caseloadselect.ca/privacy | head -1
-curl -sI https://app.caseloadselect.ca/terms | head -1
-curl -sI https://app.caseloadselect.ca/data-deletion | head -1
+curl -sI https://caseloadselect.ca/privacy | head -1
+curl -sI https://caseloadselect.ca/terms | head -1
+curl -sI https://caseloadselect.ca/data-deletion | head -1
 ```
 
 All three must return `HTTP/2 200`. Privacy + Terms + Data Deletion pages already carry the 2026-05-24 update timestamp.
@@ -247,13 +247,13 @@ In the App dashboard at `https://developers.facebook.com/apps/1007304805285554/a
 |---|---|
 | App display name | `CaseLoad Select` |
 | App contact email | `hello@caseloadselect.ca` |
-| Privacy Policy URL | `https://app.caseloadselect.ca/privacy` |
-| Terms of Service URL | `https://app.caseloadselect.ca/terms` |
-| User Data Deletion URL | `https://app.caseloadselect.ca/data-deletion` |
+| Privacy Policy URL | `https://caseloadselect.ca/privacy` |
+| Terms of Service URL | `https://caseloadselect.ca/terms` |
+| User Data Deletion URL | `https://caseloadselect.ca/data-deletion` |
 | Category | `Business` (sub-category: `Business and Pages` or `Productivity` if rejected) |
 | App icon | Upload `public/brand/logos/icon-dark-bg-1024.png` |
 | App Domain | `caseloadselect.ca` |
-| Site URL (Website platform) | `https://app.caseloadselect.ca` |
+| Site URL (Website platform) | `https://caseloadselect.ca/` |
 
 Paste the long-form app description from `Phase11_Submission_Package.md` Section 1.2 into "Tell us about your app".
 
@@ -377,7 +377,7 @@ Check the App Review status daily at `https://developers.facebook.com/apps/10073
 | Screencasts (v1, 4 clips) | RECORDED 2026-08-13 and preserved under `docs/app-review/screencasts/`; rejected evidence, not for reuse in the v2 submission |
 | Screencasts (v2, 2 clips) | NOT RECORDED; operator records only after Option B is merged, migration is applied, and production is verified, following `screencasts/SHOTLIST_v2.md` |
 | **App Review submission**: Tech Provider gate | CONTINUE clicked. Per-permission "Add to App Review" path active. |
-| App Review: App settings step | green; App domain `caseloadselect.ca`, Website platform `https://app.caseloadselect.ca`, all URLs, app icon |
+| App Review: App settings step | green; App domain `caseloadselect.ca`, Website platform `https://caseloadselect.ca`, all URLs, app icon |
 | App Review: Allowed usage step (10 permissions) | Historical draft state only. Inventory the live draft before relying on any saved permission or description. |
 | App Review: Data handling step | Historical green state. Recheck the live form before submission. |
 | App Review: Reviewer instructions step | Historical v1 state only. Replace with `Reviewer_Instructions_Paste_v2.md`. |

@@ -49,14 +49,14 @@ CaseLoad Select is operated by Adriano Domingues from Toronto, Ontario. The firs
 
 | Platform | Status |
 |---|---|
-| Website | YES: primary surface at `https://app.caseloadselect.ca` |
+| Website | YES: primary surface at `https://caseloadselect.ca/` |
 | iOS | Not applicable |
 | Android | Not applicable |
 | Windows app | Not applicable |
 | Page tab | Not applicable |
 | Gaming | Not applicable |
 
-In the platforms section, add **Website** only. App Domain: `caseloadselect.ca`. Site URL: `https://app.caseloadselect.ca`.
+In the platforms section, add **Website** only. App Domain: `caseloadselect.ca`. Site URL: `https://caseloadselect.ca/`.
 
 ### 1.5 Business verification status
 
@@ -72,12 +72,12 @@ If unverified, expect to upload:
 Paste these into the Basic Settings page exactly as shown:
 
 ```
-Privacy Policy URL:        https://app.caseloadselect.ca/privacy
-Terms of Service URL:      https://app.caseloadselect.ca/terms
-User Data Deletion URL:    https://app.caseloadselect.ca/data-deletion
+Privacy Policy URL:        https://caseloadselect.ca/privacy
+Terms of Service URL:      https://caseloadselect.ca/terms
+User Data Deletion URL:    https://caseloadselect.ca/data-deletion
 ```
 
-**Block 1 leftover (2026-05-13):** the Meta validator rejected the data-deletion URL with a stale `name_placeholder should represent a valid URL` error even though the page returns HTTP 200. Today (2026-05-15) try a fresh hard reload of the dashboard. If the field still refuses to save, attach a screenshot of the page returning 200 (via `curl -sI https://app.caseloadselect.ca/data-deletion`) and open a Meta developer-support ticket before submitting; the URL must save before the form can be submitted.
+**Block 1 leftover (2026-05-13):** the Meta validator rejected the data-deletion URL with a stale `name_placeholder should represent a valid URL` error even though the page returns HTTP 200. Today (2026-05-15) try a fresh hard reload of the dashboard. If the field still refuses to save, attach a screenshot of the page returning 200 (via `curl -sI https://caseloadselect.ca/data-deletion`) and open a Meta developer-support ticket before submitting; the URL must save before the form can be submitted.
 
 ---
 
@@ -376,7 +376,7 @@ The reviewer needs to message three test assets. The lawyer triage portal is ope
 
 ## 4. Privacy policy compliance review
 
-This section walks Meta's Platform Terms data-handling expectations against the live Privacy Policy at `https://app.caseloadselect.ca/privacy`. The policy's substantive content covers PIPEDA-grade obligations; the gaps below are about clarity for a Meta reviewer who is checking that the policy describes the Meta-specific data flow accurately.
+This section walks Meta's Platform Terms data-handling expectations against the live Privacy Policy at `https://caseloadselect.ca/privacy`. The policy's substantive content covers PIPEDA-grade obligations; the gaps below are about clarity for a Meta reviewer who is checking that the policy describes the Meta-specific data flow accurately.
 
 ### 4.1 Data collected
 
@@ -445,13 +445,13 @@ Meta Platforms, Inc., for intake that arrives via Facebook Messenger, Instagram 
 
 **Remediation 4: refresh the "Last updated" date.** Change `2026-05-13` to the date the above remediations are deployed.
 
-These four changes can be made in one edit pass to `src/app/privacy/page.tsx`, deployed via Vercel, and verified live at `https://app.caseloadselect.ca/privacy` before the App Review form is submitted.
+These four changes can be made in one edit pass to `src/app/privacy/page.tsx`, deployed via Vercel, and verified live at `https://caseloadselect.ca/privacy` before the App Review form is submitted.
 
 ---
 
 ## 5. Terms of Service compliance review
 
-The live Terms at `https://app.caseloadselect.ca/terms` are calibrated for LSO Rule 4.2-1 and substantively cover the right ground. Meta's reviewer cares less about regulatory calibration and more about whether the Terms describe how Meta data is treated and what users agree to when they message a Page or IG account that runs on CaseLoad Select. Two gaps and one optional addition.
+The live Terms at `https://caseloadselect.ca/terms` are calibrated for LSO Rule 4.2-1 and substantively cover the right ground. Meta's reviewer cares less about regulatory calibration and more about whether the Terms describe how Meta data is treated and what users agree to when they message a Page or IG account that runs on CaseLoad Select. Two gaps and one optional addition.
 
 ### 5.1 Sub-processor disclosure
 
@@ -515,7 +515,7 @@ Meta accepts an instructions-URL approach (a static page that tells users how to
 
 | Expectation | Coverage | Status |
 |---|---|---|
-| Page reachable at the configured URL | `/data-deletion` returns HTTP 200 at `https://app.caseloadselect.ca/data-deletion` | OK |
+| Page reachable at the configured URL | `/data-deletion` returns HTTP 200 at `https://caseloadselect.ca/data-deletion` | OK |
 | Explicit deletion process | Page describes the email procedure step-by-step | OK |
 | Realistic timeline | 5 days acknowledgment, 30 days completion | OK |
 | Distinct from privacy policy | Has its own URL even though substance overlaps | OK |
@@ -533,9 +533,9 @@ Meta accepts an instructions-URL approach (a static page that tells users how to
 
 ### 6.4 Meta's User Data Deletion Callback URL (current status)
 
-The Meta dashboard field name is "User Data Deletion Callback URL", which can accept either a callback endpoint (programmatic) or an instructions URL (static page). We use the instructions URL: `https://app.caseloadselect.ca/data-deletion`.
+The Meta dashboard field name is "User Data Deletion Callback URL", which can accept either a callback endpoint (programmatic) or an instructions URL (static page). We use the instructions URL: `https://caseloadselect.ca/data-deletion`.
 
-[VERIFY WITH ADRIANO: Block 2 runbook (line 232) flagged a stale validator error from 2026-05-13 that may still affect today's save. Try a fresh hard reload of the dashboard; if it still rejects, file a Meta developer-support ticket attaching `curl -sI https://app.caseloadselect.ca/data-deletion` output. The field is mandatory at App Review submission time and the form cannot submit if the URL slot is blank or showing an error.]
+[VERIFY WITH ADRIANO: Block 2 runbook (line 232) flagged a stale validator error from 2026-05-13 that may still affect today's save. Try a fresh hard reload of the dashboard; if it still rejects, file a Meta developer-support ticket attaching `curl -sI https://caseloadselect.ca/data-deletion` output. The field is mandatory at App Review submission time and the form cannot submit if the URL slot is blank or showing an error.]
 
 ---
 
@@ -550,13 +550,13 @@ Tick each box in order before clicking Submit.
 - [ ] Category and sub-category selected (Section 1.1)
 - [ ] Platform set to Website only (Section 1.4)
 - [ ] App Domain set to `caseloadselect.ca`
-- [ ] Site URL set to `https://app.caseloadselect.ca`
+- [ ] Site URL set to `https://caseloadselect.ca/`
 
 ### Compliance pages
 
-- [ ] Privacy Policy URL saved: `https://app.caseloadselect.ca/privacy`
-- [ ] Terms of Service URL saved: `https://app.caseloadselect.ca/terms`
-- [ ] User Data Deletion URL saved: `https://app.caseloadselect.ca/data-deletion`
+- [ ] Privacy Policy URL saved: `https://caseloadselect.ca/privacy`
+- [ ] Terms of Service URL saved: `https://caseloadselect.ca/terms`
+- [ ] User Data Deletion URL saved: `https://caseloadselect.ca/data-deletion`
 - [ ] Privacy Policy gaps remediated and deployed (Section 4.5, four changes)
 - [ ] Terms of Service gaps remediated and deployed (Section 5.1 + 5.2 + 5.3)
 - [ ] Both pages verified live at the saved URLs after deployment
@@ -598,9 +598,9 @@ Tick each box in order before clicking Submit.
 
 ### Final pre-submit sanity
 
-- [ ] Open `https://app.caseloadselect.ca/privacy` in an incognito tab: confirm latest copy is live
-- [ ] Open `https://app.caseloadselect.ca/terms` in an incognito tab: confirm latest copy is live
-- [ ] Open `https://app.caseloadselect.ca/data-deletion` in an incognito tab: confirm HTTP 200
+- [ ] Open `https://caseloadselect.ca/privacy` in an incognito tab: confirm latest copy is live
+- [ ] Open `https://caseloadselect.ca/terms` in an incognito tab: confirm latest copy is live
+- [ ] Open `https://caseloadselect.ca/data-deletion` in an incognito tab: confirm HTTP 200
 - [ ] Re-read every paste-ready block in Section 2 once, checking for any field that needs a project-specific value to be filled in (test asset names, phone numbers) before submit
 - [ ] Click Submit on the App Review form
 

@@ -59,7 +59,7 @@ Paste these exactly. Character-for-character match to the CRA PDF is what got th
 | Business address | `1512 - 50 Stephanie St, Toronto, ON M5T 1B3, Canada` |
 | Country | `Canada` |
 | Business type | `Sole proprietorship` |
-| Website | `https://app.caseloadselect.ca` |
+| Website | `https://caseloadselect.ca/` |
 | Business email | `adriano@caseloadselect.ca` |
 
 If Meta does NOT surface a separate DBA / operating name field, enter the legal name field as `ADRIANO DA SILVA DOMINGUES` only — do NOT combine into "Adriano Domingues operating as CaseLoad Select" in one field. Meta's string-match is literal and the CRA PDF carries the registrant name as the primary string.
