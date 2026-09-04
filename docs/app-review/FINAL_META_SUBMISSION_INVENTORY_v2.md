@@ -77,9 +77,9 @@ The following Meta-relevant checks must be closed before final submission:
 - [x] PR #219's fictional real-Postgres transactional logical-restore simulation passed immediate-relock, authorization, encrypted-intent, applied replay, idempotent replay, provider-pending, and no-provider-call assertions. This is not a managed backup/PITR or provider-expiry rehearsal.
 - [x] The bounded current-registry audit and controlled production activation/open postflight passed. PR #219 remains the final fictional end-to-end exercise; closeout created no persistent production fixture.
 - [ ] Obtain written privacy-counsel approval for the retained envelope, available joins, three-year per-event maximum, deletion-tombstone retention, and suppression-hash retention.
-- [ ] Resolve the public-copy decisions in `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md` after counsel approval and verify the released pages signed out.
+- [ ] Obtain counsel's decision on the candidate public-copy changes in `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`, apply any required revision, merge with explicit approval, and verify the released pages signed out.
 
-The tested CaseLoad Select redaction and recovery controls are materially implemented, audited, and activated. Final submission remains blocked by privacy-counsel approval, public-copy reconciliation, live Meta draft checks, and Adriano's action-time approval. No evidence claims deletion from Meta's own systems, and the two Meta provider dispositions remain pending.
+The tested CaseLoad Select redaction and recovery controls are materially implemented, audited, and activated. Candidate public-copy source changes are prepared but not approved or released. Final submission remains blocked by privacy-counsel approval, the resulting public-copy release and signed-out verification, live Meta draft checks, and Adriano's action-time approval. No evidence claims deletion from Meta's own systems, and the two Meta provider dispositions remain pending.
 
 ### Separate follow-up, not a Meta submission gate
 

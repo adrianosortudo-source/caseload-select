@@ -25,7 +25,7 @@ export default function PrivacyPage() {
         <div>
           <p className="text-xs uppercase tracking-[0.18em] font-semibold text-gold">CaseLoad Select</p>
           <h1 className="text-3xl font-bold text-navy mt-2">Privacy Policy</h1>
-          <p className="mt-2 text-sm text-black/50">Last updated: 2026-09-02</p>
+          <p className="mt-2 text-sm text-black/50">Last updated: 2026-09-04</p>
         </div>
 
         <Section title="Who we are">
@@ -135,7 +135,7 @@ export default function PrivacyPage() {
 
         <Section title="How long we keep it">
           <p>
-            Identifying intake information follows the priority band assigned to the matter. At the end of the applicable period, or after a verified deletion request, CaseLoad Select irreversibly removes message content and direct identifiers from its active operational systems. The system may retain a de-identified row so aggregate reporting remains accurate.
+            Identifying intake information follows the priority band assigned to the matter. At the end of the applicable period, or after a verified deletion request, CaseLoad Select irreversibly removes message content and direct identifiers from the operational copies it controls. Remaining rows are limited to redacted or non-content operational records. This process does not delete copies controlled by a law firm or communication platform.
           </p>
           <table className="w-full text-sm border border-black/10 mt-2">
             <thead className="bg-parchment-2 border-b border-black/10">
@@ -156,13 +156,13 @@ export default function PrivacyPage() {
             If you become a client of the firm, the firm&rsquo;s own retention rules govern your file from that point on, separate from this policy.
           </p>
           <p>
-            A minimal audit envelope may remain for system security, delivery-integrity checks, proof that deletion was completed, and non-identifying operational counts. The release target is to remove each retained channel audit event within three years of when it occurred. Privacy counsel must approve the retention boundary and the assessment that the retained fields and available joins do not reasonably identify a person before this revised commitment is released.
+            A limited audit record may remain for system security, delivery-integrity checks, proof that deletion was completed, and aggregate reporting. It excludes names, contact details, message content, platform sender IDs, and platform message IDs. Retained channel audit events have a three-year retention period measured from the original event. Separate deletion-request and anti-recontact suppression records are retained only for their deletion-proof and re-collection-prevention purposes.
           </p>
         </Section>
 
         <Section title="Where it lives">
           <p>
-            Your data is stored on Supabase infrastructure in Montreal, Canada (AWS ca-central-1), encrypted at rest. Access requires a service-role key held only by the application and by the operator. We use TLS for every connection. Encrypted backup copies follow the provider&rsquo;s documented expiry schedule. Backup-expiry evidence and a production rehearsal proving that completed deletion requests are reapplied after restoration remain release gates for this revised commitment.
+            Your data is stored on Supabase infrastructure in Montreal, Canada (AWS ca-central-1), encrypted at rest. Access requires a service-role key held only by the application and by the operator. We use TLS for every connection. Application-level recovery controls keep encrypted deletion instructions outside the operational database and block normal use until those instructions are replayed and verified after a restore. We tested that control with fictional data in a transactional logical-restore simulation. This was not a managed Supabase backup or point-in-time recovery rehearsal. Provider-managed backup copies remain subject to the provider&rsquo;s retention and expiry controls.
           </p>
         </Section>
 
@@ -173,7 +173,7 @@ export default function PrivacyPage() {
           <ul className="list-disc pl-5 space-y-1.5">
             <li>Ask what information we hold about you.</li>
             <li>Ask us to correct inaccurate information.</li>
-            <li>Ask us to irreversibly remove message content and direct identifiers outside the regular retention schedule. A minimal non-identifying audit envelope may remain. If the firm took on your matter, the firm&rsquo;s own record is governed by its policy, not ours.</li>
+            <li>Ask us to irreversibly remove message content and direct identifiers outside the regular retention schedule. A limited audit record without names, contact details, message content, or platform identifiers may remain. If the firm took on your matter, the firm&rsquo;s own record is governed by its policy, not ours.</li>
             <li>Withdraw consent at any time, subject to legal or contractual restrictions.</li>
           </ul>
           <p>

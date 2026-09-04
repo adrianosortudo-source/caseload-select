@@ -26,7 +26,7 @@ This is the current Meta-only gate ledger. It supersedes older readiness stateme
 ## Counsel and public-copy gates
 
 - [ ] Obtain a dated written privacy-counsel decision covering retained identifiers and joins, exact timestamps, `client_request_id`, salted suppression hashes, deletion tombstones, the proposed three-year per-event period, and the public wording.
-- [ ] Resolve the contradictions recorded in `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md` through a pushed PR after counsel decides. The current public pages already contain provisional language that says approval must occur “before this revised commitment is released.”
+- [ ] Obtain counsel's decision on the candidate source reconciliation in `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`, apply any required revision, and merge the exact public-copy PR only with Adriano's explicit approval. Preparing the candidate does not constitute counsel approval or release it.
 - [ ] Recheck the three public URLs signed out after any copy release and preserve rendered evidence.
 
 ## Meta-controlled-copy evidence

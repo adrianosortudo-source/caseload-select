@@ -27,7 +27,7 @@ export default function DataDeletionPage() {
         <div>
           <p className="text-xs uppercase tracking-[0.18em] font-semibold text-gold">CaseLoad Select</p>
           <h1 className="text-3xl font-bold text-navy mt-2">Data Deletion<span className="text-gold">▪</span></h1>
-          <p className="mt-2 text-sm text-black/50">Last updated: 2026-09-03</p>
+          <p className="mt-2 text-sm text-black/50">Last updated: 2026-09-04</p>
         </div>
 
         <Section title="What this page covers">
@@ -56,13 +56,13 @@ export default function DataDeletionPage() {
 
         <Section title="What happens after a verified request">
           <p>
-            For screened leads, CaseLoad Select uses a restricted database operation to irreversibly remove message content and direct identifiers from the active records linked to the inquiry. This includes names, contact details, channel identifiers, message identifiers, transcripts, and free-text descriptions. The matched fields are deleted or replaced with redacted markers and cannot be restored through the application.
+            For screened leads, CaseLoad Select uses a restricted database operation to irreversibly remove message content and direct identifiers from the operational copies it controls. This includes names, contact details, channel identifiers, message identifiers, transcripts, and free-text descriptions. The matched fields are cleared or replaced with redacted markers and cannot be reconstructed through the application.
           </p>
           <p>
             Older intake records follow a separate recovery-aware process that clears the matched lead, its linked intake session, queued payloads, and its intake-attachment folder. We keep a request open if any required cleanup or verification step fails.
           </p>
           <p>
-            We do not promise that every database row will be physically deleted. We may preserve a minimal audit envelope for system security, delivery-integrity checks, proof that deletion was completed, and non-identifying operational counts. The release target is to remove each retained channel audit event within three years of when it occurred. That limit, the retained-field assessment, and production expiry evidence must be approved before this revised commitment is released.
+            We do not promise that every database row will be physically deleted. We may preserve a limited audit record for system security, delivery-integrity checks, proof that deletion was completed, and aggregate reporting. It excludes names, contact details, message content, platform sender IDs, and platform message IDs. Retained channel audit events have a three-year retention period measured from the original event. Separate deletion-request and anti-recontact suppression records are retained only for their deletion-proof and re-collection-prevention purposes.
           </p>
           <p>
             If a legal obligation prevents us from removing a specific item, we will explain the item, the reason, and the expected retention period when we respond.
@@ -83,7 +83,7 @@ export default function DataDeletionPage() {
             When a service provider may hold an active copy on our behalf, a privileged operator records the provider-specific disposition after checking the applicable deletion or escalation step. A completed or not-applicable status is the operator&rsquo;s attestation, not provider-issued evidence. A provider-managed status is only a routing marker and cannot, by itself, close external cleanup.
           </p>
           <p>
-            A provider may retain encrypted backup copies until its documented backup cycle expires. The production restore procedure must prove that completed deletion requests are reapplied before restored data returns to use. That procedure and the applicable provider schedules remain release gates for this revised commitment.
+            Application-level recovery controls keep encrypted deletion instructions outside the operational database and block normal use until those instructions are replayed and verified after a restore. We tested that control with fictional data in a transactional logical-restore simulation. This was not a managed Supabase backup or point-in-time recovery rehearsal. Provider-managed backup copies may remain until the provider&rsquo;s retention or backup cycle expires.
           </p>
           <p>
             Facebook Messenger, Instagram Direct, WhatsApp, Google, and other communication platforms control copies created in their own products before the information reaches CaseLoad Select. Deleting the CaseLoad Select copy does not delete those platform-controlled copies. Use the platform&rsquo;s deletion controls or contact the platform directly.

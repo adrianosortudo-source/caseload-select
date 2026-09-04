@@ -68,18 +68,18 @@ For the Meta-focused approval, please answer each question expressly rather than
 9. Is the current distinction sufficient between CaseLoad Select's Meta-derived operational copies and copies controlled by Meta? If app-specific Meta-side evidence is required, what minimum request-specific action, not-found, retention, or escalation record must be preserved without retaining direct identifiers?
 10. Is PR #219's fictional transactional logical-restore simulation plus the fail-closed production registry/replay evidence sufficient for the public commitment, or is managed-backup/PITR or account-specific expiry evidence also required?
 
-## Public wording for review
+## Candidate public wording for review
 
-The current live wording says that, after a verified request, CaseLoad Select irreversibly removes message content and direct identifiers from its operational systems. It says that a minimal audit envelope may remain for system security, delivery-integrity checks, proof that deletion was completed, and non-identifying operational counts. It states a target of removing each retained channel audit event within three years of when it occurred.
+The candidate source wording on `codex/privacy-public-copy-v1` says that, after a verified request, CaseLoad Select irreversibly removes message content and direct identifiers from the operational copies it controls. It describes a limited audit record that excludes names, contact details, message content, platform sender IDs, and platform message IDs. It applies a three-year retention period specifically to retained channel audit events and identifies deletion-request and anti-recontact suppression records as separate record classes. It does not call the remaining records legally de-identified or non-identifying.
 
-The merged wording also distinguishes:
+The candidate wording also distinguishes:
 
 - CaseLoad Select operational copies;
 - firm-controlled legal files that the firm may need to retain under its own duties;
 - processor and external-platform copies, including the distinction between privileged-operator attestations and provider-issued evidence; and
-- encrypted backups that require an applicable expiry schedule and deletion replay before restored data returns to use.
+- application-level encrypted deletion instructions and replay controls from provider-managed backup retention and expiry.
 
-It does not promise physical deletion of every database row. However, the live pages also say counsel and backup/restore evidence are required “before this revised commitment is released.” That is self-contradictory because the wording is already public. Please decide the substantive promise and required correction using `docs/app-review/PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`.
+It does not promise physical deletion of every database row or deletion of copies inside Meta products. It states that the restore evidence is a fictional transactional logical-restore simulation, not a managed Supabase backup or PITR rehearsal. The candidate removes the live pages' self-contradictory statement that approval must occur before already-public wording is released. Please approve, revise, or reject the candidate using `docs/app-review/PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`. This draft does not treat preparation of the candidate as counsel approval.
 
 ## Meta-focused approval record requested
 
