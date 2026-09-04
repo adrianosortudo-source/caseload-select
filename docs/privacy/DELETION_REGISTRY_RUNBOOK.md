@@ -12,6 +12,15 @@ fresh Git-integrated preview checks. It changes no runtime, migration,
 environment, authentication, audit, or replay behavior, and its merge still
 requires separate approval.
 
+Recovery-control credential reconciliation note (2026-09-04): the dedicated
+production recovery token was rotated and its operator credential copy was
+reconciled after the prior local copy was found to be stale. This
+documentation-only change exists solely to request a Git-integrated deployment
+that can load the already-configured sensitive production value. It changes no
+runtime, migration, environment scope, authentication contract, registry data,
+provider-cleanup evidence, or replay state. Replay remains blocked until the
+deployment succeeds and the separately authorized controlled replay resumes.
+
 ## Purpose and boundary
 
 The external registry gives a restore replay source that is independent of
