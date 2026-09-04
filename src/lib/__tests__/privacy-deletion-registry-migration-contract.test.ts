@@ -14,6 +14,10 @@ const operational = readFileSync(
   join(process.cwd(), 'supabase/migrations/20260903183915_privacy_deletion_registry_operational_completeness.sql'),
   'utf8',
 );
+const openFromLocked = readFileSync(
+  join(process.cwd(), 'supabase/migrations/20260904125000_privacy_recovery_open_from_locked.sql'),
+  'utf8',
+);
 
 describe('privacy deletion registry migration ACL contract', () => {
   it('keeps recovery and coordinator RPCs service-only', () => {
@@ -87,10 +91,14 @@ describe('privacy deletion registry migration ACL contract', () => {
   });
 
   it('permits opening only after a global replay and makes same-cycle retry idempotent', () => {
-    expect(operational).toContain("v_control.required_operation <> 'replay'");
-    expect(operational).toContain("if v_control.state = 'open' then");
-    expect(operational).toContain("reconciliation_operation_id is distinct from p_operation_id");
-    expect(operational).toContain("revoke all on function public.open_privacy_recovery(uuid, uuid)");
-    expect(operational).toContain('from public, anon, authenticated, service_role');
+    expect(openFromLocked).toContain("v_control.required_operation <> 'replay'");
+    expect(openFromLocked).toContain("if v_control.state = 'open' then");
+    expect(openFromLocked).toContain("v_control.state not in ('locked', 'replaying')");
+    expect(openFromLocked).toContain('reconciliation_operation_id is distinct from p_operation_id');
+    expect(openFromLocked).toContain('reconciliation_completed_at is null');
+    expect(openFromLocked).toContain("schema_version <> '20260903183915'");
+    expect(openFromLocked).toContain('revoke all on function public.open_privacy_recovery(uuid, uuid)');
+    expect(openFromLocked).toContain('from public, anon, authenticated, service_role');
+    expect(openFromLocked).not.toContain('update private.privacy_recovery_control\n   set state = \'locked\'');
   });
 });

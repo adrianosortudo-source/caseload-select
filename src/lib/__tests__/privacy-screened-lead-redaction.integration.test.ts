@@ -267,6 +267,98 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
     }
   });
 
+  it("opens a completed replay from locked or replaying, but rejects incomplete coordinates", async () => {
+    const cycleId = randomUUID();
+    const operationId = randomUUID();
+    const otherId = randomUUID();
+
+    await conn.query("begin");
+    try {
+      const setControl = async (overrides: {
+        state?: string;
+        schemaVersion?: string;
+        cycleId?: string;
+        requiredOperation?: string | null;
+        operationId?: string | null;
+        completed?: boolean;
+      } = {}) => {
+        await conn.query("reset role");
+        await conn.query(
+          `update private.privacy_recovery_control
+              set state = $1,
+                  schema_version = $2,
+                  cycle_id = $3,
+                  cycle_started_at = now() - interval '1 minute',
+                  initial_backfill_started_at = now() - interval '1 minute',
+                  required_operation = $4,
+                  reconciliation_operation_id = $5,
+                  reconciliation_completed_at = case when $6 then now() else null end
+            where singleton`,
+          [
+            overrides.state ?? "locked",
+            overrides.schemaVersion ?? "20260903183915",
+            overrides.cycleId ?? cycleId,
+            overrides.requiredOperation === undefined ? "replay" : overrides.requiredOperation,
+            overrides.operationId === undefined ? operationId : overrides.operationId,
+            overrides.completed ?? true,
+          ],
+        );
+        await conn.query("set local role service_role");
+      };
+
+      await setControl();
+      const locked = await conn.query(
+        `select public.open_privacy_recovery($1, $2) as result`,
+        [cycleId, operationId],
+      );
+      expect(locked.rows[0].result).toEqual({ ok: true, state: "open" });
+
+      const idempotent = await conn.query(
+        `select public.open_privacy_recovery($1, $2) as result`,
+        [cycleId, operationId],
+      );
+      expect(idempotent.rows[0].result).toEqual({ ok: true, state: "open" });
+
+      await setControl({ state: "replaying" });
+      const replaying = await conn.query(
+        `select public.open_privacy_recovery($1, $2) as result`,
+        [cycleId, operationId],
+      );
+      expect(replaying.rows[0].result).toEqual({ ok: true, state: "open" });
+
+      for (const mismatch of [
+        { schemaVersion: "stale" },
+        { cycleId: otherId },
+        { operationId: otherId },
+        { completed: false },
+        { requiredOperation: "backfill" },
+      ]) {
+        await setControl(mismatch);
+        const refused = await conn.query(
+          `select public.open_privacy_recovery($1, $2) as result`,
+          [cycleId, operationId],
+        );
+        expect(refused.rows[0].result).toEqual({
+          ok: false,
+          error: "privacy recovery is not ready to open",
+        });
+      }
+
+      await conn.query("reset role");
+      await conn.query("savepoint invalid_recovery_state");
+      try {
+        await expect(conn.query(
+          `update private.privacy_recovery_control set state = 'failed' where singleton`,
+        )).rejects.toMatchObject({ code: "23514" });
+      } finally {
+        await conn.query("rollback to savepoint invalid_recovery_state");
+        await conn.query("release savepoint invalid_recovery_state");
+      }
+    } finally {
+      await conn.query("rollback");
+    }
+  });
+
   it("freezes initial backfill at activation time and refuses direct first replay", async () => {
     const lateLeadPk = randomUUID();
     const lateRequestId = randomUUID();
