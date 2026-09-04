@@ -341,7 +341,17 @@ async function registerImmutable<K extends RegistryRecordKind>(kind: K, value: R
     (prior as RegistryIntent).firmId === (value as RegistryIntent).firmId &&
     (prior as RegistryIntent).screenedLeadId === (value as RegistryIntent).screenedLeadId &&
     (prior as RegistryIntent).reason === (value as RegistryIntent).reason;
-  if (!sameIntent && JSON.stringify(prior) !== JSON.stringify(value)) throw new Error('privacy registry record collision');
+  // A restore can legitimately reapply the same terminal deletion after the
+  // database's original redacted_at timestamp was lost with the snapshot.
+  // Keep the first immutable receipt and timestamp authoritative when the
+  // stable request and terminal result agree; a different result still
+  // signals a collision and fails closed.
+  const sameAppliedReceipt = kind === 'applied' &&
+    (prior as RegistryAppliedReceipt).deletionRequestId === (value as RegistryAppliedReceipt).deletionRequestId &&
+    (prior as RegistryAppliedReceipt).redactedCount === (value as RegistryAppliedReceipt).redactedCount;
+  if (!sameIntent && !sameAppliedReceipt && JSON.stringify(prior) !== JSON.stringify(value)) {
+    throw new Error('privacy registry record collision');
+  }
   return 'existing';
 }
 
