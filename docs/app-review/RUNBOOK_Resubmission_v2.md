@@ -15,7 +15,7 @@ The shipped messaging and privacy-redaction baseline is complete:
 - [x] PRs #191, #193, and #195 merged.
 - [x] Required CI passed.
 - [x] PR #198 merged the controlled-redaction implementation, PR #199 corrected the migration runtime failure, and PR #202 corrected the provider-cleanup completion semantics.
-- [x] PR #204 updated the release-target public wording and active Meta evidence package for the corrected implementation; counsel-backed final public-copy reconciliation remains open.
+- [x] PR #204 updated the release-target public wording and active Meta evidence package for the corrected implementation. Adriano approved the final PR #223 candidate as owner on 2026-09-04 and waived external counsel review; the exact merge and release verification remain open.
 - [x] Production merge `fbb6aac6712b28191de5aee79d0d4511aaaf4b59` is deployed to both production projects.
 - [x] Migration `20260901231830_channel_conversation_ledger` is applied and verified.
 - [x] Migration `20260902102620_restrict_screen_funnel_service_role_acl` is applied and verified.
@@ -138,7 +138,7 @@ The earlier rehearsal identified a completion-semantics defect: the application 
 
 Treat `completed` and `not_applicable` as privileged-operator attestations, not provider-issued evidence. Record either status only after the operator checks the applicable disposition. Treat `provider_managed` only as a routing marker; it cannot close external cleanup by itself.
 
-The technical privacy closeout no longer blocks rehearsal or recording. Counsel approval, public-copy reconciliation, the live Meta draft checks, and Adriano's action-time approval still block final Meta submission.
+The technical privacy closeout no longer blocks rehearsal or recording. The owner's privacy decision and counsel waiver are recorded. The exact public-copy merge and verification, live Meta draft and Data Handling changes, and Adriano's action-time approval still block final Meta submission.
 
 Do not submit the Meta draft until all of these checks pass:
 
@@ -150,9 +150,11 @@ Do not submit the Meta draft until all of these checks pass:
 - [x] The final rollback-only fictional production verification proves that the deployed deletion path removes the tested direct identifiers and message content from Meta-derived CaseLoad Select operational copies. It does not claim deletion from Meta's systems.
 - [x] The encrypted external registry, historical backfill, controlled production replay, and PR #219 fictional transactional logical-restore simulation are complete within their documented evidence boundaries.
 - [x] The bounded current-registry audit and controlled production activation/open postflight passed. PR #219 remains the final fictional end-to-end exercise; no fresh persistent production fixture was added.
-- [ ] Obtain privacy-counsel approval of the audit envelope, retained-key reidentification assessment, and three-year retention period.
- - [ ] Resolve `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md` after counsel review, release any approved source correction through a PR, and verify `/privacy`, `/terms`, and `/data-deletion` signed out.
-- [ ] Resolve the live Meta Data Handling `Needs your review` gate through owner and privacy-counsel review. Do not infer or pre-answer the attestation questions in this runbook.
+- [x] Adriano accepted the documented audit-envelope, retained-key, join, and three-year-period risks as owner and waived external privacy-counsel review. This is not counsel approval or legal advice.
+- [x] Adriano approved the PR #223 public-copy candidate as owner.
+- [ ] Merge the exact public-copy PR only with Adriano's explicit approval, then verify `/privacy`, `/terms`, and `/data-deletion` signed out.
+- [x] Record the owner-approved Meta Data Handling answers: `No` for national-security disclosures in the 12 months ending 2026-09-04, `None of the above` for the currently undocumented public-authority processes, and acceptance of the current controller wording.
+- [ ] Apply those exact answers in the live Meta Data Handling step and confirm `Needs your review` clears. The current four pre-filled positive process selections must not be submitted.
 
 The legacy HighLevel disposition and any Resend, HighLevel, or Supabase support requests are separate privacy-compliance follow-up work. They do not block this Meta submission. Do not send a provider support draft without separate provider-specific approval.
 
@@ -191,7 +193,8 @@ Do not use `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, `s
 ## 10. Final audit and approval stop
 
 - [ ] Draft contains the two retained messaging capabilities and exactly the four unique required technical dependencies.
-- [ ] Meta Data Handling no longer shows `Needs your review`; the owner and privacy counsel approved the submitted attestations.
+- [x] The owner-approved Meta Data Handling decisions are recorded without implying counsel approval.
+- [ ] Meta Data Handling no longer shows `Needs your review` and the live values match the owner decision.
 - [ ] No approved scope is present.
 - [ ] Messenger has the Messenger v2 clip.
 - [ ] Instagram has the Instagram v2 clip.
@@ -201,7 +204,7 @@ Do not use `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, `s
 - [ ] No real or unrelated lead data is visible.
 - [x] The controlled-redaction resolution is shipped and the post-ledger fictional deletion rehearsal is recorded as passed for the tested CaseLoad Select stores and controls.
 - [x] The PR #202 completion-semantics correction and Meta-derived CaseLoad Select operational-copy gates in Section 7 are closed.
-- [ ] The remaining privacy-counsel and public-copy reconciliation gates in Section 7 are closed. The current-registry audit and activation gates are complete.
+- [ ] The public-copy merge and signed-out verification gates in Section 7 are closed. The owner privacy decision, counsel waiver, current-registry audit, and activation gates are complete.
 - [ ] Privacy, terms, and deletion URLs open publicly.
 - [ ] Operator contact is `adriano@caseloadselect.ca`.
 

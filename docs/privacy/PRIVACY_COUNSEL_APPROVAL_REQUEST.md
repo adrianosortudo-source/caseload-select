@@ -1,8 +1,10 @@
 # Privacy counsel approval request: deletion audit envelope
 
-**Draft only. Do not send without Adriano's approval.**
+**Historical draft only. External counsel review was waived by the owner on 2026-09-04. Do not send or describe this file as an approval.**
 
-## Decision requested
+The owner decision and residual-risk acceptance are recorded in `OWNER_PRIVACY_AND_META_DATA_HANDLING_DECISION_2026-09-04.md`. This dossier is retained to preserve the questions that were considered; none was answered by privacy counsel.
+
+## Historical decision requested
 
 Please review the controlled-redaction design and provide a written decision on:
 
@@ -12,7 +14,7 @@ Please review the controlled-redaction design and provide a written decision on:
 4. whether the public deletion wording accurately describes CaseLoad Select's obligations across operational data, processors, firm-controlled legal files, and backups; and
 5. the final answers to Meta's live Data Handling questions, which currently show `Needs your review` and are not pre-answered in this dossier.
 
-Meta submission remains blocked until these decisions are recorded and the other operational gates are closed.
+These were the questions proposed for external review. Adriano chose to waive that review for this release and accept the residual risk as owner. The remaining merge, live Meta, and action-time submission gates still apply.
 
 ## Implemented and rehearsed outcome
 
@@ -80,9 +82,9 @@ The candidate wording also distinguishes:
 - processor and external-platform copies, including the distinction between privileged-operator attestations and provider-issued evidence; and
 - application-level encrypted deletion instructions and replay controls from provider-managed backup retention and expiry.
 
-It does not promise physical deletion of every database row or deletion of copies inside Meta products. It states that the restore evidence is a fictional transactional logical-restore simulation, not a managed Supabase backup or PITR rehearsal. The candidate removes the live pages' self-contradictory statement that approval must occur before already-public wording is released. Please approve, revise, or reject the candidate using `docs/app-review/PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`. This draft does not treat preparation of the candidate as counsel approval.
+It does not promise physical deletion of every database row or deletion of copies inside Meta products. It states that the restore evidence is a fictional transactional logical-restore simulation, not a managed Supabase backup or PITR rehearsal. The candidate removes the live pages' self-contradictory statement that approval must occur before already-public wording is released. This was the wording proposed for counsel review using `docs/app-review/PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`. No counsel decision was obtained. The owner separately approved the candidate on 2026-09-04 and waived external review.
 
-## Meta-focused approval record requested
+## Historical Meta-focused approval record requested
 
 Please return a dated written decision that includes:
 
@@ -96,4 +98,4 @@ Please return a dated written decision that includes:
 - approval or correction of the owner's proposed answers to Meta's live Data Handling questions;
 - counsel name, capacity, and approval date.
 
-Until this Meta-focused record exists, mark counsel approval **open** and do not submit the Meta App Review package. Even after counsel approval, final submission remains subject to Adriano's explicit action-time approval. Resend, HighLevel, and Supabase provider-support questions are outside this Meta-focused dossier and do not block this review.
+No Meta-focused counsel record exists. Mark external counsel review **waived by owner**, not approved. Final submission remains subject to the public-copy merge and signed-out verification, live Meta draft checks, and Adriano's explicit action-time approval. Resend, HighLevel, and Supabase provider-support questions are outside this Meta-focused dossier and do not block this review.

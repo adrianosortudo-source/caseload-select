@@ -2,7 +2,7 @@
 
 Source basis: production merge `fbb6aac6712b28191de5aee79d0d4511aaaf4b59`, deployed on 2026-09-04.
 
-The runtime messaging paths remain unchanged from the reviewed v2 evidence. Production migrations through `20260904125000_privacy_recovery_open_from_locked` are applied; the completed technical privacy closeout and remaining counsel/public-copy gates are tracked separately in `META_READINESS_CLOSEOUT_2026-09-04.md`.
+The runtime messaging paths remain unchanged from the reviewed v2 evidence. Production migrations through `20260904125000_privacy_recovery_open_from_locked` are applied. The completed technical privacy closeout, recorded owner waiver, public-copy release gate, and live Meta gates are tracked separately in `META_READINESS_CLOSEOUT_2026-09-04.md`.
 
 The two business capabilities are retained because the application contains concrete runtime operations that exercise them. Meta-declared technical dependencies are included only when the current [Permissions Reference](https://developers.facebook.com/docs/permissions) requires them for one of those capabilities. A configured asset ID, webhook field, manually configured Meta asset, or Business Manager screenshot is not an application code path and must not be presented as standalone use of a dependency.
 

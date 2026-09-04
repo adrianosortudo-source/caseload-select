@@ -1,6 +1,6 @@
 # Personal-information deletion operations
 
-Status: technical controls implemented; candidate public wording pending counsel and merge
+Status: technical controls implemented; candidate public wording owner-approved and pending merge
 
 Owner: CaseLoad Select operator
 
@@ -14,7 +14,7 @@ After a verified request, CaseLoad Select irreversibly removes message content a
 
 The audit envelope must not contain message content, names, email addresses, phone numbers, channel-scoped sender identifiers, external message identifiers, free-text failure details, transcripts, attachments, or another value that can reasonably reconnect the event to a person.
 
-The candidate public copy applies a three-year retention period to each retained channel audit event, measured from its original event time. The deletion tombstone and anti-recontact suppression record are separate classes without that expiry in the present implementation. Privacy counsel must approve or revise the classification, periods, retained fields, and join controls before the candidate is merged.
+The candidate public copy applies a three-year retention period to each retained channel audit event, measured from its original event time. The deletion tombstone and anti-recontact suppression record are separate classes without that expiry in the present implementation. On 2026-09-04, Adriano waived external privacy-counsel review, accepted the residual risk, and approved this wording as owner. That decision is not a counsel opinion or a determination that the retained records are legally de-identified.
 
 ## Record boundaries
 
@@ -72,10 +72,9 @@ Use fictional data only. Do not place secrets, access tokens, real client detail
 
 ## Release gates
 
-The following decisions remain open for the privacy release and public deletion wording. Apply them to the Meta submission only where they directly affect the deployed handling of Meta-derived data:
+The following decisions and operational follow-ups govern the privacy release and public deletion wording. Apply them to the Meta submission only where they directly affect the deployed handling of Meta-derived data:
 
-- Privacy counsel approves the three-year provisional audit-envelope limit or supplies a replacement period.
-- Privacy counsel confirms that the retained fields and available joins do not create a reasonable reidentification path.
+- On 2026-09-04, Adriano accepted the candidate three-year channel-event period and the documented residual risks in the retained fields and joins as owner. External privacy-counsel review was waived for this release; no independent legal or reidentification opinion was obtained.
 - Engineering disconnects or otherwise proves safe every retained screened-lead key that can join to a firm-controlled matter or another identifying record.
 - The operator confirms the actual backup-expiry schedules for every processor and documents how deletion requests are replayed after restoration.
 - The operator confirms the deletion or escalation procedure for each downstream processor and records evidence beyond a `provider_managed` status. This is broader privacy-compliance follow-up; support responses from Resend, HighLevel, and Supabase do not block Meta App Review.

@@ -36,11 +36,11 @@ Use these repository documents as the active package:
 3. `docs/app-review/PERMISSION_CODE_PATH_EVIDENCE_v2.md`
 4. `docs/app-review/screencasts/SHOTLIST_v2.md`
 5. `docs/app-review/deletion-flow-verification.md`
-6. `docs/privacy/PRIVACY_COUNSEL_APPROVAL_REQUEST.md`
+6. `docs/privacy/OWNER_PRIVACY_AND_META_DATA_HANDLING_DECISION_2026-09-04.md`
 7. `docs/app-review/META_READINESS_CLOSEOUT_2026-09-04.md`
 8. `docs/app-review/PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`
 
-Keep `docs/privacy/PROVIDER_ACCOUNT_EVIDENCE_2026-09-02.md` and `docs/privacy/PROVIDER_SUPPORT_REQUEST_DRAFTS.md` as separate privacy-compliance follow-up records. They are not active Meta submission package files.
+Keep `docs/privacy/PRIVACY_COUNSEL_APPROVAL_REQUEST.md` as a historical unsent dossier; external review was waived and it is not an approval. Keep `docs/privacy/PROVIDER_ACCOUNT_EVIDENCE_2026-09-02.md` and `docs/privacy/PROVIDER_SUPPORT_REQUEST_DRAFTS.md` as separate privacy-compliance follow-up records. They are not active Meta submission package files.
 
 Treat `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, and `screencasts/README.md` as historical first-submission material. Do not paste or execute them for this resubmission.
 
@@ -81,11 +81,12 @@ The following Meta-relevant checks must be closed before final submission:
 - [x] Initial production backfill and a controlled global replay completed with the database reconciliation linked and complete, two intents accounted for, zero replay failures, and both circuits re-locked before the later audit and activation. Meta provider dispositions remain pending.
 - [x] PR #219's fictional real-Postgres transactional logical-restore simulation passed immediate-relock, authorization, encrypted-intent, applied replay, idempotent replay, provider-pending, and no-provider-call assertions. This is not a managed backup/PITR or provider-expiry rehearsal.
 - [x] The bounded current-registry audit and controlled production activation/open postflight passed. PR #219 remains the final fictional end-to-end exercise; closeout created no persistent production fixture.
-- [ ] Obtain written privacy-counsel approval for the retained envelope, available joins, three-year per-event maximum, deletion-tombstone retention, and suppression-hash retention.
-- [ ] Obtain counsel's decision on the candidate public-copy changes in `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`, apply any required revision, merge with explicit approval, and verify the released pages signed out.
-- [ ] Meta Data Handling currently shows `Needs your review`. The owner and privacy counsel must review the live questions and approve the final attestations; this package does not infer or pre-answer them.
+- [x] Adriano waived external privacy-counsel review, accepted the documented retained-envelope and join risks, and approved the candidate public wording as owner. This is recorded in `../privacy/OWNER_PRIVACY_AND_META_DATA_HANDLING_DECISION_2026-09-04.md` and is not counsel approval.
+- [ ] Merge the exact owner-approved public-copy PR only with Adriano's explicit approval and verify the released pages signed out.
+- [x] The owner's Meta Data Handling decisions are recorded: `No` for the past-12-month national-security disclosure question, `None of the above` for the undocumented public-authority processes, and acceptance of the current controller wording.
+- [ ] Apply those exact decisions in the live Meta form and confirm Data Handling no longer shows `Needs your review`. Do not submit the four pre-filled positive process selections.
 
-The tested CaseLoad Select redaction and recovery controls are materially implemented, audited, and activated. Candidate public-copy source changes are prepared but not approved or released. Final submission remains blocked by privacy-counsel approval, the resulting public-copy release and signed-out verification, live Meta draft checks, and Adriano's action-time approval. No evidence claims deletion from Meta's own systems, and the two Meta provider dispositions remain pending.
+The tested CaseLoad Select redaction and recovery controls are materially implemented, audited, and activated. Candidate public-copy source changes are owner-approved but not merged or released. Final submission remains blocked by the exact public-copy merge and signed-out verification, live Meta draft and Data Handling changes, upload checks, and Adriano's action-time approval. No evidence claims deletion from Meta's own systems, and the two Meta provider dispositions remain pending.
 
 ### Separate follow-up, not a Meta submission gate
 
