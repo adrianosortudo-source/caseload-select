@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { Redis } from '@upstash/redis';
 
 const mocks = vi.hoisted(() => ({ assertReplaying: vi.fn(), erase: vi.fn(), rpc: vi.fn() }));
 vi.mock('server-only', () => ({}));
@@ -6,7 +7,12 @@ vi.mock('../privacy-recovery-gate', () => ({ assertPrivacyRecoveryReplaying: moc
 vi.mock('../screened-lead-erasure', () => ({ eraseScreenedLead: mocks.erase }));
 vi.mock('../supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpc } }));
 
-import { decryptRegistryRecord, registerDeletionIntent, type RegistryStore } from '../privacy-deletion-registry';
+import {
+  decryptRegistryRecord,
+  diagnosePrivacyRegistryStorage,
+  registerDeletionIntent,
+  type RegistryStore,
+} from '../privacy-deletion-registry';
 import {
   diagnosePrivacyRecoveryReadiness,
   runPrivacyDeletionRegistryWorkerStep,
@@ -288,6 +294,22 @@ describe('durable privacy deletion registry worker', () => {
       checks: { control: true, databaseCandidateRead: true, redisLeaseEval: false, encryptionCheckpoint: false },
     });
     expect(JSON.stringify(result)).not.toContain('sensitive Redis endpoint detail');
+  });
+
+  it('classifies Redis client construction failures without leaking configuration details', async () => {
+    const constructor = vi.spyOn(Redis, 'fromEnv')
+      .mockImplementationOnce(() => { throw new Error('sensitive Redis configuration detail'); });
+    try {
+      const result = await diagnosePrivacyRegistryStorage();
+      expect(result).toEqual({
+        redisLeaseEval: false,
+        encryptionCheckpoint: false,
+        failedStage: 'redis_lease_eval',
+      });
+      expect(JSON.stringify(result)).not.toContain('sensitive Redis configuration detail');
+    } finally {
+      constructor.mockRestore();
+    }
   });
 
   it('separates a valid Redis lease from an invalid encryption/checkpoint configuration', async () => {
