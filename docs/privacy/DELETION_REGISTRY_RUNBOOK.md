@@ -71,6 +71,21 @@ read the external activation marker, so only this endpoint may supply the
   `encryption_checkpoint`; it never returns raw errors,
   coordinates, URLs, tokens, plaintext, or ciphertext. Re-lock after any
   failed diagnostic and remediate before retrying a worker.
+- Audit a completed initial backfill while both circuits are locked:
+  `{ "action": "auditBackfillRegistry", "cycleId": "<same DB cycle>",
+  "operationId": "<terminal backfill operation UUID>",
+  "expectedIntentCount": <aggregate DB count> }`. This service-only action is
+  read-only: its storage interface exposes only `GET` and bounded `SCAN`. It
+  scans only `privacy:deletion-registry:v2:*`, stops after 100 pages or 1,000
+  returned keys, and fails closed on unknown key shapes, transient keys,
+  malformed/authentication-failing ciphertext, or linkage/accounting drift.
+  Its response contains only fixed counts, booleans, and one of `control`,
+  `registry_scan`, `key_shape`, `encrypted_envelope`, or `record_linkage`.
+  It never returns Redis keys, IDs, hashes, cursors, ciphertext, decrypted
+  fields, URLs, tokens, provider metadata, or raw exceptions. A valid result
+  proves the expected intent, seal, terminal operation, and progress records
+  share the supplied cycle and operation and that every non-control value is
+  an authenticated encrypted envelope.
 - Run replay: `{ "action": "run", "operation": "replay", "operationId":
   "<new UUID>", "cycleId": "<begin response>", "cycleStartedAt":
   "<begin response>", "limit": 100 }`
@@ -114,8 +129,9 @@ blocks migration and activation.
    lead UUID. Its encrypted per-intent and cursor state is resumable in Upstash.
 3. Keep the database and external circuit in `replaying/backfill` while those
    firm operations run sequentially. Firm completion proofs accumulate for the
-   same cycle. After every discovered firm is complete, lock once and then
-   begin the global `replay` operation.
+   same cycle. After every discovered firm is complete, lock once, run the
+   aggregate registry audit, and only after its fixed result is valid begin the
+   global `replay` operation.
 4. Before the permanent external activation marker
    exists, the DB refuses replay if any eligible historical firm lacks a
    completed backfill. Exhaust the entire Redis SCAN to cursor `0` with an
