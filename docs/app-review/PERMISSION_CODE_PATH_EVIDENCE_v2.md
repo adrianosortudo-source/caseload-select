@@ -1,8 +1,8 @@
 # Meta App Review permission-to-code-path evidence, v2
 
-Source basis: production commit `a05520e3b9d08d82bd81c42779907cbd2c807757`, READY on 2026-09-03.
+Source basis: production merge `fbb6aac6712b28191de5aee79d0d4511aaaf4b59`, deployed on 2026-09-04.
 
-PRs #191, #193, #195, #198, #199, #202, #203, and #204 are merged. Production migrations through `20260903011450_privacy_provider_evidence_required` are applied and verified.
+The runtime messaging paths remain unchanged from the reviewed v2 evidence. Production migrations through `20260904125000_privacy_recovery_open_from_locked` are applied; the completed technical privacy closeout and remaining counsel/public-copy gates are tracked separately in `META_READINESS_CLOSEOUT_2026-09-04.md`.
 
 A permission is retained only when the application contains a concrete runtime operation that exercises it. A configured asset ID, webhook field, manually configured Meta asset, or Business Manager screenshot is not an application code path.
 

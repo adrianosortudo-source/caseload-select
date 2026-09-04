@@ -16,14 +16,20 @@ The shipped messaging and privacy-redaction baseline is complete:
 - [x] Required CI passed.
 - [x] PR #198 merged the controlled-redaction implementation, PR #199 corrected the migration runtime failure, and PR #202 corrected the provider-cleanup completion semantics.
 - [x] PR #204 updated the release-target public wording and active Meta evidence package for the corrected implementation; counsel-backed final public-copy reconciliation remains open.
-- [x] Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` is READY.
+- [x] Production merge `fbb6aac6712b28191de5aee79d0d4511aaaf4b59` is deployed to both production projects.
 - [x] Migration `20260901231830_channel_conversation_ledger` is applied and verified.
 - [x] Migration `20260902102620_restrict_screen_funnel_service_role_acl` is applied and verified.
 - [x] Migration `20260902111504_harden_channel_conversation_acl` is applied and verified.
 - [x] Migration `20260902210124_privacy_screened_lead_redaction` is applied and verified.
 - [x] Migration `20260903011450_privacy_provider_evidence_required` is applied and verified.
+- [x] Migrations `20260903140551_privacy_external_deletion_registry_recovery_control`, `20260903144312_privacy_deletion_registry_saga_hardening`, and `20260903183915_privacy_deletion_registry_operational_completeness` are applied in order and verified.
+- [x] Migration `20260904125000_privacy_recovery_open_from_locked` is applied and verified; the production ledger has 223 entries with that migration as its tip.
 - [x] The fictional post-ledger production deletion rehearsal is recorded in `deletion-flow-verification.md`.
 - [x] The final rollback-only production verification of strict completion semantics and Meta-derived CaseLoad Select operational copies is recorded in `deletion-flow-verification.md`.
+- [x] The initial encrypted-registry backfill and controlled global replay completed with reconciliation linked, all two intents accounted for, zero failures, and both recovery circuits re-locked before the later audit and activation.
+- [x] PR #219's fictional real-Postgres transactional logical-restore simulation passed. It is not evidence of a managed Supabase backup/PITR restore or provider backup expiry.
+- [x] PR #221's bounded current-registry audit passed in production with fixed aggregate evidence only.
+- [x] PR #222's controlled activation opened only after exact reconciliation and activation-marker verification; a protected nonexistent path returned the normal `404` pass-through afterward.
 
 The following operator gates passed for both verified local v2 clips. Reconfirm them only if either clip must be recorded again:
 
@@ -119,13 +125,13 @@ Watch the full upload copy before attaching it.
 
 ## 7. Pre-submission blocker: deletion promise and conversation ledger
 
-Adriano selected controlled, irreversible redaction as the resolution. PRs #198 and #199 shipped the service-only, tenant-scoped operation and migration. The fresh fictional production rehearsal passed the database, application, Storage, authorization, idempotency, tenant-isolation, append-only, pending-message, and expiry-invocation checks recorded in `deletion-flow-verification.md`.
+Adriano selected controlled, irreversible redaction as the resolution. The deployed service-only workflow, production migrations through `20260904125000`, external encrypted registry, historical backfill, controlled global replay, bounded current-registry audit, and activation/open postflight passed the aggregate checks recorded in `deletion-flow-verification.md` and `META_READINESS_CLOSEOUT_2026-09-04.md`.
 
-That rehearsal identified a completion-semantics defect: the application and database could mark external cleanup complete when Meta or Resend was recorded only as `provider_managed`. PR #202 corrected that contract. Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` and migration `20260903011450` were then verified in a final rollback-only fictional production exercise. The exercise proved that `provider_managed` remains pending, cannot produce a completion summary, and that the tested Meta-derived CaseLoad Select operational copies are redacted.
+The earlier rehearsal identified a completion-semantics defect: the application and database could mark external cleanup complete when a provider was recorded only as `provider_managed`. PR #202 corrected that contract. Production evidence continues to show two Meta provider dispositions pending, zero complete, and zero completion timestamps while the tested Meta-derived CaseLoad Select operational copies remain redacted.
 
 Treat `completed` and `not_applicable` as privileged-operator attestations, not provider-issued evidence. Record either status only after the operator checks the applicable disposition. Treat `provider_managed` only as a routing marker; it cannot close external cleanup by itself.
 
-This does not block rehearsal or recording after the production send gates pass. It does block final Meta submission.
+The technical privacy closeout no longer blocks rehearsal or recording. Counsel approval, public-copy reconciliation, the live Meta draft checks, and Adriano's action-time approval still block final Meta submission.
 
 Do not submit the Meta draft until all of these checks pass:
 
@@ -133,11 +139,12 @@ Do not submit the Meta draft until all of these checks pass:
 - [x] The scheduled three-year audit-envelope expiry is deployed and its production invocation is verified.
 - [x] Every in-scope attachment location and retained audit ledger in the fictional fixture is included in deletion and expiry verification.
 - [x] A fresh fictional post-ledger deletion rehearsal is appended to `deletion-flow-verification.md`.
-- [x] Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` and migration `20260903011450` are deployed and verified: `provider_managed` alone cannot produce `external_cleanup_status: complete` or a successful completion notice.
+- [x] Production merge `fbb6aac6712b28191de5aee79d0d4511aaaf4b59` and migrations through `20260904125000` are deployed and verified: `provider_managed` alone cannot produce `external_cleanup_status: complete` or a successful completion notice.
 - [x] The final rollback-only fictional production verification proves that the deployed deletion path removes the tested direct identifiers and message content from Meta-derived CaseLoad Select operational copies. It does not claim deletion from Meta's systems.
-- [ ] Document account-specific backup-expiry schedules and complete a safe restore rehearsal proving completed deletions are reapplied before restored data returns to use.
+- [x] The encrypted external registry, historical backfill, controlled production replay, and PR #219 fictional transactional logical-restore simulation are complete within their documented evidence boundaries.
+- [x] The bounded current-registry audit and controlled production activation/open postflight passed. PR #219 remains the final fictional end-to-end exercise; no fresh persistent production fixture was added.
 - [ ] Obtain privacy-counsel approval of the audit envelope, retained-key reidentification assessment, and three-year retention period.
-- [ ] Reconfirm that production `/privacy` and `/data-deletion` wording matches the verified end state after the completion-semantics correction and counsel review.
+- [ ] Resolve `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md` after counsel review, release any approved source correction through a PR, and verify `/privacy`, `/terms`, and `/data-deletion` signed out.
 
 The legacy HighLevel disposition and any Resend, HighLevel, or Supabase support requests are separate privacy-compliance follow-up work. They do not block this Meta submission. Do not send a provider support draft without separate provider-specific approval.
 
@@ -178,7 +185,7 @@ Do not use `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, `s
 - [ ] No real or unrelated lead data is visible.
 - [x] The controlled-redaction resolution is shipped and the post-ledger fictional deletion rehearsal is recorded as passed for the tested CaseLoad Select stores and controls.
 - [x] The PR #202 completion-semantics correction and Meta-derived CaseLoad Select operational-copy gates in Section 7 are closed.
-- [ ] The remaining backup and restore-replay, privacy-counsel, and public-copy reconciliation gates in Section 7 are closed.
+- [ ] The remaining privacy-counsel and public-copy reconciliation gates in Section 7 are closed. The current-registry audit and activation gates are complete.
 - [ ] Privacy, terms, and deletion URLs open publicly.
 - [ ] Operator contact is `adriano@caseloadselect.ca`.
 
