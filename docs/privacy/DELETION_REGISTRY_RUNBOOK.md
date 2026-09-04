@@ -169,6 +169,16 @@ blocks migration and activation.
 5. Open only with the completed replay operation and matching cycle. The DB
    opens idempotently, the permanent external activation marker is persisted,
    and only then does the external circuit open. Backfill alone can never open.
+   Migration `20260904125000_privacy_recovery_open_from_locked` permits this
+   final transition from a deliberate locked audit window without repeating
+   replay, but only when the current schema, exact cycle, replay requirement,
+   reconciliation operation, and non-null completion proof all match. The
+   migration itself does not alter the control row or open either circuit.
+   The authenticated recovery route separately requires the encrypted Redis
+   replay checkpoint to be global, terminal, scan-exhausted, unbuffered, and
+   free of pending intents or failures before it invokes the database RPC.
+   The database wrapper remains trusted `service_role`-only and must not be
+   invoked directly by an operator.
 
 ## Restore/replay procedure after activation (approval-gated)
 

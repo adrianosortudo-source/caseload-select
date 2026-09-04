@@ -206,11 +206,21 @@ describe('privacy recovery control route', () => {
     expect(mocks.auditReplayedRegistry).not.toHaveBeenCalled();
   });
 
-  it('refuses to open until the same cycle has an exhausted zero-failure global replay', async () => {
-    mocks.loadState.mockResolvedValue({ operationId, cycleId, operation: 'replay', firmId: null,
-      status: 'running', failedCount: 0, pendingIntents: [], scanExhausted: true, bufferedKeys: [] });
-    const response = await POST(request({ action: 'open', operation: 'replay', operationId, cycleId }));
-    expect(response.status).toBe(409);
+  it('refuses every incomplete or non-global terminal replay checkpoint before the DB RPC', async () => {
+    const complete = { operationId, cycleId, operation: 'replay', firmId: null,
+      status: 'complete', failedCount: 0, pendingIntents: [], scanExhausted: true, bufferedKeys: [] };
+    for (const invalid of [
+      { ...complete, firmId: '33333333-3333-4333-8333-333333333333' },
+      { ...complete, status: 'running' },
+      { ...complete, failedCount: 1 },
+      { ...complete, pendingIntents: ['44444444-4444-4444-8444-444444444444'] },
+      { ...complete, scanExhausted: false },
+      { ...complete, bufferedKeys: ['durable-key-coordinate'] },
+    ]) {
+      mocks.loadState.mockResolvedValueOnce(invalid);
+      const response = await POST(request({ action: 'open', operation: 'replay', operationId, cycleId }));
+      expect(response.status).toBe(409);
+    }
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
