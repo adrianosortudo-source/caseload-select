@@ -47,7 +47,8 @@ function setupStore(): SetupStore {
       }
       return (value as T | undefined) ?? null;
     },
-    scan: vi.fn(async () => ['0', [...values.keys()].filter((key) => key.startsWith(prefix))]),
+    scan: vi.fn(async (): Promise<[string, string[]]> =>
+      ['0', [...values.keys()].filter((key) => key.startsWith(prefix))]),
     eval: vi.fn(),
     del: vi.fn(),
   };
