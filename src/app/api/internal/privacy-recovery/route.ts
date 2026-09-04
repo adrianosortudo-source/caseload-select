@@ -8,6 +8,7 @@ import {
   type RegistryOperation,
 } from '@/lib/privacy-deletion-registry';
 import { diagnosePrivacyRecoveryReadiness, runPrivacyDeletionRegistryWorkerStep } from '@/lib/privacy-deletion-recovery';
+import { auditPrivacyDeletionRegistry } from '@/lib/privacy-deletion-registry-audit';
 import { setPrivacyRecoveryCircuit } from '@/lib/privacy-recovery-gate';
 
 export const runtime = 'nodejs';
@@ -115,6 +116,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         failedStage: diagnostic.failedStage,
         checks: { authorization: true, ...diagnostic.checks },
       }, { status: diagnostic.ready ? 200 : 503 });
+    }
+
+    if (body.action === 'auditBackfillRegistry' && exactKeys(body, [
+      'action', 'cycleId', 'operationId', 'expectedIntentCount',
+    ])) {
+      const cycleId = typeof body.cycleId === 'string' ? body.cycleId : '';
+      const operationId = typeof body.operationId === 'string' ? body.operationId : '';
+      const expectedIntentCount = Number(body.expectedIntentCount);
+      if (!UUID_RE.test(cycleId) || !UUID_RE.test(operationId) || !Number.isSafeInteger(expectedIntentCount) ||
+          expectedIntentCount < 1 || expectedIntentCount > 1_000) {
+        return NextResponse.json({ error: 'invalid registry audit coordinate' }, { status: 400 });
+      }
+      const audit = await auditPrivacyDeletionRegistry({ cycleId, operationId, expectedIntentCount });
+      return NextResponse.json({
+        ok: audit.valid,
+        status: audit.valid ? 'valid' : 'invalid',
+        failedStage: audit.failedStage,
+        counts: audit.counts,
+        checks: { authorization: true, ...audit.checks },
+      }, { status: audit.valid ? 200 : 503 });
     }
 
     if (body.action === 'run' && (
