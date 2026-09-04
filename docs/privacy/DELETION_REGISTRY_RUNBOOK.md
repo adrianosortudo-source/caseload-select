@@ -61,6 +61,15 @@ read the external activation marker, so only this endpoint may supply the
   "cycleId": "<begin response>", "afterFirmId": "<optional last UUID>",
   "limit": 100 }`. Continue with the returned last firm UUID until
   `exhausted` is true.
+- Diagnose a paused initial backfill: `{ "action": "diagnose", "operation":
+  "backfill", "cycleId": "<begin response>", "cycleStartedAt": "<begin
+  response>", "firmId": "<one discovered firm UUID>" }`. This service-only,
+  bounded check reads at most one already-redacted candidate and exercises
+  random 60-second Redis lease/checkpoint keys. Its response contains only
+  fixed readiness booleans and one of `control`, `database_candidate_read`,
+  `redis_lease_eval`, or `encryption_checkpoint`; it never returns raw errors,
+  coordinates, URLs, tokens, plaintext, or ciphertext. Re-lock after any
+  failed diagnostic and remediate before retrying a worker.
 - Run replay: `{ "action": "run", "operation": "replay", "operationId":
   "<new UUID>", "cycleId": "<begin response>", "cycleStartedAt":
   "<begin response>", "limit": 100 }`

@@ -7,7 +7,7 @@
  * addresses, telephone numbers, or message bodies here.
  */
 import 'server-only';
-import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHmac, randomBytes, randomUUID } from 'node:crypto';
 import { Redis } from '@upstash/redis';
 
 const PREFIX = 'privacy:deletion-registry:v2:';
@@ -427,6 +427,77 @@ export async function saveRegistryOperationStateIfLease(
     [leaseToken, encryptRegistryRecord('operation-state', value)],
   );
   if (Number(result) !== 1) throw new Error('privacy recovery worker lease was lost');
+}
+
+export type PrivacyRegistryStorageDiagnostic = Readonly<{
+  redisLeaseEval: boolean;
+  encryptionCheckpoint: boolean;
+  failedStage: 'redis_lease_eval' | 'encryption_checkpoint' | null;
+}>;
+
+/**
+ * Exercise the two storage boundaries that unit mocks cannot prove in the
+ * deployed environment. Diagnostic keys contain only random coordinates,
+ * expire after 60 seconds, and are compare-and-deleted before return. No
+ * secret-derived value, ciphertext, key, or raw exception leaves this helper.
+ */
+export async function diagnosePrivacyRegistryStorage(
+  store: RegistryAtomicStore = Redis.fromEnv() as unknown as RegistryAtomicStore,
+): Promise<PrivacyRegistryStorageDiagnostic> {
+  const operationId = randomUUID();
+  const cycleId = randomUUID();
+  const leaseToken = randomUUID();
+  const leaseKey = `${PREFIX}diagnostic-lease:${operationId}`;
+  const checkpointKey = `${PREFIX}diagnostic-checkpoint:${operationId}`;
+  let leaseAcquired = false;
+  let redisLeaseEval = false;
+  try {
+    try {
+      const acquired = await store.set(leaseKey, leaseToken, { nx: true, ex: 60 });
+      if (acquired !== 'OK' && acquired !== true) throw new Error('unavailable');
+      leaseAcquired = true;
+      const renewed = await store.eval(
+        "if redis.call('get',KEYS[1]) == ARGV[1] then return redis.call('expire',KEYS[1],60) else return 0 end",
+        [leaseKey], [leaseToken],
+      );
+      if (Number(renewed) !== 1) throw new Error('unavailable');
+      redisLeaseEval = true;
+    } catch {
+      return { redisLeaseEval: false, encryptionCheckpoint: false, failedStage: 'redis_lease_eval' };
+    }
+
+    try {
+      const now = new Date().toISOString();
+      const checkpoint: RegistryOperationState = {
+        operationId, cycleId, operation: 'replay', firmId: null, status: 'running',
+        startedAt: now, updatedAt: now, scanCursor: '0', scanStarted: false,
+        scanExhausted: false, bufferedKeys: [], pendingIntents: [],
+        dbCursorRequestedAt: null, dbCursorRequestId: null,
+        dbUpperBoundRequestedAt: now, dbExhausted: false, finalizedAt: null,
+        scannedCount: 0, appliedCount: 0, skippedCount: 0, failedCount: 0,
+      };
+      const encrypted = encryptRegistryRecord('operation-state', checkpoint);
+      const written = await store.eval(
+        "if redis.call('get',KEYS[1])~=ARGV[1] then return 0 end; redis.call('set',KEYS[2],ARGV[2],'EX',60); return 1",
+        [leaseKey, checkpointKey], [leaseToken, encrypted],
+      );
+      if (Number(written) !== 1) throw new Error('unavailable');
+      const stored = await store.get<unknown>(checkpointKey);
+      if (typeof stored !== 'string') throw new Error('unavailable');
+      const decoded = decryptRegistryRecord(stored, 'operation-state', operationId);
+      if (decoded.operationId !== operationId || decoded.cycleId !== cycleId) throw new Error('unavailable');
+      return { redisLeaseEval: true, encryptionCheckpoint: true, failedStage: null };
+    } catch {
+      return { redisLeaseEval, encryptionCheckpoint: false, failedStage: 'encryption_checkpoint' };
+    }
+  } finally {
+    if (leaseAcquired) {
+      await store.eval(
+        "if redis.call('get',KEYS[1])==ARGV[1] then redis.call('del',KEYS[2]); return redis.call('del',KEYS[1]) else return 0 end",
+        [leaseKey, checkpointKey], [leaseToken],
+      ).catch(() => undefined);
+    }
+  }
 }
 
 export async function loadRegistryOperationState(operationId: string, store = defaultStore()): Promise<RegistryOperationState | null> {
