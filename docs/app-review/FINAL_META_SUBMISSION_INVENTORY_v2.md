@@ -72,14 +72,14 @@ Do not upload the repository's v1 Messenger, Instagram, WhatsApp, or Business Ma
 
 The following Meta-relevant checks must be closed before final submission:
 
-- [x] Production merge `6f6c59330d94d84b1fc3bc63fb76d8830d3c8644` and migrations through `20260903183915` contain the external encrypted deletion registry, service-only recovery controls, and strict `provider_managed` semantics.
-- [x] Initial production backfill and a controlled global replay completed with the database reconciliation linked and complete, two intents accounted for, zero replay failures, both circuits re-locked, and Meta provider dispositions still pending.
+- [x] Production merge `fbb6aac6712b28191de5aee79d0d4511aaaf4b59` and migrations through `20260904125000` contain the external encrypted deletion registry, service-only recovery controls, strict `provider_managed` semantics, and the audited locked-to-open transition.
+- [x] Initial production backfill and a controlled global replay completed with the database reconciliation linked and complete, two intents accounted for, zero replay failures, and both circuits re-locked before the later audit and activation. Meta provider dispositions remain pending.
 - [x] PR #219's fictional real-Postgres transactional logical-restore simulation passed immediate-relock, authorization, encrypted-intent, applied replay, idempotent replay, provider-pending, and no-provider-call assertions. This is not a managed backup/PITR or provider-expiry rehearsal.
-- [ ] Deploy and pass the bounded current-registry audit, final fictional production end-to-end verification, and controlled production activation/open postflight recorded in `META_READINESS_CLOSEOUT_2026-09-04.md`.
+- [x] The bounded current-registry audit and controlled production activation/open postflight passed. PR #219 remains the final fictional end-to-end exercise; closeout created no persistent production fixture.
 - [ ] Obtain written privacy-counsel approval for the retained envelope, available joins, three-year per-event maximum, deletion-tombstone retention, and suppression-hash retention.
 - [ ] Resolve the public-copy decisions in `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md` after counsel approval and verify the released pages signed out.
 
-The tested CaseLoad Select redaction and recovery controls are materially implemented. Final submission remains blocked by the current-registry audit and activation/open postflight, privacy-counsel approval, public-copy reconciliation, live Meta draft checks, and Adriano's action-time approval. No evidence claims deletion from Meta's own systems.
+The tested CaseLoad Select redaction and recovery controls are materially implemented, audited, and activated. Final submission remains blocked by privacy-counsel approval, public-copy reconciliation, live Meta draft checks, and Adriano's action-time approval. No evidence claims deletion from Meta's own systems, and the two Meta provider dispositions remain pending.
 
 ### Separate follow-up, not a Meta submission gate
 
