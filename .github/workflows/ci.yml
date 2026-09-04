@@ -469,15 +469,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          target='src/lib/__tests__/privacy-restore-replay.integration.test.ts'
-          linked_flag='--lin''ked'
-          push_command='db'' push'
-          project_flag='--project''-ref'
-          service_secret='SUPABASE_''SERVICE_ROLE_KEY'
-          if rg -n -F -e "$linked_flag" -e "$push_command" -e "$project_flag" -e "$service_secret" "$target"; then
-            echo "::error::Restore rehearsal contains a cloud-capable command or credential reference."
-            exit 1
-          fi
+          node <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const target = 'src/lib/__tests__/privacy-restore-replay.integration.test.ts';
+          const forbidden = [
+            '--lin' + 'ked',
+            'db' + ' push',
+            '--project' + '-ref',
+            'supabase' + ' link',
+            'SUPABASE_' + 'SERVICE_ROLE_KEY',
+            'SUPABASE_' + 'ACCESS_TOKEN',
+            'SUPABASE_' + 'DB_PASSWORD',
+          ];
+          const findHits = (source) => forbidden.filter((marker) => source.includes(marker));
+          for (const marker of forbidden) {
+            if (findHits(`fixture:${marker}`).length !== 1) {
+              throw new Error('restore rehearsal guard self-test failed');
+            }
+          }
+          const source = readFileSync(target, 'utf8');
+          const hits = findHits(source);
+          if (hits.length > 0) {
+            console.error(`::error::Restore rehearsal contains ${hits.length} cloud-capable command or credential reference(s).`);
+            process.exit(1);
+          }
+          console.log(`Restore rehearsal cloud-capability guard passed ${forbidden.length} self-tested rules.`);
+          NODE
 
       - name: Run publication and privacy integration tests
         run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts src/lib/__tests__/drg-manifest-deployment.integration.test.ts src/lib/__tests__/channel-conversation-acl.integration.test.ts src/lib/__tests__/privacy-screened-lead-redaction.integration.test.ts src/lib/__tests__/privacy-restore-replay.integration.test.ts

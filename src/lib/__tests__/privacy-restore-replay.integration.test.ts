@@ -451,7 +451,8 @@ describe.skipIf(!DB_URL || !SERVER_IPS)(
           error: 'external privacy deletion registry is unavailable',
         });
         expect(Number((await conn.query(
-          `select count(*) as count from privacy_deletion_requests`,
+          `select count(*) as count from privacy_deletion_requests where id in ($1,$2)`,
+          [requestId, deniedRequestId],
         )).rows[0].count)).toBe(0);
         await expectRoleDenied('anon');
         await expectRoleDenied('authenticated');
