@@ -444,6 +444,19 @@ export async function eraseScreenedLead(
     deletion_request_id: requestId,
     privacy_redacted_at: payload.privacy_redacted_at ?? null,
   };
+  // Restore replay is complete once the tenant-scoped database transition and
+  // durable registry receipt above have succeeded. Provider and Storage
+  // cleanup remain governed by their existing pending evidence workflow; a
+  // recovery worker must never acknowledge or perform that separate work.
+  if (registryEnabled && input.recoveryReplay) {
+    return {
+      ok: true,
+      ...base,
+      external_cleanup_status: payload.external_cleanup_status ?? 'pending',
+      storage_objects_removed: 0,
+      pending_cleanup_categories: [],
+    };
+  }
   if (
     payload.external_cleanup_status === 'complete' ||
     payload.external_cleanup_status === 'not_applicable'
