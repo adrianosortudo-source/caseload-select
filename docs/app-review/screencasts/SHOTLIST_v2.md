@@ -10,7 +10,7 @@ Do not splice, pause, or cover a failed attempt with a cut.
 
 ## Recording gate
 
-The deployment prerequisites for recording and send are complete at production merge `fbb6aac6712b28191de5aee79d0d4511aaaf4b59`. Both local v2 clips passed these checks and remain byte-identical to the documented files. Reapply the per-session checks below only if either clip must be recorded again. Separate Meta submission counsel, public-copy, live-draft, and approval gates remain open in `../META_READINESS_CLOSEOUT_2026-09-04.md` and `../RUNBOOK_Resubmission_v2.md`.
+The deployment prerequisites for recording and send are complete at production merge `fbb6aac6712b28191de5aee79d0d4511aaaf4b59`. Both local v2 clips passed these checks and remain byte-identical to the documented files. Reapply the per-session checks below only if either clip must be recorded again. The owner privacy decision and counsel waiver are recorded; separate public-copy release, live-draft, upload, and action-time approval gates remain open in `../META_READINESS_CLOSEOUT_2026-09-04.md` and `../RUNBOOK_Resubmission_v2.md`.
 
 Before each take, confirm:
 

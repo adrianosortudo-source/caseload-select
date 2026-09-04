@@ -1,6 +1,6 @@
 # Meta App Review readiness closeout — 2026-09-04
 
-**Status:** Preparation only. Do not upload, contact Meta or counsel, change production, or submit from this document.
+**Status:** Preparation only. The owner decision is recorded; do not upload, contact Meta, change production, or submit from this document.
 
 This is the current Meta-only gate ledger. It supersedes older readiness statements in the v2 package where those statements describe the external deletion registry or restore/replay control as unimplemented.
 
@@ -23,17 +23,17 @@ This is the current Meta-only gate ledger. It supersedes older readiness stateme
 - [x] The controlled locked-to-open postflight completed on the exact reconciled replay, with activation-marker-before-external-open ordering and normal protected-path pass-through verified.
 - [x] The final production SHA, migration ledger, authorization boundary, redaction invariants, registry reconciliation, provider-pending state, and no-provider-call boundary are recorded in `deletion-flow-verification.md`.
 
-## Counsel and public-copy gates
+## Owner decision and public-copy gates
 
-- [ ] Obtain a dated written privacy-counsel decision covering retained identifiers and joins, exact timestamps, `client_request_id`, salted suppression hashes, deletion tombstones, the proposed three-year per-event period, and the public wording.
-- [ ] Resolve the contradictions recorded in `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md` through a pushed PR after counsel decides. The current public pages already contain provisional language that says approval must occur “before this revised commitment is released.”
+- [x] Adriano waived external privacy-counsel review for this release, accepted the residual risk as owner, and approved the candidate public copy and current controller wording. The dated decision and its evidence limits are recorded in `../privacy/OWNER_PRIVACY_AND_META_DATA_HANDLING_DECISION_2026-09-04.md`. This is not counsel approval or legal advice.
+- [ ] Merge the exact owner-approved public-copy PR only with Adriano's explicit approval. Owner approval of the wording does not itself authorize the merge or release it.
 - [ ] Recheck the three public URLs signed out after any copy release and preserve rendered evidence.
 
 ## Meta-controlled-copy evidence
 
 CaseLoad Select can prove redaction only for the Meta-derived operational copies it controls. Meta controls copies created in Messenger and Instagram before the webhook reaches CaseLoad Select.
 
-Meta support evidence is **conditional**, not automatically a release gate. If counsel or the live App Review form requires app-specific proof of Meta-side disposition, preserve a request-specific, non-personal record showing the applicable Meta action or documented not-applicable basis, time, app/asset context, provider case or action reference if available, and outcome. Do not retain raw sender IDs, message IDs, message bodies, access tokens, or other direct identifiers in that evidence. A local `provider_managed` marker never proves completion.
+Meta support evidence is **conditional**, not automatically a release gate. If the live App Review form requires app-specific proof of Meta-side disposition, preserve a request-specific, non-personal record showing the applicable Meta action or documented not-applicable basis, time, app/asset context, provider case or action reference if available, and outcome. Do not retain raw sender IDs, message IDs, message bodies, access tokens, or other direct identifiers in that evidence. A local `provider_managed` marker never proves completion.
 
 No Meta deletion/not-found evidence has been obtained. The two production provider dispositions remain pending and must not be marked complete merely to satisfy App Review.
 
@@ -49,7 +49,9 @@ action merely to close the gate.
 
 - [x] The two v2 local videos exist, match the documented SHA-256 values, decode fully, and remain unuploaded.
 - [ ] Inventory the live Meta draft without submitting it.
-- [ ] Confirm the live draft contains only `pages_messaging` and the exact displayed Instagram messaging permission label.
+- [ ] Confirm the live draft contains `pages_messaging`, the exact displayed Instagram messaging permission label, and the four unique Meta-required technical dependencies `instagram_basic`, `pages_read_engagement`, `pages_show_list`, and `pages_manage_metadata`, with no unrelated or already-approved scope.
+- [x] The owner decisions for Meta Data Handling are recorded: `No` for national-security disclosures in the 12 months ending 2026-09-04; `None of the above` for the currently undocumented public-authority-request processes; and the current controller wording accepted. This is owner attestation and risk acceptance, not counsel approval.
+- [ ] Apply those exact owner-approved answers in the live Meta Data Handling step and confirm it no longer shows `Needs your review`. The current four pre-filled positive process selections must not be submitted.
 - [ ] Recompute both video hashes immediately before upload, attach each file to the matching permission, and watch each Meta preview completely.
 - [ ] Paste the final reviewed instructions, verify the signed-out public URLs, and capture the full draft with app identity and draft identifier.
 - [ ] Stop for Adriano's explicit action-time approval before selecting **Submit for review**.
