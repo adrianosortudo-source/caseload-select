@@ -9,6 +9,7 @@ import {
 } from '@/lib/privacy-deletion-registry';
 import { diagnosePrivacyRecoveryReadiness, runPrivacyDeletionRegistryWorkerStep } from '@/lib/privacy-deletion-recovery';
 import { auditPrivacyDeletionRegistry } from '@/lib/privacy-deletion-registry-audit';
+import { auditPrivacyDeletionRegistryAfterReplay } from '@/lib/privacy-deletion-registry-current-audit';
 import { setPrivacyRecoveryCircuit } from '@/lib/privacy-recovery-gate';
 
 export const runtime = 'nodejs';
@@ -129,6 +130,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ error: 'invalid registry audit coordinate' }, { status: 400 });
       }
       const audit = await auditPrivacyDeletionRegistry({ cycleId, operationId, expectedIntentCount });
+      return NextResponse.json({
+        ok: audit.valid,
+        status: audit.valid ? 'valid' : 'invalid',
+        failedStage: audit.failedStage,
+        counts: audit.counts,
+        checks: { authorization: true, ...audit.checks },
+      }, { status: audit.valid ? 200 : 503 });
+    }
+
+    if (body.action === 'auditReplayedRegistry' && exactKeys(body, [
+      'action', 'backfillOperationId', 'cycleId', 'expectedIntentCount', 'replayOperationId',
+    ])) {
+      const cycleId = typeof body.cycleId === 'string' ? body.cycleId : '';
+      const backfillOperationId = typeof body.backfillOperationId === 'string' ? body.backfillOperationId : '';
+      const replayOperationId = typeof body.replayOperationId === 'string' ? body.replayOperationId : '';
+      const expectedIntentCount = Number(body.expectedIntentCount);
+      if (!UUID_RE.test(cycleId) || !UUID_RE.test(backfillOperationId) || !UUID_RE.test(replayOperationId) ||
+          backfillOperationId === replayOperationId || !Number.isSafeInteger(expectedIntentCount) ||
+          expectedIntentCount < 1 || expectedIntentCount > 1_000) {
+        return NextResponse.json({ error: 'invalid registry audit coordinate' }, { status: 400 });
+      }
+      const audit = await auditPrivacyDeletionRegistryAfterReplay({
+        cycleId, backfillOperationId, replayOperationId, expectedIntentCount,
+      });
       return NextResponse.json({
         ok: audit.valid,
         status: audit.valid ? 'valid' : 'invalid',

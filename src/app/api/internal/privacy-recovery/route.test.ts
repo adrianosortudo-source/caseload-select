@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
   rpc: vi.fn(), setCircuit: vi.fn(), loadState: vi.fn(), runWorker: vi.fn(), diagnose: vi.fn(),
-  auditRegistry: vi.fn(), isActivated: vi.fn(), markActivated: vi.fn(),
+  auditRegistry: vi.fn(), auditReplayedRegistry: vi.fn(), isActivated: vi.fn(), markActivated: vi.fn(),
 }));
 vi.mock('@/lib/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpc } }));
 vi.mock('@/lib/privacy-recovery-gate', () => ({ setPrivacyRecoveryCircuit: mocks.setCircuit }));
@@ -18,6 +18,9 @@ vi.mock('@/lib/privacy-deletion-recovery', () => ({
 }));
 vi.mock('@/lib/privacy-deletion-registry-audit', () => ({
   auditPrivacyDeletionRegistry: mocks.auditRegistry,
+}));
+vi.mock('@/lib/privacy-deletion-registry-current-audit', () => ({
+  auditPrivacyDeletionRegistryAfterReplay: mocks.auditReplayedRegistry,
 }));
 
 import { POST } from './route';
@@ -46,6 +49,14 @@ beforeEach(() => {
       operationStateCount: 1, intentProgressCount: 2 },
     checks: { locked: true, withinBounds: true, knownKeyShapes: true, encryptedEnvelopes: true,
       noPlaintextDirectIdentifiers: true, terminalOperation: true, cycleLinked: true, accountingLinked: true },
+  });
+  mocks.auditReplayedRegistry.mockResolvedValue({ valid: true, failedStage: null,
+    counts: { recordCount: 14, firmCount: 1, intentCount: 2, appliedReceiptCount: 2,
+      backfillSealCount: 1, replayRunCount: 1, operationStateCount: 3, intentProgressCount: 5 },
+    checks: { locked: true, withinBounds: true, knownKeyShapes: true,
+      activationMarkerValid: true, activationMarkerPresent: false, encryptedEnvelopes: true,
+      noPlaintextDirectIdentifiers: true, receiptsLinked: true, terminalBackfill: true,
+      terminalReplay: true, cycleLinked: true, evidenceLinked: true, accountingLinked: true },
   });
 });
 
@@ -159,6 +170,40 @@ describe('privacy recovery control route', () => {
     expect((await POST(request({ action: 'auditBackfillRegistry', cycleId, operationId,
       expectedIntentCount: 2 }, 'wrong-token'))).status).toBe(404);
     expect(mocks.auditRegistry).not.toHaveBeenCalled();
+  });
+
+  it('returns only aggregate post-replay registry counts and fixed booleans', async () => {
+    const response = await POST(request({ action: 'auditReplayedRegistry', cycleId,
+      backfillOperationId: '44444444-4444-4444-8444-444444444444',
+      replayOperationId: operationId, expectedIntentCount: 2 }));
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      ok: true, status: 'valid', failedStage: null,
+      counts: { recordCount: 14, firmCount: 1, intentCount: 2, appliedReceiptCount: 2,
+        backfillSealCount: 1, replayRunCount: 1, operationStateCount: 3, intentProgressCount: 5 },
+      checks: { authorization: true, locked: true, withinBounds: true, knownKeyShapes: true,
+        activationMarkerValid: true, activationMarkerPresent: false, encryptedEnvelopes: true,
+        noPlaintextDirectIdentifiers: true, receiptsLinked: true, terminalBackfill: true,
+        terminalReplay: true, cycleLinked: true, evidenceLinked: true, accountingLinked: true },
+    });
+    expect(mocks.auditReplayedRegistry).toHaveBeenCalledWith({ cycleId,
+      backfillOperationId: '44444444-4444-4444-8444-444444444444',
+      replayOperationId: operationId, expectedIntentCount: 2 });
+  });
+
+  it('keeps the post-replay audit exact-key and enumeration safe', async () => {
+    const backfillOperationId = '44444444-4444-4444-8444-444444444444';
+    expect((await POST(request({ action: 'auditReplayedRegistry', cycleId,
+      backfillOperationId, replayOperationId: operationId }))).status).toBe(400);
+    expect((await POST(request({ action: 'auditReplayedRegistry', cycleId,
+      backfillOperationId, replayOperationId: operationId, expectedIntentCount: 2,
+      extra: true }))).status).toBe(400);
+    expect((await POST(request({ action: 'auditReplayedRegistry', cycleId,
+      backfillOperationId, replayOperationId: operationId, expectedIntentCount: 2 }, 'wrong-token'))).status).toBe(404);
+    expect((await POST(request({ action: 'auditReplayedRegistry', cycleId,
+      backfillOperationId: operationId, replayOperationId: operationId,
+      expectedIntentCount: 2 }))).status).toBe(400);
+    expect(mocks.auditReplayedRegistry).not.toHaveBeenCalled();
   });
 
   it('refuses to open until the same cycle has an exhausted zero-failure global replay', async () => {
