@@ -5,6 +5,13 @@ remains incomplete until the approval-gated rollout completes. This document
 is not authorization to configure Redis, change a plan, deploy, apply a
 migration, contact counsel, or perform a deletion/backfill/replay.
 
+Deployment retry note (2026-09-04): PR #214 merged the bounded registry-audit
+route, but its Git-integrated production builds were rate-limited before the
+route could deploy. This documentation-only change exists solely to request
+fresh Git-integrated preview checks. It changes no runtime, migration,
+environment, authentication, audit, or replay behavior, and its merge still
+requires separate approval.
+
 ## Purpose and boundary
 
 The external registry gives a restore replay source that is independent of
