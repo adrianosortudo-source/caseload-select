@@ -156,7 +156,7 @@ export default function PrivacyPage() {
             If you become a client of the firm, the firm&rsquo;s own retention rules govern your file from that point on, separate from this policy.
           </p>
           <p>
-            A limited audit record may remain for system security, delivery-integrity checks, proof that deletion was completed, and aggregate reporting. It excludes names, contact details, message content, platform sender IDs, and platform message IDs. Retained channel audit events have a three-year retention period measured from the original event. Separate deletion-request and anti-recontact suppression records are retained only for their deletion-proof and re-collection-prevention purposes.
+            A limited audit record may remain for system security, delivery-integrity checks, proof that deletion was completed, and aggregate reporting. It excludes names, contact details, message content, platform sender IDs, and platform message IDs. Retained channel audit events have a three-year retention period measured from the original event. Separate deletion-request and anti-recontact suppression records are retained for their deletion-proof and re-collection-prevention purposes only.
           </p>
         </Section>
 

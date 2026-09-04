@@ -62,7 +62,7 @@ export default function DataDeletionPage() {
             Older intake records follow a separate recovery-aware process that clears the matched lead, its linked intake session, queued payloads, and its intake-attachment folder. We keep a request open if any required cleanup or verification step fails.
           </p>
           <p>
-            We do not promise that every database row will be physically deleted. We may preserve a limited audit record for system security, delivery-integrity checks, proof that deletion was completed, and aggregate reporting. It excludes names, contact details, message content, platform sender IDs, and platform message IDs. Retained channel audit events have a three-year retention period measured from the original event. Separate deletion-request and anti-recontact suppression records are retained only for their deletion-proof and re-collection-prevention purposes.
+            We do not promise that every database row will be physically deleted. We may preserve a limited audit record for system security, delivery-integrity checks, proof that deletion was completed, and aggregate reporting. It excludes names, contact details, message content, platform sender IDs, and platform message IDs. Retained channel audit events have a three-year retention period measured from the original event. Separate deletion-request and anti-recontact suppression records are retained for their deletion-proof and re-collection-prevention purposes only.
           </p>
           <p>
             If a legal obligation prevents us from removing a specific item, we will explain the item, the reason, and the expected retention period when we respond.
