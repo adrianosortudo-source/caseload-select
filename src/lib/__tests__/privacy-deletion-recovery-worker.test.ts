@@ -7,7 +7,11 @@ vi.mock('../screened-lead-erasure', () => ({ eraseScreenedLead: mocks.erase }));
 vi.mock('../supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpc } }));
 
 import { decryptRegistryRecord, registerDeletionIntent, type RegistryStore } from '../privacy-deletion-registry';
-import { runPrivacyDeletionRegistryWorkerStep, type RegistryIntentScanStore } from '../privacy-deletion-recovery';
+import {
+  diagnosePrivacyRecoveryReadiness,
+  runPrivacyDeletionRegistryWorkerStep,
+  type RegistryIntentScanStore,
+} from '../privacy-deletion-recovery';
 
 const encryptionKey = Buffer.alloc(32, 9).toString('base64');
 const operationId = '11111111-1111-4111-8111-111111111111';
@@ -42,6 +46,12 @@ function memoryScanStore(): RegistryIntentScanStore & RegistryStore & { values: 
       return ['0', [...values.keys()].filter((key) => key.startsWith('privacy:deletion-registry:v2:intent:'))];
     },
     async eval(script, keys, args) {
+      if (keys.length === 2 && script.includes("redis.call('del',KEYS[2])")) {
+        if (values.get(keys[0]) !== args[0]) return 0;
+        values.delete(keys[1]);
+        values.delete(keys[0]);
+        return 1;
+      }
       if (keys.length === 3 && script.includes("redis.call('set',KEYS[3]")) {
         if (values.get(keys[0]) !== args[0]) return 0;
         values.set(keys[1], args[1]);
@@ -203,5 +213,95 @@ describe('durable privacy deletion registry worker', () => {
     expect(mocks.erase).not.toHaveBeenCalled();
     expect(mocks.rpc).toHaveBeenNthCalledWith(1, 'list_privacy_deletion_registry_backfill_candidates',
       expect.objectContaining({ p_firm_id: intent.firmId, p_cycle_id: cycleId, p_before_or_at: cycleStartedAt }));
+  });
+
+  it('diagnoses the deployed control, DB-read, Redis-EVAL, and encrypted-checkpoint boundaries without retaining probes', async () => {
+    const store = memoryScanStore();
+    const source = { take: vi.fn().mockResolvedValue([intent]) };
+    await expect(diagnosePrivacyRecoveryReadiness({
+      cycleId, cycleStartedAt, firmId: intent.firmId, source, store,
+    })).resolves.toEqual({
+      ready: true,
+      failedStage: null,
+      checks: {
+        control: true,
+        databaseCandidateRead: true,
+        redisLeaseEval: true,
+        encryptionCheckpoint: true,
+      },
+    });
+    expect(source.take).toHaveBeenCalledWith(1);
+    expect([...store.values.keys()].filter((key) => key.includes('diagnostic'))).toEqual([]);
+  });
+
+  it('returns a fixed database stage without exposing a raw diagnostic exception', async () => {
+    const store = memoryScanStore();
+    const source = { take: vi.fn().mockRejectedValue(new Error('sensitive upstream detail')) };
+    const result = await diagnosePrivacyRecoveryReadiness({
+      cycleId, cycleStartedAt, firmId: intent.firmId, source, store,
+    });
+    expect(result).toEqual({
+      ready: false,
+      failedStage: 'database_candidate_read',
+      checks: {
+        control: true,
+        databaseCandidateRead: false,
+        redisLeaseEval: false,
+        encryptionCheckpoint: false,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('sensitive upstream detail');
+  });
+
+  it('returns a fixed control stage without exposing the circuit exception', async () => {
+    mocks.assertReplaying.mockRejectedValueOnce(new Error('sensitive circuit detail'));
+    const result = await diagnosePrivacyRecoveryReadiness({
+      cycleId, cycleStartedAt, firmId: intent.firmId,
+      source: { take: vi.fn().mockResolvedValue([]) }, store: memoryScanStore(),
+    });
+    expect(result).toEqual({
+      ready: false,
+      failedStage: 'control',
+      checks: {
+        control: false,
+        databaseCandidateRead: false,
+        redisLeaseEval: false,
+        encryptionCheckpoint: false,
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('sensitive circuit detail');
+  });
+
+  it('maps a Redis exception to a fixed lease stage without leaking storage details', async () => {
+    const base = memoryScanStore();
+    const store = {
+      ...base,
+      set: vi.fn().mockRejectedValue(new Error('sensitive Redis endpoint detail')),
+    };
+    const result = await diagnosePrivacyRecoveryReadiness({
+      cycleId, cycleStartedAt, firmId: intent.firmId,
+      source: { take: vi.fn().mockResolvedValue([]) }, store,
+    });
+    expect(result).toMatchObject({
+      ready: false,
+      failedStage: 'redis_lease_eval',
+      checks: { control: true, databaseCandidateRead: true, redisLeaseEval: false, encryptionCheckpoint: false },
+    });
+    expect(JSON.stringify(result)).not.toContain('sensitive Redis endpoint detail');
+  });
+
+  it('separates a valid Redis lease from an invalid encryption/checkpoint configuration', async () => {
+    process.env.PRIVACY_DELETION_REGISTRY_ENCRYPTION_KEY = 'invalid';
+    const store = memoryScanStore();
+    const result = await diagnosePrivacyRecoveryReadiness({
+      cycleId, cycleStartedAt, firmId: intent.firmId,
+      source: { take: vi.fn().mockResolvedValue([]) }, store,
+    });
+    expect(result).toMatchObject({
+      ready: false,
+      failedStage: 'encryption_checkpoint',
+      checks: { control: true, databaseCandidateRead: true, redisLeaseEval: true, encryptionCheckpoint: false },
+    });
+    expect([...store.values.keys()].filter((key) => key.includes('diagnostic'))).toEqual([]);
   });
 });

@@ -5,6 +5,7 @@ import { Redis } from '@upstash/redis';
 import { supabaseAdmin } from './supabase-admin';
 import {
   decryptRegistryRecord,
+  diagnosePrivacyRegistryStorage,
   isPrivacyDeletionRegistryEnabled,
   loadRegistryIntentProgress,
   loadRegistryOperationState,
@@ -38,6 +39,23 @@ export type RecoveryAggregate = Readonly<{
   appliedCount: number;
   skippedCount: number;
   failedCount: number;
+}>;
+
+export type PrivacyRecoveryDiagnosticStage =
+  | 'control'
+  | 'database_candidate_read'
+  | 'redis_lease_eval'
+  | 'encryption_checkpoint';
+
+export type PrivacyRecoveryReadinessDiagnostic = Readonly<{
+  ready: boolean;
+  failedStage: PrivacyRecoveryDiagnosticStage | null;
+  checks: Readonly<{
+    control: boolean;
+    databaseCandidateRead: boolean;
+    redisLeaseEval: boolean;
+    encryptionCheckpoint: boolean;
+  }>;
 }>;
 
 function asIntent(value: unknown): RegistryIntent | null {
@@ -195,6 +213,43 @@ export class SupabaseHistoricalIntentSource implements RegistryIntentSource {
     if (intents.length < limit) this.cursor = { ...this.cursor, exhausted: true };
     return intents;
   }
+}
+
+/** Service-only, bounded readiness check. It reads at most one already-redacted
+ * historical coordinate and discards it, then uses random expiring Redis keys.
+ * Only fixed stage codes are returned; raw errors and coordinates never leave. */
+export async function diagnosePrivacyRecoveryReadiness(args: {
+  cycleId: string;
+  cycleStartedAt: string;
+  firmId: string;
+  source?: RegistryIntentSource;
+  store?: RegistryIntentScanStore;
+}): Promise<PrivacyRecoveryReadinessDiagnostic> {
+  const checks = {
+    control: false,
+    databaseCandidateRead: false,
+    redisLeaseEval: false,
+    encryptionCheckpoint: false,
+  };
+  try {
+    await assertPrivacyRecoveryReplaying();
+    checks.control = true;
+  } catch {
+    return { ready: false, failedStage: 'control', checks };
+  }
+  try {
+    const source = args.source ?? new SupabaseHistoricalIntentSource(args.firmId, args.cycleId, {
+      requestedAt: null, requestId: null, upperBoundRequestedAt: args.cycleStartedAt, exhausted: false,
+    });
+    await source.take(1);
+    checks.databaseCandidateRead = true;
+  } catch {
+    return { ready: false, failedStage: 'database_candidate_read', checks };
+  }
+  const storage = await diagnosePrivacyRegistryStorage(args.store);
+  checks.redisLeaseEval = storage.redisLeaseEval;
+  checks.encryptionCheckpoint = storage.encryptionCheckpoint;
+  return { ready: storage.failedStage === null, failedStage: storage.failedStage, checks };
 }
 
 function validateLimit(limit: number): void {

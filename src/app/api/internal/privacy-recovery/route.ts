@@ -7,7 +7,7 @@ import {
   markPrivacyDeletionRegistryActivated,
   type RegistryOperation,
 } from '@/lib/privacy-deletion-registry';
-import { runPrivacyDeletionRegistryWorkerStep } from '@/lib/privacy-deletion-recovery';
+import { diagnosePrivacyRecoveryReadiness, runPrivacyDeletionRegistryWorkerStep } from '@/lib/privacy-deletion-recovery';
 import { setPrivacyRecoveryCircuit } from '@/lib/privacy-recovery-gate';
 
 export const runtime = 'nodejs';
@@ -95,6 +95,26 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         return NextResponse.json({ error: 'firm discovery is unavailable' }, { status: 503 });
       }
       return NextResponse.json({ ok: true, firmIds: result.firm_ids, exhausted: result.exhausted });
+    }
+
+    if (body.action === 'diagnose' && exactKeys(body, [
+      'action', 'cycleId', 'cycleStartedAt', 'firmId', 'operation',
+    ])) {
+      const selected = operation(body.operation);
+      const cycleId = typeof body.cycleId === 'string' ? body.cycleId : '';
+      const cycleStartedAt = typeof body.cycleStartedAt === 'string' ? body.cycleStartedAt : '';
+      const firmId = typeof body.firmId === 'string' ? body.firmId : '';
+      if (selected !== 'backfill' || !UUID_RE.test(cycleId) || Number.isNaN(Date.parse(cycleStartedAt)) ||
+          !UUID_RE.test(firmId)) {
+        return NextResponse.json({ error: 'invalid recovery coordinate' }, { status: 400 });
+      }
+      const diagnostic = await diagnosePrivacyRecoveryReadiness({ cycleId, cycleStartedAt, firmId });
+      return NextResponse.json({
+        ok: diagnostic.ready,
+        status: diagnostic.ready ? 'ready' : 'not_ready',
+        failedStage: diagnostic.failedStage,
+        checks: { authorization: true, ...diagnostic.checks },
+      }, { status: diagnostic.ready ? 200 : 503 });
     }
 
     if (body.action === 'run' && (

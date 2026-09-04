@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
-  rpc: vi.fn(), setCircuit: vi.fn(), loadState: vi.fn(), runWorker: vi.fn(),
+  rpc: vi.fn(), setCircuit: vi.fn(), loadState: vi.fn(), runWorker: vi.fn(), diagnose: vi.fn(),
   isActivated: vi.fn(), markActivated: vi.fn(),
 }));
 vi.mock('@/lib/supabase-admin', () => ({ supabaseAdmin: { rpc: mocks.rpc } }));
@@ -12,7 +12,10 @@ vi.mock('@/lib/privacy-deletion-registry', () => ({
   isPrivacyDeletionRegistryActivated: mocks.isActivated,
   markPrivacyDeletionRegistryActivated: mocks.markActivated,
 }));
-vi.mock('@/lib/privacy-deletion-recovery', () => ({ runPrivacyDeletionRegistryWorkerStep: mocks.runWorker }));
+vi.mock('@/lib/privacy-deletion-recovery', () => ({
+  runPrivacyDeletionRegistryWorkerStep: mocks.runWorker,
+  diagnosePrivacyRecoveryReadiness: mocks.diagnose,
+}));
 
 import { POST } from './route';
 
@@ -32,6 +35,9 @@ beforeEach(() => {
   mocks.setCircuit.mockResolvedValue(undefined);
   mocks.isActivated.mockResolvedValue(false);
   mocks.markActivated.mockResolvedValue(undefined);
+  mocks.diagnose.mockResolvedValue({ ready: true, failedStage: null, checks: {
+    control: true, databaseCandidateRead: true, redisLeaseEval: true, encryptionCheckpoint: true,
+  } });
 });
 
 describe('privacy recovery control route', () => {
@@ -93,6 +99,32 @@ describe('privacy recovery control route', () => {
     expect(mocks.runWorker).toHaveBeenCalledWith({
       operation: 'replay', operationId, cycleId, cycleStartedAt, firmId: null, limit: undefined,
     });
+  });
+
+  it('returns only bounded readiness stage codes to an authorized caller', async () => {
+    const firmId = 'e65245d9-2fb0-44ee-a41b-0bb6db2090d5';
+    mocks.diagnose.mockResolvedValue({ ready: false, failedStage: 'redis_lease_eval', checks: {
+      control: true, databaseCandidateRead: true, redisLeaseEval: false, encryptionCheckpoint: false,
+    } });
+    const response = await POST(request({
+      action: 'diagnose', operation: 'backfill', cycleId, cycleStartedAt, firmId,
+    }));
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toEqual({
+      ok: false, status: 'not_ready', failedStage: 'redis_lease_eval', checks: {
+        authorization: true, control: true, databaseCandidateRead: true,
+        redisLeaseEval: false, encryptionCheckpoint: false,
+      },
+    });
+  });
+
+  it('keeps the diagnostic enumeration-safe for unauthorized callers', async () => {
+    const response = await POST(request({
+      action: 'diagnose', operation: 'backfill', cycleId, cycleStartedAt,
+      firmId: 'e65245d9-2fb0-44ee-a41b-0bb6db2090d5',
+    }, 'wrong-token'));
+    expect(response.status).toBe(404);
+    expect(mocks.diagnose).not.toHaveBeenCalled();
   });
 
   it('refuses to open until the same cycle has an exhausted zero-failure global replay', async () => {
