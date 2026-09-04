@@ -190,6 +190,23 @@ blocks migration and activation.
 6. Only after documented reconciliation and a distinct approval may recovery
    move from `replaying` to `open`.
 
+### Rehearsal evidence boundary
+
+The automated recovery rehearsal is a **transactional logical-restore
+simulation** against the disposable local Supabase/Postgres stack created by
+CI. It uses only fictional `example.test` data, preserves an encrypted registry
+intent outside the database transaction, rolls the database back to a
+pre-deletion savepoint, immediately re-locks it, and runs the production replay
+coordinator twice to prove both redaction and idempotency. The job binds its
+connection to the exact local Docker container and fails before testing if the
+URL, port, container, or SQL server address is ambiguous.
+
+A green rehearsal is engineering evidence for the application-level restore
+and replay contract. It is **not** evidence of a managed Supabase backup or
+PITR restore, provider backup expiry, cloud disaster recovery, or durability of
+the in-memory test adapter. Those claims require their own account-specific
+provider evidence and approval.
+
 ## Initial historical backfill details
 
 The service-only database function

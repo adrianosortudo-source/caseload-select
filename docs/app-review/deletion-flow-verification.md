@@ -288,3 +288,59 @@ The logical restore emitted warnings for Supabase-managed `pg_cron`, Realtime, a
 **Rehearsal conclusion:** replay is idempotent and effective when an outstanding request is supplied from outside the restored database. Automatic replay is not implemented because the only current tombstone is part of the database being restored. Before release, completed and pending deletion request identifiers must be durably retained outside the database backup boundary, and the production restore runbook must block operational access until that external registry has been replayed and verified.
 
 **Engineering sign-off:** The shipped implementation and fictional production deletion path passed the controls listed above, including strict completion semantics and the tested Meta-derived CaseLoad Select operational copies. Final Meta submission sign-off remains withheld until the open backup and restore-replay, privacy-counsel, and public-copy reconciliation gates above are supported. Broader privacy-program follow-up remains separately open and does not control Meta App Review readiness.
+
+### Candidate automated restore/replay simulation: 2026-09-04
+
+**Status:** Passed on PR #219 candidate head
+`b5976a7097b421866a2be9d52aa6966af22d4a0b`. The GitHub real-Postgres job
+`101089004431` passed 33 tests, including the dedicated transactional
+restore/replay rehearsal; the full Vitest suite, typecheck, ESLint, remaining
+required checks, and both Vercel previews also passed. This candidate is not
+yet merged or deployed, so the release gate remains open pending the normal
+DR-109 merge and post-deployment verification.
+
+The rehearsal ran only against the fresh local Supabase/Postgres Docker stack
+created by GitHub CI. It proved the connection was numeric-loopback and
+correlated the published port and SQL server address to the one expected local
+database container. No cloud database credential or cloud-capable Supabase
+command was available to the test.
+
+The fictional sequence proved:
+
+1. A legitimate operational state was established, an encrypted external
+   intent and applied receipt were written, and the initial database redaction
+   removed the fictional identifiers and message content.
+2. Both recovery circuits were locked before the database transaction was
+   rolled back to its pre-deletion savepoint. The database snapshot restored
+   the fictional identifiers and Meta-style message ID and removed its local
+   deletion tombstone, while the external encrypted intent, receipt, and
+   activation marker survived.
+3. The restored database was re-locked as the first database action. A normal
+   operational deletion failed closed; actual `anon` and `authenticated` RPC
+   calls were denied.
+4. The production replay coordinator consumed the surviving encrypted intent,
+   completed one applied replay with zero failures, recreated the redacted
+   database state and tombstone, and then completed a second fresh replay as an
+   idempotent skip.
+5. Late inbound content was rejected, a pending outbound terminal event was
+   coerced to the redacted envelope, processed message coordinates were absent,
+   provider cleanup remained pending, and neither Storage nor provider
+   completion was invoked.
+6. Persistent subject and operation records used authenticated encrypted
+   envelopes; their stored values contained none of the fictional names,
+   email, phone, message body, sender/message IDs, or stable fixture UUIDs.
+   The outer transaction rolled back and CI stopped the local stack in an
+   unconditional teardown step.
+
+The first CI execution exposed a real receipt-idempotency defect: replay after
+restore generated a later database redaction timestamp than the surviving
+immutable applied receipt. The candidate fix preserves the original receipt
+and timestamp when the deletion request and terminal redaction count match,
+while a conflicting terminal count still fails closed. Focused unit tests and
+the repeated real-Postgres rehearsal passed after the correction.
+
+**Evidence boundary:** This is an application-level **transactional logical
+restore simulation**. It is not a managed Supabase backup or PITR restore, does
+not prove provider backup expiry or cloud disaster recovery, and does not
+represent the in-memory test adapter as externally durable. Production data
+and provider cleanup state were not touched.
