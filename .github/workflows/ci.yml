@@ -414,8 +414,73 @@ jobs:
           fi
           echo "DIRECT_DATABASE_URL is set; integration tests will run for real."
 
+      - name: Bind restore rehearsal to the exact local Supabase Postgres container
+        shell: bash
+        run: |
+          set -euo pipefail
+          project_id="$(sed -n 's/^project_id = "\([^"]*\)"/\1/p' supabase/config.toml)"
+          if [ -z "$project_id" ]; then
+            echo "::error::Local Supabase project_id is missing."
+            exit 1
+          fi
+          container_name="supabase_db_${project_id}"
+          mapfile -t matches < <(docker ps --filter "name=^/${container_name}$" --format '{{.Names}}')
+          if [ "${#matches[@]}" -ne 1 ] || [ "${matches[0]}" != "$container_name" ]; then
+            echo "::error::Expected exactly one running local Supabase database container."
+            exit 1
+          fi
+          readarray -t url_parts < <(node <<'NODE'
+          const raw = process.env.DIRECT_DATABASE_URL?.trim() ?? '';
+          const value = ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'")))
+            ? raw.slice(1, -1) : raw;
+          const parsed = new URL(value);
+          const host = decodeURIComponent(parsed.hostname).replace(/^\[|\]$/g, '');
+          if (!['postgres:', 'postgresql:'].includes(parsed.protocol) ||
+              !['127.0.0.1', '::1'].includes(host) || parsed.pathname !== '/postgres' || !parsed.port) {
+            process.exit(1);
+          }
+          process.stdout.write(`${host}\n${parsed.port}\n`);
+          NODE
+          )
+          if [ "${#url_parts[@]}" -ne 2 ]; then
+            echo "::error::Integration database URL is not numeric-loopback local Postgres."
+            exit 1
+          fi
+          binding="$(docker inspect "$container_name" | jq -c '.[0].NetworkSettings.Ports["5432/tcp"] // []')"
+          family_binding="$(jq -c --arg host "${url_parts[0]}" '
+            map(select(if $host == "127.0.0.1"
+              then (.HostIp == "127.0.0.1" or .HostIp == "0.0.0.0")
+              else (.HostIp == "::1" or .HostIp == "::") end))' <<<"$binding")"
+          binding_count="$(jq 'length' <<<"$family_binding")"
+          host_port="$(jq -r '.[0].HostPort // empty' <<<"$family_binding")"
+          if [ "$binding_count" -ne 1 ] || [ "$host_port" != "${url_parts[1]}" ]; then
+            echo "::error::Local Supabase 5432/tcp is not uniquely bound to the URL's numeric-loopback address family and port."
+            exit 1
+          fi
+          server_ips="$(docker inspect "$container_name" | jq -r \
+            '.[0].NetworkSettings.Networks | to_entries | map(.value.IPAddress) | map(select(length > 0)) | unique | join(",")')"
+          if [ -z "$server_ips" ]; then
+            echo "::error::Local Supabase database container has no unambiguous network address."
+            exit 1
+          fi
+          echo "LOCAL_SUPABASE_DB_CONTAINER_IPS=$server_ips" >> "$GITHUB_ENV"
+
+      - name: Reject cloud-capable restore rehearsal code
+        shell: bash
+        run: |
+          set -euo pipefail
+          target='src/lib/__tests__/privacy-restore-replay.integration.test.ts'
+          linked_flag='--lin''ked'
+          push_command='db'' push'
+          project_flag='--project''-ref'
+          service_secret='SUPABASE_''SERVICE_ROLE_KEY'
+          if rg -n -F -e "$linked_flag" -e "$push_command" -e "$project_flag" -e "$service_secret" "$target"; then
+            echo "::error::Restore rehearsal contains a cloud-capable command or credential reference."
+            exit 1
+          fi
+
       - name: Run publication and privacy integration tests
-        run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts src/lib/__tests__/drg-manifest-deployment.integration.test.ts src/lib/__tests__/channel-conversation-acl.integration.test.ts src/lib/__tests__/privacy-screened-lead-redaction.integration.test.ts
+        run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts src/lib/__tests__/drg-manifest-deployment.integration.test.ts src/lib/__tests__/channel-conversation-acl.integration.test.ts src/lib/__tests__/privacy-screened-lead-redaction.integration.test.ts src/lib/__tests__/privacy-restore-replay.integration.test.ts
 
       - name: Stop local Supabase stack
         if: always()
