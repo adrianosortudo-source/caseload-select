@@ -6,7 +6,9 @@ App ID: `1007304805285554`
 
 Original submission ID: `1016624077686960`
 
-Current production commit: `a05520e3b9d08d82bd81c42779907cbd2c807757`, READY
+Current production commit: `6f6c59330d94d84b1fc3bc63fb76d8830d3c8644`, deployed to both production projects
+
+Current Meta-only gate ledger: `META_READINESS_CLOSEOUT_2026-09-04.md`
 
 ## Current decision and release state
 
@@ -18,14 +20,14 @@ Release evidence:
 - PR #193 merged the rendered-copy QA harness and related copy correction.
 - PR #195 merged the ledger ACL hardening.
 - PR #198 merged the controlled-redaction application and migration. PR #199 corrected the migration runtime failure.
-- PR #202 merged the strict external-cleanup completion semantics: `provider_managed` is a location marker and cannot complete a deletion request. PR #203 recorded the fictional local restore/replay rehearsal and the remaining external-registry gap. PR #204 aligned the Meta release record, counsel request, and release-target public deletion wording with those boundaries; counsel-backed final public-copy reconciliation remains open.
-- Production is running commit `a05520e3b9d08d82bd81c42779907cbd2c807757` with READY status.
-- Migrations `20260901231830_channel_conversation_ledger`, `20260902102620_restrict_screen_funnel_service_role_acl`, `20260902111504_harden_channel_conversation_acl`, `20260902210124_privacy_screened_lead_redaction`, and `20260903011450_privacy_provider_evidence_required` are applied and verified in production.
+- PR #202 merged the strict external-cleanup completion semantics: `provider_managed` is a location marker and cannot complete a deletion request. PRs through #219 implemented and tested the encrypted external registry, fail-closed recovery controls, backfill/replay flow, bounded diagnostics, and fictional transactional logical-restore simulation.
+- Production is running merge `6f6c59330d94d84b1fc3bc63fb76d8830d3c8644`.
+- Migrations through `20260903183915_privacy_deletion_registry_operational_completeness` are applied in production.
 - The conversation ledger is append-only. `service_role` has SELECT and INSERT only. Browser roles and PUBLIC have no table privileges. RLS is enabled and forced with no policies.
 - The fresh fictional post-ledger deletion rehearsal passed the CaseLoad Select database, application, Storage, authorization, idempotency, tenant-isolation, append-only, pending-message, and expiry-invocation checks recorded in `deletion-flow-verification.md`.
 - After deployment of `20260903011450`, a second fictional production verification ran entirely inside one rollback-only transaction. It confirmed that `provider_managed` is rejected as completion evidence and leaves the request pending; a complete/not-applicable disposition closes the request idempotently; Messenger-style direct identifiers and content are removed from the screened lead, conversation event, channel session, unconfirmed inquiry, and processed-message claim; suppression prevents those Meta-derived operational copies from being recreated; and rollback left zero fixture rows. No external provider send or deletion was attempted.
 
-The live Messenger and Instagram rehearsals passed, and both continuous local v2 clips passed content and technical verification. Remaining messaging work is limited to the live Meta draft cleanup, immediate pre-upload hash and playback checks, final draft evidence, and Adriano's approved submission action. The strict completion-semantics and Meta-derived CaseLoad Select operational-copy gates are closed. Final submission remains blocked by the backup/registry, privacy-counsel, public-copy, and action-time submission gates described below.
+The live Messenger and Instagram rehearsals passed, and both continuous local v2 clips passed content and technical verification. Remaining messaging work is limited to the live Meta draft cleanup, immediate pre-upload hash and playback checks, final draft evidence, and Adriano's approved submission action. Final submission remains blocked by the current-registry audit/production activation closeout, privacy-counsel approval, public-copy reconciliation, and action-time submission gates described below.
 
 ## Authority and scope
 
@@ -35,6 +37,11 @@ These are the active files for the resubmission:
 2. `RUNBOOK_Resubmission_v2.md`: operator sequence and stop gates.
 3. `screencasts/SHOTLIST_v2.md`: recording script and clip QA.
 4. `Reviewer_Instructions_Paste_v2.md`: text for the reviewer-instructions field.
+5. `FINAL_META_SUBMISSION_INVENTORY_v2.md`: final package and upload inventory.
+6. `META_READINESS_CLOSEOUT_2026-09-04.md`: current Meta-only gate ledger.
+7. `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md`: counsel-dependent public-copy decisions.
+8. `deletion-flow-verification.md`: append-only engineering evidence.
+9. `../privacy/PRIVACY_COUNSEL_APPROVAL_REQUEST.md`: unsent counsel dossier.
 
 `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, and `screencasts/README.md` are first-submission archives. Do not paste or execute them for this resubmission.
 
@@ -106,13 +113,13 @@ If Meta displays a dependency or a different Instagram permission label, capture
 
 ## Pre-submission blocker: deletion promise and conversation ledger
 
-Adriano selected controlled, irreversible redaction as the resolution. PRs #198 and #199 shipped the service-only operation and production migration. PR #202 tightened completion, PR #203 documented the restore/replay boundary, and PR #204 aligned the release evidence and public wording. The September 2026 fictional production rehearsal and the post-`20260903011450` rollback-only production verification established the tested CaseLoad Select controls. Whether the retained fields and available joins are non-identifying remains a counsel decision.
+Adriano selected controlled, irreversible redaction as the resolution. The production system now includes the service-only operation, strict completion semantics, encrypted external registry, historical backfill, controlled replay, and fail-closed recovery circuit. PR #219 added a passing fictional transactional logical-restore simulation. Whether the retained fields and available joins are non-identifying remains a counsel decision.
 
-The strict-completion gate and the Meta-derived CaseLoad Select operational-copy gate are now closed. The blocker remains open for the Meta-relevant gates recorded in the runbook: account-specific backup expiry evidence; an external durable deletion registry and a restore procedure that blocks operational access until replay is verified; privacy-counsel approval of the retained audit envelope, available joins, suppression/tombstone treatment, and three-year period; and final confirmation that the public deletion wording is accurate and supportable after those controls close. The Messenger and Instagram flows may be rehearsed and recorded after the production send gates pass. The legacy HighLevel disposition and Resend, HighLevel, or Supabase support responses remain separate privacy-compliance follow-up work and do not block Meta submission.
+The strict-completion gate and the tested Meta-derived CaseLoad Select operational-copy gate are closed. The remaining technical blocker is the current-registry audit, final fictional production end-to-end verification, and activation/open postflight; production remains locked. Privacy-counsel approval and the public-copy decisions in `PUBLIC_COPY_RECONCILIATION_MATRIX_2026-09-04.md` also remain open. Meta support evidence is conditional only if counsel or the live review form requires Meta-side disposition proof. The legacy HighLevel work and Resend, HighLevel, or Supabase support responses remain separate and do not block Meta submission.
 
 ## Remaining sequence
 
-1. Close the remaining backup/registry, privacy-counsel, and public-copy gates recorded above.
+1. Close the current-registry audit/activation, privacy-counsel, and public-copy gates recorded above.
 2. Inventory the live Meta draft. Remove unsupported and approved permissions one row at a time.
 3. Recheck the documented clip hashes, attach only the matching v2 clips, and play each completely in Meta's preview.
 4. Re-review and paste the then-current v2 reviewer instructions, verify the public URLs signed out, and preserve a final draft screenshot.
@@ -130,9 +137,10 @@ The strict-completion gate and the Meta-derived CaseLoad Select operational-copy
 - [x] The controlled-redaction resolution is shipped and the post-ledger fictional deletion rehearsal is recorded as passed for the tested CaseLoad Select stores and controls.
 - [x] `provider_managed` alone cannot mark external cleanup complete or produce a successful completion notice.
 - [x] The deployed deletion path removes direct identifiers and message content from the tested Meta-derived CaseLoad Select operational copies.
-- [ ] Account-specific backup expiry, an external durable deletion registry, and a fail-closed restore/replay procedure are verified.
+- [x] The external encrypted registry, backfill/replay flow, and fictional transactional logical-restore simulation are verified within their recorded boundaries.
+- [ ] The bounded current-registry audit, final fictional production end-to-end verification, and activation/open postflight are complete.
 - [ ] Privacy counsel approves the retained audit envelope, available joins, and three-year period.
-- [ ] Public deletion wording is approved as accurate and supportable after the backup/registry and counsel gates close.
+- [ ] Public deletion wording is approved as accurate and supportable after the current-registry audit/activation and counsel gates close.
 - [ ] Live draft contains only the two source-supported messaging permissions.
 - [ ] The three approved scopes are absent.
 - [ ] Reviewer instructions use the exact live Instagram permission label.

@@ -251,7 +251,10 @@ Supabase's post-DDL security advisor reported no new warning tied to the privacy
 
 This closes the strict completion-semantics and Meta-derived CaseLoad Select operational-copy gates only. It does not close backup and restore replay, privacy-counsel review, public-copy reconciliation, provider-account follow-up, or final Meta submission controls.
 
-### Meta-relevant gate status: submission remains blocked
+### Meta-relevant gate status recorded on 2026-09-03
+
+This snapshot is preserved as historical evidence and is superseded by the
+2026-09-04 sections below.
 
 1. **Completion semantics, passed:** production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` and migration `20260903011450` were verified. A `provider_managed` marker alone cannot complete external cleanup or produce a successful completion summary.
 2. **Meta-derived operational copies, passed:** the final rollback-only fictional verification proved that the deployed path removes the tested direct identifiers and message content from CaseLoad Select operational copies derived from Facebook Messenger intake. This does not claim deletion from Meta's systems.
@@ -287,17 +290,18 @@ The logical restore emitted warnings for Supabase-managed `pg_cron`, Realtime, a
 
 **Rehearsal conclusion:** replay is idempotent and effective when an outstanding request is supplied from outside the restored database. Automatic replay is not implemented because the only current tombstone is part of the database being restored. Before release, completed and pending deletion request identifiers must be durably retained outside the database backup boundary, and the production restore runbook must block operational access until that external registry has been replayed and verified.
 
-**Engineering sign-off:** The shipped implementation and fictional production deletion path passed the controls listed above, including strict completion semantics and the tested Meta-derived CaseLoad Select operational copies. Final Meta submission sign-off remains withheld until the open backup and restore-replay, privacy-counsel, and public-copy reconciliation gates above are supported. Broader privacy-program follow-up remains separately open and does not control Meta App Review readiness.
+**2026-09-03 engineering sign-off:** The then-shipped implementation and fictional production deletion path passed the controls listed above, including strict completion semantics and the tested Meta-derived CaseLoad Select operational copies. The registry/restore statement here is historical and is superseded by the 2026-09-04 evidence below. Privacy-counsel and public-copy gates remain open.
 
 ### Candidate automated restore/replay simulation: 2026-09-04
 
-**Status:** Passed on PR #219 candidate head
-`b5976a7097b421866a2be9d52aa6966af22d4a0b`. The GitHub real-Postgres job
-`101089004431` passed 33 tests, including the dedicated transactional
-restore/replay rehearsal; the full Vitest suite, typecheck, ESLint, remaining
-required checks, and both Vercel previews also passed. This candidate is not
-yet merged or deployed, so the release gate remains open pending the normal
-DR-109 merge and post-deployment verification.
+**Status:** Passed and merged. The code/test candidate head was
+`b5976a7097b421866a2be9d52aa6966af22d4a0b`; the final reviewed documentation
+head was `1ea08ac607c4ad9ee42de219df46ff3f68829177`. The authoritative final-head
+GitHub real-Postgres job `101090234475` passed 33 tests, including the dedicated
+transactional restore/replay rehearsal; the full Vitest suite, typecheck,
+ESLint, remaining required checks, and both Vercel previews also passed. PR
+#219 merged as `6f6c59330d94d84b1fc3bc63fb76d8830d3c8644`, and both Git-integrated
+production deployments for that exact merge completed successfully.
 
 The rehearsal ran only against the fresh local Supabase/Postgres Docker stack
 created by GitHub CI. It proved the connection was numeric-loopback and
@@ -344,3 +348,21 @@ restore simulation**. It is not a managed Supabase backup or PITR restore, does
 not prove provider backup expiry or cloud disaster recovery, and does not
 represent the in-memory test adapter as externally durable. Production data
 and provider cleanup state were not touched.
+
+### Post-PR #219 production closeout state
+
+Read-only aggregate verification after deployment shows the production database
+locked and current, with the 222-entry migration ledger unchanged at tip
+`20260903183915`. The controlled replay reconciliation remains linked and
+complete; the two tested records remain redacted in CaseLoad Select. Meta
+provider disposition remains pending for both records, with zero complete and
+zero completion timestamps.
+
+The earlier initial-backfill registry-audit action now fails closed at bounded
+stage `key_shape` because it recognizes only the initial-backfill namespaces and
+the completed replay added further legitimate registry namespaces. This is not
+evidence of plaintext exposure or a redaction reversal, but it prevents final
+registry attestation. The remaining technical gate is a narrow current-registry
+audit followed by final fictional end-to-end verification and controlled
+production activation/open postflight. No Meta submission or provider-completion
+claim is authorized while that gate remains open.
