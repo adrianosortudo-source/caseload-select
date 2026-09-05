@@ -1,13 +1,20 @@
 /**
  * Voice front-desk branch classification.
  *
- * The GHL agent emits a coarse marker (`RECORD_BRANCH: NEW_MATTER | OTHER |
- * UNCLEAR`) and the app independently classifies the transcript. The app is
- * authoritative for persistence and notification routing; the marker is only
- * one input.
+ * Current GHL agents write a structured call intent silently. Older agents
+ * emitted a coarse transcript marker (`RECORD_BRANCH: NEW_MATTER | OTHER |
+ * UNCLEAR`). The app independently classifies caller speech in either case.
+ * Structured intent is preferred; the legacy marker remains a compatibility
+ * input until every live agent has migrated.
  */
 
 export type VoiceMacroBranch = 'NEW_MATTER' | 'OTHER' | 'UNCLEAR';
+
+export type VoiceStructuredIntent =
+  | 'new_legal_help'
+  | 'existing_client'
+  | 'admin_business'
+  | 'unknown_recovery';
 
 export type VoiceFineBranch =
   | 'new_matter'
@@ -16,6 +23,7 @@ export type VoiceFineBranch =
   | 'court_or_counsel'
   | 'vendor'
   | 'wrong_number'
+  | 'caller_declined'
   | 'unclear';
 
 export type VoiceCallbackBranch = Exclude<VoiceFineBranch, 'new_matter'>;
@@ -28,6 +36,7 @@ export interface VoiceBranchMarker {
 }
 
 export interface VoiceBranchDecision {
+  structuredIntent: VoiceStructuredIntent | null;
   marker: VoiceBranchMarker | null;
   classifierBranch: VoiceFineBranch;
   route: 'new_matter' | 'callback';
@@ -38,23 +47,66 @@ export interface VoiceBranchDecision {
   reason: string;
 }
 
+/**
+ * Routing and urgency are about the caller's situation, never the agent's
+ * scripted language. GHL transcripts normally label speakers; when they do,
+ * discard bot/agent lines before matching. If a provider gives us unlabeled
+ * text we keep it rather than silently losing a possible urgent request.
+ */
+export function callerSpeechOnly(transcript: string): string {
+  const lines = (transcript ?? '').split(/\r?\n/).filter(Boolean);
+  const callerLines = lines.filter((line) => /^(human|caller|user|client)\s*:/i.test(line));
+  if (callerLines.length === 0) return transcript ?? '';
+  return callerLines
+    .map((line) => line.replace(/^(human|caller|user|client)\s*:\s*/i, ''))
+    .join('\n');
+}
+
 const MARKER_RE = /\bRECORD_BRANCH\s*:\s*(NEW_MATTER|OTHER|UNCLEAR)\b/i;
 
+const STRUCTURED_INTENT_ALIASES: Record<string, VoiceStructuredIntent> = {
+  new_legal_help: 'new_legal_help',
+  new_matter: 'new_legal_help',
+  legal_help: 'new_legal_help',
+  existing_client: 'existing_client',
+  current_client: 'existing_client',
+  admin_business: 'admin_business',
+  administrative: 'admin_business',
+  admin: 'admin_business',
+  unknown_recovery: 'unknown_recovery',
+  unknown: 'unknown_recovery',
+  unclear: 'unknown_recovery',
+};
+
+/** Normalize the constrained GHL field while rejecting unresolved template
+ * placeholders and unrecognized free text. */
+export function parseVoiceStructuredIntent(value: string | undefined | null): VoiceStructuredIntent | null {
+  const normalized = (value ?? '')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_');
+  if (!normalized || /^\{\{[^{}]+\}\}$/.test(normalized)) return null;
+  return STRUCTURED_INTENT_ALIASES[normalized] ?? null;
+}
+
 const URGENCY_PATTERNS: Array<{ label: string; re: RegExp }> = [
-  { label: 'court', re: /\bcourt\b/i },
-  { label: 'judge', re: /\bjudge\b/i },
-  { label: 'clerk', re: /\bclerk\b/i },
   { label: 'today', re: /\btoday\b/i },
   { label: 'tomorrow', re: /\btomorrow\b/i },
-  { label: 'deadline', re: /\bdeadline\b/i },
-  { label: 'served papers', re: /\bserved (?:with )?papers\b/i },
-  { label: 'summons', re: /\bsummons\b/i },
-  { label: 'subpoena', re: /\bsubpoena\b/i },
-  { label: 'hearing', re: /\bhearing\b/i },
-  { label: 'emergency', re: /\bemergency\b/i },
+  { label: 'tonight', re: /\btonight\b/i },
+  { label: 'within 24 hours', re: /\bwithin (?:one|1|twenty[- ]four|24) hours?\b/i },
+  { label: 'same-day period', re: /\bthis (?:morning|afternoon|evening)\b/i },
+  { label: 'immediate', re: /\b(?:right now|immediately)\b/i },
+  { label: 'emergency', re: /\b(?:an |a |it is |it's |this is )?emergency\b/i },
 ];
 
+const NEGATED_URGENCY_CLAUSE_RE =
+  /\b(?:no|not|isn't|is not|aren't|are not|without)\b[^.!?\n]{0,50}\b(?:urgent|emergency|deadline|due|hearing|court|today|tomorrow|tonight)\b[^.!?\n]*/gi;
+
 const WRONG_NUMBER_RE = /\b(wrong number|wrong person|not who i meant|called by mistake|mistake)\b/i;
+// A refusal of further contact is a recovery disposition. Refusing SMS alone
+// is only a channel-consent decision and must never override a legal-help
+// classification.
+const CALLER_DECLINED_RE = /\b(do not call|don't call|do not contact|don't contact|stop calling|remove me)\b/i;
 
 const VENDOR_RE =
   /\b(vendor|sales|sell you|marketing services|seo|website services|lead generation|advertising|partnership opportunity|supplier|robocall)\b/i;
@@ -84,14 +136,19 @@ export function detectVoiceUrgency(transcript: string): {
   urgency: VoiceUrgency;
   triggers: string[];
 } {
-  const text = transcript ?? '';
+  // Remove explicitly negated urgency clauses before matching. This keeps
+  // statements such as "No deadline that I know of" from becoming urgent,
+  // while a separate caller statement such as "The hearing is tomorrow"
+  // still supplies affirmative evidence.
+  const text = callerSpeechOnly(transcript).replace(NEGATED_URGENCY_CLAUSE_RE, ' ');
   const triggers = URGENCY_PATTERNS.filter((p) => p.re.test(text)).map((p) => p.label);
   return { urgency: triggers.length > 0 ? 'urgent' : 'normal', triggers };
 }
 
 export function classifyVoiceBranchHeuristic(transcript: string): VoiceFineBranch {
-  const text = (transcript ?? '').replace(MARKER_RE, ' ');
+  const text = callerSpeechOnly(transcript).replace(MARKER_RE, ' ');
   if (!text.trim()) return 'unclear';
+  if (CALLER_DECLINED_RE.test(text)) return 'caller_declined';
   if (WRONG_NUMBER_RE.test(text)) return 'wrong_number';
   if (COURT_OR_COUNSEL_RE.test(text)) return 'court_or_counsel';
   if (VENDOR_RE.test(text)) return 'vendor';
@@ -107,6 +164,7 @@ export function classifyVoiceBranchHeuristic(transcript: string): VoiceFineBranc
 export function reconcileVoiceBranch(args: {
   transcript: string;
   classifierBranch?: VoiceFineBranch;
+  structuredCallIntent?: string | null;
   /**
    * Backward compatibility: while GHL is still transitioning from the v2.x
    * prompt, clear new-matter calls without a marker may continue to intake.
@@ -115,13 +173,97 @@ export function reconcileVoiceBranch(args: {
    */
   strictMissingMarker?: boolean;
 }): VoiceBranchDecision {
+  const structuredIntent = parseVoiceStructuredIntent(args.structuredCallIntent);
   const marker = extractVoiceBranchMarker(args.transcript);
   const classifierBranch = args.classifierBranch ?? classifyVoiceBranchHeuristic(args.transcript);
   const { urgency, triggers } = detectVoiceUrgency(args.transcript);
 
+  if (structuredIntent) {
+    if (structuredIntent === 'new_legal_help') {
+      if (classifierBranch === 'new_matter') {
+        return {
+          structuredIntent,
+          marker,
+          classifierBranch,
+          route: 'new_matter',
+          callbackBranch: null,
+          urgency,
+          urgencyTriggers: triggers,
+          operatorReview: marker !== null && marker.value !== 'NEW_MATTER',
+          reason: marker !== null && marker.value !== 'NEW_MATTER'
+            ? 'structured_new_matter_legacy_marker_conflict'
+            : 'structured_and_classifier_new_matter',
+        };
+      }
+      return {
+        structuredIntent,
+        marker,
+        classifierBranch,
+        route: 'callback',
+        callbackBranch: 'unclear',
+        urgency,
+        urgencyTriggers: triggers,
+        operatorReview: true,
+        reason: 'structured_new_matter_classifier_non_intake',
+      };
+    }
+
+    if (structuredIntent === 'unknown_recovery') {
+      return {
+        structuredIntent,
+        marker,
+        classifierBranch,
+        route: 'callback',
+        callbackBranch: classifierBranch === 'new_matter' ? 'unclear' : classifierBranch,
+        urgency,
+        urgencyTriggers: triggers,
+        operatorReview: true,
+        reason: classifierBranch === 'new_matter'
+          ? 'structured_recovery_classifier_new_matter'
+          : 'structured_recovery',
+      };
+    }
+
+    const expectedBranch: VoiceFineBranch = structuredIntent === 'existing_client'
+      ? 'existing_client'
+      : 'admin';
+    if (classifierBranch === 'new_matter') {
+      return {
+        structuredIntent,
+        marker,
+        classifierBranch,
+        route: 'callback',
+        callbackBranch: 'unclear',
+        urgency,
+        urgencyTriggers: triggers,
+        operatorReview: true,
+        reason: 'structured_non_intake_classifier_new_matter',
+      };
+    }
+    const callbackBranch = structuredIntent === 'existing_client'
+      ? 'existing_client'
+      : classifierBranch === 'court_or_counsel' || classifierBranch === 'vendor' || classifierBranch === 'wrong_number'
+        ? classifierBranch
+        : expectedBranch;
+    return {
+      structuredIntent,
+      marker,
+      classifierBranch,
+      route: 'callback',
+      callbackBranch,
+      urgency,
+      urgencyTriggers: triggers,
+      operatorReview: classifierBranch !== expectedBranch,
+      reason: classifierBranch === expectedBranch
+        ? 'structured_and_classifier_non_intake'
+        : 'structured_non_intake_classifier_mismatch',
+    };
+  }
+
   if (marker?.value === 'NEW_MATTER') {
     if (classifierBranch === 'new_matter') {
       return {
+        structuredIntent: null,
         marker,
         classifierBranch,
         route: 'new_matter',
@@ -133,6 +275,7 @@ export function reconcileVoiceBranch(args: {
       };
     }
     return {
+      structuredIntent: null,
       marker,
       classifierBranch,
       route: 'callback',
@@ -147,6 +290,7 @@ export function reconcileVoiceBranch(args: {
   if (marker?.value === 'OTHER' || marker?.value === 'UNCLEAR') {
     if (classifierBranch === 'new_matter') {
       return {
+        structuredIntent: null,
         marker,
         classifierBranch,
         route: 'callback',
@@ -158,6 +302,7 @@ export function reconcileVoiceBranch(args: {
       };
     }
     return {
+      structuredIntent: null,
       marker,
       classifierBranch,
       route: 'callback',
@@ -171,6 +316,7 @@ export function reconcileVoiceBranch(args: {
 
   if (classifierBranch === 'new_matter' && !args.strictMissingMarker) {
     return {
+      structuredIntent: null,
       marker: null,
       classifierBranch,
       route: 'new_matter',
@@ -183,6 +329,7 @@ export function reconcileVoiceBranch(args: {
   }
 
   return {
+    structuredIntent: null,
     marker: null,
     classifierBranch,
     route: 'callback',
