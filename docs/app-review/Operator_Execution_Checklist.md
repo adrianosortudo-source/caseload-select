@@ -13,14 +13,14 @@ Use these active v2 files:
 
 Current release state:
 
-- PRs #191, #193, #195, #198, #199, #202, #203, and #204 are merged.
+- PRs #191, #193, #195, #198, #199, #202, #203, #204, and #223 are merged.
 - Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` is READY.
 - Migrations through `20260903011450_privacy_provider_evidence_required` are applied and verified.
 - Option B is shipped.
 - The post-ledger and strict-completion production verifications passed, including Meta-derived CaseLoad Select operational-copy checks.
-- The application-level registry and restore/replay controls are complete. Adriano approved the candidate public copy and current controller wording as owner, confirmed the past-12-month national-security answer after reasonable review, selected `None of the above` for undocumented public-authority processes, and waived external privacy-counsel review. Remaining Meta gates are the exact public-copy merge and verification, live Meta draft and upload checks, and Adriano's approved submission action.
+- The application-level registry and restore/replay controls are complete. Adriano approved the public copy and current controller wording as owner, confirmed the past-12-month national-security answer after reasonable review, selected `None of the above` for undocumented public-authority processes, and waived external privacy-counsel review. PR #223 merged the approved copy, and the three canonical public URLs passed signed-out verification. Remaining Meta gates are the live Meta draft and upload checks and Adriano's approved submission action.
 
-PRE-SUBMISSION BLOCKER: Controlled, irreversible redaction, strict external-cleanup semantics, and the application-level recovery controls are deployed and verified for the tested CaseLoad Select operational copies. This does not prove external-provider deletion, managed-backup expiry, or an independent legal assessment of the retained audit envelope. Do not submit the Meta draft until the public-copy release, live Meta Data Handling and permission values, upload checks, and action-time approval gates close.
+PRE-SUBMISSION BLOCKER: Controlled, irreversible redaction, strict external-cleanup semantics, and the application-level recovery controls are deployed and verified for the tested CaseLoad Select operational copies. This does not prove external-provider deletion, managed-backup expiry, or an independent legal assessment of the retained audit envelope. The public-copy release gate is closed. Do not submit the Meta draft until the live Meta Data Handling and permission values, upload checks, and action-time approval gates close.
 
 The configured test assets use the DRG production workspace row, not a segregated test tenant. Use a fresh fictional conversation and frame the brief so no unrelated lead data is visible. Never resubmit the approved WhatsApp scopes or `public_profile`. Stop for Adriano's action-time approval before the final submission control.
 

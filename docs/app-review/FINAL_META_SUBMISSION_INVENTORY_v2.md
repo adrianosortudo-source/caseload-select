@@ -48,9 +48,9 @@ Treat `Phase11_Submission_Package.md`, `Reviewer_Instructions_Paste.md`, and `sc
 
 Read-only HTTP checks on 2026-09-04 returned status 200 for:
 
-- `https://app.caseloadselect.ca/privacy`
-- `https://app.caseloadselect.ca/terms`
-- `https://app.caseloadselect.ca/data-deletion`
+- `https://caseloadselect.ca/privacy`
+- `https://caseloadselect.ca/terms`
+- `https://caseloadselect.ca/data-deletion`
 
 Before submission, re-open each URL in a signed-out session and confirm the rendered copy matches the merged source and exposes no operator-only controls.
 
@@ -82,11 +82,11 @@ The following Meta-relevant checks must be closed before final submission:
 - [x] PR #219's fictional real-Postgres transactional logical-restore simulation passed immediate-relock, authorization, encrypted-intent, applied replay, idempotent replay, provider-pending, and no-provider-call assertions. This is not a managed backup/PITR or provider-expiry rehearsal.
 - [x] The bounded current-registry audit and controlled production activation/open postflight passed. PR #219 remains the final fictional end-to-end exercise; closeout created no persistent production fixture.
 - [x] Adriano waived external privacy-counsel review, accepted the documented retained-envelope and join risks, and approved the candidate public wording as owner. This is recorded in `../privacy/OWNER_PRIVACY_AND_META_DATA_HANDLING_DECISION_2026-09-04.md` and is not counsel approval.
-- [ ] Merge the exact owner-approved public-copy PR only with Adriano's explicit approval and verify the released pages signed out.
+- [x] PR #223 merged with Adriano's explicit approval. Signed-out checks on 2026-09-04 returned HTTP 200 for the three canonical public URLs above, and the released privacy and deletion pages contain the owner-approved controlled-redaction, audit-record, recovery-control, and provider-boundary wording.
 - [x] The owner's Meta Data Handling decisions are recorded: `No` for the past-12-month national-security disclosure question, `None of the above` for the undocumented public-authority processes, and acceptance of the current controller wording.
 - [ ] Apply those exact decisions in the live Meta form and confirm Data Handling no longer shows `Needs your review`. Do not submit the four pre-filled positive process selections.
 
-The tested CaseLoad Select redaction and recovery controls are materially implemented, audited, and activated. Candidate public-copy source changes are owner-approved but not merged or released. Final submission remains blocked by the exact public-copy merge and signed-out verification, live Meta draft and Data Handling changes, upload checks, and Adriano's action-time approval. No evidence claims deletion from Meta's own systems, and the two Meta provider dispositions remain pending.
+The tested CaseLoad Select redaction and recovery controls are materially implemented, audited, and activated. The owner-approved public copy is merged and verified at the canonical public URLs. Final submission remains blocked by the live Meta draft and Data Handling changes, upload checks, and Adriano's action-time approval. No evidence claims deletion from Meta's own systems, and the two Meta provider dispositions remain pending.
 
 ### Separate follow-up, not a Meta submission gate
 
