@@ -14,7 +14,7 @@ Use these active v2 files:
 Current release state:
 
 - PRs #191, #193, #195, #198, #199, #202, #203, #204, and #223 are merged.
-- Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` is READY.
+- Historical verification baseline `a05520e3b9d08d82bd81c42779907cbd2c807757` was READY. The active canonical Meta deployment is established by the current merged release and must be verified at the deployment gate before callback changes.
 - Migrations through `20260903011450_privacy_provider_evidence_required` are applied and verified.
 - Option B is shipped.
 - The post-ledger and strict-completion production verifications passed, including Meta-derived CaseLoad Select operational-copy checks.
