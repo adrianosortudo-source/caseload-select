@@ -670,12 +670,16 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
          values ($1, 'facebook', $2, $3)`,
         [firmId, redactFirstMid, redactFirstSender],
       );
-      await waitForAdvisoryLock(claimPid);
-      await redactConn.query("commit");
-      await expect(waitingClaim).rejects.toMatchObject({
+      // Attach the expected-rejection handler while the claim is still blocked.
+      // Otherwise a fast runner can reject the query after COMMIT but before the
+      // later assertion is registered, which Vitest reports as an unhandled error.
+      const claimRejected = expect(waitingClaim).rejects.toMatchObject({
         code: "P0001",
         message: "privacy-suppressed channel subject cannot be claimed",
       });
+      await waitForAdvisoryLock(claimPid);
+      await redactConn.query("commit");
+      await claimRejected;
     } finally {
       await claimConn.query("rollback").catch(() => undefined);
       await redactConn.query("rollback").catch(() => undefined);
