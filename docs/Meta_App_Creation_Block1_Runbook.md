@@ -102,8 +102,8 @@ This must happen BEFORE Meta can verify the webhook URLs in Phases E and F.
 | `META_INSTAGRAM_VERIFY_TOKEN` | `[stored in Vercel production environment; never commit]` | Production |
 
 3. Click **Save** for each.
-4. Trigger a redeploy: Deployments tab → most recent deployment → **Redeploy** → **Redeploy** in the confirmation dialog. Takes ~2 minutes.
-5. Wait for the redeploy to land before continuing to Phase E.
+4. Activate the new values through the repository's production path: open a narrow PR against `main`, wait for every required check, obtain approval to merge that specific PR, and merge it. The merged `main` deployment activates the new Production values. Do not use a direct Vercel production redeploy.
+5. Wait for the merged deployment to become Ready before continuing to Phase E.
 
 While waiting, you can start Phase E by adding the products (skip the webhook verification steps until the redeploy completes).
 
