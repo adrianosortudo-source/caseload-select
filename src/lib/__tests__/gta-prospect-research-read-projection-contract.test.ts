@@ -27,13 +27,25 @@ describe("GTA prospect research operator read projection contract", () => {
     expect(returnContract).not.toMatch(/contact|email|phone|outreach|crm|canonical_record|source_record_sha256/i);
   });
 
-  it("keeps the route server-only, operator-gated, and explicit about fixture cutover", () => {
+  it("keeps the route server-only, operator-gated, and explicit about hybrid fallback semantics", () => {
     const route = readFileSync(resolve(process.cwd(), "src/app/admin/prospects/reconciled/route.ts"), "utf8");
+    const sourceLabels = readFileSync(
+      resolve(process.cwd(), "src/app/admin/prospects/reconciled-prospects-source.ts"),
+      "utf8",
+    );
     expect(route).toContain("getOperatorSession");
     expect(route).toContain("{ status: 401 }");
     expect(route).toContain("listGtaProspectResearchForOperator");
-    expect(route).toContain("fixture_seed_incomplete");
+    expect(route.indexOf("await getOperatorSession()")).toBeLessThan(
+      route.indexOf("const records = await listGtaProspectResearchForOperator()"),
+    );
+    expect(route).toContain("records: [...records, ...missingFixtures].sort(compareRecords)");
+    expect(route).toContain('source: merged.missingFixtureCount > 0 ? "hybrid" : "ledger"');
+    expect(route).toContain('if (records.length === 0) return fixtureResponse("ledger_empty")');
     expect(route).toContain("ledger_unavailable");
-    expect(route).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|createClient|\.from\(/);
+    expect(route).not.toContain("fixture_seed_incomplete");
+    expect(sourceLabels).toContain('ReconciledProspectSource = "fixture" | "ledger" | "hybrid"');
+    expect(sourceLabels).toContain('ReconciledProspectFallbackReason = "ledger_unavailable" | "ledger_empty"');
+    expect(route).not.toMatch(/SUPABASE_SERVICE_ROLE_KEY|service_role|createClient|\.from\(/);
   });
 });

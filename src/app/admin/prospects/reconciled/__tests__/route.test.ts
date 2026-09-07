@@ -48,31 +48,66 @@ describe("reviewed GTA prospects route", () => {
     expect(await response.json()).toMatchObject({
       records: RECONCILED_GTA_PROSPECTS,
       source: "fixture",
+      sourceCounts: { ledger: 0, fixture: 20 },
       fallbackReason: "ledger_unavailable",
     });
   });
 
-  it("does not cut over or mix sources when the authorized fixture seed is incomplete", async () => {
+  it("uses the fixture-only fallback when the ledger has no records", async () => {
     h.state.session = { role: "operator" };
-    h.state.records = RECONCILED_GTA_PROSPECTS.slice(0, -1);
     const response = await GET();
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.source).toBe("fixture");
-    expect(body.fallbackReason).toBe("fixture_seed_incomplete");
+    expect(body.sourceCounts).toEqual({ ledger: 0, fixture: 20 });
+    expect(body.fallbackReason).toBe("ledger_empty");
     expect(body.records).toEqual(RECONCILED_GTA_PROSPECTS);
   });
 
-  it("uses only the ledger after the complete fixture seed is present", async () => {
+  it("shows nonempty ledger records alongside only the missing fixtures", async () => {
     h.state.session = { role: "operator" };
-    h.state.records = [...RECONCILED_GTA_PROSPECTS, { ...RECONCILED_GTA_PROSPECTS[0], id: "later-reviewed-firm", firmName: "Later reviewed firm" }];
+    const ledgerOverride = { ...RECONCILED_GTA_PROSPECTS[0], firmName: "Aastha Lawyers from ledger" };
+    const ledgerAddition = { ...RECONCILED_GTA_PROSPECTS[0], id: "later-reviewed-firm", firmName: "Later reviewed firm" };
+    h.state.records = [ledgerAddition, ledgerOverride];
+    const response = await GET();
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.source).toBe("hybrid");
+    expect(body.sourceCounts).toEqual({ ledger: 2, fixture: 19 });
+    expect(body.fallbackReason).toBeUndefined();
+    expect(body.records).toHaveLength(21);
+    expect(body.records.filter((record: { id: string }) => record.id === RECONCILED_GTA_PROSPECTS[0].id)).toHaveLength(1);
+    expect(body.records.find((record: { id: string }) => record.id === RECONCILED_GTA_PROSPECTS[0].id).firmName).toBe("Aastha Lawyers from ledger");
+    expect(body.records.map((record: { firmName: string }) => record.firmName)).toEqual(
+      [...body.records.map((record: { firmName: string }) => record.firmName)].sort((left, right) => left.localeCompare(right, "en-CA", { sensitivity: "base" })),
+    );
+  });
+
+  it("shows a 103-record ledger batch alongside the 20 disjoint fixtures", async () => {
+    h.state.session = { role: "operator" };
+    h.state.records = Array.from({ length: 103 }, (_, index) => ({
+      ...RECONCILED_GTA_PROSPECTS[0],
+      id: `imported-firm-${String(index + 1).padStart(3, "0")}`,
+      firmName: `Imported firm ${String(index + 1).padStart(3, "0")}`,
+    }));
+    const response = await GET();
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.source).toBe("hybrid");
+    expect(body.sourceCounts).toEqual({ ledger: 103, fixture: 20 });
+    expect(body.records).toHaveLength(123);
+    expect(new Set(body.records.map((record: { id: string }) => record.id)).size).toBe(123);
+  });
+
+  it("uses only ledger rows after every fixture key is represented", async () => {
+    h.state.session = { role: "operator" };
+    h.state.records = [...RECONCILED_GTA_PROSPECTS].reverse();
     const response = await GET();
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.source).toBe("ledger");
-    expect(body.fallbackReason).toBeUndefined();
-    expect(body.records).toEqual(h.state.records);
-    expect(body.records.filter((record: { id: string }) => record.id === RECONCILED_GTA_PROSPECTS[0].id)).toHaveLength(1);
+    expect(body.sourceCounts).toEqual({ ledger: 20, fixture: 0 });
+    expect(body.records).toHaveLength(20);
   });
 
   it("returns a visible server error for a real ledger failure rather than concealing it as fallback", async () => {

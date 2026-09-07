@@ -4,26 +4,47 @@ import {
   GtaProspectLedgerUnavailableError,
   listGtaProspectResearchForOperator,
 } from "@/lib/gta-prospect-research-reader";
+import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
 import { RECONCILED_GTA_PROSPECTS } from "../reconciled-prospects";
+import type {
+  ReconciledProspectFallbackReason,
+  ReconciledProspectSource,
+  ReconciledProspectSourceCounts,
+} from "../reconciled-prospects-source";
 
 export const dynamic = "force-dynamic";
 
 type RecordsResponse = {
-  records: readonly (typeof RECONCILED_GTA_PROSPECTS)[number][];
-  source: "fixture" | "ledger";
-  fallbackReason?: "ledger_unavailable" | "fixture_seed_incomplete";
+  records: readonly ReconciledGtaProspect[];
+  source: ReconciledProspectSource;
+  sourceCounts: ReconciledProspectSourceCounts;
+  fallbackReason?: ReconciledProspectFallbackReason;
 };
 
-function fixtureResponse(fallbackReason: NonNullable<RecordsResponse["fallbackReason"]>) {
+function fixtureResponse(fallbackReason: ReconciledProspectFallbackReason) {
   return NextResponse.json<RecordsResponse>(
-    { records: RECONCILED_GTA_PROSPECTS, source: "fixture", fallbackReason },
+    {
+      records: RECONCILED_GTA_PROSPECTS,
+      source: "fixture",
+      sourceCounts: { ledger: 0, fixture: RECONCILED_GTA_PROSPECTS.length },
+      fallbackReason,
+    },
     { headers: { "Cache-Control": "private, no-store" } },
   );
 }
 
-function coversEveryFixtureRecord(records: readonly { id: string }[]): boolean {
+function compareRecords(left: ReconciledGtaProspect, right: ReconciledGtaProspect): number {
+  return left.firmName.localeCompare(right.firmName, "en-CA", { sensitivity: "base" })
+    || left.id.localeCompare(right.id, "en-CA");
+}
+
+function mergeLedgerAndFixtureRecords(records: readonly ReconciledGtaProspect[]) {
   const ledgerKeys = new Set(records.map((record) => record.id));
-  return ledgerKeys.size === records.length && RECONCILED_GTA_PROSPECTS.every((record) => ledgerKeys.has(record.id));
+  const missingFixtures = RECONCILED_GTA_PROSPECTS.filter((record) => !ledgerKeys.has(record.id));
+  return {
+    records: [...records, ...missingFixtures].sort(compareRecords),
+    missingFixtureCount: missingFixtures.length,
+  };
 }
 
 /** Operator-gated read endpoint for the reviewed firm-expansion records. */
@@ -34,9 +55,15 @@ export async function GET() {
 
   try {
     const records = await listGtaProspectResearchForOperator();
-    if (!coversEveryFixtureRecord(records)) return fixtureResponse("fixture_seed_incomplete");
+    if (records.length === 0) return fixtureResponse("ledger_empty");
+
+    const merged = mergeLedgerAndFixtureRecords(records);
     return NextResponse.json<RecordsResponse>(
-      { records, source: "ledger" },
+      {
+        records: merged.records,
+        source: merged.missingFixtureCount > 0 ? "hybrid" : "ledger",
+        sourceCounts: { ledger: records.length, fixture: merged.missingFixtureCount },
+      },
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
