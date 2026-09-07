@@ -1,0 +1,43 @@
+{
+  "schema_version": "gta-prospect-batch-003-validation-v1",
+  "report_type": "read_only_public_roster_qa",
+  "validated_commit": "1938177801d7a7c831de8378ddbf3e8a86179520",
+  "comparison_commit_pr_231": "44c844f49a5eda7a2a237a5b7706135e118b49e5",
+  "observed_at": "2026-09-07",
+  "source_policy": "first-party public web roster pages only",
+  "actions_not_performed": ["LSO automation", "CRM activity or import", "forms", "chat", "contact or outreach", "deployment", "merge"],
+  "summary": {
+    "total_records": 25,
+    "disposition_counts": {"accepted_for_staging": 22, "needs_count_review": 2, "identity_review": 1, "reject": 0},
+    "pr_231_exact_duplicate_ids": [],
+    "pr_231_exact_duplicate_count": 0,
+    "legacy_reconciliation": "unknown_no_stable_crosswalk_for_all_records"
+  },
+  "records": [
+    {"record_id":"B003-01","firm_name":"Cohen LLP","disposition":"accepted_for_staging","reasons":["First-party lawyers page supports four current lawyer roles, separated from law-clerk content."],"evidence":{"city":"Toronto","count":"4 exact current lawyers"}},
+    {"record_id":"B003-02","firm_name":"Rites Law","disposition":"accepted_for_staging","reasons":["First-party team page supports four lawyer or lawyer-mediator roles, separately labelled from clerk and student roles."],"evidence":{"city":"Toronto and North York","count":"4 exact current lawyers"}},
+    {"record_id":"B003-03","firm_name":"Ramachandran Law","disposition":"accepted_for_staging","reasons":["First-party page supports one managing lawyer and three associate lawyers."],"evidence":{"city":"Scarborough","count":"4 exact current lawyers"}},
+    {"record_id":"B003-04","firm_name":"Insight Law Professional Corporation","disposition":"accepted_for_staging","reasons":["First-party team page separates three lawyer roles from the support team."],"evidence":{"city":"Toronto","count":"3 exact current lawyers"}},
+    {"record_id":"B003-05","firm_name":"Englobe Law LLP","disposition":"accepted_for_staging","reasons":["First-party people page identifies two founding partners and one associate lawyer, separately from non-lawyer roles."],"evidence":{"city":"Toronto and North York","count":"3 exact current lawyers"}},
+    {"record_id":"B003-06","firm_name":"Jackman & Associates","disposition":"accepted_for_staging","reasons":["First-party team section identifies four lawyer roles and separately labels clerk, intake, and student roles."],"evidence":{"city":"Toronto","count":"4 exact current lawyers"}},
+    {"record_id":"B003-07","firm_name":"MacDonald Injury Lawyers","disposition":"accepted_for_staging","reasons":["First-party team page identifies one principal partner and two associate lawyers, separately from the senior law clerk."],"evidence":{"city":"Toronto","count":"3 exact current lawyers"}},
+    {"record_id":"B003-08","firm_name":"Walker Sorensen LLP","disposition":"accepted_for_staging","reasons":["First-party roster distinguishes four partners and two associates from support staff."],"evidence":{"city":"Toronto","count":"6 exact current lawyers"}},
+    {"record_id":"B003-09","firm_name":"Goldman, Spring, Kichler & Fischer LLP","disposition":"accepted_for_staging","reasons":["First-party lawyers page supports seven current partners and one associate; retired and former people are separately marked."],"evidence":{"city":"North York","count":"8 exact current lawyers"}},
+    {"record_id":"B003-10","firm_name":"Mamann, Sandaluk & Kingwell LLP","disposition":"identity_review","reasons":["The roster supports the captured lawyer-role count, but the current site footer presents the firm as Mamann Sandaluk LLP; trade/legal-name identity must be resolved before staging."],"evidence":{"city":"Toronto","count":"8 lawyer-role entries","current_site_identity":"Mamann Sandaluk LLP"}},
+    {"record_id":"B003-11","firm_name":"Jain Immigration Law Professional Corporation","disposition":"accepted_for_staging","reasons":["First-party lawyers page supports three completed lawyer profiles; the person described as LL.B. in progress is correctly excluded."],"evidence":{"city":"Toronto","count":"3 exact current lawyers"}},
+    {"record_id":"B003-12","firm_name":"Mass Tsang LLP","disposition":"needs_count_review","reasons":["The live roster indicates seven current lawyer profiles while the batch records five; the staged count is stale."],"evidence":{"city":"North York","live_count":"7 current lawyer profiles","staged_count":5}},
+    {"record_id":"B003-13","firm_name":"The Biking Lawyer LLP","disposition":"accepted_for_staging","reasons":["First-party team page expressly states that the LLP team includes four lawyers and names four people."],"evidence":{"city":"Toronto","count":"4 exact current lawyers"}},
+    {"record_id":"B003-14","firm_name":"Zwiebel & Associates Professional Corporation","disposition":"accepted_for_staging","reasons":["First-party team separates four lawyers from paralegal and staff sections."],"evidence":{"city":"North York","count":"4 exact current lawyers"}},
+    {"record_id":"B003-15","firm_name":"Neuberger & Partners LLP","disposition":"needs_count_review","reasons":["The combined lawyers, paralegals, and clerks page does not provide enough role separation to support the captured five-lawyer count without a further current review."],"evidence":{"city":"Toronto","count":"uncertain"}},
+    {"record_id":"B003-16","firm_name":"Wise Law Office","disposition":"accepted_for_staging","reasons":["First-party page has a distinct three-person lawyers group, separately headed from staff."],"evidence":{"city":"Toronto","count":"3 exact current lawyers"}},
+    {"record_id":"B003-17","firm_name":"Kormans LLP","disposition":"accepted_for_staging","reasons":["First-party page identifies five lawyer roles and separately labels staff."],"evidence":{"city":"Toronto","count":"5 exact current lawyers"}},
+    {"record_id":"B003-18","firm_name":"Carranza LLP","disposition":"accepted_for_staging","reasons":["First-party roster lists five people explicitly titled personal-injury lawyer and separates the immigration consultant."],"evidence":{"city":"Toronto","count":"5 exact current lawyers"}},
+    {"record_id":"B003-19","firm_name":"Silcoff Shacter","disposition":"accepted_for_staging","reasons":["First-party people section identifies two partners, one senior associate, and two associates."],"evidence":{"city":"Toronto","count":"5 exact current lawyers"}},
+    {"record_id":"B003-20","firm_name":"Sokoloff Lawyers","disposition":"accepted_for_staging","reasons":["First-party page presents eight named people as its team of personal-injury lawyers."],"evidence":{"city":"Toronto","count":"8 exact current lawyers"}},
+    {"record_id":"B003-21","firm_name":"Gottlieb Family Law Professional Corporation","disposition":"accepted_for_staging","reasons":["First-party lawyers page identifies one senior counsel and five associate lawyers, separately from assistants and office management."],"evidence":{"city":"Toronto","count":"6 exact current lawyers"}},
+    {"record_id":"B003-22","firm_name":"Vaturi & Cho LLP","disposition":"accepted_for_staging","reasons":["First-party team page distinguishes five lawyer roles from an immigration consultant."],"evidence":{"city":"North York","count":"5 exact current lawyers"}},
+    {"record_id":"B003-23","firm_name":"Glick Feinberg Stone LLP","disposition":"accepted_for_staging","reasons":["First-party team page identifies three partners and two lawyers before non-lawyer roles."],"evidence":{"city":"Toronto","count":"5 exact current lawyers"}},
+    {"record_id":"B003-24","firm_name":"Houser Henry & Syron LLP","disposition":"accepted_for_staging","reasons":["First-party team page separates six lawyer roles from clerks and business-team roles."],"evidence":{"city":"Toronto","count":"6 exact current lawyers"}},
+    {"record_id":"B003-25","firm_name":"Jap Ji Lawyers","disposition":"accepted_for_staging","reasons":["First-party team page identifies four people as barrister and solicitor and publishes the Etobicoke office."],"evidence":{"city":"Etobicoke","count":"4 exact current lawyers"}}
+  ]
+}
