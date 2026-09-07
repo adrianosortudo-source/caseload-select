@@ -61,6 +61,8 @@ describe("GTA prospect research reader", () => {
 
   it("fails closed on malformed data, duplicate stable keys, and authorization failures", async () => {
     await expect(listGtaProspectResearchForOperator(client([row({ roster_source_url: "not-a-url" })]))).rejects.toThrow("Invalid GTA prospect research projection");
+    await expect(listGtaProspectResearchForOperator(client([row({ observed_lawyer_count: "3" })]))).rejects.toThrow("observed_lawyer_count is invalid");
+    await expect(listGtaProspectResearchForOperator(client([row({ legacy_cluster_lawyer_count: -1 })]))).rejects.toThrow("legacy_cluster_lawyer_count is invalid");
     await expect(listGtaProspectResearchForOperator(client([row(), row()]))).rejects.toThrow("duplicate source record keys");
     await expect(listGtaProspectResearchForOperator(client(null, { code: "42501", message: "permission denied for function list_gta_prospect_research_for_operator" }))).rejects.toThrow("Could not read the GTA prospect research ledger");
   });

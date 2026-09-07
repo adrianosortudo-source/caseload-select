@@ -32,6 +32,10 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
+function isNullableNonNegativeInteger(value: unknown): value is number | null {
+  return value === null || (typeof value === "number" && Number.isInteger(value) && value >= 0);
+}
+
 function isIsoDate(value: unknown): value is string {
   return typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -74,11 +78,11 @@ function parseRecord(value: unknown): ReconciledGtaProspect {
   if (!Array.isArray(practiceAreas) || !practiceAreas.every((area) => typeof area === "string" && area.trim() !== "")) throw projectionError("practice_areas is invalid");
   if (!isHttpUrl(value.website_url) || !isHttpUrl(value.roster_source_url) || typeof value.roster_source_url !== "string") throw projectionError("website or roster URL is invalid");
   if (!isIsoDate(value.roster_checked_at)) throw projectionError("roster_checked_at is invalid");
-  if (observedLawyerCount !== null && (!Number.isInteger(observedLawyerCount) || observedLawyerCount < 0)) throw projectionError("observed_lawyer_count is invalid");
+  if (!isNullableNonNegativeInteger(observedLawyerCount)) throw projectionError("observed_lawyer_count is invalid");
   if (value.observed_lawyer_count_qualifier !== "exact" && value.observed_lawyer_count_qualifier !== "at_least" && value.observed_lawyer_count_qualifier !== "unknown") throw projectionError("observed_lawyer_count_qualifier is invalid");
   if ((value.observed_lawyer_count_qualifier === "unknown") !== (observedLawyerCount === null)) throw projectionError("count qualifier and count disagree");
   if (!isNullableString(value.observed_lawyer_count_display) || !isNullableString(value.legacy_crosswalk) || !isNullableString(value.reconciliation_note)) throw projectionError("a nullable text field is invalid");
-  if (legacyClusterLawyerCount !== null && (!Number.isInteger(legacyClusterLawyerCount) || legacyClusterLawyerCount < 0)) throw projectionError("legacy_cluster_lawyer_count is invalid");
+  if (!isNullableNonNegativeInteger(legacyClusterLawyerCount)) throw projectionError("legacy_cluster_lawyer_count is invalid");
   if (typeof value.reconciliation_status !== "string" || !reconciliationStatuses.has(value.reconciliation_status as ReconciliationStatus)) throw projectionError("reconciliation_status is invalid");
   if (typeof value.advertising_evidence !== "string" || !evidenceAvailability.has(value.advertising_evidence as EvidenceAvailability) || !isHttpUrl(value.advertising_source_url)) throw projectionError("advertising evidence is invalid");
   if (typeof value.gbp_evidence !== "string" || !evidenceAvailability.has(value.gbp_evidence as EvidenceAvailability) || !isHttpUrl(value.gbp_source_url)) throw projectionError("GBP evidence is invalid");
