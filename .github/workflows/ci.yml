@@ -373,6 +373,40 @@ jobs:
         with:
           version: '2.109.1'
 
+      - name: Allocate an isolated local Supabase database port
+        # GitHub-hosted runners occasionally reserve the conventional local
+        # Supabase database port (54322). The integration suite must still
+        # use a real, job-local Postgres instance, so choose a currently free
+        # loopback port for this ephemeral checkout rather than weakening the
+        # test or relying on a fixed alternate port.
+        shell: bash
+        run: |
+          set -euo pipefail
+          db_port="$(node <<'NODE'
+          const net = require('node:net');
+          const server = net.createServer();
+          server.listen({ host: '127.0.0.1', port: 0 }, () => {
+            const address = server.address();
+            if (!address || typeof address === 'string') process.exit(1);
+            const port = address.port;
+            server.close(() => process.stdout.write(String(port)));
+          });
+          server.on('error', (error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          )"
+          if ! [[ "$db_port" =~ ^[1-9][0-9]{3,4}$ ]]; then
+            echo "::error::Failed to allocate a numeric local Supabase database port."
+            exit 1
+          fi
+          sed -i -E "s/^port = 54322$/port = ${db_port}/" supabase/config.toml
+          if ! grep -qx "port = ${db_port}" supabase/config.toml; then
+            echo "::error::Failed to set the ephemeral local Supabase database port."
+            exit 1
+          fi
+
       - name: Start local Supabase stack (applies supabase/migrations/*.sql to a fresh Postgres)
         # `supabase start` spins up the full local stack via Docker (real
         # Postgres 17 plus the auth/storage/extensions schemas and the
@@ -497,7 +531,7 @@ jobs:
           NODE
 
       - name: Run publication and privacy integration tests
-        run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts src/lib/__tests__/drg-manifest-deployment.integration.test.ts src/lib/__tests__/channel-conversation-acl.integration.test.ts src/lib/__tests__/privacy-screened-lead-redaction.integration.test.ts src/lib/__tests__/privacy-restore-replay.integration.test.ts
+        run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts src/lib/__tests__/drg-manifest-deployment.integration.test.ts src/lib/__tests__/channel-conversation-acl.integration.test.ts src/lib/__tests__/privacy-screened-lead-redaction.integration.test.ts src/lib/__tests__/privacy-restore-replay.integration.test.ts src/lib/__tests__/gta-prospect-research-import-batch.integration.test.ts
 
       - name: Stop local Supabase stack
         if: always()
