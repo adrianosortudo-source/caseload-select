@@ -218,7 +218,6 @@ REVOKE ALL ON TABLE public.gta_prospect_import_audit FROM PUBLIC, anon, authenti
 -- Explicitly grant the only intended database principal. New UUID-backed
 -- tables use no sequences, so no sequence grant is required.
 REVOKE ALL ON TABLE public.gta_prospect_import_batches, public.gta_prospect_firms, public.gta_prospect_aliases, public.gta_prospect_domains, public.gta_prospect_offices, public.gta_prospect_roster_observations, public.gta_prospect_evidence_links, public.gta_prospect_identity_adjudications, public.gta_prospect_import_audit FROM service_role;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.gta_prospect_import_batches, public.gta_prospect_firms, public.gta_prospect_aliases, public.gta_prospect_domains, public.gta_prospect_offices, public.gta_prospect_roster_observations, public.gta_prospect_evidence_links, public.gta_prospect_identity_adjudications, public.gta_prospect_import_audit TO service_role;
 
 CREATE OR REPLACE FUNCTION public.apply_gta_prospect_research_record(p_batch_id uuid, p_record jsonb, p_record_sha256 text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
@@ -251,6 +250,21 @@ BEGIN
 END; $$;
 REVOKE ALL ON FUNCTION public.apply_gta_prospect_research_record(uuid,jsonb,text) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.apply_gta_prospect_research_record(uuid,jsonb,text) TO service_role;
+
+CREATE OR REPLACE FUNCTION public.begin_gta_prospect_import_batch(p_source_name text,p_source_sha256 text,p_source_record_count integer)
+RETURNS uuid LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ DECLARE b public.gta_prospect_import_batches%ROWTYPE; BEGIN
+  IF p_source_name !~ '^[-_a-z0-9]{1,200}$' OR p_source_sha256 !~ '^[0-9a-f]{64}$' OR p_source_record_count < 0 THEN RAISE EXCEPTION 'invalid batch arguments'; END IF;
+  INSERT INTO public.gta_prospect_import_batches(source_name,source_sha256,source_record_count) VALUES(p_source_name,p_source_sha256,p_source_record_count) ON CONFLICT(source_name,source_sha256) DO NOTHING;
+  SELECT * INTO b FROM public.gta_prospect_import_batches WHERE source_name=p_source_name AND source_sha256=p_source_sha256 FOR UPDATE;
+  IF b.state='applied' THEN RAISE EXCEPTION 'applied batch is terminal'; END IF;
+  UPDATE public.gta_prospect_import_batches SET state='staged', applied_at=NULL WHERE id=b.id; RETURN b.id;
+END; $$;
+CREATE OR REPLACE FUNCTION public.fail_gta_prospect_import_batch(p_batch_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN UPDATE public.gta_prospect_import_batches SET state='failed' WHERE id=p_batch_id AND state='staged'; IF NOT FOUND THEN RAISE EXCEPTION 'batch cannot transition to failed'; END IF; END; $$;
+CREATE OR REPLACE FUNCTION public.complete_gta_prospect_import_batch(p_batch_id uuid)
+RETURNS void LANGUAGE plpgsql SECURITY DEFINER SET search_path='' AS $$ BEGIN UPDATE public.gta_prospect_import_batches SET state='applied',applied_at=now() WHERE id=p_batch_id AND state='staged'; IF NOT FOUND THEN RAISE EXCEPTION 'batch cannot transition to applied'; END IF; END; $$;
+REVOKE ALL ON FUNCTION public.begin_gta_prospect_import_batch(text,text,integer), public.fail_gta_prospect_import_batch(uuid), public.complete_gta_prospect_import_batch(uuid) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.begin_gta_prospect_import_batch(text,text,integer), public.fail_gta_prospect_import_batch(uuid), public.complete_gta_prospect_import_batch(uuid) TO service_role;
 
 COMMENT ON TABLE public.gta_prospect_firms IS
   'Internal public-evidence research firms. Separate from CRM and inbound prospects; no contact or outreach data.';

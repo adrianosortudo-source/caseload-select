@@ -53,6 +53,14 @@ describe("GTA prospect research migration contract", () => {
     expect(migration).not.toContain("REVOKE ALL ON ALL TABLES");
   });
 
+  it("keeps batch lifecycle behind terminal-state RPCs without service-role table DML", () => {
+    expect(migration).toContain("begin_gta_prospect_import_batch");
+    expect(migration).toContain("applied batch is terminal");
+    expect(migration).toContain("fail_gta_prospect_import_batch");
+    expect(migration).toContain("complete_gta_prospect_import_batch");
+    expect(migration).not.toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.gta_prospect_import_batches");
+  });
+
   it("keeps the browser-facing validation route dry-run-only and operator-gated", () => {
     const route = readFileSync(resolve(process.cwd(), "src/app/admin/prospects/research-import/route.ts"), "utf8");
     expect(route).toContain("getOperatorSession");

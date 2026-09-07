@@ -54,6 +54,17 @@ describe("GTA prospect research importer", () => {
     expect(plan.rejected[0]?.issues[0]?.message).toContain("contact, outreach, or CRM fields are not allowed");
   });
 
+  it("rejects objects in nullable scalar fields and invalid calendar dates", async () => {
+    const plan = await buildGtaProspectImportPlan([{ ...candidate("strict-shape"), observedLawyerCountDisplay: { text: "two" }, reconciliationNote: ["bad"], rosterCheckedAt: "2026-02-30" }]);
+    expect(plan.accepted).toEqual([]);
+    expect(plan.rejected[0]?.issues.map(issue => issue.message)).toEqual(expect.arrayContaining(["observedLawyerCountDisplay must be a nullable string", "reconciliationNote must be a nullable string", "accepted records require a roster observation date"]));
+  });
+
+  it("preserves supported stable source fields in the canonical projection", async () => {
+    const plan = await buildGtaProspectImportPlan([candidate("preserved-fields")]);
+    expect(plan.accepted[0]).toMatchObject({ sourceRecordKey: "preserved-fields", city: "Toronto", practiceAreas: ["Family law"], legacyClusterLawyerCount: null, legacyCrosswalk: null });
+  });
+
   it("does not merge different source identities merely because names and domains collide", async () => {
     const first = candidate("same-name-a");
     const second = { ...candidate("same-name-b"), officeCities: ["Mississauga"] };
