@@ -105,6 +105,8 @@ This must happen BEFORE Meta can verify the webhook URLs in Phases E and F.
 4. Activate the new values through the repository's production path: open a narrow PR against `main`, wait for every required check, obtain approval to merge that specific PR, and merge it. The merged `main` deployment activates the new Production values. Do not use a direct Vercel production redeploy.
 5. Wait for the merged deployment to become Ready before continuing to Phase E.
 
+Credential-entry safety: do not capture a screenshot, accessibility tree, DOM snapshot, console log, or recording while a verify-token field contains plaintext. Enter the value only after the matching production endpoint accepts it, click **Verify and save** without an intervening inspection, and then verify the masked saved state. If any automation trace reveals the value, treat it as exposed and repeat the rotation before saving it in Meta.
+
 While waiting, you can start Phase E by adding the products (skip the webhook verification steps until the redeploy completes).
 
 ---
