@@ -1,17 +1,12 @@
-<<<<<<< HEAD
-# GTA Prospect Batch 001 review
+# GTA prospect validation reports
 
-This directory contains an independent, read-only validation of the staged `gta-prospect-batch-001` research artifact. The review is staging-only: it is not an outreach list, CRM-import approval, contact authorization, or send authorization.
+This directory contains independent, read-only validation reports for staged GTA prospect research artifacts. These reviews are staging-only: they are not outreach lists, CRM-import approval, contact authorization, send authorization, deployment, or publication approval.
 
-The JSON report records only public evidence metadata: first-party roster URL access, source/domain/city checks, lawyer-count qualification, comparison against the existing 20-record fixture, and explicit unresolved items. No LSO page, form, chat, scheduling control, contact-data workflow, import, or automation was used.
+Each JSON report preserves the source batch record IDs and records public-evidence checks such as first-party roster access, firm identity, source/domain/city consistency, lawyer-count qualification, fixture and legacy comparisons, and explicit unresolved items. The reports do not alter their source research rows.
 
-The report does not alter the research rows. Any future promotion requires a fresh review of the live roster, firm identity, office scope, lawyer-only count, and legacy crosswalk.
-=======
-# GTA prospect batch-002 validation
+Current reports include:
 
-`gta-prospect-batch-002-validation.json` is a read-only QA report for commit `79baba8c67e3c1f99a6a51cad447583691f915ca`, observed 2026-09-07 from first-party public roster pages.
+- `gta-prospect-batch-001-validation.json`: batch 001 review. Future promotion requires a fresh review of the live roster, firm identity, office scope, lawyer-only count, and legacy crosswalk.
+- `gta-prospect-batch-002-validation.json`: batch 002 review of commit `79baba8c67e3c1f99a6a51cad447583691f915ca`, observed 2026-09-07. It records the B002-08 Jordan Honickman duplicate correction, 9 same-domain legacy firms / 11 legacy rows, plus roster-count, city, URL, and other evidence-specific findings.
 
-It preserves all 25 record IDs and assigns one strict disposition: `accepted_for_staging`, `needs_count_review`, `identity_review`, or `reject`. It corrects the batch's PR #231 duplicate claim for B002-08 Jordan Honickman, identifies 9 same-domain legacy firms / 11 legacy rows rather than the claimed 10 rows, and records stale roster counts, city unknowns, URL failures, and other evidence-specific reasons.
-
-This is an internal, unsent review artifact. It does not authorize LSO automation, CRM activity/import, contact, outreach, forms, chat, deployment, or publication.
->>>>>>> b6fb2026 (docs: add GTA prospect batch 002 QA report)
+No LSO page, form, chat, scheduling control, contact-data workflow, import, automation, CRM activity, contact, outreach, or send is authorized by these artifacts.
