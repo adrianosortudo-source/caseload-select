@@ -57,7 +57,7 @@ export default function ReconciledProspects() {
     return () => { cancelled = true; };
   }, []);
 
-  const cities = useMemo(() => [...new Set((records ?? []).map((record) => record.city))].sort(), [records]);
+  const cities = useMemo(() => [...new Set((records ?? []).flatMap((record) => record.officeCities))].sort(), [records]);
   const practiceAreas = useMemo(
     () => [...new Set((records ?? []).flatMap((record) => record.practiceAreas))].sort(),
     [records],
@@ -120,7 +120,7 @@ export default function ReconciledProspects() {
                   <td className="px-3 py-3"><span className="font-medium text-black/80">{observedLawyerCountLabel(record)}</span><span className="mt-1 block text-xs text-black/55">Band: {lawyerCountBandLabel(lawyerCountBand(record.observedLawyerCount))}</span></td>
                   <td className="px-3 py-3 text-black/75">{record.city}</td>
                   <td className="px-3 py-3">{record.rosterSourceUrl ? <a href={record.rosterSourceUrl} target="_blank" rel="noreferrer" className="text-navy underline underline-offset-2">Public roster</a> : <span className="text-black/50">Not recorded</span>}<span className="mt-1 block text-xs text-black/55">Checked {record.rosterCheckedAt}</span></td>
-                  <td className="px-3 py-3"><span className="text-black/75">{reconciliationLabel[record.reconciliationStatus]}</span>{record.legacyClusterLawyerCount !== null && <span className="mt-1 block text-xs text-black/55">Legacy cluster: {record.legacyClusterLawyerCount}</span>}{record.reconciliationNote && <span className="mt-1 block text-xs text-black/55">{record.reconciliationNote}</span>}</td>
+                  <td className="px-3 py-3"><span className="text-black/75">{reconciliationLabel[record.reconciliationStatus]}</span>{record.legacyClusterLawyerCount !== null && <span className="mt-1 block text-xs text-black/55">Legacy cluster: {record.legacyClusterLawyerCount}</span>}{record.legacyCrosswalk && <span className="mt-1 block text-xs text-black/55">{record.legacyCrosswalk}</span>}{record.reconciliationNote && <span className="mt-1 block text-xs text-black/55">{record.reconciliationNote}</span>}</td>
                   <td className="px-3 py-3 text-xs leading-5"><EvidenceLink availability={record.advertisingEvidence} href={record.advertisingSourceUrl} label="Advertising" /><br /><EvidenceLink availability={record.gbpEvidence} href={record.gbpSourceUrl} label="GBP" /></td>
                 </tr>
               ))}

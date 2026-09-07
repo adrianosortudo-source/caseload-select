@@ -17,7 +17,10 @@ export interface ReconciledGtaProspect {
   /** Stable source-controlled identifier, not a database id. */
   id: string;
   firmName: string;
+  /** Display label for the recorded office location or locations. */
   city: string;
+  /** Individual office cities used by the city filter. */
+  officeCities: readonly string[];
   websiteUrl: string | null;
   practiceAreas: readonly string[];
 
@@ -32,6 +35,8 @@ export interface ReconciledGtaProspect {
   /** Result of matching against the legacy 5,902-row directory corpus. */
   reconciliationStatus: ReconciliationStatus;
   legacyClusterLawyerCount: number | null;
+  /** A reviewed legacy-match description; never a guessed legacy row id. */
+  legacyCrosswalk: string | null;
   reconciliationNote: string | null;
 
   advertisingEvidence: EvidenceAvailability;
@@ -89,12 +94,12 @@ export function filterReconciledGtaProspects(
 
   return records.filter((record) => {
     if (query) {
-      const searchable = [record.firmName, record.city, record.websiteUrl ?? "", ...record.practiceAreas]
+      const searchable = [record.firmName, record.city, ...record.officeCities, record.websiteUrl ?? "", ...record.practiceAreas]
         .join(" ")
         .toLocaleLowerCase();
       if (!searchable.includes(query)) return false;
     }
-    if (city && record.city.toLocaleLowerCase() !== city) return false;
+    if (city && !record.officeCities.some((officeCity) => officeCity.toLocaleLowerCase() === city)) return false;
     if (filters.lawyerCountBand && lawyerCountBand(record.observedLawyerCount) !== filters.lawyerCountBand) return false;
     if (practiceArea && !record.practiceAreas.some((area) => area.toLocaleLowerCase() === practiceArea)) return false;
     if (filters.advertising && record.advertisingEvidence !== filters.advertising) return false;

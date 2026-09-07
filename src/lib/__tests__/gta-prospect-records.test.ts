@@ -12,6 +12,7 @@ const records: ReconciledGtaProspect[] = [
     id: "alpha-law-toronto",
     firmName: "Alpha Law",
     city: "Toronto",
+    officeCities: ["Toronto"],
     websiteUrl: "https://alpha.example.test",
     practiceAreas: ["Family law"],
     observedLawyerCount: 4,
@@ -21,6 +22,7 @@ const records: ReconciledGtaProspect[] = [
     rosterCheckedAt: "2026-09-07",
     reconciliationStatus: "provisional_new",
     legacyClusterLawyerCount: null,
+    legacyCrosswalk: null,
     reconciliationNote: null,
     advertisingEvidence: "observed",
     advertisingSourceUrl: "https://ads.example.test/alpha",
@@ -31,6 +33,7 @@ const records: ReconciledGtaProspect[] = [
     id: "beta-law-oakville",
     firmName: "Beta Law",
     city: "Oakville",
+    officeCities: ["Oakville"],
     websiteUrl: null,
     practiceAreas: ["Civil litigation"],
     observedLawyerCount: 7,
@@ -40,6 +43,7 @@ const records: ReconciledGtaProspect[] = [
     rosterCheckedAt: "2026-09-07",
     reconciliationStatus: "update_existing",
     legacyClusterLawyerCount: 2,
+    legacyCrosswalk: "Legacy cluster 42, reviewed through firm domain.",
     reconciliationNote: "Legacy cluster corrected from the firm roster.",
     advertisingEvidence: "unknown",
     advertisingSourceUrl: null,
@@ -79,5 +83,31 @@ describe("gta prospect records", () => {
     expect(RECONCILED_GTA_PROSPECTS.find((record) => record.firmName === "Lockyer + Hein")?.reconciliationStatus).toBe("new_pending_identity");
     expect(RECONCILED_GTA_PROSPECTS.find((record) => record.firmName === "Vakili Law Group")?.observedLawyerCountDisplay).toBe("3 core + counsel");
     expect(RECONCILED_GTA_PROSPECTS.find((record) => record.firmName === "Book Erskine")?.observedLawyerCountDisplay).toBe("4+");
+  });
+
+  it("keeps the reviewed batch's real count bands and observed advertising evidence", () => {
+    expect(filterReconciledGtaProspects(RECONCILED_GTA_PROSPECTS, { lawyerCountBand: "3-5" })).toHaveLength(14);
+    expect(filterReconciledGtaProspects(RECONCILED_GTA_PROSPECTS, { lawyerCountBand: "6-10" })).toHaveLength(6);
+    expect(filterReconciledGtaProspects(RECONCILED_GTA_PROSPECTS, { advertising: "observed" }).map((record) => record.firmName)).toEqual([
+      "KPA Lawyers Professional Corporation",
+      "Angrove Law",
+      "Heft Law",
+    ]);
+  });
+
+  it("records the verified evidence links and does not invent legacy crosswalk IDs", () => {
+    const kpa = RECONCILED_GTA_PROSPECTS.find((record) => record.firmName === "KPA Lawyers Professional Corporation");
+    const angrove = RECONCILED_GTA_PROSPECTS.find((record) => record.firmName === "Angrove Law");
+    const heft = RECONCILED_GTA_PROSPECTS.find((record) => record.firmName === "Heft Law");
+    const falcone = RECONCILED_GTA_PROSPECTS.find((record) => record.firmName === "Falcone Law");
+
+    expect(kpa?.advertisingSourceUrl).toBe("https://adstransparency.google.com/advertiser/AR18160649533254533121?region=CA");
+    expect(angrove?.gbpSourceUrl).toContain("Angrove%20Law");
+    expect(heft?.gbpSourceUrl).toContain("Heft%20Law");
+    expect(kpa?.legacyClusterLawyerCount).toBeNull();
+    expect(kpa?.legacyCrosswalk).toContain("row-level cluster ID unavailable");
+    expect(falcone?.officeCities).toEqual(["Oakville", "Vaughan"]);
+    expect(filterReconciledGtaProspects(RECONCILED_GTA_PROSPECTS, { city: "Oakville" })).toContain(falcone);
+    expect(filterReconciledGtaProspects(RECONCILED_GTA_PROSPECTS, { city: "Vaughan" })).toContain(falcone);
   });
 });
