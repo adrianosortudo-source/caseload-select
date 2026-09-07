@@ -1,0 +1,1885 @@
+{
+  "schemaVersion": "gta-prospect-batch-010-staging-v1",
+  "purpose": "offline staging review only",
+  "actionsNotPerformed": [
+    "database connection",
+    "migration application",
+    "data import",
+    "CRM activity",
+    "contact or outreach",
+    "deployment",
+    "merge"
+  ],
+  "researchDenominator": {
+    "researchedFirmCount": 100,
+    "candidateCount": 51,
+    "sourceHeldCount": 49
+  },
+  "independentReview": {
+    "acceptedBeforeCentralDeduplication": 31,
+    "held": 7,
+    "rejected": 13,
+    "uniqueStagingCount": 30
+  },
+  "sourceFiles": [
+    {
+      "lane": "core",
+      "path": "docs/research/gta-prospect-batch-010/lanes/core.json",
+      "sha256": "412443e8344f4aa341e833cf419ccfe956b036c45c3f31b987e53a5d54ea6091",
+      "recordCount": 34
+    },
+    {
+      "lane": "west-north",
+      "path": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "sha256": "f22d81900af74fa7a79ce854bb51a085b1ccb1bcd88f524eba065d04e368df23",
+      "recordCount": 33
+    },
+    {
+      "lane": "east-outer",
+      "path": "docs/research/gta-prospect-batch-010/lanes/east-outer.json",
+      "sha256": "b0ef44ed3a8654496dc99263aa4829486cbd4979863e4b7a04dd4d51540d78d2",
+      "recordCount": 33
+    }
+  ],
+  "qaFiles": [
+    {
+      "lane": "core",
+      "path": "docs/prospecting/reviews/gta-prospect-batch-010/core-validation.json",
+      "sha256": "69b75c8a9533c49b43fd45cecd6de6f07064b6a11664cb23b0a3c3ec7f1285cd",
+      "recordCount": 10
+    },
+    {
+      "lane": "west-north",
+      "path": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "sha256": "1fdd2626c18dac8f9e534699db0622ee3df20764f848ea3aa9e03970c0e43d64",
+      "recordCount": 17
+    },
+    {
+      "lane": "east-outer",
+      "path": "docs/prospecting/reviews/gta-prospect-batch-010/east-outer-validation.json",
+      "sha256": "fba7f7078f64f583feb212961af5041f765bd2db9bb71abce5ddabb00df20404",
+      "recordCount": 24
+    }
+  ],
+  "importPlan": {
+    "sourceSha256": "d304fe5a621baa61f2702afe22f3862e4886d4d4ea15ec97bcd21fb0b43fc6ef",
+    "acceptedRecordCount": 30,
+    "rejectedRecordCount": 0
+  },
+  "importRecords": [
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-02",
+      "firmName": "Angrove Law",
+      "normalizedFirmName": "angrove law",
+      "city": "Toronto",
+      "practiceAreas": [
+        "Family law",
+        "Mediation"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Toronto"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.angrovelaw.ca/family-law/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 4,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.angrovelaw.ca/family-law/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-05",
+      "firmName": "Cappellacci DaRoza LLP",
+      "normalizedFirmName": "cappellacci daroza llp",
+      "city": "Toronto",
+      "practiceAreas": [
+        "Health-care corporate law",
+        "Corporate commercial law"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Toronto"
+      ],
+      "roster": {
+        "sourceUrl": "https://capplaw.ca/our-people/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 3,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://capplaw.ca/our-people/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-13",
+      "firmName": "Ingenuity LLP",
+      "normalizedFirmName": "ingenuity llp",
+      "city": "Toronto",
+      "practiceAreas": [
+        "Corporate and M&A",
+        "Commercial",
+        "Financing",
+        "Securities"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Toronto"
+      ],
+      "roster": {
+        "sourceUrl": "https://ingenuitylegal.com/team/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 4,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://ingenuitylegal.com/team/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-14",
+      "firmName": "Jones Kopp Litigation Partners LLP",
+      "normalizedFirmName": "jones kopp litigation partners llp",
+      "city": "Toronto",
+      "practiceAreas": [
+        "Insurance defence",
+        "Civil litigation"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Toronto"
+      ],
+      "roster": {
+        "sourceUrl": "https://joneskopplitigation.com/our-team/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 12,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://joneskopplitigation.com/our-team/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-19",
+      "firmName": "Monkhouse Law",
+      "normalizedFirmName": "monkhouse law",
+      "city": "Toronto",
+      "practiceAreas": [
+        "Employment law",
+        "Wrongful dismissal",
+        "Human rights"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Toronto"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.monkhouselaw.com/aboutus/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 18,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.monkhouselaw.com/aboutus/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-20",
+      "firmName": "Oatley Vigmond LLP",
+      "normalizedFirmName": "oatley vigmond llp",
+      "city": "Toronto",
+      "practiceAreas": [
+        "Personal injury",
+        "Accident benefits",
+        "Catastrophic injury"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Toronto"
+      ],
+      "roster": {
+        "sourceUrl": "https://oatleyvigmond.com/personal-injury-law-team/lawyers/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 16,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://oatleyvigmond.com/personal-injury-law-team/lawyers/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-23",
+      "firmName": "Ricketts Harris LLP",
+      "normalizedFirmName": "ricketts harris llp",
+      "city": "Toronto",
+      "practiceAreas": [
+        "Litigation",
+        "Employment law",
+        "Insurance law",
+        "Estate litigation"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Toronto"
+      ],
+      "roster": {
+        "sourceUrl": "https://rickettsharris.com/abouts/who-we-are/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 4,
+        "qualifier": "at_least",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://rickettsharris.com/abouts/who-we-are/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-25",
+      "firmName": "Ross Nasseri LLP",
+      "normalizedFirmName": "ross nasseri llp",
+      "city": "Toronto",
+      "practiceAreas": [
+        "Civil litigation",
+        "Regulatory litigation",
+        "Commercial litigation"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Toronto"
+      ],
+      "roster": {
+        "sourceUrl": "https://rossnasseri.com/people/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 18,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://rossnasseri.com/people/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-28",
+      "firmName": "Tyr LLP",
+      "normalizedFirmName": "tyr llp",
+      "city": "Toronto",
+      "practiceAreas": [
+        "Commercial litigation",
+        "Class actions",
+        "Intellectual property litigation"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Toronto"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.tyrllp.com/sitemap.html",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 19,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.tyrllp.com/sitemap.html",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-29",
+      "firmName": "Whitten & Lublin PC",
+      "normalizedFirmName": "whitten & lublin pc",
+      "city": "Toronto",
+      "practiceAreas": [
+        "Employment law",
+        "Labour law"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Toronto"
+      ],
+      "roster": {
+        "sourceUrl": "https://whittenlublin.com/your-team/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 19,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://whittenlublin.com/your-team/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-02",
+      "firmName": "Tandem Law PC",
+      "normalizedFirmName": "tandem law pc",
+      "city": "Pickering",
+      "practiceAreas": [
+        "Family law",
+        "Criminal law",
+        "Civil litigation"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Pickering"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.tandemlawpc.com/our-team",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 3,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.tandemlawpc.com/our-team",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-03",
+      "firmName": "McMurter & Associates",
+      "normalizedFirmName": "mcmurter & associates",
+      "city": "Whitby",
+      "practiceAreas": [
+        "Real estate law",
+        "Estates law",
+        "Notary services"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Whitby"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.mcmurter.com/lawyers.html",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 3,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.mcmurter.com/lawyers.html",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-05",
+      "firmName": "O'Brien, Balka, Khehra & Guile",
+      "normalizedFirmName": "o'brien, balka, khehra & guile",
+      "city": "Oshawa",
+      "practiceAreas": [
+        "Real estate",
+        "Family law",
+        "Criminal law",
+        "Business law"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Oshawa"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.oshawalaw.com/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 6,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.oshawalaw.com/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-11",
+      "firmName": "Goulart Workplace Lawyers",
+      "normalizedFirmName": "goulart workplace lawyers",
+      "city": "Oakville",
+      "practiceAreas": [
+        "Employment law",
+        "Labour law",
+        "Workplace litigation"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Oakville"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.goulartlawyers.ca/team",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 6,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.goulartlawyers.ca/team",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-12",
+      "firmName": "Rogers & Company PC",
+      "normalizedFirmName": "rogers & company pc",
+      "city": "Oakville",
+      "practiceAreas": [
+        "Employment law",
+        "Labour law",
+        "Workplace investigations"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Oakville"
+      ],
+      "roster": {
+        "sourceUrl": "https://rogersco.ca/the-firm/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 6,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://rogersco.ca/the-firm/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-13",
+      "firmName": "Alves Law",
+      "normalizedFirmName": "alves law",
+      "city": "Oakville",
+      "practiceAreas": [
+        "Family law",
+        "Criminal law",
+        "Civil litigation"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Oakville"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.alveslaw.ca/our-team/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 5,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.alveslaw.ca/our-team/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-15",
+      "firmName": "MFC Lawyers",
+      "normalizedFirmName": "mfc lawyers",
+      "city": "Milton",
+      "practiceAreas": [
+        "Family law",
+        "Criminal law",
+        "Real estate",
+        "Business law"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Milton"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.mfclawyers.com/our-team/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 7,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.mfclawyers.com/our-team/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-01",
+      "firmName": "Aastha Lawyers",
+      "normalizedFirmName": "aastha lawyers",
+      "city": "Mississauga",
+      "practiceAreas": [
+        "Real estate",
+        "Business",
+        "Family",
+        "Wills and estates",
+        "Civil litigation"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Mississauga"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.aasthalaw.ca/our-team",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 6,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.aasthalaw.ca/our-team",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-02",
+      "firmName": "Dhillon Murthi Law",
+      "normalizedFirmName": "dhillon murthi law",
+      "city": "Mississauga",
+      "practiceAreas": [
+        "Family law",
+        "Immigration",
+        "Real estate",
+        "Civil litigation"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Mississauga"
+      ],
+      "roster": {
+        "sourceUrl": "https://dhillonmurthilaw.ca/about-us/our-team/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 6,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://dhillonmurthilaw.ca/about-us/our-team/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-04",
+      "firmName": "Brattys LLP",
+      "normalizedFirmName": "brattys llp",
+      "city": "Vaughan",
+      "practiceAreas": [
+        "Real estate",
+        "Corporate-commercial",
+        "Financial services"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Vaughan"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.bratty.com/our-team",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 19,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.bratty.com/our-team",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-05",
+      "firmName": "Sutherland Law",
+      "normalizedFirmName": "sutherland law",
+      "city": "Vaughan",
+      "practiceAreas": [
+        "Business and corporate",
+        "Employment",
+        "Civil-commercial litigation",
+        "Family",
+        "Construction",
+        "Criminal",
+        "Real estate",
+        "Wills and estates"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Vaughan"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.sutherlaw.ca/our-team",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 13,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.sutherlaw.ca/our-team",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-06",
+      "firmName": "GZ Legal",
+      "normalizedFirmName": "gz legal",
+      "city": "North York",
+      "practiceAreas": [
+        "Civil litigation",
+        "Corporate-commercial",
+        "Family",
+        "Real estate",
+        "Wills and estates",
+        "Employment",
+        "Intellectual property",
+        "Condominium"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "North York"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.gzlegal.com/our-lawyers/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 11,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.gzlegal.com/our-lawyers/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-08",
+      "firmName": "Bluestone Law Professional Corporation",
+      "normalizedFirmName": "bluestone law professional corporation",
+      "city": "Brampton",
+      "practiceAreas": [
+        "Corporate-commercial",
+        "Real estate",
+        "Wills and estates",
+        "Civil litigation",
+        "Immigration",
+        "Family",
+        "Employment",
+        "Personal injury"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Brampton"
+      ],
+      "roster": {
+        "sourceUrl": "https://bluestonelaw.ca/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 13,
+        "qualifier": "at_least",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://bluestonelaw.ca/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-09",
+      "firmName": "Falcone Law",
+      "normalizedFirmName": "falcone law",
+      "city": "Oakville",
+      "practiceAreas": [
+        "Business law",
+        "Real estate",
+        "Wills and estates"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Oakville",
+        "Vaughan"
+      ],
+      "roster": {
+        "sourceUrl": "https://falconelaw.ca/about/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 6,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://falconelaw.ca/about/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-10",
+      "firmName": "Affinity Law",
+      "normalizedFirmName": "affinity law",
+      "city": "Markham",
+      "practiceAreas": [
+        "Personal injury",
+        "Corporate-commercial",
+        "Real estate",
+        "Family",
+        "Civil-commercial litigation"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Markham"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.affinitylawyers.ca/our-team/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 13,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.affinitylawyers.ca/our-team/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-12",
+      "firmName": "Flaherty McCarthy LLP",
+      "normalizedFirmName": "flaherty mccarthy llp",
+      "city": "Markham",
+      "practiceAreas": [
+        "Insurance defence",
+        "Personal injury",
+        "Tort"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Markham"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.fmlaw.ca/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 15,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.fmlaw.ca/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-13",
+      "firmName": "Bianchi Presta LLP",
+      "normalizedFirmName": "bianchi presta llp",
+      "city": "Vaughan",
+      "practiceAreas": [
+        "Business law",
+        "Family law",
+        "Wills trusts and estates"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Vaughan"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.bianchipresta.com/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 11,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.bianchipresta.com/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-14",
+      "firmName": "Feldstein Family Law Group, P.C.",
+      "normalizedFirmName": "feldstein family law group, p.c.",
+      "city": "Markham",
+      "practiceAreas": [
+        "Family law"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Markham",
+        "Mississauga",
+        "Oakville",
+        "Vaughan"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.separation.ca/our-lawyers/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 11,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.separation.ca/our-lawyers/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-15",
+      "firmName": "Jamal Family Law",
+      "normalizedFirmName": "jamal family law",
+      "city": "Oakville",
+      "practiceAreas": [
+        "Family law",
+        "Arbitration"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Oakville"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.jamalfamilylaw.com/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 6,
+        "qualifier": "exact",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.jamalfamilylaw.com/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-16",
+      "firmName": "Bandhu Lakhani Campea Employment & Labour Law",
+      "normalizedFirmName": "bandhu lakhani campea employment & labour law",
+      "city": "Oakville",
+      "practiceAreas": [
+        "Employment law",
+        "Labour law"
+      ],
+      "legacyCrosswalk": null,
+      "legacyClusterLawyerCount": null,
+      "websiteUrl": null,
+      "officeCities": [
+        "Oakville"
+      ],
+      "roster": {
+        "sourceUrl": "https://www.lchrlaw.com/",
+        "observedOn": "2026-09-07",
+        "lawyerCount": 6,
+        "qualifier": "at_least",
+        "display": null
+      },
+      "reconciliation": {
+        "status": "provisional_new",
+        "basis": "Legacy reconciliation is unknown: no stable row-level crosswalk is present in the historical address-cluster artifact."
+      },
+      "evidence": [
+        {
+          "type": "roster",
+          "sourceUrl": "https://www.lchrlaw.com/",
+          "observedOn": "2026-09-07",
+          "value": null
+        }
+      ]
+    }
+  ],
+  "provenance": [
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-02",
+      "batchSourceRecordId": "B010-C-02",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/core.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/core-validation.json",
+      "canonicalDomain": "angrovelaw.ca",
+      "rosterSourceUrl": "https://www.angrovelaw.ca/family-law/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 4,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-05",
+      "batchSourceRecordId": "B010-C-05",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/core.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/core-validation.json",
+      "canonicalDomain": "capplaw.ca",
+      "rosterSourceUrl": "https://capplaw.ca/our-people/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 3,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-13",
+      "batchSourceRecordId": "B010-C-13",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/core.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/core-validation.json",
+      "canonicalDomain": "ingenuitylegal.com",
+      "rosterSourceUrl": "https://ingenuitylegal.com/team/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 4,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-14",
+      "batchSourceRecordId": "B010-C-14",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/core.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/core-validation.json",
+      "canonicalDomain": "joneskopplitigation.com",
+      "rosterSourceUrl": "https://joneskopplitigation.com/our-team/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 12,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-19",
+      "batchSourceRecordId": "B010-C-19",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/core.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/core-validation.json",
+      "canonicalDomain": "monkhouselaw.com",
+      "rosterSourceUrl": "https://www.monkhouselaw.com/aboutus/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 18,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-20",
+      "batchSourceRecordId": "B010-C-20",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/core.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/core-validation.json",
+      "canonicalDomain": "oatleyvigmond.com",
+      "rosterSourceUrl": "https://oatleyvigmond.com/personal-injury-law-team/lawyers/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 16,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-23",
+      "batchSourceRecordId": "B010-C-23",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/core.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/core-validation.json",
+      "canonicalDomain": "rickettsharris.com",
+      "rosterSourceUrl": "https://rickettsharris.com/abouts/who-we-are/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 4,
+      "observedLawyerCountQualifier": "at_least",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-25",
+      "batchSourceRecordId": "B010-C-25",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/core.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/core-validation.json",
+      "canonicalDomain": "rossnasseri.com",
+      "rosterSourceUrl": "https://rossnasseri.com/people/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 18,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-28",
+      "batchSourceRecordId": "B010-C-28",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/core.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/core-validation.json",
+      "canonicalDomain": "tyrllp.com",
+      "rosterSourceUrl": "https://www.tyrllp.com/sitemap.html",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 19,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-c-29",
+      "batchSourceRecordId": "B010-C-29",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/core.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/core-validation.json",
+      "canonicalDomain": "whittenlublin.com",
+      "rosterSourceUrl": "https://whittenlublin.com/your-team/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 19,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "Canonical domain corrected to whittenlublin.com; original hostname remains a source alias."
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-02",
+      "batchSourceRecordId": "B010-EAST-02",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/east-outer.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/east-outer-validation.json",
+      "canonicalDomain": "tandemlawpc.com",
+      "rosterSourceUrl": "https://www.tandemlawpc.com/our-team",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 3,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-03",
+      "batchSourceRecordId": "B010-EAST-03",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/east-outer.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/east-outer-validation.json",
+      "canonicalDomain": "mcmurter.com",
+      "rosterSourceUrl": "https://www.mcmurter.com/lawyers.html",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 3,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-05",
+      "batchSourceRecordId": "B010-EAST-05",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/east-outer.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/east-outer-validation.json",
+      "canonicalDomain": "oshawalaw.com",
+      "rosterSourceUrl": "https://www.oshawalaw.com/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-11",
+      "batchSourceRecordId": "B010-EAST-11",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/east-outer.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/east-outer-validation.json",
+      "canonicalDomain": "goulartlawyers.ca",
+      "rosterSourceUrl": "https://www.goulartlawyers.ca/team",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-12",
+      "batchSourceRecordId": "B010-EAST-12",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/east-outer.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/east-outer-validation.json",
+      "canonicalDomain": "rogersco.ca",
+      "rosterSourceUrl": "https://rogersco.ca/the-firm/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-13",
+      "batchSourceRecordId": "B010-EAST-13",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/east-outer.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/east-outer-validation.json",
+      "canonicalDomain": "alveslaw.ca",
+      "rosterSourceUrl": "https://www.alveslaw.ca/our-team/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 5,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-east-15",
+      "batchSourceRecordId": "B010-EAST-15",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/east-outer.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/east-outer-validation.json",
+      "canonicalDomain": "mfclawyers.com",
+      "rosterSourceUrl": "https://www.mfclawyers.com/our-team/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 7,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-01",
+      "batchSourceRecordId": "B010-WN-01",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "aasthalaw.ca",
+      "rosterSourceUrl": "https://www.aasthalaw.ca/our-team",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-02",
+      "batchSourceRecordId": "B010-WN-02",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "dhillonmurthilaw.ca",
+      "rosterSourceUrl": "https://dhillonmurthilaw.ca/about-us/our-team/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-04",
+      "batchSourceRecordId": "B010-WN-04",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "bratty.com",
+      "rosterSourceUrl": "https://www.bratty.com/our-team",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 19,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-05",
+      "batchSourceRecordId": "B010-WN-05",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "sutherlaw.ca",
+      "rosterSourceUrl": "https://www.sutherlaw.ca/our-team",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 13,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-06",
+      "batchSourceRecordId": "B010-WN-06",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "gzlegal.com",
+      "rosterSourceUrl": "https://www.gzlegal.com/our-lawyers/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 11,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-08",
+      "batchSourceRecordId": "B010-WN-08",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "bluestonelaw.ca",
+      "rosterSourceUrl": "https://bluestonelaw.ca/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 13,
+      "observedLawyerCountQualifier": "at_least",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-09",
+      "batchSourceRecordId": "B010-WN-09",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "falconelaw.ca",
+      "rosterSourceUrl": "https://falconelaw.ca/about/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-10",
+      "batchSourceRecordId": "B010-WN-10",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "affinitylawyers.ca",
+      "rosterSourceUrl": "https://www.affinitylawyers.ca/our-team/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 13,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-12",
+      "batchSourceRecordId": "B010-WN-12",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "fmlaw.ca",
+      "rosterSourceUrl": "https://www.fmlaw.ca/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 15,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-13",
+      "batchSourceRecordId": "B010-WN-13",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "bianchipresta.com",
+      "rosterSourceUrl": "https://www.bianchipresta.com/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 11,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-14",
+      "batchSourceRecordId": "B010-WN-14",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "separation.ca",
+      "rosterSourceUrl": "https://www.separation.ca/our-lawyers/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 11,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-15",
+      "batchSourceRecordId": "B010-WN-15",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "jamalfamilylaw.com",
+      "rosterSourceUrl": "https://www.jamalfamilylaw.com/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "centralDecision": "accepted_after_independent_review"
+    },
+    {
+      "sourceRecordKey": "gta-prospect-010-b010-wn-16",
+      "batchSourceRecordId": "B010-WN-16",
+      "sourcePath": "docs/research/gta-prospect-batch-010/lanes/west-north.json",
+      "qaPath": "docs/prospecting/reviews/gta-prospect-batch-010/west-north-validation.json",
+      "canonicalDomain": "lchrlaw.com",
+      "rosterSourceUrl": "https://www.lchrlaw.com/",
+      "observedOn": "2026-09-07",
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "at_least",
+      "centralDecision": "accepted_after_independent_review"
+    }
+  ],
+  "exclusions": [
+    {
+      "sourceRecordId": "B010-C-01",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-03",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-04",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-06",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-07",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-08",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-09",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-10",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-11",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-12",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-15",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-16",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-17",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-18",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-21",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-22",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-24",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-26",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-27",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-30",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-31",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-32",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-33",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-C-34",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-01",
+      "disposition": "held",
+      "reason": "The stated Whitby roster is otherwise in range, but current robots.txt disallows the site root. No staging promotion without usable source-access review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-04",
+      "disposition": "held",
+      "reason": "The reported Oshawa count is in range, but current robots.txt disallows the site root. No staging promotion without usable source-access review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-06",
+      "disposition": "rejected",
+      "reason": "Hamilton is outside the strict Greater Toronto Area boundary used for this staging review. A GTHA expansion would need separate authorization."
+    },
+    {
+      "sourceRecordId": "B010-EAST-07",
+      "disposition": "rejected",
+      "reason": "Hamilton is outside the strict Greater Toronto Area boundary used for this staging review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-08",
+      "disposition": "rejected",
+      "reason": "Hamilton is outside the strict Greater Toronto Area boundary used for this staging review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-09",
+      "disposition": "held",
+      "reason": "The reported Oakville roster is in range, but current robots.txt disallows the site root. No staging promotion without usable source-access review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-10",
+      "disposition": "rejected",
+      "reason": "Hamilton is outside the strict Greater Toronto Area boundary used for this staging review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-14",
+      "disposition": "held",
+      "reason": "The reported Burlington/Hamilton roster is in range, but current robots.txt disallows the site root. No staging promotion without usable source-access review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-16",
+      "disposition": "rejected",
+      "reason": "Duplicate canonical domain in batch 001. It is not a new staging record."
+    },
+    {
+      "sourceRecordId": "B010-EAST-17",
+      "disposition": "rejected",
+      "reason": "Duplicate canonical domain in batch 001. It is not a new staging record."
+    },
+    {
+      "sourceRecordId": "B010-EAST-18",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-19",
+      "disposition": "rejected",
+      "reason": "Hamilton is outside the strict Greater Toronto Area boundary used for this staging review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-20",
+      "disposition": "duplicate_collapsed",
+      "reason": "Duplicate of B010-WN-14 (Feldstein Family Law Group / separation.ca); retained once in the central staging pool."
+    },
+    {
+      "sourceRecordId": "B010-EAST-21",
+      "disposition": "rejected",
+      "reason": "Hamilton is outside the strict Greater Toronto Area boundary used for this staging review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-22",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-23",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-24",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-25",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-26",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-27",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-28",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-29",
+      "disposition": "rejected",
+      "reason": "Hamilton is outside the strict Greater Toronto Area boundary used for this staging review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-30",
+      "disposition": "rejected",
+      "reason": "Hamilton is outside the strict Greater Toronto Area boundary used for this staging review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-31",
+      "disposition": "rejected",
+      "reason": "Hamilton is outside the strict Greater Toronto Area boundary used for this staging review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-32",
+      "disposition": "rejected",
+      "reason": "Hamilton is outside the strict Greater Toronto Area boundary used for this staging review."
+    },
+    {
+      "sourceRecordId": "B010-EAST-33",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-03",
+      "disposition": "held",
+      "reason": "Live first-party page names eleven people under Our Team and identifies Vaughan, but does not label the individual licence/role boundary; do not promote an at-least lawyer count without that distinction."
+    },
+    {
+      "sourceRecordId": "B010-WN-07",
+      "disposition": "rejected",
+      "reason": "Live first-party site is M + F Mediation and presents three senior mediators plus a coordinator, not a current private-practice lawyer roster for the requested firm-size lane."
+    },
+    {
+      "sourceRecordId": "B010-WN-11",
+      "disposition": "held",
+      "reason": "Live first-party construction-practice page names eighteen lawyers and two GTA offices, but it is an expertise slice rather than a bounded firm-wide roster; an at-least count of 18 cannot establish the 20-lawyer ceiling."
+    },
+    {
+      "sourceRecordId": "B010-WN-17",
+      "disposition": "held",
+      "reason": "The cited first-party page could not be safely fetched during QA, so current roster, role boundary, and Brampton office evidence could not be independently confirmed; do not promote."
+    },
+    {
+      "sourceRecordId": "B010-WN-H01",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H02",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H03",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H04",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H05",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H06",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H07",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H08",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H09",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H10",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H11",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H12",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H13",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H14",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H15",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    },
+    {
+      "sourceRecordId": "B010-WN-H16",
+      "disposition": "held_at_lane_review",
+      "reason": "No candidate promotion was requested at lane review."
+    }
+  ]
+}
