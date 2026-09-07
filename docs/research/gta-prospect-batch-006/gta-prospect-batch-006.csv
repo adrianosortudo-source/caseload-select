@@ -1,0 +1,26 @@
+record_id,workflow_status,firm_name,canonical_domain,office_cities,observed_lawyer_count,count_qualifier,first_party_roster_url,reconciliation,legacy_rows
+B006-01,candidate,Chernos Flaherty Svonkin LLP,cfscounsel.com,Toronto,10,exact,https://cfscounsel.com/index.html,no exact canonical domain or name match,unknown no stable crosswalk
+B006-02,candidate,Charney Lawyers PC,charneylawyers.com,Toronto,4,exact,https://www.charneylawyers.com/team,no exact canonical domain or name match,unknown no stable crosswalk
+B006-03,candidate,Consky & Associates PC,consky.ca,Toronto,3,exact,https://www.consky.ca/our-team/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-04,candidate,Bergel Magence LLP,bergellaw.com,Toronto,6,exact,https://www.bergellaw.com/personal-injury-team/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-05,candidate,Halpern Law Group,halpernlawgroup.ca,Toronto|Maple|Etobicoke,5,exact,https://halpernlawgroup.ca/about-us/our-lawyers/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-06,candidate,Workly Law,worklylaw.com,Toronto,3,exact,https://worklylaw.com/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-07,candidate,Schwarz Law Partners LLP,schwarzlaw.ca,Toronto|Brampton,6,at_least,https://schwarzlaw.ca/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-08,candidate,Starkman & Zhang Lawyers,starkmanlawyers.com,Markham,6,exact,https://www.starkmanlawyers.com/team,no exact canonical domain or name match,unknown no stable crosswalk
+B006-09,candidate,Gardiner Miller Arnold LLP,gmalaw.ca,Toronto,6,exact,https://www.gmalaw.ca/our-team/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-10,candidate,Lex Magnus Law,lexmagnus.ca,Toronto,3,exact,https://lexmagnus.ca/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-11,candidate,Misir & Company,misirandcompany.ca,Toronto,8,at_least,https://www.misirandcompany.ca/our-team,no exact canonical domain or name match,unknown no stable crosswalk
+B006-12,candidate,Falconers LLP,falconers.ca,Toronto,6,exact,https://falconers.ca/our-team/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-13,candidate,Greenspan Humphrey Makepeace LLP,15bedford.com,Toronto,7,exact,https://15bedford.com/team/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-14,candidate,Sabsay Lawyers,sabsaylaw.com,Toronto,3,exact,https://sabsaylaw.com/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-15,candidate,Wray James LLP,wrayjames.com,Toronto,5,exact,https://wrayjames.com/contact-us/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-16,candidate,MBBM Lawyers LLP,mbbmlawyers.com,Toronto,7,exact,https://mbbmlawyers.com/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-17,candidate,Hines Legal PC,hineslegal.ca,Toronto,3,exact,https://www.hineslegal.ca/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-18,candidate,Di Battista Katz Grant Cobbina LLP,dkgcfamilylaw.com,Toronto,6,exact,https://www.dkgcfamilylaw.com/team/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-19,candidate,SkyLaw,skylaw.ca,Toronto,5,at_least,https://www.skylaw.ca/our-team/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-20,candidate,Sun & Kang Law,sunkanglaw.com,Markham,4,exact,https://www.sunkanglaw.com/team,no exact canonical domain or name match,unknown no stable crosswalk
+B006-21,candidate,Tenenbaum & Solomon,tenenbaumsolomon.ca,North York,3,at_least,https://tenenbaumsolomon.ca/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-22,candidate,"Hodder, Wang",hwlawyers.ca,Toronto,5,exact,https://www.hwlawyers.ca/team,no exact canonical domain or name match,unknown no stable crosswalk
+B006-23,candidate,Bozai Law,bozailaw.com,Markham,4,exact,https://www.bozailaw.com/team/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-24,candidate,Edelson Foord Law,edelsonlaw.ca,Toronto,8,exact,https://edelsonlaw.ca/lawyers/,no exact canonical domain or name match,unknown no stable crosswalk
+B006-25,candidate,OWS Law,owslaw.ca,North York|Toronto|Mississauga,5,exact,https://owslaw.ca/the-team/,no exact canonical domain or name match,unknown no stable crosswalk
