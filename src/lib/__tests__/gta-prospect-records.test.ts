@@ -5,6 +5,7 @@ import {
   observedLawyerCountLabel,
   type ReconciledGtaProspect,
 } from "../gta-prospect-records";
+import { RECONCILED_GTA_PROSPECTS } from "@/app/admin/prospects/reconciled-prospects";
 
 const records: ReconciledGtaProspect[] = [
   {
@@ -70,5 +71,13 @@ describe("gta prospect records", () => {
     expect(filterReconciledGtaProspects(records, { lawyerCountBand: "3-5", city: "Toronto", advertising: "observed" })).toEqual([records[0]]);
     expect(filterReconciledGtaProspects(records, { lawyerCountBand: "6-10", gbp: "observed" })).toEqual([records[1]]);
     expect(filterReconciledGtaProspects(records, { practiceArea: "family law" })).toEqual([records[0]]);
+  });
+
+  it("keeps the reviewed 20-firm batch and its reconciliation safeguards intact", () => {
+    expect(RECONCILED_GTA_PROSPECTS).toHaveLength(20);
+    expect(RECONCILED_GTA_PROSPECTS.filter((record) => record.reconciliationStatus === "update_existing")).toHaveLength(8);
+    expect(RECONCILED_GTA_PROSPECTS.find((record) => record.firmName === "Lockyer + Hein")?.reconciliationStatus).toBe("new_pending_identity");
+    expect(RECONCILED_GTA_PROSPECTS.find((record) => record.firmName === "Vakili Law Group")?.observedLawyerCountDisplay).toBe("3 core + counsel");
+    expect(RECONCILED_GTA_PROSPECTS.find((record) => record.firmName === "Book Erskine")?.observedLawyerCountDisplay).toBe("4+");
   });
 });
