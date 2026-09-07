@@ -1,0 +1,50 @@
+{
+  "review_id": "gta-prospect-batch-001-validation-2026-09-07",
+  "reviewed_on": "2026-09-07",
+  "reviewed_commit": "cf545ddec366a3dd8752fcd533e7863a5da9a0b1",
+  "reviewed_branch": "codex/gta-prospect-batch-001",
+  "scope": "Independent read-only staging review; no outreach, import, contact, or send authorization.",
+  "checks": {
+    "record_count": 25,
+    "unique_ids": 25,
+    "first_party_http_200": 22,
+    "first_party_http_403": 3,
+    "canonical_host_matches_source": 25,
+    "exact_name_or_domain_matches_existing_20": 0,
+    "legacy_crosswalk": "unresolved_no_stable_crosswalk",
+    "reject_count": 0
+  },
+  "disposition_counts": {
+    "accepted_for_staging": 9,
+    "needs_count_review": 13,
+    "identity_review": 3,
+    "reject": 0
+  },
+  "records": [
+    {"id":"tailor-law-mississauga","disposition":"accepted_for_staging","source_url":"https://tailorlaw.com/our-team/","http_status":200,"reason":"Six advocate entries are separated from support team; Mississauga and domain match; no existing-20 duplicate."},
+    {"id":"ap-lawyers-mississauga","disposition":"needs_count_review","source_url":"https://www.aprincewill.com/our-team/","http_status":403,"reason":"Roster access denied; seven-person total and lawyer/staff separation cannot be independently verified."},
+    {"id":"rutman-rutman-brampton-vaughan","disposition":"accepted_for_staging","source_url":"https://www.rutmanlaw.com/our-team/","http_status":200,"reason":"Ten lawyer entries precede a separate staff section; Brampton/Vaughan and domain match; no existing-20 duplicate."},
+    {"id":"dale-streiman-brampton","disposition":"accepted_for_staging","source_url":"https://www.dalestreimanlaw.com/our-team/","http_status":200,"reason":"Eight lawyer profiles/credentials with support-staff separation; Brampton and domain match; no existing-20 duplicate."},
+    {"id":"cattanach-markham","disposition":"accepted_for_staging","source_url":"https://www.cattanach.ca/markham-lawyer-team/","http_status":200,"reason":"Markham Lawyer Team page exposes five roster entries; Markham and domain match; no existing-20 duplicate."},
+    {"id":"cook-law-markham","disposition":"accepted_for_staging","source_url":"https://www.cooklawfirm.ca/pages/our-team","http_status":200,"reason":"Three entries explicitly labelled lawyer, with administrator separated; Markham/domain match; no existing-20 duplicate."},
+    {"id":"nichols-law-markham","disposition":"accepted_for_staging","source_url":"https://markhamlaw.com/our-team/","http_status":200,"reason":"Four Lawyer/Associate Lawyer entries are separated from non-lawyer staff; Markham/domain match; no existing-20 duplicate."},
+    {"id":"edwards-pollard-oakville","disposition":"needs_count_review","source_url":"https://edwardspollard.ca/","http_status":200,"reason":"Accessible homepage is not a lawyer-only roster; five professionals cannot establish the claimed lawyer count."},
+    {"id":"pappas-law-vaughan","disposition":"accepted_for_staging","source_url":"https://www.pappaslaw.ca/pages/the-team","http_status":200,"reason":"Three professional-lawyer team entries; Vaughan/domain match; no existing-20 duplicate."},
+    {"id":"pssm-law-oakville","disposition":"identity_review","source_url":"https://pssmlaw.com/","http_status":200,"reason":"Four legal-team profiles and Oakville match, but visible firm identity is Spadafora and Murphy LLP rather than the recorded PSSM alias."},
+    {"id":"pdc-lawyers-brampton","disposition":"needs_count_review","source_url":"https://pdclawyers.ca/","http_status":200,"reason":"Ten Legal Team entries visible, but lawyer/staff role separation is not established."},
+    {"id":"naz-law-brampton-mississauga","disposition":"needs_count_review","source_url":"https://nazlaw.ca/","http_status":200,"reason":"Four-person claim is not lawyer-only separated; Brampton and Mississauga appear on source page."},
+    {"id":"nachla-law-oakville","disposition":"needs_count_review","source_url":"https://www.nachlaw.com/team/","http_status":200,"reason":"Eight team entries visible, but roles are not separated."},
+    {"id":"brace-law-oakville-vaughan","disposition":"needs_count_review","source_url":"https://www.bracelaw.ca/our-team","http_status":200,"reason":"Nine Legal Team entries visible, but lawyer/staff separation is not established."},
+    {"id":"blackburn-lawyers-richmond-hill","disposition":"accepted_for_staging","source_url":"https://blackburnlawyers.ca/team/","http_status":200,"reason":"Nine entries under Our Lawyers with support staff separately headed; Richmond Hill/domain match; no existing-20 duplicate."},
+    {"id":"patel-law-milton","disposition":"accepted_for_staging","source_url":"https://patellawpc.ca/about/","http_status":200,"reason":"Three legal-team entries; Milton/domain match; no existing-20 duplicate."},
+    {"id":"map-law-milton","disposition":"needs_count_review","source_url":"https://maplaw.ca/about-us/","http_status":200,"reason":"Five team entries visible, but lawyer-only role separation is not established."},
+    {"id":"nanda-associate-mississauga","disposition":"needs_count_review","source_url":"https://nanda.ca/our-team/","http_status":200,"reason":"First-party team page accessible, but no rendered lawyer roster/count was exposed."},
+    {"id":"slc-law-mississauga","disposition":"needs_count_review","source_url":"https://slclaw.ca/about-our-team/","http_status":200,"reason":"Lawyers section exists, but no rendered names or complete count was exposed."},
+    {"id":"taneja-law-brampton","disposition":"needs_count_review","source_url":"https://tanejalaw.ca/our-team/","http_status":200,"reason":"Source shows two Our Lawyers entries while artifact records null/uncertain count; record needs correction/review."},
+    {"id":"brechin-huffman-burlington","disposition":"needs_count_review","source_url":"https://brechinandhuffman.com/our-legal-team/","http_status":200,"reason":"Legal Team page accessible, but no rendered roster names/count was exposed."},
+    {"id":"helsons-georgetown","disposition":"identity_review","source_url":"https://helsons.ca/lawyers/","http_status":200,"reason":"Ten lawyer entries visible, but artifact count is null and Georgetown is absent from fetched page text; office scope needs review."},
+    {"id":"omh-llp-oakville-burlington","disposition":"identity_review","source_url":"https://www.omh.ca/our-team/lawyers/","http_status":200,"reason":"Visible identity is O'Connor MacLeod Hanna LLP; Oakville appears but Burlington does not; count remains unresolved."},
+    {"id":"fdh-lawyers-burlington","disposition":"needs_count_review","source_url":"https://fdhlawyers.com/legal-team/","http_status":403,"reason":"Roster access denied; indexed minimum of five profiles cannot establish current total."},
+    {"id":"day-borg-mississauga","disposition":"needs_count_review","source_url":"https://dayborg.com/lawyers/","http_status":403,"reason":"Roster access denied; indexed minimum of four profiles cannot establish current total."}
+  ]
+}
