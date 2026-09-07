@@ -12,7 +12,12 @@ import {
   type ReconciledGtaProspect,
 } from "@/lib/gta-prospect-records";
 
-type RecordsResponse = { records?: ReconciledGtaProspect[]; error?: string };
+type RecordsResponse = {
+  records?: ReconciledGtaProspect[];
+  source?: "fixture" | "ledger";
+  fallbackReason?: "ledger_unavailable" | "fixture_seed_incomplete";
+  error?: string;
+};
 
 const evidenceLabel: Record<EvidenceAvailability, string> = {
   observed: "Observed",
@@ -36,6 +41,7 @@ function EvidenceLink({ availability, href, label }: { availability: EvidenceAva
 
 export default function ReconciledProspects() {
   const [records, setRecords] = useState<ReconciledGtaProspect[] | null>(null);
+  const [source, setSource] = useState<"fixture" | "ledger" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [city, setCity] = useState("");
@@ -50,9 +56,14 @@ export default function ReconciledProspects() {
       .then(async (response) => {
         const body = (await response.json()) as RecordsResponse;
         if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
-        return body.records ?? [];
+        return { records: body.records ?? [], source: body.source ?? "fixture" };
       })
-      .then((nextRecords) => { if (!cancelled) setRecords(nextRecords); })
+      .then((result) => {
+        if (!cancelled) {
+          setRecords(result.records);
+          setSource(result.source);
+        }
+      })
       .catch((cause: Error) => { if (!cancelled) setError(cause.message); });
     return () => { cancelled = true; };
   }, []);
@@ -80,6 +91,7 @@ export default function ReconciledProspects() {
         <p className="text-xs font-semibold uppercase tracking-wider text-gold-on-light">Firm expansion</p>
         <h2 id="reconciled-prospects-heading" className="mt-1 text-xl font-bold text-navy">Reviewed GTA firm records</h2>
         <p className="mt-1 text-sm text-black/60">Firm-level public roster evidence, reconciled separately from the older LSO address-cluster list.</p>
+        <p className="mt-2 text-xs font-medium text-black/60">Source: {source === "ledger" ? "governed research ledger" : "reviewed source-controlled fixture (ledger cutover pending)"}</p>
       </div>
 
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3" aria-label="Firm record filters">
