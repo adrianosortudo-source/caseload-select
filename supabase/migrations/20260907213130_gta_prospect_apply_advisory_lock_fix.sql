@@ -17,24 +17,24 @@ BEGIN
     IF existing_hash <> computed_hash THEN RAISE EXCEPTION 'record hash differs for existing batch/source key; start a new batch'; END IF;
     RETURN jsonb_build_object('state','already_applied','firm_id',existing);
   END IF;
-  SELECT * INTO r FROM jsonb_to_record(canonical) AS x(sourceRecordKey text, firmName text, normalizedFirmName text, city text, practiceAreas jsonb, legacyCrosswalk jsonb, legacyClusterLawyerCount jsonb, websiteUrl text, officeCities jsonb, roster jsonb, reconciliation jsonb, evidence jsonb);
-  INSERT INTO public.gta_prospect_firms(source_record_key,display_name,normalized_display_name,website_url,reconciliation_status) VALUES(r.sourceRecordKey,r.firmName,r.normalizedFirmName,r.websiteUrl,r.reconciliation->>'status') ON CONFLICT(source_record_key) DO NOTHING RETURNING id INTO f;
-  IF f IS NULL THEN SELECT id INTO f FROM public.gta_prospect_firms WHERE source_record_key=r.sourceRecordKey; END IF;
+  SELECT * INTO r FROM jsonb_to_record(canonical) AS x("sourceRecordKey" text, "firmName" text, "normalizedFirmName" text, city text, "practiceAreas" jsonb, "legacyCrosswalk" jsonb, "legacyClusterLawyerCount" jsonb, "websiteUrl" text, "officeCities" jsonb, roster jsonb, reconciliation jsonb, evidence jsonb);
+  INSERT INTO public.gta_prospect_firms(source_record_key,display_name,normalized_display_name,website_url,reconciliation_status) VALUES(r."sourceRecordKey",r."firmName",r."normalizedFirmName",r."websiteUrl",r.reconciliation->>'status') ON CONFLICT(source_record_key) DO NOTHING RETURNING id INTO f;
+  IF f IS NULL THEN SELECT id INTO f FROM public.gta_prospect_firms WHERE source_record_key=r."sourceRecordKey"; END IF;
   INSERT INTO public.gta_prospect_aliases(firm_id,alias_kind,alias_value,normalized_alias_value,source_type,source_url,observed_on) VALUES
-    (f,'brand_name',r.firmName,r.normalizedFirmName,'import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date),
-    (f,'source_identifier',r.sourceRecordKey,r.sourceRecordKey,'import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date) ON CONFLICT DO NOTHING;
+    (f,'brand_name',r."firmName",r."normalizedFirmName",'import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date),
+    (f,'source_identifier',r."sourceRecordKey",r."sourceRecordKey",'import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date) ON CONFLICT DO NOTHING;
   INSERT INTO public.gta_prospect_offices(firm_id,city,province,source_type,source_url,observed_on)
-    SELECT f,value,'ON','import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date FROM jsonb_array_elements_text(r.officeCities) ON CONFLICT DO NOTHING;
-  IF r.websiteUrl IS NOT NULL THEN
+    SELECT f,value,'ON','import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date FROM jsonb_array_elements_text(r."officeCities") ON CONFLICT DO NOTHING;
+  IF r."websiteUrl" IS NOT NULL THEN
     INSERT INTO public.gta_prospect_domains(firm_id,domain_value,normalized_domain_value,source_type,source_url,observed_on)
-      VALUES(f,lower(split_part(regexp_replace(r.websiteUrl,'^https?://','','i'), '/', 1)),lower(split_part(regexp_replace(r.websiteUrl,'^https?://','','i'), '/', 1)),'import_source',r.websiteUrl,(r.roster->>'observedOn')::date) ON CONFLICT DO NOTHING;
+      VALUES(f,lower(split_part(regexp_replace(r."websiteUrl",'^https?://','','i'), '/', 1)),lower(split_part(regexp_replace(r."websiteUrl",'^https?://','','i'), '/', 1)),'import_source',r."websiteUrl",(r.roster->>'observedOn')::date) ON CONFLICT DO NOTHING;
   END IF;
   FOR ev IN SELECT value FROM jsonb_array_elements(r.evidence) LOOP
     INSERT INTO public.gta_prospect_evidence_links(firm_id,import_batch_id,evidence_type,source_type,source_url,observed_on,raw_value) VALUES(f,p_batch_id,ev.value->>'type','import_source',ev.value->>'sourceUrl',(ev.value->>'observedOn')::date,ev.value->>'value') ON CONFLICT DO NOTHING;
   END LOOP;
   INSERT INTO public.gta_prospect_roster_observations(firm_id,import_batch_id,source_type,source_url,observed_on,observed_lawyer_count,count_qualifier,count_display,canonical_observation) VALUES(f,p_batch_id,'import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date,NULLIF(r.roster->>'lawyerCount','')::integer,r.roster->>'qualifier',r.roster->>'display',jsonb_build_object('roster',r.roster));
   INSERT INTO public.gta_prospect_identity_adjudications(firm_id,import_batch_id,decision,review_method,adjudication_basis,source_type,source_url,observed_on) VALUES(f,p_batch_id,r.reconciliation->>'status','manual_review',r.reconciliation->>'basis','import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date);
-  INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,validation_errors,canonical_record) VALUES(p_batch_id,r.sourceRecordKey,computed_hash,'accepted','created',f,'[]',canonical);
+  INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,validation_errors,canonical_record) VALUES(p_batch_id,r."sourceRecordKey",computed_hash,'accepted','created',f,'[]',canonical);
   RETURN jsonb_build_object('state','applied','firm_id',f);
 END; $$;
 

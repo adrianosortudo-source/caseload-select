@@ -94,6 +94,21 @@ describe.skipIf(!DB_URL)("GTA prospect import batch lifecycle (real Postgres)", 
     );
     expect(applied.rows[0]?.result).toMatchObject({ state: "applied" });
 
+    const persisted = await conn.query(
+      `select source_record_key, display_name, normalized_display_name, website_url
+       from public.gta_prospect_firms
+       where source_record_key = $1`,
+      [sourceKey],
+    );
+    expect(persisted.rows).toEqual([
+      {
+        source_record_key: sourceKey,
+        display_name: record.firmName,
+        normalized_display_name: record.normalizedFirmName,
+        website_url: record.websiteUrl,
+      },
+    ]);
+
     const firstRetryBatch = await asServiceRole(
       "select public.begin_gta_prospect_import_batch($1, $2, $3) as batch_id",
       [retrySourceName, retrySourceSha, 1],
