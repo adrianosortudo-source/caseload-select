@@ -1,0 +1,32 @@
+{
+  "schema_version": "gta-prospect-batch-004-transport-review-v1",
+  "report_type": "read_only_source_access_review",
+  "validated_commit": "0bf2aa7f31fddf75d585efa93cb52caf7c7913e7",
+  "observed_at": "2026-09-07",
+  "method": "One low-rate GET request to each recorded public first-party roster URL using an identified internal research user agent. No retries, bypass, form/chat action, LSO request, paid data, contact, CRM activity, or import.",
+  "important_limit": "A reachable page only confirms that the cited public source was available at review time. This review does not independently re-count lawyer roles or promote any candidate. Each candidate remains workflow_status=candidate and accepted=false until a separate role/count QA disposition exists.",
+  "summary": {
+    "total_records": 15,
+    "reachable_http_200": 12,
+    "access_hold": 2,
+    "count_hold": 1,
+    "accepted_for_staging": 0
+  },
+  "records": [
+    {"record_id":"B004-01","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"Estate Lawyers in Newmarket | Friedman Estate Litigation"},
+    {"record_id":"B004-02","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"Our Team - Sondhi Defence"},
+    {"record_id":"B004-03","source_access":"http_403","disposition":"needs_access_review","reason":"The public roster URL did not permit this ordinary read-only validation request. Do not retry aggressively or bypass access controls."},
+    {"record_id":"B004-04","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"Our Team | W. Glen How & Associates LLP"},
+    {"record_id":"B004-05","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"LLM Info - BoardWalk Law LLP"},
+    {"record_id":"B004-06","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"Team Showcase Archive - Oakville Estate Litigation Lawyer | Mississauga Real Estate Lawyer | Milton Estate Planning Lawyer | Georgetown Real Estate Law Firm"},
+    {"record_id":"B004-07","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"Our Team | Lawyers, Paralegals in North York, Toronto,"},
+    {"record_id":"B004-08","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"Stouffville Family Lawyers | Shariff & Associates | Aurora, Markham"},
+    {"record_id":"B004-09","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"Team | Vaughan Divorce & Family Lawyers | Bortolussi Family Law"},
+    {"record_id":"B004-10","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"Our Team &#8211; Dahab Law"},
+    {"record_id":"B004-11","source_access":"tls_error","disposition":"needs_access_review","reason":"The ordinary validation request could not establish TLS. This is not a reason to relax transport verification or bypass certificate errors."},
+    {"record_id":"B004-12","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"Carson Law &mdash; Carson Law Lawyers specializing in Real Estate, IP, Corporate, and Estates"},
+    {"record_id":"B004-13","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"Lawyers in Burlington, Ontario &mdash; Cass & Bishop | Real Estate, Corporate-Commercial, and Estate Lawyers"},
+    {"record_id":"B004-14","source_access":"reachable_200","disposition":"needs_role_count_review","page_title":"Meet the Burlington Lawyers - Martin & Hillyer Associates"},
+    {"record_id":"B004-15","source_access":"reachable_200","disposition":"needs_count_review","reason":"The cited first-party article is older content and the source batch itself marks the four-lawyer count uncertain."}
+  ]
+}
