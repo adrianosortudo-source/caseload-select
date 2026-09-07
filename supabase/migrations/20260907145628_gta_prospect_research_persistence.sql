@@ -222,11 +222,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.gta_prospect_import_batches
 
 CREATE OR REPLACE FUNCTION public.apply_gta_prospect_research_record(p_batch_id uuid, p_record jsonb, p_record_sha256 text)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
-DECLARE f uuid; r record; ev record; existing uuid; canonical jsonb;
+DECLARE f uuid; r record; ev record; existing uuid; existing_hash text; canonical jsonb;
 BEGIN
   PERFORM pg_advisory_xact_lock(hashtextextended(p_batch_id::text || coalesce(p_record->>'sourceRecordKey',''), 0));
-  SELECT firm_id INTO existing FROM public.gta_prospect_import_audit WHERE import_batch_id=p_batch_id AND source_record_key=p_record->>'sourceRecordKey';
-  IF existing IS NOT NULL THEN RETURN jsonb_build_object('state','already_applied','firm_id',existing); END IF;
+  SELECT firm_id, source_record_sha256 INTO existing, existing_hash FROM public.gta_prospect_import_audit WHERE import_batch_id=p_batch_id AND source_record_key=p_record->>'sourceRecordKey';
+  IF existing IS NOT NULL THEN IF existing_hash <> p_record_sha256 THEN RAISE EXCEPTION 'record hash differs for existing batch/source key; start a new batch'; END IF; RETURN jsonb_build_object('state','already_applied','firm_id',existing); END IF;
   SELECT * INTO r FROM jsonb_to_record(p_record) AS x(sourceRecordKey text, firmName text, normalizedFirmName text, websiteUrl text, officeCities jsonb, roster jsonb, reconciliation jsonb, evidence jsonb);
   IF r.sourceRecordKey IS NULL OR r.firmName IS NULL OR r.roster IS NULL OR r.reconciliation IS NULL THEN RAISE EXCEPTION 'invalid canonical GTA record'; END IF;
   INSERT INTO public.gta_prospect_firms(source_record_key,display_name,normalized_display_name,website_url,reconciliation_status) VALUES(r.sourceRecordKey,r.firmName,r.normalizedFirmName,r.websiteUrl,r.reconciliation->>'status') ON CONFLICT(source_record_key) DO NOTHING RETURNING id INTO f;
