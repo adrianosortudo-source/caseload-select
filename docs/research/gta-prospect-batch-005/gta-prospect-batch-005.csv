@@ -1,0 +1,26 @@
+record_id,firm_name,canonical_domain,office_cities,observed_lawyer_count,count_qualifier,first_party_roster_url,workflow_status,accepted
+B005-01,Smith Immigration Law,smithimmigrationgroup.com,Toronto,4,exact,https://www.smithimmigrationgroup.com/our-team,candidate,false
+B005-02,Vakili Law Group,vakililaw.com,Vaughan,4,exact,https://vakililaw.com/our-attorneys/,candidate,false
+B005-03,Henry K. Hui & Associates,hkhlawyers.com,Richmond Hill,4,exact,https://www.hkhlawyers.com/,candidate,false
+B005-04,Lockyer + Hein LLP,lhlaw.ca,Brampton;Caledon;Georgetown,8,exact,https://lhlaw.ca/lawyers/,candidate,false
+B005-05,Barrison & Manitius,criminallawoshawa.com,Oshawa,3,exact,https://criminallawoshawa.com/our-lawyers/,candidate,false
+B005-06,Kelly Greenway Bruce,oshawalawyers.com,Oshawa;Lindsay,6,exact,https://www.oshawalawyers.com/about,candidate,false
+B005-07,Furlong Ford,furlongford.ca,Oshawa,3,exact,https://furlongford.ca/about-us/,candidate,false
+B005-08,Smitiuch Injury Law,sil.lawyer,Toronto,5,exact,https://www.sil.lawyer/about/,candidate,false
+B005-09,Youngman Law,youngmanlaw.com,Toronto,6,exact,https://www.youngmanlaw.com/our-lawyers/,candidate,false
+B005-10,Stringer LLP,stringerllp.com,Toronto,7,exact,https://www.stringerllp.com/about-us-2/our-story/,candidate,false
+B005-11,Casey & Moss LLP,caseyandmoss.com,Toronto,7,at_least,https://caseyandmoss.com/,candidate,false
+B005-12,Schnurr Kirsh Oelbaum Tator LLP,estatelitigation.net,Toronto;Bowmanville,8,exact,https://estatelitigation.net/,candidate,false
+B005-13,Zubas Flett Liberatore Law LLP,employment-lawyers.ca,Toronto,9,exact,https://www.employment-lawyers.ca/our-team/,candidate,false
+B005-14,Posner Craig Stein LLP,pcslaw.ca,Toronto,8,exact,https://pcslaw.ca/our-team/,candidate,false
+B005-15,Wagner Sidlofsky LLP,wagnersidlofsky.com,Toronto,7,at_least,https://www.wagnersidlofsky.com/,candidate,false
+B005-16,Gilbertson Davis LLP,gilbertsondavis.com,Toronto,7,exact,https://www.gilbertsondavis.com/contact-us/,candidate,false
+B005-17,Landy Marr Kats LLP,thetorontolawyers.ca,Toronto,6,exact,https://thetorontolawyers.ca/about-us/,candidate,false
+B005-18,Kramer Simaan Dhillon LLP,kramersimaan.com,Toronto,5,exact,https://kramersimaan.com/litigation-lawyers-toronto/,candidate,false
+B005-19,Douglas Law Firm,douglaslawfirm.ca,Vaughan;Bradford;Barrie,7,exact,https://douglaslawfirm.ca/our-firm/melissa-douglas/,candidate,false
+B005-20,Singer Kwinter,singerkwinter.com,Toronto,5,exact,https://www.singerkwinter.com/our-lawyers,candidate,false
+B005-21,Pinto Shekib LLP,pintoshekib.ca,Toronto,3,at_least,https://www.pintoshekib.ca/,candidate,false
+B005-22,Blanshay Law LLP,blanshaylaw.com,Toronto,4,exact,https://blanshaylaw.com/,candidate,false
+B005-23,Esna Law PC,esnalaw.com,Toronto,4,exact,https://esnalaw.com/about-us/,candidate,false
+B005-24,Bondy Immigration Law,bondyimmigration.com,Toronto,4,exact,https://bondyimmigration.com/,candidate,false
+B005-25,NIKA LAW LLP,nikalaw.ca,Toronto;Mississauga,8,exact,https://nikalaw.ca/etobicoke-lawyers/,candidate,false
