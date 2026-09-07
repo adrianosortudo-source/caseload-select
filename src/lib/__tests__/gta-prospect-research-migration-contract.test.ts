@@ -46,10 +46,12 @@ describe("GTA prospect research migration contract", () => {
     expect(migration).not.toMatch(/REFERENCES public\.(agency_prospects|caseload_prospects)/i);
   });
 
-  it("uses an idempotent per-record RPC and explicit service-role grants", () => {
+  it("uses an idempotent per-record RPC without direct service-role table DML", () => {
     expect(migration).toContain("apply_gta_prospect_research_record");
     expect(migration).toContain("pg_advisory_xact_lock");
-    expect(migration).toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.gta_prospect_import_batches");
+    expect(migration).toContain("gta_prospect_research_record_sha256");
+    expect(migration).toContain("record hash does not match canonical record");
+    expect(migration).not.toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.gta_prospect_import_batches");
     expect(migration).not.toContain("REVOKE ALL ON ALL TABLES");
   });
 
@@ -59,6 +61,19 @@ describe("GTA prospect research migration contract", () => {
     expect(migration).toContain("fail_gta_prospect_import_batch");
     expect(migration).toContain("complete_gta_prospect_import_batch");
     expect(migration).not.toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.gta_prospect_import_batches");
+    expect(migration).toContain("batch is not staged for record application");
+    expect(migration).toContain("batch cannot complete until every accepted record is applied");
+  });
+
+  it("validates and hashes the typed canonical projection inside the database boundary", () => {
+    expect(migration).toContain("gta_prospect_research_canonical");
+    expect(migration).toContain("canonical GTA record has unsupported fields");
+    expect(migration).toContain("record hash does not match canonical record");
+    expect(migration).toContain("SELECT * INTO batch FROM public.gta_prospect_import_batches WHERE id=p_batch_id FOR UPDATE");
+    expect(migration).toContain("batch is not staged for record application");
+    expect(migration).toContain("'city',p_record->>'city'");
+    expect(migration).toContain("'practiceAreas',p_record->'practiceAreas'");
+    expect(migration).not.toContain("retaining raw source records");
   });
 
   it("keeps the browser-facing validation route dry-run-only and operator-gated", () => {

@@ -51,7 +51,7 @@ describe("GTA prospect research importer", () => {
   it("refuses contact, outreach, and CRM-shaped source fields", async () => {
     const plan = await buildGtaProspectImportPlan([{ ...candidate("forbidden-contact"), email: "person@example.test", outreach_status: "queued" }]);
     expect(plan.accepted).toEqual([]);
-    expect(plan.rejected[0]?.issues[0]?.message).toContain("contact, outreach, or CRM fields are not allowed");
+    expect(plan.rejected[0]?.issues[0]?.message).toContain("unrecognized fields are forbidden");
   });
 
   it("rejects objects in nullable scalar fields and invalid calendar dates", async () => {
@@ -69,7 +69,7 @@ describe("GTA prospect research importer", () => {
     const first = candidate("same-name-a");
     const second = { ...candidate("same-name-b"), officeCities: ["Mississauga"] };
     const plan = await buildGtaProspectImportPlan([first, second]);
-    expect(plan.accepted.map((record) => record.id)).toEqual(["same-name-a", "same-name-b"]);
+    expect(plan.accepted.map((record) => record.sourceRecordKey)).toEqual(["same-name-a", "same-name-b"]);
     expect(plan.rejected).toEqual([]);
   });
 
