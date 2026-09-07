@@ -11,7 +11,7 @@ BEGIN
   canonical := public.gta_prospect_research_canonical(p_record);
   computed_hash := encode(extensions.digest(convert_to(canonical::text,'utf8'),'sha256'),'hex');
   IF p_record_sha256 <> computed_hash THEN RAISE EXCEPTION 'record hash does not match canonical record'; END IF;
-  PERFORM pg_advisory_xact_lock(hashtextextended((p_batch_id::text || canonical->>'sourceRecordKey'), 0));
+  PERFORM pg_advisory_xact_lock(hashtextextended((p_batch_id::text || (canonical->>'sourceRecordKey')), 0));
   SELECT firm_id, source_record_sha256 INTO existing, existing_hash FROM public.gta_prospect_import_audit WHERE import_batch_id=p_batch_id AND source_record_key=canonical->>'sourceRecordKey';
   IF existing IS NOT NULL THEN
     IF existing_hash <> computed_hash THEN RAISE EXCEPTION 'record hash differs for existing batch/source key; start a new batch'; END IF;
