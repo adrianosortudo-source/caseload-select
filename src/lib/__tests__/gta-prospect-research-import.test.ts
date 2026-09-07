@@ -3,10 +3,9 @@ import { RECONCILED_GTA_PROSPECTS } from "@/app/admin/prospects/reconciled-prosp
 import {
   buildGtaProspectImportPlan,
   executeGtaProspectImport,
-  type GtaProspectResearchRecord,
 } from "../gta-prospect-research-import";
 
-function candidate(id: string): GtaProspectResearchRecord {
+function candidate(id: string) {
   return {
     id,
     firmName: "Example Family Law",
@@ -70,17 +69,10 @@ describe("GTA prospect research importer", () => {
     expect(plan.rejected[0]?.issues.map((issue) => issue.message)).toContain("duplicate source record key within batch");
   });
 
-  it("keeps same-street offices with different or missing suites distinct", async () => {
-    const record = {
-      ...candidate("suite-guard"),
-      officeObservations: [
-        { city: "Toronto", addressRaw: "100 King St W, Suite 200", streetNormalized: "100 king st w", suiteRaw: "200", sourceUrl: "https://example.test/contact", observedOn: "2026-09-06" },
-        { city: "Toronto", addressRaw: "100 King St W", streetNormalized: "100 king st w", suiteRaw: null, sourceUrl: "https://example.test/contact", observedOn: "2026-09-06" },
-      ],
-    };
-    const plan = await buildGtaProspectImportPlan([record]);
-    expect(plan.accepted[0]?.officeObservations).toHaveLength(2);
-    expect(plan.rejected).toEqual([]);
+  it("rejects unknown nested-shaped import data rather than retaining raw fields", async () => {
+    const plan = await buildGtaProspectImportPlan([{ ...candidate("raw-reject"), officeObservations: [{ city: "Toronto", email: "no@example.test" }] }]);
+    expect(plan.accepted).toEqual([]);
+    expect(plan.rejected[0]?.issues[0]?.message).toContain("unrecognized fields are forbidden");
   });
 
   it("makes dry runs and unauthenticated requests no-write paths", async () => {

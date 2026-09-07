@@ -16,6 +16,7 @@ CREATE TABLE public.gta_prospect_import_batches (
   applied_at timestamptz NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   CHECK ((state = 'applied') = (applied_at IS NOT NULL))
+  , UNIQUE (source_name, source_sha256)
 );
 
 CREATE TABLE public.gta_prospect_firms (
@@ -86,7 +87,7 @@ CREATE TABLE public.gta_prospect_roster_observations (
   observed_lawyer_count integer NULL CHECK (observed_lawyer_count IS NULL OR observed_lawyer_count >= 0),
   count_qualifier text NOT NULL CHECK (count_qualifier IN ('exact', 'at_least', 'unknown')),
   count_display text NULL,
-  raw_observation jsonb NOT NULL DEFAULT '{}'::jsonb,
+  canonical_observation jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   CHECK (
     (count_qualifier = 'unknown' AND observed_lawyer_count IS NULL)
@@ -134,7 +135,7 @@ CREATE TABLE public.gta_prospect_import_audit (
   action_state text NOT NULL CHECK (action_state IN ('created', 'already_present', 'rejected')),
   firm_id uuid NULL REFERENCES public.gta_prospect_firms(id) ON DELETE RESTRICT,
   validation_errors jsonb NOT NULL DEFAULT '[]'::jsonb,
-  raw_source_record jsonb NOT NULL,
+  canonical_record jsonb NOT NULL,
   created_at timestamptz NOT NULL DEFAULT now(),
   UNIQUE (import_batch_id, source_record_key),
   CHECK ((validation_state = 'accepted') = (jsonb_array_length(validation_errors) = 0)),
@@ -213,6 +214,43 @@ REVOKE ALL ON TABLE public.gta_prospect_roster_observations FROM PUBLIC, anon, a
 REVOKE ALL ON TABLE public.gta_prospect_evidence_links FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.gta_prospect_identity_adjudications FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON TABLE public.gta_prospect_import_audit FROM PUBLIC, anon, authenticated;
+
+-- Explicitly grant the only intended database principal. New UUID-backed
+-- tables use no sequences, so no sequence grant is required.
+REVOKE ALL ON TABLE public.gta_prospect_import_batches, public.gta_prospect_firms, public.gta_prospect_aliases, public.gta_prospect_domains, public.gta_prospect_offices, public.gta_prospect_roster_observations, public.gta_prospect_evidence_links, public.gta_prospect_identity_adjudications, public.gta_prospect_import_audit FROM service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.gta_prospect_import_batches, public.gta_prospect_firms, public.gta_prospect_aliases, public.gta_prospect_domains, public.gta_prospect_offices, public.gta_prospect_roster_observations, public.gta_prospect_evidence_links, public.gta_prospect_identity_adjudications, public.gta_prospect_import_audit TO service_role;
+
+CREATE OR REPLACE FUNCTION public.apply_gta_prospect_research_record(p_batch_id uuid, p_record jsonb, p_record_sha256 text)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE f uuid; r record; ev record; existing uuid; canonical jsonb;
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended(p_batch_id::text || coalesce(p_record->>'sourceRecordKey',''), 0));
+  SELECT firm_id INTO existing FROM public.gta_prospect_import_audit WHERE import_batch_id=p_batch_id AND source_record_key=p_record->>'sourceRecordKey';
+  IF existing IS NOT NULL THEN RETURN jsonb_build_object('state','already_applied','firm_id',existing); END IF;
+  SELECT * INTO r FROM jsonb_to_record(p_record) AS x(sourceRecordKey text, firmName text, normalizedFirmName text, websiteUrl text, officeCities jsonb, roster jsonb, reconciliation jsonb, evidence jsonb);
+  IF r.sourceRecordKey IS NULL OR r.firmName IS NULL OR r.roster IS NULL OR r.reconciliation IS NULL THEN RAISE EXCEPTION 'invalid canonical GTA record'; END IF;
+  INSERT INTO public.gta_prospect_firms(source_record_key,display_name,normalized_display_name,website_url,reconciliation_status) VALUES(r.sourceRecordKey,r.firmName,r.normalizedFirmName,r.websiteUrl,r.reconciliation->>'status') ON CONFLICT(source_record_key) DO NOTHING RETURNING id INTO f;
+  IF f IS NULL THEN SELECT id INTO f FROM public.gta_prospect_firms WHERE source_record_key=r.sourceRecordKey; END IF;
+  INSERT INTO public.gta_prospect_aliases(firm_id,alias_kind,alias_value,normalized_alias_value,source_type,source_url,observed_on) VALUES
+    (f,'brand_name',r.firmName,r.normalizedFirmName,'import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date),
+    (f,'source_identifier',r.sourceRecordKey,r.sourceRecordKey,'import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date) ON CONFLICT DO NOTHING;
+  INSERT INTO public.gta_prospect_offices(firm_id,city,province,source_type,source_url,observed_on)
+    SELECT f,value,'ON','import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date FROM jsonb_array_elements_text(r.officeCities) ON CONFLICT DO NOTHING;
+  IF r.websiteUrl IS NOT NULL THEN
+    INSERT INTO public.gta_prospect_domains(firm_id,domain_value,normalized_domain_value,source_type,source_url,observed_on)
+      VALUES(f,lower(split_part(regexp_replace(r.websiteUrl,'^https?://','','i'), '/', 1)),lower(split_part(regexp_replace(r.websiteUrl,'^https?://','','i'), '/', 1)),'import_source',r.websiteUrl,(r.roster->>'observedOn')::date) ON CONFLICT DO NOTHING;
+  END IF;
+  FOR ev IN SELECT value FROM jsonb_array_elements(coalesce(r.evidence,'[]'::jsonb)) LOOP
+    INSERT INTO public.gta_prospect_evidence_links(firm_id,import_batch_id,evidence_type,source_type,source_url,observed_on,raw_value) VALUES(f,p_batch_id,ev.value->>'type','import_source',ev.value->>'sourceUrl',(ev.value->>'observedOn')::date,ev.value->>'value') ON CONFLICT DO NOTHING;
+  END LOOP;
+  canonical := jsonb_build_object('sourceRecordKey',r.sourceRecordKey,'firmName',r.firmName,'websiteUrl',r.websiteUrl,'officeCities',r.officeCities,'roster',r.roster,'reconciliation',r.reconciliation,'evidence',r.evidence);
+  INSERT INTO public.gta_prospect_roster_observations(firm_id,import_batch_id,source_type,source_url,observed_on,observed_lawyer_count,count_qualifier,count_display,canonical_observation) VALUES(f,p_batch_id,'import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date,NULLIF(r.roster->>'lawyerCount','')::integer,r.roster->>'qualifier',r.roster->>'display',jsonb_build_object('roster',r.roster));
+  INSERT INTO public.gta_prospect_identity_adjudications(firm_id,import_batch_id,decision,review_method,adjudication_basis,source_type,source_url,observed_on) VALUES(f,p_batch_id,r.reconciliation->>'status','manual_review',r.reconciliation->>'basis','import_source',r.roster->>'sourceUrl',(r.roster->>'observedOn')::date);
+  INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,validation_errors,canonical_record) VALUES(p_batch_id,r.sourceRecordKey,p_record_sha256,'accepted','created',f,'[]',canonical);
+  RETURN jsonb_build_object('state','applied','firm_id',f);
+END; $$;
+REVOKE ALL ON FUNCTION public.apply_gta_prospect_research_record(uuid,jsonb,text) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.apply_gta_prospect_research_record(uuid,jsonb,text) TO service_role;
 
 COMMENT ON TABLE public.gta_prospect_firms IS
   'Internal public-evidence research firms. Separate from CRM and inbound prospects; no contact or outreach data.';

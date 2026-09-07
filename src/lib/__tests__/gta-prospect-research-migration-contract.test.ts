@@ -29,7 +29,7 @@ describe("GTA prospect research migration contract", () => {
     expect(migration).toContain("UNIQUE NULLS NOT DISTINCT (firm_id, city, province, address_raw, suite_raw, source_url, observed_on)");
     expect(migration).toContain("source_url text NOT NULL CHECK (source_url ~ '^https?://')");
     expect(migration).toContain("observed_on date NOT NULL");
-    expect(migration).toContain("raw_source_record jsonb NOT NULL");
+    expect(migration).toContain("canonical_record jsonb NOT NULL");
     expect(migration).toContain("review_method text NOT NULL DEFAULT 'manual_review'");
   });
 
@@ -44,6 +44,13 @@ describe("GTA prospect research migration contract", () => {
   it("contains no CRM, contact, or outreach data model", () => {
     expect(migration).not.toMatch(/contact_email|contact_phone|outreach_status|campaign_id|crm_contact_id/i);
     expect(migration).not.toMatch(/REFERENCES public\.(agency_prospects|caseload_prospects)/i);
+  });
+
+  it("uses an idempotent per-record RPC and explicit service-role grants", () => {
+    expect(migration).toContain("apply_gta_prospect_research_record");
+    expect(migration).toContain("pg_advisory_xact_lock");
+    expect(migration).toContain("GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.gta_prospect_import_batches");
+    expect(migration).not.toContain("REVOKE ALL ON ALL TABLES");
   });
 
   it("keeps the browser-facing validation route dry-run-only and operator-gated", () => {
