@@ -11,11 +11,18 @@ import {
   type LawyerCountBand,
   type ReconciledGtaProspect,
 } from "@/lib/gta-prospect-records";
+import {
+  reconciledProspectSourceLabel,
+  type ReconciledProspectFallbackReason,
+  type ReconciledProspectSource,
+  type ReconciledProspectSourceCounts,
+} from "./reconciled-prospects-source";
 
 type RecordsResponse = {
   records?: ReconciledGtaProspect[];
-  source?: "fixture" | "ledger";
-  fallbackReason?: "ledger_unavailable" | "fixture_seed_incomplete";
+  source?: ReconciledProspectSource;
+  sourceCounts?: ReconciledProspectSourceCounts;
+  fallbackReason?: ReconciledProspectFallbackReason;
   error?: string;
 };
 
@@ -41,7 +48,7 @@ function EvidenceLink({ availability, href, label }: { availability: EvidenceAva
 
 export default function ReconciledProspects() {
   const [records, setRecords] = useState<ReconciledGtaProspect[] | null>(null);
-  const [source, setSource] = useState<"fixture" | "ledger" | null>(null);
+  const [sourceDetails, setSourceDetails] = useState<Pick<RecordsResponse, "source" | "sourceCounts" | "fallbackReason"> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
   const [city, setCity] = useState("");
@@ -56,12 +63,17 @@ export default function ReconciledProspects() {
       .then(async (response) => {
         const body = (await response.json()) as RecordsResponse;
         if (!response.ok) throw new Error(body.error ?? `HTTP ${response.status}`);
-        return { records: body.records ?? [], source: body.source ?? "fixture" };
+        return {
+          records: body.records ?? [],
+          source: body.source ?? "fixture",
+          sourceCounts: body.sourceCounts ?? { ledger: 0, fixture: body.records?.length ?? 0 },
+          fallbackReason: body.fallbackReason,
+        };
       })
       .then((result) => {
         if (!cancelled) {
           setRecords(result.records);
-          setSource(result.source);
+          setSourceDetails(result);
         }
       })
       .catch((cause: Error) => { if (!cancelled) setError(cause.message); });
@@ -91,7 +103,13 @@ export default function ReconciledProspects() {
         <p className="text-xs font-semibold uppercase tracking-wider text-gold-on-light">Firm expansion</p>
         <h2 id="reconciled-prospects-heading" className="mt-1 text-xl font-bold text-navy">Reviewed GTA firm records</h2>
         <p className="mt-1 text-sm text-black/60">Firm-level public roster evidence, reconciled separately from the older LSO address-cluster list.</p>
-        <p className="mt-2 text-xs font-medium text-black/60">Source: {source === "ledger" ? "governed research ledger" : "reviewed source-controlled fixture (ledger cutover pending)"}</p>
+        <p className="mt-2 text-xs font-medium text-black/60">
+          Source: {sourceDetails ? reconciledProspectSourceLabel({
+            source: sourceDetails.source ?? "fixture",
+            sourceCounts: sourceDetails.sourceCounts ?? { ledger: 0, fixture: records.length },
+            fallbackReason: sourceDetails.fallbackReason,
+          }) : "reviewed source-controlled fixture"}
+        </p>
       </div>
 
       <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3" aria-label="Firm record filters">
