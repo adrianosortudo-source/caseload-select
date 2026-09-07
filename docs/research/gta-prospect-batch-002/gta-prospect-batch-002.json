@@ -1,0 +1,960 @@
+{
+  "schema_version": "gta-public-roster-candidate-v1",
+  "batch_id": "gta-prospect-batch-002",
+  "generated_at": "2026-09-07",
+  "observation_date": "2026-09-07",
+  "scope": {
+    "geography": [
+      "Toronto",
+      "Etobicoke",
+      "North York",
+      "Scarborough",
+      "Pickering",
+      "Ajax",
+      "Whitby",
+      "Oshawa"
+    ],
+    "max_records": 25,
+    "source_policy": "first-party public web only",
+    "excluded_actions": [
+      "LSO automation",
+      "CRM/import",
+      "forms",
+      "chat",
+      "contact",
+      "private data"
+    ]
+  },
+  "counts": {
+    "total_records": 25,
+    "accepted": 0,
+    "candidate": 22,
+    "uncertain": 3,
+    "exact_count_qualifier": 22,
+    "uncertain_count_qualifier": 3,
+    "legacy_same_domain_rows": 10
+  },
+  "records": [
+    {
+      "record_id": "B002-01",
+      "workflow_status": "candidate",
+      "firm_name": "Creighton Law LLP",
+      "canonical_domain": "durhamlawyers.ca",
+      "office_city": "Oshawa",
+      "practice_areas_published": [
+        "Family Law",
+        "Real Estate",
+        "Wills & Estates",
+        "Business & Corporate",
+        "Estate Litigation",
+        "Immigration",
+        "Civil Litigation"
+      ],
+      "observed_lawyer_count": 5,
+      "count_qualifier": "uncertain",
+      "first_party_roster_url": "https://durhamlawyers.ca/about/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Brian John Raymond Hall",
+        "Robert John MacGregor",
+        "G. Charles S. Morison",
+        "Holly Reid",
+        "Alexander Raymond Schram"
+      ],
+      "aliases": [
+        "Creighton Law",
+        "Durham Region's First Law Firm"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party About page separates five names under Our Team from Clerks & Administration, but does not label each biography with a lawyer title; count remains uncertain pending retained profiles."
+    },
+    {
+      "record_id": "B002-02",
+      "workflow_status": "candidate",
+      "firm_name": "Ristich Law",
+      "canonical_domain": "ristichlaw.ca",
+      "office_city": "Etobicoke",
+      "practice_areas_published": [],
+      "observed_lawyer_count": 8,
+      "count_qualifier": "uncertain",
+      "first_party_roster_url": "https://ristichlaw.ca/team/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Slavko Ristich",
+        "Christine Boulos",
+        "Nooria Kamran",
+        "Mandy Mok",
+        "Peter Azer",
+        "Silvia Ristich",
+        "Stefan Jovanovic",
+        "Sherman Garcia"
+      ],
+      "aliases": [
+        "Ristich Law"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party Our Team page lists eight named team members with firm email/phone but no role labels; roster cardinality is a lead, not an accepted lawyer count."
+    },
+    {
+      "record_id": "B002-03",
+      "workflow_status": "candidate",
+      "firm_name": "Harcourt LLP",
+      "canonical_domain": "harcourtspllp.com",
+      "office_city": "Toronto",
+      "practice_areas_published": [],
+      "observed_lawyer_count": 6,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.harcourtspllp.com/who-we-are/index.html",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Douglas White",
+        "Victor E. Clark",
+        "Phillip K. Doolin",
+        "Alfonzo Higgins",
+        "R. Antonio Viera",
+        "Caterina D. Magee"
+      ],
+      "aliases": [
+        "Harcourt"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party page has an Our Lawyers heading and six named lawyers. Local DNS GET recheck did not resolve the hostname; retain as candidate pending fresh live fetch."
+    },
+    {
+      "record_id": "B002-04",
+      "workflow_status": "candidate",
+      "firm_name": "Vanular Lawyers Professional Corporation",
+      "canonical_domain": "vanulaw.com",
+      "office_city": "Pickering",
+      "practice_areas_published": [
+        "Real Estate",
+        "Corporate / Commercial",
+        "Wills & Estates",
+        "Litigation"
+      ],
+      "observed_lawyer_count": 3,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.vanulaw.com/about-us/our-team/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Jason Vanular",
+        "Stephanie Scott",
+        "Stephanie Turnham"
+      ],
+      "aliases": [
+        "Vanular Lawyers",
+        "Vanular Law"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "Three current lawyer profiles are labelled Managing Principal Lawyer, Associate Lawyer, and Senior Litigation Associate; retired Tim Vanular and clerks are excluded."
+    },
+    {
+      "record_id": "B002-05",
+      "workflow_status": "candidate",
+      "firm_name": "TAP Law",
+      "canonical_domain": "taplaw.ca",
+      "office_city": "Toronto",
+      "practice_areas_published": [
+        "Civil Litigation",
+        "Alternative Dispute Resolution",
+        "Employment Litigation",
+        "Appeals",
+        "Commercial Litigation",
+        "Professional Liability & Regulation"
+      ],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.taplaw.ca/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Tanya A. Pagliaroli",
+        "Alexandra Grishanova",
+        "Chloe Carr",
+        "Zack Levy"
+      ],
+      "aliases": [
+        "TAP Law"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "same_domain_legacy_rows_found",
+        "legacy_artifact_match_count": 1,
+        "legacy_artifact_names": [
+          "TAP Law"
+        ],
+        "assessment": "New candidate domain/name is not in the existing 20; same-domain legacy row(s) require reconciliation and are not treated as accepted identity or current roster evidence."
+      },
+      "evidence_note": "First-party home page labels one Partner and three Associates; law clerk is excluded. Legacy artifact has one same-domain row (TAP Law; one named lawyer), requiring reconciliation."
+    },
+    {
+      "record_id": "B002-06",
+      "workflow_status": "candidate",
+      "firm_name": "Lundy Levy & Eski Barristers",
+      "canonical_domain": "lleb.ca",
+      "office_city": "Toronto",
+      "practice_areas_published": [],
+      "observed_lawyer_count": 10,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.lleb.ca/ourteam",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Eni Eski",
+        "Evan Rankin",
+        "Zohar Levy",
+        "Andrew Lundy",
+        "Trevor Hume",
+        "Timothy Law",
+        "Emily Papsin",
+        "Laurie Taylor Graham",
+        "Arsal Wahab",
+        "Tanzim Rashid"
+      ],
+      "aliases": [
+        "Lundy Levy Eski",
+        "LLEB"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "same_domain_legacy_rows_found",
+        "legacy_artifact_match_count": 2,
+        "legacy_artifact_names": [
+          "Lundy Levy Eski",
+          "Lundy Levy Eski Baum"
+        ],
+        "assessment": "New candidate domain/name is not in the existing 20; same-domain legacy row(s) require reconciliation and are not treated as accepted identity or current roster evidence."
+      },
+      "evidence_note": "First-party Our Team page labels all ten names as managing partner, partner, senior associate, or associate. Two same-domain legacy rows use older/alternate firm names and one name each."
+    },
+    {
+      "record_id": "B002-07",
+      "workflow_status": "candidate",
+      "firm_name": "Belmore Neidrauer LLP",
+      "canonical_domain": "belmorelaw.com",
+      "office_city": "Toronto",
+      "practice_areas_published": [],
+      "observed_lawyer_count": 3,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.belmorelaw.com/team",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Marian Wolanski",
+        "Megan Pocalyuko",
+        "Andrew Medico"
+      ],
+      "aliases": [
+        "Belmore Neidrauer"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party team page labels three lawyers (Partner/Associate); two law clerks are excluded."
+    },
+    {
+      "record_id": "B002-08",
+      "workflow_status": "candidate",
+      "firm_name": "Jordan Honickman Barristers",
+      "canonical_domain": "jhbarristers.com",
+      "office_city": "Toronto",
+      "practice_areas_published": [
+        "Civil & Commercial",
+        "Defamation",
+        "Employment",
+        "Insurance",
+        "Long-Term Disability",
+        "Personal Injury",
+        "Professional Discipline & Regulation",
+        "Public Law"
+      ],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.jhbarristers.com/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Michael Jordan",
+        "Asher Honickman",
+        "Lorne Honickman",
+        "Tanner Kyle"
+      ],
+      "aliases": [
+        "Jordan Honickman Barristers"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party home page lists four lawyers with Partner, Senior Counsel, or Associate roles."
+    },
+    {
+      "record_id": "B002-09",
+      "workflow_status": "candidate",
+      "firm_name": "Weisberg Law Criminal Lawyers LLP",
+      "canonical_domain": "weisberg.ca",
+      "office_city": "Toronto",
+      "practice_areas_published": [
+        "Criminal Law"
+      ],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.weisberg.ca/team/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Adam Weisberg",
+        "Samiyyah Ganga",
+        "Anthony Bugo",
+        "Cassandra Laperriere"
+      ],
+      "aliases": [
+        "Weisberg Law",
+        "Weisberg Law Criminal Lawyers"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "same_domain_legacy_rows_found",
+        "legacy_artifact_match_count": 1,
+        "legacy_artifact_names": [
+          "Weisberg Law Criminal Lawyers LLP"
+        ],
+        "assessment": "New candidate domain/name is not in the existing 20; same-domain legacy row(s) require reconciliation and are not treated as accepted identity or current roster evidence."
+      },
+      "evidence_note": "First-party team page labels four lawyers (Managing Partner, Partner, Associate Lawyer). Legacy artifact has one same-domain row with two names; current roster requires reconciliation."
+    },
+    {
+      "record_id": "B002-10",
+      "workflow_status": "candidate",
+      "firm_name": "Fox Vanounou LLP",
+      "canonical_domain": "fvlaw.ca",
+      "office_city": "North York",
+      "practice_areas_published": [
+        "Personal Injury",
+        "Accident Benefits"
+      ],
+      "observed_lawyer_count": 3,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://fvlaw.ca/our-team/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Jamie M. Fox",
+        "R. Tally Vanounou",
+        "Faisal Afridi"
+      ],
+      "aliases": [
+        "Fox Vanounou",
+        "FV Law"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party page labels two Partners and one Associate; paralegals and administration are excluded."
+    },
+    {
+      "record_id": "B002-11",
+      "workflow_status": "candidate",
+      "firm_name": "Baker & Company",
+      "canonical_domain": "bakerlawyers.com",
+      "office_city": "Toronto",
+      "practice_areas_published": [],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://bakerlawyers.com/who-we-are/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Mark G. Baker",
+        "David Hamilton",
+        "Eric Kay",
+        "Liana Rossi"
+      ],
+      "aliases": [
+        "Baker & Company Lawyers"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party Who We Are page labels one Principal, two Counsel, and one Associate."
+    },
+    {
+      "record_id": "B002-12",
+      "workflow_status": "candidate",
+      "firm_name": "Nia Law Professional Corporation",
+      "canonical_domain": "nia-law.com",
+      "office_city": "North York",
+      "practice_areas_published": [
+        "Immigration & Refugee",
+        "Real Estate Transactions",
+        "Personal Injury",
+        "International Trade",
+        "Employment Law"
+      ],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://nia-law.com/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Shahab Nazarinia",
+        "Niloufar (Nelly) Doushabchi",
+        "Zaira Cherian",
+        "Amie Rose Lisking Onda"
+      ],
+      "aliases": [
+        "Nia Law",
+        "NiaLaw"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "same_domain_legacy_rows_found",
+        "legacy_artifact_match_count": 1,
+        "legacy_artifact_names": [
+          "NiaLaw Professional Corporation"
+        ],
+        "assessment": "New candidate domain/name is not in the existing 20; same-domain legacy row(s) require reconciliation and are not treated as accepted identity or current roster evidence."
+      },
+      "evidence_note": "Current first-party root labels three Lawyers and one Special Counsel; RCICs, clerks, managers, and administrators are excluded. Legacy artifact has one same-domain row with two names."
+    },
+    {
+      "record_id": "B002-13",
+      "workflow_status": "candidate",
+      "firm_name": "Goodman Berman, Barristers",
+      "canonical_domain": "goodmanbermanlaw.com",
+      "office_city": "North York",
+      "practice_areas_published": [],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://goodmanbermanlaw.com/our-team/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Yamini Harish",
+        "Parvin Thakor",
+        "Dixon Emanuel",
+        "Jaspreet Multani"
+      ],
+      "aliases": [
+        "Goodman Berman",
+        "Goodman Berman Barristers"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party Our Team page labels four Associates."
+    },
+    {
+      "record_id": "B002-14",
+      "workflow_status": "candidate",
+      "firm_name": "Lindsay Law",
+      "canonical_domain": "lindsaylaw.ca",
+      "office_city": "North York",
+      "practice_areas_published": [
+        "Impaired Driving (DUI)"
+      ],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.lindsaylaw.ca/our-team-lawyers/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Peter Robert Lindsay",
+        "Hamna Anwar",
+        "Nikita Da Silva",
+        "Aleena Mahmood"
+      ],
+      "aliases": [
+        "Lindsay Law"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party page labels four Barristers & Solicitors."
+    },
+    {
+      "record_id": "B002-15",
+      "workflow_status": "candidate",
+      "firm_name": "Waldman & Associates",
+      "canonical_domain": "waldmanlaw.ca",
+      "office_city": "Toronto",
+      "practice_areas_published": [],
+      "observed_lawyer_count": 7,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://waldmanlaw.ca/our-team/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Lorne Waldman",
+        "Tara McElroy",
+        "Steven Blakey",
+        "Charles Steven",
+        "Sumeya Mulla",
+        "Clare Yacyshyn",
+        "Katarina Shaw"
+      ],
+      "aliases": [
+        "Waldman Law",
+        "Waldman & Associates LLP",
+        "Lorne Waldman Professional Corporation"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "same_domain_legacy_rows_found",
+        "legacy_artifact_match_count": 2,
+        "legacy_artifact_names": [
+          "Lorne Waldman Professional Corporation",
+          "Waldman & Associates LLP"
+        ],
+        "assessment": "New candidate domain/name is not in the existing 20; same-domain legacy row(s) require reconciliation and are not treated as accepted identity or current roster evidence."
+      },
+      "evidence_note": "First-party team page labels seven current lawyers. Two same-domain legacy rows use corporate/LLP names and historical two-lawyer snapshots; exact current brand/legal-entity reconciliation remains open."
+    },
+    {
+      "record_id": "B002-16",
+      "workflow_status": "candidate",
+      "firm_name": "Snell Balka Scovino Lawyers",
+      "canonical_domain": "sbs-lawyers.ca",
+      "office_city": "Whitby",
+      "practice_areas_published": [
+        "Family Law",
+        "Separation Agreements",
+        "Cohabitation Agreements",
+        "Marriage Contracts",
+        "Family Law Litigation",
+        "Mediation / Arbitration",
+        "Adoption",
+        "Child Protection / CAS",
+        "Independent Legal Advice",
+        "Notarizations"
+      ],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://sbs-lawyers.ca/our-team/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Robert Snell",
+        "Sandra Scovino",
+        "Kyle Wasko",
+        "Sebastian Duff"
+      ],
+      "aliases": [
+        "SBS Lawyers",
+        "Snell Balka Scovino"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "same_domain_legacy_rows_found",
+        "legacy_artifact_match_count": 1,
+        "legacy_artifact_names": [
+          "Snell Balka Scovino"
+        ],
+        "assessment": "New candidate domain/name is not in the existing 20; same-domain legacy row(s) require reconciliation and are not treated as accepted identity or current roster evidence."
+      },
+      "evidence_note": "First-party Our Team page labels four Partners; two law clerks are excluded. Legacy artifact has one same-domain row with two names."
+    },
+    {
+      "record_id": "B002-17",
+      "workflow_status": "candidate",
+      "firm_name": "MK Law",
+      "canonical_domain": "mklaw.ca",
+      "office_city": "Toronto",
+      "practice_areas_published": [
+        "Personal Injury",
+        "Disability"
+      ],
+      "observed_lawyer_count": 5,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.mklaw.ca/our-team/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "David Kapanadze",
+        "Omar Makhatadze",
+        "Michael Rotondo",
+        "Tyson Carter",
+        "Sabrina Leung"
+      ],
+      "aliases": [
+        "MK Law",
+        "MK Law Firm"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party page labels five lawyers (two Partners, Senior Litigation Counsel, and two Associate Lawyers); paralegal and staff are excluded."
+    },
+    {
+      "record_id": "B002-18",
+      "workflow_status": "candidate",
+      "firm_name": "ZSRH Litigation Lawyers LLP",
+      "canonical_domain": "zsrhlaw.ca",
+      "office_city": "Toronto",
+      "practice_areas_published": [
+        "Insurance Litigation",
+        "Personal Injury",
+        "Long-Term Disability Claims",
+        "Civil Litigation"
+      ],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.zsrhlaw.ca/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Zoran Samac",
+        "Rohan Haté",
+        "Mihail Salariu",
+        "Mahdi Al-Toum"
+      ],
+      "aliases": [
+        "ZSRH Litigation Lawyers",
+        "ZSRH"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "same_domain_legacy_rows_found",
+        "legacy_artifact_match_count": 1,
+        "legacy_artifact_names": [
+          "ZSRH Litigation Lawyers LLP"
+        ],
+        "assessment": "New candidate domain/name is not in the existing 20; same-domain legacy row(s) require reconciliation and are not treated as accepted identity or current roster evidence."
+      },
+      "evidence_note": "First-party home page labels two Co-Founder & Partners and two Associate Lawyers; Toronto office is listed alongside Oakville head office. Legacy artifact has one same-domain row with one name."
+    },
+    {
+      "record_id": "B002-19",
+      "workflow_status": "candidate",
+      "firm_name": "Goldmans LLP",
+      "canonical_domain": "goldmansllp.com",
+      "office_city": "Toronto",
+      "practice_areas_published": [
+        "Corporate and Commercial Disputes",
+        "Franchise Law",
+        "Construction Deficiency Claims",
+        "Injunctions",
+        "Partnership and Shareholder Disputes",
+        "Intellectual Property",
+        "Mediation and Arbitration",
+        "Administrative Law"
+      ],
+      "observed_lawyer_count": 5,
+      "count_qualifier": "uncertain",
+      "first_party_roster_url": "https://www.goldmansllp.com/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Jonathan Mesiano-Crookston",
+        "Stephen Barbier",
+        "Kyle MacDonald",
+        "Niki Kanavas",
+        "Louise Li"
+      ],
+      "aliases": [
+        "Goldmans"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party home page names partners, associate, of counsel, and additional personnel; one listed Mingyan Hu is described as a lawyer (China) and articling student, so the Ontario-lawyer cardinality is uncertain."
+    },
+    {
+      "record_id": "B002-20",
+      "workflow_status": "candidate",
+      "firm_name": "KND Complex Litigation",
+      "canonical_domain": "knd.law",
+      "office_city": "Toronto",
+      "practice_areas_published": [
+        "Class Actions",
+        "Securities",
+        "Privacy",
+        "Consumer",
+        "Competition",
+        "Employment"
+      ],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://knd.law/about/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Eli Karp",
+        "Sage Nematollahi",
+        "Hadi M. Davarinia",
+        "Taek Soo Shin"
+      ],
+      "aliases": [
+        "KND Complex Litigation",
+        "KND Complex Litigation Professional Corporation"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "same_domain_legacy_rows_found",
+        "legacy_artifact_match_count": 1,
+        "legacy_artifact_names": [
+          "KND Complex Litigation Professional Corporation"
+        ],
+        "assessment": "New candidate domain/name is not in the existing 20; same-domain legacy row(s) require reconciliation and are not treated as accepted identity or current roster evidence."
+      },
+      "evidence_note": "First-party About page labels four lawyers (Managing Partner, Partners, Associate); articling student is excluded. Legacy artifact has one same-domain row with one name."
+    },
+    {
+      "record_id": "B002-21",
+      "workflow_status": "candidate",
+      "firm_name": "Anderson MacKeigan LLP",
+      "canonical_domain": "andersonmackeigan.com",
+      "office_city": "Toronto",
+      "practice_areas_published": [
+        "Commercial Real Estate",
+        "Corporate and Commercial Law"
+      ],
+      "observed_lawyer_count": 3,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://andersonmackeigan.com/about-us/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Patrick A. Anderson",
+        "Megan MacKeigan",
+        "Elgin Kongoli"
+      ],
+      "aliases": [
+        "Anderson MacKeigan"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party page labels two Partners and one Associate Lawyer; law clerk excluded."
+    },
+    {
+      "record_id": "B002-22",
+      "workflow_status": "candidate",
+      "firm_name": "Salahshoor Law PC",
+      "canonical_domain": "salahshoor.ca",
+      "office_city": "North York",
+      "practice_areas_published": [
+        "Immigration and Refugee Law",
+        "Family Law",
+        "Appellate Litigation",
+        "Civil Disputes",
+        "Notarial Services"
+      ],
+      "observed_lawyer_count": 3,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.salahshoor.ca/our-team",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Anoosh Salahshoor",
+        "Pawanjit Suhan",
+        "Eliana Ramitt"
+      ],
+      "aliases": [
+        "Salahshoor Law",
+        "Salahshoor Law Professional Corporation"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party Our Team page labels three lawyers; two Senior Clerks and one Student-at-Law are excluded."
+    },
+    {
+      "record_id": "B002-23",
+      "workflow_status": "candidate",
+      "firm_name": "Srebrolow, Dubb, DiCampo Professional Corporation",
+      "canonical_domain": "slspc.ca",
+      "office_city": "Etobicoke",
+      "practice_areas_published": [
+        "Dental Malpractice",
+        "Disability",
+        "Motor Vehicle Accidents",
+        "Employment",
+        "Premises Liability",
+        "Tort",
+        "Accident Benefits",
+        "Short-Term Disability",
+        "Long-Term Disability",
+        "CPP Disability",
+        "Slip and Fall",
+        "Wrongful Dismissal",
+        "Constructive Dismissal",
+        "Workplace Harassment",
+        "Discrimination"
+      ],
+      "observed_lawyer_count": 6,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.slspc.ca/",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "James W. Srebrolow",
+        "Harjit S. Dubb",
+        "Kristoffer DiCampo",
+        "Sidney J. Lebowitz",
+        "Aaron Atwal",
+        "Sam F. Spadafora"
+      ],
+      "aliases": [
+        "SLSPC",
+        "Srebrolow Dubb DiCampo"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "First-party home page labels six Partners/Associates; licensed paralegal is excluded."
+    },
+    {
+      "record_id": "B002-24",
+      "workflow_status": "candidate",
+      "firm_name": "Coristine Law Firm",
+      "canonical_domain": "coristinelaw.ca",
+      "office_city": "North York",
+      "practice_areas_published": [
+        "Criminal Law",
+        "Family Law"
+      ],
+      "observed_lawyer_count": 3,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://www.coristinelaw.ca/team",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Michael Coristine",
+        "Samarra D'Souza",
+        "Gurveer Gill"
+      ],
+      "aliases": [
+        "Michael Coristine Law Professional Corporation",
+        "Coristine Law"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "same_domain_legacy_rows_found",
+        "legacy_artifact_match_count": 1,
+        "legacy_artifact_names": [
+          "Michael Coristine Law Professional Corporation"
+        ],
+        "assessment": "New candidate domain/name is not in the existing 20; same-domain legacy row(s) require reconciliation and are not treated as accepted identity or current roster evidence."
+      },
+      "evidence_note": "First-party Team page labels one Founding Partner & Senior Counsel and two Associate Lawyers; paralegal, law clerk, and consultant are excluded. Legacy artifact has one same-domain row with one name."
+    },
+    {
+      "record_id": "B002-25",
+      "workflow_status": "candidate",
+      "firm_name": "Harris + Harris LLP",
+      "canonical_domain": "harrisandharris.com",
+      "office_city": "Etobicoke",
+      "practice_areas_published": [
+        "Business Law",
+        "Litigation",
+        "Employment Law",
+        "Finance & Securities",
+        "Family Law",
+        "Tax Planning",
+        "Real Estate",
+        "Estates & Trusts",
+        "Workplace Investigations"
+      ],
+      "observed_lawyer_count": 8,
+      "count_qualifier": "exact",
+      "first_party_roster_url": "https://harrisandharris.com/about/lawyers",
+      "observation_date": "2026-09-07",
+      "roster_names": [
+        "Doug Christie",
+        "Greg Harris",
+        "R. Alan Harris",
+        "Shawn Haqqani",
+        "Amy Lok",
+        "Norman Ronski",
+        "Mark Swartz",
+        "Derek Yu"
+      ],
+      "aliases": [
+        "Harris and Harris",
+        "Harris + Harris"
+      ],
+      "existing_20_duplicate_assessment": {
+        "existing_20_status": "no_exact_name_or_canonical_domain_match",
+        "existing_20_matches": [],
+        "legacy_artifact_status": "no_exact_name_or_canonical_domain_match",
+        "legacy_artifact_match_count": 0,
+        "legacy_artifact_names": [],
+        "assessment": "No exact name or canonical-domain match found in the existing 20 or inspected legacy artifact; candidate remains unaccepted."
+      },
+      "evidence_note": "Current first-party Lawyers page lists eight lawyers by name; law clerks are excluded."
+    }
+  ]
+}
+
