@@ -1,0 +1,57 @@
+{
+  "schema_version": "gta-prospect-batch-005-validation-v1",
+  "report_type": "read_only_public_roster_qa",
+  "validated_commit": "5c2e722863df6d38154195431ad4e39da7356e0d",
+  "comparison_commit_pr_231": "44c844f49a5eda7a2a237a5b7706135e118b49e5",
+  "observed_at": "2026-09-07",
+  "source_policy": "first-party public web roster pages only; ordinary read-only access; no bypass or form interaction",
+  "actions_not_performed": [
+    "LSO automation",
+    "CRM activity or import",
+    "forms",
+    "chat",
+    "contact or outreach",
+    "deployment",
+    "merge"
+  ],
+  "summary": {
+    "total_records": 25,
+    "disposition_counts": {
+      "accepted_for_staging": 11,
+      "needs_count_review": 8,
+      "identity_review": 3,
+      "needs_access_review": 3,
+      "reject": 0
+    },
+    "pr_231_exact_duplicate_ids": ["B005-02", "B005-03", "B005-04"],
+    "pr_231_exact_duplicate_count": 3,
+    "legacy_reconciliation": "unknown_no_stable_crosswalk_for_all_records"
+  },
+  "records": [
+    {"record_id":"B005-01","firm_name":"Smith Immigration Law","disposition":"accepted_for_staging","reasons":["The current first-party team page identifies one principal lawyer and three associate lawyers, separately from non-lawyer roles."],"evidence":{"city":"Toronto","count":"4 exact current lawyer-role entries"}},
+    {"record_id":"B005-02","firm_name":"Vakili Law Group","disposition":"identity_review","reasons":["The candidate's canonical domain and firm name exactly match a PR #231 record. The source roster also describes special counsel as working in association with the firm, so its four-person count must not silently replace the baseline's at-least count."],"evidence":{"city":"Vaughan","staged_count":4,"pr_231_record":"Vakili Law Group; 3 at_least core plus counsel"}},
+    {"record_id":"B005-03","firm_name":"Henry K. Hui & Associates","disposition":"identity_review","reasons":["The candidate's canonical domain and firm name exactly match a PR #231 record. The current first-party team page supports four lawyer roles, but this duplicate must be reconciled rather than staged twice."],"evidence":{"city":"Richmond Hill","count":"4 current lawyer-role entries","pr_231_record":"Henry K. Hui & Associates"}},
+    {"record_id":"B005-04","firm_name":"Lockyer + Hein LLP","disposition":"identity_review","reasons":["The canonical domain exactly matches a PR #231 Lockyer + Hein record, which uses a slightly shorter displayed name. The first-party roster supports eight lawyer roles, but the firm identity must be reconciled before staging."],"evidence":{"city":"Brampton, Caledon, and Georgetown","count":"8 current lawyer-role entries","pr_231_record":"Lockyer + Hein"}},
+    {"record_id":"B005-05","firm_name":"Barrison & Manitius","disposition":"accepted_for_staging","reasons":["The current first-party Our Lawyers section lists a senior partner, partner, and associate, separately from clerk and office roles."],"evidence":{"city":"Oshawa","count":"3 exact current lawyer-role entries"}},
+    {"record_id":"B005-06","firm_name":"Kelly Greenway Bruce","disposition":"needs_count_review","reasons":["The current first-party Lawyers section contains ten lawyer profiles, excluding the separately labelled articling student; the staged six-person count is stale."],"evidence":{"city":"Oshawa and Lindsay","staged_count":6,"live_count":"10 current lawyer-role entries"}},
+    {"record_id":"B005-07","firm_name":"Furlong Ford","disposition":"accepted_for_staging","reasons":["The first-party Lawyers page identifies three people explicitly as lawyers and presents them as the complete lawyer list."],"evidence":{"city":"Oshawa","count":"3 exact current lawyer-role entries"}},
+    {"record_id":"B005-08","firm_name":"Smitiuch Injury Law","disposition":"needs_count_review","reasons":["The current first-party navigation and firm page list six named lawyer profiles, while the candidate records five. Reconcile the count rather than overwrite it."],"evidence":{"city":"Toronto","staged_count":5,"live_count":"6 named lawyer profiles"}},
+    {"record_id":"B005-09","firm_name":"Youngman Law","disposition":"needs_access_review","reasons":["The recorded public roster URL returned an ordinary-access bad-request response in this review. The candidate is held rather than retried aggressively, bypassed, or replaced with a different source."],"evidence":{"city":"unverified","count":"unverified"}},
+    {"record_id":"B005-10","firm_name":"Stringer LLP","disposition":"accepted_for_staging","reasons":["The current first-party team roster lists seven lawyer-role profiles: partners, counsel, managing partner, and associate lawyers."],"evidence":{"city":"Toronto","count":"7 exact current lawyer-role entries"}},
+    {"record_id":"B005-11","firm_name":"Casey & Moss LLP","disposition":"needs_access_review","reasons":["The recorded public roster URL timed out during ordinary read-only access. The candidate is held rather than retried aggressively or accessed through a bypass."],"evidence":{"city":"unverified","count":"unverified"}},
+    {"record_id":"B005-12","firm_name":"Schnurr Kirsh Oelbaum Tator LLP","disposition":"needs_access_review","reasons":["The recorded public roster URL returned an ordinary-access bad-request response in this review. The candidate is held rather than retried aggressively, bypassed, or replaced with a different source."],"evidence":{"city":"unverified","count":"unverified"}},
+    {"record_id":"B005-13","firm_name":"Zubas Flett Liberatore Law LLP","disposition":"accepted_for_staging","reasons":["The current first-party team page supports nine lawyer or counsel roles and separately labels clerk, paralegal, and assistant roles."],"evidence":{"city":"Toronto","count":"9 exact current lawyer-role entries"}},
+    {"record_id":"B005-14","firm_name":"Posner Craig Stein LLP","disposition":"needs_count_review","reasons":["The current first-party team navigation lists twelve lawyer profiles, while the candidate records eight. The staging record must be reconciled before it can be used for a 3-10-lawyer filter."],"evidence":{"city":"Toronto","staged_count":8,"live_count":"12 named lawyer profiles"}},
+    {"record_id":"B005-15","firm_name":"Wagner Sidlofsky LLP","disposition":"needs_count_review","reasons":["The cited homepage shows seven partners, but directs readers to a separate All Lawyers page for the complete roster. The at-least-seven observation must not be promoted to an exact count."],"evidence":{"city":"Toronto","staged_count":"7 at_least","live_count":"at least 7 partners; complete lawyer roster unverified"}},
+    {"record_id":"B005-16","firm_name":"Gilbertson Davis LLP","disposition":"accepted_for_staging","reasons":["The current first-party Lawyers Contact table names seven lawyers separately from arbitrators, mediators, and staff."],"evidence":{"city":"Toronto","count":"7 exact current lawyer-role entries"}},
+    {"record_id":"B005-17","firm_name":"Landy Marr Kats LLP","disposition":"accepted_for_staging","reasons":["The current first-party Meet Our Team section supports six lawyer profiles and separately identifies the articling student."],"evidence":{"city":"Toronto","count":"6 exact current lawyer-role entries"}},
+    {"record_id":"B005-18","firm_name":"Kramer Simaan Dhillon LLP","disposition":"accepted_for_staging","reasons":["The current first-party Lawyers page identifies two litigation counsel and three associates, while explicitly marking a sixth listed person retired."],"evidence":{"city":"Toronto","count":"5 exact current lawyer-role entries"}},
+    {"record_id":"B005-19","firm_name":"Douglas Law Firm","disposition":"accepted_for_staging","reasons":["The current first-party founder profile explicitly states that the firm has seven lawyers and ten support staff."],"evidence":{"city":"Vaughan, Bradford, and Barrie","count":"7 lawyer-role entries by first-party firm statement"}},
+    {"record_id":"B005-20","firm_name":"Singer Kwinter","disposition":"accepted_for_staging","reasons":["The current first-party Our Lawyers roster lists five people explicitly labelled lawyer and distinguishes the separate health-professional network."],"evidence":{"city":"Toronto","count":"5 exact current lawyer-role entries"}},
+    {"record_id":"B005-21","firm_name":"Pinto Shekib LLP","disposition":"needs_count_review","reasons":["The current team page identifies two partners and firm counsel but does not explicitly establish the counsel role as a lawyer profile. The at-least-three record is held rather than inferred as exact."],"evidence":{"city":"Toronto","staged_count":"3 at_least","live_count":"2 explicit partner roles plus firm counsel; lawyer-role boundary unresolved"}},
+    {"record_id":"B005-22","firm_name":"Blanshay Law LLP","disposition":"needs_count_review","reasons":["The current first-party team lists five lawyer-role profiles, including a person separately marked on medical leave. The staged four-person count silently excludes that entry, so the current-count policy needs a decision before staging."],"evidence":{"city":"Toronto","staged_count":4,"live_count":"5 lawyer-role profiles including one marked on medical leave"}},
+    {"record_id":"B005-23","firm_name":"Esna Law PC","disposition":"needs_count_review","reasons":["The current first-party team page lists one managing lawyer and six associate lawyers; the staged four-person count is stale."],"evidence":{"city":"Toronto","staged_count":4,"live_count":"7 exact current lawyer-role entries"}},
+    {"record_id":"B005-24","firm_name":"Bondy Immigration Law","disposition":"accepted_for_staging","reasons":["The current first-party legal-team roster identifies four people as Barrister & Solicitor and separates clerks, assistants, and office management."],"evidence":{"city":"Toronto","count":"4 exact current lawyer-role entries"}},
+    {"record_id":"B005-25","firm_name":"NIKA LAW LLP","disposition":"needs_count_review","reasons":["The source identifies six people explicitly as lawyers, but the two additional entries needed for the staged eight-person count are labelled only Partner. The count is held rather than assuming both partner roles meet the same lawyer-role criterion."],"evidence":{"city":"Toronto","staged_count":8,"verified_explicit_lawyer_roles":6}}
+  ]
+}
