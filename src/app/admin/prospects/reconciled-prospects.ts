@@ -54,6 +54,7 @@ function record(
 ): ReconciledGtaProspect {
   return {
     id,
+    recordOrigin: "reviewed_fixture",
     firmName,
     city,
     officeCities: overrides.officeCities ?? [city],

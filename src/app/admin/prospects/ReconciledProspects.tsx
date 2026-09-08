@@ -19,6 +19,13 @@ import {
   type ReconciledProspectSource,
   type ReconciledProspectSourceCounts,
 } from "./reconciled-prospects-source";
+import {
+  filterUnifiedProspectState,
+  prospectIdentityState,
+  prospectSources,
+  type UnifiedIdentityState,
+  type UnifiedProspectSource,
+} from "./prospect-unified-view";
 
 export type RecordsResponse = {
   records?: ReconciledGtaProspect[];
@@ -29,7 +36,7 @@ export type RecordsResponse = {
   error?: string;
 };
 
-type QuickView = "all" | "qualified" | "audit_ready" | "needs_evidence";
+type QuickView = "all" | "shared_registry" | "audit_ready" | "identity_review";
 type CountFilter = "" | "2" | "3" | "2-3";
 
 const evidenceLabel: Record<EvidenceAvailability, string> = { observed: "Observed", none: "None found", unknown: "Unknown" };
@@ -57,6 +64,25 @@ const freshnessLabels: Record<EvidenceFreshness, string> = {
   older_than_180_days: "Older than 180 days",
   unknown: "Date unknown",
 };
+const sourceLabels: Record<UnifiedProspectSource, string> = {
+  shared_registry: "Shared registry",
+  research_ledger: "Research ledger",
+  reviewed_fixture: "Reviewed fixture",
+  legacy_provenance: "Legacy provenance",
+};
+const identityLabels: Record<UnifiedIdentityState, string> = {
+  linked: "Linked identity",
+  reviewed_match: "Reviewed legacy match",
+  review_needed: "Identity review needed",
+  provisional: "Provisional identity",
+};
+
+function badgeClass(kind: UnifiedProspectSource | UnifiedIdentityState): string {
+  if (kind === "shared_registry" || kind === "linked") return "border-green-200 bg-green-50 text-green-900";
+  if (kind === "review_needed") return "border-amber-200 bg-amber-50 text-amber-900";
+  if (kind === "legacy_provenance" || kind === "reviewed_match") return "border-blue-200 bg-blue-50 text-blue-900";
+  return "border-black/10 bg-parchment/60 text-black/70";
+}
 
 function titleCase(value: string): string {
   return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
@@ -104,6 +130,8 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const [lawyerCountConfidence, setLawyerCountConfidence] = useState<QualifiedProspectConfidence | "">("");
   const [freshness, setFreshness] = useState<EvidenceFreshness | "">("");
   const [cohortId, setCohortId] = useState("");
+  const [source, setSource] = useState<UnifiedProspectSource | "">("");
+  const [identity, setIdentity] = useState<UnifiedIdentityState | "">("");
 
   useEffect(() => {
     if (initialData) return;
@@ -139,17 +167,17 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
 
   const quickCounts = useMemo(() => {
     const list = records ?? [];
-    const qualified = list.filter((record) => Boolean(record.qualifiedDossier)).length;
+    const sharedRegistry = list.filter((record) => Boolean(record.qualifiedDossier)).length;
     const auditReady = list.filter((record) => record.qualifiedDossier?.audit.state === "ready").length;
-    return { all: list.length, qualified, auditReady, needsEvidence: list.length - qualified };
+    const identityReview = list.filter((record) => prospectIdentityState(record) === "review_needed").length;
+    return { all: list.length, sharedRegistry, auditReady, identityReview };
   }, [records]);
 
-  const filtered = useMemo(() => filterReconciledGtaProspects(records ?? [], {
+  const filtered = useMemo(() => filterUnifiedProspectState(filterReconciledGtaProspects(records ?? [], {
     query, city, exactLawyerCount: countFilter, practiceArea, advertising, gbp,
-    qualification: quickView === "qualified" ? "qualified" : quickView === "needs_evidence" ? "needs_evidence" : "",
-    audit: quickView === "audit_ready" ? "ready" : "", advertisingActivity, gbpOpportunityType,
+    advertisingActivity, gbpOpportunityType,
     advertisingSourceType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, evidenceFreshness: freshness, cohortId,
-  }), [records, query, city, countFilter, practiceArea, advertising, gbp, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId]);
+  }), { source, identity, quickView }), [records, query, city, countFilter, practiceArea, advertising, gbp, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity]);
 
   const filterChips = [
     query && { label: `Search: ${query}`, clear: () => setQuery("") }, city && { label: `City: ${city}`, clear: () => setCity("") },
@@ -165,38 +193,43 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
     lawyerCountConfidence && { label: `Count confidence: ${titleCase(lawyerCountConfidence)}`, clear: () => setLawyerCountConfidence("") },
     freshness && { label: `Evidence: ${freshnessLabels[freshness]}`, clear: () => setFreshness("") },
     cohortId && { label: "Original qualified cohort", clear: () => setCohortId("") },
+    source && { label: `Source: ${sourceLabels[source]}`, clear: () => setSource("") },
+    identity && { label: `Identity: ${identityLabels[identity]}`, clear: () => setIdentity("") },
   ].filter(Boolean) as { label: string; clear: () => void }[];
 
   function clearFilters() {
     setQuery(""); setCity(""); setCountFilter(""); setPracticeArea(""); setAdvertising(""); setGbp("");
     setAdvertisingActivity(""); setAdvertisingSourceType(""); setGbpOpportunityType(""); setWebsiteOpportunityType(""); setIntakeChannel("");
     setLawyerCountConfidence(""); setFreshness(""); setCohortId("");
+    setSource(""); setIdentity("");
   }
 
   if (error) return <div className="rounded border border-red-fail/30 bg-white px-4 py-3 text-sm text-red-fail">Firm expansion records could not be loaded: {error}</div>;
   if (records === null) return <div className="rounded border border-black/10 bg-white px-4 py-3 text-sm text-black/50">Loading firm expansion records...</div>;
 
   return (
-    <section aria-labelledby="reconciled-prospects-heading" className="rounded-lg border border-border-brand bg-white p-4 sm:p-5 [&_[data-ui-copy]]:text-pretty" data-ui-component-content="firm-expansion">
+    <section aria-labelledby="reconciled-prospects-heading" className="rounded-lg border border-border-brand bg-white p-4 sm:p-5 [&_[data-ui-copy]]:text-pretty" data-ui-component-content="prospect-unified-list">
       <div className="mb-5 w-full">
-        <p className="w-full text-xs font-semibold uppercase tracking-wider text-gold-on-light" data-ui-copy="supporting">Firm expansion</p>
-        <h2 id="reconciled-prospects-heading" className="mt-1 w-full text-xl font-bold text-navy" data-ui-copy="heading">Reviewed GTA firm records</h2>
-        <p className="mt-1 w-full text-sm text-black/60" data-ui-copy="body">Use qualification evidence to find firms with a supported marketing opportunity, then open the firm audit for the underlying observations and limits.</p>
+        <p className="w-full text-xs font-semibold uppercase tracking-wider text-gold-on-light" data-ui-copy="supporting">Unified prospect workspace</p>
+        <h2 id="reconciled-prospects-heading" className="mt-1 w-full text-xl font-bold text-navy" data-ui-copy="heading">All prospect records</h2>
+        <p className="mt-1 w-full text-sm text-black/60" data-ui-copy="body">Search shared firm identities, reviewed research records, and retained legacy crosswalks in one list. Open an audit when the supporting evidence is ready.</p>
         <p className="mt-2 w-full text-xs font-medium text-black/60" data-ui-copy="supporting">
           Source: {sourceDetails ? reconciledProspectSourceLabel({ source: sourceDetails.source ?? "fixture", sourceCounts: sourceDetails.sourceCounts ?? { ledger: 0, fixture: records.length }, fallbackReason: sourceDetails.fallbackReason }) : "reviewed source-controlled fixture"}. Qualified cohort reconciliation: {sourceDetails?.qualifiedImport ? `${sourceDetails.qualifiedImport.updated} enriched, ${sourceDetails.qualifiedImport.added} added, ${sourceDetails.qualifiedImport.ambiguous} held for identity review` : "loading"}.
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="Firm expansion views">
-        {([["all", "All reviewed", quickCounts.all], ["qualified", "Qualified", quickCounts.qualified], ["audit_ready", "Audit ready", quickCounts.auditReady], ["needs_evidence", "Needs evidence", quickCounts.needsEvidence]] as const).map(([value, label, count]) => (
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="Prospect record views">
+        {([["all", "All records", quickCounts.all], ["shared_registry", "Shared registry", quickCounts.sharedRegistry], ["audit_ready", "Audit ready", quickCounts.auditReady], ["identity_review", "Identity review", quickCounts.identityReview]] as const).map(([value, label, count]) => (
           <button key={value} type="button" onClick={() => setQuickView(value)} aria-pressed={quickView === value} className={`rounded border px-3 py-2 text-left text-sm font-semibold transition ${quickView === value ? "border-navy bg-navy text-white" : "border-border-brand bg-parchment/50 text-navy hover:bg-parchment"}`}>
             <span className="block">{label}</span><span className={`mt-0.5 block text-xs ${quickView === value ? "text-white/75" : "text-black/50"}`}>{count} firms</span>
           </button>
         ))}
       </div>
 
-      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3" aria-label="Firm record filters">
-        <label className="text-xs font-semibold text-field-label">Search<input value={query} onChange={(event) => setQuery(event.target.value)} className="mt-1 w-full rounded border border-border-brand px-3 py-2 text-sm text-black" placeholder="Firm, city, website, or practice area" /></label>
+      <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4" aria-label="Prospect record filters">
+        <label className="text-xs font-semibold text-field-label">Search<input value={query} onChange={(event) => setQuery(event.target.value)} className="mt-1 w-full rounded border border-border-brand px-3 py-2 text-sm text-black" placeholder="Firm, domain, city, or practice area" /></label>
+        <SelectField label="Record source" value={source} onChange={(value) => setSource(value as UnifiedProspectSource | "")}><option value="">All sources</option>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
+        <SelectField label="Identity status" value={identity} onChange={(value) => setIdentity(value as UnifiedIdentityState | "")}><option value="">All identity states</option>{Object.entries(identityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
         <SelectField label="City" value={city} onChange={setCity}><option value="">All cities</option>{values.cities.map((value) => <option key={value} value={value}>{value}</option>)}</SelectField>
         <SelectField label="Lawyer count" value={countFilter} onChange={(value) => setCountFilter(value as CountFilter)}><option value="">Any count</option><option value="2">Exactly 2 lawyers</option><option value="3">Exactly 3 lawyers</option><option value="2-3">2 or 3 lawyers</option></SelectField>
         <SelectField label="Practice area" value={practiceArea} onChange={setPracticeArea}><option value="">All practice areas</option>{values.practiceAreas.map((value) => <option key={value} value={value}>{value}</option>)}</SelectField>
@@ -219,22 +252,23 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
       )}
 
       {filterChips.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Active filters">{filterChips.map((chip) => <button key={chip.label} type="button" onClick={chip.clear} className="rounded-full border border-navy/20 bg-navy/5 px-3 py-1 text-xs font-medium text-navy">{chip.label} <span aria-hidden="true">x</span><span className="sr-only">, remove filter</span></button>)}<button type="button" onClick={clearFilters} className="px-2 py-1 text-xs font-semibold text-navy underline underline-offset-2">Clear filters</button></div>}
-      <p className="mt-4 w-full text-sm text-black/60" aria-live="polite" data-ui-copy="supporting">{filtered.length} of {records.length} reviewed firm records</p>
+      <p className="mt-4 w-full text-sm text-black/60" aria-live="polite" data-ui-copy="supporting">{filtered.length} of {records.length} unified prospect records</p>
 
       {records.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No reviewed expansion records have been added yet.</div> : filtered.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No firms match the current view and filters.</div> : (
         <div className="mt-3 overflow-x-auto rounded border border-border-brand">
-          <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
-            <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Qualification</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
+          <table className="w-full min-w-[1240px] border-collapse text-left text-sm">
+            <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Source and identity</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
             <tbody>{filtered.map((record) => {
               const dossier = record.qualifiedDossier;
+              const identityState = prospectIdentityState(record);
               return <tr key={record.id} className="border-t border-border-brand align-top">
                 <td className="px-3 py-3 font-semibold text-navy">{record.websiteUrl ? <a href={record.websiteUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">{record.firmName}</a> : record.firmName}<span className="mt-1 block text-xs font-normal text-black/55">{record.city}</span>{record.canonicalDomain && <span className="mt-1 block text-xs font-normal text-black/55">{record.canonicalDomain}</span>}</td>
-                <td className="px-3 py-3">{dossier ? <><span className="inline-flex rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-900">Qualified</span><span className="mt-1 block text-xs text-black/55">Audit ready</span></> : <><span className="inline-flex rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-900">Needs evidence</span><span className="mt-1 block text-xs text-black/55">Qualification incomplete</span></>}</td>
+                <td className="px-3 py-3"><div className="flex flex-wrap gap-1">{prospectSources(record).map((item) => <span key={item} className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(item)}`}>{sourceLabels[item]}</span>)}<span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(identityState)}`}>{identityLabels[identityState]}</span></div>{record.legacyCrosswalk && <span className="mt-2 block text-xs leading-5 text-black/60">{record.legacyCrosswalk}</span>}{record.reconciliationNote && <span className="mt-1 block text-xs leading-5 text-black/50">{record.reconciliationNote}</span>}</td>
                 <td className="px-3 py-3"><span className="font-medium text-black/80">{observedLawyerCountLabel(record)}</span>{dossier && <><span className="mt-1 block text-xs text-black/55">{titleCase(dossier.lawyerCount.confidence)} confidence</span><span className="mt-1 block text-xs text-black/55">Observed {dossier.lawyerCount.observedAt.slice(0, 10)}</span></>}</td>
                 <td className="px-3 py-3 text-black/75">{dossier ? <><span className="font-medium">GBP: {gbpOpportunityLabels[dossier.gbpOpportunity.type] ?? titleCase(dossier.gbpOpportunity.type)}</span><span className="mt-1 block text-xs text-black/55">Website: {dossier.websiteAndIntake.opportunityTypes.map((value) => websiteOpportunityLabels[value] ?? titleCase(value)).join(", ")}</span></> : <span className="text-black/50">Not assessed</span>}</td>
                 <td className="px-3 py-3 text-xs leading-5 text-black/70">{dossier?.websiteAndIntake.observedChannels.join(", ") || "Not assessed"}</td>
                 <td className="px-3 py-3 text-xs leading-5"><EvidenceLink availability={record.advertisingEvidence} href={record.advertisingSourceUrl} label="Advertising" /><br /><EvidenceLink availability={record.gbpEvidence} href={record.gbpSourceUrl} label="GBP" />{dossier && <span className="mt-1 block text-black/55">{dossier.evidenceIds.length} registered sources</span>}</td>
-                <td className="px-3 py-3">{dossier ? <a href={`/admin/prospects/audits/${encodeURIComponent(dossier.firmId)}`} className="inline-flex rounded bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-navy/90">Open audit</a> : <span className="text-xs text-black/50">Audit unavailable</span>}</td>
+                <td className="px-3 py-3">{dossier ? <><a href={`/admin/prospects/audits/${encodeURIComponent(dossier.firmId)}`} className="inline-flex rounded bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-navy/90">Open audit</a><span className="mt-2 block text-xs text-black/55">Qualified and audit ready</span></> : <span className="text-xs text-black/50">Audit unavailable</span>}</td>
               </tr>;
             })}</tbody>
           </table>

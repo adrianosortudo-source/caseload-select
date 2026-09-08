@@ -322,6 +322,7 @@ function enrichRecord(record: ReconciledGtaProspect, dossier: QualifiedProspectD
 function addRecord(dossier: QualifiedProspectDossier): ReconciledGtaProspect {
   return {
     id: qualifiedRecordId(dossier.canonicalDomain),
+    recordOrigin: "shared_registry",
     firmId: dossier.firmId,
     canonicalDomain: dossier.canonicalDomain,
     firmName: dossier.firmName,

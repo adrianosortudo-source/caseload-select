@@ -12,4 +12,16 @@ describe("legacy prospect iframe contract", () => {
     expect(source).toContain('sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"');
     expect(source).not.toMatch(/sandbox="[^"]*allow-same-origin/);
   });
+
+  it("keeps the legacy artifact out of the primary prospects page", () => {
+    const page = readFileSync(
+      resolve(process.cwd(), "src/app/admin/prospects/page.tsx"),
+      "utf8",
+    );
+
+    expect(page).toContain("<ReconciledProspects />");
+    expect(page).toContain("Open archived legacy directory");
+    expect(page).not.toContain("<ProspectsFrame />");
+    expect(page).not.toContain('from "./ProspectsFrame"');
+  });
 });

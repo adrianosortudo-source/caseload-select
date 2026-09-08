@@ -91,6 +91,7 @@ function parseRecord(value: unknown): ReconciledGtaProspect {
 
   return {
     id: value.id,
+    recordOrigin: "research_ledger",
     firmName: value.firm_name,
     city: value.city,
     officeCities,

@@ -74,8 +74,8 @@ for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/dev/prospect-qualified-preview");
     await settle(page);
-    await expect(page.getByRole("heading", { name: "Reviewed GTA firm records" })).toBeVisible();
-    await page.getByRole("button", { name: /^Qualified/ }).click();
+    await expect(page.getByRole("heading", { name: "All prospect records" })).toBeVisible();
+    await page.getByRole("button", { name: /^Shared registry/ }).click();
     await expect(page.getByText("20 of", { exact: false })).toBeVisible();
     await page.getByRole("button", { name: "More qualification filters" }).click();
     await page.getByLabel("Advertising source type").selectOption("ad_library_record");

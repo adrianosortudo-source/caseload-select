@@ -6,13 +6,10 @@
  * leave the console shell when moving between tools). Auth is enforced by the
  * parent /admin layout (getOperatorSession + redirect).
  *
- * The list itself is the self-contained artifact served by ./view/route.ts;
- * ProspectsFrame fetches it and renders it in an iframe srcdoc so it behaves
- * exactly as-is (its own filters, search, table) without its styles or scripts
- * touching the console chrome. Standalone by design: no CRM link, no shared
- * data, nothing to configure here.
+ * The primary view is one native list for governed registry records, reviewed
+ * research rows, and retained legacy provenance. The historical standalone
+ * artifact remains available as a secondary reference, not a duplicate iframe.
  */
-import ProspectsFrame from "./ProspectsFrame";
 import Link from "next/link";
 import ReconciledProspects from "./ReconciledProspects";
 
@@ -25,7 +22,7 @@ export default function ProspectsPage() {
         <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator console</p>
         <h1 className="text-2xl font-bold text-navy mt-1">Prospect list</h1>
         <p className="text-sm text-black/50 mt-1">
-          Browse the reviewed firm expansion alongside the legacy GTA directory clusters.
+          Search shared registry firms, reviewed research rows, and retained legacy provenance in one place.
         </p>
         <Link href="/admin/prospects/brazilian" className="mt-3 inline-flex rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white hover:bg-navy/90">
           Open Brazilian lawyer research overlay
@@ -34,11 +31,9 @@ export default function ProspectsPage() {
 
       <ReconciledProspects />
 
-      <div>
-        <h2 className="text-lg font-bold text-navy">Legacy GTA directory clusters</h2>
-        <p className="text-sm text-black/50 mt-1">The original LSO-derived solo and two-lawyer address clusters remain available while their firm-level records are reconciled above.</p>
+      <div className="rounded-lg border border-border-brand bg-white px-4 py-3 text-sm text-black/60">
+        The original LSO-derived artifact remains read-only for historical reference. <Link href="/admin/prospects/view" target="_blank" className="font-semibold text-navy underline underline-offset-2">Open archived legacy directory</Link>
       </div>
-      <ProspectsFrame />
     </div>
   );
 }
