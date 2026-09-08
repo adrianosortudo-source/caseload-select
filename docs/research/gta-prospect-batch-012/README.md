@@ -48,13 +48,14 @@ to infer ownership.
 ## Static comparison scope
 
 `baseline-reconciliation.static.json` records a read-only full static screen
-using the comparison contract from PR #247 without copying its unfinished
-code into this branch: 20 current fixtures + 103 offline accepted-ledger
+using the corrected suite-aware comparison contract from PR #247 commit
+`337b5cf7` without copying its unrelated or unfinished code into this branch:
+20 current fixtures + 103 offline accepted-ledger
 records + 5,902 historical rows = 6,025 records. It compares canonical domain,
 normalized firm name, and city-compatible suite-aware street address. Every
 match is a `review_required` signal only; automatic merge is false for every
 row. The live ledger remains `offline_pending`.
 
-D'Alessio Sindhwani is deliberately held for address/suite identity review even
-though the static screen found no match: it publishes more than one office, so
-the source queue must not treat a clear static result as identity clearance.
+D'Alessio Sindhwani is deliberately held for address/suite identity review. The
+corrected contract finds the legacy trailing-suite address match, but that is a
+review signal only and not an identity, import, or merge decision.

@@ -6,6 +6,7 @@
   "algorithm_source": {
     "reference_pr": 247,
     "reference_branch": "codex/batch-011-consolidation",
+    "reference_commit": "337b5cf7",
     "reference_module": "src/lib/gta-prospect-baseline-reconciliation.ts",
     "copied_source_code": false,
     "comparison_fields": ["canonical_domain", "firm_name", "suite_aware_street_address"],
@@ -24,7 +25,7 @@
     {"record_id": "B012-WN-02", "baseline_candidate": {"city": "Stouffville", "suite_aware_street": "unit=;street=6060 main street"}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-2566", "match_fields": ["street_address"]}]},
     {"record_id": "B012-WN-03", "baseline_candidate": {"city": "Woodbridge", "suite_aware_street": "unit=201;street=4370 steeles avenue west"}, "state": "clear", "automatic_merge": false, "matches": []},
     {"record_id": "B012-WN-04", "baseline_candidate": {"city": "Brampton", "suite_aware_street": "unit=101;street=197 county court boulevard"}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-315", "match_fields": ["street_address"]}, {"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-351", "match_fields": ["street_address"]}]},
-    {"record_id": "B012-WN-05", "baseline_candidate": {"city": "Vaughan", "suite_aware_street": "unit=204;street=3100 rutherford road"}, "state": "held_address_suite_identity_review", "automatic_merge": false, "matches": [], "note": "Static comparison is clear, but this row remains held because the multi-office address and suite identity need human review."},
+    {"record_id": "B012-WN-05", "baseline_candidate": {"city": "Vaughan", "suite_aware_street": "unit=204;street=3100 rutherford road"}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-5901", "match_fields": ["street_address"]}], "note": "The corrected contract recognizes the legacy trailing-suite spelling. The lane remains held for address/suite identity review; this review signal is not an identity decision."},
     {"record_id": "B012-WN-H01", "baseline_candidate": {"city": "Woodbridge", "suite_aware_street": "unit=304;street=3700 steeles avenue west"}, "state": "clear", "automatic_merge": false, "matches": []},
     {"record_id": "B012-WN-H02", "baseline_candidate": {"city": "Toronto", "suite_aware_street": "unit=303;street=1 eva road"}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-4504", "match_fields": ["street_address"]}]},
     {"record_id": "B012-WN-H03", "baseline_candidate": {"city": "Bolton", "suite_aware_street": "unit=h3;street=18 king street east"}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-99", "match_fields": ["canonical_domain", "firm_name"]}]},
