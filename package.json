@@ -26,6 +26,7 @@
     "publishing:export-packets": "node scripts/publishing-export-packets.mjs",
     "check:seo-calibration": "node scripts/seo-check-calibration-acceptance.mjs",
     "record:seo-calibration": "node scripts/seo-check-record-calibration-fixture.mjs",
+    "prospects:generate-owner-cohort": "node scripts/generate-brazilian-owner-cohort-snapshot.mjs",
     "drg:deploy": "tsx scripts/drg-deploy/cli.ts",
     "drg:revise-checklists": "tsx scripts/drg-deploy/checklist-revision.ts"
   },

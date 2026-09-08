@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BRAZILIAN_LAWYER_PROSPECTS, filterBrazilianProspects, isSelectable, isSuppressed, LEGACY_PROSPECT_MANIFEST } from "../prospect-intelligence";
+import { applyOwnerCohortUpdates, BRAZILIAN_LAWYER_PROSPECTS, filterBrazilianProspects, isOwnerResearchEligible, isSelectable, isSuppressed, LEGACY_PROSPECT_MANIFEST, type ProspectOwnerCohortUpdate } from "../prospect-intelligence";
 import { PUBLIC_CONTACT_SNAPSHOT } from "../brazilian-prospect-contacts.snapshot";
 
 describe("Brazilian lawyer prospect overlay", () => {
@@ -68,6 +68,90 @@ describe("Brazilian lawyer prospect overlay", () => {
       },
     });
   });
+  it("adds a fail-closed owner research cohort without changing legacy selection", () => {
+    expect(BRAZILIAN_LAWYER_PROSPECTS.filter(isSelectable)).toHaveLength(11);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.filter(isOwnerResearchEligible)).toHaveLength(0);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.every((record) => record.cohort.ownerAuthority === "O4")).toBe(true);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.filter((record) => record.cohort.researchEligibility === "hold_owner_authority_review")).toHaveLength(21);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.filter((record) => record.cohort.researchEligibility === "do_not_contact")).toHaveLength(4);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.filter((record) => record.cohort.researchState === "suppressed")).toHaveLength(4);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.every((record) => record.cohort.interviewState === "not_started")).toBe(true);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.every((record) => record.cohort.explicitUnknowns.includes("Owner or operating authority has not been independently verified."))).toBe(true);
+  });
+  it("provides canonical IDs, domain states, and contact-source provenance", () => {
+    expect(BRAZILIAN_LAWYER_PROSPECTS.every((record) => record.cohort.canonicalPersonId && record.cohort.canonicalFirmId)).toBe(true);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.every((record) => record.cohort.canonicalFirmId.startsWith("firm:"))).toBe(true);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.every((record) => record.cohort.domainRelationships.length > 0)).toBe(true);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.every((record) => record.cohort.domainRelationships.some((relationship) => relationship.state === "current_primary"))).toBe(true);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.every((record) => record.cohort.contactSourceProvenance.some((entry) => entry.field === "website"))).toBe(true);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.filter((record) => record.email).every((record) => record.cohort.contactSourceProvenance.some((entry) => entry.field === "email"))).toBe(true);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.filter((record) => record.phone).every((record) => record.cohort.contactSourceProvenance.some((entry) => entry.field === "phone"))).toBe(true);
+  });
+  it("integrates approved owner updates and additions deterministically", () => {
+    const existing = BRAZILIAN_LAWYER_PROSPECTS.find((record) => record.id === "thiago-machado")!;
+    const updates: ProspectOwnerCohortUpdate[] = [
+      {
+        operation: "add",
+        id: "fixture-owner",
+        name: "Fixture Owner",
+        firm: "Fixture Law",
+        bucket: "explicit",
+        researchSet: "brazil_connected_ready",
+        outreachEligibility: "INTERNAL_CANDIDATE_UNSENT",
+        currentPrimaryFirm: "Fixture Law",
+        suppression: null,
+        evidence: "B3",
+        website: "https://fixture.example/",
+        sources: ["https://fixture.example/about"],
+        unknowns: [],
+        canonicalPersonId: "BAO-P-FIXTURE-2",
+        canonicalFirmId: "BAO-F-FIXTURE-2",
+        ownerAuthority: "O2",
+        ownerAuthorityEvidence: ["FIXTURE-E-2"],
+        researchEligibility: "primary_owner_cohort",
+        researchState: "eligible",
+        interviewState: "not_started",
+        evidenceConfidence: "corroborated",
+        domainRelationships: [{ url: "https://fixture.example/", host: "fixture.example", state: "current_primary", confidence: "corroborated" }],
+        contactSourceProvenance: [{ field: "website", value: "https://fixture.example/", sourceUrl: "https://fixture.example/about", evidenceIds: ["FIXTURE-E-2"], confidence: "corroborated" }],
+        explicitUnknowns: [],
+      },
+      {
+        operation: "update",
+        id: existing.id,
+        canonicalPersonId: existing.cohort.canonicalPersonId,
+        canonicalFirmId: existing.cohort.canonicalFirmId,
+        ownerAuthority: "O1",
+        ownerAuthorityEvidence: ["FIXTURE-E-1"],
+        researchEligibility: "primary_owner_cohort",
+        researchState: "eligible",
+        interviewState: "not_started",
+        evidenceConfidence: "corroborated",
+        domainRelationships: existing.cohort.domainRelationships,
+        contactSourceProvenance: existing.cohort.contactSourceProvenance,
+        explicitUnknowns: existing.unknowns,
+      },
+    ];
+    const integrated = applyOwnerCohortUpdates(BRAZILIAN_LAWYER_PROSPECTS, updates);
+
+    expect(integrated).toHaveLength(26);
+    expect(integrated.filter(isOwnerResearchEligible)).toHaveLength(2);
+    expect(integrated.find((record) => record.id === "thiago-machado")?.cohort.ownerAuthority).toBe("O1");
+    expect(integrated.at(-1)?.id).toBe("fixture-owner");
+    expect(BRAZILIAN_LAWYER_PROSPECTS).toHaveLength(25);
+    expect(BRAZILIAN_LAWYER_PROSPECTS.filter(isOwnerResearchEligible)).toHaveLength(0);
+  });
+  it("rejects any cohort update that relaxes DNC", () => {
+    const damaris = BRAZILIAN_LAWYER_PROSPECTS.find((record) => record.id === "damaris")!;
+    const unsafe: ProspectOwnerCohortUpdate = {
+      operation: "update",
+      id: damaris.id,
+      ...damaris.cohort,
+      researchEligibility: "primary_owner_cohort",
+      researchState: "eligible",
+    };
+    expect(() => applyOwnerCohortUpdates(BRAZILIAN_LAWYER_PROSPECTS, [unsafe])).toThrow("cannot relax DNC suppression");
+  });
   it("searches names/domains and never makes DNC selectable", () => {
     expect(filterBrazilianProspects("sakuraba")[0]?.firm).toBe("Sakuraba Law");
     const damaris = filterBrazilianProspects("faurilaw")[0];
@@ -80,5 +164,8 @@ describe("Brazilian lawyer prospect overlay", () => {
     ]);
     expect(isSelectable(damaris!)).toBe(false);
     expect(isSuppressed(damaris!)).toBe(true);
+    expect(damaris?.domains?.every((url) => damaris.cohort.domainRelationships.some((relationship) => relationship.url === url))).toBe(true);
+    expect(filterBrazilianProspects("BAO-P-000001")[0]?.id).toBe("damaris");
+    expect(filterBrazilianProspects("firm:sakuraba-law")[0]?.id).toBe("celso-sakuraba");
   });
 });
