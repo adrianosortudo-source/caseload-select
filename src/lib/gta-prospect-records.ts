@@ -12,7 +12,7 @@ export type LawyerCountBand = (typeof LAWYER_COUNT_BANDS)[number];
 
 export type ReconciliationStatus = "provisional_new" | "update_existing" | "new_pending_identity" | "duplicate" | "unresolved";
 export type EvidenceAvailability = "observed" | "none" | "unknown";
-export type ProspectRecordOrigin = "research_ledger" | "reviewed_fixture" | "shared_registry";
+export type ProspectRecordOrigin = "research_ledger" | "reviewed_fixture" | "shared_registry" | "legacy_provenance";
 
 export interface ReconciledGtaProspect {
   /** Stable source-controlled identifier, not a database id. */

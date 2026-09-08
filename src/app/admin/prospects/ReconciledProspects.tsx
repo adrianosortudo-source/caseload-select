@@ -38,6 +38,7 @@ export type RecordsResponse = {
 
 type QuickView = "all" | "shared_registry" | "audit_ready" | "identity_review";
 type CountFilter = "" | "2" | "3" | "2-3";
+const PAGE_SIZE = 100;
 
 const evidenceLabel: Record<EvidenceAvailability, string> = { observed: "Observed", none: "None found", unknown: "Unknown" };
 const advertisingActivityLabel: Record<AdvertisingActivityState, string> = {
@@ -132,6 +133,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const [cohortId, setCohortId] = useState("");
   const [source, setSource] = useState<UnifiedProspectSource | "">("");
   const [identity, setIdentity] = useState<UnifiedIdentityState | "">("");
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     if (initialData) return;
@@ -178,6 +180,9 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
     advertisingActivity, gbpOpportunityType,
     advertisingSourceType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, evidenceFreshness: freshness, cohortId,
   }), { source, identity, quickView }), [records, query, city, countFilter, practiceArea, advertising, gbp, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity]);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const displayedPage = Math.min(page, pageCount - 1);
+  const visibleRecords = filtered.slice(displayedPage * PAGE_SIZE, (displayedPage + 1) * PAGE_SIZE);
 
   const filterChips = [
     query && { label: `Search: ${query}`, clear: () => setQuery("") }, city && { label: `City: ${city}`, clear: () => setCity("") },
@@ -214,7 +219,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
         <h2 id="reconciled-prospects-heading" className="mt-1 w-full text-xl font-bold text-navy" data-ui-copy="heading">All prospect records</h2>
         <p className="mt-1 w-full text-sm text-black/60" data-ui-copy="body">Search shared firm identities, reviewed research records, and retained legacy crosswalks in one list. Open an audit when the supporting evidence is ready.</p>
         <p className="mt-2 w-full text-xs font-medium text-black/60" data-ui-copy="supporting">
-          Source: {sourceDetails ? reconciledProspectSourceLabel({ source: sourceDetails.source ?? "fixture", sourceCounts: sourceDetails.sourceCounts ?? { ledger: 0, fixture: records.length }, fallbackReason: sourceDetails.fallbackReason }) : "reviewed source-controlled fixture"}. Qualified cohort reconciliation: {sourceDetails?.qualifiedImport ? `${sourceDetails.qualifiedImport.updated} enriched, ${sourceDetails.qualifiedImport.added} added, ${sourceDetails.qualifiedImport.ambiguous} held for identity review` : "loading"}.
+          Source: {sourceDetails ? reconciledProspectSourceLabel({ source: sourceDetails.source ?? "fixture", sourceCounts: sourceDetails.sourceCounts ?? { ledger: 0, fixture: records.length }, fallbackReason: sourceDetails.fallbackReason }) : "reviewed source-controlled fixture"}, plus retained legacy directory provenance. Legacy rows remain unresolved until their firm identity is supported. Qualified cohort reconciliation: {sourceDetails?.qualifiedImport ? `${sourceDetails.qualifiedImport.updated} enriched, ${sourceDetails.qualifiedImport.added} added, ${sourceDetails.qualifiedImport.ambiguous} held for identity review` : "loading"}.
         </p>
       </div>
 
@@ -258,7 +263,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
         <div className="mt-3 overflow-x-auto rounded border border-border-brand">
           <table className="w-full min-w-[1240px] border-collapse text-left text-sm">
             <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Source and identity</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
-            <tbody>{filtered.map((record) => {
+            <tbody>{visibleRecords.map((record) => {
               const dossier = record.qualifiedDossier;
               const identityState = prospectIdentityState(record);
               return <tr key={record.id} className="border-t border-border-brand align-top">
@@ -274,6 +279,10 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
           </table>
         </div>
       )}
+      {filtered.length > PAGE_SIZE && <div className="mt-3 flex items-center justify-between gap-3 text-sm text-black/60">
+        <span>Showing {displayedPage * PAGE_SIZE + 1}–{Math.min((displayedPage + 1) * PAGE_SIZE, filtered.length)}</span>
+        <div className="flex gap-2"><button type="button" disabled={displayedPage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Previous</button><button type="button" disabled={displayedPage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Next</button></div>
+      </div>}
     </section>
   );
 }

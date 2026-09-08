@@ -61,7 +61,7 @@ describe("reviewed GTA prospects route", () => {
     expect(body.source).toBe("fixture");
     expect(body.sourceCounts).toEqual({ ledger: 0, fixture: 20 });
     expect(body.fallbackReason).toBe("ledger_empty");
-    expect(body.records).toHaveLength(40);
+    expect(body.records).toHaveLength(5_942);
     expect(body.qualifiedImport).toMatchObject({ inputCount: 20, added: 20, updated: 0, ambiguous: 0 });
     expect(body.records.filter((record: { qualifiedDossier?: unknown }) => record.qualifiedDossier)).toHaveLength(20);
   });
@@ -77,7 +77,7 @@ describe("reviewed GTA prospects route", () => {
     expect(body.source).toBe("hybrid");
     expect(body.sourceCounts).toEqual({ ledger: 2, fixture: 19 });
     expect(body.fallbackReason).toBeUndefined();
-    expect(body.records).toHaveLength(41);
+    expect(body.records).toHaveLength(5_943);
     expect(body.qualifiedImport).toMatchObject({ added: 20, updated: 0, ambiguous: 0 });
     expect(body.records.filter((record: { id: string }) => record.id === RECONCILED_GTA_PROSPECTS[0].id)).toHaveLength(1);
     expect(body.records.find((record: { id: string }) => record.id === RECONCILED_GTA_PROSPECTS[0].id).firmName).toBe("Aastha Lawyers from ledger");
@@ -98,9 +98,9 @@ describe("reviewed GTA prospects route", () => {
     expect(response.status).toBe(200);
     expect(body.source).toBe("hybrid");
     expect(body.sourceCounts).toEqual({ ledger: 103, fixture: 20 });
-    expect(body.records).toHaveLength(143);
+    expect(body.records).toHaveLength(6_045);
     expect(body.qualifiedImport).toMatchObject({ added: 20, updated: 0, ambiguous: 0 });
-    expect(new Set(body.records.map((record: { id: string }) => record.id)).size).toBe(143);
+    expect(new Set(body.records.map((record: { id: string }) => record.id)).size).toBe(6_045);
   });
 
   it("uses only ledger rows after every fixture key is represented", async () => {
@@ -111,7 +111,7 @@ describe("reviewed GTA prospects route", () => {
     expect(response.status).toBe(200);
     expect(body.source).toBe("ledger");
     expect(body.sourceCounts).toEqual({ ledger: 20, fixture: 0 });
-    expect(body.records).toHaveLength(40);
+    expect(body.records).toHaveLength(5_942);
     expect(body.qualifiedImport).toMatchObject({ added: 20, updated: 0, ambiguous: 0 });
   });
 

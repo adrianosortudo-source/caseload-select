@@ -8,6 +8,7 @@ export function prospectSources(record: ReconciledGtaProspect): UnifiedProspectS
   if (record.qualifiedDossier) sources.push("shared_registry");
   if (record.recordOrigin === "research_ledger") sources.push("research_ledger");
   else if (record.recordOrigin === "reviewed_fixture") sources.push("reviewed_fixture");
+  else if (record.recordOrigin === "legacy_provenance") sources.push("legacy_provenance");
   if (record.legacyCrosswalk || record.legacyClusterLawyerCount !== null) sources.push("legacy_provenance");
   return sources.length > 0 ? sources : ["reviewed_fixture"];
 }
