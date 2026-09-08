@@ -1,6 +1,0 @@
-record_id,workflow_status,accepted,firm_name,canonical_domain,office_cities,observed_lawyer_count,count_qualifier,first_party_roster_url,office_source_url,qa_disposition
-B009-01,candidate,false,Naymark LLP,naymarklaw.com,Toronto,7,exact,https://www.naymarklaw.com/team,https://www.naymarklaw.com/contact-3,accepted_for_staging
-B009-02,candidate,false,Falconeri Rumble Harrison LLP,frhlaw.ca,Toronto,4,exact,https://frhlaw.ca/our-team/,https://frhlaw.ca/our-team/,accepted_for_staging
-B009-03,candidate,false,Cowling Boissonneau LLP,cblitigators.com,Toronto,3,exact,https://www.cblitigators.com/,https://www.cblitigators.com/,accepted_for_staging
-B009-04,candidate,false,Overland LLP,overlandllp.ca,Toronto,8,exact,https://overlandllp.ca/about,https://overlandllp.ca/contact,accepted_for_staging
-B009-05,candidate,false,Taerk Family Law,taerkfamilylaw.com,Toronto,4,at_least,https://taerkfamilylaw.com/,https://taerkfamilylaw.com/,needs_count_review
