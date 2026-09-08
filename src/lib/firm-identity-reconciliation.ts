@@ -329,7 +329,9 @@ export function matchFirmIdentityCandidate(
     if (!identity) return unresolved("conflicting_high_confidence_identifiers", [mapping.firmId], ["The confirmed source mapping references a firm that is not in the governed identity set."], "high");
     const candidateDomain = normalizeFirmDomain(candidate.canonicalDomain);
     if ((candidate.firmId && candidate.firmId !== mapping.firmId) || (candidateDomain && candidateDomain !== identity.canonicalDomain)) {
-      return unresolved("conflicting_high_confidence_identifiers", [mapping.firmId, isStableFirmId(candidate.firmId) ? candidate.firmId : null], ["The confirmed source mapping conflicts with another supplied high-confidence identifier."], "high");
+      const conflictingFirmIds: StableFirmId[] = [mapping.firmId];
+      if (isStableFirmId(candidate.firmId)) conflictingFirmIds.push(candidate.firmId);
+      return unresolved("conflicting_high_confidence_identifiers", conflictingFirmIds, ["The confirmed source mapping conflicts with another supplied high-confidence identifier."], "high");
     }
     return confirmed(mapping.firmId, "confirmed_source_mapping", mapping.reason);
   }
