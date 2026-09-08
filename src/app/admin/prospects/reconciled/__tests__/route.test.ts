@@ -46,9 +46,9 @@ describe("reviewed GTA prospects route", () => {
     const response = await GET();
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({
-      records: RECONCILED_GTA_PROSPECTS,
       source: "fixture",
       sourceCounts: { ledger: 0, fixture: 20 },
+      qualifiedImport: { inputCount: 20, added: 20, updated: 0, ambiguous: 0 },
       fallbackReason: "ledger_unavailable",
     });
   });
@@ -61,7 +61,9 @@ describe("reviewed GTA prospects route", () => {
     expect(body.source).toBe("fixture");
     expect(body.sourceCounts).toEqual({ ledger: 0, fixture: 20 });
     expect(body.fallbackReason).toBe("ledger_empty");
-    expect(body.records).toEqual(RECONCILED_GTA_PROSPECTS);
+    expect(body.records).toHaveLength(40);
+    expect(body.qualifiedImport).toMatchObject({ inputCount: 20, added: 20, updated: 0, ambiguous: 0 });
+    expect(body.records.filter((record: { qualifiedDossier?: unknown }) => record.qualifiedDossier)).toHaveLength(20);
   });
 
   it("shows nonempty ledger records alongside only the missing fixtures", async () => {
@@ -75,7 +77,8 @@ describe("reviewed GTA prospects route", () => {
     expect(body.source).toBe("hybrid");
     expect(body.sourceCounts).toEqual({ ledger: 2, fixture: 19 });
     expect(body.fallbackReason).toBeUndefined();
-    expect(body.records).toHaveLength(21);
+    expect(body.records).toHaveLength(41);
+    expect(body.qualifiedImport).toMatchObject({ added: 20, updated: 0, ambiguous: 0 });
     expect(body.records.filter((record: { id: string }) => record.id === RECONCILED_GTA_PROSPECTS[0].id)).toHaveLength(1);
     expect(body.records.find((record: { id: string }) => record.id === RECONCILED_GTA_PROSPECTS[0].id).firmName).toBe("Aastha Lawyers from ledger");
     expect(body.records.map((record: { firmName: string }) => record.firmName)).toEqual(
@@ -95,8 +98,9 @@ describe("reviewed GTA prospects route", () => {
     expect(response.status).toBe(200);
     expect(body.source).toBe("hybrid");
     expect(body.sourceCounts).toEqual({ ledger: 103, fixture: 20 });
-    expect(body.records).toHaveLength(123);
-    expect(new Set(body.records.map((record: { id: string }) => record.id)).size).toBe(123);
+    expect(body.records).toHaveLength(143);
+    expect(body.qualifiedImport).toMatchObject({ added: 20, updated: 0, ambiguous: 0 });
+    expect(new Set(body.records.map((record: { id: string }) => record.id)).size).toBe(143);
   });
 
   it("uses only ledger rows after every fixture key is represented", async () => {
@@ -107,7 +111,28 @@ describe("reviewed GTA prospects route", () => {
     expect(response.status).toBe(200);
     expect(body.source).toBe("ledger");
     expect(body.sourceCounts).toEqual({ ledger: 20, fixture: 0 });
-    expect(body.records).toHaveLength(20);
+    expect(body.records).toHaveLength(40);
+    expect(body.qualifiedImport).toMatchObject({ added: 20, updated: 0, ambiguous: 0 });
+  });
+
+  it("enriches a ledger record by normalized canonical domain instead of duplicating it", async () => {
+    h.state.session = { role: "operator" };
+    h.state.records = [{
+      ...RECONCILED_GTA_PROSPECTS[0],
+      id: "ledger-struthers",
+      firmName: "Struthers Law from ledger",
+      websiteUrl: "https://www.strutherslaw.ca/contact.html",
+    }];
+    const response = await GET();
+    const body = await response.json();
+    expect(response.status).toBe(200);
+    expect(body.qualifiedImport).toMatchObject({ added: 19, updated: 1, ambiguous: 0 });
+    expect(body.records.filter((record: { canonicalDomain?: string }) => record.canonicalDomain === "strutherslaw.ca")).toHaveLength(1);
+    expect(body.records.find((record: { id: string }) => record.id === "ledger-struthers")).toMatchObject({
+      firmName: "Struthers Law from ledger",
+      firmId: "FIRM-7XGYP723JDAXDAB2J76RVNSVD5",
+      observedLawyerCount: 2,
+    });
   });
 
   it("returns a visible server error for a real ledger failure rather than concealing it as fallback", async () => {
