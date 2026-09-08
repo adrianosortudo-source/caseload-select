@@ -6,6 +6,10 @@ import {
 } from "@/lib/gta-prospect-research-reader";
 import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
 import { RECONCILED_GTA_PROSPECTS } from "../reconciled-prospects";
+import {
+  mergeQualifiedProspects,
+  type QualifiedProspectImportReport,
+} from "@/lib/qualified-gta-prospects";
 import type {
   ReconciledProspectFallbackReason,
   ReconciledProspectSource,
@@ -18,15 +22,18 @@ type RecordsResponse = {
   records: readonly ReconciledGtaProspect[];
   source: ReconciledProspectSource;
   sourceCounts: ReconciledProspectSourceCounts;
+  qualifiedImport: QualifiedProspectImportReport;
   fallbackReason?: ReconciledProspectFallbackReason;
 };
 
 function fixtureResponse(fallbackReason: ReconciledProspectFallbackReason) {
+  const merged = mergeQualifiedProspects(RECONCILED_GTA_PROSPECTS);
   return NextResponse.json<RecordsResponse>(
     {
-      records: RECONCILED_GTA_PROSPECTS,
+      records: merged.records,
       source: "fixture",
       sourceCounts: { ledger: 0, fixture: RECONCILED_GTA_PROSPECTS.length },
+      qualifiedImport: merged.report,
       fallbackReason,
     },
     { headers: { "Cache-Control": "private, no-store" } },
@@ -58,11 +65,13 @@ export async function GET() {
     if (records.length === 0) return fixtureResponse("ledger_empty");
 
     const merged = mergeLedgerAndFixtureRecords(records);
+    const qualified = mergeQualifiedProspects(merged.records);
     return NextResponse.json<RecordsResponse>(
       {
-        records: merged.records,
+        records: qualified.records,
         source: merged.missingFixtureCount > 0 ? "hybrid" : "ledger",
         sourceCounts: { ledger: records.length, fixture: merged.missingFixtureCount },
+        qualifiedImport: qualified.report,
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );

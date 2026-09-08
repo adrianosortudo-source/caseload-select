@@ -16,6 +16,10 @@ export type EvidenceAvailability = "observed" | "none" | "unknown";
 export interface ReconciledGtaProspect {
   /** Stable source-controlled identifier, not a database id. */
   id: string;
+  /** Stable shared firm identity when this record has been linked to the governed registry. */
+  firmId?: string | null;
+  /** Normalized host used for deterministic cross-source reconciliation. */
+  canonicalDomain?: string | null;
   firmName: string;
   /** Display label for the recorded office location or locations. */
   city: string;
@@ -43,6 +47,9 @@ export interface ReconciledGtaProspect {
   advertisingSourceUrl: string | null;
   gbpEvidence: EvidenceAvailability;
   gbpSourceUrl: string | null;
+
+  /** Evidence-backed qualification detail for enriched firm-expansion records. */
+  qualifiedDossier?: import("@/lib/qualified-gta-prospects").QualifiedProspectDossier;
 }
 
 export interface ReconciledProspectFilters {
@@ -52,6 +59,18 @@ export interface ReconciledProspectFilters {
   practiceArea?: string;
   advertising?: EvidenceAvailability | "";
   gbp?: EvidenceAvailability | "";
+  exactLawyerCount?: "2" | "3" | "2-3" | "";
+  qualification?: import("@/lib/qualified-gta-prospects").QualificationState | "";
+  audit?: import("@/lib/qualified-gta-prospects").AuditState | "";
+  advertisingActivity?: import("@/lib/qualified-gta-prospects").AdvertisingActivityState | "";
+  advertisingSourceType?: string;
+  gbpOpportunityType?: string;
+  websiteOpportunityType?: string;
+  intakeChannel?: string;
+  lawyerCountConfidence?: import("@/lib/qualified-gta-prospects").QualifiedProspectConfidence | "";
+  evidenceFreshness?: import("@/lib/qualified-gta-prospects").EvidenceFreshness | "";
+  cohortId?: string;
+  referenceDate?: Date;
 }
 
 export function lawyerCountBand(count: number | null): LawyerCountBand {
@@ -104,6 +123,38 @@ export function filterReconciledGtaProspects(
     if (practiceArea && !record.practiceAreas.some((area) => area.toLocaleLowerCase() === practiceArea)) return false;
     if (filters.advertising && record.advertisingEvidence !== filters.advertising) return false;
     if (filters.gbp && record.gbpEvidence !== filters.gbp) return false;
+    if (filters.exactLawyerCount) {
+      const count = record.observedLawyerCount;
+      if (filters.exactLawyerCount === "2-3" && count !== 2 && count !== 3) return false;
+      if (filters.exactLawyerCount !== "2-3" && count !== Number(filters.exactLawyerCount)) return false;
+    }
+    if (filters.qualification || filters.audit || filters.advertisingActivity || filters.advertisingSourceType || filters.gbpOpportunityType
+      || filters.websiteOpportunityType || filters.intakeChannel || filters.lawyerCountConfidence
+      || filters.evidenceFreshness || filters.cohortId) {
+      const dossier = record.qualifiedDossier;
+      if (filters.qualification === "qualified" && !dossier) return false;
+      if (filters.qualification === "needs_evidence" && dossier) return false;
+      if (filters.audit === "ready" && dossier?.audit.state !== "ready") return false;
+      if (filters.audit === "not_ready" && dossier?.audit.state === "ready") return false;
+      if (filters.advertisingActivity && dossier?.advertisingActivity.state !== filters.advertisingActivity) return false;
+      if (filters.advertisingSourceType && !dossier?.advertisingActivity.sourceTypes.includes(filters.advertisingSourceType)) return false;
+      if (filters.gbpOpportunityType && dossier?.gbpOpportunity.type !== filters.gbpOpportunityType) return false;
+      if (filters.websiteOpportunityType && !dossier?.websiteAndIntake.opportunityTypes.includes(filters.websiteOpportunityType)) return false;
+      if (filters.intakeChannel && !dossier?.websiteAndIntake.observedChannels.includes(filters.intakeChannel)) return false;
+      if (filters.lawyerCountConfidence && dossier?.lawyerCount.confidence !== filters.lawyerCountConfidence) return false;
+      if (filters.cohortId && dossier?.qualification.cohortId !== filters.cohortId) return false;
+      if (filters.evidenceFreshness) {
+        // Loaded lazily in the module graph through the dossier field contract.
+        const observed = dossier?.audit.observedOn ?? record.rosterCheckedAt;
+        const observedDate = new Date(`${observed.slice(0, 10)}T00:00:00Z`);
+        const referenceDate = filters.referenceDate ?? new Date();
+        const ageDays = Number.isNaN(observedDate.getTime())
+          ? null
+          : Math.max(0, Math.floor((referenceDate.getTime() - observedDate.getTime()) / 86_400_000));
+        const freshness = ageDays === null ? "unknown" : ageDays <= 30 ? "last_30_days" : ageDays <= 180 ? "31_to_180_days" : "older_than_180_days";
+        if (freshness !== filters.evidenceFreshness) return false;
+      }
+    }
     return true;
   });
 }
