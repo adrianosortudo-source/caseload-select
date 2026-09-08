@@ -77,7 +77,14 @@ for (const width of WIDTHS) {
     await expect(page.getByRole("heading", { name: "All prospect records" })).toBeVisible();
     await page.getByRole("button", { name: /^Shared registry/ }).click();
     await expect(page.getByText("20 of", { exact: false })).toBeVisible();
+    await page.getByLabel("Observed lawyer count").selectOption("2-3");
+    await expect(page.getByText("20 of", { exact: false })).toBeVisible();
+    await page.getByLabel("Minimum lawyers").fill("2");
+    await page.getByLabel("Maximum lawyers").fill("3");
+    await expect(page.getByText("20 of", { exact: false })).toBeVisible();
     await page.getByRole("button", { name: "More qualification filters" }).click();
+    await expect(page.getByLabel("Owner identified")).toBeVisible();
+    await expect(page.getByLabel("Public email")).toBeVisible();
     await page.getByLabel("Advertising source type").selectOption("ad_library_record");
     await expect(page.getByText("8 of", { exact: false })).toBeVisible();
     await assertRenderedGates(page);

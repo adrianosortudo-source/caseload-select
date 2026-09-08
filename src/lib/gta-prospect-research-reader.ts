@@ -1,8 +1,9 @@
 import "server-only";
 
-import type { EvidenceAvailability, ReconciledGtaProspect, ReconciliationStatus } from "@/lib/gta-prospect-records";
+import type { EvidenceAvailability, PublicProspectContact, ReconciledGtaProspect, ReconciliationStatus } from "@/lib/gta-prospect-records";
 
-const RPC_NAME = "list_gta_prospect_research_for_operator";
+const RPC_NAME = "list_gta_prospect_research_with_contacts_for_operator";
+const LEGACY_RPC_NAME = "list_gta_prospect_research_for_operator";
 const reconciliationStatuses = new Set<ReconciliationStatus>([
   "provisional_new",
   "update_existing",
@@ -51,6 +52,28 @@ function isHttpUrl(value: unknown): value is string | null {
   }
 }
 
+function parsePublicContacts(value: unknown): readonly PublicProspectContact[] {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw projectionError("public_contacts is invalid");
+  const relationships = new Set<PublicProspectContact["relationship"]>(["owner", "founder", "principal", "named_lawyer", "firm_inbox"]);
+  const emailKinds = new Set<PublicProspectContact["emailKind"]>(["owner", "named_person", "general_firm"]);
+  return value.map((entry) => {
+    if (!isObject(entry) || !isNullableString(entry.name) || !isNullableString(entry.email)
+      || typeof entry.relationship !== "string" || !relationships.has(entry.relationship as PublicProspectContact["relationship"])
+      || typeof entry.email_kind !== "string" || !emailKinds.has(entry.email_kind as PublicProspectContact["emailKind"])
+      || !isHttpUrl(entry.source_url) || !isIsoDate(entry.observed_at)) throw projectionError("public contact is invalid");
+    if (entry.name === null && entry.email === null) throw projectionError("public contact has no name or email");
+    return {
+      name: entry.name,
+      relationship: entry.relationship as PublicProspectContact["relationship"],
+      email: entry.email,
+      emailKind: entry.email_kind as PublicProspectContact["emailKind"],
+      sourceUrl: entry.source_url,
+      observedAt: entry.observed_at,
+    };
+  });
+}
+
 function projectionError(message: string): Error {
   return new Error(`Invalid GTA prospect research projection: ${message}`);
 }
@@ -64,12 +87,13 @@ function parseRecord(value: unknown): ReconciledGtaProspect {
     "legacy_crosswalk", "reconciliation_note", "advertising_evidence", "advertising_source_url",
     "gbp_evidence", "gbp_source_url",
   ];
-  const unexpected = Object.keys(value).filter((key) => !expectedKeys.includes(key));
+  const unexpected = Object.keys(value).filter((key) => ![...expectedKeys, "public_contacts"].includes(key));
   if (unexpected.length > 0) throw projectionError(`unexpected column(s): ${unexpected.join(", ")}`);
   const officeCities = value.office_cities;
   const practiceAreas = value.practice_areas;
   const observedLawyerCount = value.observed_lawyer_count;
   const legacyClusterLawyerCount = value.legacy_cluster_lawyer_count;
+  const publicContacts = parsePublicContacts(value.public_contacts);
 
   if (typeof value.id !== "string" || !/^[a-z0-9][a-z0-9-]{1,159}$/.test(value.id)) throw projectionError("id is invalid");
   if (typeof value.firm_name !== "string" || value.firm_name.trim() === "") throw projectionError("firm_name is invalid");
@@ -110,15 +134,16 @@ function parseRecord(value: unknown): ReconciledGtaProspect {
     advertisingSourceUrl: value.advertising_source_url,
     gbpEvidence: value.gbp_evidence as EvidenceAvailability,
     gbpSourceUrl: value.gbp_source_url,
+    publicContacts,
   };
 }
 
-function isMissingProjectionRpc(error: RpcError): boolean {
+function isMissingProjectionRpc(error: RpcError, rpcName = RPC_NAME): boolean {
   const text = [error.code, error.message, error.details, error.hint].filter(Boolean).join(" ").toLowerCase();
   return error.code === "PGRST202"
     || error.code === "42883"
-    || text.includes(`function public.${RPC_NAME} does not exist`)
-    || text.includes(`could not find the function public.${RPC_NAME}`);
+    || text.includes(`function public.${rpcName} does not exist`)
+    || text.includes(`could not find the function public.${rpcName}`);
 }
 
 export async function listGtaProspectResearchForOperator(
@@ -128,9 +153,10 @@ export async function listGtaProspectResearchForOperator(
     const { supabaseAdmin } = await import("@/lib/supabase-admin");
     return supabaseAdmin as unknown as GtaProspectResearchReaderClient;
   })();
-  const { data, error } = await reader.rpc(RPC_NAME);
+  let { data, error } = await reader.rpc(RPC_NAME);
+  if (error && isMissingProjectionRpc(error)) ({ data, error } = await reader.rpc(LEGACY_RPC_NAME));
   if (error) {
-    if (isMissingProjectionRpc(error)) throw new GtaProspectLedgerUnavailableError();
+    if (isMissingProjectionRpc(error, LEGACY_RPC_NAME)) throw new GtaProspectLedgerUnavailableError();
     throw new Error(`Could not read the GTA prospect research ledger: ${error.message ?? "unknown database error"}`);
   }
   if (!Array.isArray(data)) throw projectionError("RPC did not return an array");
