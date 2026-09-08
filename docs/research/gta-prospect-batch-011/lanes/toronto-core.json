@@ -1,0 +1,2351 @@
+{
+  "schema_version": "2.0",
+  "batch_id": "gta-prospect-batch-011",
+  "lane": "toronto-core",
+  "records": [
+    {
+      "record_id": "B011-T-01",
+      "firm_name": "Black Sutherland LLP",
+      "canonical_domain": "blacksutherland.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 15,
+      "count_qualifier": "exact",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-01",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "cross_lane_counterpart=B011-WN-004"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.blacksutherland.com/our-lawyers/",
+          "note": "The reviewed 'Our Lawyers' page lists 15 lawyer profiles and identifies the Toronto office separately."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.blacksutherland.com/our-lawyers/",
+          "note": "The source presents 15 named lawyer profiles; no owner claim is made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-02",
+      "firm_name": "Bruder Springstead LLP",
+      "canonical_domain": "bruderspringstead.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 11,
+      "count_qualifier": "exact",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-02",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://bruderspringstead.com/our-team/",
+          "note": "The reviewed team page separates six partners and five associates from staff."
+        },
+        {
+          "kind": "office",
+          "url": "https://bruderspringstead.com/our-team/",
+          "note": "Partner and associate headings provide a bounded 11-lawyer roster. Partner status is not treated as ownership."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-03",
+      "firm_name": "Lenczner Slaght LLP",
+      "canonical_domain": "litigate.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 14,
+      "count_qualifier": "at_least",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-03",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.litigate.com/People",
+          "note": "The reviewed filtered lawyers page visibly listed at least 14 lawyer profiles before its result excerpt ended; it did not establish a bounded total in this pass."
+        },
+        {
+          "kind": "office",
+          "url": "https://litigate.com/",
+          "note": "Lower bound only; do not use it to assign a capped size band."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-04",
+      "firm_name": "Cavalluzzo LLP",
+      "canonical_domain": "cavalluzzo.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 16,
+      "count_qualifier": "at_least",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-04",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.cavalluzzo.com/employment-law-and-litigation-our-people",
+          "note": "Sixteen unique individual lawyer source entries addresses appeared on the reviewed first-party people page; generic mailboxes were excluded."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.cavalluzzo.com/",
+          "note": "This is a conservative roster lower bound, not a full-firm total."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-05",
+      "firm_name": "Stockwoods LLP",
+      "canonical_domain": "stockwoods.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 30,
+      "count_qualifier": "at_least",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-05",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://stockwoods.ca/",
+          "note": "Thirty named lawyer profiles were visible on the reviewed first-party page; roster completeness needs an independent re-check."
+        },
+        {
+          "kind": "office",
+          "url": "https://stockwoods.ca/",
+          "note": "Lower bound only; the leadership title does not establish ownership."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://stockwoods.ca/",
+          "note": "Managing Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-06",
+      "firm_name": "Daniel Brown Law",
+      "canonical_domain": "danielbrownlaw.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 14,
+      "count_qualifier": "exact",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-06",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.danielbrownlaw.ca/our-team/",
+          "note": "The reviewed team page distinguishes 14 partner or associate lawyer profiles from law-clerk and paralegal roles."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.danielbrownlaw.ca/our-team/",
+          "note": "Partner title is preserved as published and is not an ownership inference."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.danielbrownlaw.ca/our-team/",
+          "note": "Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-07",
+      "firm_name": "Gluckstein Lawyers",
+      "canonical_domain": "gluckstein.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 22,
+      "count_qualifier": "at_least",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-07",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.gluckstein.com/team",
+          "note": "The first-party team list identifies 23 people under Lawyers, including one marked retired; this lower bound excludes the retired lawyer."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.gluckstein.com/contact/toronto",
+          "note": "Charles and Bernard Gluckstein are labelled managing and founding partners by the firm; no ownership claim is added."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.gluckstein.com/team",
+          "note": "Managing Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-08",
+      "firm_name": "McLeish Orlando LLP",
+      "canonical_domain": "mcleishorlando.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 12,
+      "count_qualifier": "at_least",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-08",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.mcleishorlando.com/our-people/",
+          "note": "A reviewed first-party lawyer profile listed 12 partner, associate, and founding-partner lawyer profiles; no claim that this is the entire roster."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.mcleishorlando.com/our-firm/",
+          "note": "Count is a lower bound and the founding-partner label is not an ownership assertion."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.mcleishorlando.com/our-people/patrick-brown/",
+          "note": "Founding Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-09",
+      "firm_name": "Neinstein Personal Injury Lawyers",
+      "canonical_domain": "neinstein.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 19,
+      "count_qualifier": "at_least",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-09",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://neinstein.com/our-lawyers",
+          "note": "The reviewed lawyer directory distinguishes 12 partners and seven associates from paralegal and student sections. A separate homepage statement says 20 dedicated lawyers, so this record retains the directly countable lower bound."
+        },
+        {
+          "kind": "office",
+          "url": "https://neinstein.com/about",
+          "note": "The 19-profile count is a lower bound pending resolution of the current homepage's 20-lawyer statement."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://neinstein.com/our-lawyers",
+          "note": "Managing Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-10",
+      "firm_name": "Bogoroch & Associates LLP",
+      "canonical_domain": "bogoroch.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 11,
+      "count_qualifier": "at_least",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-10",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.bogoroch.com/our-lawyers/",
+          "note": "The reviewed firm team page states that the firm has 11 lawyers; this needs a fresh bounded-roster check before treating it as exact."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.bogoroch.com/",
+          "note": "Founder and managing-partner wording is preserved without inferring ownership."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.bogoroch.com/our-lawyers/",
+          "note": "Founder and Managing Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-11",
+      "firm_name": "Thomson Rogers LLP",
+      "canonical_domain": "thomsonrogers.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 22,
+      "count_qualifier": "at_least",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-11",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.thomsonrogers.com/directory/",
+          "note": "The first-page directory excerpt lists 22 lawyer profiles before a 'Load More' control; it cannot establish the total."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.thomsonrogers.com/directory/",
+          "note": "Lower bound only because the directory required further loading."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.thomsonrogers.com/directory/",
+          "note": "Managing Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-12",
+      "firm_name": "Wildeboer Dellelce LLP",
+      "canonical_domain": "wildlaw.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": 18,
+      "count_qualifier": "at_least",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-12",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://wildlaw.ca/practice-areas/tax",
+          "note": "A first-party lawyer filter listed 18 distinct lawyers; it did not establish a full-firm total."
+        },
+        {
+          "kind": "office",
+          "url": "https://wildlaw.ca/contact",
+          "note": "The published founder and managing-partner title is not converted into an ownership claim."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://wildlaw.ca/people/perry-n-dellelce",
+          "note": "Founder and Managing Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-13",
+      "firm_name": "Birenbaum, Steinberg, Landau, Savin & Colraine, LLP",
+      "canonical_domain": "bslsc.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-13",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.bslsc.com/lawyers/",
+          "note": "The reviewed firm page identifies the firm and its published practice areas but did not provide an auditable bounded lawyer roster in this pass."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.bslsc.com/",
+          "note": "Source observed; count and ownership remain unknown."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-14",
+      "firm_name": "Aird & Berlis LLP",
+      "canonical_domain": "airdberlis.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-14",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.airdberlis.com/people",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.airdberlis.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-15",
+      "firm_name": "Blaney McMurtry LLP",
+      "canonical_domain": "blaney.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-15",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.blaney.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.blaney.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-16",
+      "firm_name": "Beard Winter LLP",
+      "canonical_domain": "beardwinter.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-16",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.beardwinter.com/lawyers/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.beardwinter.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-17",
+      "firm_name": "Gardiner Roberts LLP",
+      "canonical_domain": "grllp.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-17",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.grllp.com/lawyers/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.grllp.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-18",
+      "firm_name": "Minden Gross LLP",
+      "canonical_domain": "minden.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-18",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.minden.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.minden.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-19",
+      "firm_name": "Torkin Manes LLP",
+      "canonical_domain": "torkin.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-19",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.torkin.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.torkin.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-20",
+      "firm_name": "Loopstra Nixon LLP",
+      "canonical_domain": "loopstranixon.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-20",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "cross_lane_counterpart=B011-WN-012"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.loopstranixon.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.loopstranixon.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-21",
+      "firm_name": "Robins Appleby LLP",
+      "canonical_domain": "robinsappleby.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-21",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://robinsappleby.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://robinsappleby.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-22",
+      "firm_name": "Shibley Righton LLP",
+      "canonical_domain": "shibleyrighton.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-22",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.shibleyrighton.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.shibleyrighton.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-23",
+      "firm_name": "Fogler, Rubinoff LLP",
+      "canonical_domain": "foglers.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-23",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://foglers.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://foglers.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-24",
+      "firm_name": "WeirFoulds LLP",
+      "canonical_domain": "weirfoulds.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-24",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.weirfoulds.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.weirfoulds.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-25",
+      "firm_name": "Miller Thomson LLP",
+      "canonical_domain": "millerthomson.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-25",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "cross_lane_counterpart=B011-WN-009"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.millerthomson.com/en/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.millerthomson.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-26",
+      "firm_name": "Fasken Martineau DuMoulin LLP",
+      "canonical_domain": "fasken.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-26",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.fasken.com/en/people",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.fasken.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-27",
+      "firm_name": "Goodmans LLP",
+      "canonical_domain": "goodmans.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-27",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.goodmans.ca/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.goodmans.ca/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-28",
+      "firm_name": "Stikeman Elliott LLP",
+      "canonical_domain": "stikeman.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-28",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.stikeman.com/en-ca/people",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.stikeman.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-29",
+      "firm_name": "Osler, Hoskin & Harcourt LLP",
+      "canonical_domain": "osler.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-29",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.osler.com/en/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.osler.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-30",
+      "firm_name": "Torys LLP",
+      "canonical_domain": "torys.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-30",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.torys.com/our-team",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.torys.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-31",
+      "firm_name": "Davies Ward Phillips & Vineberg LLP",
+      "canonical_domain": "dwpv.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-31",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.dwpv.com/en/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.dwpv.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-32",
+      "firm_name": "Bennett Jones LLP",
+      "canonical_domain": "bennettjones.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-32",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.bennettjones.com/People",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.bennettjones.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-33",
+      "firm_name": "McCarthy Tétrault LLP",
+      "canonical_domain": "mccarthy.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-33",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.mccarthy.ca/en/people",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.mccarthy.ca/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-34",
+      "firm_name": "Bereskin & Parr LLP",
+      "canonical_domain": "bereskinparr.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-34",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.bereskinparr.com/people",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.bereskinparr.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-35",
+      "firm_name": "Smart & Biggar LLP",
+      "canonical_domain": "smartbiggar.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-35",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.smartbiggar.ca/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.smartbiggar.ca/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-36",
+      "firm_name": "Ridout & Maybee LLP",
+      "canonical_domain": "ridoutmaybee.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-36",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.ridoutmaybee.com/people",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.ridoutmaybee.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-37",
+      "firm_name": "Jackman LLP",
+      "canonical_domain": "jackmanllp.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-37",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.jackmanllp.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.jackmanllp.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-38",
+      "firm_name": "Lax O'Sullivan Lisus Gottlieb LLP",
+      "canonical_domain": "lolg.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-38",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.lolg.ca/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.lolg.ca/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-39",
+      "firm_name": "Deeth Williams Wall LLP",
+      "canonical_domain": "dww.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-39",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.dww.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.dww.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-40",
+      "firm_name": "Steinecke Maciura LeBlanc LLP",
+      "canonical_domain": "sml-law.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-40",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.sml-law.com/our-people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.sml-law.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-41",
+      "firm_name": "Crawley MacKewn Brush LLP",
+      "canonical_domain": "cmb.law",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-41",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://cmb.law/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://cmb.law/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-42",
+      "firm_name": "Rosenberg Kosakoski LLP",
+      "canonical_domain": "rosenberglaw.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-42",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.rosenberglaw.ca/our-team/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.rosenberglaw.ca/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-43",
+      "firm_name": "Dale & Lessmann LLP",
+      "canonical_domain": "dalelessmann.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-43",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.dalelessmann.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.dalelessmann.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-44",
+      "firm_name": "Affleck Greene McMurtry LLP",
+      "canonical_domain": "agmllp.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-44",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://agmllp.com/our-people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://agmllp.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-45",
+      "firm_name": "McCague Borlack LLP",
+      "canonical_domain": "mccagueborlack.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-45",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "cross_lane_counterpart=B011-WN-011"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://mccagueborlack.com/lawyers/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://mccagueborlack.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-46",
+      "firm_name": "Lerners LLP",
+      "canonical_domain": "lerners.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-46",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.lerners.ca/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.lerners.ca/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-47",
+      "firm_name": "Siskinds LLP",
+      "canonical_domain": "siskinds.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-47",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.siskinds.com/people/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.siskinds.com/",
+          "note": "Source URL queued; Toronto office and roster require first-party confirmation."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-48",
+      "firm_name": "Brauti Thorning Zibarras LLP",
+      "canonical_domain": "btzlaw.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-48",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.btzlaw.ca/our-team/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.btzlaw.ca/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-49",
+      "firm_name": "Zuber & Company LLP",
+      "canonical_domain": "zuberlaw.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-49",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://zuberlaw.com/our-team/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://zuberlaw.com/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-T-50",
+      "firm_name": "Rosenblatt Law Firm",
+      "canonical_domain": "rosenblattlawfirm.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "pending_operator_baseline",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-T-50",
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+        ]
+      },
+      "access": {
+        "state": "queued_no_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://rosenblattlawfirm.ca/our-team/",
+          "note": "Queued for first-party roster review."
+        },
+        {
+          "kind": "office",
+          "url": "https://rosenblattlawfirm.ca/",
+          "note": "Source URL queued; no profile claim made."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    }
+  ]
+}
