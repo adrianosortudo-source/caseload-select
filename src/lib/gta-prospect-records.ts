@@ -12,10 +12,13 @@ export type LawyerCountBand = (typeof LAWYER_COUNT_BANDS)[number];
 
 export type ReconciliationStatus = "provisional_new" | "update_existing" | "new_pending_identity" | "duplicate" | "unresolved";
 export type EvidenceAvailability = "observed" | "none" | "unknown";
+export type ProspectRecordOrigin = "research_ledger" | "reviewed_fixture" | "shared_registry";
 
 export interface ReconciledGtaProspect {
   /** Stable source-controlled identifier, not a database id. */
   id: string;
+  /** Presentational provenance assigned by the read adapter; not an identity claim. */
+  recordOrigin?: ProspectRecordOrigin;
   /** Stable shared firm identity when this record has been linked to the governed registry. */
   firmId?: string | null;
   /** Normalized host used for deterministic cross-source reconciliation. */

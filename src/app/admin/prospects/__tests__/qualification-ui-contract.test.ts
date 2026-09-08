@@ -5,13 +5,16 @@ import { describe, expect, it } from "vitest";
 const list = readFileSync(resolve(process.cwd(), "src/app/admin/prospects/ReconciledProspects.tsx"), "utf8");
 const audit = readFileSync(resolve(process.cwd(), "src/app/admin/prospects/audits/[firmId]/page.tsx"), "utf8");
 
-describe("Firm expansion qualification UI contract", () => {
-  it("keeps qualification in Firm expansion with the four decision views", () => {
-    expect(list).toContain('data-ui-component-content="firm-expansion"');
-    expect(list).toContain('["all", "All reviewed"');
-    expect(list).toContain('["qualified", "Qualified"');
+describe("Unified prospect list UI contract", () => {
+  it("keeps shared registry and legacy identity work in one four-view shell", () => {
+    expect(list).toContain('data-ui-component-content="prospect-unified-list"');
+    expect(list).toContain('["all", "All records"');
+    expect(list).toContain('["shared_registry", "Shared registry"');
     expect(list).toContain('["audit_ready", "Audit ready"');
-    expect(list).toContain('["needs_evidence", "Needs evidence"');
+    expect(list).toContain('["identity_review", "Identity review"');
+    expect(list).toContain("Record source");
+    expect(list).toContain("Identity status");
+    expect(list).toContain("Legacy provenance");
     expect(list).toContain("More qualification filters");
   });
 
