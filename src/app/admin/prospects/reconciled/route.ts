@@ -10,6 +10,7 @@ import {
   mergeQualifiedProspects,
   type QualifiedProspectImportReport,
 } from "@/lib/qualified-gta-prospects";
+import { combineUnifiedGtaProspects } from "@/lib/unified-gta-prospect-records";
 import type {
   ReconciledProspectFallbackReason,
   ReconciledProspectSource,
@@ -30,7 +31,7 @@ function fixtureResponse(fallbackReason: ReconciledProspectFallbackReason) {
   const merged = mergeQualifiedProspects(RECONCILED_GTA_PROSPECTS);
   return NextResponse.json<RecordsResponse>(
     {
-      records: merged.records,
+      records: combineUnifiedGtaProspects(merged.records),
       source: "fixture",
       sourceCounts: { ledger: 0, fixture: RECONCILED_GTA_PROSPECTS.length },
       qualifiedImport: merged.report,
@@ -68,7 +69,7 @@ export async function GET() {
     const qualified = mergeQualifiedProspects(merged.records);
     return NextResponse.json<RecordsResponse>(
       {
-        records: qualified.records,
+        records: combineUnifiedGtaProspects(qualified.records),
         source: merged.missingFixtureCount > 0 ? "hybrid" : "ledger",
         sourceCounts: { ledger: records.length, fixture: merged.missingFixtureCount },
         qualifiedImport: qualified.report,
