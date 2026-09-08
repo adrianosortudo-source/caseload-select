@@ -1,4 +1,5 @@
 import { readFile, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -10,6 +11,7 @@ const CONFIDENCE = new Set(["unreviewed", "single_source", "corroborated", "conf
 const DOMAIN_STATES = new Set(["current_primary", "professional_profile", "contact_source", "regulator", "directory", "historic", "unresolved"]);
 
 const value = (row, camel, snake) => row[camel] ?? row[snake];
+const slug = (text) => text.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 const required = (row, camel, snake = camel) => {
   const found = value(row, camel, snake);
   if (found === undefined || found === null || found === "") throw new Error(`Missing required field ${snake}`);
@@ -86,8 +88,103 @@ function normalizePublicContact(contact) {
   };
 }
 
-export function normalizeOwnerCohortRows(rows) {
+function uniqueStrings(values) {
+  return [...new Set(values.filter((item) => typeof item === "string" && item.trim()))];
+}
+
+function cleanContactValue(found) {
+  if (typeof found !== "string") return null;
+  const trimmed = found.trim();
+  return !trimmed || trimmed === "—" || trimmed.toLowerCase() === "unknown" ? null : trimmed;
+}
+
+function verifiedLaneDomainRelationships(row) {
+  const relationships = new Map();
+  const add = (url, state) => {
+    if (!url || relationships.has(url)) return;
+    relationships.set(url, { url, host: new URL(url).hostname.replace(/^www\./, ""), state, confidence: "corroborated" });
+  };
+  add(row.firm_website, "current_primary");
+  add(row.person_bio_url, "professional_profile");
+  add(row.lso_profile_url, "regulator");
+  for (const url of row.evidence_urls ?? []) add(url, "unresolved");
+  return [...relationships.values()];
+}
+
+function normalizeVerifiedLaneRow(row, existingPersonIds) {
+  const canonicalPersonId = required(row, "person_id");
+  const name = required(row, "name");
+  const firm = required(row, "firm");
+  const ownerAuthority = expectAllowed("owner authority", required(row, "owner_class"), OWNER_CODES);
+  const evidence = required(row, "b_class");
+  const eligibleOwner = row.eligibility === "verified_owner_operator";
+  const researchEligibility = eligibleOwner
+    ? evidence === "B4" ? "secondary_owner_cohort" : "primary_owner_cohort"
+    : "hold_owner_authority_review";
+  const evidenceUrls = stringList(row.evidence_urls ?? [], "evidence_urls");
+  const provenance = typeof row.provenance === "string" ? [row.provenance] : stringList(row.provenance ?? [], "provenance");
+  const explicitUnknowns = uniqueStrings([...(row.unknowns ?? []), ...(row.contradictions ?? [])]);
+  const contactSource = row.person_bio_url ?? row.firm_website ?? null;
+  const email = cleanContactValue(row.public_business_email);
+  const phone = cleanContactValue(row.public_business_phone);
+  const website = cleanContactValue(row.firm_website);
+  const domainRelationships = verifiedLaneDomainRelationships(row);
+  const contactSourceProvenance = [
+    website ? { field: "website", value: website, sourceUrl: website, evidenceIds: evidenceUrls, confidence: "corroborated" } : null,
+    email ? { field: "email", value: email, sourceUrl: contactSource, evidenceIds: evidenceUrls, confidence: "corroborated" } : null,
+    phone ? { field: "phone", value: phone, sourceUrl: contactSource, evidenceIds: evidenceUrls, confidence: "corroborated" } : null,
+  ].filter(Boolean);
+  const common = {
+    operation: existingPersonIds.has(canonicalPersonId) ? "update" : "add",
+    id: slug(name),
+    name,
+    firm,
+    bucket: evidence === "B4" ? "portuguese" : "explicit",
+    researchSet: evidence === "B4" ? "portuguese_only_brazil_unconfirmed" : "brazil_connected_ready",
+    outreachEligibility: "INTERNAL_CANDIDATE_UNSENT",
+    currentPrimaryFirm: firm,
+    suppression: null,
+    evidence,
+    website: website ?? undefined,
+    email: email ?? undefined,
+    phone: phone ?? undefined,
+    sources: evidenceUrls,
+    unknowns: explicitUnknowns,
+    domains: evidenceUrls,
+    sourceRecordId: canonicalPersonId,
+    publicContact: {
+      email,
+      phone,
+      website,
+      bioUrl: row.person_bio_url ?? null,
+      contactSourceUrl: contactSource,
+      lsoSourceUrl: row.lso_profile_url ?? null,
+      provenance,
+      lsoNumber: row.lso_number ?? null,
+      practiceAreas: [],
+      status: row.current_affiliation_status ?? null,
+      role: null,
+      suppressionReason: null,
+    },
+    canonicalPersonId,
+    canonicalFirmId: `firm:${slug(firm)}`,
+    ownerAuthority,
+    ownerAuthorityEvidence: uniqueStrings([row.owner_basis, ...evidenceUrls]),
+    researchEligibility,
+    researchState: eligibleOwner ? "eligible" : "screened",
+    interviewState: "not_started",
+    evidenceConfidence: "corroborated",
+    domainRelationships,
+    contactSourceProvenance,
+    explicitUnknowns,
+  };
+  return common;
+}
+
+export function normalizeOwnerCohortRows(rows, options = {}) {
+  const existingPersonIds = options.existingPersonIds ?? new Set();
   const normalized = rows.map((row) => {
+    if (!row.operation && row.owner_class) return normalizeVerifiedLaneRow(row, existingPersonIds);
     const operation = required(row, "operation");
     if (operation !== "update" && operation !== "add") throw new Error(`Invalid operation: ${operation}`);
     const common = { operation, id: required(row, "id"), ...normalizeCohortFields(row) };
@@ -138,9 +235,19 @@ async function main() {
   const source = process.argv[2];
   if (!source) throw new Error("Usage: node scripts/generate-brazilian-owner-cohort-snapshot.mjs <approved-qa.jsonl> [destination.ts]");
   const destination = resolve(process.argv[3] ?? "src/lib/brazilian-owner-cohort.snapshot.ts");
-  const lines = (await readFile(resolve(source), "utf8")).split(/\r?\n/).filter((line) => line.trim());
-  const normalized = normalizeOwnerCohortRows(lines.map((line) => JSON.parse(line)));
-  const output = `import type { ProspectOwnerCohortUpdate } from "./prospect-intelligence";\n\n// Generated from a Luna-approved owner-cohort QA dataset; do not hand edit.\nexport const BRAZILIAN_OWNER_COHORT_UPDATES = ${JSON.stringify(normalized, null, 2)} as const satisfies readonly ProspectOwnerCohortUpdate[];\n`;
+  const raw = await readFile(resolve(source), "utf8");
+  const lines = raw.split(/\r?\n/).filter((line) => line.trim());
+  const contactSnapshot = await readFile(resolve("src/lib/brazilian-prospect-contacts.snapshot.ts"), "utf8");
+  const snapshotMatch = contactSnapshot.match(/PUBLIC_CONTACT_SNAPSHOT = ([\s\S]+) as const;\s*$/);
+  if (!snapshotMatch) throw new Error("Unable to parse the existing public-contact snapshot");
+  const existingPersonIds = new Set(JSON.parse(snapshotMatch[1]).map((row) => row.personId));
+  const normalized = normalizeOwnerCohortRows(lines.map((line) => JSON.parse(line)), { existingPersonIds });
+  const manifest = {
+    rows: normalized.length,
+    sha256: createHash("sha256").update(raw).digest("hex").toUpperCase(),
+    sourceFile: resolve(source).split(/[\\/]/).at(-1),
+  };
+  const output = `import type { ProspectOwnerCohortUpdate } from "./prospect-intelligence";\n\n// Generated from a Luna-approved owner-cohort QA dataset; do not hand edit.\nexport const BRAZILIAN_OWNER_COHORT_SOURCE_MANIFEST = ${JSON.stringify(manifest, null, 2)} as const;\n\nexport const BRAZILIAN_OWNER_COHORT_UPDATES = ${JSON.stringify(normalized, null, 2)} as const satisfies readonly ProspectOwnerCohortUpdate[];\n`;
   await writeFile(destination, output);
   console.log(`Wrote ${normalized.length} owner-cohort updates to ${destination}`);
 }

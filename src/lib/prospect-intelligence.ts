@@ -109,6 +109,24 @@ export type ProspectOwnerCohortUpdate =
   | ({
       operation: "update";
       id: string;
+      name?: string;
+      firm?: string;
+      bucket?: ProspectBucket;
+      researchSet?: ResearchSet;
+      outreachEligibility?: OutreachEligibility;
+      currentPrimaryFirm?: string | null;
+      suppression?: string | null;
+      evidence?: ProspectResearch["evidence"];
+      website?: string;
+      email?: string;
+      phone?: string;
+      sources?: readonly string[];
+      unknowns?: readonly string[];
+      domains?: readonly string[];
+      note?: string;
+      sourceRecordId?: string;
+      portugueseBrazilConnection?: ProspectResearch["portugueseBrazilConnection"];
+      publicContact?: PublicContactDetails;
     } & OwnerCohortUpdateFields)
   | ({
       operation: "add";
@@ -283,7 +301,7 @@ export function applyOwnerCohortUpdates(
     };
 
     if (update.operation === "update") {
-      const index = result.findIndex((record) => record.id === update.id);
+      const index = result.findIndex((record) => record.id === update.id || record.cohort.canonicalPersonId === update.canonicalPersonId);
       if (index < 0) throw new Error(`Owner-cohort update references unknown record: ${update.id}`);
       const current = result[index];
       if (current.bucket === "dnc" && (update.researchEligibility !== "do_not_contact" || update.researchState !== "suppressed")) {
@@ -294,7 +312,29 @@ export function applyOwnerCohortUpdates(
       }
       personIds.delete(current.cohort.canonicalPersonId);
       personIds.add(update.canonicalPersonId);
-      result[index] = { ...current, personId: update.canonicalPersonId, cohort: nextCohort };
+      result[index] = {
+        ...current,
+        personId: update.canonicalPersonId,
+        name: update.name ?? current.name,
+        firm: update.firm ?? current.firm,
+        bucket: update.bucket ?? current.bucket,
+        researchSet: update.researchSet ?? current.researchSet,
+        outreachEligibility: update.outreachEligibility ?? current.outreachEligibility,
+        currentPrimaryFirm: update.currentPrimaryFirm ?? current.currentPrimaryFirm,
+        suppression: update.suppression ?? current.suppression,
+        evidence: update.evidence ?? current.evidence,
+        website: update.website ?? current.website,
+        email: update.email ?? current.email,
+        phone: update.phone ?? current.phone,
+        sources: update.sources ? [...update.sources] : current.sources,
+        unknowns: update.unknowns ?? current.unknowns,
+        domains: update.domains ? [...update.domains] : current.domains,
+        note: update.note ?? current.note,
+        sourceRecordId: update.sourceRecordId ?? current.sourceRecordId,
+        portugueseBrazilConnection: update.portugueseBrazilConnection ?? current.portugueseBrazilConnection,
+        publicContact: update.publicContact ?? current.publicContact,
+        cohort: nextCohort,
+      };
       continue;
     }
 
@@ -348,7 +388,7 @@ export function isSuppressed(record: ProspectResearch): boolean {
 }
 
 export function isOwnerResearchEligible(record: ProspectResearch): boolean {
-  return record.cohort.researchEligibility === "primary_owner_cohort";
+  return record.cohort.researchEligibility === "primary_owner_cohort" || record.cohort.researchEligibility === "secondary_owner_cohort";
 }
 
 export function filterBrazilianProspects(query: string, bucket?: ProspectBucket): ProspectResearch[] {
