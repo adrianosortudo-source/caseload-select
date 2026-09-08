@@ -4,19 +4,22 @@
   "lane": "EAST_OUTER",
   "observation_date": "2026-09-08",
   "scope": "Public first-party research for Durham/east and approved outer GTA municipalities; private-practice firms only.",
-  "source_policy": "Discovery used public search. Evidence is limited to accessible firm-owned roster/about/contact pages. No forms, chats, logins, outreach, ads, GBP, CRM, database, or production import. Published emails were not copied because unnecessary.",
+  "source_policy": "Discovery used public search. Evidence is limited to accessible firm-owned roster/about/contact pages. No forms, chats, logins, outreach, ads, GBP, CRM, database, or production import. The five provisional enrichment records include only visibly published named/general emails with source URLs and observation date; no email was inferred.",
   "comparison_baseline": "Batch 001-010 canonical domains plus current 103-record manifest were checked before lane drafting. Parallel Batch 011 Toronto/west reconciliation remains required; unresolved possible collisions are held.",
   "disposition_summary": {
     "records_researched": 50,
-    "accepted_for_staging": 12,
-    "held": 38,
-    "update_or_collision": 0,
+    "accepted_for_staging": 5,
+    "provisional_staging": 5,
+    "held": 45,
+    "hold_collision_update": 5,
+    "hold_lower_bound_count": 2,
+    "update_or_collision": 5,
     "rejected": 0
   },
   "records": [
     {
       "record_id": "B011-EAST-01",
-      "workflow_status": "accepted_for_staging",
+      "workflow_status": "provisional_staging",
       "accepted": true,
       "firm_name": "Walker Head",
       "canonical_domain": "walkerhead.com",
@@ -33,6 +36,37 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Pickering",
+      "office_address_evidence": [
+        {
+          "city": "Pickering",
+          "street_address": "1315 Pickering Parkway, Suite 800, Pickering, ON L1V 7G5",
+          "source_url": "https://www.walkerhead.com/contact-us",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "office_address_unknown": null,
+      "published_practice_evidence": {
+        "labels": ["Family law", "Business and corporate law", "Employment law", "Real estate law", "Civil litigation", "Elder law", "Guardianship law", "Wills, estates and estate litigation"],
+        "source_url": "https://www.walkerhead.com/about/about-us",
+        "observed_date": "2026-09-08"
+      },
+      "leadership_title_evidence": [
+        {
+          "name": "Raymond Goddard",
+          "title": "Managing Partner",
+          "source_url": "https://www.walkerhead.com/",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "published_email_evidence": [
+        {
+          "label": "general firm email",
+          "email": "info@walkerhead.com",
+          "source_url": "https://www.walkerhead.com/contact-us",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "enrichment_status": "complete_for_current_pass",
       "leadership_evidence": "Raymond Goddard is identified as Managing Partner; the home page enumerates 21 current lawyer roles.",
       "evidence_note": "Firm page lists 21 current lawyer roles (partners, counsel, senior associate, associates); staff excluded.",
       "access_review": "Current first-party public pages were accessible; roster count is an exact visible role count.",
@@ -40,7 +74,7 @@
     },
     {
       "record_id": "B011-EAST-02",
-      "workflow_status": "accepted_for_staging",
+      "workflow_status": "provisional_staging",
       "accepted": true,
       "firm_name": "Devry Smith Frank LLP",
       "canonical_domain": "devrylaw.ca",
@@ -57,6 +91,31 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Whitby",
+      "office_address_evidence": [
+        {
+          "city": "Whitby",
+          "street_address": "209 Dundas Street East, Suite 401, Whitby, ON L1N 7H8",
+          "source_url": "https://devrylaw.ca/about-us/",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "office_address_unknown": null,
+      "published_practice_evidence": {
+        "labels": ["Business and corporate law", "Family law", "Personal injury law", "Immigration law", "Real estate law", "Litigation", "Mediation", "Wills and estates", "Tax law", "Employment and labour law"],
+        "source_url": "https://devrylaw.ca/careers/",
+        "observed_date": "2026-09-08"
+      },
+      "leadership_title_evidence": [],
+      "leadership_title_unknown": "Current first-party pages name senior lawyers and partners but do not publish a qualifying owner/founder/managing-partner title in the reviewed sources.",
+      "published_email_evidence": [
+        {
+          "label": "general firm email",
+          "email": "info@devrylaw.ca",
+          "source_url": "https://devrylaw.ca/about-us/",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "enrichment_status": "complete_for_current_pass",
       "leadership_evidence": "The first-party team page names George O. Frank and William J. Smith among firm lawyers; published firm material states over 70 lawyers.",
       "evidence_note": "Published firm material says over 70 lawyers; team page is the roster source and staff are not counted.",
       "access_review": "Current first-party team and Whitby office pages were accessible; count is firm-wide minimum, not Whitby-office headcount.",
@@ -64,8 +123,8 @@
     },
     {
       "record_id": "B011-EAST-03",
-      "workflow_status": "accepted_for_staging",
-      "accepted": true,
+      "workflow_status": "hold_collision_update",
+      "accepted": false,
       "firm_name": "Wilson Vukelich LLP",
       "canonical_domain": "wvllp.ca",
       "office_cities": [
@@ -81,6 +140,31 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Markham",
+      "office_address_evidence": [],
+      "office_address_unknown": "No current office street address was exposed in the reviewed lawyers page; a first-party brochure contains 60 Columbia Way, Suite 710, Markham, ON L3R 0C9 but is treated as collision/update hold evidence.",
+      "published_practice_evidence": {
+        "labels": [],
+        "source_url": "https://wvllp.ca/lawyers/",
+        "observed_date": "2026-09-08"
+      },
+      "leadership_title_evidence": [
+        {
+          "name": "Daniel Condon",
+          "title": "Managing Partner",
+          "source_url": "https://wvllp.ca/lawyers/",
+          "observed_date": "2026-09-08"
+        },
+        {
+          "name": "Heather Whitten",
+          "title": "Managing Partner",
+          "source_url": "https://wvllp.ca/lawyers/",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "published_email_evidence": [],
+      "published_email_unknown": "No current named or general email was visible on the reviewed current lawyers page; an older first-party brochure lists information@wvllp.ca but this record is held for update/collision review.",
+      "enrichment_status": "qa_hold_not_enriched",
+      "qa_hold_reason": "Independent QA moved this record to collision/update hold pending full baseline reconciliation.",
       "leadership_evidence": "Daniel Condon is identified as Managing Partner; the lawyers page enumerates 21 current lawyer roles.",
       "evidence_note": "21 named lawyer profiles/roles counted; non-lawyer staff excluded.",
       "access_review": "Current first-party lawyers and contact pages were accessible; exact visible role count.",
@@ -88,8 +172,8 @@
     },
     {
       "record_id": "B011-EAST-04",
-      "workflow_status": "accepted_for_staging",
-      "accepted": true,
+      "workflow_status": "hold_collision_update",
+      "accepted": false,
       "firm_name": "SimpsonWigle LAW LLP",
       "canonical_domain": "simpsonwigle.com",
       "office_cities": [
@@ -106,6 +190,20 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Hamilton; Burlington",
+      "office_address_evidence": [],
+      "office_address_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "published_practice_evidence": {
+        "labels": [],
+        "source_url": "https://simpsonwigle.com/our-team/",
+        "observed_date": "2026-09-08"
+      },
+      "published_practice_unknown": "Practice labels were visible but not copied during the focused hold pass.",
+      "leadership_title_evidence": [],
+      "leadership_title_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "published_email_evidence": [],
+      "published_email_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "enrichment_status": "qa_hold_not_enriched",
+      "qa_hold_reason": "Independent QA moved this record to collision/update hold pending full baseline reconciliation.",
       "leadership_evidence": "Team page identifies current lawyer profiles and Hamilton/Burlington office locations; no bounded full roster was exposed.",
       "evidence_note": "At least seven current lawyer profiles were visibly enumerated; count is conservative and staff excluded.",
       "access_review": "First-party pages accessible; minimum count only because roster content is dynamic/partial in public view.",
@@ -113,7 +211,7 @@
     },
     {
       "record_id": "B011-EAST-05",
-      "workflow_status": "accepted_for_staging",
+      "workflow_status": "provisional_staging",
       "accepted": true,
       "firm_name": "Longo Lawyers",
       "canonical_domain": "longolawyers.ca",
@@ -134,6 +232,43 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Brampton; Mississauga; Oakville; Vaughan; Hamilton",
+      "office_address_evidence": [
+        {
+          "city": "Toronto",
+          "street_address": "4950 Yonge Street, Suite 401, Toronto, ON M2N 6K1",
+          "source_url": "https://longolawyers.ca/contact/",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "office_address_unknown": "The cited first-party pages list outer-GTA service areas but no separate outer-GTA street address; the published office address is Toronto.",
+      "published_practice_evidence": {
+        "labels": ["Personal injury", "Litigation", "Insurance claims", "Employment law", "Mortgage enforcement", "Commercial litigation"],
+        "source_url": "https://longolawyers.ca/opportunities/",
+        "observed_date": "2026-09-08"
+      },
+      "leadership_title_evidence": [
+        {
+          "name": "Fabio Longo",
+          "title": "Owner",
+          "source_url": "https://longolawyers.ca/fabio-longo/",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "published_email_evidence": [
+        {
+          "label": "general firm email",
+          "email": "reception@longolawyers.ca",
+          "source_url": "https://longolawyers.ca/fabio-longo/",
+          "observed_date": "2026-09-08"
+        },
+        {
+          "label": "named firm contact",
+          "email": "adele@longolawyers.ca",
+          "source_url": "https://longolawyers.ca/opportunities/",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "enrichment_status": "complete_for_current_pass",
       "leadership_evidence": "Fabio Longo is the founding/lead name; meet-the-team page enumerates 11 current lawyers and lists service/office coverage including outer GTA cities.",
       "evidence_note": "11 named lawyers counted; retired or non-lawyer roles excluded.",
       "access_review": "First-party team page accessible; count is exact for the visible current lawyer roster; locations are firm-wide/service scope.",
@@ -141,8 +276,8 @@
     },
     {
       "record_id": "B011-EAST-06",
-      "workflow_status": "accepted_for_staging",
-      "accepted": true,
+      "workflow_status": "hold_collision_update",
+      "accepted": false,
       "firm_name": "Will Trial Lawyers",
       "canonical_domain": "willtriallawyers.ca",
       "office_cities": [
@@ -158,6 +293,20 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Oakville",
+      "office_address_evidence": [],
+      "office_address_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "published_practice_evidence": {
+        "labels": [],
+        "source_url": "https://willtriallawyers.ca/team/",
+        "observed_date": "2026-09-08"
+      },
+      "published_practice_unknown": "Practice labels were not copied during the focused hold pass.",
+      "leadership_title_evidence": [],
+      "leadership_title_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "published_email_evidence": [],
+      "published_email_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "enrichment_status": "qa_hold_not_enriched",
+      "qa_hold_reason": "Independent QA moved this record to collision/update hold pending full baseline reconciliation.",
       "leadership_evidence": "Gary Will is identified as Founding Partner; team page lists Gary Will, Michael Ellis, Gordon Marsden and Robert Seredynski; William Taberner is expressly retired and excluded.",
       "evidence_note": "Four current lawyer roles counted; retired lawyer excluded.",
       "access_review": "Current first-party team/contact pages accessible; retired profile excluded.",
@@ -165,7 +314,7 @@
     },
     {
       "record_id": "B011-EAST-07",
-      "workflow_status": "accepted_for_staging",
+      "workflow_status": "provisional_staging",
       "accepted": true,
       "firm_name": "Speigel Nichols Fox LLP",
       "canonical_domain": "ontlaw.com",
@@ -182,6 +331,49 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Mississauga",
+      "office_address_evidence": [
+        {
+          "city": "Mississauga",
+          "street_address": "1 Robert Speck Parkway, Suite 200, Mississauga, ON L4Z 3M3",
+          "source_url": "https://ontlaw.com/contact-speigel-nichols-fox-llp-law-firm/",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "office_address_unknown": null,
+      "published_practice_evidence": {
+        "labels": ["Commercial litigation", "Estates litigation", "Construction law", "Personal injury", "Wills and estates"],
+        "source_url": "https://ontlaw.com/mississauga-lawyers/",
+        "observed_date": "2026-09-08"
+      },
+      "leadership_title_evidence": [
+        {
+          "name": "Jonathan Speigel",
+          "title": "Partner",
+          "source_url": "https://ontlaw.com/mississauga-lawyers/",
+          "observed_date": "2026-09-08"
+        },
+        {
+          "name": "Allison J. Speigel",
+          "title": "Partner",
+          "source_url": "https://ontlaw.com/mississauga-lawyers/",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "published_email_evidence": [
+        {
+          "label": "general firm email",
+          "email": "info@ontlaw.com",
+          "source_url": "https://ontlaw.com/mississauga-law-firm-careers/",
+          "observed_date": "2026-09-08"
+        },
+        {
+          "label": "named partner email",
+          "email": "jonathan@ontlaw.com",
+          "source_url": "https://ontlaw.com/wp-content/uploads/MEDRES-Speigel-0308.pdf",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "enrichment_status": "complete_for_current_pass",
       "leadership_evidence": "Allison J. Speigel and Jonathan Speigel are identified as partners; Mississauga lawyers page lists ten current lawyer/counsel profiles.",
       "evidence_note": "Ten current lawyer/counsel profiles counted; law clerks excluded.",
       "access_review": "First-party Mississauga roster and contact pages accessible; exact visible count.",
@@ -189,8 +381,8 @@
     },
     {
       "record_id": "B011-EAST-08",
-      "workflow_status": "accepted_for_staging",
-      "accepted": true,
+      "workflow_status": "hold_collision_update",
+      "accepted": false,
       "firm_name": "Rashidy & Associates",
       "canonical_domain": "rashidylaw.com",
       "office_cities": [
@@ -206,6 +398,20 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Mississauga",
+      "office_address_evidence": [],
+      "office_address_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "published_practice_evidence": {
+        "labels": [],
+        "source_url": "https://rashidylaw.com/team/",
+        "observed_date": "2026-09-08"
+      },
+      "published_practice_unknown": "Practice labels were visible but not copied during the focused hold pass.",
+      "leadership_title_evidence": [],
+      "leadership_title_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "published_email_evidence": [],
+      "published_email_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "enrichment_status": "qa_hold_not_enriched",
+      "qa_hold_reason": "Independent QA moved this record to collision/update hold pending full baseline reconciliation.",
       "leadership_evidence": "Mohamed El Rashidy is the firm lead/name; Canadian team page lists five lawyers.",
       "evidence_note": "Five Canadian-office lawyers counted; staff excluded.",
       "access_review": "First-party team/contact pages accessible; Canadian office scope is explicit.",
@@ -213,8 +419,8 @@
     },
     {
       "record_id": "B011-EAST-09",
-      "workflow_status": "accepted_for_staging",
-      "accepted": true,
+      "workflow_status": "hold_collision_update",
+      "accepted": false,
       "firm_name": "DeRusha Law Firm",
       "canonical_domain": "derushalawfirm.com",
       "office_cities": [
@@ -230,6 +436,20 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Mississauga",
+      "office_address_evidence": [],
+      "office_address_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "published_practice_evidence": {
+        "labels": [],
+        "source_url": "https://derushalawfirm.com/",
+        "observed_date": "2026-09-08"
+      },
+      "published_practice_unknown": "Practice labels were visible but not copied during the focused hold pass.",
+      "leadership_title_evidence": [],
+      "leadership_title_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "published_email_evidence": [],
+      "published_email_unknown": "Not enriched in this pass because independent QA moved the record to collision/update hold.",
+      "enrichment_status": "qa_hold_not_enriched",
+      "qa_hold_reason": "Independent QA moved this record to collision/update hold pending full baseline reconciliation.",
       "leadership_evidence": "Haig DeRusha is the firm lead/name; first-party site team section names five lawyers.",
       "evidence_note": "Five named lawyers counted; non-lawyer staff excluded.",
       "access_review": "First-party home/contact pages accessible; exact visible lawyer count.",
@@ -237,8 +457,8 @@
     },
     {
       "record_id": "B011-EAST-10",
-      "workflow_status": "accepted_for_staging",
-      "accepted": true,
+      "workflow_status": "hold_lower_bound_count",
+      "accepted": false,
       "firm_name": "RZCD Law Firm LLP",
       "canonical_domain": "rzcdlaw.com",
       "office_cities": [
@@ -254,6 +474,20 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Mississauga",
+      "office_address_evidence": [],
+      "office_address_unknown": "Not enriched in this pass because independent QA moved the record to lower-bound count hold.",
+      "published_practice_evidence": {
+        "labels": [],
+        "source_url": "https://www.rzcdlaw.com/lawyers/",
+        "observed_date": "2026-09-08"
+      },
+      "published_practice_unknown": "Practice labels were visible but not copied during the focused hold pass.",
+      "leadership_title_evidence": [],
+      "leadership_title_unknown": "Not enriched in this pass because independent QA moved the record to lower-bound count hold.",
+      "published_email_evidence": [],
+      "published_email_unknown": "A named email is visible on the roster page, but this record was not enriched further during the focused hold pass.",
+      "enrichment_status": "qa_hold_not_enriched",
+      "qa_hold_reason": "Independent QA moved this record to lower-bound count hold pending full baseline reconciliation.",
       "leadership_evidence": "Bonnie Franklin is identified as Managing Partner and Bruce C. Robertson as Partner; lawyers page exposes partners/associates/counsel roster.",
       "evidence_note": "At least ten current lawyer profiles visibly present; staff excluded.",
       "access_review": "First-party roster and contact pages accessible; minimum count because roster sections may be dynamic.",
@@ -261,7 +495,7 @@
     },
     {
       "record_id": "B011-EAST-11",
-      "workflow_status": "accepted_for_staging",
+      "workflow_status": "provisional_staging",
       "accepted": true,
       "firm_name": "Deacon Spears Fedson + Montizambert",
       "canonical_domain": "condolaw.to",
@@ -279,6 +513,44 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Oakville; Toronto",
+      "office_address_evidence": [
+        {
+          "city": "Oakville",
+          "street_address": "247 North Service Road West, Suite 304, Oakville, ON L6M 3E7",
+          "source_url": "https://condolaw.to/contact-us/",
+          "observed_date": "2026-09-08"
+        },
+        {
+          "city": "Toronto",
+          "street_address": "2300 Yonge Street, Suite 1901, Box 2384, Toronto, ON M4P 1E4",
+          "source_url": "https://condolaw.to/contact-us/",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "office_address_unknown": null,
+      "published_practice_evidence": {
+        "labels": ["Condominium law", "Litigation and dispute resolution", "Business law", "Wills and estates", "Real estate"],
+        "source_url": "https://condolaw.to/team/michael-campbell/",
+        "observed_date": "2026-09-08"
+      },
+      "leadership_title_evidence": [
+        {
+          "name": "Michael Campbell",
+          "title": "Partner",
+          "source_url": "https://condolaw.to/team/michael-campbell/",
+          "observed_date": "2026-09-08"
+        },
+        {
+          "name": "Michael Spears",
+          "title": "Senior Litigation Partner",
+          "source_url": "https://condolaw.to/our-team/",
+          "observed_date": "2026-09-08"
+        }
+      ],
+      "published_email_evidence": [
+      ],
+      "published_email_unknown": "The reviewed first-party pages visibly contain email links, but the public extraction rendered the addresses masked; no address was transcribed or inferred.",
+      "enrichment_status": "complete_for_current_pass",
       "leadership_evidence": "Team page names six current lawyers; Oakville office is shown; firm leadership is visible through partner roles.",
       "evidence_note": "Six current lawyer roles counted; staff excluded.",
       "access_review": "First-party team/contact pages accessible; exact visible count across firm.",
@@ -286,8 +558,8 @@
     },
     {
       "record_id": "B011-EAST-12",
-      "workflow_status": "accepted_for_staging",
-      "accepted": true,
+      "workflow_status": "hold_lower_bound_count",
+      "accepted": false,
       "firm_name": "Refcio & Associates",
       "canonical_domain": "rrlaw.ca",
       "office_cities": [
@@ -304,6 +576,20 @@
       "observation_date": "2026-09-08",
       "identity_aliases": [],
       "office_facts": "Burlington; London",
+      "office_address_evidence": [],
+      "office_address_unknown": "Not enriched in this pass because independent QA moved the record to lower-bound count hold.",
+      "published_practice_evidence": {
+        "labels": [],
+        "source_url": "https://rrlaw.ca/about-us/",
+        "observed_date": "2026-09-08"
+      },
+      "published_practice_unknown": "Practice labels were visible but not copied during the focused hold pass.",
+      "leadership_title_evidence": [],
+      "leadership_title_unknown": "Not enriched in this pass because independent QA moved the record to lower-bound count hold.",
+      "published_email_evidence": [],
+      "published_email_unknown": "A general email is visible on the current contact page, but this record was not enriched further during the focused hold pass.",
+      "enrichment_status": "qa_hold_not_enriched",
+      "qa_hold_reason": "Independent QA moved this record to lower-bound count hold pending full baseline reconciliation.",
       "leadership_evidence": "Rod Refcio is identified as founder/CEO/senior lawyer; Burlington is explicitly an appointment-only satellite office.",
       "evidence_note": "At least four lawyer/counsel profiles counted; Burlington is not represented as a separate full office roster.",
       "access_review": "First-party profiles/about pages accessible; minimum firm-wide count and satellite-office scope are explicit.",
