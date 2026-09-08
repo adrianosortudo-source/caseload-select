@@ -1,5 +1,7 @@
 # Meta App Creation · Block 1 Runbook
 
+> **2026-09-04 canonical-domain supersession:** For the pending Meta submission, the public site is `https://caseloadselect.ca/`; Privacy is `https://caseloadselect.ca/privacy`; Terms is `https://caseloadselect.ca/terms`; Data Deletion is `https://caseloadselect.ca/data-deletion`; and Messenger, Instagram, and WhatsApp callbacks use the same paths under `https://caseloadselect.ca`. Historical app-subdomain evidence below remains provenance only. Credential rotation is mandatory before submission because historical Git copies remain recoverable. Never place a credential in this repository. Follow the Git-governed canonical cutover runbook; do not execute an older direct-redeploy instruction.
+
 **Purpose:** Stand up the CaseLoad Select Meta Business Manager and the CaseLoad Select Meta App at developers.facebook.com, configure the three products (WhatsApp Business Platform, Messenger, Instagram Graph API), and wire the webhook receivers (already live at `/api/messenger-intake` and `/api/instagram-intake`).
 
 **Estimated duration:** 30-45 minutes.
@@ -24,13 +26,13 @@
 |---|---|
 | App name | `CaseLoad Select` |
 | Contact email | `adriano@caseloadselect.ca` |
-| Privacy Policy URL | `https://app.caseloadselect.ca/privacy` |
-| Terms of Service URL | `https://app.caseloadselect.ca/terms` |
+| Privacy Policy URL | `https://caseloadselect.ca/privacy` |
+| Terms of Service URL | `https://caseloadselect.ca/terms` |
 | App Category | Business and pages |
-| Messenger webhook callback URL | `https://app.caseloadselect.ca/api/messenger-intake` |
-| Instagram webhook callback URL | `https://app.caseloadselect.ca/api/instagram-intake` |
-| Messenger verify token | `cls_msgr_c61f210e5854376cedb6b3631d3ea836ebdc44ea2029e82f` |
-| Instagram verify token | `cls_ig_dm_03c98e075a2236858856565edf4eb200ccbccfd8ca7762b3` |
+| Messenger webhook callback URL | `https://caseloadselect.ca/api/messenger-intake` |
+| Instagram webhook callback URL | `https://caseloadselect.ca/api/instagram-intake` |
+| Messenger verify token | `[stored in Vercel production environment; never commit]` |
+| Instagram verify token | `[stored in Vercel production environment; never commit]` |
 
 Store the verify tokens — they go into both the Meta developer console AND Vercel env vars (must match exactly).
 
@@ -49,7 +51,7 @@ Store the verify tokens — they go into both the Meta developer console AND Ver
    - Legal business name: `CaseLoad Select`
    - Business address: [your operator address]
    - Business phone: [your operator phone]
-   - Business website: `https://app.caseloadselect.ca` (or `https://caseloadselect.ca` if the marketing site is live)
+   - Business website: `https://caseloadselect.ca/`
    - Vertical: `Professional services` → `Marketing services` (closest match)
 9. Save. The MBM exists with a Business ID — note it for the App creation step.
 
@@ -76,11 +78,11 @@ You land on the App Dashboard. Note the **App ID** at the top.
 1. Left sidebar: **App settings** → **Basic**.
 2. Fill in:
    - **App icon:** click upload, select `D:\00_Work\01_CaseLoad_Select\05_Product\caseload-select-app\public\brand\logos\icon-light-bg.png`.
-   - **Privacy Policy URL:** `https://app.caseloadselect.ca/privacy`
-   - **Terms of Service URL:** `https://app.caseloadselect.ca/terms`
+   - **Privacy Policy URL:** `https://caseloadselect.ca/privacy`
+   - **Terms of Service URL:** `https://caseloadselect.ca/terms`
    - **Category:** Business and pages
    - **Business use:** Support my own business
-   - **Data Deletion Instructions URL:** `https://app.caseloadselect.ca/privacy` (acceptable per Meta; the privacy policy covers deletion)
+   - **Data Deletion Instructions URL:** `https://caseloadselect.ca/data-deletion`
 3. **App Secret:** click **Show** next to App Secret, enter your Facebook password. Copy the value — this is **META_APP_SECRET** for Vercel.
 4. **Save changes** at the bottom.
 
@@ -95,13 +97,15 @@ This must happen BEFORE Meta can verify the webhook URLs in Phases E and F.
 
 | Key | Value | Environment |
 |---|---|---|
-| `META_APP_SECRET` | [the App Secret from Phase C, step 3] | Production |
-| `META_MESSENGER_VERIFY_TOKEN` | `cls_msgr_c61f210e5854376cedb6b3631d3ea836ebdc44ea2029e82f` | Production |
-| `META_INSTAGRAM_VERIFY_TOKEN` | `cls_ig_dm_03c98e075a2236858856565edf4eb200ccbccfd8ca7762b3` | Production |
+| `META_APP_SECRET` | `[stored in Vercel production environment; never commit]` | Production |
+| `META_MESSENGER_VERIFY_TOKEN` | `[stored in Vercel production environment; never commit]` | Production |
+| `META_INSTAGRAM_VERIFY_TOKEN` | `[stored in Vercel production environment; never commit]` | Production |
 
 3. Click **Save** for each.
-4. Trigger a redeploy: Deployments tab → most recent deployment → **Redeploy** → **Redeploy** in the confirmation dialog. Takes ~2 minutes.
-5. Wait for the redeploy to land before continuing to Phase E.
+4. Activate the new values through the repository's production path: open a narrow PR against `main`, wait for every required check, obtain approval to merge that specific PR, and merge it. The merged `main` deployment activates the new Production values. Do not use a direct Vercel production redeploy.
+5. Wait for the merged deployment to become Ready before continuing to Phase E.
+
+Credential-entry safety: do not capture a screenshot, accessibility tree, DOM snapshot, console log, or recording while a verify-token field contains plaintext. Enter the value only after the matching production endpoint accepts it, click **Verify and save** without an intervening inspection, and then verify the masked saved state. If any automation trace reveals the value, treat it as exposed and repeat the rotation before saving it in Meta.
 
 While waiting, you can start Phase E by adding the products (skip the webhook verification steps until the redeploy completes).
 
@@ -123,8 +127,8 @@ While waiting, you can start Phase E by adding the products (skip the webhook ve
 2. Messenger Settings page opens.
 3. Scroll to **Webhooks** section → click **Add Callback URL**.
 4. Fill in:
-   - **Callback URL:** `https://app.caseloadselect.ca/api/messenger-intake`
-   - **Verify Token:** `cls_msgr_c61f210e5854376cedb6b3631d3ea836ebdc44ea2029e82f`
+   - **Callback URL:** `https://caseloadselect.ca/api/messenger-intake`
+   - **Verify Token:** `[stored in Vercel production environment; never commit]`
 5. Click **Verify and Save**.
    - If Meta returns "The URL couldn't be validated" → the Vercel redeploy from Phase D may not be complete yet. Wait 30 seconds and retry.
    - If verification still fails → check Vercel env vars are set on Production environment specifically (not just Preview).
@@ -142,8 +146,8 @@ While waiting, you can start Phase E by adding the products (skip the webhook ve
 2. Open the product settings.
 3. Find **Webhooks** section → click **Add Callback URL** (or **Subscriptions**).
 4. Fill in:
-   - **Callback URL:** `https://app.caseloadselect.ca/api/instagram-intake`
-   - **Verify Token:** `cls_ig_dm_03c98e075a2236858856565edf4eb200ccbccfd8ca7762b3`
+   - **Callback URL:** `https://caseloadselect.ca/api/instagram-intake`
+   - **Verify Token:** `[stored in Vercel production environment; never commit]`
 5. Click **Verify and Save**.
 6. Subscribe to:
    - `messages`

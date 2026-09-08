@@ -5,6 +5,22 @@ remains incomplete until the approval-gated rollout completes. This document
 is not authorization to configure Redis, change a plan, deploy, apply a
 migration, contact counsel, or perform a deletion/backfill/replay.
 
+Deployment retry note (2026-09-04): PR #214 merged the bounded registry-audit
+route, but its Git-integrated production builds were rate-limited before the
+route could deploy. This documentation-only change exists solely to request
+fresh Git-integrated preview checks. It changes no runtime, migration,
+environment, authentication, audit, or replay behavior, and its merge still
+requires separate approval.
+
+Recovery-control credential reconciliation note (2026-09-04): the dedicated
+production recovery token was rotated and its operator credential copy was
+reconciled after the prior local copy was found to be stale. This
+documentation-only change exists solely to request a Git-integrated deployment
+that can load the already-configured sensitive production value. It changes no
+runtime, migration, environment scope, authentication contract, registry data,
+provider-cleanup evidence, or replay state. Replay remains blocked until the
+deployment succeeds and the separately authorized controlled replay resumes.
+
 ## Purpose and boundary
 
 The external registry gives a restore replay source that is independent of
@@ -86,6 +102,20 @@ read the external activation marker, so only this endpoint may supply the
   proves the expected intent, seal, terminal operation, and progress records
   share the supplied cycle and operation and that every non-control value is
   an authenticated encrypted envelope.
+- Audit the complete durable namespace after the global replay while both
+  circuits are locked: `{ "action": "auditReplayedRegistry", "cycleId":
+  "<same DB cycle>", "backfillOperationId": "<completed backfill UUID>",
+  "replayOperationId": "<DB reconciliation operation UUID>",
+  "expectedIntentCount": <aggregate DB count> }`. This second read-only action
+  recognizes the durable `intent`, `applied`, `backfill-seal`, `replay-run`,
+  `operation-state`, and `intent-progress` namespaces plus the exact circuit
+  and optional activation markers. It rejects transient leases, diagnostics,
+  unknown keys, plaintext values, malformed ciphertext, or linkage/accounting
+  drift. Historical interrupted-operation checkpoints may remain encrypted,
+  but only the supplied replay operation can satisfy the terminal current-run
+  proof. Output is limited to fixed counts and booleans; keys, coordinates,
+  ciphertext, decrypted records, provider metadata, and raw errors are never
+  returned.
 - Run replay: `{ "action": "run", "operation": "replay", "operationId":
   "<new UUID>", "cycleId": "<begin response>", "cycleStartedAt":
   "<begin response>", "limit": 100 }`
@@ -139,6 +169,16 @@ blocks migration and activation.
 5. Open only with the completed replay operation and matching cycle. The DB
    opens idempotently, the permanent external activation marker is persisted,
    and only then does the external circuit open. Backfill alone can never open.
+   Migration `20260904125000_privacy_recovery_open_from_locked` permits this
+   final transition from a deliberate locked audit window without repeating
+   replay, but only when the current schema, exact cycle, replay requirement,
+   reconciliation operation, and non-null completion proof all match. The
+   migration itself does not alter the control row or open either circuit.
+   The authenticated recovery route separately requires the encrypted Redis
+   replay checkpoint to be global, terminal, scan-exhausted, unbuffered, and
+   free of pending intents or failures before it invokes the database RPC.
+   The database wrapper remains trusted `service_role`-only and must not be
+   invoked directly by an operator.
 
 ## Restore/replay procedure after activation (approval-gated)
 
@@ -165,10 +205,31 @@ blocks migration and activation.
    fails closed before its cursor is checkpointed. Every mutable write is
    lease-token conditional, and terminal progress plus aggregate accounting
    commits atomically.
+   Recovery replay stops after the tenant-scoped database redaction and durable
+   registry receipt succeed. It does not inspect, delete, acknowledge, or mark
+   complete any provider or Storage cleanup; those records remain in their
+   separate pending evidence workflow.
 5. Reconcile aggregate totals and every provider exception through the approved
    evidence process. Keep the circuit locked if any batch fails.
 6. Only after documented reconciliation and a distinct approval may recovery
    move from `replaying` to `open`.
+
+### Rehearsal evidence boundary
+
+The automated recovery rehearsal is a **transactional logical-restore
+simulation** against the disposable local Supabase/Postgres stack created by
+CI. It uses only fictional `example.test` data, preserves an encrypted registry
+intent outside the database transaction, rolls the database back to a
+pre-deletion savepoint, immediately re-locks it, and runs the production replay
+coordinator twice to prove both redaction and idempotency. The job binds its
+connection to the exact local Docker container and fails before testing if the
+URL, port, container, or SQL server address is ambiguous.
+
+A green rehearsal is engineering evidence for the application-level restore
+and replay contract. It is **not** evidence of a managed Supabase backup or
+PITR restore, provider backup expiry, cloud disaster recovery, or durability of
+the in-memory test adapter. Those claims require their own account-specific
+provider evidence and approval.
 
 ## Initial historical backfill details
 

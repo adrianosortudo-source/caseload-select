@@ -7,6 +7,7 @@ import {
   decryptRegistryRecord,
   encryptRegistryRecord,
   registerBackfillSeal,
+  registerDeletionAppliedReceipt,
   registerDeletionIntent,
   registerDeletionIntentWhenOpen,
   isPrivacyDeletionRegistryActivated,
@@ -134,6 +135,45 @@ describe('privacy deletion registry crypto', () => {
     const store = memoryStore();
     await expect(registerDeletionIntent(intent, store)).resolves.toBe('created');
     await expect(registerDeletionIntent({ ...intent, recordedAt: '2026-09-03T14:01:00.000Z' }, store)).resolves.toBe('existing');
+  });
+
+  it('keeps the first applied receipt when restore replay produces a later timestamp', async () => {
+    process.env.PRIVACY_DELETION_REGISTRY_ENCRYPTION_KEY = key;
+    const store = memoryStore();
+    const first = {
+      deletionRequestId: intent.deletionRequestId,
+      redactedCount: 1,
+      appliedAt: '2026-09-03T14:00:00.000Z',
+    };
+    await expect(registerDeletionAppliedReceipt(first, store)).resolves.toBe('created');
+    const originalCiphertext = [...store.values.values()][0];
+
+    await expect(registerDeletionAppliedReceipt({
+      ...first,
+      appliedAt: '2026-09-04T16:00:00.000Z',
+    }, store)).resolves.toBe('existing');
+    expect([...store.values.values()][0]).toBe(originalCiphertext);
+    expect(decryptRegistryRecord(
+      String(originalCiphertext),
+      'applied',
+      first.deletionRequestId,
+    )).toEqual(first);
+  });
+
+  it('rejects an applied receipt retry with a different terminal result', async () => {
+    process.env.PRIVACY_DELETION_REGISTRY_ENCRYPTION_KEY = key;
+    const store = memoryStore();
+    const first = {
+      deletionRequestId: intent.deletionRequestId,
+      redactedCount: 1,
+      appliedAt: '2026-09-03T14:00:00.000Z',
+    };
+    await registerDeletionAppliedReceipt(first, store);
+    await expect(registerDeletionAppliedReceipt({
+      ...first,
+      redactedCount: 0,
+      appliedAt: '2026-09-04T16:00:00.000Z',
+    }, store)).rejects.toThrow('collision');
   });
 
   it('atomically refuses a normal intent when the external circuit is not open', async () => {

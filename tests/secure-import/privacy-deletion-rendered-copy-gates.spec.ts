@@ -142,12 +142,14 @@ for (const route of ROUTES) {
       if (route === "/data-deletion") {
         expect(renderedText).toContain("A completed or not-applicable status is the operator’s attestation, not provider-issued evidence.");
         expect(renderedText).toContain("A provider-managed status is only a routing marker and cannot, by itself, close external cleanup.");
-        expect(renderedText).toContain("remain release gates for this revised commitment");
+        expect(renderedText).toContain("CaseLoad Select uses a restricted database operation to irreversibly remove message content and direct identifiers from the operational copies it controls.");
+        expect(renderedText).toContain("This was not a managed Supabase backup or point-in-time recovery rehearsal.");
         expect(renderedText).not.toContain("We apply the request to active copies held by service providers");
         expect(renderedText).not.toContain("Backup copies are not returned to operational use without reapplying completed deletion requests");
       } else {
-        expect(renderedText).toContain("Privacy counsel must approve the retention boundary");
-        expect(renderedText).toContain("remain release gates for this revised commitment");
+        expect(renderedText).toContain("CaseLoad Select irreversibly removes message content and direct identifiers from the operational copies it controls.");
+        expect(renderedText).toContain("Retained channel audit events have a three-year retention period measured from the original event.");
+        expect(renderedText).toContain("This was not a managed Supabase backup or point-in-time recovery rehearsal.");
         expect(renderedText).not.toContain("are not returned to operational use without reapplying completed deletion requests");
       }
     });

@@ -122,6 +122,34 @@ describe('durable privacy deletion registry worker', () => {
     });
   });
 
+  it('counts provider-pending local replay success without passing provider completion input', async () => {
+    const store = memoryScanStore();
+    await registerDeletionIntent(intent, store);
+    mocks.erase.mockResolvedValueOnce({
+      ok: true,
+      database_redacted: true,
+      redacted_count: 1,
+      external_cleanup_status: 'pending',
+      storage_objects_removed: 0,
+      pending_cleanup_categories: [],
+    });
+
+    await expect(runPrivacyDeletionRegistryWorkerStep({
+      operation: 'replay', operationId, cycleId, cycleStartedAt, store,
+    })).resolves.toMatchObject({
+      status: 'complete', appliedCount: 1, skippedCount: 0, failedCount: 0, hasMore: false,
+    });
+    expect(mocks.erase).toHaveBeenCalledWith(expect.objectContaining({
+      recoveryReplay: true,
+      deletionRequestId: intent.deletionRequestId,
+      screenedLeadId: intent.screenedLeadId,
+    }));
+    expect(mocks.erase.mock.calls[0]?.[0]).not.toHaveProperty('externalCleanup');
+    expect(mocks.rpc).toHaveBeenCalledWith('mark_privacy_registry_reconciliation_complete', {
+      p_operation: 'replay', p_operation_id: operationId, p_cycle_id: cycleId, p_firm_id: null,
+    });
+  });
+
   it('persists a failed attempt and retries it without inflating unresolved failures', async () => {
     const store = memoryScanStore();
     await registerDeletionIntent(intent, store);

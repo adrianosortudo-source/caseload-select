@@ -169,6 +169,126 @@ describe('eraseScreenedLead', () => {
     });
   });
 
+  it('completes a provider-pending recovery replay after local redaction and receipt only', async () => {
+    mocks.registryEnabled = true;
+    mocks.rpc.mockResolvedValueOnce(pendingPayload());
+
+    const result = await eraseScreenedLead({
+      firmId: FIRM_ID,
+      leadId: '[recovery-by-stable-id]',
+      screenedLeadId: SCREENED_LEAD_ID,
+      reason: 'subject_request',
+      deletionRequestId: REQUEST_ID,
+      recoveryReplay: true,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      database_redacted: true,
+      redacted_count: 1,
+      deletion_request_id: REQUEST_ID,
+      privacy_redacted_at: '2026-09-02T20:00:00.000Z',
+      external_cleanup_status: 'pending',
+      storage_objects_removed: 0,
+      pending_cleanup_categories: [],
+    });
+    expect(mocks.assertReplaying).toHaveBeenCalledOnce();
+    expect(mocks.registerIntent).toHaveBeenCalledOnce();
+    expect(mocks.registerReceipt).toHaveBeenCalledWith({
+      deletionRequestId: REQUEST_ID,
+      redactedCount: 1,
+      appliedAt: '2026-09-02T20:00:00.000Z',
+    });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+    expect(mocks.rpc).toHaveBeenCalledWith('redact_screened_lead_subject_by_id', {
+      p_firm_id: FIRM_ID,
+      p_screened_lead_id: SCREENED_LEAD_ID,
+      p_reason: 'subject_request',
+      p_deletion_request_id: REQUEST_ID,
+    });
+    expect(mocks.storageBuckets).toEqual([]);
+    expect(mocks.list).not.toHaveBeenCalled();
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  it('keeps an already-redacted provider-pending recovery replay idempotent', async () => {
+    mocks.registryEnabled = true;
+    mocks.rpc.mockResolvedValueOnce(pendingPayload({ redacted_count: 0 }));
+
+    const result = await eraseScreenedLead({
+      firmId: FIRM_ID,
+      leadId: '[recovery-by-stable-id]',
+      screenedLeadId: SCREENED_LEAD_ID,
+      reason: 'subject_request',
+      deletionRequestId: REQUEST_ID,
+      recoveryReplay: true,
+    });
+
+    expect(result).toMatchObject({
+      ok: true,
+      database_redacted: true,
+      redacted_count: 0,
+      external_cleanup_status: 'pending',
+      storage_objects_removed: 0,
+      pending_cleanup_categories: [],
+    });
+    expect(mocks.registerReceipt).toHaveBeenCalledWith({
+      deletionRequestId: REQUEST_ID,
+      redactedCount: 1,
+      appliedAt: '2026-09-02T20:00:00.000Z',
+    });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  it('fails recovery replay before database mutation when intent registration fails', async () => {
+    mocks.registryEnabled = true;
+    mocks.registerIntent.mockRejectedValueOnce(new Error('registry unavailable'));
+
+    const result = await eraseScreenedLead({
+      firmId: FIRM_ID,
+      leadId: '[recovery-by-stable-id]',
+      screenedLeadId: SCREENED_LEAD_ID,
+      reason: 'subject_request',
+      deletionRequestId: REQUEST_ID,
+      recoveryReplay: true,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      database_redacted: false,
+      error: 'external privacy deletion registry is unavailable',
+    });
+    expect(mocks.rpc).not.toHaveBeenCalled();
+    expect(mocks.registerReceipt).not.toHaveBeenCalled();
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
+  it('fails recovery replay after database mutation when the durable receipt fails', async () => {
+    mocks.registryEnabled = true;
+    mocks.rpc.mockResolvedValueOnce(pendingPayload());
+    mocks.registerReceipt.mockRejectedValueOnce(new Error('receipt unavailable'));
+
+    const result = await eraseScreenedLead({
+      firmId: FIRM_ID,
+      leadId: '[recovery-by-stable-id]',
+      screenedLeadId: SCREENED_LEAD_ID,
+      reason: 'subject_request',
+      deletionRequestId: REQUEST_ID,
+      recoveryReplay: true,
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      database_redacted: true,
+      external_cleanup_status: 'pending',
+      pending_cleanup_categories: ['external_deletion_registry_receipt'],
+      error: 'external privacy registry receipt is unavailable',
+    });
+    expect(mocks.rpc).toHaveBeenCalledOnce();
+    expect(mocks.remove).not.toHaveBeenCalled();
+  });
+
   it('calls the atomic primitive with the exact firm and lead scope', async () => {
     mocks.rpc.mockResolvedValueOnce(pendingPayload());
 

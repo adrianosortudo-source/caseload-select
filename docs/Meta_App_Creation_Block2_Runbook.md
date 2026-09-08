@@ -1,5 +1,7 @@
 # Meta App Creation · Block 2 Runbook
 
+> **2026-09-04 canonical-domain supersession:** For the pending Meta submission, the public site is `https://caseloadselect.ca/`; Privacy is `https://caseloadselect.ca/privacy`; Terms is `https://caseloadselect.ca/terms`; Data Deletion is `https://caseloadselect.ca/data-deletion`; and Messenger, Instagram, and WhatsApp callbacks use the same paths under `https://caseloadselect.ca`. Historical app-subdomain evidence below remains provenance only. Credential rotation is mandatory before submission because historical Git copies remain recoverable. Never place a credential in this repository. Follow the Git-governed canonical cutover runbook; do not execute an older direct-redeploy instruction.
+
 **Purpose:** Create the test assets needed to demonstrate the Meta App working end-to-end (test Facebook Page, test Instagram Business account, test WhatsApp number, test firm GHL sub-account), wire them through the app's existing intake plumbing, and record demo screencasts for the App Review submission.
 
 **Prerequisite:** Block 1 closed 2026-05-13. Meta Business Portfolio, Meta App, Vercel env vars, Messenger + Instagram webhook verifications all live and verified.
@@ -22,11 +24,11 @@
 |---|---|
 | Meta App ID | `1007304805285554` |
 | Meta Business Portfolio ID | `2191422434947205` |
-| Messenger webhook URL | `https://app.caseloadselect.ca/api/messenger-intake` |
-| Instagram webhook URL | `https://app.caseloadselect.ca/api/instagram-intake` |
-| Messenger verify token | `cls_msgr_c61f210e5854376cedb6b3631d3ea836ebdc44ea2029e82f` |
-| Instagram verify token | `cls_ig_dm_03c98e075a2236858856565edf4eb200ccbccfd8ca7762b3` |
-| Meta App Secret | `66417396d1de2f4abcee5f67973617cd` (also in Vercel as `META_APP_SECRET`) |
+| Messenger webhook URL | `https://caseloadselect.ca/api/messenger-intake` |
+| Instagram webhook URL | `https://caseloadselect.ca/api/instagram-intake` |
+| Messenger verify token | `[stored in Vercel production environment; never commit]` |
+| Instagram verify token | `[stored in Vercel production environment; never commit]` |
+| Meta App Secret | `[stored in Vercel production environment; never commit]` |
 
 All three secrets are already saved as Production env vars in Vercel and verified working via the webhook handshake test (both endpoints returned the challenge string with HTTP 200 on 2026-05-13).
 
@@ -119,8 +121,8 @@ This is the step that activates the webhook field subscriptions we couldn't conf
 
 1. Same WhatsApp use case → **Configuration** in the left sub-nav.
 2. Find the **Webhook** section.
-3. **Callback URL:** `https://app.caseloadselect.ca/api/whatsapp-intake` (Note: this endpoint may not exist yet — see Phase 7).
-4. **Verify token:** Generate a new token following the same pattern as Messenger/IG. Suggested: `cls_wa_` + 48 random hex chars. Save it; we'll add to Vercel.
+3. **Callback URL:** `https://caseloadselect.ca/api/whatsapp-intake` (Note: this endpoint may not exist yet — see Phase 7).
+4. **Verify token:** Generate a new per-channel token locally with cryptographic randomness at the separately authorized cutover gate. Store it only in the approved recovery location and Vercel Production environment.
 5. Before clicking Verify and Save, finish Phase 7 first to make sure the endpoint exists and the env var is in Vercel.
 
 ---
@@ -142,7 +144,7 @@ If it exists, skip to Phase 8. If not:
    - Persists to `screened_leads` with `channel='whatsapp'`.
 3. Commit + push. Vercel redeploys. Confirm 200 on the handshake:
 ```
-curl -sw "\nHTTP %{http_code}\n" "https://app.caseloadselect.ca/api/whatsapp-intake?hub.mode=subscribe&hub.verify_token=<the-token>&hub.challenge=test"
+curl -sw "\nHTTP %{http_code}\n" "https://caseloadselect.ca/api/whatsapp-intake?hub.mode=subscribe&hub.verify_token=<the-token>&hub.challenge=test"
 ```
 
 Then go back to Phase 6 and click Verify and Save.
@@ -229,7 +231,7 @@ When all eleven boxes are ticked: Block 2 is done. Move to Block 3 (App Review s
 
 ## Block 1 leftovers to retry today
 
-- **Meta User Data Deletion URL validator bug:** The field rejected `https://app.caseloadselect.ca/data-deletion` with a stale "name_placeholder should represent a valid URL" error on 2026-05-13, even though the page is live and returns HTTP 200. Try again today from a fresh hard reload. If still rejected, file a support ticket with Meta — the page is correctly hosted, this is a validator bug on their side. The field is non-blocking for Block 1/2 but becomes mandatory at App Review submission in Block 3.
+- **Meta User Data Deletion URL validator bug:** The field rejected `https://caseloadselect.ca/data-deletion` with a stale "name_placeholder should represent a valid URL" error on 2026-05-13, even though the page is live and returns HTTP 200. Try again today from a fresh hard reload. If still rejected, file a support ticket with Meta — the page is correctly hosted, this is a validator bug on their side. The field is non-blocking for Block 1/2 but becomes mandatory at App Review submission in Block 3.
 
 ---
 

@@ -13,14 +13,16 @@ Use these active v2 files:
 
 Current release state:
 
-- PRs #191, #193, #195, #198, #199, #202, #203, and #204 are merged.
-- Production commit `a05520e3b9d08d82bd81c42779907cbd2c807757` is READY.
+- PRs #191, #193, #195, #198, #199, #202, #203, #204, and #223 are merged.
+- Historical verification baseline `a05520e3b9d08d82bd81c42779907cbd2c807757` was READY. The active canonical Meta deployment is established by the current merged release and must be verified at the deployment gate before callback changes.
 - Migrations through `20260903011450_privacy_provider_evidence_required` are applied and verified.
 - Option B is shipped.
 - The post-ledger and strict-completion production verifications passed, including Meta-derived CaseLoad Select operational-copy checks.
-- Remaining Meta gates are the backup-expiry and durable-registry restore/replay control, privacy-counsel approval, public-copy reconciliation, live Meta draft/upload checks, and Adriano's approved submission action.
+- The application-level registry and restore/replay controls are complete. Adriano approved the public copy and current controller wording as owner, confirmed the past-12-month national-security answer after reasonable review, selected `None of the above` for undocumented public-authority processes, and waived external privacy-counsel review. PR #223 merged the approved copy, and the three canonical public URLs passed signed-out verification.
+- Meta submission `1105787938770573` entered Review in progress on 2026-09-06 at 00:58 EDT. The app remains unpublished.
+- The first post-submission Instagram replacement value was exposed in a local automation trace before it was saved in Meta and was discarded. A second replacement was written to the Vercel Production environment on 2026-09-06. It becomes active, and invalidates the exposed value, only after the follow-up merged `main` deployment is Ready; update Meta's Instagram webhook verification value only after that deployment is verified, without capturing the plaintext field.
 
-PRE-SUBMISSION BLOCKER: Controlled, irreversible redaction and strict external-cleanup semantics are deployed and verified for the tested CaseLoad Select operational copies. This does not prove external-provider deletion, backup-safe replay, or the legal sufficiency of the retained audit envelope. Do not submit the Meta draft until the remaining backup/registry, privacy-counsel, public-copy, and live Meta gates close and Adriano gives explicit action-time approval.
+POST-SUBMISSION CONTROL: Controlled, irreversible redaction, strict external-cleanup semantics, and the application-level recovery controls are deployed and verified for the tested CaseLoad Select operational copies. This does not prove external-provider deletion, managed-backup expiry, or an independent legal assessment of the retained audit envelope. The public-copy and submission gates are closed. While review is in progress, do not alter requested permissions, reviewer materials, callback URLs, or submission answers unless Meta requests a change and Adriano approves it.
 
 The configured test assets use the DRG production workspace row, not a segregated test tenant. Use a fresh fictional conversation and frame the brief so no unrelated lead data is visible. Never resubmit the approved WhatsApp scopes or `public_profile`. Stop for Adriano's action-time approval before the final submission control.
 
@@ -129,11 +131,11 @@ Path B (fresh account, cleaner):
 2. Add to Vercel Production env: `META_WHATSAPP_VERIFY_TOKEN=<your token>`. Redeploy.
 3. Wait for deploy (~2 min). Verify the endpoint now accepts the token:
    ```bash
-   curl -sw "\nHTTP %{http_code}\n" "https://app.caseloadselect.ca/api/whatsapp-intake?hub.mode=subscribe&hub.verify_token=<your-token>&hub.challenge=verify-test"
+   curl -sw "\nHTTP %{http_code}\n" "https://caseloadselect.ca/api/whatsapp-intake?hub.mode=subscribe&hub.verify_token=<your-token>&hub.challenge=verify-test"
    ```
    Expect HTTP 200 + the challenge string echoed.
 4. App use-cases page → WhatsApp → **Configuration** → Webhook section.
-5. Callback URL: `https://app.caseloadselect.ca/api/whatsapp-intake`
+5. Callback URL: `https://caseloadselect.ca/api/whatsapp-intake`
 6. Verify token: the value you just generated.
 7. Click **Verify and Save**. Subscribe to `messages`.
 
@@ -222,9 +224,9 @@ Required by Section 6.3 of `Phase11_Submission_Package.md`. Lets the deletion cl
 ### Step 12 · Re-verify policy pages live (5 min)
 
 ```bash
-curl -sI https://app.caseloadselect.ca/privacy | head -1
-curl -sI https://app.caseloadselect.ca/terms | head -1
-curl -sI https://app.caseloadselect.ca/data-deletion | head -1
+curl -sI https://caseloadselect.ca/privacy | head -1
+curl -sI https://caseloadselect.ca/terms | head -1
+curl -sI https://caseloadselect.ca/data-deletion | head -1
 ```
 
 All three must return `HTTP/2 200`. Privacy + Terms + Data Deletion pages already carry the 2026-05-24 update timestamp.
@@ -247,13 +249,13 @@ In the App dashboard at `https://developers.facebook.com/apps/1007304805285554/a
 |---|---|
 | App display name | `CaseLoad Select` |
 | App contact email | `hello@caseloadselect.ca` |
-| Privacy Policy URL | `https://app.caseloadselect.ca/privacy` |
-| Terms of Service URL | `https://app.caseloadselect.ca/terms` |
-| User Data Deletion URL | `https://app.caseloadselect.ca/data-deletion` |
+| Privacy Policy URL | `https://caseloadselect.ca/privacy` |
+| Terms of Service URL | `https://caseloadselect.ca/terms` |
+| User Data Deletion URL | `https://caseloadselect.ca/data-deletion` |
 | Category | `Business` (sub-category: `Business and Pages` or `Productivity` if rejected) |
 | App icon | Upload `public/brand/logos/icon-dark-bg-1024.png` |
 | App Domain | `caseloadselect.ca` |
-| Site URL (Website platform) | `https://app.caseloadselect.ca` |
+| Site URL (Website platform) | `https://caseloadselect.ca/` |
 
 Paste the long-form app description from `Phase11_Submission_Package.md` Section 1.2 into "Tell us about your app".
 
@@ -283,12 +285,22 @@ In the App dashboard, navigate to App Review → Permissions and Features. For e
 3. Attach the matching screencast(s) per the table in `screencasts/README.md`.
 4. For test instructions, paste the matching reviewer instructions block from Section 2.
 
-Permissions to resubmit (2 total):
+Business capabilities to resubmit (2):
 
 - [ ] `pages_messaging` (Section 2.1)
 - [ ] Historical label variant: `instagram_business_manage_messages` (do not copy; confirm the exact live Meta label under the active v2 runbook)
 
-Remove or leave out `pages_show_list`, `pages_manage_metadata`, `business_management`, `instagram_basic`, and `pages_read_engagement`. Do not resubmit approved `whatsapp_business_messaging`, `whatsapp_business_management`, or `public_profile`.
+Mandatory technical dependencies across the two messaging capabilities (4 unique scopes):
+
+- [ ] `instagram_basic`
+- [ ] `pages_read_engagement`
+- [ ] `pages_show_list`
+- [ ] `pages_manage_metadata`
+
+`instagram_basic`, `pages_read_engagement`, and `pages_show_list` support legacy Instagram messaging; `pages_manage_metadata` and `pages_show_list` support Messenger. Request the four unique scopes only as Meta-declared dependencies, not standalone product features. Remove or leave out `business_management` unless the live form identifies another mandatory dependency and that change is separately reviewed. Do not resubmit approved `whatsapp_business_messaging`, `whatsapp_business_management`, or `public_profile`.
+
+- [x] The owner-approved Data Handling answers are recorded in `../privacy/OWNER_PRIVACY_AND_META_DATA_HANDLING_DECISION_2026-09-04.md`; external counsel review was waived.
+- [ ] Apply those exact answers in Meta and confirm Data Handling no longer shows `Needs your review`. Do not submit the four pre-filled positive public-authority-process selections.
 
 ---
 
@@ -367,7 +379,7 @@ Check the App Review status daily at `https://developers.facebook.com/apps/10073
 | Screencasts (v1, 4 clips) | RECORDED 2026-08-13 and preserved under `docs/app-review/screencasts/`; rejected evidence, not for reuse in the v2 submission |
 | Screencasts (v2, 2 clips) | NOT RECORDED; operator records only after Option B is merged, migration is applied, and production is verified, following `screencasts/SHOTLIST_v2.md` |
 | **App Review submission**: Tech Provider gate | CONTINUE clicked. Per-permission "Add to App Review" path active. |
-| App Review: App settings step | green; App domain `caseloadselect.ca`, Website platform `https://app.caseloadselect.ca`, all URLs, app icon |
+| App Review: App settings step | green; App domain `caseloadselect.ca`, Website platform `https://caseloadselect.ca`, all URLs, app icon |
 | App Review: Allowed usage step (10 permissions) | Historical draft state only. Inventory the live draft before relying on any saved permission or description. |
 | App Review: Data handling step | Historical green state. Recheck the live form before submission. |
 | App Review: Reviewer instructions step | Historical v1 state only. Replace with `Reviewer_Instructions_Paste_v2.md`. |
@@ -381,8 +393,10 @@ Check the App Review status daily at `https://developers.facebook.com/apps/10073
 
 **Cross-permission Data handling assertions worth keeping in mind as you fill remaining questions:**
 
-- We have NEVER provided personal data to public authorities (national security or otherwise); answer "No" to such questions.
-- We have NEVER shared personal data with any third party except the 4 documented processors (Supabase, Vercel, Google, Resend).
+**2026-09-04 correction:** The first two historical bullets below were not supported by a request register and are not current instructions. Preserve them as history only. The current owner decision is narrower: after reasonable review, no national-security disclosure occurred in the 12 months ending 2026-09-04; select `None of the above` for the four currently undocumented public-authority processes. Current Platform Data processors must be assessed against the live data path and current privacy disclosures.
+
+- Historical claim, superseded: “We have NEVER provided personal data to public authorities (national security or otherwise); answer ‘No’ to such questions.”
+- Historical claim, superseded: “We have NEVER shared personal data with any third party except the 4 documented processors (Supabase, Vercel, Google, Resend).”
 - Retention: band-based per Privacy Policy. 1095d / 365d / 180d / 30d / 90d. Anonymization (not deletion) once retention period elapses.
 - Encryption at rest (Supabase) + TLS in transit. No special EU residency since we're Canadian; data is stored in Montreal (Supabase ca-central-1).
 - Breach protocol: notify affected users within 72 hours of becoming aware; notify the firm whose tenant was affected; notify the Office of the Privacy Commissioner of Canada if there is real risk of significant harm (PIPEDA breach standard).

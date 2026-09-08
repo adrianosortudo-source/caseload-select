@@ -14,6 +14,7 @@
  */
 import ProspectsFrame from "./ProspectsFrame";
 import Link from "next/link";
+import ReconciledProspects from "./ReconciledProspects";
 
 export const dynamic = "force-dynamic";
 
@@ -24,14 +25,19 @@ export default function ProspectsPage() {
         <p className="text-xs uppercase tracking-wider font-semibold text-gold">Operator console</p>
         <h1 className="text-2xl font-bold text-navy mt-1">Prospect list</h1>
         <p className="text-sm text-black/50 mt-1">
-          GTA solo and two-lawyer firms from the LSO directory, with verified websites,
-          advertising signals, practice areas, and Portuguese / Spanish language tiers.
+          Browse the reviewed firm expansion alongside the legacy GTA directory clusters.
         </p>
         <Link href="/admin/prospects/brazilian" className="mt-3 inline-flex rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white hover:bg-navy/90">
           Open Brazilian lawyer research overlay
         </Link>
       </div>
 
+      <ReconciledProspects />
+
+      <div>
+        <h2 className="text-lg font-bold text-navy">Legacy GTA directory clusters</h2>
+        <p className="text-sm text-black/50 mt-1">The original LSO-derived solo and two-lawyer address clusters remain available while their firm-level records are reconciled above.</p>
+      </div>
       <ProspectsFrame />
     </div>
   );

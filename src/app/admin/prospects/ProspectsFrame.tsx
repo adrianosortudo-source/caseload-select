@@ -56,6 +56,7 @@ export default function ProspectsFrame() {
     <iframe
       srcDoc={html}
       title="GTA prospect list"
+      sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox"
       className="w-full rounded border border-black/10 bg-white"
       style={{ height: "calc(100vh - 190px)", minHeight: "600px" }}
     />

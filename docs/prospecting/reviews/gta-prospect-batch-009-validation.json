@@ -1,0 +1,53 @@
+{
+  "schema_version": "gta-prospect-batch-009-validation-v1",
+  "report_type": "read_only_public_roster_qa",
+  "validated_commit": "pending_commit",
+  "comparison_commit_pr_231": "44c844f49a5eda7a2a237a5b7706135e118b49e5",
+  "observed_at": "2026-09-07",
+  "source_policy": "first-party public web roster pages only",
+  "actions_not_performed": ["LSO automation", "bot bypass", "CRM activity or import", "forms", "chat", "contact or outreach", "deployment", "merge"],
+  "summary": {
+    "total_records": 5,
+    "disposition_counts": {"accepted_for_staging": 4, "needs_count_review": 1, "identity_review": 0, "reject": 0},
+    "pr_231_exact_duplicate_ids": [],
+    "prior_batch_exact_duplicate_ids": [],
+    "legacy_reconciliation": "unknown_no_stable_crosswalk_for_all_records"
+  },
+  "records": [
+    {
+      "record_id": "B009-01",
+      "firm_name": "Naymark LLP",
+      "disposition": "accepted_for_staging",
+      "reasons": ["The current first-party team page distinguishes seven lawyer-or-counsel roles from three law-clerk roles and a business-development role. A separate current first-party contact page publishes the Toronto office."],
+      "evidence": {"city": "Toronto", "count": "7 exact current lawyer-or-counsel roles", "roster_source": "https://www.naymarklaw.com/team", "office_source": "https://www.naymarklaw.com/contact-3"}
+    },
+    {
+      "record_id": "B009-02",
+      "firm_name": "Falconeri Rumble Harrison LLP",
+      "disposition": "accepted_for_staging",
+      "reasons": ["The current first-party team page identifies one managing partner, two partners, and one associate, separate from three non-lawyer roles, and publishes the Toronto office."],
+      "evidence": {"city": "Toronto", "count": "4 exact current lawyer roles", "source": "https://frhlaw.ca/our-team/"}
+    },
+    {
+      "record_id": "B009-03",
+      "firm_name": "Cowling Boissonneau LLP",
+      "disposition": "accepted_for_staging",
+      "reasons": ["The current first-party homepage identifies two partners and one associate in a People section, separately from practice content, and publishes the Toronto office."],
+      "evidence": {"city": "Toronto", "count": "3 exact current lawyer roles", "source": "https://www.cblitigators.com/"}
+    },
+    {
+      "record_id": "B009-04",
+      "firm_name": "Overland LLP",
+      "disposition": "accepted_for_staging",
+      "reasons": ["The current first-party About page identifies four partners and four associates with role-labelled biographies. Its first-party contact page publishes the Toronto office."],
+      "evidence": {"city": "Toronto", "count": "8 exact current lawyer roles", "roster_source": "https://overlandllp.ca/about", "office_source": "https://overlandllp.ca/contact"}
+    },
+    {
+      "record_id": "B009-05",
+      "firm_name": "Taerk Family Law",
+      "disposition": "needs_count_review",
+      "reasons": ["The current first-party homepage identifies one founder/managing partner and three associate lawyers, and publishes the Toronto office. Because it also links to additional team material, the displayed four roles do not establish a complete roster boundary."],
+      "evidence": {"city": "Toronto", "count": "at least 4 current lawyer roles", "source": "https://taerkfamilylaw.com/", "hold": "re-check the complete current team page before staging"}
+    }
+  ]
+}
