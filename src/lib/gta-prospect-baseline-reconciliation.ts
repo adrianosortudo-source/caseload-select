@@ -186,7 +186,7 @@ export function reconcileProspectCandidateAgainstBaseline(
   const candidateAddress = normalizeProspectStreetAddress(candidate.streetAddress);
   const candidateCity = normalizeCity(candidate.city);
 
-  const matches = baseline.map((record) => {
+  const matches = baseline.map((record): ProspectBaselineMatch | null => {
     baselineKey(record);
     const fields: ProspectBaselineMatchField[] = [];
     const domain = normalizeFirmDomain(record.canonicalDomain);
