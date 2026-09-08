@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.0",
+  "schema_version": "2.1",
   "batch_id": "gta-prospect-batch-011",
   "stage": "research_only",
   "accepted": false,
@@ -19,5 +19,11 @@
     "loopstranixon.com",
     "mccagueborlack.com",
     "millerthomson.com"
-  ]
+  ],
+  "baseline_sources": {
+    "fixture_records": 20,
+    "offline_import_fixture_records": 103,
+    "legacy_source_records": 5902,
+    "live_ledger_state": "offline_pending"
+  }
 }

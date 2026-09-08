@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.0",
+  "schema_version": "2.1",
   "batch_id": "gta-prospect-batch-011",
   "lane": "toronto-core",
   "records": [
@@ -10,22 +10,41 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 15,
       "count_qualifier": "exact",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3004",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-01",
           "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
           "cross_lane_counterpart=B011-WN-004"
         ]
       },
@@ -37,11 +56,13 @@
         {
           "kind": "roster",
           "url": "https://www.blacksutherland.com/our-lawyers/",
+          "observed_on": "2026-09-08",
           "note": "The reviewed 'Our Lawyers' page lists 15 lawyer profiles and identifies the Toronto office separately."
         },
         {
           "kind": "office",
           "url": "https://www.blacksutherland.com/our-lawyers/",
+          "observed_on": "2026-09-08",
           "note": "The source presents 15 named lawyer profiles; no owner claim is made."
         }
       ],
@@ -57,22 +78,41 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 11,
       "count_qualifier": "exact",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3070",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-02",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -83,11 +123,13 @@
         {
           "kind": "roster",
           "url": "https://bruderspringstead.com/our-team/",
+          "observed_on": "2026-09-08",
           "note": "The reviewed team page separates six partners and five associates from staff."
         },
         {
           "kind": "office",
           "url": "https://bruderspringstead.com/our-team/",
+          "observed_on": "2026-09-08",
           "note": "Partner and associate headings provide a bounded 11-lawyer roster. Partner status is not treated as ownership."
         }
       ],
@@ -103,22 +145,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 14,
       "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-03",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -129,11 +181,13 @@
         {
           "kind": "roster",
           "url": "https://www.litigate.com/People",
+          "observed_on": "2026-09-08",
           "note": "The reviewed filtered lawyers page visibly listed at least 14 lawyer profiles before its result excerpt ended; it did not establish a bounded total in this pass."
         },
         {
           "kind": "office",
           "url": "https://litigate.com/",
+          "observed_on": "2026-09-08",
           "note": "Lower bound only; do not use it to assign a capped size band."
         }
       ],
@@ -149,22 +203,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 16,
       "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-04",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -175,11 +239,13 @@
         {
           "kind": "roster",
           "url": "https://www.cavalluzzo.com/employment-law-and-litigation-our-people",
+          "observed_on": "2026-09-08",
           "note": "Sixteen unique individual lawyer source entries addresses appeared on the reviewed first-party people page; generic mailboxes were excluded."
         },
         {
           "kind": "office",
           "url": "https://www.cavalluzzo.com/",
+          "observed_on": "2026-09-08",
           "note": "This is a conservative roster lower bound, not a full-firm total."
         }
       ],
@@ -195,22 +261,49 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 30,
       "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5323",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5324",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-05",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -221,16 +314,19 @@
         {
           "kind": "roster",
           "url": "https://stockwoods.ca/",
+          "observed_on": "2026-09-08",
           "note": "Thirty named lawyer profiles were visible on the reviewed first-party page; roster completeness needs an independent re-check."
         },
         {
           "kind": "office",
           "url": "https://stockwoods.ca/",
+          "observed_on": "2026-09-08",
           "note": "Lower bound only; the leadership title does not establish ownership."
         },
         {
           "kind": "leadership",
           "url": "https://stockwoods.ca/",
+          "observed_on": "2026-09-08",
           "note": "Managing Partner"
         }
       ],
@@ -246,22 +342,41 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 14,
       "count_qualifier": "exact",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3284",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-06",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -272,16 +387,19 @@
         {
           "kind": "roster",
           "url": "https://www.danielbrownlaw.ca/our-team/",
+          "observed_on": "2026-09-08",
           "note": "The reviewed team page distinguishes 14 partner or associate lawyer profiles from law-clerk and paralegal roles."
         },
         {
           "kind": "office",
           "url": "https://www.danielbrownlaw.ca/our-team/",
+          "observed_on": "2026-09-08",
           "note": "Partner title is preserved as published and is not an ownership inference."
         },
         {
           "kind": "leadership",
           "url": "https://www.danielbrownlaw.ca/our-team/",
+          "observed_on": "2026-09-08",
           "note": "Partner"
         }
       ],
@@ -297,22 +415,40 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 22,
       "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3671",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-07",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -323,16 +459,19 @@
         {
           "kind": "roster",
           "url": "https://www.gluckstein.com/team",
+          "observed_on": "2026-09-08",
           "note": "The first-party team list identifies 23 people under Lawyers, including one marked retired; this lower bound excludes the retired lawyer."
         },
         {
           "kind": "office",
           "url": "https://www.gluckstein.com/contact/toronto",
+          "observed_on": "2026-09-08",
           "note": "Charles and Bernard Gluckstein are labelled managing and founding partners by the firm; no ownership claim is added."
         },
         {
           "kind": "leadership",
           "url": "https://www.gluckstein.com/team",
+          "observed_on": "2026-09-08",
           "note": "Managing Partner"
         }
       ],
@@ -348,22 +487,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 12,
       "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-08",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -374,16 +523,19 @@
         {
           "kind": "roster",
           "url": "https://www.mcleishorlando.com/our-people/",
+          "observed_on": "2026-09-08",
           "note": "A reviewed first-party lawyer profile listed 12 partner, associate, and founding-partner lawyer profiles; no claim that this is the entire roster."
         },
         {
           "kind": "office",
           "url": "https://www.mcleishorlando.com/our-firm/",
+          "observed_on": "2026-09-08",
           "note": "Count is a lower bound and the founding-partner label is not an ownership assertion."
         },
         {
           "kind": "leadership",
           "url": "https://www.mcleishorlando.com/our-people/patrick-brown/",
+          "observed_on": "2026-09-08",
           "note": "Founding Partner"
         }
       ],
@@ -399,22 +551,40 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 19,
       "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4703",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-09",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -425,16 +595,19 @@
         {
           "kind": "roster",
           "url": "https://neinstein.com/our-lawyers",
+          "observed_on": "2026-09-08",
           "note": "The reviewed lawyer directory distinguishes 12 partners and seven associates from paralegal and student sections. A separate homepage statement says 20 dedicated lawyers, so this record retains the directly countable lower bound."
         },
         {
           "kind": "office",
           "url": "https://neinstein.com/about",
+          "observed_on": "2026-09-08",
           "note": "The 19-profile count is a lower bound pending resolution of the current homepage's 20-lawyer statement."
         },
         {
           "kind": "leadership",
           "url": "https://neinstein.com/our-lawyers",
+          "observed_on": "2026-09-08",
           "note": "Managing Partner"
         }
       ],
@@ -450,22 +623,41 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 11,
       "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3019",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-10",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -476,16 +668,19 @@
         {
           "kind": "roster",
           "url": "https://www.bogoroch.com/our-lawyers/",
+          "observed_on": "2026-09-08",
           "note": "The reviewed firm team page states that the firm has 11 lawyers; this needs a fresh bounded-roster check before treating it as exact."
         },
         {
           "kind": "office",
           "url": "https://www.bogoroch.com/",
+          "observed_on": "2026-09-08",
           "note": "Founder and managing-partner wording is preserved without inferring ownership."
         },
         {
           "kind": "leadership",
           "url": "https://www.bogoroch.com/our-lawyers/",
+          "observed_on": "2026-09-08",
           "note": "Founder and Managing Partner"
         }
       ],
@@ -501,22 +696,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 22,
       "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-11",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -527,16 +732,19 @@
         {
           "kind": "roster",
           "url": "https://www.thomsonrogers.com/directory/",
+          "observed_on": "2026-09-08",
           "note": "The first-page directory excerpt lists 22 lawyer profiles before a 'Load More' control; it cannot establish the total."
         },
         {
           "kind": "office",
           "url": "https://www.thomsonrogers.com/directory/",
+          "observed_on": "2026-09-08",
           "note": "Lower bound only because the directory required further loading."
         },
         {
           "kind": "leadership",
           "url": "https://www.thomsonrogers.com/directory/",
+          "observed_on": "2026-09-08",
           "note": "Managing Partner"
         }
       ],
@@ -552,22 +760,40 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": 18,
       "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5540",
+              "fields": [
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-12",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -578,16 +804,19 @@
         {
           "kind": "roster",
           "url": "https://wildlaw.ca/practice-areas/tax",
+          "observed_on": "2026-09-08",
           "note": "A first-party lawyer filter listed 18 distinct lawyers; it did not establish a full-firm total."
         },
         {
           "kind": "office",
           "url": "https://wildlaw.ca/contact",
+          "observed_on": "2026-09-08",
           "note": "The published founder and managing-partner title is not converted into an ownership claim."
         },
         {
           "kind": "leadership",
           "url": "https://wildlaw.ca/people/perry-n-dellelce",
+          "observed_on": "2026-09-08",
           "note": "Founder and Managing Partner"
         }
       ],
@@ -603,22 +832,41 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_observed",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3001",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-13",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -629,11 +877,13 @@
         {
           "kind": "roster",
           "url": "https://www.bslsc.com/lawyers/",
+          "observed_on": "2026-09-08",
           "note": "The reviewed firm page identifies the firm and its published practice areas but did not provide an auditable bounded lawyer roster in this pass."
         },
         {
           "kind": "office",
           "url": "https://www.bslsc.com/",
+          "observed_on": "2026-09-08",
           "note": "Source observed; count and ownership remain unknown."
         }
       ],
@@ -649,22 +899,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-14",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -675,11 +935,13 @@
         {
           "kind": "roster",
           "url": "https://www.airdberlis.com/people",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.airdberlis.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -695,22 +957,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-15",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -721,11 +993,13 @@
         {
           "kind": "roster",
           "url": "https://www.blaney.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.blaney.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -741,22 +1015,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-16",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -767,11 +1051,13 @@
         {
           "kind": "roster",
           "url": "https://www.beardwinter.com/lawyers/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.beardwinter.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -787,22 +1073,81 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1257",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3614",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3615",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3616",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3617",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3618",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-17",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -813,11 +1158,13 @@
         {
           "kind": "roster",
           "url": "https://www.grllp.com/lawyers/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.grllp.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -833,22 +1180,40 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4614",
+              "fields": [
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-18",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -859,11 +1224,13 @@
         {
           "kind": "roster",
           "url": "https://www.minden.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.minden.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -879,22 +1246,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-19",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -905,11 +1282,13 @@
         {
           "kind": "roster",
           "url": "https://www.torkin.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.torkin.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -925,22 +1304,96 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1385",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1846",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3194",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4355",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4356",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5693",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5837",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-830",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-20",
           "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
           "cross_lane_counterpart=B011-WN-012"
         ]
       },
@@ -952,11 +1405,13 @@
         {
           "kind": "roster",
           "url": "https://www.loopstranixon.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.loopstranixon.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -972,22 +1427,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-21",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -998,11 +1463,13 @@
         {
           "kind": "roster",
           "url": "https://robinsappleby.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://robinsappleby.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1018,22 +1485,41 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5223",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-22",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1044,11 +1530,13 @@
         {
           "kind": "roster",
           "url": "https://www.shibleyrighton.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.shibleyrighton.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1064,22 +1552,71 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1769",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1770",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3567",
+              "fields": [
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3568",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3623",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-23",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1090,11 +1627,13 @@
         {
           "kind": "roster",
           "url": "https://foglers.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://foglers.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1110,22 +1649,41 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5902",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-24",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1136,11 +1694,13 @@
         {
           "kind": "roster",
           "url": "https://www.weirfoulds.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.weirfoulds.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1156,22 +1716,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-25",
           "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
           "cross_lane_counterpart=B011-WN-009"
         ]
       },
@@ -1183,11 +1753,13 @@
         {
           "kind": "roster",
           "url": "https://www.millerthomson.com/en/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.millerthomson.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1203,22 +1775,40 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3545",
+              "fields": [
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-26",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1229,11 +1819,13 @@
         {
           "kind": "roster",
           "url": "https://www.fasken.com/en/people",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.fasken.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1249,22 +1841,40 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4858",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-27",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1275,11 +1885,13 @@
         {
           "kind": "roster",
           "url": "https://www.goodmans.ca/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.goodmans.ca/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1295,22 +1907,48 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5321",
+              "fields": [
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5322",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-28",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1321,11 +1959,13 @@
         {
           "kind": "roster",
           "url": "https://www.stikeman.com/en-ca/people",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.stikeman.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1341,22 +1981,62 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4757",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4771",
+              "fields": [
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4772",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5162",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-29",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1367,11 +2047,13 @@
         {
           "kind": "roster",
           "url": "https://www.osler.com/en/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.osler.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1387,22 +2069,65 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1977",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5448",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5449",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5450",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-30",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1413,11 +2138,13 @@
         {
           "kind": "roster",
           "url": "https://www.torys.com/our-team",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.torys.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1433,22 +2160,40 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3363",
+              "fields": [
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-31",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1459,11 +2204,13 @@
         {
           "kind": "roster",
           "url": "https://www.dwpv.com/en/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.dwpv.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1479,22 +2226,47 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-2784",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-2785",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-32",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1505,11 +2277,13 @@
         {
           "kind": "roster",
           "url": "https://www.bennettjones.com/People",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.bennettjones.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1525,22 +2299,87 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-2795",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3198",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4530",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4531",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4532",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4533",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4534",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-33",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1551,11 +2390,13 @@
         {
           "kind": "roster",
           "url": "https://www.mccarthy.ca/en/people",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.mccarthy.ca/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1571,22 +2412,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-34",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1597,11 +2448,13 @@
         {
           "kind": "roster",
           "url": "https://www.bereskinparr.com/people",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.bereskinparr.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1617,22 +2470,41 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5254",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-35",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1643,11 +2515,13 @@
         {
           "kind": "roster",
           "url": "https://www.smartbiggar.ca/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.smartbiggar.ca/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1663,22 +2537,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-36",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1689,11 +2573,13 @@
         {
           "kind": "roster",
           "url": "https://www.ridoutmaybee.com/people",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.ridoutmaybee.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1709,22 +2595,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-37",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1735,11 +2631,13 @@
         {
           "kind": "roster",
           "url": "https://www.jackmanllp.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.jackmanllp.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1755,22 +2653,41 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4265",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-38",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1781,11 +2698,13 @@
         {
           "kind": "roster",
           "url": "https://www.lolg.ca/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.lolg.ca/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1801,22 +2720,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-39",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1827,11 +2756,13 @@
         {
           "kind": "roster",
           "url": "https://www.dww.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.dww.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1847,22 +2778,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-40",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1873,11 +2814,13 @@
         {
           "kind": "roster",
           "url": "https://www.sml-law.com/our-people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.sml-law.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1893,22 +2836,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-41",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1919,11 +2872,13 @@
         {
           "kind": "roster",
           "url": "https://cmb.law/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://cmb.law/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1939,22 +2894,47 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5638",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5639",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-42",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -1965,11 +2945,13 @@
         {
           "kind": "roster",
           "url": "https://www.rosenberglaw.ca/our-team/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.rosenberglaw.ca/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -1985,22 +2967,41 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3273",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-43",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -2011,11 +3012,13 @@
         {
           "kind": "roster",
           "url": "https://www.dalelessmann.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.dalelessmann.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -2031,22 +3034,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-44",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -2057,11 +3070,13 @@
         {
           "kind": "roster",
           "url": "https://agmllp.com/our-people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://agmllp.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -2077,22 +3092,41 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4527",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-45",
           "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
           "cross_lane_counterpart=B011-WN-011"
         ]
       },
@@ -2104,11 +3138,13 @@
         {
           "kind": "roster",
           "url": "https://mccagueborlack.com/lawyers/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://mccagueborlack.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -2124,22 +3160,56 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-2361",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-2717",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4286",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-46",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -2150,11 +3220,13 @@
         {
           "kind": "roster",
           "url": "https://www.lerners.ca/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.lerners.ca/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -2170,22 +3242,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-47",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -2196,11 +3278,13 @@
         {
           "kind": "roster",
           "url": "https://www.siskinds.com/people/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.siskinds.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; Toronto office and roster require first-party confirmation."
         }
       ],
@@ -2216,22 +3300,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-48",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -2242,11 +3336,13 @@
         {
           "kind": "roster",
           "url": "https://www.btzlaw.ca/our-team/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://www.btzlaw.ca/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -2262,22 +3358,40 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "review_required",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
-          "matches": []
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5606",
+              "fields": [
+                "firm_name"
+              ]
+            }
+          ]
         },
         "provenance": [
           "source_record=B011-T-49",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -2288,11 +3402,13 @@
         {
           "kind": "roster",
           "url": "https://zuberlaw.com/our-team/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://zuberlaw.com/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],
@@ -2308,22 +3424,32 @@
       "office_cities": [
         "Toronto"
       ],
+      "observed_on": "2026-09-08",
       "observed_lawyer_count": null,
       "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
       "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "reconciliation": {
         "state": "pending_operator_baseline",
         "baseline_review": {
-          "state": "pending_operator_baseline",
+          "state": "clear",
           "automatic_merge": false,
           "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
           "matches": []
         },
         "provenance": [
           "source_record=B011-T-50",
-          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd"
+          "source_commit=e792cb2b5cad33c487a6cd6761e9a1ae4cafa9fd",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending"
         ]
       },
       "access": {
@@ -2334,11 +3460,13 @@
         {
           "kind": "roster",
           "url": "https://rosenblattlawfirm.ca/our-team/",
+          "observed_on": "2026-09-08",
           "note": "Queued for first-party roster review."
         },
         {
           "kind": "office",
           "url": "https://rosenblattlawfirm.ca/",
+          "observed_on": "2026-09-08",
           "note": "Source URL queued; no profile claim made."
         }
       ],

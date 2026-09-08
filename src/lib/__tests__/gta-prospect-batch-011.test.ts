@@ -3,9 +3,12 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import {
+  deriveGtaProspectBatch011RootSummary,
   isResearchCountInTargetBand,
+  isValidHttpsUrl,
   reconcileBatch011RecordWithBaseline,
   validateGtaProspectBatch011Document,
+  validateGtaProspectBatch011Root,
   type GtaProspectBatch011Document,
 } from "../gta-prospect-batch-011";
 import { normalizeProspectStreetAddress } from "../gta-prospect-baseline-reconciliation";
@@ -25,7 +28,13 @@ describe("GTA prospect batch 011 research artifacts", () => {
       expect(record.accepted).toBe(false);
       expect(record.import_ready).toBe(false);
       expect(record.access.scope).toBe("public_first_party_read_only");
-      expect(record.evidence.map((evidence) => evidence.kind)).toEqual(expect.arrayContaining(["roster", "office"]));
+      expect(record.evidence.map((evidence) => evidence.kind)).toContain("office");
+      expect(record.reconciliation.baseline_review.live_ledger_state).toBe("offline_pending");
+      expect(record.reconciliation.baseline_review.loaded_sources).toEqual(["fixture", "import_fixture", "legacy_source"]);
+      for (const evidence of record.evidence) {
+        expect(isValidHttpsUrl(evidence.url)).toBe(true);
+        expect(evidence.observed_on).toBe(record.observed_on);
+      }
     }
   });
 
@@ -65,9 +74,29 @@ describe("GTA prospect batch 011 research artifacts", () => {
 
   it("enforces count qualifiers without treating lower bounds as a capped size conclusion", () => {
     expect(isResearchCountInTargetBand({ observed_lawyer_count: 3, count_qualifier: "exact" })).toBe(true);
-    expect(isResearchCountInTargetBand({ observed_lawyer_count: 20, count_qualifier: "at_least" })).toBe(true);
+    expect(isResearchCountInTargetBand({ observed_lawyer_count: 20, count_qualifier: "at_least" })).toBe(false);
     expect(isResearchCountInTargetBand({ observed_lawyer_count: 21, count_qualifier: "at_least" })).toBe(false);
     expect(isResearchCountInTargetBand({ observed_lawyer_count: null, count_qualifier: "unknown" })).toBe(false);
+  });
+
+  it("holds DeRusha until a valid first-party roster source exists without inventing a URL", () => {
+    const record = westNorth.records.find((item) => item.record_id === "B011-WN-021");
+    expect(record).toMatchObject({
+      stage: "held",
+      roster_evidence_state: "missing_first_party_source",
+      reconciliation: { state: "held_missing_first_party_roster" },
+    });
+    expect(record?.evidence.some((evidence) => evidence.kind === "roster")).toBe(false);
+  });
+
+  it("derives root counts from lane artifacts rather than accepting hardcoded totals", () => {
+    const derived = deriveGtaProspectBatch011RootSummary([toronto, westNorth]);
+    expect(derived).toEqual({
+      raw_record_count: 100,
+      distinct_canonical_domains: 96,
+      cross_lane_duplicate_domains: ["blacksutherland.com", "loopstranixon.com", "mccagueborlack.com", "millerthomson.com"],
+    });
+    expect(() => validateGtaProspectBatch011Root([toronto, westNorth], derived)).not.toThrow();
   });
 
   it("retains source provenance while excluding public contact details", () => {
