@@ -3,10 +3,18 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   filterReconciledGtaProspects,
+  lawyerCountRangeForBand,
   observedLawyerCountLabel,
+  type LawyerCountBand,
   type EvidenceAvailability,
+  type PublicProspectContact,
   type ReconciledGtaProspect,
 } from "@/lib/gta-prospect-records";
+import {
+  normalizedCityLabel,
+  normalizedPracticeAreaLabel,
+  uniqueNormalizedLabels,
+} from "@/lib/prospect-display-normalization";
 import type {
   AdvertisingActivityState,
   EvidenceFreshness,
@@ -37,7 +45,7 @@ export type RecordsResponse = {
 };
 
 type QuickView = "all" | "shared_registry" | "audit_ready" | "identity_review";
-type CountFilter = "" | "2" | "3" | "2-3";
+type CountFilter = "" | "2-3" | LawyerCountBand;
 const PAGE_SIZE = 100;
 
 const evidenceLabel: Record<EvidenceAvailability, string> = { observed: "Observed", none: "None found", unknown: "Unknown" };
@@ -68,7 +76,7 @@ const freshnessLabels: Record<EvidenceFreshness, string> = {
 const sourceLabels: Record<UnifiedProspectSource, string> = {
   shared_registry: "Shared registry",
   research_ledger: "Research ledger",
-  reviewed_fixture: "Reviewed fixture",
+  reviewed_fixture: "Reviewed research",
   legacy_provenance: "Legacy provenance",
 };
 const identityLabels: Record<UnifiedIdentityState, string> = {
@@ -106,6 +114,10 @@ function SelectField({ label, value, onChange, children }: { label: string; valu
   );
 }
 
+function contactRoleLabel(relationship: PublicProspectContact["relationship"]): string {
+  return ({ owner: "Owner", founder: "Founder", principal: "Principal", named_lawyer: "Named lawyer", firm_inbox: "Firm inbox" })[relationship];
+}
+
 export default function ReconciledProspects({ initialData }: { initialData?: RecordsResponse } = {}) {
   const [records, setRecords] = useState<ReconciledGtaProspect[] | null>(initialData?.records ?? null);
   const [sourceDetails, setSourceDetails] = useState<Pick<RecordsResponse, "source" | "sourceCounts" | "qualifiedImport" | "fallbackReason"> | null>(initialData ? {
@@ -120,6 +132,8 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const [query, setQuery] = useState("");
   const [city, setCity] = useState("");
   const [countFilter, setCountFilter] = useState<CountFilter>("");
+  const [customMinimum, setCustomMinimum] = useState("");
+  const [customMaximum, setCustomMaximum] = useState("");
   const [practiceArea, setPracticeArea] = useState("");
   const [advertising, setAdvertising] = useState<EvidenceAvailability | "">("");
   const [gbp, setGbp] = useState<EvidenceAvailability | "">("");
@@ -131,6 +145,8 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const [lawyerCountConfidence, setLawyerCountConfidence] = useState<QualifiedProspectConfidence | "">("");
   const [freshness, setFreshness] = useState<EvidenceFreshness | "">("");
   const [cohortId, setCohortId] = useState("");
+  const [hasOwner, setHasOwner] = useState<boolean | "">("");
+  const [hasPublicEmail, setHasPublicEmail] = useState<boolean | "">("");
   const [source, setSource] = useState<UnifiedProspectSource | "">("");
   const [identity, setIdentity] = useState<UnifiedIdentityState | "">("");
   const [page, setPage] = useState(0);
@@ -157,8 +173,8 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
     const list = records ?? [];
     const dossiers = list.flatMap((record) => record.qualifiedDossier ? [record.qualifiedDossier] : []);
     return {
-      cities: [...new Set(list.flatMap((record) => record.officeCities))].sort(),
-      practiceAreas: [...new Set(list.flatMap((record) => record.practiceAreas))].sort(),
+      cities: uniqueNormalizedLabels(list.flatMap((record) => record.officeCities), normalizedCityLabel),
+      practiceAreas: uniqueNormalizedLabels(list.flatMap((record) => record.practiceAreas), normalizedPracticeAreaLabel),
       gbpOpportunities: [...new Set(dossiers.map((dossier) => dossier.gbpOpportunity.type))].sort(),
       advertisingSourceTypes: [...new Set(dossiers.flatMap((dossier) => dossier.advertisingActivity.sourceTypes))].sort(),
       websiteOpportunities: [...new Set(dossiers.flatMap((dossier) => dossier.websiteAndIntake.opportunityTypes))].sort(),
@@ -166,6 +182,22 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
       cohorts: [...new Set(dossiers.map((dossier) => dossier.qualification.cohortId))].sort(),
     };
   }, [records]);
+
+  const customRange = useMemo(() => {
+    const minimum = customMinimum === "" ? null : Number(customMinimum);
+    const maximum = customMaximum === "" ? null : Number(customMaximum);
+    if (minimum === null && maximum === null) return { value: null, valid: true };
+    if ((minimum !== null && (!Number.isInteger(minimum) || minimum < 1))
+      || (maximum !== null && (!Number.isInteger(maximum) || maximum < 1))
+      || (minimum !== null && maximum !== null && minimum > maximum)) return { value: null, valid: false };
+    return { value: { min: minimum ?? 1, max: maximum }, valid: true };
+  }, [customMinimum, customMaximum]);
+
+  const selectedCountRange = useMemo(() => (
+    countFilter === "2-3"
+      ? { min: 2, max: 3 }
+      : countFilter ? lawyerCountRangeForBand(countFilter) : customRange.value
+  ), [countFilter, customRange]);
 
   const quickCounts = useMemo(() => {
     const list = records ?? [];
@@ -176,17 +208,18 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   }, [records]);
 
   const filtered = useMemo(() => filterUnifiedProspectState(filterReconciledGtaProspects(records ?? [], {
-    query, city, exactLawyerCount: countFilter, practiceArea, advertising, gbp,
+    query, city, lawyerCountBand: countFilter === "unknown" ? "unknown" : "", lawyerCountRange: selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail,
     advertisingActivity, gbpOpportunityType,
     advertisingSourceType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, evidenceFreshness: freshness, cohortId,
-  }), { source, identity, quickView }), [records, query, city, countFilter, practiceArea, advertising, gbp, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity]);
+  }), { source, identity, quickView }), [records, query, city, countFilter, selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const displayedPage = Math.min(page, pageCount - 1);
   const visibleRecords = filtered.slice(displayedPage * PAGE_SIZE, (displayedPage + 1) * PAGE_SIZE);
 
   const filterChips = [
     query && { label: `Search: ${query}`, clear: () => setQuery("") }, city && { label: `City: ${city}`, clear: () => setCity("") },
-    countFilter && { label: `Lawyers: ${countFilter === "2-3" ? "2 or 3" : countFilter}`, clear: () => setCountFilter("") },
+    countFilter && { label: `Lawyers: ${countFilter === "2-3" ? "2 or 3" : lawyerCountRangeForBand(countFilter) ? countFilter.replace("-", " to ") : countFilter}`, clear: () => setCountFilter("") },
+    !countFilter && customRange.value && { label: `Lawyers: ${customRange.value.min}${customRange.value.max === null ? "+" : ` to ${customRange.value.max}`}`, clear: () => { setCustomMinimum(""); setCustomMaximum(""); } },
     practiceArea && { label: `Practice: ${practiceArea}`, clear: () => setPracticeArea("") },
     advertising && { label: `Advertising evidence: ${evidenceLabel[advertising]}`, clear: () => setAdvertising("") },
     gbp && { label: `GBP evidence: ${evidenceLabel[gbp]}`, clear: () => setGbp("") },
@@ -198,14 +231,16 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
     lawyerCountConfidence && { label: `Count confidence: ${titleCase(lawyerCountConfidence)}`, clear: () => setLawyerCountConfidence("") },
     freshness && { label: `Evidence: ${freshnessLabels[freshness]}`, clear: () => setFreshness("") },
     cohortId && { label: "Original qualified cohort", clear: () => setCohortId("") },
+    hasOwner !== "" && { label: hasOwner ? "Owner identified" : "Owner not identified", clear: () => setHasOwner("") },
+    hasPublicEmail !== "" && { label: hasPublicEmail ? "Email available" : "Email not available", clear: () => setHasPublicEmail("") },
     source && { label: `Source: ${sourceLabels[source]}`, clear: () => setSource("") },
     identity && { label: `Identity: ${identityLabels[identity]}`, clear: () => setIdentity("") },
   ].filter(Boolean) as { label: string; clear: () => void }[];
 
   function clearFilters() {
-    setQuery(""); setCity(""); setCountFilter(""); setPracticeArea(""); setAdvertising(""); setGbp("");
+    setQuery(""); setCity(""); setCountFilter(""); setCustomMinimum(""); setCustomMaximum(""); setPracticeArea(""); setAdvertising(""); setGbp("");
     setAdvertisingActivity(""); setAdvertisingSourceType(""); setGbpOpportunityType(""); setWebsiteOpportunityType(""); setIntakeChannel("");
-    setLawyerCountConfidence(""); setFreshness(""); setCohortId("");
+    setLawyerCountConfidence(""); setFreshness(""); setCohortId(""); setHasOwner(""); setHasPublicEmail("");
     setSource(""); setIdentity("");
   }
 
@@ -236,7 +271,9 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
         <SelectField label="Record source" value={source} onChange={(value) => setSource(value as UnifiedProspectSource | "")}><option value="">All sources</option>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
         <SelectField label="Identity status" value={identity} onChange={(value) => setIdentity(value as UnifiedIdentityState | "")}><option value="">All identity states</option>{Object.entries(identityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
         <SelectField label="City" value={city} onChange={setCity}><option value="">All cities</option>{values.cities.map((value) => <option key={value} value={value}>{value}</option>)}</SelectField>
-        <SelectField label="Lawyer count" value={countFilter} onChange={(value) => setCountFilter(value as CountFilter)}><option value="">Any count</option><option value="2">Exactly 2 lawyers</option><option value="3">Exactly 3 lawyers</option><option value="2-3">2 or 3 lawyers</option></SelectField>
+        <SelectField label="Observed lawyer count" value={countFilter} onChange={(value) => { setCountFilter(value as CountFilter); setCustomMinimum(""); setCustomMaximum(""); }}>
+          <option value="">Any count</option><option value="1">1 lawyer</option><option value="2">2 lawyers</option><option value="3">3 lawyers</option><option value="2-3">2 or 3 lawyers</option><option value="4-5">4 to 5 lawyers</option><option value="6-10">6 to 10 lawyers</option><option value="11-20">11 to 20 lawyers</option><option value="21-50">21 to 50 lawyers</option><option value="51+">51 or more lawyers</option><option value="unknown">Count unknown</option>
+        </SelectField>
         <SelectField label="Practice area" value={practiceArea} onChange={setPracticeArea}><option value="">All practice areas</option>{values.practiceAreas.map((value) => <option key={value} value={value}>{value}</option>)}</SelectField>
         <SelectField label="Advertising evidence" value={advertising} onChange={(value) => setAdvertising(value as EvidenceAvailability | "")}><option value="">Any availability</option><option value="observed">Observed</option><option value="none">None found</option><option value="unknown">Unknown</option></SelectField>
         <SelectField label="GBP evidence" value={gbp} onChange={(value) => setGbp(value as EvidenceAvailability | "")}><option value="">Any availability</option><option value="observed">Observed</option><option value="none">None found</option><option value="unknown">Unknown</option></SelectField>
@@ -253,16 +290,23 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
           <SelectField label="Lawyer-count confidence" value={lawyerCountConfidence} onChange={(value) => setLawyerCountConfidence(value as QualifiedProspectConfidence | "")}><option value="">Any confidence</option><option value="high">High</option><option value="moderate">Moderate</option></SelectField>
           <SelectField label="Evidence freshness" value={freshness} onChange={(value) => setFreshness(value as EvidenceFreshness | "")}><option value="">Any observation age</option>{Object.entries(freshnessLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
           <SelectField label="Research cohort" value={cohortId} onChange={setCohortId}><option value="">All cohorts</option>{values.cohorts.map((value) => <option key={value} value={value}>Qualified cohort, September 7, 2026</option>)}</SelectField>
+          <SelectField label="Owner identified" value={hasOwner === "" ? "" : hasOwner ? "yes" : "no"} onChange={(value) => setHasOwner(value === "" ? "" : value === "yes")}><option value="">Any availability</option><option value="yes">Owner identified</option><option value="no">Owner not identified</option></SelectField>
+          <SelectField label="Public email" value={hasPublicEmail === "" ? "" : hasPublicEmail ? "yes" : "no"} onChange={(value) => setHasPublicEmail(value === "" ? "" : value === "yes")}><option value="">Any availability</option><option value="yes">Email available</option><option value="no">Email not available</option></SelectField>
         </div>
       )}
+      <div className="mt-3 grid gap-2 md:grid-cols-2" aria-label="Custom lawyer-count range">
+        <label className="text-xs font-semibold text-field-label">Minimum lawyers<input type="number" min="1" inputMode="numeric" value={customMinimum} onChange={(event) => { setCountFilter(""); setCustomMinimum(event.target.value); }} className="mt-1 w-full rounded border border-border-brand px-3 py-2 text-sm text-black" placeholder="No minimum" /></label>
+        <label className="text-xs font-semibold text-field-label">Maximum lawyers<input type="number" min="1" inputMode="numeric" value={customMaximum} onChange={(event) => { setCountFilter(""); setCustomMaximum(event.target.value); }} className="mt-1 w-full rounded border border-border-brand px-3 py-2 text-sm text-black" placeholder="No maximum" /></label>
+      </div>
+      {!customRange.valid && <p className="mt-2 text-xs text-red-fail">Use whole numbers of at least 1, with a minimum no greater than the maximum.</p>}
 
       {filterChips.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Active filters">{filterChips.map((chip) => <button key={chip.label} type="button" onClick={chip.clear} className="rounded-full border border-navy/20 bg-navy/5 px-3 py-1 text-xs font-medium text-navy">{chip.label} <span aria-hidden="true">x</span><span className="sr-only">, remove filter</span></button>)}<button type="button" onClick={clearFilters} className="px-2 py-1 text-xs font-semibold text-navy underline underline-offset-2">Clear filters</button></div>}
       <p className="mt-4 w-full text-sm text-black/60" aria-live="polite" data-ui-copy="supporting">{filtered.length} of {records.length} unified prospect records</p>
 
       {records.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No reviewed expansion records have been added yet.</div> : filtered.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No firms match the current view and filters.</div> : (
         <div className="mt-3 overflow-x-auto rounded border border-border-brand">
-          <table className="w-full min-w-[1240px] border-collapse text-left text-sm">
-            <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Source and identity</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
+          <table className="w-full min-w-[1440px] border-collapse text-left text-sm">
+            <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Source and identity</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Owner and email</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
             <tbody>{visibleRecords.map((record) => {
               const dossier = record.qualifiedDossier;
               const identityState = prospectIdentityState(record);
@@ -270,6 +314,12 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
                 <td className="px-3 py-3 font-semibold text-navy">{record.websiteUrl ? <a href={record.websiteUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">{record.firmName}</a> : record.firmName}<span className="mt-1 block text-xs font-normal text-black/55">{record.city}</span>{record.canonicalDomain && <span className="mt-1 block text-xs font-normal text-black/55">{record.canonicalDomain}</span>}</td>
                 <td className="px-3 py-3"><div className="flex flex-wrap gap-1">{prospectSources(record).map((item) => <span key={item} className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(item)}`}>{sourceLabels[item]}</span>)}<span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(identityState)}`}>{identityLabels[identityState]}</span></div>{record.legacyCrosswalk && <span className="mt-2 block text-xs leading-5 text-black/60">{record.legacyCrosswalk}</span>}{record.reconciliationNote && <span className="mt-1 block text-xs leading-5 text-black/50">{record.reconciliationNote}</span>}</td>
                 <td className="px-3 py-3"><span className="font-medium text-black/80">{observedLawyerCountLabel(record)}</span>{dossier && <><span className="mt-1 block text-xs text-black/55">{titleCase(dossier.lawyerCount.confidence)} confidence</span><span className="mt-1 block text-xs text-black/55">Observed {dossier.lawyerCount.observedAt.slice(0, 10)}</span></>}</td>
+                <td className="px-3 py-3 text-xs leading-5 text-black/70">{(() => {
+                  const contacts = record.publicContacts ?? [];
+                  const owners = contacts.filter((contact) => contact.relationship === "owner" || contact.relationship === "founder");
+                  const emails = contacts.filter((contact) => contact.email);
+                  return <><span className="block font-semibold text-black/75">{owners.length > 0 ? owners.map((contact) => contact.name).filter(Boolean).join(", ") : "Owner not identified"}</span>{owners.map((contact, index) => <span key={`${contact.name}-${index}`} className="block text-black/55">{contactRoleLabel(contact.relationship)} · observed {contact.observedAt}</span>)}{emails.length > 0 ? emails.map((contact, index) => <span key={`${contact.email}-${index}`} className="mt-1 block break-all"><a href={`mailto:${contact.email ?? ""}`} className="text-navy underline underline-offset-2">{contact.email}</a><span className="ml-1 text-black/55">{contact.emailKind === "owner" ? "owner email" : contact.emailKind === "named_person" ? "named-person email" : "firm email"}</span>{contact.sourceUrl && <a href={contact.sourceUrl} target="_blank" rel="noreferrer" className="ml-1 text-navy underline underline-offset-2">source</a>}<span className="ml-1 text-black/55">observed {contact.observedAt}</span></span>) : <span className="mt-1 block text-black/55">Email not found</span>}</>;
+                })()}</td>
                 <td className="px-3 py-3 text-black/75">{dossier ? <><span className="font-medium">GBP: {gbpOpportunityLabels[dossier.gbpOpportunity.type] ?? titleCase(dossier.gbpOpportunity.type)}</span><span className="mt-1 block text-xs text-black/55">Website: {dossier.websiteAndIntake.opportunityTypes.map((value) => websiteOpportunityLabels[value] ?? titleCase(value)).join(", ")}</span></> : <span className="text-black/50">Not assessed</span>}</td>
                 <td className="px-3 py-3 text-xs leading-5 text-black/70">{dossier?.websiteAndIntake.observedChannels.join(", ") || "Not assessed"}</td>
                 <td className="px-3 py-3 text-xs leading-5"><EvidenceLink availability={record.advertisingEvidence} href={record.advertisingSourceUrl} label="Advertising" /><br /><EvidenceLink availability={record.gbpEvidence} href={record.gbpSourceUrl} label="GBP" />{dossier && <span className="mt-1 block text-black/55">{dossier.evidenceIds.length} registered sources</span>}</td>

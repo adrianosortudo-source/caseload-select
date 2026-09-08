@@ -65,6 +65,15 @@ describe("GTA prospect research importer", () => {
     expect(plan.accepted[0]).toMatchObject({ sourceRecordKey: "preserved-fields", city: "Toronto", practiceAreas: ["Family law"], legacyClusterLawyerCount: null, legacyCrosswalk: null });
   });
 
+  it("accepts source-backed public owner and email observations without adding outreach state", async () => {
+    const plan = await buildGtaProspectImportPlan([{
+      ...candidate("public-owner"),
+      publicContacts: [{ name: "Avery Founder", relationship: "founder", email: "avery@example.test", emailKind: "owner", sourceUrl: "https://example.test/team", observedAt: "2026-09-07" }],
+    }]);
+    expect(plan.rejected).toEqual([]);
+    expect(plan.accepted[0]?.publicContacts).toEqual([expect.objectContaining({ name: "Avery Founder", relationship: "founder", email: "avery@example.test" })]);
+  });
+
   it("does not merge different source identities merely because names and domains collide", async () => {
     const first = candidate("same-name-a");
     const second = { ...candidate("same-name-b"), officeCities: ["Mississauga"] };

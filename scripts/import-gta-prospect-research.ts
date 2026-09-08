@@ -13,9 +13,9 @@ async function apply(plan: GtaProspectImportPlan) {
     for (const record of plan.accepted) {
       // The database computes this value from its independently validated
       // canonical projection.  Do not trust a client-side hash for a write.
-      const hash = await db.rpc("gta_prospect_research_record_sha256", { p_record: record });
+      const hash = await db.rpc("gta_prospect_research_record_with_contacts_sha256", { p_record: record });
       if (hash.error || !hash.data) throw new Error(`${record.sourceRecordKey}: ${hash.error?.message ?? "Could not canonicalize record."}`);
-      const result = await db.rpc("apply_gta_prospect_research_record", { p_batch_id: batchId, p_record: record, p_record_sha256: hash.data });
+      const result = await db.rpc("apply_gta_prospect_research_record_with_contacts", { p_batch_id: batchId, p_record: record, p_record_sha256: hash.data });
       if (result.error) throw new Error(`${record.sourceRecordKey}: ${result.error.message}`);
     }
   }

@@ -132,8 +132,8 @@ describe("qualified prospect reconciliation", () => {
     const result = mergeQualifiedProspects([base()]).records;
     expect(filterReconciledGtaProspects(result, { qualification: "qualified" })).toHaveLength(20);
     expect(filterReconciledGtaProspects(result, { qualification: "needs_evidence" })).toHaveLength(1);
-    expect(filterReconciledGtaProspects(result, { exactLawyerCount: "2-3", qualification: "qualified" })).toHaveLength(20);
-    expect(filterReconciledGtaProspects(result, { exactLawyerCount: "3", qualification: "qualified" })).toHaveLength(4);
+    expect(filterReconciledGtaProspects(result, { lawyerCountRange: { min: 2, max: 3 }, qualification: "qualified" })).toHaveLength(20);
+    expect(filterReconciledGtaProspects(result, { lawyerCountRange: { min: 3, max: 3 }, qualification: "qualified" })).toHaveLength(4);
     expect(filterReconciledGtaProspects(result, { audit: "ready" })).toHaveLength(20);
     expect(filterReconciledGtaProspects(result, { advertisingActivity: "observable_historical" }).length).toBeGreaterThan(0);
     const advertisingSourceMatches = filterReconciledGtaProspects(result, { advertisingSourceType: "ad_library_record" });
