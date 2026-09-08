@@ -2,13 +2,25 @@ import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+import { RECONCILED_GTA_PROSPECTS } from "../src/app/admin/prospects/reconciled-prospects";
 import { buildGtaProspectImportPlan } from "../src/lib/gta-prospect-research-import";
 
 type JsonRecord = Record<string, unknown>;
 
 const root = process.cwd();
 const lanes = ["core", "west-north", "east-outer"] as const;
-const excludedDuplicateSourceIds = new Set(["B010-EAST-20"]);
+const centralExclusions = new Map<string, { disposition: string; reason: string }>([
+  ["B010-EAST-20", { disposition: "duplicate_collapsed", reason: "Duplicate of B010-WN-14 (Feldstein Family Law Group / separation.ca); retained once in the central staging pool." }],
+  ["B010-C-02", { disposition: "already_in_console", reason: "Angrove Law is already an approved console fixture with the same reviewed count." }],
+  ["B010-C-05", { disposition: "already_in_console", reason: "Cappellacci DaRoza is already an approved console fixture with the same reviewed count." }],
+  ["B010-EAST-13", { disposition: "already_in_console", reason: "Alves Law is already an approved console fixture with the same reviewed count." }],
+  ["B010-WN-01", { disposition: "update_review_required", reason: "Aastha Lawyers already appears in the console; the newer six-lawyer observation requires a separate update review." }],
+  ["B010-WN-02", { disposition: "already_in_console", reason: "Dhillon Murthi Law is already an approved console fixture with the same reviewed count." }],
+  ["B010-WN-09", { disposition: "already_in_console", reason: "Falcone Law is already an approved console fixture with the same reviewed count." }],
+  ["B010-C-23", { disposition: "count_upper_bound_unknown", reason: "An at-least count of four cannot prove the firm remains within the 3–20 lawyer target." }],
+  ["B010-WN-08", { disposition: "count_upper_bound_unknown", reason: "An at-least count of 13 cannot prove the firm remains within the 3–20 lawyer target." }],
+  ["B010-WN-16", { disposition: "count_upper_bound_unknown", reason: "An at-least count of six cannot prove the firm remains within the 3–20 lawyer target." }],
+]);
 const outputPath = path.join(root, "docs/prospecting/import-manifests/gta-prospect-research-batch-010.staging.json");
 
 const readJson = async (relativePath: string) =>
@@ -46,6 +58,14 @@ const sha256 = (value: unknown) => createHash("sha256").update(stable(value)).di
 
 const sourceKey = (sourceId: string) =>
   `gta-prospect-010-${sourceId}`.toLocaleLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+
+const normalizedName = (value: string) => value.toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+
+const hostname = (value: string | null | undefined) => {
+  if (!value) return null;
+  try { return new URL(value).hostname.toLocaleLowerCase().replace(/^www\./, ""); }
+  catch { return null; }
+};
 
 const main = async () => {
   const sourceById = new Map<string, { lane: string; path: string; record: JsonRecord }>();
@@ -93,13 +113,12 @@ const main = async () => {
     }
 
     const disposition = text(qaEntry.record.disposition, `${id} QA disposition`);
-    if (disposition !== "accepted_for_staging" || excludedDuplicateSourceIds.has(id)) {
+    const centralExclusion = centralExclusions.get(id);
+    if (disposition !== "accepted_for_staging" || centralExclusion) {
       exclusions.push({
         sourceRecordId: id,
-        disposition: excludedDuplicateSourceIds.has(id) ? "duplicate_collapsed" : disposition,
-        reason: excludedDuplicateSourceIds.has(id)
-          ? "Duplicate of B010-WN-14 (Feldstein Family Law Group / separation.ca); retained once in the central staging pool."
-          : (qaEntry.record.rationale ?? null),
+        disposition: centralExclusion?.disposition ?? disposition,
+        reason: centralExclusion?.reason ?? qaEntry.record.rationale ?? null,
       });
       continue;
     }
@@ -114,12 +133,21 @@ const main = async () => {
     const rosterSourceUrl = text(qa.first_party_roster_url ?? source.first_party_roster_url, `${id} roster source URL`);
     const observedOn = text(qa.source_observation_date ?? source.observation_date, `${id} observation date`);
     const canonicalDomain = text(qa.canonical_domain ?? source.canonical_domain, `${id} canonical domain`);
+    const firmName = text(qa.firm_name ?? source.firm_name, `${id} firm name`);
+    const matchingFixture = RECONCILED_GTA_PROSPECTS.find((fixture) =>
+      normalizedName(fixture.firmName) === normalizedName(firmName)
+      || hostname(fixture.websiteUrl) === canonicalDomain.toLocaleLowerCase()
+      || hostname(fixture.rosterSourceUrl) === canonicalDomain.toLocaleLowerCase(),
+    );
+    if (matchingFixture) {
+      throw new Error(`${id} collides with displayed console fixture ${matchingFixture.id}; add a central disposition before staging.`);
+    }
     const raw = {
       id: sourceKey(id),
-      firmName: text(qa.firm_name ?? source.firm_name, `${id} firm name`),
+      firmName,
       city: officeCities[0],
       officeCities,
-      websiteUrl: null,
+      websiteUrl: `https://${canonicalDomain}/`,
       practiceAreas: stringArray(source.practice_areas_published, `${id} practice areas`),
       observedLawyerCount,
       observedLawyerCountQualifier: countQualifier,
@@ -152,17 +180,18 @@ const main = async () => {
 
   const plan = await buildGtaProspectImportPlan(inputs);
   if (plan.rejected.length) throw new Error(`Staging records fail importer validation: ${JSON.stringify(plan.rejected)}.`);
-  if (plan.accepted.length !== 30) throw new Error(`Expected 30 unique staging records, found ${plan.accepted.length}.`);
+  if (plan.accepted.length !== 21) throw new Error(`Expected 21 strict-range net-new staging records, found ${plan.accepted.length}.`);
 
   const payload = {
     schemaVersion: "gta-prospect-batch-010-staging-v1",
     purpose: "offline staging review only",
     actionsNotPerformed: ["database connection", "migration application", "data import", "CRM activity", "contact or outreach", "deployment", "merge"],
     researchDenominator: { researchedFirmCount: sourceById.size, candidateCount: candidates.length, sourceHeldCount: sourceById.size - candidates.length },
-    independentReview: { acceptedBeforeCentralDeduplication: 31, held: 7, rejected: 13, uniqueStagingCount: plan.accepted.length },
+    independentReview: { acceptedBeforeCentralDeduplication: 31, held: 7, rejected: 13, strictRangeNetNewStagingCount: plan.accepted.length },
     sourceFiles,
     qaFiles,
     importPlan: { sourceSha256: plan.sourceSha256, acceptedRecordCount: plan.accepted.length, rejectedRecordCount: plan.rejected.length },
+    records: inputs.sort((left, right) => String(left.id).localeCompare(String(right.id))),
     importRecords: plan.accepted,
     provenance: provenance.sort((left, right) => String(left.sourceRecordKey).localeCompare(String(right.sourceRecordKey))),
     exclusions: exclusions.sort((left, right) => String(left.sourceRecordId).localeCompare(String(right.sourceRecordId))),

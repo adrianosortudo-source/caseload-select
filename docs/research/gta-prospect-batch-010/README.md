@@ -36,10 +36,10 @@ The 51 lane candidates were independently reviewed by a different lane agent.
 | Held at initial lane review | 49 |
 | **Total research denominator** | **100** |
 
-`accepted_for_staging` means the record has public, first-party roster and
-office support, an explicit count qualifier, and no exact name/domain match in
-the checked prior batch baseline. It does **not** mean that it is imported,
-contacted, or approved for outreach.
+Central reconciliation then removed six firms already visible in the console,
+collapsed one cross-lane duplicate, and held three `at_least` counts that do
+not prove the 3–20 lawyer upper bound. The resulting staging pool is **21
+net-new firms with exact 3–20 lawyer counts**.
 
 ## Evidence and review files
 
@@ -53,8 +53,7 @@ contacted, or approved for outreach.
 
 ## Required gate before database work
 
-Before any of the 31 accepted records can appear in the operator console, the
-central reviewer must generate a canonical staging manifest, run exact
-domain/name reconciliation against the current 103 imported records, and
-present the resulting count, source URLs, uncertainty, and exclusions for
-explicit import approval. No database write is authorized by this packet.
+Before any of the 21 staged records can appear in the operator console, the
+central reviewer must present the generated manifest, source hash, and exact
+import command for explicit import approval. No database write is authorized
+by this packet.
