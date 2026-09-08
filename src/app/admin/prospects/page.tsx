@@ -13,6 +13,7 @@
  * data, nothing to configure here.
  */
 import ProspectsFrame from "./ProspectsFrame";
+import Link from "next/link";
 import ReconciledProspects from "./ReconciledProspects";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +27,9 @@ export default function ProspectsPage() {
         <p className="text-sm text-black/50 mt-1">
           Browse the reviewed firm expansion alongside the legacy GTA directory clusters.
         </p>
+        <Link href="/admin/prospects/brazilian" className="mt-3 inline-flex rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white hover:bg-navy/90">
+          Open Brazilian lawyer research overlay
+        </Link>
       </div>
 
       <ReconciledProspects />
