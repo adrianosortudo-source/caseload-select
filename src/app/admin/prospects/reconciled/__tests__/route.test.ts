@@ -7,6 +7,8 @@ const h = vi.hoisted(() => {
     session: null as { role: "operator" } | null,
     records: [] as unknown[],
     failure: null as Error | null,
+    ownerContacts: [] as unknown[],
+    ownerFailure: null as Error | null,
   };
   return {
     state,
@@ -14,7 +16,12 @@ const h = vi.hoisted(() => {
       if (state.failure) throw state.failure;
       return state.records;
     }),
+    ownerRead: vi.fn(async () => {
+      if (state.ownerFailure) throw state.ownerFailure;
+      return state.ownerContacts;
+    }),
     Unavailable,
+    OwnerUnavailable: class OwnerUnavailable extends Error {},
   };
 });
 
@@ -23,6 +30,10 @@ vi.mock("@/lib/gta-prospect-research-reader", () => ({
   GtaProspectLedgerUnavailableError: h.Unavailable,
   listGtaProspectResearchForOperator: h.read,
 }));
+vi.mock("@/lib/gta-prospect-owner-contact-reader", () => ({
+  GtaProspectOwnerContactLedgerUnavailableError: h.OwnerUnavailable,
+  listGtaProspectOwnerContactsForOperator: h.ownerRead,
+}));
 
 import { GET } from "../route";
 
@@ -30,7 +41,10 @@ beforeEach(() => {
   h.state.session = null;
   h.state.records = [];
   h.state.failure = null;
+  h.state.ownerContacts = [];
+  h.state.ownerFailure = null;
   h.read.mockClear();
+  h.ownerRead.mockClear();
 });
 
 describe("reviewed GTA prospects route", () => {
@@ -38,6 +52,7 @@ describe("reviewed GTA prospects route", () => {
     const response = await GET();
     expect(response.status).toBe(401);
     expect(h.read).not.toHaveBeenCalled();
+    expect(h.ownerRead).not.toHaveBeenCalled();
   });
 
   it("returns the source-controlled fixture when the projection migration is unavailable", async () => {
@@ -84,6 +99,47 @@ describe("reviewed GTA prospects route", () => {
     expect(body.records.map((record: { firmName: string }) => record.firmName)).toEqual(
       [...body.records.map((record: { firmName: string }) => record.firmName)].sort((left, right) => left.localeCompare(right, "en-CA", { sensitivity: "base" })),
     );
+  });
+
+  it("attaches only the operator owner-contact presentation by matching the stable source key", async () => {
+    h.state.session = { role: "operator" };
+    h.state.records = [RECONCILED_GTA_PROSPECTS[0]];
+    h.state.ownerContacts = [{
+      sourceRecordKey: RECONCILED_GTA_PROSPECTS[0].id,
+      ownerName: "Example Founder",
+      ownerRole: "founding_partner",
+      ownershipConfidence: "confirmed_owner",
+      ownershipSourceUrl: "https://example.test/about",
+      ownershipObservedOn: "2026-09-08",
+      emailAvailability: "direct_owner_email",
+      emailAddress: "founder@example.test",
+      emailSourceUrl: "https://example.test/contact",
+      emailObservedOn: "2026-09-08",
+      isPrimaryContact: true,
+    }];
+
+    const response = await GET();
+    const body = await response.json();
+    const record = body.records.find((candidate: { id: string }) => candidate.id === RECONCILED_GTA_PROSPECTS[0].id);
+    expect(record.ownerContact).toEqual({
+      ownerName: "Example Founder",
+      ownerRole: "founding_partner",
+      ownershipConfidence: "confirmed_owner",
+      emailAvailability: "direct_owner_email",
+      emailAddress: "founder@example.test",
+    });
+    expect(record.ownerContact).not.toHaveProperty("ownershipSourceUrl");
+    expect(record.ownerContact).not.toHaveProperty("emailSourceUrl");
+  });
+
+  it("keeps records available when the owner-contact projection has not been migrated yet", async () => {
+    h.state.session = { role: "operator" };
+    h.state.ownerFailure = new h.OwnerUnavailable();
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.records).toHaveLength(5_942);
+    expect(body.records.every((record: { ownerContact: unknown }) => record.ownerContact === null)).toBe(true);
   });
 
   it("shows a 103-record ledger batch alongside the 20 disjoint fixtures", async () => {

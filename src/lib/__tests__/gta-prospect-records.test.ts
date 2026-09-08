@@ -77,6 +77,27 @@ describe("gta prospect records", () => {
     expect(filterReconciledGtaProspects(records, { practiceArea: "family law" })).toEqual([records[0]]);
   });
 
+  it("filters the operator-only owner-contact display state without changing the core research contract", () => {
+    const direct = { ...records[0], ownerContact: {
+      ownerName: "Example Owner",
+      ownerRole: "owner" as const,
+      ownershipConfidence: "confirmed_owner" as const,
+      emailAvailability: "direct_owner_email" as const,
+      emailAddress: "owner@example.test",
+    } };
+    const general = { ...records[1], ownerContact: {
+      ownerName: "Example Leader",
+      ownerRole: "managing_partner" as const,
+      ownershipConfidence: "leadership_only" as const,
+      emailAvailability: "firm_general_email" as const,
+      emailAddress: "info@example.test",
+    } };
+
+    expect(filterReconciledGtaProspects([direct, general, records[1]], { ownerContact: "identified" })).toEqual([direct, general]);
+    expect(filterReconciledGtaProspects([direct, general, records[1]], { ownerContact: "direct_owner_email" })).toEqual([direct]);
+    expect(filterReconciledGtaProspects([direct, general, records[1]], { ownerContact: "needs_direct_email" })).toEqual([general, records[1]]);
+  });
+
   it("keeps the reviewed 20-firm batch and its reconciliation safeguards intact", () => {
     expect(RECONCILED_GTA_PROSPECTS).toHaveLength(20);
     expect(RECONCILED_GTA_PROSPECTS.filter((record) => record.reconciliationStatus === "update_existing")).toHaveLength(8);

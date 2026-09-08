@@ -4,6 +4,11 @@ import {
   GtaProspectLedgerUnavailableError,
   listGtaProspectResearchForOperator,
 } from "@/lib/gta-prospect-research-reader";
+import {
+  GtaProspectOwnerContactLedgerUnavailableError,
+  listGtaProspectOwnerContactsForOperator,
+  type GtaProspectOwnerContactSummary,
+} from "@/lib/gta-prospect-owner-contact-reader";
 import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
 import { RECONCILED_GTA_PROSPECTS } from "../reconciled-prospects";
 import {
@@ -27,11 +32,46 @@ type RecordsResponse = {
   fallbackReason?: ReconciledProspectFallbackReason;
 };
 
-function fixtureResponse(fallbackReason: ReconciledProspectFallbackReason) {
+function attachOwnerContacts(
+  records: readonly ReconciledGtaProspect[],
+  contacts: readonly GtaProspectOwnerContactSummary[],
+): ReconciledGtaProspect[] {
+  const contactsBySourceRecordKey = new Map(contacts.map((contact) => [contact.sourceRecordKey, contact]));
+  return records.map((record) => {
+    const contact = contactsBySourceRecordKey.get(record.id);
+    return {
+      ...record,
+      ownerContact: contact ? {
+        ownerName: contact.ownerName,
+        ownerRole: contact.ownerRole,
+        ownershipConfidence: contact.ownershipConfidence,
+        emailAvailability: contact.emailAvailability,
+        emailAddress: contact.emailAddress,
+      } : null,
+    };
+  });
+}
+
+async function ownerContactsForPresentation(): Promise<readonly GtaProspectOwnerContactSummary[]> {
+  try {
+    return await listGtaProspectOwnerContactsForOperator();
+  } catch (error) {
+    // The owner-contact migration can follow the research ledger migration.
+    // Its absence must not make the established prospect list unavailable.
+    if (error instanceof GtaProspectOwnerContactLedgerUnavailableError) return [];
+    throw error;
+  }
+}
+
+async function fixtureResponse(
+  fallbackReason: ReconciledProspectFallbackReason,
+  ownerContacts?: readonly GtaProspectOwnerContactSummary[],
+) {
   const merged = mergeQualifiedProspects(RECONCILED_GTA_PROSPECTS);
+  const resolvedOwnerContacts = ownerContacts ?? await ownerContactsForPresentation();
   return NextResponse.json<RecordsResponse>(
     {
-      records: combineUnifiedGtaProspects(merged.records),
+      records: attachOwnerContacts(combineUnifiedGtaProspects(merged.records), resolvedOwnerContacts),
       source: "fixture",
       sourceCounts: { ledger: 0, fixture: RECONCILED_GTA_PROSPECTS.length },
       qualifiedImport: merged.report,
@@ -62,14 +102,15 @@ export async function GET() {
   }
 
   try {
+    const ownerContacts = await ownerContactsForPresentation();
     const records = await listGtaProspectResearchForOperator();
-    if (records.length === 0) return fixtureResponse("ledger_empty");
+    if (records.length === 0) return fixtureResponse("ledger_empty", ownerContacts);
 
     const merged = mergeLedgerAndFixtureRecords(records);
     const qualified = mergeQualifiedProspects(merged.records);
     return NextResponse.json<RecordsResponse>(
       {
-        records: combineUnifiedGtaProspects(qualified.records),
+        records: attachOwnerContacts(combineUnifiedGtaProspects(qualified.records), ownerContacts),
         source: merged.missingFixtureCount > 0 ? "hybrid" : "ledger",
         sourceCounts: { ledger: records.length, fixture: merged.missingFixtureCount },
         qualifiedImport: qualified.report,
