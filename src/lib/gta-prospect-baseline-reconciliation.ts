@@ -89,8 +89,11 @@ function normalizeAddressWords(value: string): string {
 
 /**
  * Normalizes street spellings while retaining the suite/unit as a separate
- * identity component. In particular, `200-342 Queen St W` and
- * `100-342 Queen Street West` remain different values.
+ * identity component. It recognizes unit values before or after the street
+ * address, so `Suite 204, 3100 Rutherford Road` and
+ * `3100 Rutherford Road suite 204` remain equivalent. In particular,
+ * `200-342 Queen St W` and `100-342 Queen Street West` remain different
+ * values.
  */
 export function normalizeProspectStreetAddress(value: string | null | undefined): string | null {
   const raw = value?.trim();
@@ -98,14 +101,18 @@ export function normalizeProspectStreetAddress(value: string | null | undefined)
 
   let unit: string | null = null;
   let remainder = raw;
-  const namedUnit = raw.match(/^\s*(?:suite|unit|ste\.?|#)\s*([a-z0-9]+)\s*[,\-]\s*(.+)$/i);
+  const namedUnit = raw.match(/^\s*(?:suite|unit|ste\.?|#)\s*#?\s*([a-z0-9]+)\s*(?:[,\-]\s*|\s+)(.+)$/i);
   const hyphenatedUnit = raw.match(/^\s*([a-z0-9]+)\s*-\s*(\d+[a-z0-9\s.,'-]*)$/i);
+  const trailingNamedUnit = raw.match(/^\s*(.+?)\s*,?\s+(?:suite|unit|ste\.?|#)\s*#?\s*([a-z0-9]+)\s*$/i);
   if (namedUnit) {
     unit = namedUnit[1];
     remainder = namedUnit[2];
   } else if (hyphenatedUnit) {
     unit = hyphenatedUnit[1];
     remainder = hyphenatedUnit[2];
+  } else if (trailingNamedUnit) {
+    remainder = trailingNamedUnit[1];
+    unit = trailingNamedUnit[2];
   }
 
   const normalizedRemainder = normalizeAddressWords(remainder);

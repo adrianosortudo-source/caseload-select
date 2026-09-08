@@ -73,6 +73,17 @@ describe("GTA prospect baseline reconciliation", () => {
     expect(review).toEqual({ candidateId: "suite-check", state: "clear", automaticMerge: false, matches: [] });
   });
 
+  it("canonicalizes trailing and prefix suite forms without collapsing suite identity", () => {
+    const canonical = "unit=204;street=3100 rutherford road";
+    expect(normalizeProspectStreetAddress("3100 Rutherford Road suite 204")).toBe(canonical);
+    expect(normalizeProspectStreetAddress("Suite 204, 3100 Rutherford Rd")).toBe(canonical);
+    expect(normalizeProspectStreetAddress("suite #204, 3100 Rutherford Road")).toBe(canonical);
+    expect(normalizeProspectStreetAddress("Unit 204 3100 Rutherford Road")).toBe(canonical);
+    expect(normalizeProspectStreetAddress("204-3100 Rutherford Road")).toBe(canonical);
+    expect(normalizeProspectStreetAddress("3100 Rutherford Road, Suite 200")).not.toBe(canonical);
+    expect(normalizeProspectStreetAddress("100-3100 Rutherford Rd")).not.toBe(canonical);
+  });
+
   it("emits a clear review record when no deterministic baseline key matches", () => {
     expect(reconcileProspectCandidateAgainstBaseline({
       candidateId: "net-new",
