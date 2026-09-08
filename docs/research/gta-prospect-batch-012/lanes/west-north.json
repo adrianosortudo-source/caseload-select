@@ -9,6 +9,7 @@
   "records": [
     {
       "record_id": "B012-WN-01",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
       "screen_status": "candidate_exact_public_roster",
       "accepted": false,
@@ -25,10 +26,12 @@
       "evidence_note": "The firm’s contact page explicitly says the firm consists of four lawyers and six support staff; support staff are not included in the count.",
       "relationship": {"name": null, "normalized_title": "unknown", "source_title": null, "source_url": "https://www.arnold-foster.com/", "note": "The homepage image caption identifies three partners but does not supply a recordable named leadership title in the reviewed text."},
       "published_email": {"value": "reception@arnold-foster.com", "source_url": "https://www.arnold-foster.com/contact/"},
+      "evidence": [{"kind": "roster", "url": "https://www.arnold-foster.com/contact/", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://www.arnold-foster.com/contact/", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://www.arnold-foster.com/", "observed_on": "2026-09-08"}, {"kind": "published_email", "url": "https://www.arnold-foster.com/contact/", "observed_on": "2026-09-08"}],
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     },
     {
       "record_id": "B012-WN-02",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
       "screen_status": "candidate_exact_public_roster",
       "accepted": false,
@@ -45,10 +48,12 @@
       "evidence_note": "The complete public team page labels six people as Lawyer and labels the remaining listed people as office manager, clerk, or administrator.",
       "relationship": {"name": "Ida Morra-Caruso", "normalized_title": "owner", "source_title": "Lawyer (Owner); founder and principal", "source_url": "https://stouffvilleonlawyers.ca/our-team/", "note": "Owner is explicitly stated by the firm."},
       "published_email": null,
+      "evidence": [{"kind": "roster", "url": "https://stouffvilleonlawyers.ca/our-team/", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://stouffvilleonlawyers.ca/our-team/", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://stouffvilleonlawyers.ca/our-team/", "observed_on": "2026-09-08"}],
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     },
     {
       "record_id": "B012-WN-03",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
       "screen_status": "candidate_exact_public_roster",
       "accepted": false,
@@ -63,12 +68,14 @@
       "count_qualifier": "exact",
       "roster_source_url": "https://piccinbottos.com/lawyers.html",
       "evidence_note": "The first-party Lawyers page presents six lawyer biographies, including one expressly called an associate lawyer; the page has no support-staff roster mixed into that list.",
-      "relationship": {"name": "Jonathan V.B. Piccin", "normalized_title": "unknown", "source_title": "founded Piccin Bottos Professional Corporation", "source_url": "https://piccinbottos.com/lawyers.html", "note": "The site describes founding the corporation but does not publish one of the normalized relationship titles; ownership is not inferred."},
+      "relationship": {"name": "Jonathan V.B. Piccin", "normalized_title": "founder", "source_title": "founded Piccin Bottos Professional Corporation", "source_url": "https://piccinbottos.com/lawyers.html", "note": "Founder is explicitly published; ownership is not inferred."},
       "published_email": {"value": "pb@piccinbottos.com", "source_url": "https://piccinbottos.com/contact-us.html"},
+      "evidence": [{"kind": "roster", "url": "https://piccinbottos.com/lawyers.html", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://piccinbottos.com/contact-us.html", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://piccinbottos.com/lawyers.html", "observed_on": "2026-09-08"}, {"kind": "published_email", "url": "https://piccinbottos.com/contact-us.html", "observed_on": "2026-09-08"}],
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     },
     {
       "record_id": "B012-WN-04",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
       "screen_status": "candidate_exact_public_roster",
       "accepted": false,
@@ -85,15 +92,17 @@
       "evidence_note": "The public Lawyers navigation names four people and the Team page adds a fifth associate lawyer; all five biography entries are lawyer, associate, or senior-partner roles.",
       "relationship": {"name": "Daniel R. Furlan", "normalized_title": "partner", "source_title": "Senior Partner", "source_url": "https://www.furlanbhavsarlaw.com/team/", "note": "Partner title is explicitly published."},
       "published_email": {"value": "dan@fblawoffices.com", "source_url": "https://www.furlanbhavsarlaw.com/team/"},
+      "evidence": [{"kind": "roster", "url": "https://www.furlanbhavsarlaw.com/team/", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://www.furlanbhavsarlaw.com/team/", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://www.furlanbhavsarlaw.com/team/", "observed_on": "2026-09-08"}, {"kind": "published_email", "url": "https://www.furlanbhavsarlaw.com/team/", "observed_on": "2026-09-08"}],
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     },
     {
       "record_id": "B012-WN-05",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
-      "screen_status": "candidate_exact_public_roster",
+      "screen_status": "held_address_suite_identity_review",
       "accepted": false,
       "import_ready": false,
-      "baseline_status": "pending_baseline",
+      "baseline_status": "held_address_suite_identity_review",
       "preliminary_domain_check": "no_exact_domain_match_in_local_snapshot_of_origin_main_batches_001_to_010_or_batch_011_lanes",
       "firm_name": "D'Alessio Sindhwani Law Firm",
       "canonical_domain": "dslawfirm.ca",
@@ -105,10 +114,13 @@
       "evidence_note": "The complete team page visibly lists two partners and five associates before separately listing two paralegals and support roles.",
       "relationship": {"name": "Elio D'Alessio", "normalized_title": "partner", "source_title": "Partner", "source_url": "https://www.dslawfirm.ca/our-team", "note": "Partner title is explicitly published."},
       "published_email": {"value": "admin@dslawfirm.ca", "source_url": "https://www.dslawfirm.ca/our-team"},
+      "hold_reason": "Hold for address/suite identity review before any later reconciliation; published Vaughan and Bolton offices are preserved without an automatic match.",
+      "evidence": [{"kind": "roster", "url": "https://www.dslawfirm.ca/our-team", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://www.dslawfirm.ca/our-team", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://www.dslawfirm.ca/our-team", "observed_on": "2026-09-08"}, {"kind": "published_email", "url": "https://www.dslawfirm.ca/our-team", "observed_on": "2026-09-08"}],
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     },
     {
       "record_id": "B012-WN-H01",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
       "screen_status": "held_source_quality_review",
       "accepted": false,
@@ -125,11 +137,13 @@
       "evidence_note": "The visible Team list has one principal lawyer and two associate lawyers, separate from one law clerk. The same page has template-placeholder copy elsewhere, so this otherwise exact count is held for source-quality recheck.",
       "relationship": {"name": "Emily Evangelista", "normalized_title": "unknown", "source_title": "Principal Lawyer", "source_url": "https://evangelistalaw.ca/", "note": "Principal Lawyer is preserved but not converted into an ownership inference."},
       "published_email": {"value": "info@evangelistalaw.ca", "source_url": "https://evangelistalaw.ca/"},
+      "evidence": [{"kind": "roster", "url": "https://evangelistalaw.ca/", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://evangelistalaw.ca/", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://evangelistalaw.ca/", "observed_on": "2026-09-08"}, {"kind": "published_email", "url": "https://evangelistalaw.ca/", "observed_on": "2026-09-08"}],
       "hold_reason": "Site contains apparent template placeholders outside the roster; verify the current roster before any later review.",
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     },
     {
       "record_id": "B012-WN-H02",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
       "screen_status": "held_unbounded_count",
       "accepted": false,
@@ -146,11 +160,13 @@
       "evidence_note": "The public People section names three partner/lawyer roles, but it is not labelled as a complete firm-wide roster; it cannot satisfy a capped band.",
       "relationship": {"name": "Gary D. Graham", "normalized_title": "partner", "source_title": "Partner, corporate and transactional lawyer", "source_url": "https://www.gsklawyers.com/", "note": "Partner title is explicitly published."},
       "published_email": {"value": "admin@gsklawyers.com", "source_url": "https://www.gsklawyers.com/gsk-contact"},
+      "evidence": [{"kind": "roster", "url": "https://www.gsklawyers.com/", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://www.gsklawyers.com/gsk-contact", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://www.gsklawyers.com/", "observed_on": "2026-09-08"}, {"kind": "published_email", "url": "https://www.gsklawyers.com/gsk-contact", "observed_on": "2026-09-08"}],
       "hold_reason": "At-least count cannot satisfy a capped lawyer-count range.",
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     },
     {
       "record_id": "B012-WN-H03",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
       "screen_status": "held_below_floor",
       "accepted": false,
@@ -167,11 +183,13 @@
       "evidence_note": "The public team page names two people with law degrees and separates its clerk and receptionist roles; no third lawyer is established in the reviewed roster.",
       "relationship": {"name": null, "normalized_title": "unknown", "source_title": null, "source_url": "https://neimancallegari.ca/our-team/", "note": "No normalized leadership title is published in the reviewed text."},
       "published_email": null,
+      "evidence": [{"kind": "roster", "url": "https://neimancallegari.ca/our-team/", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://neimancallegari.ca/our-team/", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://neimancallegari.ca/our-team/", "observed_on": "2026-09-08"}],
       "hold_reason": "Below the three-lawyer floor.",
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     },
     {
       "record_id": "B012-WN-H05",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
       "screen_status": "held_preliminary_domain_collision",
       "accepted": false,
@@ -188,11 +206,13 @@
       "evidence_note": "Public homepage names multiple Barrister & Solicitor profiles, but this source screen does not refresh a record that already has an exact canonical-domain collision in the baseline.",
       "relationship": {"name": null, "normalized_title": "unknown", "source_title": null, "source_url": "https://www.aasthalaw.ca/", "note": "Collision hold; no ownership inference was attempted."},
       "published_email": null,
+      "evidence": [{"kind": "roster", "url": "https://www.aasthalaw.ca/", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://www.aasthalaw.ca/", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://www.aasthalaw.ca/", "observed_on": "2026-09-08"}],
       "hold_reason": "Exact canonical-domain collision with the existing research baseline; classify as update/hold, never net-new.",
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     },
     {
       "record_id": "B012-WN-H06",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
       "screen_status": "held_preliminary_domain_collision",
       "accepted": false,
@@ -209,11 +229,13 @@
       "evidence_note": "The source presents two founding partners. It is retained only to make the Batch 011 domain collision explicit.",
       "relationship": {"name": "Shokur Fahd", "normalized_title": "partner", "source_title": "founding Partner", "source_url": "https://www.fahdlaw.ca/team", "note": "Partner title is explicitly published."},
       "published_email": {"value": "support@fahdlaw.ca", "source_url": "https://www.fahdlaw.ca/team"},
+      "evidence": [{"kind": "roster", "url": "https://www.fahdlaw.ca/team", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://www.fahdlaw.ca/team", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://www.fahdlaw.ca/team", "observed_on": "2026-09-08"}, {"kind": "published_email", "url": "https://www.fahdlaw.ca/team", "observed_on": "2026-09-08"}],
       "hold_reason": "Exact canonical-domain collision with Batch 011 east; classify as update/hold, never net-new.",
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     },
     {
       "record_id": "B012-WN-H07",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
       "screen_status": "held_preliminary_domain_collision",
       "accepted": false,
@@ -230,11 +252,13 @@
       "evidence_note": "The public page establishes family-law and private-mediation practice, but no count was refreshed after the exact Batch 011 west domain collision was identified.",
       "relationship": {"name": "Vincenzo Ruso", "normalized_title": "managing_partner", "source_title": "Founder & Managing Partner", "source_url": "https://www.rusolaw.ca/our-team", "note": "Managing-partner title is explicitly published."},
       "published_email": null,
+      "evidence": [{"kind": "roster", "url": "https://www.rusolaw.ca/our-team", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://www.rusolaw.ca/our-team", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://www.rusolaw.ca/our-team", "observed_on": "2026-09-08"}],
       "hold_reason": "Exact canonical-domain collision with Batch 011 west; classify as update/hold, never net-new.",
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     },
     {
       "record_id": "B012-WN-H08",
+      "observed_on": "2026-09-08",
       "workflow_state": "source_queue",
       "screen_status": "held_preliminary_domain_collision",
       "accepted": false,
@@ -251,6 +275,7 @@
       "evidence_note": "The public Lawyers section lists two named lawyer profiles. It is retained only to make the Batch 011 west domain collision explicit.",
       "relationship": {"name": null, "normalized_title": "unknown", "source_title": null, "source_url": "https://mancinilaw.ca/", "note": "Collision hold; no ownership inference was attempted."},
       "published_email": null,
+      "evidence": [{"kind": "roster", "url": "https://mancinilaw.ca/", "observed_on": "2026-09-08"}, {"kind": "office", "url": "https://mancinilaw.ca/", "observed_on": "2026-09-08"}, {"kind": "leadership", "url": "https://mancinilaw.ca/", "observed_on": "2026-09-08"}],
       "hold_reason": "Exact canonical-domain collision with Batch 011 west; classify as update/hold, never net-new.",
       "access_review": "Public page reviewed read-only; no interactive surface was used."
     }

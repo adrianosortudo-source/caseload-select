@@ -4,8 +4,9 @@
 
 This is a bounded, read-only public-evidence screen of west/north GTA firms.
 It is a **source queue**, not an import. Every row is explicitly
-`accepted: false`, `import_ready: false`, and `baseline_status:
-pending_baseline`.
+`accepted: false` and `import_ready: false`. The live ledger remains
+`offline_pending`; individual rows are either `pending_baseline` or explicitly
+held for address/suite identity review.
 
 The screen used public first-party roster, team, and contact pages only. It
 did not log in, bypass an access control, submit a form, send email, contact a
@@ -17,12 +18,12 @@ used for discovery only; each retained observation cites a first-party URL.
 | Outcome | Count |
 | --- | ---: |
 | Domains screened | 12 |
-| Exact 3–20 public-roster candidates | 5 |
-| Held: source/count qualification | 3 |
+| Exact 3–20 public-roster candidates | 4 |
+| Held: source/count/address qualification | 4 |
 | Held: static baseline/domain collision | 4 |
 | Accepted or import-ready | 0 |
 
-The five exact candidates are still only **preliminary source records**. A
+The four exact candidates are still only **preliminary source records**. A
 later reconciliation must compare identity aliases, the accepted-ledger
 manifest, live/current fixtures, and the historical corpus before an import
 could even be proposed. The historical 5,902-row artifact has no stable
@@ -46,8 +47,14 @@ to infer ownership.
 
 ## Static comparison scope
 
-The preliminary domain sweep covered source-controlled research and manifest
-JSON reachable from `origin/main`, batches 001–010, and the Batch 011 west and
-east lane artifacts. It deliberately does not resolve aliases, current
-database state, or the historical 5,902-row corpus. A `preliminary_*` result
-therefore remains subordinate to `pending_baseline`.
+`baseline-reconciliation.static.json` records a read-only full static screen
+using the comparison contract from PR #247 without copying its unfinished
+code into this branch: 20 current fixtures + 103 offline accepted-ledger
+records + 5,902 historical rows = 6,025 records. It compares canonical domain,
+normalized firm name, and city-compatible suite-aware street address. Every
+match is a `review_required` signal only; automatic merge is false for every
+row. The live ledger remains `offline_pending`.
+
+D'Alessio Sindhwani is deliberately held for address/suite identity review even
+though the static screen found no match: it publishes more than one office, so
+the source queue must not treat a clear static result as identity clearance.

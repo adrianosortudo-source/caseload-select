@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "batch_id": "gta-prospect-batch-012",
+  "generated_on": "2026-09-08",
+  "scope": "Static, read-only baseline screen for source-queue records. It neither imports a record nor selects a merge survivor.",
+  "algorithm_source": {
+    "reference_pr": 247,
+    "reference_branch": "codex/batch-011-consolidation",
+    "reference_module": "src/lib/gta-prospect-baseline-reconciliation.ts",
+    "copied_source_code": false,
+    "comparison_fields": ["canonical_domain", "firm_name", "suite_aware_street_address"],
+    "city_compatibility_required_for_address": true,
+    "automatic_merge": false
+  },
+  "baseline_sources": {
+    "fixture_records": 20,
+    "offline_import_fixture_records": 103,
+    "legacy_source_records": 5902,
+    "total_static_baseline_records": 6025,
+    "live_ledger_state": "offline_pending"
+  },
+  "records": [
+    {"record_id": "B012-WN-01", "baseline_candidate": {"city": "Georgetown", "suite_aware_street": "unit=201;street=232a guelph street"}, "state": "clear", "automatic_merge": false, "matches": []},
+    {"record_id": "B012-WN-02", "baseline_candidate": {"city": "Stouffville", "suite_aware_street": "unit=;street=6060 main street"}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-2566", "match_fields": ["street_address"]}]},
+    {"record_id": "B012-WN-03", "baseline_candidate": {"city": "Woodbridge", "suite_aware_street": "unit=201;street=4370 steeles avenue west"}, "state": "clear", "automatic_merge": false, "matches": []},
+    {"record_id": "B012-WN-04", "baseline_candidate": {"city": "Brampton", "suite_aware_street": "unit=101;street=197 county court boulevard"}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-315", "match_fields": ["street_address"]}, {"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-351", "match_fields": ["street_address"]}]},
+    {"record_id": "B012-WN-05", "baseline_candidate": {"city": "Vaughan", "suite_aware_street": "unit=204;street=3100 rutherford road"}, "state": "held_address_suite_identity_review", "automatic_merge": false, "matches": [], "note": "Static comparison is clear, but this row remains held because the multi-office address and suite identity need human review."},
+    {"record_id": "B012-WN-H01", "baseline_candidate": {"city": "Woodbridge", "suite_aware_street": "unit=304;street=3700 steeles avenue west"}, "state": "clear", "automatic_merge": false, "matches": []},
+    {"record_id": "B012-WN-H02", "baseline_candidate": {"city": "Toronto", "suite_aware_street": "unit=303;street=1 eva road"}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-4504", "match_fields": ["street_address"]}]},
+    {"record_id": "B012-WN-H03", "baseline_candidate": {"city": "Bolton", "suite_aware_street": "unit=h3;street=18 king street east"}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-99", "match_fields": ["canonical_domain", "firm_name"]}]},
+    {"record_id": "B012-WN-H05", "baseline_candidate": {"city": "Mississauga", "suite_aware_street": null}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "fixture", "record_id": "aastha-lawyers-mississauga", "match_fields": ["canonical_domain", "firm_name"]}]},
+    {"record_id": "B012-WN-H06", "baseline_candidate": {"city": "Richmond Hill", "suite_aware_street": "unit=309;street=330 highway 7 east"}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-2322", "match_fields": ["canonical_domain", "firm_name"]}]},
+    {"record_id": "B012-WN-H07", "baseline_candidate": {"city": "Oakville", "suite_aware_street": null}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "ledger_projection", "record_id": "offline-import:gta-prospect-008-b008-19", "match_fields": ["canonical_domain", "firm_name"]}, {"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-750", "match_fields": ["canonical_domain", "firm_name"]}]},
+    {"record_id": "B012-WN-H08", "baseline_candidate": {"city": "Woodbridge", "suite_aware_street": "unit=6;street=3850 steeles avenue west"}, "state": "review_required", "automatic_merge": false, "matches": [{"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-5842", "match_fields": ["firm_name", "street_address"]}, {"origin": "legacy_source", "record_id": "legacy-gta-directory-2026-07:row-5867", "match_fields": ["street_address"]}]}
+  ]
+}
