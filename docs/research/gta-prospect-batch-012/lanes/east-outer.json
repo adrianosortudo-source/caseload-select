@@ -1,19 +1,35 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "batch_id": "gta-prospect-batch-012",
   "lane": "EAST_OUTER",
-  "observation_date": "2026-09-08",
+  "observed_on": "2026-09-08",
   "scope": "Public first-party source queue for Durham/east and approved outer-GTA municipalities. Private-practice firms only; office scope is explicit and consultation/service offices are not treated as headquarters.",
   "source_policy": "Public search was used for discovery. Evidence is retained only from accessible firm-owned roster, team, about, office, or contact pages. No forms, chats, logins, outreach, ads, GBP, CRM, database, production import, or anti-bot bypass. All records remain non-accepted and non-importable pending independent review and central reconciliation. Published email evidence is included only when visibly present on a cited first-party page; no email pattern was inferred.",
-  "comparison_baseline": "Static name/domain checks used the current accepted/legacy fixtures available in the Batch 011 east worktree. Batch 001-011 and the current 6,025-record reconciliation remain the authoritative central join. The live 124-record join is pending.",
+  "source_commit": "433c93bb9b18a35f3647c882eda95c57d8508f67",
+  "normalizer": {
+    "contract_commit": "337b5cf7",
+    "rules": [
+      "exact normalized canonical domain",
+      "exact normalized firm name",
+      "suite-preserving normalized street address with city gate",
+      "no fuzzy matching",
+      "no automatic merge"
+    ]
+  },
+  "baseline": {
+    "fixtures": 20,
+    "offline_ledger": 103,
+    "legacy_source": 5902,
+    "total": 6025,
+    "live_ledger_state": "offline_pending"
+  },
   "disposition_summary": {
     "records_screened": 20,
-    "exact_or_at_least_candidates": 6,
+    "source_queue_candidates": 6,
     "held": 14,
-    "held_collision_or_update": 4,
-    "held_quality_or_scope": 4,
-    "held_below_minimum": 6,
-    "rejected": 0,
+    "review_required": 6,
+    "clear": 14,
+    "automatic_merge": 0,
     "accepted": 0,
     "import_ready": 0
   },
@@ -21,199 +37,966 @@
     {
       "record_id": "B012-EAST-01",
       "workflow_status": "source_queue_candidate",
+      "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "firm_name": "KLF / Keliny Law",
       "canonical_domain": "kelinylaw.ca",
-      "identity_aliases": ["Keliny Law Firm", "KLF"],
-      "office_cities": ["Oakville", "Burlington", "Mississauga"],
+      "identity_aliases": [
+        "Keliny Law Firm",
+        "KLF"
+      ],
+      "office_cities": [
+        "Oakville",
+        "Burlington",
+        "Mississauga"
+      ],
       "office_scope_note": "Oakville is the primary office; Burlington and Mississauga are identified as satellite offices by appointment.",
-      "office_address_evidence": [{"city": "Oakville", "street_address": "1670 North Service Rd E, Unit 104, Oakville, ON L6H 7G3", "source_url": "https://kelinylaw.ca/", "observed_date": "2026-09-08"}],
+      "office_address_evidence": [
+        {
+          "city": "Oakville",
+          "street_address": "1670 North Service Rd E, Unit 104, Oakville, ON L6H 7G3",
+          "source_url": "https://kelinylaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": 4,
       "count_qualifier": "exact",
       "lawyer_band": "4-10",
       "roster_scope": "Firm-wide visible lawyer roster; support roles excluded.",
       "first_party_roster_url": "https://kelinylaw.ca/lawyers",
       "office_source_url": "https://kelinylaw.ca/",
-      "practice_areas_published": ["Commercial litigation", "Healthcare and regulated professionals", "Fraud and asset recovery", "Corporate and commercial", "Construction", "Franchise", "Automotive", "Real estate and property litigation"],
-      "leadership_evidence": [{"name": "Joseph H. Keliny", "title": "Partner", "source_url": "https://kelinylaw.ca/lawyers", "observed_date": "2026-09-08"}],
-      "relationship_type": "partner",
-      "published_email_evidence": [{"label": "general firm email", "email": "operations@kelinylaw.ca", "source_url": "https://kelinylaw.ca/", "observed_date": "2026-09-08"}],
-      "static_baseline_reconciliation": "No match found in the checked current legacy source or 103-record manifest by domain; central 6,025-name/domain/address join pending.",
-      "live_124_reconciliation": "pending",
+      "practice_source_url": "https://kelinylaw.ca/lawyers",
+      "practice_areas_published": [
+        "Commercial litigation",
+        "Healthcare and regulated professionals",
+        "Fraud and asset recovery",
+        "Corporate and commercial",
+        "Construction",
+        "Franchise",
+        "Automotive",
+        "Real estate and property litigation"
+      ],
+      "leadership_evidence": [
+        {
+          "name": "Joseph H. Keliny",
+          "title": "Partner",
+          "source_url": "https://kelinylaw.ca/lawyers",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "relationship_labels": [
+        "Partner"
+      ],
+      "published_email_evidence": [
+        {
+          "label": "general firm email",
+          "email": "operations@kelinylaw.ca",
+          "source_url": "https://kelinylaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
       "access_review": "Current first-party lawyers and home/contact content accessible on observation date.",
       "counting_rationale": "Four current lawyer profiles are visibly named on the firm lawyers page; non-lawyer support roles are excluded.",
-      "hold_reason": "Source queue only; not accepted pending independent review and full baseline reconciliation."
+      "hold_reason": "Source queue only; not accepted pending independent review and full baseline reconciliation.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://kelinylaw.ca/lawyers",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 4,
+            "count_qualifier": "exact",
+            "scope": "Firm-wide visible lawyer roster; support roles excluded.",
+            "rationale": "Four current lawyer profiles are visibly named on the firm lawyers page; non-lawyer support roles are excluded."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://kelinylaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Oakville",
+              "street_address": "1670 North Service Rd E, Unit 104, Oakville, ON L6H 7G3",
+              "source_url": "https://kelinylaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://kelinylaw.ca/lawyers",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Commercial litigation",
+            "Healthcare and regulated professionals",
+            "Fraud and asset recovery",
+            "Corporate and commercial",
+            "Construction",
+            "Franchise",
+            "Automotive",
+            "Real estate and property litigation"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://kelinylaw.ca/lawyers",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Joseph H. Keliny",
+              "title": "Partner",
+              "source_url": "https://kelinylaw.ca/lawyers",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Names and titles are preserved exactly as published; no ownership or authority inference was added."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://kelinylaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "label": "general firm email",
+              "email": "operations@kelinylaw.ca",
+              "source_url": "https://kelinylaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Only visibly published first-party email evidence is retained; no address pattern was inferred."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-02",
       "workflow_status": "source_queue_candidate",
+      "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Spadafora and Murphy LLP",
       "canonical_domain": "pssmlaw.com",
-      "identity_aliases": ["Spadafora & Murphy LLP"],
-      "office_cities": ["Oakville"],
-      "office_address_evidence": [{"city": "Oakville", "street_address": "1540 Cornwall Road, Suite 106, Oakville, ON L6J 7W5", "source_url": "https://pssmlaw.com/28-team", "observed_date": "2026-09-08"}],
+      "identity_aliases": [
+        "Spadafora & Murphy LLP"
+      ],
+      "office_cities": [
+        "Oakville"
+      ],
+      "office_address_evidence": [
+        {
+          "city": "Oakville",
+          "street_address": "1540 Cornwall Road, Suite 106, Oakville, ON L6J 7W5",
+          "source_url": "https://pssmlaw.com/28-team",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": 4,
       "count_qualifier": "exact",
       "lawyer_band": "4-10",
       "roster_scope": "The cited page separates a four-person legal team from support team; support roles excluded.",
       "first_party_roster_url": "https://pssmlaw.com/28-team",
       "office_source_url": "https://pssmlaw.com/28-team",
-      "practice_areas_published": ["Real estate", "Corporate contracts and incorporation", "Wills and estates"],
+      "practice_source_url": "https://pssmlaw.com/28-team",
+      "practice_areas_published": [
+        "Real estate",
+        "Corporate contracts and incorporation",
+        "Wills and estates"
+      ],
       "leadership_evidence": [],
-      "relationship_type": "unknown",
+      "relationship_labels": [],
       "published_email_evidence": [],
-      "published_email_unknown": "No visible email value was exposed in the reviewed current legal-team block.",
-      "static_baseline_reconciliation": "No match found in the checked current legacy source or 103-record manifest by domain; central 6,025-name/domain/address join pending.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "Current first-party team page accessible; legal team and support team are visibly separated.",
       "counting_rationale": "Peggy Spadafora, Shannon Murphy, David Rickards, and Victoria Seo are listed under LEGAL TEAM; support staff excluded.",
-      "hold_reason": "Source queue only; not accepted pending independent review and full baseline reconciliation."
+      "hold_reason": "Source queue only; not accepted pending independent review and full baseline reconciliation.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://pssmlaw.com/28-team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 4,
+            "count_qualifier": "exact",
+            "scope": "The cited page separates a four-person legal team from support team; support roles excluded.",
+            "rationale": "Peggy Spadafora, Shannon Murphy, David Rickards, and Victoria Seo are listed under LEGAL TEAM; support staff excluded."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://pssmlaw.com/28-team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Oakville",
+              "street_address": "1540 Cornwall Road, Suite 106, Oakville, ON L6J 7W5",
+              "source_url": "https://pssmlaw.com/28-team",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://pssmlaw.com/28-team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Real estate",
+            "Corporate contracts and incorporation",
+            "Wills and estates"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://pssmlaw.com/28-team",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No explicit owner, founder, managing partner, partner, or other leadership title was retained from the reviewed first-party page."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://pssmlaw.com/28-team",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-03",
       "workflow_status": "source_queue_candidate",
+      "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Findlay Personal Injury Lawyers",
       "canonical_domain": "findlaylaw.ca",
-      "identity_aliases": ["Findlay Law"],
-      "office_cities": ["Hamilton", "Burlington", "Brantford", "St. Catharines"],
-      "office_address_evidence": [{"city": "Hamilton", "street_address": "20 Hughson St S, Suite 510, Hamilton, ON L8N 2A1", "source_url": "https://findlaylaw.ca/", "observed_date": "2026-09-08"}],
+      "identity_aliases": [
+        "Findlay Law"
+      ],
+      "office_cities": [
+        "Hamilton",
+        "Burlington",
+        "Brantford",
+        "St. Catharines"
+      ],
+      "office_address_evidence": [
+        {
+          "city": "Hamilton",
+          "street_address": "20 Hughson St S, Suite 510, Hamilton, ON L8N 2A1",
+          "source_url": "https://findlaylaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": 6,
       "count_qualifier": "exact",
       "lawyer_band": "4-10",
       "roster_scope": "Firm-wide visible lawyer roster; office locations are separately published.",
       "first_party_roster_url": "https://findlaylaw.ca/about-us/our-team/",
       "office_source_url": "https://findlaylaw.ca/",
-      "practice_areas_published": ["Personal injury", "Motor vehicle claims", "Serious injury claims"],
+      "practice_source_url": "https://findlaylaw.ca/about-us/our-team/",
+      "practice_areas_published": [
+        "Personal injury",
+        "Motor vehicle claims",
+        "Serious injury claims"
+      ],
       "leadership_evidence": [],
-      "relationship_type": "unknown",
+      "relationship_labels": [],
       "published_email_evidence": [],
-      "published_email_unknown": "No visible email value was captured from the reviewed public pages.",
-      "static_baseline_reconciliation": "No match found in the checked current legacy source or 103-record manifest by domain; central 6,025-name/domain/address join pending.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "Current first-party team and office content accessible on observation date.",
       "counting_rationale": "Robert Findlay, Ryan Findlay, Kaelan Male, Eric Findlay, Daniel Roncari, and Amy Hammel are visibly named on the current team page.",
-      "hold_reason": "Source queue only; not accepted pending independent review and full baseline reconciliation."
+      "hold_reason": "Source queue only; not accepted pending independent review and full baseline reconciliation.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://findlaylaw.ca/about-us/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 6,
+            "count_qualifier": "exact",
+            "scope": "Firm-wide visible lawyer roster; office locations are separately published.",
+            "rationale": "Robert Findlay, Ryan Findlay, Kaelan Male, Eric Findlay, Daniel Roncari, and Amy Hammel are visibly named on the current team page."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://findlaylaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Hamilton",
+              "street_address": "20 Hughson St S, Suite 510, Hamilton, ON L8N 2A1",
+              "source_url": "https://findlaylaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://findlaylaw.ca/about-us/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Personal injury",
+            "Motor vehicle claims",
+            "Serious injury claims"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://findlaylaw.ca/about-us/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No explicit owner, founder, managing partner, partner, or other leadership title was retained from the reviewed first-party page."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://findlaylaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-04",
       "workflow_status": "source_queue_candidate",
+      "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "firm_name": "The Alam Law",
       "canonical_domain": "thealamlaw.com",
-      "identity_aliases": ["Alam Law Firm"],
-      "office_cities": ["Ajax", "Hamilton", "Scarborough", "Mississauga", "Toronto"],
+      "identity_aliases": [
+        "Alam Law Firm"
+      ],
+      "office_cities": [
+        "Ajax",
+        "Hamilton",
+        "Scarborough",
+        "Mississauga",
+        "Toronto"
+      ],
       "office_scope_note": "Mississauga is identified as head office; Ajax, Hamilton, Scarborough, and Toronto are identified as consultation offices.",
-      "office_address_evidence": [{"city": "Ajax", "street_address": "250 Bayly St W, Unit 13A, Ajax, ON L1S 3V4", "source_url": "https://www.thealamlaw.com/lawyers", "observed_date": "2026-09-08"}, {"city": "Hamilton", "street_address": "948 Main Street East, Hamilton, ON L8M 1M8", "source_url": "https://www.thealamlaw.com/careers", "observed_date": "2026-09-08"}],
+      "office_address_evidence": [
+        {
+          "city": "Ajax",
+          "street_address": "250 Bayly St W, Unit 13A, Ajax, ON L1S 3V4",
+          "source_url": "https://www.thealamlaw.com/lawyers",
+          "observed_on": "2026-09-08"
+        },
+        {
+          "city": "Hamilton",
+          "street_address": "948 Main Street East, Hamilton, ON L8M 1M8",
+          "source_url": "https://www.thealamlaw.com/careers",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": 7,
       "count_qualifier": "exact",
       "lawyer_band": "4-10",
       "roster_scope": "Current lawyers/barristers named in the first-party lawyers page; non-lawyer staff excluded.",
       "first_party_roster_url": "https://www.thealamlaw.com/lawyers",
       "office_source_url": "https://www.thealamlaw.com/careers",
-      "practice_areas_published": ["Motor vehicle and personal injury", "Real estate", "Mediation", "Immigration", "Criminal", "Family", "Wills and estates", "Civil litigation", "Employment"],
-      "leadership_evidence": [{"name": "Muhammad M. Alam", "title": "Founder & Managing Barrister", "source_url": "https://www.thealamlaw.com/lawyers", "observed_date": "2026-09-08"}, {"name": "M. Aftab Alam", "title": "Managing Barrister", "source_url": "https://www.thealamlaw.com/lawyers", "observed_date": "2026-09-08"}],
-      "relationship_type": "founder",
+      "practice_source_url": "https://www.thealamlaw.com/lawyers",
+      "practice_areas_published": [
+        "Motor vehicle and personal injury",
+        "Real estate",
+        "Mediation",
+        "Immigration",
+        "Criminal",
+        "Family",
+        "Wills and estates",
+        "Civil litigation",
+        "Employment"
+      ],
+      "leadership_evidence": [
+        {
+          "name": "Muhammad M. Alam",
+          "title": "Founder & Managing Barrister",
+          "source_url": "https://www.thealamlaw.com/lawyers",
+          "observed_on": "2026-09-08"
+        },
+        {
+          "name": "M. Aftab Alam",
+          "title": "Managing Barrister",
+          "source_url": "https://www.thealamlaw.com/lawyers",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "relationship_labels": [
+        "Founder & Managing Barrister",
+        "Managing Barrister"
+      ],
       "published_email_evidence": [],
-      "published_email_unknown": "No visible named or general email value was captured from the reviewed public pages.",
-      "static_baseline_reconciliation": "No match found in the checked current legacy source or 103-record manifest by domain; central 6,025-name/domain/address join pending.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "Current first-party lawyers and office pages accessible; Ajax/Hamilton are explicitly consultation offices.",
       "counting_rationale": "Muhammad M. Alam, M. Aftab Alam, Laurencia Fasoyiro, Naina Tandon, Sherzod Karimov, Jaswant Malhi, and Nkiru Nwabudike are named as current lawyers/barristers.",
-      "hold_reason": "Source queue only; consultation-office scope and central identity reconciliation require independent review."
+      "hold_reason": "Source queue only; consultation-office scope and central identity reconciliation require independent review.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://www.thealamlaw.com/lawyers",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 7,
+            "count_qualifier": "exact",
+            "scope": "Current lawyers/barristers named in the first-party lawyers page; non-lawyer staff excluded.",
+            "rationale": "Muhammad M. Alam, M. Aftab Alam, Laurencia Fasoyiro, Naina Tandon, Sherzod Karimov, Jaswant Malhi, and Nkiru Nwabudike are named as current lawyers/barristers."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://www.thealamlaw.com/careers",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Ajax",
+              "street_address": "250 Bayly St W, Unit 13A, Ajax, ON L1S 3V4",
+              "source_url": "https://www.thealamlaw.com/lawyers",
+              "observed_on": "2026-09-08"
+            },
+            {
+              "city": "Hamilton",
+              "street_address": "948 Main Street East, Hamilton, ON L8M 1M8",
+              "source_url": "https://www.thealamlaw.com/careers",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://www.thealamlaw.com/lawyers",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Motor vehicle and personal injury",
+            "Real estate",
+            "Mediation",
+            "Immigration",
+            "Criminal",
+            "Family",
+            "Wills and estates",
+            "Civil litigation",
+            "Employment"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://www.thealamlaw.com/lawyers",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Muhammad M. Alam",
+              "title": "Founder & Managing Barrister",
+              "source_url": "https://www.thealamlaw.com/lawyers",
+              "observed_on": "2026-09-08"
+            },
+            {
+              "name": "M. Aftab Alam",
+              "title": "Managing Barrister",
+              "source_url": "https://www.thealamlaw.com/lawyers",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Names and titles are preserved exactly as published; no ownership or authority inference was added."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://www.thealamlaw.com/careers",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-05",
       "workflow_status": "source_queue_candidate",
+      "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Davidson Cahill Morrison LLP",
       "canonical_domain": "dcmlaw.ca",
-      "identity_aliases": ["DCM Law"],
-      "office_cities": ["Bowmanville", "Toronto", "Huntsville"],
-      "office_address_evidence": [{"city": "Bowmanville", "street_address": "222 King Street East, Suite 207, Bowmanville, ON L1C 1P6", "source_url": "https://dcmlaw.ca/contact-us/", "observed_date": "2026-09-08"}],
+      "identity_aliases": [
+        "DCM Law"
+      ],
+      "office_cities": [
+        "Bowmanville",
+        "Toronto",
+        "Huntsville"
+      ],
+      "office_address_evidence": [
+        {
+          "city": "Bowmanville",
+          "street_address": "222 King Street East, Suite 207, Bowmanville, ON L1C 1P6",
+          "source_url": "https://dcmlaw.ca/contact-us/",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": 11,
       "count_qualifier": "exact",
       "lawyer_band": "11-20",
       "roster_scope": "The current Our Team page separates lawyers from law clerks and other staff; 11 lawyer/counsel roles counted.",
       "first_party_roster_url": "https://dcmlaw.ca/our-team/",
       "office_source_url": "https://dcmlaw.ca/contact-us/",
-      "practice_areas_published": ["Insurance law", "Medical malpractice", "Appellate advocacy", "Personal injury", "Municipal litigation"],
-      "leadership_evidence": [{"name": "David Morin", "title": "Managing Partner", "source_url": "https://dcmlaw.ca/our-team/", "observed_date": "2026-09-08"}],
-      "relationship_type": "managing_partner",
-      "published_email_evidence": [{"label": "general firm email", "email": "info@dcmlaw.ca", "source_url": "https://dcmlaw.ca/contact-us/", "observed_date": "2026-09-08"}],
-      "static_baseline_reconciliation": "No match found in the checked current legacy source or 103-record manifest by domain; central 6,025-name/domain/address join pending.",
-      "live_124_reconciliation": "pending",
+      "practice_source_url": "https://dcmlaw.ca/our-team/",
+      "practice_areas_published": [
+        "Insurance law",
+        "Medical malpractice",
+        "Appellate advocacy",
+        "Personal injury",
+        "Municipal litigation"
+      ],
+      "leadership_evidence": [
+        {
+          "name": "David Morin",
+          "title": "Managing Partner",
+          "source_url": "https://dcmlaw.ca/our-team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "relationship_labels": [
+        "Managing Partner"
+      ],
+      "published_email_evidence": [
+        {
+          "label": "general firm email",
+          "email": "info@dcmlaw.ca",
+          "source_url": "https://dcmlaw.ca/contact-us/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
       "access_review": "Current first-party team and office pages accessible; Bowmanville office is explicitly listed.",
       "counting_rationale": "David Morin, Jim Davidson, Paul Cahill, Chris Morrison, Ron Strike, Joel Cormier, Peter Reinitzer, Tiffany Usher, Hudson Chalmers, Kathleen Lefebvre, and Margaret Klassen are listed under Lawyers; law clerks and staff excluded.",
-      "hold_reason": "Source queue only; not accepted pending independent review and full baseline reconciliation."
+      "hold_reason": "Source queue only; not accepted pending independent review and full baseline reconciliation.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://dcmlaw.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 11,
+            "count_qualifier": "exact",
+            "scope": "The current Our Team page separates lawyers from law clerks and other staff; 11 lawyer/counsel roles counted.",
+            "rationale": "David Morin, Jim Davidson, Paul Cahill, Chris Morrison, Ron Strike, Joel Cormier, Peter Reinitzer, Tiffany Usher, Hudson Chalmers, Kathleen Lefebvre, and Margaret Klassen are listed under Lawyers; law clerks and staff excluded."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://dcmlaw.ca/contact-us/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Bowmanville",
+              "street_address": "222 King Street East, Suite 207, Bowmanville, ON L1C 1P6",
+              "source_url": "https://dcmlaw.ca/contact-us/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://dcmlaw.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Insurance law",
+            "Medical malpractice",
+            "Appellate advocacy",
+            "Personal injury",
+            "Municipal litigation"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://dcmlaw.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "David Morin",
+              "title": "Managing Partner",
+              "source_url": "https://dcmlaw.ca/our-team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Names and titles are preserved exactly as published; no ownership or authority inference was added."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://dcmlaw.ca/contact-us/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "label": "general firm email",
+              "email": "info@dcmlaw.ca",
+              "source_url": "https://dcmlaw.ca/contact-us/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Only visibly published first-party email evidence is retained; no address pattern was inferred."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-06",
       "workflow_status": "source_queue_candidate",
+      "stage": "source_queue",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Woitzik Polsinelli LLP",
       "canonical_domain": "durhamlawyer.ca",
-      "identity_aliases": ["Durham Lawyer"],
-      "office_cities": ["Whitby", "Bowmanville"],
-      "office_address_evidence": [{"city": "Whitby", "street_address": "209 Dundas Street East, Suite 401, Whitby, ON L1N 7H8", "source_url": "https://durhamlawyer.ca/meet-our-team/", "observed_date": "2026-09-08"}],
+      "identity_aliases": [
+        "Durham Lawyer"
+      ],
+      "office_cities": [
+        "Whitby",
+        "Bowmanville"
+      ],
+      "office_address_evidence": [
+        {
+          "city": "Whitby",
+          "street_address": "209 Dundas Street East, Suite 401, Whitby, ON L1N 7H8",
+          "source_url": "https://durhamlawyer.ca/meet-our-team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": 11,
       "count_qualifier": "exact",
       "lawyer_band": "11-20",
       "roster_scope": "Visible current lawyer roster on firm team page; support roles excluded.",
       "first_party_roster_url": "https://durhamlawyer.ca/meet-our-team/",
       "office_source_url": "https://durhamlawyer.ca/meet-our-team/",
-      "practice_areas_published": ["Family law", "Criminal law", "Real estate", "Wills and estates", "Personal injury", "Corporate and commercial", "Litigation"],
+      "practice_source_url": "https://durhamlawyer.ca/meet-our-team/",
+      "practice_areas_published": [
+        "Family law",
+        "Criminal law",
+        "Real estate",
+        "Wills and estates",
+        "Personal injury",
+        "Corporate and commercial",
+        "Litigation"
+      ],
       "leadership_evidence": [],
-      "relationship_type": "unknown",
-      "published_email_evidence": [{"label": "general firm email", "email": "info@durhamlawyer.ca", "source_url": "https://durhamlawyer.ca/meet-our-team/", "observed_date": "2026-09-08"}],
-      "static_baseline_reconciliation": "No match found in the checked current legacy source or 103-record manifest by domain; possible relationship to other Durham identities still requires central name/address join.",
-      "live_124_reconciliation": "pending",
+      "relationship_labels": [],
+      "published_email_evidence": [
+        {
+          "label": "general firm email",
+          "email": "info@durhamlawyer.ca",
+          "source_url": "https://durhamlawyer.ca/meet-our-team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
       "access_review": "Current first-party team page accessible; address and public general email visible.",
       "counting_rationale": "Eleven named lawyer profiles are visibly listed on the current Meet Our Team page; support roles excluded.",
-      "hold_reason": "Source queue only; possible Durham identity/alias relationship requires central reconciliation."
+      "hold_reason": "Source queue only; possible Durham identity/alias relationship requires central reconciliation.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://durhamlawyer.ca/meet-our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 11,
+            "count_qualifier": "exact",
+            "scope": "Visible current lawyer roster on firm team page; support roles excluded.",
+            "rationale": "Eleven named lawyer profiles are visibly listed on the current Meet Our Team page; support roles excluded."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://durhamlawyer.ca/meet-our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Whitby",
+              "street_address": "209 Dundas Street East, Suite 401, Whitby, ON L1N 7H8",
+              "source_url": "https://durhamlawyer.ca/meet-our-team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://durhamlawyer.ca/meet-our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Family law",
+            "Criminal law",
+            "Real estate",
+            "Wills and estates",
+            "Personal injury",
+            "Corporate and commercial",
+            "Litigation"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://durhamlawyer.ca/meet-our-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No explicit owner, founder, managing partner, partner, or other leadership title was retained from the reviewed first-party page."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://durhamlawyer.ca/meet-our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "label": "general firm email",
+              "email": "info@durhamlawyer.ca",
+              "source_url": "https://durhamlawyer.ca/meet-our-team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Only visibly published first-party email evidence is retained; no address pattern was inferred."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-07",
       "workflow_status": "held_quality_review",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "ABLF Law",
       "canonical_domain": "ablflaw.ca",
       "identity_aliases": [],
-      "office_cities": ["Whitby", "Bowmanville", "Port Hope"],
-      "office_address_evidence": [{"city": "Whitby", "street_address": "1621 McEwen Dr, Suite 103, Whitby, ON L1N 9A5", "source_url": "https://ablflaw.ca/", "observed_date": "2026-09-08"}],
+      "office_cities": [
+        "Whitby",
+        "Bowmanville",
+        "Port Hope"
+      ],
+      "office_address_evidence": [
+        {
+          "city": "Whitby",
+          "street_address": "1621 McEwen Dr, Suite 103, Whitby, ON L1N 9A5",
+          "source_url": "https://ablflaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": 10,
       "count_qualifier": "exact",
       "lawyer_band": "4-10",
       "roster_scope": "Ten named people are presented as personal-injury legal team members; individual role detail is not bounded in the reviewed page.",
       "first_party_roster_url": "https://ablflaw.ca/",
       "office_source_url": "https://ablflaw.ca/",
-      "practice_areas_published": ["Personal injury"],
+      "practice_source_url": "https://ablflaw.ca/",
+      "practice_areas_published": [
+        "Personal injury"
+      ],
       "leadership_evidence": [],
-      "relationship_type": "unknown",
+      "relationship_labels": [],
       "published_email_evidence": [],
-      "static_baseline_reconciliation": "No match found in the checked current legacy source or 103-record manifest by domain; central join pending.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "First-party page accessible, but it includes placeholder-style metrics and limited individual role evidence.",
       "counting_rationale": "Ten names are visibly listed under the personal-injury legal team; the page does not independently expose full lawyer titles for each person.",
-      "hold_reason": "Held for quality review; exact lawyer classification and page-quality concerns prevent promotion."
+      "hold_reason": "Held for quality review; exact lawyer classification and page-quality concerns prevent promotion.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://ablflaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 10,
+            "count_qualifier": "exact",
+            "scope": "Ten named people are presented as personal-injury legal team members; individual role detail is not bounded in the reviewed page.",
+            "rationale": "Ten names are visibly listed under the personal-injury legal team; the page does not independently expose full lawyer titles for each person."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://ablflaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Whitby",
+              "street_address": "1621 McEwen Dr, Suite 103, Whitby, ON L1N 9A5",
+              "source_url": "https://ablflaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://ablflaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Personal injury"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://ablflaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No explicit owner, founder, managing partner, partner, or other leadership title was retained from the reviewed first-party page."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://ablflaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-08",
       "workflow_status": "held_suspect_source",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Hamilton Morrison Law",
       "canonical_domain": "hamiltonmorrisonlaw.com",
       "identity_aliases": [],
-      "office_cities": ["Hamilton"],
+      "office_cities": [
+        "Hamilton"
+      ],
       "office_address_evidence": [],
       "office_address_unknown": "No reliable physical office address was published on the reviewed about page.",
       "observed_lawyer_count": 6,
@@ -222,315 +1005,1521 @@
       "roster_scope": "Six names appear on the current about page; firm identity and office evidence are not reliable enough for staging.",
       "first_party_roster_url": "https://hamiltonmorrisonlaw.com/about/",
       "office_source_url": "https://hamiltonmorrisonlaw.com/about/",
+      "practice_source_url": "https://hamiltonmorrisonlaw.com/about/",
       "practice_areas_published": [],
-      "leadership_evidence": [{"name": "James Hamilton", "title": "Managing Partner", "source_url": "https://hamiltonmorrisonlaw.com/about/", "observed_date": "2026-09-08"}],
-      "relationship_type": "managing_partner",
+      "leadership_evidence": [
+        {
+          "name": "James Hamilton",
+          "title": "Managing Partner",
+          "source_url": "https://hamiltonmorrisonlaw.com/about/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "relationship_labels": [
+        "Managing Partner"
+      ],
       "published_email_evidence": [],
-      "static_baseline_reconciliation": "No match found in the checked current legacy source or 103-record manifest by domain; central join pending.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "First-party page accessible but content, office evidence, and phone geography appear inconsistent; no bypass used.",
       "counting_rationale": "Six named lawyer/leadership entries are visible, but current lawyer status is not independently established.",
-      "hold_reason": "Suspect source/identity; do not promote without independent first-party verification."
+      "hold_reason": "Suspect source/identity; do not promote without independent first-party verification.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://hamiltonmorrisonlaw.com/about/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 6,
+            "count_qualifier": "exact",
+            "scope": "Six names appear on the current about page; firm identity and office evidence are not reliable enough for staging.",
+            "rationale": "Six named lawyer/leadership entries are visible, but current lawyer status is not independently established."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://hamiltonmorrisonlaw.com/about/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No reliable physical office address was published on the reviewed about page."
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://hamiltonmorrisonlaw.com/about/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No bounded practice labels were retained from the reviewed first-party page."
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://hamiltonmorrisonlaw.com/about/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "James Hamilton",
+              "title": "Managing Partner",
+              "source_url": "https://hamiltonmorrisonlaw.com/about/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Names and titles are preserved exactly as published; no ownership or authority inference was added."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://hamiltonmorrisonlaw.com/about/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-09",
       "workflow_status": "held_incomplete_roster",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Snell Balka Scovino Lawyers",
       "canonical_domain": "sbs-lawyers.ca",
       "identity_aliases": [],
-      "office_cities": ["Whitby"],
-      "office_address_evidence": [{"city": "Whitby", "street_address": "185 Brock Street North, Suite 200, Whitby, ON L1N 4H3", "source_url": "https://sbs-lawyers.ca/", "observed_date": "2026-09-08"}],
+      "office_cities": [
+        "Whitby"
+      ],
+      "office_address_evidence": [
+        {
+          "city": "Whitby",
+          "street_address": "185 Brock Street North, Suite 200, Whitby, ON L1N 4H3",
+          "source_url": "https://sbs-lawyers.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": null,
-      "count_qualifier": "uncertain",
+      "count_qualifier": "unknown",
       "lawyer_band": null,
       "first_party_roster_url": "https://sbs-lawyers.ca/",
       "office_source_url": "https://sbs-lawyers.ca/",
-      "practice_areas_published": ["Family law"],
+      "practice_source_url": "https://sbs-lawyers.ca/",
+      "practice_areas_published": [
+        "Family law"
+      ],
       "leadership_evidence": [],
-      "relationship_type": "unknown",
+      "relationship_labels": [],
       "published_email_evidence": [],
-      "static_baseline_reconciliation": "Domain appears in the checked legacy source; identity/update status requires central review.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "Public first-party presence and Whitby address visible, but no bounded current roster was established.",
       "counting_rationale": "A complete current lawyer count was not accessible; Sandra Scovino is described as retired and Robert Snell is visible, which is insufficient for the minimum band.",
-      "hold_reason": "Collision/update and incomplete roster; not promoted."
+      "hold_reason": "Collision/update and incomplete roster; not promoted.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://sbs-lawyers.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": {
+            "observed_lawyer_count": null,
+            "count_qualifier": "unknown",
+            "scope": null,
+            "rationale": "A complete current lawyer count was not accessible; Sandra Scovino is described as retired and Robert Snell is visible, which is insufficient for the minimum band."
+          },
+          "note": "The reviewed first-party page did not establish a bounded current lawyer count."
+        },
+        {
+          "kind": "office",
+          "source_url": "https://sbs-lawyers.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Whitby",
+              "street_address": "185 Brock Street North, Suite 200, Whitby, ON L1N 4H3",
+              "source_url": "https://sbs-lawyers.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://sbs-lawyers.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Family law"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://sbs-lawyers.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No explicit owner, founder, managing partner, partner, or other leadership title was retained from the reviewed first-party page."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://sbs-lawyers.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-5791",
+            "fields": [
+              "canonical_domain"
+            ]
+          }
+        ]
+      }
     },
     {
       "record_id": "B012-EAST-10",
       "workflow_status": "held_collision_update",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Elm Law",
       "canonical_domain": "elmlaw.ca",
       "identity_aliases": [],
-      "office_cities": ["Whitby", "Oshawa"],
-      "office_address_evidence": [{"city": "Whitby", "street_address": "707 Brock Street South, Whitby, ON L1N 4L3", "source_url": "https://elmlaw.ca/", "observed_date": "2026-09-08"}, {"city": "Oshawa", "street_address": "19 Celina Street, Oshawa, ON L1H 4M9", "source_url": "https://elmlaw.ca/", "observed_date": "2026-09-08"}],
+      "office_cities": [
+        "Whitby",
+        "Oshawa"
+      ],
+      "office_address_evidence": [
+        {
+          "city": "Whitby",
+          "street_address": "707 Brock Street South, Whitby, ON L1N 4L3",
+          "source_url": "https://elmlaw.ca/",
+          "observed_on": "2026-09-08"
+        },
+        {
+          "city": "Oshawa",
+          "street_address": "19 Celina Street, Oshawa, ON L1H 4M9",
+          "source_url": "https://elmlaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": null,
-      "count_qualifier": "uncertain",
+      "count_qualifier": "unknown",
       "lawyer_band": null,
       "first_party_roster_url": "https://elmlaw.ca/",
       "office_source_url": "https://elmlaw.ca/",
+      "practice_source_url": "https://elmlaw.ca/",
       "practice_areas_published": [],
-      "leadership_evidence": [{"name": "Amelia", "title": "Founder", "source_url": "https://elmlaw.ca/", "observed_date": "2026-09-08"}],
-      "relationship_type": "founder",
-      "published_email_evidence": [{"label": "general firm email", "email": "info@elmlaw.ca", "source_url": "https://elmlaw.ca/", "observed_date": "2026-09-08"}],
-      "static_baseline_reconciliation": "Domain appears in the checked legacy source; update/collision status unresolved.",
-      "live_124_reconciliation": "pending",
+      "leadership_evidence": [
+        {
+          "name": "Amelia",
+          "title": "Founder",
+          "source_url": "https://elmlaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "relationship_labels": [
+        "Founder"
+      ],
+      "published_email_evidence": [
+        {
+          "label": "general firm email",
+          "email": "info@elmlaw.ca",
+          "source_url": "https://elmlaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
       "access_review": "First-party offices and email visible, but current lawyer roster is not bounded.",
       "counting_rationale": "Page references Amelia, Melissa, and Erin but does not expose a complete current lawyer roster or titles.",
-      "hold_reason": "Collision/update plus incomplete count; not promoted."
+      "hold_reason": "Collision/update plus incomplete count; not promoted.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://elmlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": {
+            "observed_lawyer_count": null,
+            "count_qualifier": "unknown",
+            "scope": null,
+            "rationale": "Page references Amelia, Melissa, and Erin but does not expose a complete current lawyer roster or titles."
+          },
+          "note": "The reviewed first-party page did not establish a bounded current lawyer count."
+        },
+        {
+          "kind": "office",
+          "source_url": "https://elmlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Whitby",
+              "street_address": "707 Brock Street South, Whitby, ON L1N 4L3",
+              "source_url": "https://elmlaw.ca/",
+              "observed_on": "2026-09-08"
+            },
+            {
+              "city": "Oshawa",
+              "street_address": "19 Celina Street, Oshawa, ON L1H 4M9",
+              "source_url": "https://elmlaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://elmlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No bounded practice labels were retained from the reviewed first-party page."
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://elmlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Amelia",
+              "title": "Founder",
+              "source_url": "https://elmlaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Names and titles are preserved exactly as published; no ownership or authority inference was added."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://elmlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "label": "general firm email",
+              "email": "info@elmlaw.ca",
+              "source_url": "https://elmlaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Only visibly published first-party email evidence is retained; no address pattern was inferred."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-15",
+            "fields": [
+              "canonical_domain",
+              "firm_name"
+            ]
+          },
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-5757",
+            "fields": [
+              "canonical_domain",
+              "firm_name"
+            ]
+          },
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-5758",
+            "fields": [
+              "canonical_domain",
+              "firm_name"
+            ]
+          }
+        ]
+      }
     },
     {
       "record_id": "B012-EAST-11",
       "workflow_status": "held_below_minimum",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Koziar, Reczulski, Hunter",
       "canonical_domain": "koziarlaw.com",
-      "identity_aliases": ["KRH Law"],
-      "office_cities": ["Whitby"],
+      "identity_aliases": [
+        "KRH Law"
+      ],
+      "office_cities": [
+        "Whitby"
+      ],
       "office_address_evidence": [],
       "observed_lawyer_count": 2,
       "count_qualifier": "exact",
       "lawyer_band": null,
       "first_party_roster_url": "https://koziarlaw.com/our-team/",
       "office_source_url": "https://koziarlaw.com/our-team/",
+      "practice_source_url": "https://koziarlaw.com/our-team/",
       "practice_areas_published": [],
-      "leadership_evidence": [{"name": "Ted Koziar", "title": "Founding Partner", "source_url": "https://koziarlaw.com/our-team/", "observed_date": "2026-09-08"}, {"name": "Michael Reczulski", "title": "Partner", "source_url": "https://koziarlaw.com/our-team/", "observed_date": "2026-09-08"}],
-      "relationship_type": "founder",
+      "leadership_evidence": [
+        {
+          "name": "Ted Koziar",
+          "title": "Founding Partner",
+          "source_url": "https://koziarlaw.com/our-team/",
+          "observed_on": "2026-09-08"
+        },
+        {
+          "name": "Michael Reczulski",
+          "title": "Partner",
+          "source_url": "https://koziarlaw.com/our-team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "relationship_labels": [
+        "Founding Partner",
+        "Partner"
+      ],
       "published_email_evidence": [],
-      "static_baseline_reconciliation": "No match found in checked legacy source or 103-record manifest by domain; central join pending.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "First-party team page accessible.",
       "counting_rationale": "Two active lawyer profiles are visible; Andrew Koziar is marked retired and a legal assistant is excluded.",
-      "hold_reason": "Below the minimum four-lawyer threshold."
+      "hold_reason": "Below the minimum four-lawyer threshold.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://koziarlaw.com/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 2,
+            "count_qualifier": "exact",
+            "scope": null,
+            "rationale": "Two active lawyer profiles are visible; Andrew Koziar is marked retired and a legal assistant is excluded."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://koziarlaw.com/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No office street address was observed on the reviewed first-party page."
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://koziarlaw.com/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No bounded practice labels were retained from the reviewed first-party page."
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://koziarlaw.com/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Ted Koziar",
+              "title": "Founding Partner",
+              "source_url": "https://koziarlaw.com/our-team/",
+              "observed_on": "2026-09-08"
+            },
+            {
+              "name": "Michael Reczulski",
+              "title": "Partner",
+              "source_url": "https://koziarlaw.com/our-team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Names and titles are preserved exactly as published; no ownership or authority inference was added."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://koziarlaw.com/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-12",
       "workflow_status": "held_below_minimum",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Bird Bolt Law",
       "canonical_domain": "birdboltlaw.ca",
       "identity_aliases": [],
-      "office_cities": ["Hamilton"],
+      "office_cities": [
+        "Hamilton"
+      ],
       "office_address_evidence": [],
       "observed_lawyer_count": 2,
       "count_qualifier": "exact",
       "lawyer_band": null,
       "first_party_roster_url": "https://birdboltlaw.ca/team",
       "office_source_url": "https://birdboltlaw.ca/team",
+      "practice_source_url": "https://birdboltlaw.ca/team",
       "practice_areas_published": [],
       "leadership_evidence": [],
-      "relationship_type": "unknown",
+      "relationship_labels": [],
       "published_email_evidence": [],
-      "static_baseline_reconciliation": "No match found in checked legacy source or 103-record manifest by domain; central join pending.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "First-party team page accessible.",
       "counting_rationale": "Fausto Amendola and Nicole Biros-Bolton are the two lawyer profiles; a law clerk is excluded.",
-      "hold_reason": "Below the minimum four-lawyer threshold."
+      "hold_reason": "Below the minimum four-lawyer threshold.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://birdboltlaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 2,
+            "count_qualifier": "exact",
+            "scope": null,
+            "rationale": "Fausto Amendola and Nicole Biros-Bolton are the two lawyer profiles; a law clerk is excluded."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://birdboltlaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No office street address was observed on the reviewed first-party page."
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://birdboltlaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No bounded practice labels were retained from the reviewed first-party page."
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://birdboltlaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No explicit owner, founder, managing partner, partner, or other leadership title was retained from the reviewed first-party page."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://birdboltlaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-13",
       "workflow_status": "held_below_minimum",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Lloyd & Kemper LLP",
       "canonical_domain": "lkfamilylawyers.com",
       "identity_aliases": [],
-      "office_cities": ["Hamilton"],
+      "office_cities": [
+        "Hamilton"
+      ],
       "office_address_evidence": [],
       "observed_lawyer_count": 2,
       "count_qualifier": "exact",
       "lawyer_band": null,
       "first_party_roster_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
       "office_source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
-      "practice_areas_published": ["Family law"],
-      "leadership_evidence": [{"name": "Wendy A. Lloyd", "title": "Partner", "source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/", "observed_date": "2026-09-08"}, {"name": "Aleksandra Kemper", "title": "Partner", "source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/", "observed_date": "2026-09-08"}],
-      "relationship_type": "partner",
+      "practice_source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
+      "practice_areas_published": [
+        "Family law"
+      ],
+      "leadership_evidence": [
+        {
+          "name": "Wendy A. Lloyd",
+          "title": "Partner",
+          "source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
+          "observed_on": "2026-09-08"
+        },
+        {
+          "name": "Aleksandra Kemper",
+          "title": "Partner",
+          "source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "relationship_labels": [
+        "Partner",
+        "Partner"
+      ],
       "published_email_evidence": [],
-      "static_baseline_reconciliation": "No match found in checked legacy source or 103-record manifest by domain; central join pending.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "First-party team page accessible.",
       "counting_rationale": "Two current partner profiles are visible.",
-      "hold_reason": "Below the minimum four-lawyer threshold."
+      "hold_reason": "Below the minimum four-lawyer threshold.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 2,
+            "count_qualifier": "exact",
+            "scope": null,
+            "rationale": "Two current partner profiles are visible."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No office street address was observed on the reviewed first-party page."
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Family law"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Wendy A. Lloyd",
+              "title": "Partner",
+              "source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
+              "observed_on": "2026-09-08"
+            },
+            {
+              "name": "Aleksandra Kemper",
+              "title": "Partner",
+              "source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Names and titles are preserved exactly as published; no ownership or authority inference was added."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://lkfamilylawyers.com/meet-the-lloyd-kemper-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-5774",
+            "fields": [
+              "canonical_domain",
+              "firm_name"
+            ]
+          }
+        ]
+      }
     },
     {
       "record_id": "B012-EAST-14",
       "workflow_status": "held_below_minimum",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Graydon Sheppard",
       "canonical_domain": "sheppardlaw.ca",
       "identity_aliases": [],
-      "office_cities": ["Whitby"],
+      "office_cities": [
+        "Whitby"
+      ],
       "office_address_evidence": [],
       "observed_lawyer_count": 2,
       "count_qualifier": "exact",
       "lawyer_band": null,
       "first_party_roster_url": "https://sheppardlaw.ca/",
       "office_source_url": "https://sheppardlaw.ca/",
+      "practice_source_url": "https://sheppardlaw.ca/",
       "practice_areas_published": [],
       "leadership_evidence": [],
-      "relationship_type": "unknown",
+      "relationship_labels": [],
       "published_email_evidence": [],
-      "static_baseline_reconciliation": "No match found in checked legacy source or 103-record manifest by domain; central join pending.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "First-party firm page accessible.",
       "counting_rationale": "Two active lawyer profiles are visible; founder Graydon Sheppard is marked retired.",
-      "hold_reason": "Below the minimum four-lawyer threshold."
+      "hold_reason": "Below the minimum four-lawyer threshold.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://sheppardlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 2,
+            "count_qualifier": "exact",
+            "scope": null,
+            "rationale": "Two active lawyer profiles are visible; founder Graydon Sheppard is marked retired."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://sheppardlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No office street address was observed on the reviewed first-party page."
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://sheppardlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No bounded practice labels were retained from the reviewed first-party page."
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://sheppardlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No explicit owner, founder, managing partner, partner, or other leadership title was retained from the reviewed first-party page."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://sheppardlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-15",
       "workflow_status": "held_below_minimum",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Titlers Professional Corporation",
       "canonical_domain": "titlers.ca",
       "identity_aliases": [],
-      "office_cities": ["Port Perry"],
-      "office_address_evidence": [{"city": "Port Perry", "street_address": "226 Queen Street, Port Perry, ON L9L 1B9", "source_url": "https://titlers.ca/our-team/", "observed_date": "2026-09-08"}],
+      "office_cities": [
+        "Port Perry"
+      ],
+      "office_address_evidence": [
+        {
+          "city": "Port Perry",
+          "street_address": "226 Queen Street, Port Perry, ON L9L 1B9",
+          "source_url": "https://titlers.ca/our-team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": 2,
       "count_qualifier": "exact",
       "lawyer_band": null,
       "first_party_roster_url": "https://titlers.ca/our-team/",
       "office_source_url": "https://titlers.ca/our-team/",
+      "practice_source_url": "https://titlers.ca/our-team/",
       "practice_areas_published": [],
       "leadership_evidence": [],
-      "relationship_type": "unknown",
+      "relationship_labels": [],
       "published_email_evidence": [],
-      "static_baseline_reconciliation": "No match found in checked legacy source or 103-record manifest by domain; central join pending.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "First-party team page accessible.",
       "counting_rationale": "George Smith and Megan Beck are the two current lawyer profiles; staff excluded.",
-      "hold_reason": "Below the minimum four-lawyer threshold."
+      "hold_reason": "Below the minimum four-lawyer threshold.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://titlers.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 2,
+            "count_qualifier": "exact",
+            "scope": null,
+            "rationale": "George Smith and Megan Beck are the two current lawyer profiles; staff excluded."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://titlers.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Port Perry",
+              "street_address": "226 Queen Street, Port Perry, ON L9L 1B9",
+              "source_url": "https://titlers.ca/our-team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://titlers.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No bounded practice labels were retained from the reviewed first-party page."
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://titlers.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No explicit owner, founder, managing partner, partner, or other leadership title was retained from the reviewed first-party page."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://titlers.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-16",
       "workflow_status": "held_collision_update",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "McMackin Law",
       "canonical_domain": "mcmackinlaw.ca",
       "identity_aliases": [],
-      "office_cities": ["Hamilton"],
+      "office_cities": [
+        "Hamilton"
+      ],
       "office_address_evidence": [],
       "observed_lawyer_count": 2,
       "count_qualifier": "exact",
       "lawyer_band": null,
       "first_party_roster_url": "https://mcmackinlaw.ca/",
       "office_source_url": "https://mcmackinlaw.ca/",
+      "practice_source_url": "https://mcmackinlaw.ca/",
       "practice_areas_published": [],
       "leadership_evidence": [],
-      "relationship_type": "unknown",
+      "relationship_labels": [],
       "published_email_evidence": [],
-      "static_baseline_reconciliation": "Domain/name appears in checked legacy source; collision/update status unresolved.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "First-party homepage accessible.",
       "counting_rationale": "Alan J. McMackin and Ryan J. McMackin are the two visible current lawyers.",
-      "hold_reason": "Below minimum and baseline collision; not promoted."
+      "hold_reason": "Below minimum and baseline collision; not promoted.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://mcmackinlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 2,
+            "count_qualifier": "exact",
+            "scope": null,
+            "rationale": "Alan J. McMackin and Ryan J. McMackin are the two visible current lawyers."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://mcmackinlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No office street address was observed on the reviewed first-party page."
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://mcmackinlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No bounded practice labels were retained from the reviewed first-party page."
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://mcmackinlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No explicit owner, founder, managing partner, partner, or other leadership title was retained from the reviewed first-party page."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://mcmackinlaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-91",
+            "fields": [
+              "canonical_domain"
+            ]
+          }
+        ]
+      }
     },
     {
       "record_id": "B012-EAST-17",
       "workflow_status": "held_scope",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "Wray James LLP",
       "canonical_domain": "wrayjames.com",
       "identity_aliases": [],
-      "office_cities": ["Toronto"],
-      "office_address_evidence": [{"city": "Toronto", "street_address": "181 University Avenue, Suite 2200, Toronto, ON M5H 3M7", "source_url": "https://wrayjames.com/lawyers/", "observed_date": "2026-09-08"}],
+      "office_cities": [
+        "Toronto"
+      ],
+      "office_address_evidence": [
+        {
+          "city": "Toronto",
+          "street_address": "181 University Avenue, Suite 2200, Toronto, ON M5H 3M7",
+          "source_url": "https://wrayjames.com/lawyers/",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": 5,
       "count_qualifier": "exact",
       "lawyer_band": "4-10",
       "first_party_roster_url": "https://wrayjames.com/lawyers/",
       "office_source_url": "https://wrayjames.com/lawyers/",
+      "practice_source_url": "https://wrayjames.com/lawyers/",
       "practice_areas_published": [],
-      "leadership_evidence": [{"name": "Andrew Wray", "title": "Managing Partner", "source_url": "https://wrayjames.com/lawyers/", "observed_date": "2026-09-08"}],
-      "relationship_type": "managing_partner",
+      "leadership_evidence": [
+        {
+          "name": "Andrew Wray",
+          "title": "Managing Partner",
+          "source_url": "https://wrayjames.com/lawyers/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "relationship_labels": [
+        "Managing Partner"
+      ],
       "published_email_evidence": [],
-      "static_baseline_reconciliation": "No match found in checked legacy source or 103-record manifest by domain; central join pending.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "First-party roster page accessible.",
       "counting_rationale": "Five current lawyer profiles are visible; an articling student is excluded.",
-      "hold_reason": "Toronto-only physical office is outside this east/outer lane."
+      "hold_reason": "Toronto-only physical office is outside this east/outer lane.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://wrayjames.com/lawyers/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 5,
+            "count_qualifier": "exact",
+            "scope": null,
+            "rationale": "Five current lawyer profiles are visible; an articling student is excluded."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://wrayjames.com/lawyers/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Toronto",
+              "street_address": "181 University Avenue, Suite 2200, Toronto, ON M5H 3M7",
+              "source_url": "https://wrayjames.com/lawyers/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://wrayjames.com/lawyers/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No bounded practice labels were retained from the reviewed first-party page."
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://wrayjames.com/lawyers/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Andrew Wray",
+              "title": "Managing Partner",
+              "source_url": "https://wrayjames.com/lawyers/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Names and titles are preserved exactly as published; no ownership or authority inference was added."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://wrayjames.com/lawyers/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     },
     {
       "record_id": "B012-EAST-18",
       "workflow_status": "held_collision_update",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "George Street Law Group LLP",
       "canonical_domain": "georgestreetlawgroup.com",
       "identity_aliases": [],
-      "office_cities": ["Hamilton"],
-      "office_address_evidence": [{"city": "Hamilton", "street_address": "10 George Street, Suite 200, Hamilton, ON L8P 1C8", "source_url": "https://georgestreetlawgroup.com/contact/", "observed_date": "2026-09-08"}],
+      "office_cities": [
+        "Hamilton"
+      ],
+      "office_address_evidence": [
+        {
+          "city": "Hamilton",
+          "street_address": "10 George Street, Suite 200, Hamilton, ON L8P 1C8",
+          "source_url": "https://georgestreetlawgroup.com/contact/",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": 13,
       "count_qualifier": "exact",
       "lawyer_band": "11-20",
       "first_party_roster_url": "https://georgestreetlawgroup.com/lawyers/",
       "office_source_url": "https://georgestreetlawgroup.com/contact/",
-      "practice_areas_published": ["Business and corporate", "Commercial litigation", "Employment", "Family", "Real estate", "Wills and estates"],
+      "practice_source_url": "https://georgestreetlawgroup.com/lawyers/",
+      "practice_areas_published": [
+        "Business and corporate",
+        "Commercial litigation",
+        "Employment",
+        "Family",
+        "Real estate",
+        "Wills and estates"
+      ],
       "leadership_evidence": [],
-      "relationship_type": "unknown",
-      "published_email_evidence": [{"label": "general firm email", "email": "reception@georgestreetlaw.ca", "source_url": "https://georgestreetlawgroup.com/contact/", "observed_date": "2026-09-08"}],
-      "static_baseline_reconciliation": "Domain appears in checked legacy source; collision/update status unresolved.",
-      "live_124_reconciliation": "pending",
+      "relationship_labels": [],
+      "published_email_evidence": [
+        {
+          "label": "general firm email",
+          "email": "reception@georgestreetlaw.ca",
+          "source_url": "https://georgestreetlawgroup.com/contact/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
       "access_review": "Current first-party roster and contact pages accessible.",
       "counting_rationale": "Thirteen current lawyer profiles are visibly enumerated; staff excluded.",
-      "hold_reason": "Existing baseline identity collision; not promoted."
+      "hold_reason": "Existing baseline identity collision; not promoted.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://georgestreetlawgroup.com/lawyers/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 13,
+            "count_qualifier": "exact",
+            "scope": null,
+            "rationale": "Thirteen current lawyer profiles are visibly enumerated; staff excluded."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://georgestreetlawgroup.com/contact/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Hamilton",
+              "street_address": "10 George Street, Suite 200, Hamilton, ON L8P 1C8",
+              "source_url": "https://georgestreetlawgroup.com/contact/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://georgestreetlawgroup.com/lawyers/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Business and corporate",
+            "Commercial litigation",
+            "Employment",
+            "Family",
+            "Real estate",
+            "Wills and estates"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://georgestreetlawgroup.com/lawyers/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No explicit owner, founder, managing partner, partner, or other leadership title was retained from the reviewed first-party page."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://georgestreetlawgroup.com/contact/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "label": "general firm email",
+              "email": "reception@georgestreetlaw.ca",
+              "source_url": "https://georgestreetlawgroup.com/contact/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Only visibly published first-party email evidence is retained; no address pattern was inferred."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-2059",
+            "fields": [
+              "canonical_domain"
+            ]
+          }
+        ]
+      }
     },
     {
       "record_id": "B012-EAST-19",
       "workflow_status": "held_collision_update",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "UL Lawyers",
       "canonical_domain": "ullaw.ca",
       "identity_aliases": [],
-      "office_cities": ["Burlington"],
-      "office_address_evidence": [{"city": "Burlington", "street_address": "552 Brant Street, Burlington, ON L7R 2G8", "source_url": "https://www.ullaw.ca/team", "observed_date": "2026-09-08"}],
+      "office_cities": [
+        "Burlington"
+      ],
+      "office_address_evidence": [
+        {
+          "city": "Burlington",
+          "street_address": "552 Brant Street, Burlington, ON L7R 2G8",
+          "source_url": "https://www.ullaw.ca/team",
+          "observed_on": "2026-09-08"
+        }
+      ],
       "observed_lawyer_count": 6,
       "count_qualifier": "exact",
       "lawyer_band": "4-10",
       "first_party_roster_url": "https://www.ullaw.ca/team",
       "office_source_url": "https://www.ullaw.ca/team",
-      "practice_areas_published": ["Personal injury", "Disability claims", "Wills and estates", "Employment", "Litigation", "Immigration"],
-      "leadership_evidence": [{"name": "Sunish Rai Uppal", "title": "Managing Lawyer", "source_url": "https://www.ullaw.ca/team", "observed_date": "2026-09-08"}],
-      "relationship_type": "managing_partner",
-      "published_email_evidence": [{"label": "general firm email", "email": "info@ullaw.ca", "source_url": "https://www.ullaw.ca/team", "observed_date": "2026-09-08"}],
-      "static_baseline_reconciliation": "Domain/name appears in checked legacy source; collision/update status unresolved.",
-      "live_124_reconciliation": "pending",
+      "practice_source_url": "https://www.ullaw.ca/team",
+      "practice_areas_published": [
+        "Personal injury",
+        "Disability claims",
+        "Wills and estates",
+        "Employment",
+        "Litigation",
+        "Immigration"
+      ],
+      "leadership_evidence": [
+        {
+          "name": "Sunish Rai Uppal",
+          "title": "Managing Lawyer",
+          "source_url": "https://www.ullaw.ca/team",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "relationship_labels": [
+        "Managing Lawyer"
+      ],
+      "published_email_evidence": [
+        {
+          "label": "general firm email",
+          "email": "info@ullaw.ca",
+          "source_url": "https://www.ullaw.ca/team",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
       "access_review": "Current first-party team page accessible.",
       "counting_rationale": "Six lawyer profiles are visible; law clerks and staff excluded.",
-      "hold_reason": "Existing baseline identity collision; not promoted."
+      "hold_reason": "Existing baseline identity collision; not promoted.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://www.ullaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 6,
+            "count_qualifier": "exact",
+            "scope": null,
+            "rationale": "Six lawyer profiles are visible; law clerks and staff excluded."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://www.ullaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Burlington",
+              "street_address": "552 Brant Street, Burlington, ON L7R 2G8",
+              "source_url": "https://www.ullaw.ca/team",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://www.ullaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Personal injury",
+            "Disability claims",
+            "Wills and estates",
+            "Employment",
+            "Litigation",
+            "Immigration"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://www.ullaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Sunish Rai Uppal",
+              "title": "Managing Lawyer",
+              "source_url": "https://www.ullaw.ca/team",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Names and titles are preserved exactly as published; no ownership or authority inference was added."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://www.ullaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "label": "general firm email",
+              "email": "info@ullaw.ca",
+              "source_url": "https://www.ullaw.ca/team",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Only visibly published first-party email evidence is retained; no address pattern was inferred."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-1634",
+            "fields": [
+              "canonical_domain",
+              "firm_name"
+            ]
+          },
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-1635",
+            "fields": [
+              "canonical_domain",
+              "firm_name"
+            ]
+          }
+        ]
+      }
     },
     {
       "record_id": "B012-EAST-20",
       "workflow_status": "held_collision_update",
+      "stage": "held",
       "accepted": false,
       "import_ready": false,
       "firm_name": "DWA Law",
       "canonical_domain": "dwalaw.ca",
       "identity_aliases": [],
-      "office_cities": ["Hamilton"],
+      "office_cities": [
+        "Hamilton"
+      ],
       "office_address_evidence": [],
       "observed_lawyer_count": 4,
       "count_qualifier": "exact",
       "lawyer_band": "4-10",
       "first_party_roster_url": "https://dwalaw.ca/",
       "office_source_url": "https://dwalaw.ca/",
+      "practice_source_url": "https://dwalaw.ca/",
       "practice_areas_published": [],
-      "leadership_evidence": [{"name": "Allen Wynperle", "title": "Founder / Principal", "source_url": "https://dwalaw.ca/", "observed_date": "2026-09-08"}],
-      "relationship_type": "founder",
+      "leadership_evidence": [
+        {
+          "name": "Allen Wynperle",
+          "title": "Founder / Principal",
+          "source_url": "https://dwalaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "relationship_labels": [
+        "Founder / Principal"
+      ],
       "published_email_evidence": [],
-      "static_baseline_reconciliation": "Domain/name appears in checked legacy source; collision/update status unresolved.",
-      "live_124_reconciliation": "pending",
+      "observed_on": "2026-09-08",
       "access_review": "Current first-party homepage accessible.",
       "counting_rationale": "Allen Wynperle, Laura Dickson, Brent McQuestion, and Jacob Sazio are visibly named as current lawyers/principals.",
-      "hold_reason": "Existing baseline identity collision; not promoted."
+      "hold_reason": "Existing baseline identity collision; not promoted.",
+      "evidence": [
+        {
+          "kind": "roster",
+          "source_url": "https://dwalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 4,
+            "count_qualifier": "exact",
+            "scope": null,
+            "rationale": "Allen Wynperle, Laura Dickson, Brent McQuestion, and Jacob Sazio are visibly named as current lawyers/principals."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "source_url": "https://dwalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No office street address was observed on the reviewed first-party page."
+        },
+        {
+          "kind": "practice",
+          "source_url": "https://dwalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No bounded practice labels were retained from the reviewed first-party page."
+        },
+        {
+          "kind": "relationship",
+          "source_url": "https://dwalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Allen Wynperle",
+              "title": "Founder / Principal",
+              "source_url": "https://dwalaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Names and titles are preserved exactly as published; no ownership or authority inference was added."
+        },
+        {
+          "kind": "public_email",
+          "source_url": "https://dwalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No visibly published named or general email was retained from the reviewed first-party page."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "normalizer_commit": "337b5cf7",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "live_ledger_state": "offline_pending",
+        "matches": []
+      }
     }
   ]
 }

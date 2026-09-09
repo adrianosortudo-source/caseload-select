@@ -1,0 +1,238 @@
+{
+  "schema_version": "gta-prospect-baseline-reconciliation-v1",
+  "batch_id": "gta-prospect-batch-012",
+  "lane": "EAST_OUTER",
+  "observed_on": "2026-09-08",
+  "normalizer": {
+    "module": "src/lib/gta-prospect-baseline-reconciliation.ts",
+    "fixed_commit": "337b5cf7",
+    "contract": "exact canonical-domain/name/street-address diagnostics; suite identity retained; no fuzzy matching"
+  },
+  "baseline": {
+    "fixtures": {
+      "count": 20,
+      "source_path": "src/app/admin/prospects/reconciled-prospects.ts",
+      "sha256": "630d794971f3ada77223e0f4ea92d7809653bbaf61c2836a509c014408abf7fa"
+    },
+    "offline_ledger": {
+      "count": 103,
+      "source_path": "docs/prospecting/import-manifests/gta-prospect-research-accepted-001-009.dry-run.json",
+      "sha256": "5c0212555615229a8e14d12f7034ceae05443ef6230a83686046e15142908b3e"
+    },
+    "legacy_source": {
+      "count": 5902,
+      "source_path": "src/app/admin/prospects/prospects-content.ts",
+      "sha256": "3c59cc2d219df6112d17a3ac13510c5769c57217dc84f61b3c4a7422485a80d6"
+    },
+    "total": 6025
+  },
+  "live_ledger": "offline_pending",
+  "automatic_merge": false,
+  "disposition_summary": {
+    "records_screened": 20,
+    "source_queue_candidates": 6,
+    "held": 14,
+    "review_required": 6,
+    "clear": 14,
+    "automatic_merge": 0,
+    "accepted": 0,
+    "import_ready": 0
+  },
+  "candidate_results": [
+    {
+      "candidate_id": "B012-EAST-01",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-02",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-03",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-04",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-05",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-06",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-07",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-08",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-09",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-5791",
+          "fields": [
+            "canonical_domain"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-10",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-15",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        },
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-5757",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        },
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-5758",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-11",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-12",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-13",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-5774",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-14",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-15",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-16",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-91",
+          "fields": [
+            "canonical_domain"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-17",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-18",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-2059",
+          "fields": [
+            "canonical_domain"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-19",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-1634",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        },
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-1635",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-20",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    }
+  ]
+}
