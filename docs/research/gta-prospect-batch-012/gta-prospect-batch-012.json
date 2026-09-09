@@ -1,0 +1,34 @@
+{
+  "schema_version": "2.0",
+  "batch_id": "gta-prospect-batch-012",
+  "stage": "research_only",
+  "accepted": false,
+  "import_ready": false,
+  "automatic_merge": false,
+  "source_commits": {
+    "west-north": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+    "east-outer": "a2b8dfe1db49deb39737d4e803d92010df69b1ef"
+  },
+  "normalizer_commit": "337b5cf7a43ab8f00af242c3f6da29290f2b575e",
+  "lane_files": [
+    "lanes/west-north.json",
+    "lanes/east-outer.json"
+  ],
+  "raw_record_count": 32,
+  "distinct_canonical_domains": 32,
+  "source_queue_count": 10,
+  "held_count": 22,
+  "static_clear_count": 17,
+  "static_review_required_count": 15,
+  "cross_lane_duplicate_domains": [],
+  "accepted_count": 0,
+  "import_ready_count": 0,
+  "automatic_merge_count": 0,
+  "baseline": {
+    "fixture_records": 20,
+    "offline_ledger_records": 103,
+    "legacy_source_records": 5902,
+    "total_static_records": 6025,
+    "live_ledger_state": "offline_pending"
+  }
+}

@@ -1,0 +1,441 @@
+{
+  "schema_version": "gta-prospect-baseline-reconciliation-v1",
+  "batch_id": "gta-prospect-batch-012",
+  "normalizer": {
+    "commit": "337b5cf7a43ab8f00af242c3f6da29290f2b575e",
+    "module": "src/lib/gta-prospect-baseline-reconciliation.ts",
+    "contract": "exact normalized domain/name and suite-preserving street address with city gate; no fuzzy match"
+  },
+  "baseline": {
+    "fixtures": {
+      "count": 20,
+      "path": "src/app/admin/prospects/reconciled-prospects.ts",
+      "sha256": "630d794971f3ada77223e0f4ea92d7809653bbaf61c2836a509c014408abf7fa"
+    },
+    "offline_ledger": {
+      "count": 103,
+      "path": "docs/prospecting/import-manifests/gta-prospect-research-accepted-001-009.dry-run.json",
+      "sha256": "5c0212555615229a8e14d12f7034ceae05443ef6230a83686046e15142908b3e"
+    },
+    "legacy_source": {
+      "count": 5902,
+      "path": "src/app/admin/prospects/prospects-content.ts",
+      "sha256": "3c59cc2d219df6112d17a3ac13510c5769c57217dc84f61b3c4a7422485a80d6"
+    },
+    "total": 6025
+  },
+  "live_ledger_state": "offline_pending",
+  "automatic_merge": false,
+  "disposition_summary": {
+    "raw_record_count": 32,
+    "distinct_canonical_domains": 32,
+    "source_queue_count": 10,
+    "held_count": 22,
+    "static_clear_count": 17,
+    "static_review_required_count": 15,
+    "cross_lane_duplicate_domains": [],
+    "accepted_count": 0,
+    "import_ready_count": 0,
+    "automatic_merge_count": 0
+  },
+  "results": [
+    {
+      "candidate_id": "B012-WN-01",
+      "lane": "west-north",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-WN-02",
+      "lane": "west-north",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-2566",
+          "fields": [
+            "street_address"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-WN-03",
+      "lane": "west-north",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-WN-04",
+      "lane": "west-north",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-315",
+          "fields": [
+            "street_address"
+          ]
+        },
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-351",
+          "fields": [
+            "street_address"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-WN-05",
+      "lane": "west-north",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-5901",
+          "fields": [
+            "street_address"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-WN-H01",
+      "lane": "west-north",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-WN-H02",
+      "lane": "west-north",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-4504",
+          "fields": [
+            "street_address"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-WN-H03",
+      "lane": "west-north",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-99",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-WN-H05",
+      "lane": "west-north",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "fixture",
+          "record_id": "aastha-lawyers-mississauga",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-WN-H06",
+      "lane": "west-north",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-2322",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-WN-H07",
+      "lane": "west-north",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "ledger_projection",
+          "record_id": "offline-import:gta-prospect-008-b008-19",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        },
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-750",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-WN-H08",
+      "lane": "west-north",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-5842",
+          "fields": [
+            "firm_name",
+            "street_address"
+          ]
+        },
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-5867",
+          "fields": [
+            "street_address"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-01",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-02",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-03",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-04",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-05",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-06",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-07",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-08",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-09",
+      "lane": "east-outer",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-5791",
+          "fields": [
+            "canonical_domain"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-10",
+      "lane": "east-outer",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-15",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        },
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-5757",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        },
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-5758",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-11",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-12",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-13",
+      "lane": "east-outer",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-5774",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-14",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-15",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-16",
+      "lane": "east-outer",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-91",
+          "fields": [
+            "canonical_domain"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-17",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_id": "B012-EAST-18",
+      "lane": "east-outer",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-2059",
+          "fields": [
+            "canonical_domain"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-19",
+      "lane": "east-outer",
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-1634",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        },
+        {
+          "origin": "legacy_source",
+          "record_id": "legacy-gta-directory-2026-07:row-1635",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ]
+        }
+      ]
+    },
+    {
+      "candidate_id": "B012-EAST-20",
+      "lane": "east-outer",
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    }
+  ]
+}

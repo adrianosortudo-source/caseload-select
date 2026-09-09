@@ -32,6 +32,8 @@
     "prospects:verify-batch-012-live-baseline": "tsx scripts/verify-gta-prospect-batch-012-live-baseline.ts",
     "prospects:generate-batch-011": "tsx scripts/generate-gta-prospect-batch-011.ts",
     "prospects:validate-batch-011": "tsx scripts/generate-gta-prospect-batch-011.ts --check",
+    "prospects:generate-batch-012": "tsx scripts/generate-gta-prospect-batch-012.ts",
+    "prospects:validate-batch-012": "tsx scripts/generate-gta-prospect-batch-012.ts --check",
     "drg:deploy": "tsx scripts/drg-deploy/cli.ts",
     "drg:revise-checklists": "tsx scripts/drg-deploy/checklist-revision.ts"
   },
