@@ -85,6 +85,17 @@ for (const width of WIDTHS) {
     await page.getByRole("button", { name: "More qualification filters" }).click();
     await expect(page.getByLabel("Owner identified")).toBeVisible();
     await expect(page.getByLabel("Public email")).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "Public contact evidence" })).toBeVisible();
+    await expect(page.getByText("Public contact observations are source evidence only. They do not authorize outreach.")).toBeVisible();
+    await expect(page.getByText("Avery Founder")).toBeVisible();
+    await expect(page.getByText("Founder ·")).toBeVisible();
+    await expect(page.getByText("Sam Lawyer")).toBeVisible();
+    await expect(page.getByText("Named lawyer ·")).toBeVisible();
+    await expect(page.getByText("sam@example.test")).toBeVisible();
+    await expect(page.getByText("Named-person email ·")).toBeVisible();
+    await expect(page.getByText("hello@example.test")).toBeVisible();
+    await expect(page.getByText("General firm email ·")).toBeVisible();
+    await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
     await page.getByLabel("Advertising source type").selectOption("ad_library_record");
     await expect(page.getByText("8 of", { exact: false })).toBeVisible();
     await assertRenderedGates(page);

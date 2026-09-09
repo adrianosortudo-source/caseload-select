@@ -20,8 +20,13 @@ describe("Unified prospect list UI contract", () => {
     expect(list).toContain("11 to 20 lawyers");
     expect(list).toContain("Minimum lawyers");
     expect(list).toContain("Maximum lawyers");
-    expect(list).toContain("Owner and email");
-    expect(list).toContain("Owner not identified");
+    expect(list).toContain("Public contact evidence");
+    expect(list).toContain("Owner or leadership");
+    expect(list).toContain("Other named public contacts");
+    expect(list).toContain("Visibly published email");
+    expect(list).toContain(">Unknown</span>");
+    expect(list).toContain("They do not authorize outreach");
+    expect(list).not.toContain("mailto:");
   });
 
   it("exposes the evidence dimensions and the protected in-console audit route", () => {
