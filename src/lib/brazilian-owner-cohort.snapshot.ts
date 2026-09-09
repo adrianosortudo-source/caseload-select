@@ -2,8 +2,8 @@ import type { ProspectOwnerCohortUpdate } from "./prospect-intelligence";
 
 // Generated from a Luna-approved owner-cohort QA dataset; do not hand edit.
 export const BRAZILIAN_OWNER_COHORT_SOURCE_MANIFEST = {
-  "rows": 13,
-  "sha256": "0CC15CCB59FD31FFC3EA70C744AF5163EB06CB81EEE7371F1F8F1ABDEDE900BB",
+  "rows": 12,
+  "sha256": "631888E5634035EF6643C7673334A812BAA4B9966BDF47F6DDE371CEE21933A4",
   "sourceFile": "LANE_B_FINAL_PORTAL_INGESTION_2026-09-07.jsonl"
 } as const;
 
@@ -776,116 +776,6 @@ export const BRAZILIAN_OWNER_COHORT_UPDATES = [
     ],
     "explicitUnknowns": [
       "LSO email is fdmartins@hotmail.com; firm page email is fernandomartins@martinslawfirm.ca. Both are preserved."
-    ]
-  },
-  {
-    "operation": "add",
-    "id": "krystle-ferreira",
-    "name": "Krystle Ferreira",
-    "firm": "Nova Law Firm Professional Corporation",
-    "bucket": "portuguese",
-    "researchSet": "portuguese_only_brazil_unconfirmed",
-    "outreachEligibility": "INTERNAL_CANDIDATE_UNSENT",
-    "currentPrimaryFirm": "Nova Law Firm Professional Corporation",
-    "suppression": null,
-    "evidence": "B4",
-    "website": "https://novalaw.ca/",
-    "email": "krystle@novalaw.ca",
-    "phone": "647-417-6682",
-    "sources": [
-      "https://novalaw.ca/principal-lawyer",
-      "https://lsodirectory.lso.ca/en-US/licensee-detail/?lawsocietynumber=73189L"
-    ],
-    "unknowns": [
-      "LSO lists Oakville business address while a secondary Toronto listing showed a different Nova Law address; Oakville remains the authoritative current LSO location."
-    ],
-    "domains": [
-      "https://novalaw.ca/principal-lawyer",
-      "https://lsodirectory.lso.ca/en-US/licensee-detail/?lawsocietynumber=73189L"
-    ],
-    "sourceRecordId": "BAO-P-000036",
-    "publicContact": {
-      "email": "krystle@novalaw.ca",
-      "phone": "647-417-6682",
-      "website": "https://novalaw.ca/",
-      "bioUrl": "https://novalaw.ca/principal-lawyer",
-      "contactSourceUrl": "https://novalaw.ca/principal-lawyer",
-      "lsoSourceUrl": "https://lsodirectory.lso.ca/en-US/licensee-detail/?lawsocietynumber=73189L",
-      "provenance": [
-        "baseline_68 plus saturation challenge plus live LSO verification"
-      ],
-      "lsoNumber": "73189L",
-      "practiceAreas": [],
-      "status": "current_lso_and_first_party",
-      "role": null,
-      "suppressionReason": null
-    },
-    "canonicalPersonId": "BAO-P-000036",
-    "canonicalFirmId": "firm:nova-law-firm-professional-corporation",
-    "ownerAuthority": "O1",
-    "ownerAuthorityEvidence": [
-      "First-party page identifies Krystle as principal lawyer and Portuguese-speaking; LSO lists current private practice and Nova Law business name.",
-      "https://novalaw.ca/principal-lawyer",
-      "https://lsodirectory.lso.ca/en-US/licensee-detail/?lawsocietynumber=73189L"
-    ],
-    "researchEligibility": "secondary_owner_cohort",
-    "researchState": "eligible",
-    "interviewState": "not_started",
-    "evidenceConfidence": "corroborated",
-    "domainRelationships": [
-      {
-        "url": "https://novalaw.ca/",
-        "host": "novalaw.ca",
-        "state": "current_primary",
-        "confidence": "corroborated"
-      },
-      {
-        "url": "https://novalaw.ca/principal-lawyer",
-        "host": "novalaw.ca",
-        "state": "professional_profile",
-        "confidence": "corroborated"
-      },
-      {
-        "url": "https://lsodirectory.lso.ca/en-US/licensee-detail/?lawsocietynumber=73189L",
-        "host": "lsodirectory.lso.ca",
-        "state": "regulator",
-        "confidence": "corroborated"
-      }
-    ],
-    "contactSourceProvenance": [
-      {
-        "field": "website",
-        "value": "https://novalaw.ca/",
-        "sourceUrl": "https://novalaw.ca/",
-        "evidenceIds": [
-          "https://novalaw.ca/principal-lawyer",
-          "https://lsodirectory.lso.ca/en-US/licensee-detail/?lawsocietynumber=73189L"
-        ],
-        "confidence": "corroborated"
-      },
-      {
-        "field": "email",
-        "value": "krystle@novalaw.ca",
-        "sourceUrl": "https://novalaw.ca/principal-lawyer",
-        "evidenceIds": [
-          "https://novalaw.ca/principal-lawyer",
-          "https://lsodirectory.lso.ca/en-US/licensee-detail/?lawsocietynumber=73189L"
-        ],
-        "confidence": "corroborated"
-      },
-      {
-        "field": "phone",
-        "value": "647-417-6682",
-        "sourceUrl": "https://novalaw.ca/principal-lawyer",
-        "evidenceIds": [
-          "https://novalaw.ca/principal-lawyer",
-          "https://lsodirectory.lso.ca/en-US/licensee-detail/?lawsocietynumber=73189L"
-        ],
-        "confidence": "corroborated"
-      }
-    ],
-    "explicitUnknowns": [
-      "LSO lists Oakville business address while a secondary Toronto listing showed a different Nova Law address; Oakville remains the authoritative current LSO location."
     ]
   },
   {
