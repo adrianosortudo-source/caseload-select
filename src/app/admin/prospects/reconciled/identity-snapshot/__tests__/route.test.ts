@@ -12,12 +12,14 @@ describe("operator identity snapshot route", () => {
   it("fails closed on 401 before reading a snapshot", async () => {
     const response = await GET();
     expect(response.status).toBe(401);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
   });
 
   it("does not fall back to fixtures when the live projection is empty", async () => {
     h.session = { role: "operator" };
     const response = await GET();
     expect(response.status).toBe(503);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
   });
 
   it("returns only the sanitized identity contract", async () => {
