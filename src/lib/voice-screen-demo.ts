@@ -7,6 +7,14 @@ export const FICTIONAL_CALL = {
   phone: "+1 416-555-0142",
   situation: "I own a small Toronto design studio. A client has not paid a $28,000 invoice for completed work. The invoice was due two weeks ago and the client now disputes the scope.",
   deadline: "No immediate deadline reported",
+  // Explicit fixture facts, mirroring a future validated current-call payload.
+  // The deterministic text extractor does not normalize every numeric amount.
+  capturedSlots: {
+    amount_at_stake: "$25,000–$100,000",
+    invoice_exists: "Yes",
+    payment_status: "Nothing paid",
+    dispute_reason: "The client disputes the scope of the completed work.",
+  },
 };
 
 export type InquiryPermission = "unknown" | "granted" | "declined";
@@ -20,8 +28,11 @@ export function seedCallState(): EngineState {
   let state = startDemoState(FICTIONAL_CALL.situation);
   state = answerDemoState(state, "client_name", FICTIONAL_CALL.name);
   state = answerDemoState(state, "client_phone", FICTIONAL_CALL.phone);
+  for (const [slot, value] of Object.entries(FICTIONAL_CALL.capturedSlots)) {
+    state = answerDemoState(state, slot, value);
+  }
   // Contact was captured by voice. Do not activate the web contact-form stop gate.
-  return { ...state, contactCaptureStarted: false };
+  return { ...state, contactCaptureStarted: false, questionHistory: [] };
 }
 
 /** The unchanged Screen selector decides which remaining question comes next. */

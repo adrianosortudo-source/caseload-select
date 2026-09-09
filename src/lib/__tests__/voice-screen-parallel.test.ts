@@ -8,11 +8,12 @@ describe("parallel Voice to Screen", () => {
     let state = seedCallState();
     expect(state.slots.client_name).toBe("Alex Morgan");
     expect(state.slots.client_phone).toBe("+1 416-555-0142");
+    expect(state.slots.amount_at_stake).toBe("$25,000–$100,000");
     const asked = new Set<string>();
     for (let i = 0; i < 20; i++) {
       const next = nextContinuationStep(state);
       if (!next.slot) break;
-      expect(["client_name", "client_phone", "client_email"]).not.toContain(next.slot.id);
+      expect(["client_name", "client_phone", "client_email", "amount_at_stake", "invoice_exists", "payment_status", "dispute_reason"]).not.toContain(next.slot.id);
       expect(asked.has(next.slot.id)).toBe(false);
       asked.add(next.slot.id);
       state = answerDemoState(state, next.slot.id, next.slot.options?.[0]?.value ?? "not_sure");
@@ -27,6 +28,19 @@ describe("parallel Voice to Screen", () => {
     expect(canContinueDemo("declined", "new", true)).toBe(false);
     expect(canContinueDemo("granted", "urgent", true)).toBe(false);
     expect(canContinueDemo("granted", "existing", true)).toBe(false);
+  });
+  it("does not repeatedly ask a skipped question", () => {
+    let state = seedCallState();
+    const asked = new Set<string>();
+    for (let i = 0; i < 20; i++) {
+      const next = nextContinuationStep(state);
+      if (!next.slot) break;
+      expect(asked.has(next.slot.id)).toBe(false);
+      asked.add(next.slot.id);
+      state = answerDemoState(state, next.slot.id, "not_sure");
+    }
+    expect(asked.size).toBeGreaterThan(0);
+    expect(asked.size).toBeLessThan(20);
   });
 });
 
