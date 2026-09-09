@@ -1,0 +1,1711 @@
+{
+  "schema_version": "2.0",
+  "batch_id": "gta-prospect-batch-012",
+  "lane": "west-north",
+  "records": [
+    {
+      "record_id": "B012-WN-01",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-01"
+      },
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "Arnold Foster LLP",
+      "identity_aliases": [],
+      "canonical_domain": "arnold-foster.com",
+      "office_cities": [
+        "Georgetown"
+      ],
+      "office_addresses": [
+        {
+          "city": "Georgetown",
+          "published_address": "232A Guelph St, Suite 201, Georgetown, ON L7G 4B1",
+          "comparison_street_address": "unit=201;street=232a guelph street",
+          "url": "https://www.arnold-foster.com/contact/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "roster_scope": "The firm’s contact page explicitly says the firm consists of four lawyers and six support staff; support staff are not included in the count.",
+      "practice_areas_published": [
+        "Real Estate",
+        "Estates and Succession Planning",
+        "Business",
+        "Family",
+        "Civil Litigation",
+        "Land Development"
+      ],
+      "leadership": [],
+      "public_emails": [
+        {
+          "email": "reception@arnold-foster.com",
+          "label": "published firm email",
+          "url": "https://www.arnold-foster.com/contact/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "candidate_exact_public_roster",
+      "hold_reason": null,
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.arnold-foster.com/contact/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 4,
+            "count_qualifier": "exact",
+            "rationale": "The firm’s contact page explicitly says the firm consists of four lawyers and six support staff; support staff are not included in the count."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "url": "https://www.arnold-foster.com/contact/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Georgetown",
+              "published_address": "232A Guelph St, Suite 201, Georgetown, ON L7G 4B1",
+              "comparison_street_address": "unit=201;street=232a guelph street",
+              "url": "https://www.arnold-foster.com/contact/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "url": "https://www.arnold-foster.com/contact/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Real Estate",
+            "Estates and Succession Planning",
+            "Business",
+            "Family",
+            "Civil Litigation",
+            "Land Development"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://www.arnold-foster.com/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "The homepage image caption identifies three partners but does not supply a recordable named leadership title in the reviewed text."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://www.arnold-foster.com/contact/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "email": "reception@arnold-foster.com",
+              "label": "published firm email",
+              "url": "https://www.arnold-foster.com/contact/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Visibly published first-party email; no pattern inference."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [],
+        "cross_lane_counterpart": null
+      }
+    },
+    {
+      "record_id": "B012-WN-02",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-02"
+      },
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "Morra Caruso Law",
+      "identity_aliases": [],
+      "canonical_domain": "stouffvilleonlawyers.ca",
+      "office_cities": [
+        "Stouffville"
+      ],
+      "office_addresses": [
+        {
+          "city": "Stouffville",
+          "published_address": "6060 Main Street, Stouffville, ON L4A 1B8",
+          "comparison_street_address": "unit=;street=6060 main street",
+          "url": "https://stouffvilleonlawyers.ca/our-team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_lawyer_count": 6,
+      "count_qualifier": "exact",
+      "roster_scope": "The complete public team page labels six people as Lawyer and labels the remaining listed people as office manager, clerk, or administrator.",
+      "practice_areas_published": [
+        "Business Law",
+        "Employment Law",
+        "Family Law",
+        "Wills and Estate Law",
+        "Real Estate",
+        "Litigation",
+        "Notarizations"
+      ],
+      "leadership": [
+        {
+          "name": "Ida Morra-Caruso",
+          "published_title": "Lawyer (Owner); founder and principal",
+          "relationship": "owner",
+          "url": "https://stouffvilleonlawyers.ca/our-team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "public_emails": [],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "candidate_exact_public_roster",
+      "hold_reason": null,
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://stouffvilleonlawyers.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 6,
+            "count_qualifier": "exact",
+            "rationale": "The complete public team page labels six people as Lawyer and labels the remaining listed people as office manager, clerk, or administrator."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "url": "https://stouffvilleonlawyers.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Stouffville",
+              "published_address": "6060 Main Street, Stouffville, ON L4A 1B8",
+              "comparison_street_address": "unit=;street=6060 main street",
+              "url": "https://stouffvilleonlawyers.ca/our-team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "url": "https://stouffvilleonlawyers.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Business Law",
+            "Employment Law",
+            "Family Law",
+            "Wills and Estate Law",
+            "Real Estate",
+            "Litigation",
+            "Notarizations"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://stouffvilleonlawyers.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Ida Morra-Caruso",
+              "published_title": "Lawyer (Owner); founder and principal",
+              "relationship": "owner",
+              "url": "https://stouffvilleonlawyers.ca/our-team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Published title preserved without authority inference."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://stouffvilleonlawyers.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "Public email unknown."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-2566",
+            "fields": [
+              "street_address"
+            ]
+          }
+        ],
+        "cross_lane_counterpart": null
+      }
+    },
+    {
+      "record_id": "B012-WN-03",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-03"
+      },
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "Piccin Bottos Professional Corporation",
+      "identity_aliases": [],
+      "canonical_domain": "piccinbottos.com",
+      "office_cities": [
+        "Woodbridge"
+      ],
+      "office_addresses": [
+        {
+          "city": "Woodbridge",
+          "published_address": "4370 Steeles Avenue West, Suite 201, Woodbridge, ON L4L 4Y4",
+          "comparison_street_address": "unit=201;street=4370 steeles avenue west",
+          "url": "https://piccinbottos.com/contact-us.html",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_lawyer_count": 6,
+      "count_qualifier": "exact",
+      "roster_scope": "The first-party Lawyers page presents six lawyer biographies, including one expressly called an associate lawyer; the page has no support-staff roster mixed into that list.",
+      "practice_areas_published": [
+        "Civil Litigation",
+        "Criminal Litigation",
+        "Mortgage Enforcement",
+        "Construction Lien Litigation",
+        "Real Estate",
+        "Estate Planning and Administration",
+        "Family Law",
+        "Corporate Law"
+      ],
+      "leadership": [
+        {
+          "name": "Jonathan V.B. Piccin",
+          "published_title": "founded Piccin Bottos Professional Corporation",
+          "relationship": "founder",
+          "url": "https://piccinbottos.com/lawyers.html",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "public_emails": [
+        {
+          "email": "pb@piccinbottos.com",
+          "label": "published firm email",
+          "url": "https://piccinbottos.com/contact-us.html",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "candidate_exact_public_roster",
+      "hold_reason": null,
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://piccinbottos.com/lawyers.html",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 6,
+            "count_qualifier": "exact",
+            "rationale": "The first-party Lawyers page presents six lawyer biographies, including one expressly called an associate lawyer; the page has no support-staff roster mixed into that list."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "url": "https://piccinbottos.com/contact-us.html",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Woodbridge",
+              "published_address": "4370 Steeles Avenue West, Suite 201, Woodbridge, ON L4L 4Y4",
+              "comparison_street_address": "unit=201;street=4370 steeles avenue west",
+              "url": "https://piccinbottos.com/contact-us.html",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "url": "https://piccinbottos.com/lawyers.html",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Civil Litigation",
+            "Criminal Litigation",
+            "Mortgage Enforcement",
+            "Construction Lien Litigation",
+            "Real Estate",
+            "Estate Planning and Administration",
+            "Family Law",
+            "Corporate Law"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://piccinbottos.com/lawyers.html",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Jonathan V.B. Piccin",
+              "published_title": "founded Piccin Bottos Professional Corporation",
+              "relationship": "founder",
+              "url": "https://piccinbottos.com/lawyers.html",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Published title preserved without authority inference."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://piccinbottos.com/contact-us.html",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "email": "pb@piccinbottos.com",
+              "label": "published firm email",
+              "url": "https://piccinbottos.com/contact-us.html",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Visibly published first-party email; no pattern inference."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [],
+        "cross_lane_counterpart": null
+      }
+    },
+    {
+      "record_id": "B012-WN-04",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-04"
+      },
+      "stage": "source_queue",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "Furlan Bhavsar LLP",
+      "identity_aliases": [],
+      "canonical_domain": "furlanbhavsarlaw.com",
+      "office_cities": [
+        "Brampton"
+      ],
+      "office_addresses": [
+        {
+          "city": "Brampton",
+          "published_address": "197 County Court Blvd., Suite 101, Brampton, ON L6W 4P6",
+          "comparison_street_address": "unit=101;street=197 county court boulevard",
+          "url": "https://www.furlanbhavsarlaw.com/team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_lawyer_count": 5,
+      "count_qualifier": "exact",
+      "roster_scope": "The public Lawyers navigation names four people and the Team page adds a fifth associate lawyer; all five biography entries are lawyer, associate, or senior-partner roles.",
+      "practice_areas_published": [
+        "Divorce and Family Law",
+        "Real Estate",
+        "Wills and Powers of Attorney",
+        "Estates",
+        "Criminal Law",
+        "Immigration Law",
+        "Civil Litigation",
+        "Employment Law",
+        "Wrongful Dismissal"
+      ],
+      "leadership": [
+        {
+          "name": "Daniel R. Furlan",
+          "published_title": "Senior Partner",
+          "relationship": "partner",
+          "url": "https://www.furlanbhavsarlaw.com/team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "public_emails": [
+        {
+          "email": "dan@fblawoffices.com",
+          "label": "published firm email",
+          "url": "https://www.furlanbhavsarlaw.com/team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "candidate_exact_public_roster",
+      "hold_reason": null,
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.furlanbhavsarlaw.com/team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 5,
+            "count_qualifier": "exact",
+            "rationale": "The public Lawyers navigation names four people and the Team page adds a fifth associate lawyer; all five biography entries are lawyer, associate, or senior-partner roles."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "url": "https://www.furlanbhavsarlaw.com/team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Brampton",
+              "published_address": "197 County Court Blvd., Suite 101, Brampton, ON L6W 4P6",
+              "comparison_street_address": "unit=101;street=197 county court boulevard",
+              "url": "https://www.furlanbhavsarlaw.com/team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "url": "https://www.furlanbhavsarlaw.com/team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Divorce and Family Law",
+            "Real Estate",
+            "Wills and Powers of Attorney",
+            "Estates",
+            "Criminal Law",
+            "Immigration Law",
+            "Civil Litigation",
+            "Employment Law",
+            "Wrongful Dismissal"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://www.furlanbhavsarlaw.com/team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Daniel R. Furlan",
+              "published_title": "Senior Partner",
+              "relationship": "partner",
+              "url": "https://www.furlanbhavsarlaw.com/team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Published title preserved without authority inference."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://www.furlanbhavsarlaw.com/team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "email": "dan@fblawoffices.com",
+              "label": "published firm email",
+              "url": "https://www.furlanbhavsarlaw.com/team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Visibly published first-party email; no pattern inference."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-315",
+            "fields": [
+              "street_address"
+            ]
+          },
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-351",
+            "fields": [
+              "street_address"
+            ]
+          }
+        ],
+        "cross_lane_counterpart": null
+      }
+    },
+    {
+      "record_id": "B012-WN-05",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-05"
+      },
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "D'Alessio Sindhwani Law Firm",
+      "identity_aliases": [],
+      "canonical_domain": "dslawfirm.ca",
+      "office_cities": [
+        "Vaughan",
+        "Bolton"
+      ],
+      "office_addresses": [
+        {
+          "city": "Vaughan",
+          "published_address": "Vaughan: 204-3100 Rutherford Road, Vaughan, ON L4K 0G6; Bolton: 34 Queen Street South, Bolton, ON L7E 1B3",
+          "comparison_street_address": "unit=204;street=3100 rutherford road",
+          "url": "https://www.dslawfirm.ca/our-team",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_lawyer_count": 7,
+      "count_qualifier": "exact",
+      "roster_scope": "The complete team page visibly lists two partners and five associates before separately listing two paralegals and support roles.",
+      "practice_areas_published": [
+        "Personal Injury",
+        "Disability Claims",
+        "Slip and Fall Claims",
+        "Real Estate",
+        "Litigation and Dispute Resolution",
+        "Corporate Commercial",
+        "Family Law",
+        "Employment Law",
+        "Wills and Estates"
+      ],
+      "leadership": [
+        {
+          "name": "Elio D'Alessio",
+          "published_title": "Partner",
+          "relationship": "partner",
+          "url": "https://www.dslawfirm.ca/our-team",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "public_emails": [
+        {
+          "email": "admin@dslawfirm.ca",
+          "label": "published firm email",
+          "url": "https://www.dslawfirm.ca/our-team",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "held_address_suite_identity_review",
+      "hold_reason": "held_address_suite_identity_review",
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.dslawfirm.ca/our-team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 7,
+            "count_qualifier": "exact",
+            "rationale": "The complete team page visibly lists two partners and five associates before separately listing two paralegals and support roles."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "url": "https://www.dslawfirm.ca/our-team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Vaughan",
+              "published_address": "Vaughan: 204-3100 Rutherford Road, Vaughan, ON L4K 0G6; Bolton: 34 Queen Street South, Bolton, ON L7E 1B3",
+              "comparison_street_address": "unit=204;street=3100 rutherford road",
+              "url": "https://www.dslawfirm.ca/our-team",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "url": "https://www.dslawfirm.ca/our-team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Personal Injury",
+            "Disability Claims",
+            "Slip and Fall Claims",
+            "Real Estate",
+            "Litigation and Dispute Resolution",
+            "Corporate Commercial",
+            "Family Law",
+            "Employment Law",
+            "Wills and Estates"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://www.dslawfirm.ca/our-team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Elio D'Alessio",
+              "published_title": "Partner",
+              "relationship": "partner",
+              "url": "https://www.dslawfirm.ca/our-team",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Published title preserved without authority inference."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://www.dslawfirm.ca/our-team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "email": "admin@dslawfirm.ca",
+              "label": "published firm email",
+              "url": "https://www.dslawfirm.ca/our-team",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Visibly published first-party email; no pattern inference."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-5901",
+            "fields": [
+              "street_address"
+            ]
+          }
+        ],
+        "cross_lane_counterpart": null
+      }
+    },
+    {
+      "record_id": "B012-WN-H01",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-H01"
+      },
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "Evangelista & Associates Professional Corporation",
+      "identity_aliases": [],
+      "canonical_domain": "evangelistalaw.ca",
+      "office_cities": [
+        "Woodbridge"
+      ],
+      "office_addresses": [
+        {
+          "city": "Woodbridge",
+          "published_address": "3700 Steeles Ave West, Suite 304, Woodbridge, ON L4L 8K8",
+          "comparison_street_address": "unit=304;street=3700 steeles avenue west",
+          "url": "https://evangelistalaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_lawyer_count": 3,
+      "count_qualifier": "exact",
+      "roster_scope": "The visible Team list has one principal lawyer and two associate lawyers, separate from one law clerk. The same page has template-placeholder copy elsewhere, so this otherwise exact count is held for source-quality recheck.",
+      "practice_areas_published": [
+        "Construction Liens and Litigation",
+        "Contract and Commercial Disputes",
+        "Employment Litigation",
+        "Wills and Estates Litigation",
+        "Shareholders' Disputes",
+        "Real Estate Disputes and Litigation"
+      ],
+      "leadership": [
+        {
+          "name": "Emily Evangelista",
+          "published_title": "Principal Lawyer",
+          "relationship": "other_leadership",
+          "url": "https://evangelistalaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "public_emails": [
+        {
+          "email": "info@evangelistalaw.ca",
+          "label": "published firm email",
+          "url": "https://evangelistalaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "held_source_quality_review",
+      "hold_reason": "held_source_quality_review",
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://evangelistalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 3,
+            "count_qualifier": "exact",
+            "rationale": "The visible Team list has one principal lawyer and two associate lawyers, separate from one law clerk. The same page has template-placeholder copy elsewhere, so this otherwise exact count is held for source-quality recheck."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "url": "https://evangelistalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Woodbridge",
+              "published_address": "3700 Steeles Ave West, Suite 304, Woodbridge, ON L4L 8K8",
+              "comparison_street_address": "unit=304;street=3700 steeles avenue west",
+              "url": "https://evangelistalaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "url": "https://evangelistalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Construction Liens and Litigation",
+            "Contract and Commercial Disputes",
+            "Employment Litigation",
+            "Wills and Estates Litigation",
+            "Shareholders' Disputes",
+            "Real Estate Disputes and Litigation"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://evangelistalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Emily Evangelista",
+              "published_title": "Principal Lawyer",
+              "relationship": "other_leadership",
+              "url": "https://evangelistalaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Published title preserved without authority inference."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://evangelistalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "email": "info@evangelistalaw.ca",
+              "label": "published firm email",
+              "url": "https://evangelistalaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Visibly published first-party email; no pattern inference."
+        }
+      ],
+      "reconciliation": {
+        "state": "clear",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [],
+        "cross_lane_counterpart": null
+      }
+    },
+    {
+      "record_id": "B012-WN-H02",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-H02"
+      },
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "Graham Stephenson Van Vliet LLP",
+      "identity_aliases": [],
+      "canonical_domain": "gsklawyers.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "office_addresses": [
+        {
+          "city": "Toronto",
+          "published_address": "Suite 303, 1 Eva Road, Toronto, ON M9C 4Z5",
+          "comparison_street_address": "unit=303;street=1 eva road",
+          "url": "https://www.gsklawyers.com/gsk-contact",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_lawyer_count": 3,
+      "count_qualifier": "at_least",
+      "roster_scope": "The public People section names three partner/lawyer roles, but it is not labelled as a complete firm-wide roster; it cannot satisfy a capped band.",
+      "practice_areas_published": [
+        "Business Law and Advice",
+        "Litigation and Alternative Dispute Resolution",
+        "Transaction Support",
+        "Regulatory and Administrative Law"
+      ],
+      "leadership": [
+        {
+          "name": "Gary D. Graham",
+          "published_title": "Partner, corporate and transactional lawyer",
+          "relationship": "partner",
+          "url": "https://www.gsklawyers.com/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "public_emails": [
+        {
+          "email": "admin@gsklawyers.com",
+          "label": "published firm email",
+          "url": "https://www.gsklawyers.com/gsk-contact",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "held_unbounded_count",
+      "hold_reason": "held_unbounded_count",
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.gsklawyers.com/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 3,
+            "count_qualifier": "at_least",
+            "rationale": "The public People section names three partner/lawyer roles, but it is not labelled as a complete firm-wide roster; it cannot satisfy a capped band."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "url": "https://www.gsklawyers.com/gsk-contact",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Toronto",
+              "published_address": "Suite 303, 1 Eva Road, Toronto, ON M9C 4Z5",
+              "comparison_street_address": "unit=303;street=1 eva road",
+              "url": "https://www.gsklawyers.com/gsk-contact",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "url": "https://www.gsklawyers.com/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Business Law and Advice",
+            "Litigation and Alternative Dispute Resolution",
+            "Transaction Support",
+            "Regulatory and Administrative Law"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://www.gsklawyers.com/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Gary D. Graham",
+              "published_title": "Partner, corporate and transactional lawyer",
+              "relationship": "partner",
+              "url": "https://www.gsklawyers.com/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Published title preserved without authority inference."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://www.gsklawyers.com/gsk-contact",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "email": "admin@gsklawyers.com",
+              "label": "published firm email",
+              "url": "https://www.gsklawyers.com/gsk-contact",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Visibly published first-party email; no pattern inference."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-4504",
+            "fields": [
+              "street_address"
+            ]
+          }
+        ],
+        "cross_lane_counterpart": null
+      }
+    },
+    {
+      "record_id": "B012-WN-H03",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-H03"
+      },
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "Neiman Callegari",
+      "identity_aliases": [],
+      "canonical_domain": "neimancallegari.ca",
+      "office_cities": [
+        "Bolton"
+      ],
+      "office_addresses": [
+        {
+          "city": "Bolton",
+          "published_address": "18 King Street East, Unit H3, Bolton, ON L7E 1E8",
+          "comparison_street_address": "unit=h3;street=18 king street east",
+          "url": "https://neimancallegari.ca/our-team/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "roster_scope": "The public team page names two people with law degrees and separates its clerk and receptionist roles; no third lawyer is established in the reviewed roster.",
+      "practice_areas_published": [
+        "Family Law",
+        "Real Estate Law",
+        "Civil Litigation",
+        "Wills and Estates",
+        "Construction Law",
+        "Municipal Law",
+        "Employment Law",
+        "Corporate and Commercial Law"
+      ],
+      "leadership": [],
+      "public_emails": [],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "held_below_floor",
+      "hold_reason": "held_below_floor",
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://neimancallegari.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 2,
+            "count_qualifier": "exact",
+            "rationale": "The public team page names two people with law degrees and separates its clerk and receptionist roles; no third lawyer is established in the reviewed roster."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "url": "https://neimancallegari.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Bolton",
+              "published_address": "18 King Street East, Unit H3, Bolton, ON L7E 1E8",
+              "comparison_street_address": "unit=h3;street=18 king street east",
+              "url": "https://neimancallegari.ca/our-team/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "url": "https://neimancallegari.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Family Law",
+            "Real Estate Law",
+            "Civil Litigation",
+            "Wills and Estates",
+            "Construction Law",
+            "Municipal Law",
+            "Employment Law",
+            "Corporate and Commercial Law"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://neimancallegari.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No normalized leadership title is published in the reviewed text."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://neimancallegari.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "Public email unknown."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-99",
+            "fields": [
+              "canonical_domain",
+              "firm_name"
+            ]
+          }
+        ],
+        "cross_lane_counterpart": null
+      }
+    },
+    {
+      "record_id": "B012-WN-H05",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-H05"
+      },
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "Aastha Lawyers",
+      "identity_aliases": [],
+      "canonical_domain": "aasthalaw.ca",
+      "office_cities": [
+        "Mississauga"
+      ],
+      "office_addresses": [],
+      "observed_lawyer_count": 4,
+      "count_qualifier": "at_least",
+      "roster_scope": "Public homepage names multiple Barrister & Solicitor profiles, but this source screen does not refresh a record that already has an exact canonical-domain collision in the baseline.",
+      "practice_areas_published": [
+        "Real Estate",
+        "Business",
+        "Family",
+        "Wills and Estates",
+        "Civil Litigation"
+      ],
+      "leadership": [],
+      "public_emails": [],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "held_preliminary_domain_collision",
+      "hold_reason": "held_preliminary_domain_collision",
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.aasthalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 4,
+            "count_qualifier": "at_least",
+            "rationale": "Public homepage names multiple Barrister & Solicitor profiles, but this source screen does not refresh a record that already has an exact canonical-domain collision in the baseline."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "url": "https://www.aasthalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No first-party street address retained."
+        },
+        {
+          "kind": "practice",
+          "url": "https://www.aasthalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Real Estate",
+            "Business",
+            "Family",
+            "Wills and Estates",
+            "Civil Litigation"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://www.aasthalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "Collision hold; no ownership inference was attempted."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://www.aasthalaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "Public email unknown."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "fixture",
+            "record_id": "aastha-lawyers-mississauga",
+            "fields": [
+              "canonical_domain",
+              "firm_name"
+            ]
+          }
+        ],
+        "cross_lane_counterpart": null
+      }
+    },
+    {
+      "record_id": "B012-WN-H06",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-H06"
+      },
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "Fahd & Fahd Law Professional Corporation",
+      "identity_aliases": [],
+      "canonical_domain": "fahdlaw.ca",
+      "office_cities": [
+        "Richmond Hill"
+      ],
+      "office_addresses": [
+        {
+          "city": "Richmond Hill",
+          "published_address": "Suite 309, HSBC Building, 330 Hwy 7 East, Richmond Hill, ON L4B 3P8",
+          "comparison_street_address": "unit=309;street=330 highway 7 east",
+          "url": "https://www.fahdlaw.ca/team",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "roster_scope": "The source presents two founding partners. It is retained only to make the Batch 011 domain collision explicit.",
+      "practice_areas_published": [
+        "Immigration Law",
+        "Estate Planning",
+        "Estate Administration",
+        "Civil Litigation"
+      ],
+      "leadership": [
+        {
+          "name": "Shokur Fahd",
+          "published_title": "founding Partner",
+          "relationship": "partner",
+          "url": "https://www.fahdlaw.ca/team",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "public_emails": [
+        {
+          "email": "support@fahdlaw.ca",
+          "label": "published firm email",
+          "url": "https://www.fahdlaw.ca/team",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "held_preliminary_domain_collision",
+      "hold_reason": "held_preliminary_domain_collision",
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.fahdlaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 2,
+            "count_qualifier": "exact",
+            "rationale": "The source presents two founding partners. It is retained only to make the Batch 011 domain collision explicit."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "url": "https://www.fahdlaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Richmond Hill",
+              "published_address": "Suite 309, HSBC Building, 330 Hwy 7 East, Richmond Hill, ON L4B 3P8",
+              "comparison_street_address": "unit=309;street=330 highway 7 east",
+              "url": "https://www.fahdlaw.ca/team",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "url": "https://www.fahdlaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Immigration Law",
+            "Estate Planning",
+            "Estate Administration",
+            "Civil Litigation"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://www.fahdlaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Shokur Fahd",
+              "published_title": "founding Partner",
+              "relationship": "partner",
+              "url": "https://www.fahdlaw.ca/team",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Published title preserved without authority inference."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://www.fahdlaw.ca/team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "email": "support@fahdlaw.ca",
+              "label": "published firm email",
+              "url": "https://www.fahdlaw.ca/team",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Visibly published first-party email; no pattern inference."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-2322",
+            "fields": [
+              "canonical_domain",
+              "firm_name"
+            ]
+          }
+        ],
+        "cross_lane_counterpart": null
+      }
+    },
+    {
+      "record_id": "B012-WN-H07",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-H07"
+      },
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "Ruso & Associates",
+      "identity_aliases": [],
+      "canonical_domain": "rusolaw.ca",
+      "office_cities": [
+        "Oakville"
+      ],
+      "office_addresses": [],
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_scope": "The public page establishes family-law and private-mediation practice, but no count was refreshed after the exact Batch 011 west domain collision was identified.",
+      "practice_areas_published": [
+        "Family Law",
+        "Private Mediation"
+      ],
+      "leadership": [
+        {
+          "name": "Vincenzo Ruso",
+          "published_title": "Founder & Managing Partner",
+          "relationship": "managing_partner",
+          "url": "https://www.rusolaw.ca/our-team",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "public_emails": [],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "held_preliminary_domain_collision",
+      "hold_reason": "held_preliminary_domain_collision",
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.rusolaw.ca/our-team",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "The public page establishes family-law and private-mediation practice, but no count was refreshed after the exact Batch 011 west domain collision was identified."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.rusolaw.ca/our-team",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "No first-party street address retained."
+        },
+        {
+          "kind": "practice",
+          "url": "https://www.rusolaw.ca/our-team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Family Law",
+            "Private Mediation"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://www.rusolaw.ca/our-team",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "name": "Vincenzo Ruso",
+              "published_title": "Founder & Managing Partner",
+              "relationship": "managing_partner",
+              "url": "https://www.rusolaw.ca/our-team",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": "Published title preserved without authority inference."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://www.rusolaw.ca/our-team",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "Public email unknown."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "ledger_projection",
+            "record_id": "offline-import:gta-prospect-008-b008-19",
+            "fields": [
+              "canonical_domain",
+              "firm_name"
+            ]
+          },
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-750",
+            "fields": [
+              "canonical_domain",
+              "firm_name"
+            ]
+          }
+        ],
+        "cross_lane_counterpart": null
+      }
+    },
+    {
+      "record_id": "B012-WN-H08",
+      "source": {
+        "lane": "west-north",
+        "source_commit": "c789d49047d5ce1d46a8b4ef6e48c01247717a0b",
+        "source_record_id": "B012-WN-H08"
+      },
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "firm_name": "Mancini Law LLP",
+      "identity_aliases": [],
+      "canonical_domain": "mancinilaw.ca",
+      "office_cities": [
+        "Woodbridge"
+      ],
+      "office_addresses": [
+        {
+          "city": "Woodbridge",
+          "published_address": "3850 Steeles Ave W #6, Woodbridge, ON L4L 4Y6",
+          "comparison_street_address": "unit=6;street=3850 steeles avenue west",
+          "url": "https://mancinilaw.ca/",
+          "observed_on": "2026-09-08"
+        }
+      ],
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "roster_scope": "The public Lawyers section lists two named lawyer profiles. It is retained only to make the Batch 011 west domain collision explicit.",
+      "practice_areas_published": [
+        "Corporate Law",
+        "Real Estate Law",
+        "Wills and Estates Planning"
+      ],
+      "leadership": [],
+      "public_emails": [],
+      "observed_on": "2026-09-08",
+      "access_review": "Public page reviewed read-only; no interactive surface was used.",
+      "source_disposition": "held_preliminary_domain_collision",
+      "hold_reason": "held_preliminary_domain_collision",
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://mancinilaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": {
+            "observed_lawyer_count": 2,
+            "count_qualifier": "exact",
+            "rationale": "The public Lawyers section lists two named lawyer profiles. It is retained only to make the Batch 011 west domain collision explicit."
+          },
+          "note": null
+        },
+        {
+          "kind": "office",
+          "url": "https://mancinilaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            {
+              "city": "Woodbridge",
+              "published_address": "3850 Steeles Ave W #6, Woodbridge, ON L4L 4Y6",
+              "comparison_street_address": "unit=6;street=3850 steeles avenue west",
+              "url": "https://mancinilaw.ca/",
+              "observed_on": "2026-09-08"
+            }
+          ],
+          "note": null
+        },
+        {
+          "kind": "practice",
+          "url": "https://mancinilaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "observed",
+          "value": [
+            "Corporate Law",
+            "Real Estate Law",
+            "Wills and Estates Planning"
+          ],
+          "note": null
+        },
+        {
+          "kind": "relationship",
+          "url": "https://mancinilaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "Collision hold; no ownership inference was attempted."
+        },
+        {
+          "kind": "public_email",
+          "url": "https://mancinilaw.ca/",
+          "observed_on": "2026-09-08",
+          "status": "unknown",
+          "value": null,
+          "note": "Public email unknown."
+        }
+      ],
+      "reconciliation": {
+        "state": "review_required",
+        "automatic_merge": false,
+        "guard": "gta-prospect-baseline-reconciliation",
+        "loaded_sources": [
+          "fixture",
+          "ledger_projection",
+          "legacy_source"
+        ],
+        "static_baseline_count": 6025,
+        "live_ledger_state": "offline_pending",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-5842",
+            "fields": [
+              "firm_name",
+              "street_address"
+            ]
+          },
+          {
+            "origin": "legacy_source",
+            "record_id": "legacy-gta-directory-2026-07:row-5867",
+            "fields": [
+              "street_address"
+            ]
+          }
+        ],
+        "cross_lane_counterpart": null
+      }
+    }
+  ]
+}
