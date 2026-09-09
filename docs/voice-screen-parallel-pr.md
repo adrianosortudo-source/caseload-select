@@ -4,6 +4,6 @@ The fictional browser demo requires explicit text permission and safe/correct nu
 
 Includes an inactive, pure production eligibility policy requiring current-call proof, plus a detailed bridge contract. This PR does not implement real SMS, persistent continuation tokens, live call processing, database migrations or production activation. Those remaining dependencies are documented in `docs/voice-screen-parallel-journey.md`.
 
-Validation: 12 focused engine continuity and bridge eligibility tests pass. Rendered verification and TypeScript status are recorded in the journey documentation when complete.
+Validation: the first commit passed all 14 CI checks, including TypeScript, ESLint, the full Vitest suite and real Postgres integration. The follow-up carries the explicitly stated invoice amount and other known call facts into the Screen, and expands focused coverage to 13 tests including skipping questions. Latest CI and rendered verification status are recorded in the journey documentation.
 
 Do not merge without Adriano's explicit approval of this PR.

@@ -32,3 +32,13 @@ Database changes must be committed and pushed before application. Production rel
 ## UI scope
 
 Only the new demo route is styled. The split becomes stacked below 800px. Form controls, progress navigation, facts lists, and the simulated SMS bubble are functional layout elements; ordinary panel copy fills the panel content box. No editorial width caps are used.
+
+## Validation record
+
+- Initial commit `1499d767`: all 14 GitHub checks passed, including TypeScript, ESLint, full Vitest, real Postgres integration, existing rendered-copy suites and the Vercel preview build. Those existing rendered suites do not constitute six-viewport testing of this new route.
+- Interactive authenticated preview review verified the grant path and declined, unknown, unsafe-number, urgent and existing-client paths. It found that the text-only extractor missed the explicitly stated $28,000 amount. Follow-up commit `426e51df` seeds validated fixture facts directly, and adds assertions that known amount, invoice, payment and dispute facts are not asked again. The source narrative retains the exact amount.
+- Local initial focused suite: 12 tests passed. The follow-up adds one skipped-question regression (13 total). Latest CI must be checked against the final commit before merge.
+- Local full TypeScript check using the canonical dependency junction failed because the dependency installation lacked Next and Playwright declarations. The junction was removed without altering canonical dependencies; a clean worktree install was started. Clean CI TypeScript passed on the initial commit. Do not present the failed local check as a pass.
+- Real calls, actual SMS delivery, persistent links, human notifications and production routing remain untested and unimplemented by this prototype.
+- Follow-up `426e51df`: all 14 checks passed, including the expanded 13-test focused suite as part of full Vitest. The preview is available through PR #250 and requires Vercel authentication.
+- The isolated dependency installation was stopped after prolonged registry requests (individual requests exceeded seven minutes). Only that install process was stopped; partial ignored `node_modules` remains in this worktree. No canonical dependencies were modified. Local server is stopped. The new route's full six-width rendered-copy audit is still outstanding; it is not waived or represented as passed.
