@@ -1,0 +1,17 @@
+{
+  "schemaVersion": "gta-prospect-batch-review.v1",
+  "batchId": "gta-prospect-batch-013",
+  "reviewedOn": "2026-09-10",
+  "expectedLiveBaselineCount": 141,
+  "policy": {"requiredRosterProvenance":"first_party","targetCountBands":[{"min":3,"max":5},{"min":6,"max":10},{"min":11,"max":20},{"min":21,"max":50},{"min":51,"max":500}]},
+  "candidates": [
+    {"recordId":"B013-01","firmName":"Example North Law LLP","canonicalDomain":"example-north-law.test","officeCities":["Toronto"],"websiteUrl":"https://example-north-law.test/","observedLawyerCount":4,"countQualifier":"exact","observedOn":"2026-09-10","practiceAreas":["Business Law"],"leadership":[{"name":"Example Founder","relationship":"founder","url":"https://example-north-law.test/team","observedOn":"2026-09-10"}],"publicEmails":[{"email":"hello@example-north-law.test","url":"https://example-north-law.test/contact","observedOn":"2026-09-10"}],"evidence":[{"kind":"roster","url":"https://example-north-law.test/team","provenance":"first_party"}]},
+    {"recordId":"B013-02","firmName":"Example Held Law","canonicalDomain":"example-held-law.test","officeCities":["Brampton"],"observedLawyerCount":3,"countQualifier":"at_least","observedOn":"2026-09-10","evidence":[{"kind":"roster","url":"https://example-held-law.test/team","provenance":"first_party"}]},
+    {"recordId":"B013-03","firmName":"Example Duplicate Law","canonicalDomain":"example-duplicate-law.test","officeCities":["Mississauga"],"observedLawyerCount":2,"countQualifier":"exact","observedOn":"2026-09-10","evidence":[{"kind":"roster","url":"https://example-duplicate-law.test/team","provenance":"first_party"}]}
+  ],
+  "decisions": [
+    {"recordId":"B013-01","disposition":"import","reconciliationStatus":"provisional_new","reconciliation":{"staticBaseline":"no_match","liveBaseline":"no_match"},"basis":"No live identity match was found in the reviewed baseline."},
+    {"recordId":"B013-02","disposition":"hold","reconciliation":{"staticBaseline":"no_match","liveBaseline":"uncertain"},"basis":"Count is at least, not exact."},
+    {"recordId":"B013-03","disposition":"exclude","reconciliation":{"staticBaseline":"existing_firm_match","liveBaseline":"existing_firm_match"},"basis":"Exact two-lawyer firm is outside the current expansion target."}
+  ]
+}
