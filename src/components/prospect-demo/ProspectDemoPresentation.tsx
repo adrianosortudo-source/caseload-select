@@ -159,7 +159,7 @@ export function ProspectDemoPresentation({ sessionAdapter, registrations, initia
     setSessionKey((current) => current + 1);
   }
 
-  if (!session || !profile) {
+  if (!session || !profile || !scenario) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#F4F3EF] p-6" data-ui-component-content="prospect-demo-empty">
         <div className="w-full border border-[#182538]/15 bg-white p-7 text-[#182538] shadow-sm">
