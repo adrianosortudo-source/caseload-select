@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildGtaProspectIdentitySnapshot,
+  gtaProspectIdentityRecordsSha256,
   parseGtaProspectIdentitySnapshot,
 } from "../gta-prospect-identity-snapshot";
 import type { ReconciledGtaProspect } from "../gta-prospect-records";
@@ -29,5 +30,16 @@ describe("GTA prospect identity snapshot", () => {
     expect(() => parseGtaProspectIdentitySnapshot({ ...snapshot, records_sha256: "0".repeat(64) }, { expectedCount: 1, now: new Date("2026-09-09T12:00:00.000Z") })).toThrow("hash mismatch");
     expect(() => parseGtaProspectIdentitySnapshot({ ...snapshot, contacts: [] }, { expectedCount: 1, now: new Date("2026-09-09T12:00:00.000Z") })).toThrow("schema drift");
     expect(() => parseGtaProspectIdentitySnapshot(snapshot, { expectedCount: 1, now: new Date("2026-09-11T12:00:00.000Z") })).toThrow("stale");
+    expect(() => parseGtaProspectIdentitySnapshot(snapshot, { expectedCount: 1, now: new Date("2026-09-09T11:00:00.000Z") })).toThrow("future");
+  });
+
+  it("rejects duplicate and unsafe snapshot ids even with a matching hash", () => {
+    const snapshot = buildGtaProspectIdentitySnapshot([record], new Date("2026-09-09T12:00:00.000Z"));
+    const duplicateRecords = [snapshot.records[0], snapshot.records[0]];
+    const duplicate = { ...snapshot, record_count: 2, records: duplicateRecords, records_sha256: gtaProspectIdentityRecordsSha256(duplicateRecords) };
+    expect(() => parseGtaProspectIdentitySnapshot(duplicate, { expectedCount: 2, now: new Date("2026-09-09T12:00:00.000Z") })).toThrow("duplicate");
+    const unsafeRecords = [{ ...snapshot.records[0], record_id: "ledger-1\nemail=owner@example.test" }];
+    const unsafe = { ...snapshot, records: unsafeRecords, records_sha256: gtaProspectIdentityRecordsSha256(unsafeRecords) };
+    expect(() => parseGtaProspectIdentitySnapshot(unsafe, { expectedCount: 1, now: new Date("2026-09-09T12:00:00.000Z") })).toThrow("record id");
   });
 });

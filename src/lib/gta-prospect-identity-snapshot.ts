@@ -6,6 +6,7 @@ import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
 
 export const GTA_PROSPECT_IDENTITY_SNAPSHOT_SCHEMA = "gta-operator-identity-snapshot.v1" as const;
 export const GTA_PROSPECT_IDENTITY_SNAPSHOT_SOURCE = "gta_prospect_research_operator_projection" as const;
+export const GTA_PROSPECT_SAFE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,159}$/;
 
 export type GtaProspectIdentitySnapshotRecord = Readonly<{
   record_id: string;
@@ -44,7 +45,7 @@ export function buildGtaProspectIdentitySnapshot(
 ): GtaProspectIdentitySnapshot {
   const sanitized = records.map((record): GtaProspectIdentitySnapshotRecord => {
     const normalizedName = normalizeProspectFirmName(record.firmName);
-    if (!record.id.trim() || !normalizedName) throw new Error("Operator identity projection contains an invalid identity.");
+    if (!GTA_PROSPECT_SAFE_SLUG_PATTERN.test(record.id) || !normalizedName) throw new Error("Operator identity projection contains an invalid identity.");
     return {
       record_id: record.id,
       normalized_firm_name: normalizedName,
@@ -80,7 +81,7 @@ export function parseGtaProspectIdentitySnapshot(
   const records = root.records.map((entry): GtaProspectIdentitySnapshotRecord => {
     const record = object(entry, "Identity snapshot record is invalid.");
     exactKeys(record, ["record_id", "normalized_firm_name", "canonical_domain"], "Identity snapshot record");
-    if (typeof record.record_id !== "string" || !record.record_id.trim()) throw new Error("Identity snapshot record id is invalid.");
+    if (typeof record.record_id !== "string" || !GTA_PROSPECT_SAFE_SLUG_PATTERN.test(record.record_id)) throw new Error("Identity snapshot record id is invalid.");
     if (typeof record.normalized_firm_name !== "string" || normalizeProspectFirmName(record.normalized_firm_name) !== record.normalized_firm_name) throw new Error("Identity snapshot firm name is not normalized.");
     if (record.canonical_domain !== null && (typeof record.canonical_domain !== "string" || normalizeFirmDomain(record.canonical_domain) !== record.canonical_domain)) throw new Error("Identity snapshot domain is not canonical.");
     return { record_id: record.record_id, normalized_firm_name: record.normalized_firm_name, canonical_domain: record.canonical_domain as string | null };
