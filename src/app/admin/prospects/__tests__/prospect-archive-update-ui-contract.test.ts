@@ -20,10 +20,12 @@ describe("prospect archive update operator surface", () => {
     expect(component).toContain("This panel does not invent a successful result");
   });
 
-  it("models preview, one reviewed apply action, receipts, and no-change results without a data call", () => {
+  it("models safe import preview, a future reviewed apply action, receipts, and no-change results", () => {
     for (const label of ["New", "Unchanged", "Held", "Unclassified", "Incomplete", "Apply reviewed update", "Latest result", "No changes were found"]) expect(component).toContain(label);
     expect(component).toContain("onApplyReviewedUpdate");
-    expect(component).not.toMatch(/fetch\s*\(/);
+    expect(component).toContain('/api/admin/prospect-operations/archive-updates/preview');
+    expect(component).toContain('method: "POST"');
+    expect(component).toContain('database writes');
     expect(component).not.toMatch(/send email|activate workflow|enroll/i);
   });
 
