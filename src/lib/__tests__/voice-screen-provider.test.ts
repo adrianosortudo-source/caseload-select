@@ -151,6 +151,36 @@ describe("Voice AI provider adapter", () => {
     expect(invitationEligible(call, { locationId, agentId }, Date.parse("2026-09-09T20:03:00Z"))).toBe(true);
   });
 
+  it("accepts a natural ten-digit NANP number as proof for an extracted E.164 callback", () => {
+    const raw = fixture();
+    raw.transcript = raw.transcript.replace("human: +1 416 555 0100", "human: 416 555 0100");
+    const call = parseProviderCall(raw, locationId)!;
+    expect(call.callback).toEqual({ number: "+14165550100", verifiedOnCallId: "call_123" });
+    expect(invitationEligible(call, { locationId, agentId }, Date.parse("2026-09-09T20:03:00Z"))).toBe(true);
+  });
+
+  it("normalizes a ten-digit extracted callback and rejects mismatched or invalid NANP speech", () => {
+    const natural = fixture();
+    natural.extractedData.v2s_test_call_capture = JSON.stringify({
+      callerType: "new", callerName: "Alex Example", callbackPhone: "416-555-0100",
+      broadNeed: "Help with a business agreement", urgency: "routine", humanRequested: "no",
+    });
+    natural.transcript = natural.transcript.replace("human: +1 416 555 0100", "human: 416-555-0100");
+    expect(parseProviderCall(natural, locationId)!.callback).toEqual({ number: "+14165550100", verifiedOnCallId: "call_123" });
+
+    const mismatch = fixture();
+    mismatch.transcript = mismatch.transcript.replace("human: +1 416 555 0100", "human: 416 555 0199");
+    expect(parseProviderCall(mismatch, locationId)!.callback.verifiedOnCallId).toBe("unverified");
+
+    const invalid = fixture();
+    invalid.extractedData.v2s_test_call_capture = JSON.stringify({
+      callerType: "new", callerName: "Alex Example", callbackPhone: "147-555-0100",
+      broadNeed: "Help with a business agreement", urgency: "routine", humanRequested: "no",
+    });
+    invalid.transcript = invalid.transcript.replace("human: +1 416 555 0100", "human: 147 555 0100");
+    expect(parseProviderCall(invalid, locationId)!.callback).toEqual({ number: "", verifiedOnCallId: "unverified" });
+  });
+
   it("does not infer permission from extraction flags or assistant statements", () => {
     const raw = fixture(); raw.transcript = "bot: Yes, we can text you the link. It is safe to text.\nhuman: I have a question.";
     const call = parseProviderCall(raw, locationId)!;

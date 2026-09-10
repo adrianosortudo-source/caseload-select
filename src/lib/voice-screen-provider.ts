@@ -1,4 +1,5 @@
 import { parseLiveCall, type LiveCall } from "./voice-screen-live";
+import { normalizeVoiceScreenPhone } from "./voice-screen-phone";
 
 /** Official VoiceAiCallEnd adapter. Input MUST be the byte-exact body of a
  * successfully verified X-GHL-Signature request, never caller-supplied data.
@@ -77,10 +78,9 @@ export function parseProviderCall(value: unknown, expectedLocationId: string): L
   const turns = turnsFor(transcript);
   const consent = proofFor(turns, "consent");
   const safe = proofFor(turns, "safe");
-  const callback = text(extracted.callbackPhone, 30);
-  const callbackDigits = callback.replace(/\D/g, "");
-  const callbackTurn = /^\+[1-9]\d{7,14}$/.test(callback)
-    ? turns.find(t => t.speaker === "caller" && !negative(t.content) && t.content.replace(/\D/g, "") === callbackDigits)
+  const callback = normalizeVoiceScreenPhone(text(extracted.callbackPhone, 30));
+  const callbackTurn = callback
+    ? turns.find(t => t.speaker === "caller" && !negative(t.content) && normalizeVoiceScreenPhone(t.content) === callback)
     : undefined;
   // Extraction flags alone never prove consent, safety or ownership of a number.
   const callerType = ["new", "existing", "other"].includes(text(extracted.callerType)) ? text(extracted.callerType) as LiveCall["callerType"] : "unknown";
@@ -95,7 +95,7 @@ export function parseProviderCall(value: unknown, expectedLocationId: string): L
     endedAt, endedAtSource: "provider_created_plus_duration", permissionCapturedAtSource: "call_end_bound",
     callerType, urgency, humanRequested,
     callerName: text(extracted.callerName, 120), broadNeed, deadline: text(extracted.deadline, 300),
-    callback: { number: /^\+[1-9]\d{7,14}$/.test(callback) ? callback : "", verifiedOnCallId: callbackTurn ? raw.id : "unverified" },
+    callback: { number: callback, verifiedOnCallId: callbackTurn ? raw.id : "unverified" },
     permission: { value: consent.value === "yes" ? "granted" : consent.value === "no" ? "declined" : "unknown", callId: raw.id, capturedAt: endedAt },
     safeToText: { value: safe.value, callId: raw.id },
     evidence: { callId: raw.id, consentQuote: consent.quote, safeToTextQuote: safe.quote, callbackQuote: callbackTurn?.content.slice(0, 500) ?? "" },
