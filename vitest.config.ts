@@ -14,6 +14,8 @@ export default defineConfig({
       // Widen this per-directory as other component suites adopt RTL.
       "src/components/intake-v2/__tests__/**/*.test.tsx",
       "src/**/__evals__/**/*.test.ts",
+      "scripts/prospecting-control-plane/__tests__/**/*.test.ts",
+      "scripts/ghl-prospect-readback/__tests__/**/*.test.ts",
       // Exact service-only recovery route coverage; keep this narrow rather
       // than enabling every colocated route test in the application.
       "src/app/api/internal/privacy-recovery/route.test.ts",
