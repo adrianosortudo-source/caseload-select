@@ -6,6 +6,10 @@ const migration = readFileSync(
   resolve(process.cwd(), 'supabase/migrations/20260909231858_prospect_operations_core.sql'),
   'utf8',
 );
+const rowShapeFix = readFileSync(
+  resolve(process.cwd(), 'supabase/migrations/20260910042530_fix_prospect_history_trigger_row_shape.sql'),
+  'utf8',
+);
 
 describe('prospect operations migration contract', () => {
   it('makes identity resolution explicit, append-only, and source-preserving', () => {
@@ -28,5 +32,23 @@ describe('prospect operations migration contract', () => {
     expect(migration).toContain('suppressed_by_operator_id uuid');
     expect(migration).toContain('active suppression provenance is immutable');
     expect(migration).toContain('lifting suppression must preserve its provenance');
+  });
+
+  it('dispatches the shared history trigger before accessing table-specific row fields', () => {
+    expect(rowShapeFix).toContain("CASE TG_TABLE_NAME");
+    expect(rowShapeFix).toContain("WHEN 'prospect_conversations' THEN");
+    expect(rowShapeFix).toContain("WHEN 'prospect_source_links' THEN");
+
+    const conversationBranch = rowShapeFix.slice(
+      rowShapeFix.indexOf("WHEN 'prospect_conversations' THEN"),
+      rowShapeFix.indexOf("WHEN 'prospect_source_links' THEN"),
+    );
+    expect(conversationBranch).not.toContain('OLD.source_system');
+    expect(conversationBranch).not.toContain('NEW.source_system');
+    expect(conversationBranch).not.toContain('OLD.source_record_key');
+    expect(conversationBranch).not.toContain('NEW.source_record_key');
+    expect(rowShapeFix).toContain(
+      'REVOKE ALL ON FUNCTION public.prevent_prospect_history_reassignment()',
+    );
   });
 });
