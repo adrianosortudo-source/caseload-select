@@ -86,7 +86,11 @@ export function DemoOperatorPanel({ view, contained = false }: Props) {
         </p>
         {!state ? (
           <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5" data-ui-component-content="demo-empty-brief">
-            <p className="w-full text-base leading-relaxed text-white/75" data-ui-copy="body">
+            <p
+              className="w-full text-base leading-relaxed text-white/75"
+              data-ui-copy="body"
+              style={{ textWrap: "wrap" }}
+            >
               Client answers and the firm’s brief will update here.
             </p>
           </section>
