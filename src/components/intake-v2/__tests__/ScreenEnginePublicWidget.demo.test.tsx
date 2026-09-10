@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { ScreenEnginePublicWidget, type ScreenDemoView } from "../ScreenEnginePublicWidget";
+import {
+  SCREEN_WIDGET_EXECUTION_POLICY,
+  ScreenEnginePublicWidget,
+  type ScreenDemoView,
+} from "../ScreenEnginePublicWidget";
 
 class MockResizeObserver {
   observe() {}
@@ -78,5 +82,51 @@ describe("ScreenEnginePublicWidget demo runtime", () => {
       expect(latest?.currentQuestion?.id).not.toBe(questionBefore?.id);
     });
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("allows live extraction in the live-AI demo but reports a truthful fallback and blocks every intake side effect", async () => {
+    const onDemoStateChange = vi.fn<(view: ScreenDemoView) => void>();
+    const onSubmitResult = vi.fn();
+    const fetchMock = vi.mocked(fetch);
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ mode: "disabled", reason: "No extraction provider is configured." }),
+    } as Response);
+
+    render(
+      <ScreenEnginePublicWidget
+        firmId="fictional-firm"
+        firmName="Hartwell Law"
+        runtime="demo-live-ai"
+        layout="contained"
+        consentCaptureEnabled
+        initialDescription={FICTIONAL_SITUATION}
+        onSubmitResult={onSubmitResult}
+        onDemoStateChange={onDemoStateChange}
+      />,
+    );
+
+    expect(document.querySelector('[data-shell-layout="contained"]')).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /record/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Continue matter review" }));
+
+    await waitFor(() => {
+      const latest = onDemoStateChange.mock.calls.at(-1)?.[0];
+      expect(latest?.extraction).toEqual({
+        status: "fallback",
+        reason: "No extraction provider is configured.",
+      });
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/extract");
+    expect(onSubmitResult).not.toHaveBeenCalled();
+    expect(SCREEN_WIDGET_EXECUTION_POLICY["demo-live-ai"]).toMatchObject({
+      allowsExtraction: true,
+      allowsPersistence: false,
+      allowsVoice: false,
+      allowsConsent: false,
+    });
   });
 });
