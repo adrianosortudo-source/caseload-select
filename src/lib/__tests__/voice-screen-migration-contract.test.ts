@@ -1,6 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+const storeMocks = vi.hoisted(() => ({ from: vi.fn() }));
+vi.mock("server-only", () => ({}));
+vi.mock("../supabase-admin", () => ({ supabaseAdmin: { from: storeMocks.from } }));
+import { inquiryByToken, liveConfig } from "../voice-screen-store";
+import { createContinuation } from "../voice-screen-live";
 
 const migration = readFileSync(
   join(process.cwd(), "supabase", "migrations", "20260909231831_voice_screen_parallel_journey.sql"),
@@ -9,6 +14,23 @@ const migration = readFileSync(
 const compact = migration.replace(/\s+/g, "");
 
 describe("parallel voice-to-Screen migration contract", () => {
+  afterEach(() => { vi.unstubAllEnvs(); vi.clearAllMocks(); });
+  it("requires retention and revokes issued bearer links after key rotation", async () => {
+    vi.stubEnv("V2S_ENABLED", "true"); vi.stubEnv("V2S_RETENTION_ENABLED", "false");
+    expect(liveConfig()).toBeNull();
+    vi.stubEnv("V2S_RETENTION_ENABLED", "true"); vi.stubEnv("V2S_RETENTION_DAYS", "7");
+    vi.stubEnv("V2S_FIRM_ID", "11111111-1111-4111-8111-111111111111");
+    vi.stubEnv("V2S_LOCATION_ID", "location"); vi.stubEnv("V2S_AGENT_ID", "agent");
+    vi.stubEnv("V2S_PUBLIC_ORIGIN", "https://example.test"); vi.stubEnv("V2S_WEBHOOK_SECRET", "s".repeat(32));
+    vi.stubEnv("V2S_TOKEN_KEY", "k".repeat(32));
+    const minted = createContinuation("k".repeat(32));
+    const chain = { select: vi.fn(), eq: vi.fn(), gt: vi.fn(), neq: vi.fn(), maybeSingle: vi.fn().mockResolvedValue({ data: { id: "inquiry", token_nonce: minted.nonce, token_hash: minted.hash } }) };
+    for (const method of [chain.select, chain.eq, chain.gt, chain.neq]) method.mockReturnValue(chain);
+    storeMocks.from.mockReturnValue(chain);
+    expect((await inquiryByToken(minted.token))?.id).toBe("inquiry");
+    vi.stubEnv("V2S_TOKEN_KEY", "r".repeat(32));
+    expect(await inquiryByToken(minted.token)).toBeNull();
+  });
   it("keeps both stores browser-inaccessible and service-only", () => {
     for (const table of ["voice_screen_inquiries", "voice_screen_outbox"]) {
       expect(migration).toContain(`alter table public.${table} enable row level security`);

@@ -1,5 +1,5 @@
 import "server-only";
-import { createContinuation, hashToken, invitationEligible, seedLiveState, type LiveCall } from "./voice-screen-live";
+import { createContinuation, hashToken, invitationEligible, seedLiveState, tokenForNonce, type LiveCall } from "./voice-screen-live";
 import type { EngineState } from "./screen-engine/types";
 
 export interface Inquiry {
@@ -49,6 +49,8 @@ export async function inquiryByToken(token: string): Promise<Inquiry | null> {
     .eq("token_hash", hashToken(token)).eq("firm_id", config.firmId).eq("location_id", config.locationId).eq("agent_id", config.agentId)
     .gt("expires_at", new Date().toISOString()).neq("status", "stopped").neq("human_status", "taken_over").maybeSingle();
   if (error) throw new Error("continuation_unavailable");
+  // Rotation deliberately revokes previously issued links, not only queued sends.
+  if (data && hashToken(tokenForNonce(data.token_nonce, config.key)) !== data.token_hash) return null;
   return data as Inquiry | null;
 }
 
