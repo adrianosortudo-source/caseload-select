@@ -30,6 +30,7 @@
     "requiresSeparateImportAuthorization": true
   },
   "reviewMetadata": {
+    "correctedFromCommit": "703c18b7be3221e3447f7fa8d5e733ded1aa4043",
     "generatedFromCommit": "c0259a15727429c7d543b50d152b7f1c6278e4c2",
     "evidenceBoundary": "Counts and roster URLs preserve original research declarations. The supplied files do not retain enumerated lawyer names/roles or captured roster-page evidence, and this review did not independently re-open those pages.",
     "sourceArtifacts": [
@@ -460,6 +461,7 @@
         }
       ],
       "exactExistingSignalRecordIds": [
+        "b013-001",
         "b013-003",
         "b013-009",
         "b013-025",
@@ -479,7 +481,6 @@
         "b013-088"
       ],
       "reviewedNoMatchRecordIds": [
-        "b013-001",
         "b013-007",
         "b013-008",
         "b013-018",
@@ -488,7 +489,32 @@
         "b013-049",
         "b013-077"
       ],
-      "otherCandidatesLiveStatus": "uncertain",
+      "identityConflictHeldRecordIds": [
+        "b013-001"
+      ],
+      "supersededNoMatchRecordIds": [
+        "b013-001"
+      ],
+      "postMergePreflight": {
+        "observedOn": "2026-09-10",
+        "evidenceSource": "Fresh post-merge read-only Supabase preflight reported by the coordinating task; this corrective review did not query the database.",
+        "recordId": "b013-001",
+        "firmName": "Bianchi Presta LLP",
+        "matchKind": "exact_firm_name",
+        "matchedTables": [
+          "gta_prospect_firms",
+          "prospect_organizations"
+        ],
+        "existingWebsiteUrl": "https://bianchipresta.com/",
+        "candidateWebsiteUrl": "https://www.vaughanlawyers.ca/",
+        "supersedesPriorLiveBaseline": "no_match",
+        "reviewOutcome": "hold_identity_conflict",
+        "unknowns": [
+          "The relationship between bianchipresta.com and vaughanlawyers.ca is unresolved; no survivor, domain alias, or identity merge is decided.",
+          "Matched row IDs, a durable row-level snapshot, and updated global table counts/checksums were not supplied for this corrective review. Earlier baseline counts/checksums remain historical metadata."
+        ]
+      },
+      "otherCandidatesLiveStatus": "uncertain_except_recorded_existing_signals",
       "coverageNote": "The current prospect_organizations baseline includes the additional organization registry; the old 6,025-record static baseline alone is insufficient for net-new status."
     },
     "supplementCoverage": {
@@ -8466,14 +8492,13 @@
   "decisions": [
     {
       "recordId": "b013-001",
-      "disposition": "import",
-      "decisionCode": "candidate_import",
-      "reconciliationStatus": "provisional_new",
+      "disposition": "hold",
+      "decisionCode": "hold_identity",
       "reconciliation": {
         "staticBaseline": "no_match",
-        "liveBaseline": "no_match"
+        "liveBaseline": "existing_firm_match"
       },
-      "basis": "Provisional review candidate: original first-party research declares an exact 11-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required."
+      "basis": "Hold for identity conflict: the 2026-09-10 fresh post-merge read-only preflight found exact firm-name matches for Bianchi Presta LLP in both gta_prospect_firms and prospect_organizations, with existing website https://bianchipresta.com/ versus candidate https://www.vaughanlawyers.ca/. This later evidence supersedes the earlier live no-match report. The historical static result remains no_match, but neither that result nor the different candidate domain establishes net-new status. Resolve the domain/firm relationship with first-party evidence and a reviewed identity decision before considering any import; do not import, merge, or update either identity."
     },
     {
       "recordId": "b013-002",

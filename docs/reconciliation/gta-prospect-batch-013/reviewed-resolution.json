@@ -4,9 +4,9 @@
   "reviewedOn": "2026-09-10",
   "liveOperatorBaselineCount": 141,
   "candidateCount": 100,
-  "importCount": 8,
+  "importCount": 7,
   "excludedCount": 28,
-  "heldCount": 64,
+  "heldCount": 65,
   "automaticMerge": false,
   "outreachAuthorized": false,
   "policy": {
@@ -40,13 +40,13 @@
       "firmName": "Bianchi Presta LLP",
       "observedLawyerCount": 11,
       "countQualifier": "exact",
-      "disposition": "import",
-      "reconciliationStatus": "provisional_new",
+      "disposition": "hold",
+      "reconciliationStatus": null,
       "reconciliation": {
         "staticBaseline": "no_match",
-        "liveBaseline": "no_match"
+        "liveBaseline": "existing_firm_match"
       },
-      "basis": "Provisional review candidate: original first-party research declares an exact 11-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required."
+      "basis": "Hold for identity conflict: the 2026-09-10 fresh post-merge read-only preflight found exact firm-name matches for Bianchi Presta LLP in both gta_prospect_firms and prospect_organizations, with existing website https://bianchipresta.com/ versus candidate https://www.vaughanlawyers.ca/. This later evidence supersedes the earlier live no-match report. The historical static result remains no_match, but neither that result nor the different candidate domain establishes net-new status. Resolve the domain/firm relationship with first-party evidence and a reviewed identity decision before considering any import; do not import, merge, or update either identity."
     },
     {
       "sourceRecordKey": "b013-002",
