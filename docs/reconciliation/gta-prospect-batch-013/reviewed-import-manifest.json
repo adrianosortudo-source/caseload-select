@@ -3,9 +3,9 @@
   "purpose": "reviewed GTA prospect production-import candidate; apply requires separate authorization",
   "generatedOn": "2026-09-10",
   "sourceReviewFile": "review.json",
-  "sourceResolutionSha256": "e4350a5db3439e5ba23d0f18555f793a6369bc2e09ef6b251186653c0a5889e1",
+  "sourceResolutionSha256": "850498ee8459e3c0984974c54bc705c7c48903dfd992f00ceb2031cbd8c069fb",
   "expectedLiveBaselineCount": 141,
-  "expectedImportCount": 7,
+  "expectedImportCount": 6,
   "actionsExcluded": [
     "CRM write",
     "CRM contact creation",
@@ -32,7 +32,7 @@
       "reconciliationStatus": "provisional_new",
       "legacyClusterLawyerCount": null,
       "legacyCrosswalk": null,
-      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 4-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required. Use the supplemented Toronto office and retain raw Burlington.",
+      "reconciliationNote": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 4-lawyer roster at https://www.gsklawyers.com/ within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Sandra Stephenson is source-labeled Founder; admin@gsklawyers.com is a general inbox. Toronto office evidence remains at https://www.gsklawyers.com/gsk-contact.",
       "advertisingEvidence": "unknown",
       "advertisingSourceUrl": null,
       "gbpEvidence": "unknown",
@@ -74,12 +74,21 @@
       "reconciliationStatus": "provisional_new",
       "legacyClusterLawyerCount": null,
       "legacyCrosswalk": null,
-      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 5-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "reconciliationNote": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 5-lawyer roster at https://www.cassbishop.ca/lawyers-since-1958 within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Peter H. Cass is source-labeled Partner & President at https://www.cassbishop.ca/petercass/; this does not establish ownership. No usable prospect email was found; the careers-only opportunity@ address is excluded.",
       "advertisingEvidence": "unknown",
       "advertisingSourceUrl": null,
       "gbpEvidence": "unknown",
       "gbpSourceUrl": null,
-      "publicContacts": []
+      "publicContacts": [
+        {
+          "name": "Peter H. Cass",
+          "relationship": "principal",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.cassbishop.ca/petercass/",
+          "observedAt": "2026-09-10"
+        }
+      ]
     },
     {
       "id": "gta-prospect-013-b013-018",
@@ -99,12 +108,29 @@
       "reconciliationStatus": "provisional_new",
       "legacyClusterLawyerCount": null,
       "legacyCrosswalk": null,
-      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 3-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "reconciliationNote": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 3-lawyer roster at https://anthonylaw.ca/our-team/ within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. David Anthony is represented only as Lead Counsel from https://anthonylaw.ca/our-team/. info@anthonylaw.ca is a general inbox sourced to https://anthonylaw.ca/terms-of-use-and-disclaimer-of-liability/. Ownership is not inferred.",
       "advertisingEvidence": "unknown",
       "advertisingSourceUrl": null,
       "gbpEvidence": "unknown",
       "gbpSourceUrl": null,
-      "publicContacts": []
+      "publicContacts": [
+        {
+          "name": "David Anthony",
+          "relationship": "named_lawyer",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://anthonylaw.ca/our-team/",
+          "observedAt": "2026-09-10"
+        },
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "info@anthonylaw.ca",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://anthonylaw.ca/terms-of-use-and-disclaimer-of-liability/",
+          "observedAt": "2026-09-10"
+        }
+      ]
     },
     {
       "id": "gta-prospect-013-b013-024",
@@ -124,7 +150,7 @@
       "reconciliationStatus": "provisional_new",
       "legacyClusterLawyerCount": null,
       "legacyCrosswalk": null,
-      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 6-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "reconciliationNote": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 6-lawyer roster at https://www.kestenberglitigation.com/meet-our-lawyers within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. The re-opened roster explicitly labels Marc as Founding and Managing Partner (marc@kestenberglitigation.com) and Michael as Founding Partner (michael@kestenberglitigation.com); each named email is independently source-attributed.",
       "advertisingEvidence": "unknown",
       "advertisingSourceUrl": null,
       "gbpEvidence": "unknown",
@@ -140,44 +166,10 @@
         },
         {
           "name": "Michael Kestenberg",
-          "relationship": "principal",
-          "email": null,
+          "relationship": "founder",
+          "email": "michael@kestenberglitigation.com",
           "emailKind": "named_person",
           "sourceUrl": "https://www.kestenberglitigation.com/meet-our-lawyers",
-          "observedAt": "2026-09-10"
-        }
-      ]
-    },
-    {
-      "id": "gta-prospect-013-b013-041",
-      "recordOrigin": "reviewed_gta_prospect_batch_013",
-      "firmName": "Jewell Radimisis Jorge LLP",
-      "city": "North York / Toronto",
-      "officeCities": [
-        "North York / Toronto"
-      ],
-      "websiteUrl": "https://www.jrjlaw.com/",
-      "practiceAreas": [],
-      "observedLawyerCount": 9,
-      "observedLawyerCountQualifier": "exact",
-      "observedLawyerCountDisplay": null,
-      "rosterSourceUrl": "https://www.jrjlaw.com/our-lawyers/",
-      "rosterCheckedAt": "2026-09-10",
-      "reconciliationStatus": "provisional_new",
-      "legacyClusterLawyerCount": null,
-      "legacyCrosswalk": null,
-      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 9-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
-      "advertisingEvidence": "unknown",
-      "advertisingSourceUrl": null,
-      "gbpEvidence": "unknown",
-      "gbpSourceUrl": null,
-      "publicContacts": [
-        {
-          "name": "Paul R. Jewell",
-          "relationship": "founder",
-          "email": null,
-          "emailKind": "named_person",
-          "sourceUrl": "https://www.jrjlaw.com/our-lawyers/",
           "observedAt": "2026-09-10"
         }
       ]
@@ -200,7 +192,7 @@
       "reconciliationStatus": "provisional_new",
       "legacyClusterLawyerCount": null,
       "legacyCrosswalk": null,
-      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 8-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "reconciliationNote": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 8-lawyer roster at https://www.grosman.com/our-team/ within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Five partners are listed but no owner/managing partner is established; leadership remains unknown. lawyers@grosman.com is a general inbox.",
       "advertisingEvidence": "unknown",
       "advertisingSourceUrl": null,
       "gbpEvidence": "unknown",
@@ -234,7 +226,7 @@
       "reconciliationStatus": "provisional_new",
       "legacyClusterLawyerCount": null,
       "legacyCrosswalk": null,
-      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 13-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "reconciliationNote": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 13-lawyer roster at https://www.addario.ca/lawyers within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Frank's founder wording is sourced to https://www.addario.ca/about (founded in 2012); https://www.addario.ca/lawyers binds faddario@addario.ca to Frank and lists info@addario.ca under Write us as a general inbox.",
       "advertisingEvidence": "unknown",
       "advertisingSourceUrl": null,
       "gbpEvidence": "unknown",
@@ -245,6 +237,14 @@
           "relationship": "founder",
           "email": "faddario@addario.ca",
           "emailKind": "named_person",
+          "sourceUrl": "https://www.addario.ca/lawyers",
+          "observedAt": "2026-09-10"
+        },
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "info@addario.ca",
+          "emailKind": "general_firm",
           "sourceUrl": "https://www.addario.ca/lawyers",
           "observedAt": "2026-09-10"
         }

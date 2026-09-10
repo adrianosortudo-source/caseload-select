@@ -30,9 +30,26 @@
     "requiresSeparateImportAuthorization": true
   },
   "reviewMetadata": {
+    "firstPartyRevalidation": {
+      "observedOn": "2026-09-10",
+      "evidenceSource": "Current public first-party revalidation supplied by the coordinating task; this artifact amendment did not independently browse or query a database.",
+      "revalidatedImportCandidateRecordIds": [
+        "b013-007",
+        "b013-008",
+        "b013-018",
+        "b013-024",
+        "b013-049",
+        "b013-077"
+      ],
+      "evidenceHeldRecordIds": [
+        "b013-041"
+      ],
+      "heldRecordSummary": "Jewell Radimisis Jorge: eight displayed rows include deceased founder Paul Jewell; a cached Yusra Khalid profile leaves a 7-vs-8 active count ambiguity. Current owner/leader unknown.",
+      "rolePolicy": "Preserve exact observed roles and named-email pairings; no ownership inferred. David Anthony is Lead Counsel only. Careers-only and mediation-specific inboxes are excluded."
+    },
     "correctedFromCommit": "703c18b7be3221e3447f7fa8d5e733ded1aa4043",
     "generatedFromCommit": "c0259a15727429c7d543b50d152b7f1c6278e4c2",
-    "evidenceBoundary": "Counts and roster URLs preserve original research declarations. The supplied files do not retain enumerated lawyer names/roles or captured roster-page evidence, and this review did not independently re-open those pages.",
+    "evidenceBoundary": "All original research declarations remain in sourceRecord. Six retained import candidates now include current first-party revalidation reported by the coordinating task; named roster evidence is retained where supplied. Jewell Radimisis Jorge remains on hold for an unresolved active roster. This artifact amendment did not independently reopen pages, and no captured page files are stored here.",
     "sourceArtifacts": [
       {
         "path": "D:\\00_Work\\01_CaseLoad_Select\\99_Temp\\batch-013-gta-firm-candidates-2026-09-10.json",
@@ -523,7 +540,7 @@
       "coveredCandidatesMissingStreetAddress": 12,
       "candidatesWithoutSupplement": 42
     },
-    "preservedUnknownsNote": "sourceRecord and unknowns retain original observations, including prior baseline-unknown declarations. Independent current reviewer outcomes appear only in decisions; they do not silently rewrite source observations."
+    "preservedUnknownsNote": "sourceRecord and original unknowns retain historical observations, including prior baseline-unknown declarations. Current reviewed outcomes appear in decisions and explicitly labeled revalidation/countEvidence; these additions do not silently rewrite source observations."
   },
   "candidates": [
     {
@@ -1058,9 +1075,9 @@
         {
           "name": "Sandra Stephenson",
           "relationship": "founder",
+          "sourceRole": "Founder",
           "url": "https://www.gsklawyers.com/",
           "observedOn": "2026-09-10",
-          "sourceRole": "Founder",
           "ownershipNotInferred": true
         }
       ],
@@ -1076,15 +1093,28 @@
           "kind": "roster",
           "url": "https://www.gsklawyers.com/",
           "provenance": "first_party",
-          "verificationStatus": "source_declared_not_revalidated_in_this_review",
-          "originalCountQualifier": "exact_named_team"
+          "verificationStatus": "first_party_revalidated_reported_by_coordinating_task",
+          "originalCountQualifier": "exact_named_team",
+          "observedOn": "2026-09-10"
         }
       ],
       "countEvidence": {
-        "status": "original_research_declaration",
-        "enumeratedLawyerNamesRetained": false,
+        "status": "first_party_revalidated_reported_by_coordinating_task",
+        "observedOn": "2026-09-10",
+        "sourceUrl": "https://www.gsklawyers.com/",
+        "observedLawyerCount": 4,
         "sourceQualifier": "exact_named_team",
-        "recheckRequiredBeforeApply": true
+        "enumeratedLawyerNamesRetained": true,
+        "recheckRequiredBeforeApply": true,
+        "countedLawyers": [
+          "Gary Graham",
+          "Jared Brown",
+          "Curtis Van Vliet",
+          "Sandra Stephenson"
+        ],
+        "excludedRoles": [
+          "Law clerk shown separately"
+        ]
       },
       "identityEvidence": {
         "recordId": "b013-007",
@@ -1133,9 +1163,23 @@
         "The first-party site identifies the firm as Graham Stephenson Van Vliet LLP; no separate evidence was gathered here for any prior legal-name variant."
       ],
       "sourceNotes": [
-        "Review office city corrected to Toronto using the first-party office supplement (Suite 303, 1 Eva Road). The raw Burlington observation is retained in sourceRecord.city."
+        "Review office city corrected to Toronto using the first-party office supplement (Suite 303, 1 Eva Road). The raw Burlington observation is retained in sourceRecord.city.",
+        "The re-opened page body/contact identifies Graham Stephenson Van Vliet; the HTML title still says Kennedy. Retain the current body/contact evidence and the stale-title discrepancy."
       ],
-      "staticSignals": []
+      "staticSignals": [],
+      "revalidation": {
+        "observedOn": "2026-09-10",
+        "provenance": "first_party",
+        "reportedBy": "coordinating_task",
+        "outcome": "exact_roster_reported",
+        "sourceUrls": [
+          "https://www.gsklawyers.com/",
+          "https://www.gsklawyers.com/gsk-contact"
+        ],
+        "evidenceBoundary": "The coordinating task supplied current first-party revalidation; no captured page file is stored in this review. Names are retained only where the supplied payload enumerated them.",
+        "ownershipVerified": false,
+        "officeAddress": "Suite 303, 1 Eva Road, Toronto, Ontario M9C 4Z5"
+      }
     },
     {
       "recordId": "b013-008",
@@ -1149,21 +1193,34 @@
       "countQualifier": "exact",
       "observedOn": "2026-09-10",
       "practiceAreas": [],
-      "leadership": [],
+      "leadership": [
+        {
+          "name": "Peter H. Cass",
+          "relationship": "other_leadership",
+          "sourceRole": "Partner & President",
+          "url": "https://www.cassbishop.ca/petercass/",
+          "observedOn": "2026-09-10",
+          "ownershipNotInferred": true
+        }
+      ],
       "publicEmails": [],
       "evidence": [
         {
           "kind": "roster",
           "url": "https://www.cassbishop.ca/lawyers-since-1958",
           "provenance": "first_party",
-          "verificationStatus": "source_declared_not_revalidated_in_this_review",
-          "originalCountQualifier": "exact_named_lawyers"
+          "verificationStatus": "first_party_revalidated_reported_by_coordinating_task",
+          "originalCountQualifier": "exact_named_lawyers",
+          "observedOn": "2026-09-10"
         }
       ],
       "countEvidence": {
-        "status": "original_research_declaration",
-        "enumeratedLawyerNamesRetained": false,
+        "status": "first_party_revalidated_reported_by_coordinating_task",
+        "observedOn": "2026-09-10",
+        "sourceUrl": "https://www.cassbishop.ca/lawyers-since-1958",
+        "observedLawyerCount": 5,
         "sourceQualifier": "exact_named_lawyers",
+        "enumeratedLawyerNamesRetained": false,
         "recheckRequiredBeforeApply": true
       },
       "identityEvidence": {
@@ -1209,8 +1266,30 @@
       "unknowns": [
         "Owner and baseline duplicate status unknown."
       ],
-      "sourceNotes": [],
-      "staticSignals": []
+      "sourceNotes": [
+        "Peter H. Cass is identified as Partner & President; ownership is not inferred. No usable prospect email was established, and the careers-only opportunity@ address is excluded."
+      ],
+      "staticSignals": [],
+      "revalidation": {
+        "observedOn": "2026-09-10",
+        "provenance": "first_party",
+        "reportedBy": "coordinating_task",
+        "outcome": "exact_roster_reported",
+        "sourceUrls": [
+          "https://www.cassbishop.ca/lawyers-since-1958",
+          "https://www.cassbishop.ca/petercass/"
+        ],
+        "evidenceBoundary": "The coordinating task supplied current first-party revalidation; no captured page file is stored in this review. Names are retained only where the supplied payload enumerated them.",
+        "ownershipVerified": false,
+        "currentPublishedFirmName": "Cass & Bishop Professional Corporation",
+        "officeAddress": "3455 Harvester Road, Unit 31, Burlington, Ontario L7N 3P2",
+        "excludedContacts": [
+          {
+            "addressIdentifier": "opportunity@",
+            "reason": "Careers-only address; excluded from prospect contacts. The full address is not inferred."
+          }
+        ]
+      }
     },
     {
       "recordId": "b013-009",
@@ -1858,22 +1937,61 @@
       "countQualifier": "exact",
       "observedOn": "2026-09-10",
       "practiceAreas": [],
-      "leadership": [],
-      "publicEmails": [],
+      "leadership": [
+        {
+          "name": "David Anthony",
+          "relationship": "named_lawyer",
+          "sourceRole": "Lead Counsel",
+          "url": "https://anthonylaw.ca/our-team/",
+          "observedOn": "2026-09-10",
+          "ownershipNotInferred": true
+        }
+      ],
+      "publicEmails": [
+        {
+          "email": "info@anthonylaw.ca",
+          "url": "https://anthonylaw.ca/terms-of-use-and-disclaimer-of-liability/",
+          "observedOn": "2026-09-10"
+        }
+      ],
       "evidence": [
         {
           "kind": "roster",
           "url": "https://anthonylaw.ca/our-team/",
           "provenance": "first_party",
-          "verificationStatus": "source_declared_not_revalidated_in_this_review",
-          "originalCountQualifier": "exact_named_lawyers"
+          "verificationStatus": "first_party_revalidated_reported_by_coordinating_task",
+          "originalCountQualifier": "exact_named_lawyers",
+          "observedOn": "2026-09-10"
         }
       ],
       "countEvidence": {
-        "status": "original_research_declaration",
-        "enumeratedLawyerNamesRetained": false,
+        "status": "first_party_revalidated_reported_by_coordinating_task",
+        "observedOn": "2026-09-10",
+        "sourceUrl": "https://anthonylaw.ca/our-team/",
+        "observedLawyerCount": 3,
         "sourceQualifier": "exact_named_lawyers",
-        "recheckRequiredBeforeApply": true
+        "enumeratedLawyerNamesRetained": true,
+        "recheckRequiredBeforeApply": true,
+        "countedLawyers": [
+          {
+            "name": "David Anthony",
+            "role": "Lead Counsel"
+          },
+          {
+            "name": "Jeffrey Ordon",
+            "role": "Partner"
+          },
+          {
+            "name": "Yasmeen Zamanian",
+            "role": "Associate"
+          }
+        ],
+        "excludedNonLawyers": [
+          {
+            "name": "Aseel Ahmad",
+            "role": "Senior Law Clerk"
+          }
+        ]
       },
       "identityEvidence": {
         "recordId": "b013-018",
@@ -1917,7 +2035,20 @@
         "Owner and baseline duplicate status unknown."
       ],
       "sourceNotes": [],
-      "staticSignals": []
+      "staticSignals": [],
+      "revalidation": {
+        "observedOn": "2026-09-10",
+        "provenance": "first_party",
+        "reportedBy": "coordinating_task",
+        "outcome": "exact_roster_reported",
+        "sourceUrls": [
+          "https://anthonylaw.ca/our-team/",
+          "https://anthonylaw.ca/terms-of-use-and-disclaimer-of-liability/"
+        ],
+        "evidenceBoundary": "The coordinating task supplied current first-party revalidation; no captured page file is stored in this review. Names are retained only where the supplied payload enumerated them.",
+        "ownershipVerified": false,
+        "officeAddress": "1 West Pearce Street, Suite 505, Richmond Hill, Ontario L4B 3K3"
+      }
     },
     {
       "recordId": "b013-019",
@@ -2316,21 +2447,25 @@
       "leadership": [
         {
           "name": "Marc Kestenberg",
-          "relationship": "other_leadership",
+          "relationship": "managing_partner",
+          "sourceRole": "Founding and Managing Partner",
           "url": "https://www.kestenberglitigation.com/meet-our-lawyers",
           "observedOn": "2026-09-10",
-          "sourceRole": "Founding / Managing Partners",
           "ownershipNotInferred": true,
           "email": "marc@kestenberglitigation.com",
-          "emailSourceUrl": "https://www.kestenberglitigation.com/meet-our-lawyers"
+          "emailSourceUrl": "https://www.kestenberglitigation.com/meet-our-lawyers",
+          "leadershipSourceUrl": "https://www.kestenberglitigation.com/meet-our-lawyers"
         },
         {
           "name": "Michael Kestenberg",
-          "relationship": "other_leadership",
+          "relationship": "founder",
+          "sourceRole": "Founding Partner",
           "url": "https://www.kestenberglitigation.com/meet-our-lawyers",
           "observedOn": "2026-09-10",
-          "sourceRole": "Founding / Managing Partners",
-          "ownershipNotInferred": true
+          "ownershipNotInferred": true,
+          "email": "michael@kestenberglitigation.com",
+          "emailSourceUrl": "https://www.kestenberglitigation.com/meet-our-lawyers",
+          "leadershipSourceUrl": "https://www.kestenberglitigation.com/meet-our-lawyers"
         }
       ],
       "publicEmails": [],
@@ -2339,14 +2474,18 @@
           "kind": "roster",
           "url": "https://www.kestenberglitigation.com/meet-our-lawyers",
           "provenance": "first_party",
-          "verificationStatus": "source_declared_not_revalidated_in_this_review",
-          "originalCountQualifier": "exact_named_lawyers"
+          "verificationStatus": "first_party_revalidated_reported_by_coordinating_task",
+          "originalCountQualifier": "exact_named_lawyers",
+          "observedOn": "2026-09-10"
         }
       ],
       "countEvidence": {
-        "status": "original_research_declaration",
-        "enumeratedLawyerNamesRetained": false,
+        "status": "first_party_revalidated_reported_by_coordinating_task",
+        "observedOn": "2026-09-10",
+        "sourceUrl": "https://www.kestenberglitigation.com/meet-our-lawyers",
+        "observedLawyerCount": 6,
         "sourceQualifier": "exact_named_lawyers",
+        "enumeratedLawyerNamesRetained": false,
         "recheckRequiredBeforeApply": true
       },
       "identityEvidence": {
@@ -2389,8 +2528,22 @@
       "unknowns": [
         "Only Marc email captured; do not infer an email for Michael; baseline duplicate status unknown."
       ],
-      "sourceNotes": [],
-      "staticSignals": []
+      "sourceNotes": [
+        "Revalidation explicitly observes Marc's and Michael's individual emails beside their names. The original sourceRecord uncertainty that only Marc's email was captured remains historical."
+      ],
+      "staticSignals": [],
+      "revalidation": {
+        "observedOn": "2026-09-10",
+        "provenance": "first_party",
+        "reportedBy": "coordinating_task",
+        "outcome": "exact_roster_reported",
+        "sourceUrls": [
+          "https://www.kestenberglitigation.com/meet-our-lawyers"
+        ],
+        "evidenceBoundary": "The coordinating task supplied current first-party revalidation; no captured page file is stored in this review. Names are retained only where the supplied payload enumerated them.",
+        "ownershipVerified": false,
+        "officeAddress": "2300 Yonge Street, Suite 1600, Toronto, Ontario M4P 1E4"
+      }
     },
     {
       "recordId": "b013-025",
@@ -3693,34 +3846,56 @@
         "North York / Toronto"
       ],
       "websiteUrl": "https://www.jrjlaw.com/",
-      "observedLawyerCount": 9,
-      "countQualifier": "exact",
+      "observedLawyerCount": null,
+      "countQualifier": "unknown",
       "observedOn": "2026-09-10",
       "practiceAreas": [],
-      "leadership": [
-        {
-          "name": "Paul R. Jewell",
-          "relationship": "founder",
-          "url": "https://www.jrjlaw.com/our-lawyers/",
-          "observedOn": "2026-09-10",
-          "sourceRole": "Founding Partner",
-          "ownershipNotInferred": true
-        }
-      ],
+      "leadership": [],
       "publicEmails": [],
       "evidence": [
         {
           "kind": "roster",
           "url": "https://www.jrjlaw.com/our-lawyers/",
           "provenance": "first_party",
-          "verificationStatus": "source_declared_not_revalidated_in_this_review",
+          "verificationStatus": "active_roster_unresolved_after_first_party_revalidation",
           "originalCountQualifier": "exact_named_lawyers"
+        },
+        {
+          "kind": "historical_lawyer_profile",
+          "url": "https://www.jrjlaw.com/our-lawyers/paul-r-jewell-qc/",
+          "provenance": "first_party",
+          "observedOn": "2026-09-10",
+          "note": "Paul Jewell's profile says he died in 2015; he remains included among eight displayed roster rows."
+        },
+        {
+          "kind": "lawyer_profile",
+          "url": "https://www.jrjlaw.com/our-lawyers/yusra-khalid-ll-m-ll-b-gpllm/",
+          "provenance": "first_party",
+          "observedOn": "2026-09-10",
+          "accessQualifier": "cached_first_party_profile",
+          "note": "Yusra Khalid's profile is absent from the displayed roster; its relationship to the current active roster is unresolved."
         }
       ],
       "countEvidence": {
-        "status": "original_research_declaration",
-        "enumeratedLawyerNamesRetained": false,
+        "status": "unresolved_active_roster_after_first_party_revalidation",
         "sourceQualifier": "exact_named_lawyers",
+        "originalObservedLawyerCount": 9,
+        "displayedRosterRows": 8,
+        "deceasedIncludedInDisplayedRoster": {
+          "name": "Paul R. Jewell",
+          "yearOfDeath": 2015,
+          "sourceUrl": "https://www.jrjlaw.com/our-lawyers/paul-r-jewell-qc/"
+        },
+        "remainingDisplayedRows": 7,
+        "activeLawyerCountCandidates": [
+          7,
+          8
+        ],
+        "unresolvedAdditionalProfile": {
+          "name": "Yusra Khalid",
+          "sourceUrl": "https://www.jrjlaw.com/our-lawyers/yusra-khalid-ll-m-ll-b-gpllm/",
+          "accessQualifier": "cached_first_party_profile"
+        },
         "recheckRequiredBeforeApply": true
       },
       "identityEvidence": {
@@ -3765,8 +3940,27 @@
       "unknowns": [
         "Baseline duplicate status unknown."
       ],
-      "sourceNotes": [],
-      "staticSignals": []
+      "sourceNotes": [
+        "2026-09-10 revalidation supersedes the original nine/exact declaration: eight displayed rows include deceased founder Paul Jewell; a separate cached Yusra Khalid profile leaves the active count ambiguous between seven and eight. No current owner or leader is established.",
+        "The mediation-specific pgalway email was excluded from prospect contacts; no full address was inferred."
+      ],
+      "staticSignals": [],
+      "revalidation": {
+        "observedOn": "2026-09-10",
+        "provenance": "first_party",
+        "reportedBy": "coordinating_task",
+        "outcome": "hold_evidence",
+        "currentOwnerOrLeader": null,
+        "sourceUrls": [
+          "https://www.jrjlaw.com/our-lawyers/",
+          "https://www.jrjlaw.com/our-lawyers/paul-r-jewell-qc/",
+          "https://www.jrjlaw.com/our-lawyers/yusra-khalid-ll-m-ll-b-gpllm/"
+        ],
+        "unknowns": [
+          "Active roster is ambiguous between seven and eight lawyers.",
+          "No current owner or leader is established from the supplied evidence."
+        ]
+      }
     },
     {
       "recordId": "b013-042",
@@ -4401,14 +4595,18 @@
           "kind": "roster",
           "url": "https://www.grosman.com/our-team/",
           "provenance": "first_party",
-          "verificationStatus": "source_declared_not_revalidated_in_this_review",
-          "originalCountQualifier": "exact_named_lawyers"
+          "verificationStatus": "first_party_revalidated_reported_by_coordinating_task",
+          "originalCountQualifier": "exact_named_lawyers",
+          "observedOn": "2026-09-10"
         }
       ],
       "countEvidence": {
-        "status": "original_research_declaration",
-        "enumeratedLawyerNamesRetained": false,
+        "status": "first_party_revalidated_reported_by_coordinating_task",
+        "observedOn": "2026-09-10",
+        "sourceUrl": "https://www.grosman.com/our-team/",
+        "observedLawyerCount": 8,
         "sourceQualifier": "exact_named_lawyers",
+        "enumeratedLawyerNamesRetained": false,
         "recheckRequiredBeforeApply": true
       },
       "identityEvidence": {
@@ -4454,8 +4652,25 @@
       "unknowns": [
         "Owner and baseline duplicate status unknown."
       ],
-      "sourceNotes": [],
-      "staticSignals": []
+      "sourceNotes": [
+        "Five partners are listed, but the supplied current evidence establishes no owner or managing partner. Keep current leadership empty and lawyers@grosman.com as a general firm inbox."
+      ],
+      "staticSignals": [],
+      "revalidation": {
+        "observedOn": "2026-09-10",
+        "provenance": "first_party",
+        "reportedBy": "coordinating_task",
+        "outcome": "exact_roster_reported",
+        "sourceUrls": [
+          "https://www.grosman.com/our-team/",
+          "https://www.grosman.com/"
+        ],
+        "evidenceBoundary": "The coordinating task supplied current first-party revalidation; no captured page file is stored in this review. Names are retained only where the supplied payload enumerated them.",
+        "ownershipVerified": false,
+        "officeAddress": "390 Bay Street, Suite 1100, Toronto, Ontario M5H 2Y2",
+        "listedPartnerCount": 5,
+        "currentOwnerOrLeader": null
+      }
     },
     {
       "recordId": "b013-050",
@@ -6677,29 +6892,40 @@
         {
           "name": "Frank Addario",
           "relationship": "founder",
+          "sourceRole": "Founder",
           "url": "https://www.addario.ca/lawyers",
           "observedOn": "2026-09-10",
-          "sourceRole": "Founder",
           "ownershipNotInferred": true,
           "email": "faddario@addario.ca",
           "emailSourceUrl": "https://www.addario.ca/lawyers",
-          "leadershipSourceUrl": "https://www.addario.ca/about"
+          "leadershipSourceUrl": "https://www.addario.ca/about",
+          "sourceRoleDetail": "The first-party About page says Frank founded the firm in 2012."
         }
       ],
-      "publicEmails": [],
+      "publicEmails": [
+        {
+          "email": "info@addario.ca",
+          "url": "https://www.addario.ca/lawyers",
+          "observedOn": "2026-09-10"
+        }
+      ],
       "evidence": [
         {
           "kind": "roster",
           "url": "https://www.addario.ca/lawyers",
           "provenance": "first_party",
-          "verificationStatus": "source_declared_not_revalidated_in_this_review",
-          "originalCountQualifier": "exact_named_lawyers"
+          "verificationStatus": "first_party_revalidated_reported_by_coordinating_task",
+          "originalCountQualifier": "exact_named_lawyers",
+          "observedOn": "2026-09-10"
         }
       ],
       "countEvidence": {
-        "status": "original_research_declaration",
-        "enumeratedLawyerNamesRetained": false,
+        "status": "first_party_revalidated_reported_by_coordinating_task",
+        "observedOn": "2026-09-10",
+        "sourceUrl": "https://www.addario.ca/lawyers",
+        "observedLawyerCount": 13,
         "sourceQualifier": "exact_named_lawyers",
+        "enumeratedLawyerNamesRetained": false,
         "recheckRequiredBeforeApply": true
       },
       "identityEvidence": {
@@ -6747,7 +6973,20 @@
         "Baseline duplicate status unknown."
       ],
       "sourceNotes": [],
-      "staticSignals": []
+      "staticSignals": [],
+      "revalidation": {
+        "observedOn": "2026-09-10",
+        "provenance": "first_party",
+        "reportedBy": "coordinating_task",
+        "outcome": "exact_roster_reported",
+        "sourceUrls": [
+          "https://www.addario.ca/lawyers",
+          "https://www.addario.ca/about"
+        ],
+        "evidenceBoundary": "The coordinating task supplied current first-party revalidation; no captured page file is stored in this review. Names are retained only where the supplied payload enumerated them.",
+        "ownershipVerified": false,
+        "officeAddress": "30 Duncan Street, 5th Floor, Toronto, Ontario M5V 2C3"
+      }
     },
     {
       "recordId": "b013-078",
@@ -8559,7 +8798,7 @@
         "staticBaseline": "no_match",
         "liveBaseline": "no_match"
       },
-      "basis": "Provisional review candidate: original first-party research declares an exact 4-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required. Use the supplemented Toronto office and retain raw Burlington."
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 4-lawyer roster at https://www.gsklawyers.com/ within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Sandra Stephenson is source-labeled Founder; admin@gsklawyers.com is a general inbox. Toronto office evidence remains at https://www.gsklawyers.com/gsk-contact."
     },
     {
       "recordId": "b013-008",
@@ -8570,7 +8809,7 @@
         "staticBaseline": "no_match",
         "liveBaseline": "no_match"
       },
-      "basis": "Provisional review candidate: original first-party research declares an exact 5-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required."
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 5-lawyer roster at https://www.cassbishop.ca/lawyers-since-1958 within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Peter H. Cass is source-labeled Partner & President at https://www.cassbishop.ca/petercass/; this does not establish ownership. No usable prospect email was found; the careers-only opportunity@ address is excluded."
     },
     {
       "recordId": "b013-009",
@@ -8671,7 +8910,7 @@
         "staticBaseline": "no_match",
         "liveBaseline": "no_match"
       },
-      "basis": "Provisional review candidate: original first-party research declares an exact 3-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required."
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 3-lawyer roster at https://anthonylaw.ca/our-team/ within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. David Anthony is represented only as Lead Counsel from https://anthonylaw.ca/our-team/. info@anthonylaw.ca is a general inbox sourced to https://anthonylaw.ca/terms-of-use-and-disclaimer-of-liability/. Ownership is not inferred."
     },
     {
       "recordId": "b013-019",
@@ -8732,7 +8971,7 @@
         "staticBaseline": "no_match",
         "liveBaseline": "no_match"
       },
-      "basis": "Provisional review candidate: original first-party research declares an exact 6-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required."
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 6-lawyer roster at https://www.kestenberglitigation.com/meet-our-lawyers within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. The re-opened roster explicitly labels Marc as Founding and Managing Partner (marc@kestenberglitigation.com) and Michael as Founding Partner (michael@kestenberglitigation.com); each named email is independently source-attributed."
     },
     {
       "recordId": "b013-025",
@@ -8896,14 +9135,13 @@
     },
     {
       "recordId": "b013-041",
-      "disposition": "import",
-      "decisionCode": "candidate_import",
-      "reconciliationStatus": "provisional_new",
+      "disposition": "hold",
+      "decisionCode": "hold_evidence",
       "reconciliation": {
         "staticBaseline": "no_match",
         "liveBaseline": "no_match"
       },
-      "basis": "Provisional review candidate: original first-party research declares an exact 9-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required."
+      "basis": "Hold for unresolved active roster and current leadership: the 2026-09-10 first-party revalidation found eight displayed rows at https://www.jrjlaw.com/our-lawyers/, including founder Paul Jewell, whose profile https://www.jrjlaw.com/our-lawyers/paul-r-jewell-qc/ states he died in 2015. Removing Paul leaves seven displayed rows, but the cached first-party Yusra Khalid profile at https://www.jrjlaw.com/our-lawyers/yusra-khalid-ll-m-ll-b-gpllm/ is absent from the roster, leaving a 7-vs-8 active-lawyer ambiguity. No current owner or leader is established. The prior static/live no-match observations remain identity evidence only; they cannot resolve the roster gate. Exclude the mediation-specific pgalway email from prospect contacts and require current roster/leadership resolution before reconsidering import."
     },
     {
       "recordId": "b013-042",
@@ -8984,7 +9222,7 @@
         "staticBaseline": "no_match",
         "liveBaseline": "no_match"
       },
-      "basis": "Provisional review candidate: original first-party research declares an exact 8-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required."
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 8-lawyer roster at https://www.grosman.com/our-team/ within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Five partners are listed but no owner/managing partner is established; leadership remains unknown. lawyers@grosman.com is a general inbox."
     },
     {
       "recordId": "b013-050",
@@ -9265,7 +9503,7 @@
         "staticBaseline": "no_match",
         "liveBaseline": "no_match"
       },
-      "basis": "Provisional review candidate: original first-party research declares an exact 13-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required."
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 13-lawyer roster at https://www.addario.ca/lawyers within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Frank's founder wording is sourced to https://www.addario.ca/about (founded in 2012); https://www.addario.ca/lawyers binds faddario@addario.ca to Frank and lists info@addario.ca under Write us as a general inbox."
     },
     {
       "recordId": "b013-078",
