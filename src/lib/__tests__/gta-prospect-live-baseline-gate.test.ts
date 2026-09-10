@@ -31,9 +31,9 @@ function snapshot() {
 describe("Batch 012 live baseline gate", () => {
   it("adapts west records, preserves suite identity, and emits only safe allowlisted output", () => {
     const report = reconcileGtaProspectBatch012(snapshot(), [west], [{ origin: "legacy_source", recordId: "legacy:row-200<script>", firmName: "Other", streetAddress: "Suite 200, 342 Queen Street West", city: "Toronto" }]);
-    expect(report.reviews[0]).toMatchObject({ candidate_id: "b012-wn-01", state: "review_required", automatic_merge: false, matches: expect.arrayContaining([expect.objectContaining({ origin: "ledger_projection", recordId: "ledger-1" }), expect.objectContaining({ origin: "legacy_source", fields: ["street_address"] })]) });
-    expect(report.reviews[1]).toEqual({ candidate_id: "b012-wn-02", state: "clear", automatic_merge: false, matches: [] });
-    expect(report.reviews.flatMap((review) => [review.candidate_id, ...review.matches.map((match) => match.recordId)]).every((id) => GTA_PROSPECT_SAFE_SLUG_PATTERN.test(id))).toBe(true);
+    expect(report.reviews[0]).toMatchObject({ candidate_source: { source_system: "gta_research", source_record_key: "B012-WN-01" }, state: "review_required", automatic_merge: false, matches: expect.arrayContaining([expect.objectContaining({ origin: "ledger_projection", recordId: "ledger-1", source_identity: { source_system: "gta_research", source_record_key: "ledger-1" } }), expect.objectContaining({ origin: "legacy_source", fields: ["street_address"], source_identity: null })]) });
+    expect(report.reviews[1]).toEqual({ candidate_source: { source_system: "gta_research", source_record_key: "B012-WN-02" }, state: "clear", automatic_merge: false, matches: [] });
+    expect(report.reviews.flatMap((review) => [review.candidate_source.source_record_key.toLowerCase(), ...review.matches.map((match) => match.recordId)]).every((id) => GTA_PROSPECT_SAFE_SLUG_PATTERN.test(id))).toBe(true);
     const stdout = JSON.stringify(report);
     expect(stdout).not.toMatch(/email|contact|crm|outreach|owner-secret@example\.test|CRM_SECRET|SEND_NOW/i);
     expect(stdout).not.toContain("legacy:row-200<script>");
@@ -41,9 +41,9 @@ describe("Batch 012 live baseline gate", () => {
 
   it("adapts east records and allows deliberately empty address evidence", () => {
     const baseline = [{ origin: "legacy_source" as const, recordId: "legacy-east", firmName: "Other", streetAddress: "200-10 King Street West", city: "Hamilton" }];
-    expect(reconcileGtaProspectBatch012(snapshot(), [east], baseline).reviews[0]).toMatchObject({ candidate_id: "b012-east-01", state: "review_required" });
+    expect(reconcileGtaProspectBatch012(snapshot(), [east], baseline).reviews[0]).toMatchObject({ candidate_source: { source_system: "gta_research", source_record_key: "B012-EAST-01" }, state: "review_required" });
     const empty = { ...east, records: [{ ...east.records[0], office_addresses: [] }] };
-    expect(reconcileGtaProspectBatch012(snapshot(), [empty], []).reviews[0]).toMatchObject({ candidate_id: "b012-east-01", state: "clear" });
+    expect(reconcileGtaProspectBatch012(snapshot(), [empty], []).reviews[0]).toMatchObject({ candidate_source: { source_system: "gta_research", source_record_key: "B012-EAST-01" }, state: "clear" });
   });
 
   it("parses multiple west office cities independently", () => {

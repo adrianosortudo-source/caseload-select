@@ -4,12 +4,14 @@ import { normalizeFirmDomain } from "@/lib/firm-identity-reconciliation";
 import { normalizeProspectFirmName } from "@/lib/gta-prospect-baseline-reconciliation";
 import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
 
-export const GTA_PROSPECT_IDENTITY_SNAPSHOT_SCHEMA = "gta-operator-identity-snapshot.v1" as const;
+export const GTA_PROSPECT_IDENTITY_SNAPSHOT_SCHEMA = "gta-operator-identity-snapshot.v2" as const;
 export const GTA_PROSPECT_IDENTITY_SNAPSHOT_SOURCE = "gta_prospect_research_operator_projection" as const;
+export const GTA_PROSPECT_IDENTITY_SOURCE_SYSTEM = "gta_research" as const;
 export const GTA_PROSPECT_SAFE_SLUG_PATTERN = /^[a-z0-9][a-z0-9-]{1,159}$/;
 
 export type GtaProspectIdentitySnapshotRecord = Readonly<{
-  record_id: string;
+  source_system: typeof GTA_PROSPECT_IDENTITY_SOURCE_SYSTEM;
+  source_record_key: string;
   normalized_firm_name: string;
   canonical_domain: string | null;
 }>;
@@ -47,13 +49,14 @@ export function buildGtaProspectIdentitySnapshot(
     const normalizedName = normalizeProspectFirmName(record.firmName);
     if (!GTA_PROSPECT_SAFE_SLUG_PATTERN.test(record.id) || !normalizedName) throw new Error("Operator identity projection contains an invalid identity.");
     return {
-      record_id: record.id,
+      source_system: GTA_PROSPECT_IDENTITY_SOURCE_SYSTEM,
+      source_record_key: record.id,
       normalized_firm_name: normalizedName,
       canonical_domain: normalizeFirmDomain(record.canonicalDomain ?? record.websiteUrl ?? record.rosterSourceUrl),
     };
-  }).sort((left, right) => left.record_id.localeCompare(right.record_id, "en-CA"));
+  }).sort((left, right) => left.source_record_key.localeCompare(right.source_record_key, "en-CA"));
   if (sanitized.length === 0) throw new Error("Operator identity projection is empty.");
-  if (new Set(sanitized.map((record) => record.record_id)).size !== sanitized.length) throw new Error("Operator identity projection contains duplicate record ids.");
+  if (new Set(sanitized.map((record) => `${record.source_system}:${record.source_record_key}`)).size !== sanitized.length) throw new Error("Operator identity projection contains duplicate source identities.");
   const generated_at = generatedAt.toISOString();
   return Object.freeze({
     schema_version: GTA_PROSPECT_IDENTITY_SNAPSHOT_SCHEMA,
@@ -80,15 +83,16 @@ export function parseGtaProspectIdentitySnapshot(
   if (root.record_count !== root.records.length || root.record_count !== options.expectedCount) throw new Error("Identity snapshot record count mismatch.");
   const records = root.records.map((entry): GtaProspectIdentitySnapshotRecord => {
     const record = object(entry, "Identity snapshot record is invalid.");
-    exactKeys(record, ["record_id", "normalized_firm_name", "canonical_domain"], "Identity snapshot record");
-    if (typeof record.record_id !== "string" || !GTA_PROSPECT_SAFE_SLUG_PATTERN.test(record.record_id)) throw new Error("Identity snapshot record id is invalid.");
+    exactKeys(record, ["source_system", "source_record_key", "normalized_firm_name", "canonical_domain"], "Identity snapshot record");
+    if (record.source_system !== GTA_PROSPECT_IDENTITY_SOURCE_SYSTEM) throw new Error("Identity snapshot source system is invalid.");
+    if (typeof record.source_record_key !== "string" || !GTA_PROSPECT_SAFE_SLUG_PATTERN.test(record.source_record_key)) throw new Error("Identity snapshot source record key is invalid.");
     if (typeof record.normalized_firm_name !== "string" || normalizeProspectFirmName(record.normalized_firm_name) !== record.normalized_firm_name) throw new Error("Identity snapshot firm name is not normalized.");
     if (record.canonical_domain !== null && (typeof record.canonical_domain !== "string" || normalizeFirmDomain(record.canonical_domain) !== record.canonical_domain)) throw new Error("Identity snapshot domain is not canonical.");
-    return { record_id: record.record_id, normalized_firm_name: record.normalized_firm_name, canonical_domain: record.canonical_domain as string | null };
+    return { source_system: GTA_PROSPECT_IDENTITY_SOURCE_SYSTEM, source_record_key: record.source_record_key, normalized_firm_name: record.normalized_firm_name, canonical_domain: record.canonical_domain as string | null };
   });
-  if (new Set(records.map((record) => record.record_id)).size !== records.length) throw new Error("Identity snapshot has duplicate record ids.");
-  const sortedIds = records.map((record) => record.record_id).sort((left, right) => left.localeCompare(right, "en-CA"));
-  if (JSON.stringify(sortedIds) !== JSON.stringify(records.map((record) => record.record_id))) throw new Error("Identity snapshot records are not deterministically sorted.");
+  if (new Set(records.map((record) => `${record.source_system}:${record.source_record_key}`)).size !== records.length) throw new Error("Identity snapshot has duplicate source identities.");
+  const sortedIds = records.map((record) => record.source_record_key).sort((left, right) => left.localeCompare(right, "en-CA"));
+  if (JSON.stringify(sortedIds) !== JSON.stringify(records.map((record) => record.source_record_key))) throw new Error("Identity snapshot records are not deterministically sorted.");
   if (typeof root.records_sha256 !== "string" || root.records_sha256 !== gtaProspectIdentityRecordsSha256(records)) throw new Error("Identity snapshot hash mismatch.");
   if (typeof root.generated_at !== "string" || typeof root.generated_on !== "string") throw new Error("Identity snapshot date is missing.");
   const generated = new Date(root.generated_at);

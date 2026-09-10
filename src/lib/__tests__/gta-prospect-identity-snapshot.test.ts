@@ -19,7 +19,7 @@ describe("GTA prospect identity snapshot", () => {
   it("exports only normalized identity keys and verifies count, hash, and date", () => {
     const now = new Date("2026-09-09T12:00:00.000Z");
     const snapshot = buildGtaProspectIdentitySnapshot([record], now);
-    expect(snapshot.records).toEqual([{ record_id: "ledger-1", normalized_firm_name: "example and law law", canonical_domain: "example.test" }]);
+    expect(snapshot.records).toEqual([{ source_system: "gta_research", source_record_key: "ledger-1", normalized_firm_name: "example and law law", canonical_domain: "example.test" }]);
     expect(JSON.stringify(snapshot)).not.toContain("owner@example.test");
     expect(parseGtaProspectIdentitySnapshot(snapshot, { expectedCount: 1, now })).toEqual(snapshot);
   });
@@ -38,8 +38,10 @@ describe("GTA prospect identity snapshot", () => {
     const duplicateRecords = [snapshot.records[0], snapshot.records[0]];
     const duplicate = { ...snapshot, record_count: 2, records: duplicateRecords, records_sha256: gtaProspectIdentityRecordsSha256(duplicateRecords) };
     expect(() => parseGtaProspectIdentitySnapshot(duplicate, { expectedCount: 2, now: new Date("2026-09-09T12:00:00.000Z") })).toThrow("duplicate");
-    const unsafeRecords = [{ ...snapshot.records[0], record_id: "ledger-1\nemail=owner@example.test" }];
+    const unsafeRecords = [{ ...snapshot.records[0], source_record_key: "ledger-1\nemail=owner@example.test" }];
     const unsafe = { ...snapshot, records: unsafeRecords, records_sha256: gtaProspectIdentityRecordsSha256(unsafeRecords) };
-    expect(() => parseGtaProspectIdentitySnapshot(unsafe, { expectedCount: 1, now: new Date("2026-09-09T12:00:00.000Z") })).toThrow("record id");
+    expect(() => parseGtaProspectIdentitySnapshot(unsafe, { expectedCount: 1, now: new Date("2026-09-09T12:00:00.000Z") })).toThrow("source record key");
+    const wrongSource = { ...snapshot, records: [{ ...snapshot.records[0], source_system: "agency_crm" }] };
+    expect(() => parseGtaProspectIdentitySnapshot({ ...wrongSource, records_sha256: gtaProspectIdentityRecordsSha256(wrongSource.records as never) }, { expectedCount: 1, now: new Date("2026-09-09T12:00:00.000Z") })).toThrow("source system");
   });
 });

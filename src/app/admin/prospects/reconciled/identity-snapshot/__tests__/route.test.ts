@@ -51,7 +51,7 @@ describe("operator identity snapshot route", () => {
     const response = await GET();
     const body = await response.json();
     expect(response.status).toBe(200);
-    expect(body.records).toEqual([{ record_id: "ledger-1", normalized_firm_name: "example law", canonical_domain: "example.test" }]);
+    expect(body.records).toEqual([{ source_system: "gta_research", source_record_key: "ledger-1", normalized_firm_name: "example law", canonical_domain: "example.test" }]);
     expect(JSON.stringify(body)).not.toContain("owner@example.test");
     expect(response.headers.get("cache-control")).toBe("private, no-store");
   });

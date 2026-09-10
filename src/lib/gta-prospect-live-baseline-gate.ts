@@ -8,6 +8,7 @@ import {
 import { normalizeFirmDomain } from "@/lib/firm-identity-reconciliation";
 import {
   GTA_PROSPECT_SAFE_SLUG_PATTERN,
+  GTA_PROSPECT_IDENTITY_SOURCE_SYSTEM,
   type GtaProspectIdentitySnapshot,
 } from "@/lib/gta-prospect-identity-snapshot";
 
@@ -20,7 +21,12 @@ export type GtaProspectLiveBaselineReport = Readonly<{
   batch_id: "gta-prospect-batch-012";
   snapshot: Readonly<{ generated_at: string; generated_on: string; record_count: number; records_sha256: string }>;
   candidate_count: number;
-  reviews: readonly Readonly<{ candidate_id: string; state: "clear" | "review_required"; automatic_merge: false; matches: readonly ProspectBaselineMatch[] }>[];
+  reviews: readonly Readonly<{
+    candidate_source: Readonly<{ source_system: typeof GTA_PROSPECT_IDENTITY_SOURCE_SYSTEM; source_record_key: string }>;
+    state: "clear" | "review_required";
+    automatic_merge: false;
+    matches: readonly Readonly<ProspectBaselineMatch & { source_identity: Readonly<{ source_system: typeof GTA_PROSPECT_IDENTITY_SOURCE_SYSTEM; source_record_key: string }> | null }>[];
+  }>[];
 }>;
 
 function object(value: unknown, message: string): Record<string, unknown> {
@@ -97,7 +103,7 @@ export function reconcileGtaProspectBatch012(
   staticBaseline: readonly ProspectBaselineRecord[],
 ): GtaProspectLiveBaselineReport {
   const liveBaseline: ProspectBaselineRecord[] = snapshot.records.map((record) => ({
-    origin: "ledger_projection", recordId: safeReportId(record.record_id), firmName: record.normalized_firm_name, canonicalDomain: record.canonical_domain,
+    origin: "ledger_projection", recordId: record.source_record_key, firmName: record.normalized_firm_name, canonicalDomain: record.canonical_domain,
   }));
   const candidates = documents.flatMap(parseGtaProspectBatch012Document);
   if (new Set(candidates.map((candidate) => candidate.id)).size !== candidates.length) throw new Error("Duplicate Batch 012 candidate ids.");
@@ -108,11 +114,21 @@ export function reconcileGtaProspectBatch012(
       candidateId: candidate.id, firmName: candidate.firmName, canonicalDomain: candidate.canonicalDomain,
       streetAddress: address.street || null, city: address.city ?? null,
     }, baseline).matches));
-    const candidateId = safeReportId(candidate.id.toLocaleLowerCase("en-CA"));
+    const reportMatches = matches.map((match) => ({
+      ...match,
+      source_identity: match.origin === "ledger_projection"
+        ? { source_system: GTA_PROSPECT_IDENTITY_SOURCE_SYSTEM, source_record_key: match.recordId }
+        : null,
+    }));
     if (!matches.every((match) => GTA_PROSPECT_SAFE_SLUG_PATTERN.test(match.recordId))) {
       throw new Error("Unsafe baseline id reached the report boundary.");
     }
-    return { candidate_id: candidateId, state: matches.length ? "review_required" as const : "clear" as const, automatic_merge: false as const, matches };
+    return {
+      candidate_source: { source_system: GTA_PROSPECT_IDENTITY_SOURCE_SYSTEM, source_record_key: candidate.id },
+      state: matches.length ? "review_required" as const : "clear" as const,
+      automatic_merge: false as const,
+      matches: reportMatches,
+    };
   });
   return {
     schema_version: GTA_PROSPECT_LIVE_BASELINE_REPORT_SCHEMA,
