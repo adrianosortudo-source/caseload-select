@@ -38,7 +38,8 @@
     "prospects:generate-batch-012": "tsx scripts/generate-gta-prospect-batch-012.ts",
     "prospects:validate-batch-012": "tsx scripts/generate-gta-prospect-batch-012.ts --check",
     "drg:deploy": "tsx scripts/drg-deploy/cli.ts",
-    "drg:revise-checklists": "tsx scripts/drg-deploy/checklist-revision.ts"
+    "drg:revise-checklists": "tsx scripts/drg-deploy/checklist-revision.ts",
+    "prospects:test-batch-pipeline": "node scripts/test-gta-prospect-batch-pipeline.mjs"
   },
   "dependencies": {
     "@fontsource-variable/caveat": "5.3.0",
