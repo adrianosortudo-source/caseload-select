@@ -180,7 +180,7 @@ BEGIN
        OR v_provider_event_id IS NULL OR char_length(v_provider_event_id) > 500
        OR v_event_digest IS NULL OR v_event_digest !~ '^[0-9a-f]{64}$'
        OR v_provider_observed_at IS NULL OR jsonb_typeof(v_to_endpoints) <> 'array'
-       OR NULLIF(btrim(v_event->>'idempotency_key'), '') IS DISTINCT FROM 'highlevel:' || v_provider_event_id
+       OR NULLIF(btrim(v_event->>'idempotency_key'), '') IS DISTINCT FROM 'prospect-archive-sync:highlevel:' || v_provider_event_id
     THEN RAISE EXCEPTION 'archive sync event % is invalid', v_event_count; END IF;
     IF EXISTS (
       SELECT 1 FROM jsonb_array_elements(v_to_endpoints) AS endpoint(value)
@@ -253,7 +253,7 @@ BEGIN
       v_kind, v_channel, v_direction, v_occurred_at,
       NULLIF(v_event->>'subject', ''), NULLIF(v_event->>'body', ''), NULLIF(v_event->>'from_endpoint', ''),
       v_to_endpoints, v_delivery_status, v_response_kind, v_reply_disposition, v_meeting_outcome,
-      'highlevel', v_provider_event_id, 'highlevel:' || v_provider_event_id, p_operator_id
+      'highlevel', v_provider_event_id, 'prospect-archive-sync:highlevel:' || v_provider_event_id, p_operator_id
     ) RETURNING * INTO v_activity;
 
     INSERT INTO public.prospect_provider_event_observations(

@@ -89,7 +89,7 @@ export function classifyArchiveEvent(raw: unknown): ClassifiedArchiveEvent {
     response_kind: responseKind,
     delivery_status: deliveryStatus,
     external_event_id: externalEventId,
-    idempotency_key: `highlevel:${externalEventId}`,
+    idempotency_key: `prospect-archive-sync:highlevel:${externalEventId}`,
   };
 }
 

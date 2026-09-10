@@ -70,7 +70,7 @@ function activity(event: ArchiveSyncProviderEvent, record: ArchiveSyncCohortReco
     from_endpoint: optional(event.from_endpoint, 320), to_endpoints: (event.to_endpoints ?? []).map((value) => value.trim()),
     delivery_status: event.delivery_status ?? fallback.delivery_status, response_kind: event.response_kind ?? fallback.response_kind,
     reply_disposition: event.reply_disposition ?? 'unknown', meeting_outcome: optional(event.meeting_outcome, 2000),
-    provenance_system: 'highlevel', external_event_id: externalEventId, idempotency_key: `highlevel:${externalEventId}`,
+    provenance_system: 'highlevel', external_event_id: externalEventId, idempotency_key: `prospect-archive-sync:highlevel:${externalEventId}`,
     provider_observed_at: new Date(event.provider_observed_at).toISOString(),
   };
 }

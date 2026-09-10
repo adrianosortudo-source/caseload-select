@@ -28,7 +28,7 @@ describe("prospect archive update operator surface", () => {
     expect(component).toContain('review_permit');
     expect(component).toContain('I reviewed the preview');
     expect(component).toContain('method: "POST"');
-    expect(component).toContain('database writes');
+    expect(component).toContain('cannot change HighLevel');
     expect(component).not.toMatch(/send email|activate workflow|enroll/i);
   });
 
