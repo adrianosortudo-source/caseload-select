@@ -52,6 +52,12 @@ describe("Batch 012 live baseline gate", () => {
     expect(reconcileGtaProspectBatch012(snapshot(), [document], baseline).reviews[0].matches).toHaveLength(2);
   });
 
+  it("strips a city presentation label before preserving the suite identity", () => {
+    const document = { ...west, records: [{ ...west.records[0], record_id: "B012-WN-H01", firm_name: "Labelled Law", canonical_domain: "labelled.test", office_addresses: [{ city: "Vaughan", published_address: "Vaughan: 204-3100 Rutherford Road, Vaughan, ON L4K 5R1" }] }] };
+    const baseline = [{ origin: "legacy_source" as const, recordId: "vaughan-labelled", firmName: "Other", streetAddress: "3100 Rutherford Road suite 204", city: "Vaughan" }];
+    expect(reconcileGtaProspectBatch012(snapshot(), [document], baseline).reviews[0]).toMatchObject({ state: "review_required", matches: [expect.objectContaining({ fields: ["street_address"] })] });
+  });
+
   it("fails closed on schema, state, id, and malformed east evidence", () => {
     expect(() => reconcileGtaProspectBatch012(snapshot(), [{ ...west, schema_version: "3.0" }], [])).toThrow("Unsupported");
     expect(() => reconcileGtaProspectBatch012(snapshot(), [{ ...west, records: [{ ...west.records[0], accepted: true }] }], [])).toThrow("accepted or import-ready");

@@ -1,0 +1,754 @@
+{
+  "schema_version": "gta-operator-identity-snapshot.v2",
+  "source": "gta_prospect_research_operator_projection",
+  "generated_at": "2026-09-10T12:07:01.519Z",
+  "generated_on": "2026-09-10",
+  "record_count": 124,
+  "records_sha256": "b5b7241ddf29d2c8e398907367fe812e21719ff1cee90b5df245d56e81e1c8da",
+  "records": [
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-001-blackburn-lawyers-richmond-hill",
+      "normalized_firm_name": "blackburn lawyers",
+      "canonical_domain": "blackburnlawyers.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-001-cattanach-markham",
+      "normalized_firm_name": "cattanach hindson sutton vanveldhuizen",
+      "canonical_domain": "cattanach.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-001-cook-law-markham",
+      "normalized_firm_name": "cook law firm",
+      "canonical_domain": "cooklawfirm.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-001-dale-streiman-brampton",
+      "normalized_firm_name": "dale streiman law",
+      "canonical_domain": "dalestreimanlaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-001-nichols-law-markham",
+      "normalized_firm_name": "nichols law",
+      "canonical_domain": "markhamlaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-001-pappas-law-vaughan",
+      "normalized_firm_name": "pappas law",
+      "canonical_domain": "pappaslaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-001-patel-law-milton",
+      "normalized_firm_name": "patel law",
+      "canonical_domain": "patellawpc.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-001-rutman-rutman-brampton-vaughan",
+      "normalized_firm_name": "rutman and rutman law firm",
+      "canonical_domain": "rutmanlaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-001-tailor-law-mississauga",
+      "normalized_firm_name": "tailor law",
+      "canonical_domain": "tailorlaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-002-b002-04",
+      "normalized_firm_name": "vanular lawyers",
+      "canonical_domain": "vanulaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-002-b002-11",
+      "normalized_firm_name": "baker and company",
+      "canonical_domain": "bakerlawyers.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-002-b002-13",
+      "normalized_firm_name": "goodman berman barristers",
+      "canonical_domain": "goodmanbermanlaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-002-b002-17",
+      "normalized_firm_name": "mk law",
+      "canonical_domain": "mklaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-002-b002-21",
+      "normalized_firm_name": "anderson mackeigan",
+      "canonical_domain": "andersonmackeigan.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-002-b002-25",
+      "normalized_firm_name": "harris harris",
+      "canonical_domain": "harrisandharris.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-01",
+      "normalized_firm_name": "cohen",
+      "canonical_domain": "cohenlaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-02",
+      "normalized_firm_name": "rites law",
+      "canonical_domain": "riteslaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-03",
+      "normalized_firm_name": "ramachandran law",
+      "canonical_domain": "ramachandran.law"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-04",
+      "normalized_firm_name": "insight law",
+      "canonical_domain": "insightlawfirm.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-05",
+      "normalized_firm_name": "englobe law",
+      "canonical_domain": "englobelaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-06",
+      "normalized_firm_name": "jackman and associates",
+      "canonical_domain": "jackmanandassociates.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-07",
+      "normalized_firm_name": "macdonald injury lawyers",
+      "canonical_domain": "macdonaldinjurylaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-08",
+      "normalized_firm_name": "walker sorensen",
+      "canonical_domain": "wslaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-09",
+      "normalized_firm_name": "goldman spring kichler and fischer",
+      "canonical_domain": "goldmanspring.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-11",
+      "normalized_firm_name": "jain immigration law",
+      "canonical_domain": "jainimmigrationlaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-13",
+      "normalized_firm_name": "the biking lawyer",
+      "canonical_domain": "thebikinglawyer.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-14",
+      "normalized_firm_name": "zwiebel and associates",
+      "canonical_domain": "zwiebelandassociates.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-16",
+      "normalized_firm_name": "wise law office",
+      "canonical_domain": "wiselaw.net"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-17",
+      "normalized_firm_name": "kormans",
+      "canonical_domain": "kormans.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-18",
+      "normalized_firm_name": "carranza",
+      "canonical_domain": "carranza.on.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-19",
+      "normalized_firm_name": "silcoff shacter",
+      "canonical_domain": "silcoffshacter.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-20",
+      "normalized_firm_name": "sokoloff lawyers",
+      "canonical_domain": "sokoloff.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-21",
+      "normalized_firm_name": "gottlieb family law",
+      "canonical_domain": "gottlieblawfirm.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-22",
+      "normalized_firm_name": "vaturi and cho",
+      "canonical_domain": "vclawyers.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-23",
+      "normalized_firm_name": "glick feinberg stone",
+      "canonical_domain": "gfsllp.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-24",
+      "normalized_firm_name": "houser henry and syron",
+      "canonical_domain": "houserhenry.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-003-b003-25",
+      "normalized_firm_name": "jap ji lawyers",
+      "canonical_domain": "japjilaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-004-b004-01",
+      "normalized_firm_name": "friedman estate litigation",
+      "canonical_domain": "felitigation.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-004-b004-02",
+      "normalized_firm_name": "sondhi defence",
+      "canonical_domain": "sondhidefence.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-004-b004-04",
+      "normalized_firm_name": "w glen how and associates",
+      "canonical_domain": "wghow.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-004-b004-05",
+      "normalized_firm_name": "boardwalk law",
+      "canonical_domain": "boardwalklaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-004-b004-08",
+      "normalized_firm_name": "shariff and associates",
+      "canonical_domain": "sharifflaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-004-b004-09",
+      "normalized_firm_name": "bortolussi family law",
+      "canonical_domain": "bortolussifamilylaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-004-b004-12",
+      "normalized_firm_name": "carson law office",
+      "canonical_domain": "ryan-carson-gkol.squarespace.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-004-b004-14",
+      "normalized_firm_name": "martin and hillyer associates",
+      "canonical_domain": "mhalaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-005-b005-01",
+      "normalized_firm_name": "smith immigration law",
+      "canonical_domain": "smithimmigrationgroup.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-005-b005-05",
+      "normalized_firm_name": "barrison and manitius",
+      "canonical_domain": "criminallawoshawa.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-005-b005-07",
+      "normalized_firm_name": "furlong ford",
+      "canonical_domain": "furlongford.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-005-b005-10",
+      "normalized_firm_name": "stringer",
+      "canonical_domain": "stringerllp.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-005-b005-13",
+      "normalized_firm_name": "zubas flett liberatore law",
+      "canonical_domain": "employment-lawyers.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-005-b005-16",
+      "normalized_firm_name": "gilbertson davis",
+      "canonical_domain": "gilbertsondavis.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-005-b005-17",
+      "normalized_firm_name": "landy marr kats",
+      "canonical_domain": "thetorontolawyers.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-005-b005-18",
+      "normalized_firm_name": "kramer simaan dhillon",
+      "canonical_domain": "kramersimaan.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-005-b005-19",
+      "normalized_firm_name": "douglas law firm",
+      "canonical_domain": "douglaslawfirm.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-005-b005-20",
+      "normalized_firm_name": "singer kwinter",
+      "canonical_domain": "singerkwinter.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-005-b005-24",
+      "normalized_firm_name": "bondy immigration law",
+      "canonical_domain": "bondyimmigration.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-01",
+      "normalized_firm_name": "chernos flaherty svonkin",
+      "canonical_domain": "cfscounsel.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-02",
+      "normalized_firm_name": "charney lawyers",
+      "canonical_domain": "charneylawyers.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-03",
+      "normalized_firm_name": "consky and associates",
+      "canonical_domain": "consky.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-04",
+      "normalized_firm_name": "bergel magence",
+      "canonical_domain": "bergellaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-05",
+      "normalized_firm_name": "halpern law group",
+      "canonical_domain": "halpernlawgroup.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-08",
+      "normalized_firm_name": "starkman and zhang lawyers",
+      "canonical_domain": "starkmanlawyers.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-09",
+      "normalized_firm_name": "gardiner miller arnold",
+      "canonical_domain": "gmalaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-12",
+      "normalized_firm_name": "falconers",
+      "canonical_domain": "falconers.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-13",
+      "normalized_firm_name": "greenspan humphrey makepeace",
+      "canonical_domain": "15bedford.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-16",
+      "normalized_firm_name": "mbbm lawyers",
+      "canonical_domain": "mbbmlawyers.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-17",
+      "normalized_firm_name": "hines legal",
+      "canonical_domain": "hineslegal.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-18",
+      "normalized_firm_name": "di battista katz grant cobbina",
+      "canonical_domain": "dkgcfamilylaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-22",
+      "normalized_firm_name": "hodder wang",
+      "canonical_domain": "hwlawyers.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-23",
+      "normalized_firm_name": "bozai law",
+      "canonical_domain": "bozailaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-24",
+      "normalized_firm_name": "edelson foord law",
+      "canonical_domain": "edelsonlaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-006-b006-25",
+      "normalized_firm_name": "ows law",
+      "canonical_domain": "owslaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-03",
+      "normalized_firm_name": "blacklock law firm",
+      "canonical_domain": "blacklocklawfirm.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-05",
+      "normalized_firm_name": "minken employment lawyers",
+      "canonical_domain": "minkenemploymentlawyers.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-08",
+      "normalized_firm_name": "simes law",
+      "canonical_domain": "simeslaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-09",
+      "normalized_firm_name": "garson immigration law",
+      "canonical_domain": "garsonil.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-10",
+      "normalized_firm_name": "bellissimo law group",
+      "canonical_domain": "bellissimolawgroup.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-14",
+      "normalized_firm_name": "lecker and associates",
+      "canonical_domain": "leckerslaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-16",
+      "normalized_firm_name": "anthony and associates",
+      "canonical_domain": "anthonyassociatespc.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-18",
+      "normalized_firm_name": "boulby weinberg",
+      "canonical_domain": "boulbyweinberg.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-21",
+      "normalized_firm_name": "laurel family law",
+      "canonical_domain": "laurelfamilylaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-22",
+      "normalized_firm_name": "gene c colman family law centre",
+      "canonical_domain": "complexfamilylaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-24",
+      "normalized_firm_name": "blake osler family law",
+      "canonical_domain": "blakeoslerfamilylaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-007-b007-25",
+      "normalized_firm_name": "frodis family law",
+      "canonical_domain": "frodislaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-01",
+      "normalized_firm_name": "adelaide barristers",
+      "canonical_domain": "adelaidebarristers.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-03",
+      "normalized_firm_name": "vista law",
+      "canonical_domain": "vistallp.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-05",
+      "normalized_firm_name": "walker law",
+      "canonical_domain": "tcwalkerlawyers.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-06",
+      "normalized_firm_name": "chappell partners",
+      "canonical_domain": "chappellpartners.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-09",
+      "normalized_firm_name": "blakeney henneberry murphy and rance",
+      "canonical_domain": "bhmr.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-10",
+      "normalized_firm_name": "barrett and anisfeld",
+      "canonical_domain": "barretansllp.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-11",
+      "normalized_firm_name": "dickson appell",
+      "canonical_domain": "dicksonappell.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-13",
+      "normalized_firm_name": "deo condominium lawyers",
+      "canonical_domain": "deocondolawyers.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-14",
+      "normalized_firm_name": "mand rai",
+      "canonical_domain": "mandlaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-15",
+      "normalized_firm_name": "founders",
+      "canonical_domain": "founders.law"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-17",
+      "normalized_firm_name": "schwartz and schwartz",
+      "canonical_domain": "schwartzandschwartz.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-19",
+      "normalized_firm_name": "ruso and associates",
+      "canonical_domain": "rusolaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-20",
+      "normalized_firm_name": "bsg",
+      "canonical_domain": "bsgllp.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-23",
+      "normalized_firm_name": "paterson macdougall",
+      "canonical_domain": "pmlaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-008-b008-25",
+      "normalized_firm_name": "mcintyre szabo",
+      "canonical_domain": "mcintyre-szabo.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-009-b009-01",
+      "normalized_firm_name": "naymark",
+      "canonical_domain": "naymarklaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-009-b009-02",
+      "normalized_firm_name": "falconeri rumble harrison",
+      "canonical_domain": "frhlaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-009-b009-03",
+      "normalized_firm_name": "cowling boissonneau",
+      "canonical_domain": "cblitigators.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-009-b009-04",
+      "normalized_firm_name": "overland",
+      "canonical_domain": "overlandllp.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-c-13",
+      "normalized_firm_name": "ingenuity",
+      "canonical_domain": "ingenuitylegal.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-c-14",
+      "normalized_firm_name": "jones kopp litigation partners",
+      "canonical_domain": "joneskopplitigation.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-c-19",
+      "normalized_firm_name": "monkhouse law",
+      "canonical_domain": "monkhouselaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-c-20",
+      "normalized_firm_name": "oatley vigmond",
+      "canonical_domain": "oatleyvigmond.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-c-25",
+      "normalized_firm_name": "ross nasseri",
+      "canonical_domain": "rossnasseri.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-c-28",
+      "normalized_firm_name": "tyr",
+      "canonical_domain": "tyrllp.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-c-29",
+      "normalized_firm_name": "whitten and lublin",
+      "canonical_domain": "whittenlublin.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-east-02",
+      "normalized_firm_name": "tandem law",
+      "canonical_domain": "tandemlawpc.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-east-03",
+      "normalized_firm_name": "mcmurter and associates",
+      "canonical_domain": "mcmurter.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-east-05",
+      "normalized_firm_name": "o brien balka khehra and guile",
+      "canonical_domain": "oshawalaw.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-east-11",
+      "normalized_firm_name": "goulart workplace lawyers",
+      "canonical_domain": "goulartlawyers.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-east-12",
+      "normalized_firm_name": "rogers and company",
+      "canonical_domain": "rogersco.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-east-15",
+      "normalized_firm_name": "mfc lawyers",
+      "canonical_domain": "mfclawyers.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-wn-04",
+      "normalized_firm_name": "brattys",
+      "canonical_domain": "bratty.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-wn-05",
+      "normalized_firm_name": "sutherland law",
+      "canonical_domain": "sutherlaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-wn-06",
+      "normalized_firm_name": "gz legal",
+      "canonical_domain": "gzlegal.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-wn-10",
+      "normalized_firm_name": "affinity law",
+      "canonical_domain": "affinitylawyers.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-wn-12",
+      "normalized_firm_name": "flaherty mccarthy",
+      "canonical_domain": "fmlaw.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-wn-13",
+      "normalized_firm_name": "bianchi presta",
+      "canonical_domain": "bianchipresta.com"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-wn-14",
+      "normalized_firm_name": "feldstein family law group",
+      "canonical_domain": "separation.ca"
+    },
+    {
+      "source_system": "gta_research",
+      "source_record_key": "gta-prospect-010-b010-wn-15",
+      "normalized_firm_name": "jamal family law",
+      "canonical_domain": "jamalfamilylaw.com"
+    }
+  ]
+}
