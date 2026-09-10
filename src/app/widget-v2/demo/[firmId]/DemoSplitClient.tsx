@@ -36,6 +36,8 @@ const EMPTY_VIEW: ScreenDemoView = {
   state: null,
   currentQuestion: null,
   report: null,
+  extraction: { status: "not-requested" },
+  runtime: "demo",
 };
 
 export function DemoSplitClient({ firmId, firmName, consentCaptureEnabled = true }: Props) {

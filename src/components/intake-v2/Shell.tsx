@@ -30,6 +30,8 @@ import { useRef } from "react";
 import type { ReactNode } from "react";
 import { useEmbeddedWidgetResize } from "./useEmbeddedWidgetResize";
 
+export type ShellLayout = "default" | "contained";
+
 interface ShellProps {
   /** Total number of screens in the current round. Drives dot count. */
   totalScreens: number;
@@ -55,11 +57,19 @@ interface ShellProps {
   children: ReactNode;
   /** Sticky footer (e.g. Continue button for multi-select). */
   footer?: ReactNode;
+  /**
+   * `contained` is for a widget placed directly inside a prospect-site mockup
+   * card or page column. It sizes to its content instead of reserving a
+   * viewport-height canvas, even when it is not running inside an iframe.
+   * Existing standalone and iframe consumers keep their current behaviour.
+   */
+  layout?: ShellLayout;
 }
 
-export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip, backLabel = "Back", skipLabel = "Skip", children, footer }: ShellProps) {
+export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip, backLabel = "Back", skipLabel = "Skip", children, footer, layout = "default" }: ShellProps) {
   const outerRef = useRef<HTMLDivElement | null>(null);
   const isEmbedded = useEmbeddedWidgetResize(outerRef);
+  const flowsToContent = isEmbedded || layout === "contained";
 
   // Outer chrome: min-h-screen ONLY in standalone, never when embedded.
   // When embedded the iframe is being sized to match this div, so we want
@@ -68,7 +78,7 @@ export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip,
   // Background colour is driven by --cls-bg (set by the widget page from
   // the firm's resolved theme); fallback is the default CaseLoad parchment.
   const outerClass = [
-    isEmbedded ? "" : "min-h-screen",
+    flowsToContent ? "" : "min-h-screen",
     "bg-[var(--cls-bg,#F4F3EF)] flex flex-col",
   ]
     .filter(Boolean)
@@ -79,11 +89,11 @@ export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip,
   // add empty padding the host doesn't want.
   const mainClass = [
     "flex-1 flex flex-col px-5",
-    isEmbedded ? "py-5" : "py-6 items-center justify-center",
+    flowsToContent ? "py-5" : "py-6 items-center justify-center",
   ].join(" ");
 
   return (
-    <div ref={outerRef} className={outerClass}>
+    <div ref={outerRef} className={outerClass} data-shell-layout={layout}>
       {/* Top chrome */}
       <header className="px-5 pt-5 pb-3 flex items-center justify-between">
         {onBack ? (
@@ -166,7 +176,7 @@ export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip,
         <footer
           className={[
             "px-5 pb-6 pt-3",
-            isEmbedded ? "" : "sticky bottom-0",
+            flowsToContent ? "" : "sticky bottom-0",
           ]
             .filter(Boolean)
             .join(" ")}
