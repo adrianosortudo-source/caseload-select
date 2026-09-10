@@ -34,6 +34,13 @@ import {
   type UnifiedIdentityState,
   type UnifiedProspectSource,
 } from "./prospect-unified-view";
+import ProspectActivityPanel from "../agency-crm/ProspectActivityPanel";
+import { ProspectContactStatus } from "./ProspectContactStatus";
+import {
+  fetchSourceContactStates,
+  GTA_PROSPECT_SOURCE_SYSTEM,
+  type SourceContactStateMap,
+} from "./prospect-contact-operations";
 
 export type RecordsResponse = {
   records?: ReconciledGtaProspect[];
@@ -150,6 +157,11 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const [source, setSource] = useState<UnifiedProspectSource | "">("");
   const [identity, setIdentity] = useState<UnifiedIdentityState | "">("");
   const [page, setPage] = useState(0);
+  const [contactStates, setContactStates] = useState<SourceContactStateMap>(new Map());
+  const [contactStateLoading, setContactStateLoading] = useState(false);
+  const [contactStateError, setContactStateError] = useState<string | null>(null);
+  const [selectedContact, setSelectedContact] = useState<ReconciledGtaProspect | null>(null);
+  const [contactRefreshToken, setContactRefreshToken] = useState(0);
 
   useEffect(() => {
     if (initialData) return;
@@ -214,7 +226,28 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   }), { source, identity, quickView }), [records, query, city, countFilter, selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const displayedPage = Math.min(page, pageCount - 1);
-  const visibleRecords = filtered.slice(displayedPage * PAGE_SIZE, (displayedPage + 1) * PAGE_SIZE);
+  const visibleRecords = useMemo(() => filtered.slice(displayedPage * PAGE_SIZE, (displayedPage + 1) * PAGE_SIZE), [displayedPage, filtered]);
+  const selectedOperationalContact = selectedContact?.publicContacts?.find((contact) => (
+    (contact.relationship === "owner" || contact.relationship === "founder" || contact.relationship === "principal")
+    && Boolean(contact.name)
+  )) ?? null;
+
+  useEffect(() => {
+    const sourceRecordKeys = visibleRecords.map((record) => record.id).filter(Boolean);
+    if (sourceRecordKeys.length === 0) {
+      setContactStates(new Map());
+      setContactStateError(null);
+      return;
+    }
+    const controller = new AbortController();
+    setContactStateLoading(true);
+    setContactStateError(null);
+    fetchSourceContactStates(GTA_PROSPECT_SOURCE_SYSTEM, sourceRecordKeys, controller.signal)
+      .then((states) => setContactStates(states))
+      .catch((cause: Error) => { if (cause.name !== "AbortError") { setContactStates(new Map()); setContactStateError(cause.message); } })
+      .finally(() => { if (!controller.signal.aborted) setContactStateLoading(false); });
+    return () => controller.abort();
+  }, [contactRefreshToken, visibleRecords]);
 
   const filterChips = [
     query && { label: `Search: ${query}`, clear: () => setQuery("") }, city && { label: `City: ${city}`, clear: () => setCity("") },
@@ -306,10 +339,11 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
       {records.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No reviewed expansion records have been added yet.</div> : filtered.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No firms match the current view and filters.</div> : (
         <div className="mt-3 overflow-x-auto rounded border border-border-brand">
           <table className="w-full min-w-[1440px] border-collapse text-left text-sm">
-            <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Source and identity</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Owner and email</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
+            <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Source and identity</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Owner and email</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
             <tbody>{visibleRecords.map((record) => {
               const dossier = record.qualifiedDossier;
               const identityState = prospectIdentityState(record);
+              const contactState = contactStates.get(record.id);
               return <tr key={record.id} className="border-t border-border-brand align-top">
                 <td className="px-3 py-3 font-semibold text-navy">{record.websiteUrl ? <a href={record.websiteUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">{record.firmName}</a> : record.firmName}<span className="mt-1 block text-xs font-normal text-black/55">{record.city}</span>{record.canonicalDomain && <span className="mt-1 block text-xs font-normal text-black/55">{record.canonicalDomain}</span>}</td>
                 <td className="px-3 py-3"><div className="flex flex-wrap gap-1">{prospectSources(record).map((item) => <span key={item} className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(item)}`}>{sourceLabels[item]}</span>)}<span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(identityState)}`}>{identityLabels[identityState]}</span></div>{record.legacyCrosswalk && <span className="mt-2 block text-xs leading-5 text-black/60">{record.legacyCrosswalk}</span>}{record.reconciliationNote && <span className="mt-1 block text-xs leading-5 text-black/50">{record.reconciliationNote}</span>}</td>
@@ -320,6 +354,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
                   const emails = contacts.filter((contact) => contact.email);
                   return <><span className="block font-semibold text-black/75">{owners.length > 0 ? owners.map((contact) => contact.name).filter(Boolean).join(", ") : "Owner not identified"}</span>{owners.map((contact, index) => <span key={`${contact.name}-${index}`} className="block text-black/55">{contactRoleLabel(contact.relationship)} · observed {contact.observedAt}</span>)}{emails.length > 0 ? emails.map((contact, index) => <span key={`${contact.email}-${index}`} className="mt-1 block break-all"><a href={`mailto:${contact.email ?? ""}`} className="text-navy underline underline-offset-2">{contact.email}</a><span className="ml-1 text-black/55">{contact.emailKind === "owner" ? "owner email" : contact.emailKind === "named_person" ? "named-person email" : "firm email"}</span>{contact.sourceUrl && <a href={contact.sourceUrl} target="_blank" rel="noreferrer" className="ml-1 text-navy underline underline-offset-2">source</a>}<span className="ml-1 text-black/55">observed {contact.observedAt}</span></span>) : <span className="mt-1 block text-black/55">Email not found</span>}</>;
                 })()}</td>
+                <td className="px-3 py-3"><ProspectContactStatus state={contactState} loading={contactStateLoading} error={contactStateError} sourceRecordKey={record.id} onOpenHistory={() => setSelectedContact(record)} /></td>
                 <td className="px-3 py-3 text-black/75">{dossier ? <><span className="font-medium">GBP: {gbpOpportunityLabels[dossier.gbpOpportunity.type] ?? titleCase(dossier.gbpOpportunity.type)}</span><span className="mt-1 block text-xs text-black/55">Website: {dossier.websiteAndIntake.opportunityTypes.map((value) => websiteOpportunityLabels[value] ?? titleCase(value)).join(", ")}</span></> : <span className="text-black/50">Not assessed</span>}</td>
                 <td className="px-3 py-3 text-xs leading-5 text-black/70">{dossier?.websiteAndIntake.observedChannels.join(", ") || "Not assessed"}</td>
                 <td className="px-3 py-3 text-xs leading-5"><EvidenceLink availability={record.advertisingEvidence} href={record.advertisingSourceUrl} label="Advertising" /><br /><EvidenceLink availability={record.gbpEvidence} href={record.gbpSourceUrl} label="GBP" />{dossier && <span className="mt-1 block text-black/55">{dossier.evidenceIds.length} registered sources</span>}</td>
@@ -329,6 +364,25 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
           </table>
         </div>
       )}
+      {selectedContact && <div className="mt-4"><ProspectActivityPanel
+        prospectId={selectedContact.id}
+        sourceSystem={GTA_PROSPECT_SOURCE_SYSTEM}
+        sourceRecordKey={selectedContact.id}
+        firmName={selectedContact.firmName}
+        contactName={selectedOperationalContact?.name ?? null}
+        contactEmail={selectedContact.publicContacts?.find((contact) => contact.email)?.email ?? null}
+        provisionedPersonEmail={selectedOperationalContact?.email ?? null}
+        sourceUrl={selectedContact.websiteUrl ?? selectedContact.rosterSourceUrl}
+        sourcePayload={{ source_record_key: selectedContact.id, firm_name: selectedContact.firmName, city: selectedContact.city, canonical_domain: selectedContact.canonicalDomain }}
+        provisioningBasis="Operator-confirmed GTA research source record. No identity match is inferred by this action."
+        initialContactability={contactStates.get(selectedContact.id)?.contactability}
+        initialNextAction={contactStates.get(selectedContact.id)?.next_action}
+        initialNextActionDue={contactStates.get(selectedContact.id)?.next_action_due}
+        open={Boolean(selectedContact)}
+        onClose={() => setSelectedContact(null)}
+        onActivitySaved={() => { setSelectedContact(null); setContactRefreshToken((current) => current + 1); }}
+        onConversationUpdated={() => setContactRefreshToken((current) => current + 1)}
+      /></div>}
       {filtered.length > PAGE_SIZE && <div className="mt-3 flex items-center justify-between gap-3 text-sm text-black/60">
         <span>Showing {displayedPage * PAGE_SIZE + 1}–{Math.min((displayedPage + 1) * PAGE_SIZE, filtered.length)}</span>
         <div className="flex gap-2"><button type="button" disabled={displayedPage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Previous</button><button type="button" disabled={displayedPage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Next</button></div>
