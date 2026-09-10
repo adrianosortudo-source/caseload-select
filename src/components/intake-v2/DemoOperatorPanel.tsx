@@ -91,7 +91,7 @@ export function DemoOperatorPanel({ view, contained = false }: Props) {
               data-ui-copy="body"
               style={{ textWrap: "wrap" }}
             >
-              Client answers and the firm’s brief will update here.
+              Client answers and the review brief appear here.
             </p>
           </section>
         ) : (
