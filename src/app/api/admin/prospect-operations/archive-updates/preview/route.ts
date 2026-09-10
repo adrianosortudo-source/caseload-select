@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       ba_ae_allowlist: new Set(records.map((record) => record.sourceRecordKey)),
       cohort_records: records.map((record) => ({
         cls_record_id: record.sourceRecordKey,
-        arm: record.arm,
+        arm: record.arm === 'BA' ? 'BA' : 'AE',
         highlevel_location_id: record.highLevel.locationId!,
         highlevel_contact_id: record.highLevel.contactId!,
         conversation_id: record.conversation!.id,

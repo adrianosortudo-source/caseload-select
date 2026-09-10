@@ -139,7 +139,7 @@ function scopeCheckForApply(value: Record<string, unknown>): ArchiveSyncScopeChe
 export function validateArchiveSyncScope(
   value: unknown,
   expectedHighLevelLocationId: string,
-  now = new Date(),
+  now?: Date,
 ): value is ArchiveSyncScope;
 export function validateArchiveSyncScope(value: unknown): ArchiveSyncScopeCheck;
 export function validateArchiveSyncScope(

@@ -105,7 +105,7 @@ describe('prospect archive persistence contract', () => {
   it('uses a service-only append-only database path with exact HighLevel IDs and conflict detection', () => {
     expect(migration).toContain('CREATE TABLE public.prospect_provider_event_observations');
     expect(migration).toContain("provider_system = 'highlevel'");
-    expect(migration).toContain('UNIQUE (provider_system, btrim(provider_event_id))');
+    expect(migration).toContain('UNIQUE (provider_system, provider_event_id)');
     expect(migration).toContain("RAISE EXCEPTION 'conflicting HighLevel provider event ID %'");
     expect(migration).toContain('AND v_existing.event_payload = v_event_payload');
     expect(migration).toContain("RAISE EXCEPTION 'KS records are frozen and cannot enter archive sync'");

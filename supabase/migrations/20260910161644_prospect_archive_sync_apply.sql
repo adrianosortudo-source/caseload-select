@@ -16,7 +16,7 @@ CREATE TABLE public.prospect_provider_event_observations (
   provider_observed_at timestamptz NOT NULL,
   applied_by_operator_id uuid NOT NULL REFERENCES public.firm_lawyers(id) ON DELETE RESTRICT,
   created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (provider_system, btrim(provider_event_id)),
+  UNIQUE (provider_system, provider_event_id),
   UNIQUE (activity_id)
 );
 CREATE INDEX prospect_provider_event_observations_conversation_idx

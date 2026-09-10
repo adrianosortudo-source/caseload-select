@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
     });
     return NextResponse.json({
       receipt: applied.receipt,
-      preview_digest: applied.previewDigest,
-      bundle_digest: applied.bundleDigest,
+      preview_digest: applied.prepared.previewDigest,
+      bundle_digest: applied.prepared.bundleDigest,
     });
   } catch (error) {
     return NextResponse.json({

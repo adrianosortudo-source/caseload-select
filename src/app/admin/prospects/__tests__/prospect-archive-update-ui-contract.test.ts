@@ -10,8 +10,8 @@ const component = readFileSync(resolve(process.cwd(), "src/app/admin/prospects/P
 
 describe("prospect archive update operator surface", () => {
   it("transforms the client component", async () => {
-    const module = await import("../ProspectArchiveUpdate");
-    expect(module.default).toBeTypeOf("function");
+    const loadedModule = await import("../ProspectArchiveUpdate");
+    expect(loadedModule.default).toBeTypeOf("function");
   });
 
   it("keeps direct sync unavailable and makes import preview explicit", () => {
