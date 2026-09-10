@@ -233,7 +233,7 @@ export function ProspectDemoPresentation({
         <div className="mx-auto flex w-full max-w-[1440px] flex-col gap-4">
           <div className="w-full">
             <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#90734B]">CaseLoad Select prospect preview</p>
-            <h1 className="mt-1 w-full text-pretty text-lg font-extrabold tracking-[-0.02em] sm:text-2xl" data-ui-copy="heading">{profile.firmName} intake demonstration</h1>
+            <h1 className="mt-1 w-full text-pretty text-[17px] font-extrabold leading-snug tracking-[-0.02em] sm:text-2xl" data-ui-copy="heading">{profile.firmName} intake demonstration</h1>
           </div>
           <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
             <label className="block text-xs font-semibold text-[#374457]">

@@ -87,7 +87,7 @@ export function DemoOperatorPanel({ view, contained = false }: Props) {
         {!state ? (
           <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5" data-ui-component-content="demo-empty-brief">
             <p className="w-full text-base leading-relaxed text-white/75" data-ui-copy="body">
-              The client’s answers and the firm’s review brief will appear here as the fictional intake progresses.
+              Client answers and the firm’s review brief will appear here as the intake progresses.
             </p>
           </section>
         ) : (
@@ -145,7 +145,7 @@ export function DemoOperatorPanel({ view, contained = false }: Props) {
                     {report.lawyer_time_priority}
                   </p>
                   <p className="mt-2 w-full text-sm leading-relaxed text-white/70" data-ui-copy="body">
-                    The lawyer makes the final response and engagement decision.
+                    The lawyer makes the final engagement decision.
                   </p>
                 </section>
 
