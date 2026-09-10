@@ -227,7 +227,7 @@ export function ProspectDemoBuilder({ onPresent }: Props) {
   );
 }
 
-function PlacementEditor({ draft, asset, replacementInput, onChange, onReplace, onSave }: { draft: ProspectDemoProfile; asset: ProspectDemoAsset; replacementInput: RefObject<HTMLInputElement | null>; onChange(next: ProspectDemoProfile): void; onReplace(file: File): void; onSave(): void }) {
+function PlacementEditor({ draft, asset, replacementInput, onChange, onReplace, onSave }: { draft: ProspectDemoProfile; asset: ProspectDemoAsset; replacementInput: RefObject<HTMLInputElement>; onChange(next: ProspectDemoProfile): void; onReplace(file: File): void; onSave(): void }) {
   const [url, setUrl] = useState("");
   const [imageError, setImageError] = useState("");
   useEffect(() => {
