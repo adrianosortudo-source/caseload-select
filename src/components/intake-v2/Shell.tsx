@@ -29,6 +29,7 @@
 import { useRef } from "react";
 import type { ReactNode } from "react";
 import { useEmbeddedWidgetResize } from "./useEmbeddedWidgetResize";
+import styles from "./contained-widget.module.css";
 
 export type ShellLayout = "default" | "contained";
 
@@ -78,6 +79,7 @@ export function Shell({ totalScreens, currentScreen, roundLabel, onBack, onSkip,
   // Background colour is driven by --cls-bg (set by the widget page from
   // the firm's resolved theme); fallback is the default CaseLoad parchment.
   const outerClass = [
+    layout === "contained" ? styles.contained : "",
     flowsToContent ? "" : "min-h-screen",
     "bg-[var(--cls-bg,#F4F3EF)] flex flex-col",
   ]

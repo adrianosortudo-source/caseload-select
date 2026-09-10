@@ -1,0 +1,39 @@
+.contained {
+  min-width: 0;
+  width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.contained h2,
+.contained p,
+.contained ul {
+  width: 100%;
+  max-width: none;
+  text-wrap: wrap;
+}
+
+.contained > header {
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.contained main,
+.contained main > div {
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+}
+
+.contained button {
+  max-width: 100%;
+  white-space: normal;
+}
+
+@media (max-width: 640px) {
+  .contained > header,
+  .contained > main,
+  .contained > footer {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+}

@@ -18,8 +18,10 @@
 import { useEffect, useState } from "react";
 import type { ScreenItem } from "./types";
 import { OTHER_VALUE } from "./types";
+import { useAutosizeTextarea } from "./useAutosizeTextarea";
 
 interface Props {
+  contained?: boolean;
   item: ScreenItem;
   /** Current value. string for single-select, string[] for multi. */
   value?: string | string[];
@@ -27,7 +29,7 @@ interface Props {
   onChange: (next: string | string[]) => void;
 }
 
-export function DecisionCard({ item, value, onChange }: Props) {
+export function DecisionCard({ item, value, onChange, contained = false }: Props) {
   const multi = !!item.multiSelect;
   const selected = multi
     ? Array.isArray(value) ? value : []
@@ -36,6 +38,7 @@ export function DecisionCard({ item, value, onChange }: Props) {
   const [pressedValue, setPressedValue] = useState<string | null>(null);
   const [otherMode, setOtherMode] = useState(false);
   const [otherText, setOtherText] = useState(typeof selected === "string" && selected.startsWith("other:") ? selected.slice(6) : "");
+  const textareaRef = useAutosizeTextarea(contained, otherText, otherMode);
 
   // Reset Other-mode and Other-text whenever the question changes. Without
   // this, the textarea state from the PREVIOUS question persists onto the
@@ -96,8 +99,9 @@ export function DecisionCard({ item, value, onChange }: Props) {
 
   return (
     <div className="flex flex-col gap-7">
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-2.5" data-ui-component-content={contained ? "demo-decision-prompt" : undefined}>
         <h2
+          data-ui-copy={contained ? "heading" : undefined}
           className="text-[24px] sm:text-[26px] leading-tight font-extrabold text-balance text-[var(--cls-text,#1E2F58)]"
           style={{ fontFamily: fontDisplay }}
         >
@@ -105,6 +109,7 @@ export function DecisionCard({ item, value, onChange }: Props) {
         </h2>
         {item.description && (
           <p
+            data-ui-copy={contained ? "body" : undefined}
             className="text-[15px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_65%,transparent)] leading-relaxed"
             style={{ fontFamily: fontBody }}
           >
@@ -139,13 +144,14 @@ export function DecisionCard({ item, value, onChange }: Props) {
             In your own words:
           </p>
           <textarea
+            ref={textareaRef}
             rows={4}
             autoFocus
             value={otherText}
             placeholder="Describe what happened in your situation..."
             onChange={e => setOtherText(e.target.value)}
             className="w-full px-4 py-3 rounded-lg text-[15px] leading-relaxed resize-none bg-[var(--cls-surface,#FFFFFF)] border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] focus:border-[var(--cls-accent,#1E2F58)] focus:outline-none text-[var(--cls-text,#1E2F58)] placeholder:text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_35%,transparent)]"
-            style={{ fontFamily: fontBody }}
+            style={{ fontFamily: fontBody, ...(contained ? { overflow: "hidden" } : {}) }}
           />
           <div className="flex gap-2 justify-end">
             <button
@@ -178,7 +184,7 @@ export function DecisionCard({ item, value, onChange }: Props) {
           so the prospect can switch back to a structured option without
           first dismissing the textarea via Cancel. handleTap auto-closes
           the textarea when a structured option is tapped. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className={contained ? "grid grid-cols-1 gap-3" : "grid grid-cols-1 sm:grid-cols-2 gap-3"}>
         {item.options?.map(opt => {
           const isOn = isSelected(opt.value);
           const isPressed = pressedValue === opt.value;

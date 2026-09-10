@@ -1,0 +1,70 @@
+.presentationBody {
+  container-type: inline-size;
+  width: 100%;
+  max-width: 1600px;
+  margin-inline: auto;
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  min-width: 0;
+}
+
+.websiteStage {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgb(24 37 56 / 15%);
+}
+
+.screenshotSlice {
+  position: relative;
+  width: 100%;
+  overflow: clip;
+}
+
+.screenshotImage {
+  position: absolute;
+  left: 0;
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  pointer-events: none;
+  user-select: none;
+}
+
+.formRegion {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.formBackdrop {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  overflow: clip;
+  pointer-events: none;
+}
+
+.intake {
+  position: relative;
+  min-width: 0;
+  height: auto;
+  overflow: visible;
+}
+
+@media (min-width: 640px) {
+  .presentationBody {
+    padding: 16px;
+  }
+}
+
+@container (min-width: 980px) {
+  .split {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}

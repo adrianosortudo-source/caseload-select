@@ -15,9 +15,11 @@
 
 ## Replacement rectangle
 
-The supplied reference has a left-column consultation form. The measured mask is 606 x 980 pixels: left 168, top 280, right 774, bottom 1260, against the original 2340 x 1650 screenshot.
+The supplied reference has a left-column consultation form. Revision 2 uses the original screenshot coordinates: left 230, top 360, right 960, bottom 1580, a 730 x 1220 pixel region in the 2340 x 1650 image. It covers the Consultation heading, explanatory copy, every form field, captcha, and gold Send button.
 
-Normalized profile values are `x: 0.071795`, `y: 0.169697`, `width: 0.258974`, `height: 0.593939`. The top edge begins above the Consultation heading; the bottom edge extends below the gold Send button. It therefore covers the heading, explanatory copy, all visible labels and fields, arithmetic prompt, captcha, and Send button while leaving the header and Legal Alerts column visible. The extra perimeter reduces the chance of form fragments showing during taller widget states.
+Normalized profile values are `x: 230 / 2340`, `y: 360 / 1650`, `width: 730 / 2340`, `height: 1220 / 1650`. Revision 1 incorrectly measured the resized preview as if it had the original dimensions. Browser copies are upgraded only when the profile still uses that original calibration and screenshot; presenter adjustments are preserved.
+
+The intake uses its natural content height. The screenshot is divided into unstretched top, middle, and bottom slices so later page content moves down as the intake grows. When the calibrated column would be less than 320 CSS pixels wide, a focused layout shows the screenshot header followed by the full-width intake. The widget remains at normal text size and has no internal scrollbar. This focused fallback is a presentation layout, not a claimed responsive reconstruction of the prospect site.
 
 ## Visual QA notes
 
