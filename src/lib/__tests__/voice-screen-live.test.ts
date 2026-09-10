@@ -34,7 +34,7 @@ describe("live Voice to Screen primitives", () => {
     vi.stubGlobal("fetch", request);
     expect(await dispatchInvitation("inquiry")).toEqual({ status: outcome });
     expect(request).toHaveBeenCalledTimes(outcome === "cancelled" ? 1 : 2);
-    expect(rpc).toHaveBeenLastCalledWith("v2s_finish_dispatch", { p_id: "outbox", p_status: outcome, p_provider_id: outcome === "sent" ? "message" : null, p_error: null });
+    expect(rpc).toHaveBeenLastCalledWith("v2s_finish_dispatch", { p_id: "outbox", p_status: outcome, p_provider_id: outcome === "sent" ? "message" : null, p_error: outcome === "sent" ? null : `provider_${outcome}` });
     if (outcome === "sent") {
       const message = JSON.parse(request.mock.calls[1][1].body).message;
       expect(message).toContain(`/widget/voice-continuation#${minted.token}`);

@@ -11,7 +11,7 @@ export interface Inquiry {
 }
 
 export function liveConfig() {
-  if (process.env.V2S_ENABLED !== "true") return null;
+  if (process.env.V2S_ENABLED !== "true" || process.env.V2S_RETENTION_ENABLED !== "true") return null;
   const firmId = process.env.V2S_FIRM_ID ?? "";
   const locationId = process.env.V2S_LOCATION_ID ?? "";
   const agentId = process.env.V2S_AGENT_ID ?? "";
