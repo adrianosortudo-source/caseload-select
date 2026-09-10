@@ -1,13 +1,12 @@
 /**
  * /widget-v2/demo/[firmId] — split-screen demo.
  *
- * Left half: the IntakeControllerV2 (prospect's view).
- * Right half: LiveScoringPanel showing engine state in real time.
+ * Left: the real public intake renderer running against an in-browser fixture.
+ * Right: a read-only firm-review brief derived from the same engine state.
  *
  * Used for sales demos: walk a prospect (or a partner-firm decision-maker)
- * through the intake on the left while showing the AI's scoring decisions
- * updating live on the right. Demonstrates the AI's value in a way a static
- * pitch cannot.
+ * through the intake while the review brief updates beside it. Demo mode
+ * disables transcription, checkpoints, persistence, and contact delivery.
  *
  * On mobile, panels stack vertically (widget on top, scoring panel below).
  * On desktop, side-by-side 60/40 split (widget gets the larger half).
@@ -15,6 +14,7 @@
 
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { DemoSplitClient } from "./DemoSplitClient";
+import { DRG_WIDGET_THEME, themeToCssVars } from "@/lib/widget-theme";
 
 interface PageProps {
   params: Promise<{ firmId: string }>;
@@ -39,5 +39,15 @@ export default async function DemoSplitPage({ params }: PageProps) {
     );
   }
 
-  return <DemoSplitClient firmId={firmId} firmName={firm.name as string} />;
+  const displayName = (firm.name as string).replace(/\s+(?:Test|\[DEMO\])$/i, "");
+
+  return (
+    <div style={themeToCssVars(DRG_WIDGET_THEME)}>
+      <DemoSplitClient
+        firmId={firmId}
+        firmName={displayName}
+        consentCaptureEnabled
+      />
+    </div>
+  );
 }
