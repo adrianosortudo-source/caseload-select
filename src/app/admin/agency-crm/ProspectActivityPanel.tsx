@@ -14,6 +14,7 @@ import {
   type ProspectReplyDisposition,
 } from '@/lib/prospect-operations-types';
 import { notifyProspectOperationsChanged } from './prospect-operations-events';
+import { resolveProvisionedPersonEmail } from './prospect-provisioning';
 
 type ActivityPanelProps = {
   prospectId: string;
@@ -88,7 +89,7 @@ export default function ProspectActivityPanel({
   sourceUrl,
   sourcePayload,
   provisioningBasis = 'Operator-confirmed source record; no identity match was inferred.',
-  provisionedPersonEmail = null,
+  provisionedPersonEmail,
   firmName,
   contactName,
   contactEmail,
@@ -124,6 +125,7 @@ export default function ProspectActivityPanel({
   const isSourceBacked = Boolean(sourceSystem && sourceRecordKey);
   const canProvisionSource = Boolean(sourceUrl && firmName.trim());
   const contactLabel = useMemo(() => contactName || contactEmail || 'No named contact', [contactEmail, contactName]);
+  const personEmailForProvisioning = resolveProvisionedPersonEmail(contactEmail, provisionedPersonEmail);
 
   useEffect(() => {
     if (!open) return;
@@ -247,7 +249,7 @@ export default function ProspectActivityPanel({
           source_system: sourceSystem,
           source_record_key: sourceRecordKey,
           organization: { display_name: firmName, website_url: sourceUrl ?? null },
-          person: contactName ? { display_name: contactName, primary_email: provisionedPersonEmail } : null,
+          person: contactName ? { display_name: contactName, primary_email: personEmailForProvisioning } : null,
           source_url: sourceUrl ?? null,
           source_payload: sourcePayload ?? {},
           basis: provisioningBasis,

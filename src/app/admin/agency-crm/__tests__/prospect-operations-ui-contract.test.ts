@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { resolveProvisionedPersonEmail } from '../prospect-provisioning';
 
 const surface = resolve(process.cwd(), 'src/app/admin/agency-crm');
 
@@ -40,12 +41,19 @@ describe('prospect operations UI contract', () => {
     expect(source).toContain('source_payload');
     expect(source).toContain('basis: provisioningBasis');
     expect(source).toContain('person: contactName ?');
-    expect(source).toContain('primary_email: provisionedPersonEmail');
+    expect(source).toContain('primary_email: personEmailForProvisioning');
     expect(source).toContain('idempotency_key: `provision:${sourceSystem}:${sourceRecordKey}`');
     expect(source).toContain('The contact record was provisioned but could not be reloaded.');
     expect(source).toContain('A first-party source URL is required before this record can be provisioned.');
     expect(source).toContain('disabled={provisioning || !canProvisionSource}');
     expect(source).toContain('Provision contact record');
+  });
+
+  it('provisions the visible contact email unless the source supplies an explicit person-email decision', () => {
+    expect(resolveProvisionedPersonEmail('owner@example.test')).toBe('owner@example.test');
+    expect(resolveProvisionedPersonEmail('firm@example.test', 'owner@example.test')).toBe('owner@example.test');
+    expect(resolveProvisionedPersonEmail('firm@example.test', null)).toBeNull();
+    expect(resolveProvisionedPersonEmail(null)).toBeNull();
   });
 
   it('uses the report endpoint and governed copy tags', () => {
