@@ -42,3 +42,11 @@ The 32 candidates were resolved individually against the authenticated
 the importer without `--apply` first and retain its reported source SHA-256;
 an apply is permitted only when the live baseline is still 124 and the same
 SHA-256 is supplied through the importer's confirmation flag.
+
+## Production result — 2026-09-10
+
+The hash-confirmed manifest was applied after a fresh 124-record preflight
+found no planned ID or domain collisions. The read-only operator projection
+then returned 141 unique records, including all 17 Batch 012 firms and all 28
+public-contact evidence observations. The detailed counts and immutable source
+hash are recorded in `production-import-receipt-2026-09-10.json`.

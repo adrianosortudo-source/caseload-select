@@ -1,0 +1,32 @@
+{
+  "schema_version": "gta-prospect-batch-012-production-import-receipt.v1",
+  "applied_at": "2026-09-10T15:15:16.601Z",
+  "source_sha256": "762cd4a259775afe8d031af31f01857e908fba45ee61f53013ec0bb6ea6674e7",
+  "pushed_commit": "7bddb84b646a61d398b83bf509eb61e3253c5868",
+  "pull_request": 259,
+  "preflight": {
+    "operator_record_count": 124,
+    "unique_id_count": 124,
+    "planned_id_matches": 0,
+    "planned_domain_matches": 0
+  },
+  "import": {
+    "records_accepted": 17,
+    "records_rejected": 0,
+    "public_contact_observations": 28
+  },
+  "post_import_verification": {
+    "operator_record_count": 141,
+    "unique_id_count": 141,
+    "batch_012_record_count": 17,
+    "missing_batch_012_ids": [],
+    "batch_012_public_contact_count": 28,
+    "batch_012_owner_founder_principal_count": 13,
+    "batch_012_contacts_with_email_count": 16,
+    "records_outside_exact_3_to_20_lawyer_gate": 0
+  },
+  "outreach_performed": false,
+  "forms_submitted": false,
+  "crm_records_changed": false,
+  "automatic_identity_merge": false
+}
