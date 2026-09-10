@@ -1,9 +1,8 @@
-import { createHash } from 'node:crypto';
-
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getOperatorSession } from '@/lib/portal-auth';
 import { buildArchiveSyncPreview, type ArchiveSyncHistoryObservation, type ArchiveSyncProviderEvent } from '@/lib/prospect-archive-sync';
+import { archiveSyncDigest, createArchiveSyncReviewPermit, parseArchiveSyncBundle } from '@/lib/prospect-archive-sync/persistence-contract';
 import { listProspectingControlPlaneSources } from '@/lib/prospect-source-registry';
 
 const MAX_REQUEST_BYTES = 2 * 1024 * 1024;
@@ -26,10 +25,6 @@ function asBundle(value: unknown): Bundle | null {
   if (!Array.isArray(bundle.provider_events) || bundle.provider_events.length > MAX_EVENTS) return null;
   if (!Array.isArray(bundle.history_observations) || bundle.history_observations.length > MAX_OBSERVATIONS) return null;
   return bundle as Bundle;
-}
-
-function digest(value: unknown): string {
-  return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
 /**
@@ -72,10 +67,20 @@ export async function POST(request: NextRequest) {
       provider_events: bundle.provider_events,
     });
     const historyUnknown = preview.history_states.filter((state) => state.history_coverage === 'history_unknown').length;
+    const bundleDigest = archiveSyncDigest(parseArchiveSyncBundle(bundle));
+    const previewDigest = archiveSyncDigest(preview);
+    let reviewPermit: string | null = null;
+    try {
+      reviewPermit = createArchiveSyncReviewPermit({ bundleDigest, previewDigest });
+    } catch {
+      // A preview remains useful without the production review secret. Apply
+      // stays unavailable rather than accepting an unsigned browser request.
+    }
     return NextResponse.json({
       preview,
+      review_permit: reviewPermit,
       receipt: {
-        source: 'import', schema_version: BUNDLE_SCHEMA, digest: digest(bundle), prepared_at: new Date().toISOString(),
+        source: 'import', schema_version: BUNDLE_SCHEMA, digest: bundleDigest, preview_digest: previewDigest, prepared_at: new Date().toISOString(),
         new_records: preview.proposed_activities.length,
         unchanged_records: preview.history_states.filter((state) => state.history_coverage === 'known_empty').length,
         held_records: preview.held_events.length,

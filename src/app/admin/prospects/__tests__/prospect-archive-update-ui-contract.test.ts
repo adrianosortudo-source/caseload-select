@@ -14,9 +14,9 @@ describe("prospect archive update operator surface", () => {
     expect(module.default).toBeTypeOf("function");
   });
 
-  it("keeps the two sources explicitly unavailable until their real integrations exist", () => {
+  it("keeps direct sync unavailable and makes import preview explicit", () => {
     expect(component).toContain("Direct sync needs a verified connection");
-    expect(component).toContain("Upload requires a supported history bundle");
+    expect(component).toContain("Upload a supported history bundle");
     expect(component).toContain("This panel does not invent a successful result");
   });
 
@@ -24,6 +24,9 @@ describe("prospect archive update operator surface", () => {
     for (const label of ["New", "Unchanged", "Held", "Unclassified", "Incomplete", "Apply reviewed update", "Latest result", "No changes were found"]) expect(component).toContain(label);
     expect(component).toContain("onApplyReviewedUpdate");
     expect(component).toContain('/api/admin/prospect-operations/archive-updates/preview');
+    expect(component).toContain('/api/admin/prospect-operations/archive-updates/apply');
+    expect(component).toContain('review_permit');
+    expect(component).toContain('I reviewed the preview');
     expect(component).toContain('method: "POST"');
     expect(component).toContain('database writes');
     expect(component).not.toMatch(/send email|activate workflow|enroll/i);

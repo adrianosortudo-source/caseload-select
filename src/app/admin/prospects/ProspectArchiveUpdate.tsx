@@ -49,7 +49,7 @@ const sourceOptions: readonly SourceOption[] = [
   {
     value: "import",
     label: "Import history bundle",
-    note: "Upload requires a supported history bundle. No bundle parser is connected yet.",
+    note: "Upload a supported history bundle to prepare an exact, non-mutating preview.",
   },
 ];
 
@@ -69,6 +69,9 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
   const [prepareRequested, setPrepareRequested] = useState(false);
   const [applyRequested, setApplyRequested] = useState(false);
   const [localContract, setLocalContract] = useState<ProspectArchiveUpdateContract>({ status: "unavailable" });
+  const [preparedBundle, setPreparedBundle] = useState<unknown>(null);
+  const [reviewPermit, setReviewPermit] = useState<string | null>(null);
+  const [reviewed, setReviewed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -76,13 +79,37 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
   const activeContract = contract ?? localContract;
   const preview = activeContract.preview?.source === source ? activeContract.preview : undefined;
   const isApplying = activeContract.status === "applying";
-  const canApply = Boolean(preview && activeContract.status === "ready" && activeContract.onApplyReviewedUpdate && !isApplying);
+  const canLocalApply = Boolean(source === "import" && preview && activeContract.status === "ready" && preparedBundle && reviewPermit && reviewed && !isApplying);
+  const canApply = Boolean(preview && activeContract.status === "ready" && (activeContract.onApplyReviewedUpdate || canLocalApply) && !isApplying);
 
   async function applyReviewedUpdate() {
-    if (!canApply || !activeContract.onApplyReviewedUpdate) return;
+    if (!canApply || !preview) return;
     setApplyRequested(true);
     try {
-      await activeContract.onApplyReviewedUpdate();
+      if (activeContract.onApplyReviewedUpdate) {
+        await activeContract.onApplyReviewedUpdate();
+        return;
+      }
+      const response = await fetch("/api/admin/prospect-operations/archive-updates/apply", {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ bundle: preparedBundle, review_permit: reviewPermit }),
+      });
+      const payload = await response.json().catch(() => ({})) as { error?: string; bundle_digest?: string; receipt?: { events_inserted?: number; events_replayed?: number } };
+      if (!response.ok || !payload.receipt) throw new Error(payload.error ?? "The reviewed archive update could not be applied.");
+      setLocalContract({
+        status: "ready", preview,
+        receipt: {
+          id: payload.bundle_digest ?? "archive-update",
+          recordedAt: new Date().toISOString(), source: "import",
+          appliedRecords: payload.receipt.events_inserted ?? 0,
+          unchangedRecords: payload.receipt.events_replayed ?? 0,
+        },
+      });
+      setReviewPermit(null);
+      setReviewed(false);
+      setError(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The reviewed archive update could not be applied.");
     } finally {
       setApplyRequested(false);
     }
@@ -106,8 +133,11 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
       const response = await fetch("/api/admin/prospect-operations/archive-updates/preview", {
         method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(bundle),
       });
-      const payload = await response.json().catch(() => ({})) as { error?: string; receipt?: { prepared_at?: string; new_records?: number; unchanged_records?: number; held_records?: number; unclassified_records?: number; incomplete_records?: number; digest?: string } };
+      const payload = await response.json().catch(() => ({})) as { error?: string; review_permit?: string | null; receipt?: { prepared_at?: string; new_records?: number; unchanged_records?: number; held_records?: number; unclassified_records?: number; incomplete_records?: number; digest?: string } };
       if (!response.ok || !payload.receipt) throw new Error(payload.error ?? "The archive preview could not be prepared.");
+      setPreparedBundle(bundle);
+      setReviewPermit(typeof payload.review_permit === "string" ? payload.review_permit : null);
+      setReviewed(false);
       setLocalContract({
         status: "ready",
         preview: { source: "import", newRecords: payload.receipt.new_records ?? 0, unchangedRecords: payload.receipt.unchanged_records ?? 0, heldRecords: payload.receipt.held_records ?? 0, unclassifiedRecords: payload.receipt.unclassified_records ?? 0, incompleteRecords: payload.receipt.incomplete_records ?? 0, preparedAt: payload.receipt.prepared_at ?? new Date().toISOString() },
@@ -133,7 +163,7 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
           {sourceOptions.map((option) => (
             <label key={option.value} className={`cursor-pointer rounded border p-3 ${source === option.value ? "border-navy bg-navy/[0.03]" : "border-border-brand bg-parchment/30"}`}>
             <span className="flex items-start gap-2">
-              <input type="radio" name="archive-source" value={option.value} checked={source === option.value} onChange={() => { setSource(option.value); setPrepareRequested(false); setError(null); }} className="mt-1" />
+              <input type="radio" name="archive-source" value={option.value} checked={source === option.value} onChange={() => { setSource(option.value); setPrepareRequested(false); setError(null); setPreparedBundle(null); setReviewPermit(null); setReviewed(false); }} className="mt-1" />
               <span className="min-w-0 text-sm font-semibold text-navy">{option.label}</span>
             </span>
             <span className="mt-1 block w-full text-xs leading-5 text-black/60">{option.note}</span>
@@ -169,11 +199,15 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
 
       <div className="mt-4 rounded border border-border-brand bg-parchment/30 p-3" data-ui-component-content="prospect-archive-update-apply">
         <p className="w-full text-xs font-semibold uppercase tracking-wide text-field-label" data-ui-copy="supporting">Apply reviewed update</p>
-        <p className="mt-1 w-full text-sm text-black/70" data-ui-copy="body">One reviewed action will be available only after the future verified API supplies a preview and an authorized apply function.</p>
+        <p className="mt-1 w-full text-sm text-black/70" data-ui-copy="body">Apply is available only for a server-verified import preview and a short-lived review permit. It writes archive history only; it cannot change HighLevel, a workflow, contactability, or the source record.</p>
+        {preview && source === "import" && <label className="mt-3 flex w-full items-start gap-2 text-sm text-black/75">
+          <input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.currentTarget.checked)} className="mt-1" />
+          <span>I reviewed the preview and understand that held, unclassified, or incomplete items cannot be applied.</span>
+        </label>}
         <button type="button" onClick={() => void applyReviewedUpdate()} disabled={!canApply || applyRequested} className="mt-3 rounded bg-navy px-3 py-2 text-sm font-semibold text-white hover:bg-navy/90 disabled:cursor-not-allowed disabled:opacity-45">
           {isApplying || applyRequested ? "Applying reviewed update" : "Apply reviewed update"}
         </button>
-        {!canApply && <p className="mt-2 w-full text-xs text-black/55" data-ui-copy="supporting">Application is unavailable until a verified preview and authorized update contract are present.</p>}
+        {!canApply && <p className="mt-2 w-full text-xs text-black/55" data-ui-copy="supporting">Application is unavailable until the preview is verified, reviewed, and backed by an active server-issued permit. A missing permit means the review key or database migration has not been configured yet.</p>}
       </div>
 
       {(activeContract.receipt || activeContract.noChanges) && <div className="mt-4 rounded border border-teal/25 bg-teal/10 p-3" data-ui-component-content="prospect-archive-update-result">
