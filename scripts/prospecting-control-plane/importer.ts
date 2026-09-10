@@ -49,14 +49,15 @@ function parseResult(value: unknown, manifest: ValidatedProspectManifest): Prosp
     || !object(value.assertions) || !Array.isArray(value.records)) {
     throw new Error("Batch RPC returned an invalid receipt shape.");
   }
-  const counts = value.counts;
+  const countsRaw = value.counts;
   const assertions = value.assertions;
   const records = value.records;
   const countKeys = ["input", "BA", "AE", "existing", "absent", "provisioned", "total_after", "activities_before", "activities_after"] as const;
-  if (countKeys.some((key) => !nonNegativeInteger(counts[key]))
-    || counts.input !== 100 || counts.BA !== 50 || counts.AE !== 50) {
+  if (countKeys.some((key) => !nonNegativeInteger(countsRaw[key]))
+    || countsRaw.input !== 100 || countsRaw.BA !== 50 || countsRaw.AE !== 50) {
     throw new Error("Batch RPC returned invalid cohort counts.");
   }
+  const counts = countsRaw as unknown as ProspectProvisioningResult["counts"];
   if (assertions.exact_record_count !== true || assertions.exact_arm_split !== true
     || assertions.activity_count_unchanged !== true
     || counts.activities_before !== counts.activities_after) {
