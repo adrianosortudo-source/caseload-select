@@ -235,13 +235,13 @@ test("Exported prospect package imports, persists, and reloads under the real im
   const standalone = await standalonePromise;
   await standalone.waitForLoadState("domcontentloaded");
   await expect(standalone).toHaveURL(/\/demo\/prospect\/qa-imported-prospect$/);
-  await expect(standalone.getByRole("heading", { name: "Imported Demo Firm intake demonstration" })).toBeVisible();
+  await expect(standalone.getByRole("heading", { name: "Imported Demo Firm intake preview" })).toBeVisible();
   await assertStandaloneChrome(standalone);
   await assertImages(standalone);
   await assertLayout(standalone);
   await standalone.reload();
   await expect(standalone.locator(ROOT)).toBeVisible();
-  await expect(standalone.getByRole("heading", { name: "Imported Demo Firm intake demonstration" })).toBeVisible();
+  await expect(standalone.getByRole("heading", { name: "Imported Demo Firm intake preview" })).toBeVisible();
   await assertStandaloneChrome(standalone);
   await assertImages(standalone);
   await assertLayout(standalone);
