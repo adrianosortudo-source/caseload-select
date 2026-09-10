@@ -1,6 +1,7 @@
 import "server-only";
 import { hashToken, tokenForNonce } from "./voice-screen-live";
 import { database, liveConfig, type Inquiry } from "./voice-screen-store";
+import { normalizeVoiceScreenPhone } from "./voice-screen-phone";
 
 const API = "https://services.leadconnectorhq.com";
 export function senderConfig() {
@@ -43,7 +44,7 @@ export async function dispatchInvitation(inquiryId: string) {
     if (!contactResponse.ok) return finish("cancelled");
     const contactBody = await contactResponse.json() as { contact?: { locationId?: string; phone?: string; dnd?: boolean; dndSettings?: { SMS?: { status?: string } } } };
     const contact = contactBody.contact;
-    if (!contact || contact.locationId !== config.locationId || contact.dnd !== false || contact.dndSettings?.SMS?.status === "active" || contact.phone?.replace(/[^\d+]/g, "") !== inquiry.caller_facts.callback.number) return finish("cancelled");
+    if (!contact || contact.locationId !== config.locationId || contact.dnd !== false || contact.dndSettings?.SMS?.status === "active" || normalizeVoiceScreenPhone(contact.phone) !== inquiry.caller_facts.callback.number) return finish("cancelled");
     // Recheck takeover/expiry/permission after provider read, immediately before send.
     const { data: latest } = await db.from("voice_screen_inquiries").select("human_status,status,invitation_eligible,expires_at").eq("id", inquiry.id).maybeSingle();
     if (!latest || latest.human_status !== "pending" || latest.status === "stopped" || !latest.invitation_eligible || Date.parse(latest.expires_at) <= Date.now()) return finish("cancelled");

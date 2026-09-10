@@ -43,6 +43,13 @@ describe("parallel invitation sender", () => {
     expect(body.message).not.toContain("14165550142"); expect(body.message).not.toContain("?token");
     expect(mocks.rpc).toHaveBeenLastCalledWith("v2s_finish_dispatch", { p_id: "outbox", p_status: "sent", p_provider_id: "message", p_error: null });
   });
+  it("accepts a matching provider contact returned in natural ten-digit formatting", async () => {
+    vi.mocked(fetch).mockReset()
+      .mockResolvedValueOnce(Response.json({ contact: { locationId: "location", phone: "(416) 555-0142", dnd: false } }))
+      .mockResolvedValueOnce(Response.json({ messageId: "message" }));
+    expect(await dispatchInvitation("inquiry")).toEqual({ status: "sent" });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
   it("does not repeat an already claimed attempt", async () => {
     mocks.rpc.mockResolvedValue({ data: { claimed: false } });
     expect(await dispatchInvitation("inquiry")).toEqual({ status: "not_pending" }); expect(fetch).not.toHaveBeenCalled();
