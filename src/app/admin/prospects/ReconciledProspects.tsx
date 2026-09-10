@@ -7,7 +7,6 @@ import {
   observedLawyerCountLabel,
   type LawyerCountBand,
   type EvidenceAvailability,
-  type PublicProspectContact,
   type ReconciledGtaProspect,
 } from "@/lib/gta-prospect-records";
 import {
@@ -41,6 +40,12 @@ import {
   GTA_PROSPECT_SOURCE_SYSTEM,
   type SourceContactStateMap,
 } from "./prospect-contact-operations";
+import {
+  prospectContactEvidence,
+  publicContactEmailKindLabel,
+  publicContactRelationshipLabel,
+  selectOperationalContact,
+} from "./prospect-contact-evidence";
 
 export type RecordsResponse = {
   records?: ReconciledGtaProspect[];
@@ -119,10 +124,6 @@ function SelectField({ label, value, onChange, children }: { label: string; valu
       </select>
     </label>
   );
-}
-
-function contactRoleLabel(relationship: PublicProspectContact["relationship"]): string {
-  return ({ owner: "Owner", founder: "Founder", principal: "Principal", named_lawyer: "Named lawyer", firm_inbox: "Firm inbox" })[relationship];
 }
 
 export default function ReconciledProspects({ initialData }: { initialData?: RecordsResponse } = {}) {
@@ -227,10 +228,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const displayedPage = Math.min(page, pageCount - 1);
   const visibleRecords = useMemo(() => filtered.slice(displayedPage * PAGE_SIZE, (displayedPage + 1) * PAGE_SIZE), [displayedPage, filtered]);
-  const selectedOperationalContact = selectedContact?.publicContacts?.find((contact) => (
-    (contact.relationship === "owner" || contact.relationship === "founder" || contact.relationship === "principal")
-    && Boolean(contact.name)
-  )) ?? null;
+  const selectedOperationalContact = selectOperationalContact(selectedContact?.publicContacts ?? []);
 
   useEffect(() => {
     const sourceRecordKeys = visibleRecords.map((record) => record.id).filter(Boolean);
@@ -289,6 +287,9 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
         <p className="mt-2 w-full text-xs font-medium text-black/60" data-ui-copy="supporting">
           Source: {sourceDetails ? reconciledProspectSourceLabel({ source: sourceDetails.source ?? "fixture", sourceCounts: sourceDetails.sourceCounts ?? { ledger: 0, fixture: records.length }, fallbackReason: sourceDetails.fallbackReason }) : "reviewed source-controlled fixture"}, plus retained legacy directory provenance. Legacy rows remain unresolved until their firm identity is supported. Qualified cohort reconciliation: {sourceDetails?.qualifiedImport ? `${sourceDetails.qualifiedImport.updated} enriched, ${sourceDetails.qualifiedImport.added} added, ${sourceDetails.qualifiedImport.ambiguous} held for identity review` : "loading"}.
         </p>
+        <p className="mt-1 w-full text-xs font-medium text-black/60" data-ui-copy="supporting">
+          Public contact observations are source evidence only. They do not authorize outreach.
+        </p>
       </div>
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4" aria-label="Prospect record views">
@@ -339,7 +340,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
       {records.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No reviewed expansion records have been added yet.</div> : filtered.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No firms match the current view and filters.</div> : (
         <div className="mt-3 overflow-x-auto rounded border border-border-brand">
           <table className="w-full min-w-[1440px] border-collapse text-left text-sm">
-            <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Source and identity</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Owner and email</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
+            <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Source and identity</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Public contact evidence</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
             <tbody>{visibleRecords.map((record) => {
               const dossier = record.qualifiedDossier;
               const identityState = prospectIdentityState(record);
@@ -350,9 +351,26 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
                 <td className="px-3 py-3"><span className="font-medium text-black/80">{observedLawyerCountLabel(record)}</span>{dossier && <><span className="mt-1 block text-xs text-black/55">{titleCase(dossier.lawyerCount.confidence)} confidence</span><span className="mt-1 block text-xs text-black/55">Observed {dossier.lawyerCount.observedAt.slice(0, 10)}</span></>}</td>
                 <td className="px-3 py-3 text-xs leading-5 text-black/70">{(() => {
                   const contacts = record.publicContacts ?? [];
-                  const owners = contacts.filter((contact) => contact.relationship === "owner" || contact.relationship === "founder");
-                  const emails = contacts.filter((contact) => contact.email);
-                  return <><span className="block font-semibold text-black/75">{owners.length > 0 ? owners.map((contact) => contact.name).filter(Boolean).join(", ") : "Owner not identified"}</span>{owners.map((contact, index) => <span key={`${contact.name}-${index}`} className="block text-black/55">{contactRoleLabel(contact.relationship)} · observed {contact.observedAt}</span>)}{emails.length > 0 ? emails.map((contact, index) => <span key={`${contact.email}-${index}`} className="mt-1 block break-all"><a href={`mailto:${contact.email ?? ""}`} className="text-navy underline underline-offset-2">{contact.email}</a><span className="ml-1 text-black/55">{contact.emailKind === "owner" ? "owner email" : contact.emailKind === "named_person" ? "named-person email" : "firm email"}</span>{contact.sourceUrl && <a href={contact.sourceUrl} target="_blank" rel="noreferrer" className="ml-1 text-navy underline underline-offset-2">source</a>}<span className="ml-1 text-black/55">observed {contact.observedAt}</span></span>) : <span className="mt-1 block text-black/55">Email not found</span>}</>;
+                  const evidence = prospectContactEvidence(contacts);
+                  return <>
+                    <span className="block font-semibold text-black/75">Owner or leadership</span>
+                    {evidence.leadership.length > 0 ? evidence.leadership.map((contact, index) => <span key={`${contact.name}-${contact.relationship}-${index}`} className="mt-1 block">
+                      <span className="block font-medium text-black/75">{contact.name}</span>
+                      <span className="block text-black/55">{publicContactRelationshipLabel(contact.relationship)} · {contact.sourceUrl ? <a href={contact.sourceUrl} target="_blank" rel="noreferrer" className="text-navy underline underline-offset-2">Source</a> : "Source unknown"} · observed {contact.observedAt}</span>
+                    </span>) : <span className="block text-black/55">Unknown</span>}
+                    {evidence.namedLawyers.length > 0 && <span className="mt-2 block">
+                      <span className="block font-semibold text-black/75">Other named public contacts</span>
+                      {evidence.namedLawyers.map((contact, index) => <span key={`${contact.name}-${index}`} className="mt-1 block">
+                        <span className="block font-medium text-black/75">{contact.name}</span>
+                        <span className="block text-black/55">{publicContactRelationshipLabel(contact.relationship)} · {contact.sourceUrl ? <a href={contact.sourceUrl} target="_blank" rel="noreferrer" className="text-navy underline underline-offset-2">Source</a> : "Source unknown"} · observed {contact.observedAt}</span>
+                      </span>)}
+                    </span>}
+                    <span className="mt-2 block font-semibold text-black/75">Visibly published email</span>
+                    {evidence.emails.length > 0 ? evidence.emails.map((contact, index) => <span key={`${contact.email}-${index}`} className="mt-1 block break-all">
+                      <span className="block font-medium text-black/75">{contact.email}</span>
+                      <span className="block text-black/55">{publicContactEmailKindLabel(contact.emailKind)} · {contact.sourceUrl ? <a href={contact.sourceUrl} target="_blank" rel="noreferrer" className="text-navy underline underline-offset-2">Source</a> : "Source unknown"} · observed {contact.observedAt}</span>
+                    </span>) : <span className="block text-black/55">Unknown</span>}
+                  </>;
                 })()}</td>
                 <td className="px-3 py-3"><ProspectContactStatus state={contactState} loading={contactStateLoading} error={contactStateError} sourceRecordKey={record.id} onOpenHistory={() => setSelectedContact(record)} /></td>
                 <td className="px-3 py-3 text-black/75">{dossier ? <><span className="font-medium">GBP: {gbpOpportunityLabels[dossier.gbpOpportunity.type] ?? titleCase(dossier.gbpOpportunity.type)}</span><span className="mt-1 block text-xs text-black/55">Website: {dossier.websiteAndIntake.opportunityTypes.map((value) => websiteOpportunityLabels[value] ?? titleCase(value)).join(", ")}</span></> : <span className="text-black/50">Not assessed</span>}</td>
@@ -370,7 +388,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
         sourceRecordKey={selectedContact.id}
         firmName={selectedContact.firmName}
         contactName={selectedOperationalContact?.name ?? null}
-        contactEmail={selectedContact.publicContacts?.find((contact) => contact.email)?.email ?? null}
+        contactEmail={selectedOperationalContact?.email ?? null}
         provisionedPersonEmail={selectedOperationalContact?.email ?? null}
         sourceUrl={selectedContact.websiteUrl ?? selectedContact.rosterSourceUrl}
         sourcePayload={{ source_record_key: selectedContact.id, firm_name: selectedContact.firmName, city: selectedContact.city, canonical_domain: selectedContact.canonicalDomain }}
