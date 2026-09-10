@@ -11,6 +11,7 @@
  * artifact remains available as a secondary reference, not a duplicate iframe.
  */
 import Link from "next/link";
+import ProspectArchiveUpdate from "./ProspectArchiveUpdate";
 import ProspectingControlPlaneRegistry from "./ProspectingControlPlaneRegistry";
 import ReconciledProspects from "./ReconciledProspects";
 
@@ -29,6 +30,8 @@ export default function ProspectsPage() {
           Open Brazilian lawyer research overlay
         </Link>
       </div>
+
+      <ProspectArchiveUpdate />
 
       <ProspectingControlPlaneRegistry />
 
