@@ -11,6 +11,7 @@
  * artifact remains available as a secondary reference, not a duplicate iframe.
  */
 import Link from "next/link";
+import ProspectingControlPlaneRegistry from "./ProspectingControlPlaneRegistry";
 import ReconciledProspects from "./ReconciledProspects";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +29,8 @@ export default function ProspectsPage() {
           Open Brazilian lawyer research overlay
         </Link>
       </div>
+
+      <ProspectingControlPlaneRegistry />
 
       <ReconciledProspects />
 
