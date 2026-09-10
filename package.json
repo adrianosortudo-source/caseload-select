@@ -17,6 +17,7 @@
     "test:secure-import-rendered": "playwright test --config=playwright.secure-import.config.ts",
     "test:operator-login-rendered": "playwright test --config=playwright.operator-login.config.ts",
     "test:prospect-qualified-rendered": "playwright test --config=playwright.prospect-qualified.config.ts",
+    "test:prospecting-control-plane": "vitest run --config vitest.prospect-control-plane.config.mjs",
     "test": "node scripts/verify-no-committed-meta-secrets.mjs && vitest run",
     "test:watch": "vitest",
     "check:engine-sync": "bash scripts/check-engine-sync.sh",
