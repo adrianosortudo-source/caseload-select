@@ -246,14 +246,17 @@ function FreeTextAnswerCard({
   item,
   onSubmit,
   submitLabel = "Continue",
+  contained = false,
 }: {
   item: ScreenItem;
   onSubmit: (value: string) => void;
   submitLabel?: string;
+  contained?: boolean;
 }) {
   const [value, setValue] = useState("");
   return (
     <TextCard
+      contained={contained}
       item={item}
       value={value}
       onChange={setValue}
@@ -305,7 +308,7 @@ export function ScreenEnginePublicWidget({
     status: "not-requested",
   });
 
-  const next = state ? getNextStep(state) : null;
+  const next = useMemo(() => state ? getNextStep(state) : null, [state]);
 
   // Drop-off checkpoint (qualification audit F2/F6/item 5, 2026-07-02).
   // Fires a best-effort, fire-and-forget POST after every turn advance
@@ -636,6 +639,7 @@ export function ScreenEnginePublicWidget({
     return (
       <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel} layout={layout}>
         <TextCard
+          contained={layout === "contained"}
           item={{
             id: "situation",
             question: ws("kickoff_heading", "Tell us how a lawyer can help you today."),
@@ -998,6 +1002,7 @@ export function ScreenEnginePublicWidget({
         layout={layout}
       >
         <DecisionCard
+          contained={layout === "contained"}
           key={`clarify-${clarifyAttempts}`}
           item={{
             id: `clarify-${clarifyAttempts}`,
@@ -1066,13 +1071,14 @@ export function ScreenEnginePublicWidget({
     >
       {isPureFreeText ? (
         <FreeTextAnswerCard
+          contained={layout === "contained"}
           key={currentItem.id}
           item={currentItem}
           onSubmit={(text) => answer(currentItem.id, `other:${text}`)}
           submitLabel={ws("free_text_continue", "Continue")}
         />
       ) : (
-        <DecisionCard item={currentItem} onChange={(value) => answer(currentItem.id, value)} />
+        <DecisionCard contained={layout === "contained"} item={currentItem} onChange={(value) => answer(currentItem.id, value)} />
       )}
     </Shell>
   );
