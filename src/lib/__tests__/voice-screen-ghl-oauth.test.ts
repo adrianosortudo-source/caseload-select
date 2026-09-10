@@ -21,7 +21,7 @@ const env = () => {
   vi.stubEnv("V2S_GHL_MARKETPLACE_CLIENT_SECRET", "c".repeat(32));
   vi.stubEnv("V2S_GHL_OAUTH_STATE_SECRET", "s".repeat(32));
   vi.stubEnv("V2S_GHL_OAUTH_TOKEN_KEY", Buffer.alloc(32, 7).toString("base64url"));
-  vi.stubEnv("V2S_GHL_OAUTH_REDIRECT_URI", "https://admin.caseloadselect.ca/api/admin/integrations/voice-screen/ghl/callback");
+  vi.stubEnv("V2S_GHL_OAUTH_REDIRECT_URI", "https://admin.caseloadselect.ca/api/admin/integrations/voice-screen/callback");
   return ghlOauthConfig()!;
 };
 

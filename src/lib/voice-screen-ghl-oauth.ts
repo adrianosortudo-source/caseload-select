@@ -9,7 +9,7 @@ const STATE_TTL_MS = 10 * 60 * 1000;
 const ENCRYPTION_KEY_VERSION = 1;
 
 export const GHL_OAUTH_STATE_COOKIE = "__Host-v2s-ghl-oauth-state";
-export const GHL_OAUTH_CALLBACK_PATH = "/api/admin/integrations/voice-screen/ghl/callback";
+export const GHL_OAUTH_CALLBACK_PATH = "/api/admin/integrations/voice-screen/callback";
 
 function tokenKey(value: string): Buffer | null {
   if (!/^[A-Za-z0-9_-]{43}$/.test(value)) return null;

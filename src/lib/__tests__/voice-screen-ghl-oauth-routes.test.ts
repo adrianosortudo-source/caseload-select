@@ -19,11 +19,11 @@ vi.mock("../voice-screen-ghl-oauth", () => ({
 }));
 
 import { GET as connect } from "../../app/api/admin/integrations/voice-screen/ghl/connect/route";
-import { GET as callback } from "../../app/api/admin/integrations/voice-screen/ghl/callback/route";
+import { GET as callback } from "../../app/api/admin/integrations/voice-screen/callback/route";
 import { POST as disconnect } from "../../app/api/admin/integrations/voice-screen/ghl/disconnect/route";
 
 const config = {
-  redirectUri: "https://admin.caseloadselect.ca/api/admin/integrations/voice-screen/ghl/callback",
+  redirectUri: "https://admin.caseloadselect.ca/api/admin/integrations/voice-screen/callback",
   locationId: "location", appId: "marketplace_app_test", stateSecret: "state-secret", clientId: "client",
 };
 
@@ -88,7 +88,7 @@ describe("operator-only HighLevel OAuth routes", () => {
     mocks.requireOperator.mockResolvedValue(null);
     mocks.config.mockReturnValue(config);
     mocks.verifyState.mockReturnValue(true);
-    const request = new NextRequest("https://app.caseloadselect.ca/api/admin/integrations/voice-screen/ghl/callback?code=code_123&state=signed-state", {
+    const request = new NextRequest("https://app.caseloadselect.ca/api/admin/integrations/voice-screen/callback?code=code_123&state=signed-state", {
       headers: { cookie: "__Host-v2s-ghl-oauth-state=signed-state" },
     });
     const response = await callback(request);
