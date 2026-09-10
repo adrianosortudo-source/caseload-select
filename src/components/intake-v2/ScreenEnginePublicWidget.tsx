@@ -27,7 +27,17 @@ import { llmExtract, mergeLlmResults } from "@/lib/screen-engine/llm/extractor";
 import { buildReport } from "@/lib/screen-engine/report";
 import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
 import { getWebAttribution } from "@/lib/screen-engine/persist";
-import type { EngineState, MatterType, SlotDefinition } from "@/lib/screen-engine/types";
+import type { EngineState, LawyerReport, MatterType, SlotDefinition } from "@/lib/screen-engine/types";
+import { answerDemoState, buildDemoReport, startDemoState } from "@/lib/screen-demo";
+
+export type ScreenWidgetStage = "kickoff" | "questions" | "contact" | "done";
+
+export interface ScreenDemoView {
+  stage: ScreenWidgetStage;
+  state: EngineState | null;
+  currentQuestion: ScreenItem | null;
+  report: LawyerReport | null;
+}
 
 export interface ScreenEnginePublicWidgetProps {
   firmId: string;
@@ -69,9 +79,15 @@ export interface ScreenEnginePublicWidgetProps {
     status: string;
     response: unknown;
   }) => void;
+  /** Keeps the DRG-facing UI while replacing every external side effect with an in-browser fixture. */
+  runtime?: "live" | "demo";
+  /** Read-only state bridge for the separate sales presentation panel. */
+  onDemoStateChange?: (view: ScreenDemoView) => void;
+  /** Optional fictional opening used by the presentation toolbar. */
+  initialDescription?: string;
 }
 
-type Stage = "kickoff" | "questions" | "contact" | "done";
+type Stage = ScreenWidgetStage;
 
 function resolveSubmitEndpoint(
   firmId: string,
@@ -203,9 +219,12 @@ export function ScreenEnginePublicWidget({
   consentCaptureEnabled = false,
   submitEndpoint,
   onSubmitResult,
+  runtime = "live",
+  onDemoStateChange,
+  initialDescription = "",
 }: ScreenEnginePublicWidgetProps) {
   const [stage, setStage] = useState<Stage>("kickoff");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(initialDescription);
   const [state, setState] = useState<EngineState | null>(null);
   const [history, setHistory] = useState<EngineState[]>([]);
   const [isReading, setIsReading] = useState(false);
@@ -235,6 +254,7 @@ export function ScreenEnginePublicWidget({
   // does not create a session row. Never surfaces a failure to the UI:
   // this is telemetry for the abandonment sweep, not the intake path.
   useEffect(() => {
+    if (runtime === "demo") return;
     if (!state || persistedRef.current) return;
     const hasProgress = Object.keys(state.slot_meta ?? {}).length > 0;
     if (!hasProgress) return;
@@ -282,6 +302,27 @@ export function ScreenEnginePublicWidget({
     return slotToItem(next.slot, language, i18n);
   }, [next, language, i18n]);
 
+  const demoReport = useMemo(() => {
+    if (runtime !== "demo" || !state) return null;
+    if (
+      stage !== "done" &&
+      next?.type !== "present_insight" &&
+      next?.type !== "capture_contact" &&
+      next?.type !== "stop"
+    ) return null;
+    return buildDemoReport(state);
+  }, [runtime, stage, state, next?.type]);
+
+  useEffect(() => {
+    if (runtime !== "demo") return;
+    onDemoStateChange?.({
+      stage,
+      state,
+      currentQuestion: currentItem,
+      report: demoReport,
+    });
+  }, [runtime, onDemoStateChange, stage, state, currentItem, demoReport]);
+
   async function start() {
     await runStart(description);
   }
@@ -293,6 +334,13 @@ export function ScreenEnginePublicWidget({
   async function runStart(rawText: string) {
     const text = rawText.trim();
     if (text.length < 10) return;
+
+    if (runtime === "demo") {
+      setState(startDemoState(text));
+      setStage("questions");
+      setIsReading(false);
+      return;
+    }
 
     let nextState = initialiseState(text);
     nextState = runEvidencePass(text, nextState);
@@ -348,7 +396,9 @@ export function ScreenEnginePublicWidget({
     if (!state) return;
     const value = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
     setHistory((items) => [...items, state]);
-    mutate(applyAnswer(state, slotId, value));
+    mutate(runtime === "demo"
+      ? answerDemoState(state, slotId, value)
+      : applyAnswer(state, slotId, value));
   }
 
   function back() {
@@ -372,6 +422,7 @@ export function ScreenEnginePublicWidget({
   }
 
   async function persist(finalState: EngineState) {
+    if (runtime === "demo") return;
     if (persistedRef.current) return;
     persistedRef.current = true;
     const report = buildReport(finalState);
@@ -457,12 +508,20 @@ export function ScreenEnginePublicWidget({
     if (!answers.client_name || (!answers.client_phone && !answers.client_email)) return;
     setHistory((items) => [...items, state]);
     for (const [slotId, value] of Object.entries(answers)) {
-      if (value) nextState = applyAnswer(nextState, slotId, value);
+      if (value) {
+        nextState = runtime === "demo"
+          ? answerDemoState(nextState, slotId, value)
+          : applyAnswer(nextState, slotId, value);
+      }
     }
     nextState = scoreState(nextState);
     setState(nextState);
     setStage("done");
-    void persist(nextState);
+    if (runtime === "demo") {
+      setPersistStatus("Demo only");
+    } else {
+      void persist(nextState);
+    }
   }
 
   if (stage === "kickoff") {
@@ -488,10 +547,12 @@ export function ScreenEnginePublicWidget({
           item={{
             id: "situation",
             question: ws("kickoff_heading", "Tell us how a lawyer can help you today."),
-            description: ws(
-              "kickoff_helper",
-              `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, the Screen usually asks ${WEB_DISCOVERY_TARGET_MIN}–${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`,
-            ),
+            description: runtime === "demo"
+              ? `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, we usually ask ${WEB_DISCOVERY_TARGET_MIN} to ${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`
+              : ws(
+                  "kickoff_helper",
+                  `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, the Screen usually asks ${WEB_DISCOVERY_TARGET_MIN}–${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`,
+                ),
             presentation: "text",
             placeholder: ws(
               "kickoff_placeholder",
@@ -503,7 +564,7 @@ export function ScreenEnginePublicWidget({
           onSubmit={start}
           submitLabel={ws("kickoff_submit", "Continue matter review")}
           minChars={10}
-          enableVoice
+          enableVoice={runtime !== "demo"}
           voiceHint={ws("voice_hint", "speak your answer instead of typing it")}
           examplePrompts={[
             ws("kickoff_example_1", "I am about to sign..."),
@@ -524,7 +585,7 @@ export function ScreenEnginePublicWidget({
   const fontBody = "var(--cls-font-body, DM Sans, sans-serif)";
 
   if (stage === "done" || next?.type === "stop") {
-    if (next?.type === "stop") void persist(state);
+    if (next?.type === "stop" && runtime !== "demo") void persist(state);
     // "Professional Corporation" is the formal LSO legal-entity suffix
     // on the firm's registered name; strip it for the user-facing
     // confirmation so the prospect sees the trade name (e.g. "DRG Law")
@@ -536,6 +597,9 @@ export function ScreenEnginePublicWidget({
       "A lawyer at {firmName} will read what you shared and reach out directly to talk through the legal side.",
     );
     const doneBody = doneBodyTemplate.replace(/\{firmName\}/g, trimmedFirmName);
+    const visibleDoneBody = runtime === "demo"
+      ? "The firm review brief is ready beside the intake. Nothing was saved or sent."
+      : doneBody;
     // Translate the "submitted" sentinel; pass other reason strings
     // through verbatim (they are server-supplied and not user-facing
     // copy that we author).
@@ -557,13 +621,15 @@ export function ScreenEnginePublicWidget({
             </svg>
           </div>
           <h2 className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
-            {ws("done_heading", "Your matter review was submitted.")}
+            {runtime === "demo"
+              ? "The demonstration is complete."
+              : ws("done_heading", "Your matter review was submitted.")}
           </h2>
           <p
             className="max-w-[460px] text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
             style={{ fontFamily: fontBody }}
           >
-            {doneBody}
+            {visibleDoneBody}
           </p>
           {statusLabel && (
             <p className="text-[12px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_45%,transparent)]">{statusLabel}</p>
@@ -606,10 +672,12 @@ export function ScreenEnginePublicWidget({
             className="text-[14px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
             style={{ fontFamily: fontBody }}
           >
-            {ws(
-              "insight_contact_note",
-              "A lawyer reviews what you share and reaches out directly. Add your contact details below so the firm can get back to you.",
-            )}
+            {runtime === "demo"
+              ? "Continue to see how the intake collects contact details. Nothing entered here will be saved or sent."
+              : ws(
+                  "insight_contact_note",
+                  "A lawyer reviews what you share and reaches out directly. Add your contact details below so the firm can get back to you.",
+                )}
           </p>
           <button
             type="button"
@@ -621,7 +689,9 @@ export function ScreenEnginePublicWidget({
             className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"
             style={{ fontFamily: fontBody }}
           >
-            {ws("insight_cta", "Share my contact details so the firm can reply")}
+            {runtime === "demo"
+              ? "Continue to contact details"
+              : ws("insight_cta", "Share my contact details so the firm can reply")}
           </button>
         </div>
       </Shell>
@@ -629,7 +699,9 @@ export function ScreenEnginePublicWidget({
   }
 
   if (stage === "contact" || next?.type === "capture_contact") {
-    const contactHeading = clarifyFallback
+    const contactHeading = runtime === "demo"
+      ? "How would the firm reach this client?"
+      : clarifyFallback
       ? ws("fallback_contact_heading", "We can still get this to the team.")
       : ws("contact_heading", "How should the firm reach you?");
     const contactSub = clarifyFallback
@@ -637,7 +709,9 @@ export function ScreenEnginePublicWidget({
           "fallback_contact_sub",
           "Share your contact details below and a lawyer will reach out to scope what you need.",
         )
-      : ws("contact_sub", "Share your contact details so the team can follow up after review.");
+      : runtime === "demo"
+        ? "Use fictional details to complete the demonstration. Nothing will be saved or sent."
+        : ws("contact_sub", "Share your contact details so the team can follow up after review.");
     return (
       <Shell
         totalScreens={1}
@@ -662,17 +736,17 @@ export function ScreenEnginePublicWidget({
             [
               "client_name",
               ws("contact_field_name_label", "Full name"),
-              ws("contact_field_name_placeholder", "Your name"),
+              runtime === "demo" ? "Alex Morgan" : ws("contact_field_name_placeholder", "Your name"),
             ],
             [
               "client_phone",
               ws("contact_field_phone_label", "Phone"),
-              ws("contact_field_phone_placeholder", "+1 416 555 0123"),
+              runtime === "demo" ? "(416) 555-0123" : ws("contact_field_phone_placeholder", "+1 416 555 0123"),
             ],
             [
               "client_email",
               ws("contact_field_email_label", "Email"),
-              ws("contact_field_email_placeholder", "you@example.com"),
+              runtime === "demo" ? "alex@example.com" : ws("contact_field_email_placeholder", "you@example.com"),
             ],
           ].map(([name, label, placeholder]) => (
             <label
@@ -714,7 +788,9 @@ export function ScreenEnginePublicWidget({
             className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"
             style={{ fontFamily: fontBody }}
           >
-            {ws("contact_submit", "Submit matter review")}
+            {runtime === "demo"
+              ? "Complete demonstration"
+              : ws("contact_submit", "Submit matter review")}
           </button>
         </form>
       </Shell>
