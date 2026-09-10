@@ -12,6 +12,8 @@ import {
   type DealStage,
 } from '@/lib/agency-crm-types';
 import { parseProspectsPaste, type ParsedProspectsResult } from '@/lib/agency-prospect-paste';
+import ProspectActivityPanel from './ProspectActivityPanel';
+import ProspectOperationsSummary from './ProspectOperationsSummary';
 
 type ImportResult = { ok: boolean; received: number; inserted: number; skipped: number; invalid: number; errors: string[] };
 const EMPTY_PARSE: ParsedProspectsResult = { rows: [], withFirmName: 0, format: 'empty', error: null };
@@ -56,6 +58,7 @@ export default function AgencyCrmClient({
   // (~1000 firms); mounting every card (each with its own select) at once is
   // slow. "Show more" raises the cap for that one column.
   const [shownByStage, setShownByStage] = useState<Record<string, number>>({});
+  const [selectedContact, setSelectedContact] = useState<AgencyProspect | null>(null);
 
   // Add-prospect form
   const [firmName, setFirmName] = useState('');
@@ -205,6 +208,8 @@ export default function AgencyCrmClient({
         <div className="bg-white border border-red-200 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
+      <ProspectOperationsSummary />
+
       {/* Bulk import */}
       <details className={`${PANEL} p-4`}>
         <summary className="text-xs uppercase tracking-wider font-semibold text-gold cursor-pointer">Bulk import prospects</summary>
@@ -306,9 +311,16 @@ export default function AgencyCrmClient({
                         <li key={p.id} className="px-3 py-3">
                           <div className="text-sm font-semibold text-navy">{p.firm_name}</div>
                           <div className="text-xs text-black/60 mt-0.5">
-                            {[p.contact_name, p.city, p.practice_area].filter(Boolean).join(' · ') || 'No details yet'}
+                          {[p.contact_name, p.city, p.practice_area].filter(Boolean).join(' · ') || 'No details yet'}
                           </div>
                           {p.source && <div className="text-[10px] uppercase tracking-wider text-black/40 mt-1">{p.source}</div>}
+                          <button
+                            type="button"
+                            onClick={() => setSelectedContact(p)}
+                            className="mt-2 border border-navy/25 text-navy px-2 py-1 text-[11px] uppercase tracking-wider font-semibold hover:bg-parchment"
+                          >
+                            Contact history
+                          </button>
                           <div className="mt-2">
                             <label className="sr-only" htmlFor={`stage-${p.id}`}>Stage</label>
                             <select
@@ -342,6 +354,17 @@ export default function AgencyCrmClient({
           );
         })}
       </div>
+
+      {selectedContact && (
+        <ProspectActivityPanel
+          prospectId={selectedContact.id}
+          firmName={selectedContact.firm_name}
+          contactName={selectedContact.contact_name}
+          contactEmail={selectedContact.contact_email}
+          open
+          onClose={() => setSelectedContact(null)}
+        />
+      )}
 
       {/* Deals */}
       <div className={PANEL}>
