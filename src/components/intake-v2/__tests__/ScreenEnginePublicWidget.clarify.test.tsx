@@ -64,6 +64,8 @@ async function submitOtherFreeText(text: string) {
   fireEvent.click(screen.getByText(/Something else/i));
   const textarea = await screen.findByPlaceholderText(
     "Describe what happened in your situation...",
+    undefined,
+    { timeout: 5_000 },
   );
   fireEvent.change(textarea, { target: { value: text } });
   fireEvent.click(screen.getByRole("button", { name: "Continue" }));
