@@ -1,0 +1,304 @@
+{
+  "schemaVersion": "gta-prospect-reviewed-import.v1",
+  "purpose": "reviewed GTA prospect production-import candidate; apply requires separate authorization",
+  "generatedOn": "2026-09-10",
+  "sourceReviewFile": "review.json",
+  "sourceResolutionSha256": "96b51fd4cadeb5828ce6ca5cf733e90ab6d501b75715426597dc5c11696f0ed4",
+  "expectedLiveBaselineCount": 141,
+  "expectedImportCount": 8,
+  "actionsExcluded": [
+    "CRM write",
+    "CRM contact creation",
+    "outreach",
+    "form submission",
+    "automatic identity merge"
+  ],
+  "records": [
+    {
+      "id": "gta-prospect-013-b013-001",
+      "recordOrigin": "reviewed_gta_prospect_batch_013",
+      "firmName": "Bianchi Presta LLP",
+      "city": "Vaughan",
+      "officeCities": [
+        "Vaughan"
+      ],
+      "websiteUrl": "https://www.vaughanlawyers.ca/",
+      "practiceAreas": [],
+      "observedLawyerCount": 11,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.vaughanlawyers.ca/",
+      "rosterCheckedAt": "2026-09-10",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 11-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Rudy A. Bianchi",
+          "relationship": "named_lawyer",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.vaughanlawyers.ca/",
+          "observedAt": "2026-09-10"
+        },
+        {
+          "name": "Domenic C.S. Presta",
+          "relationship": "named_lawyer",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.vaughanlawyers.ca/",
+          "observedAt": "2026-09-10"
+        },
+        {
+          "name": "Santo A. Veltri",
+          "relationship": "named_lawyer",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.vaughanlawyers.ca/",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-013-b013-007",
+      "recordOrigin": "reviewed_gta_prospect_batch_013",
+      "firmName": "Graham Stephenson Van Vliet LLP (GSK Lawyers)",
+      "city": "Toronto",
+      "officeCities": [
+        "Toronto"
+      ],
+      "websiteUrl": "https://www.gsklawyers.com/",
+      "practiceAreas": [],
+      "observedLawyerCount": 4,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.gsklawyers.com/",
+      "rosterCheckedAt": "2026-09-10",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 4-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required. Use the supplemented Toronto office and retain raw Burlington.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Sandra Stephenson",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.gsklawyers.com/",
+          "observedAt": "2026-09-10"
+        },
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "admin@gsklawyers.com",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://www.gsklawyers.com/",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-013-b013-008",
+      "recordOrigin": "reviewed_gta_prospect_batch_013",
+      "firmName": "Cass & Bishop",
+      "city": "Burlington",
+      "officeCities": [
+        "Burlington"
+      ],
+      "websiteUrl": "https://www.cassbishop.ca/",
+      "practiceAreas": [],
+      "observedLawyerCount": 5,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.cassbishop.ca/lawyers-since-1958",
+      "rosterCheckedAt": "2026-09-10",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 5-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": []
+    },
+    {
+      "id": "gta-prospect-013-b013-018",
+      "recordOrigin": "reviewed_gta_prospect_batch_013",
+      "firmName": "Anthony Family Law",
+      "city": "Richmond Hill",
+      "officeCities": [
+        "Richmond Hill"
+      ],
+      "websiteUrl": "https://anthonylaw.ca/",
+      "practiceAreas": [],
+      "observedLawyerCount": 3,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://anthonylaw.ca/our-team/",
+      "rosterCheckedAt": "2026-09-10",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 3-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": []
+    },
+    {
+      "id": "gta-prospect-013-b013-024",
+      "recordOrigin": "reviewed_gta_prospect_batch_013",
+      "firmName": "Kestenberg Litigation LLP",
+      "city": "Toronto",
+      "officeCities": [
+        "Toronto"
+      ],
+      "websiteUrl": "https://www.kestenberglitigation.com/",
+      "practiceAreas": [],
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.kestenberglitigation.com/meet-our-lawyers",
+      "rosterCheckedAt": "2026-09-10",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 6-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Marc Kestenberg",
+          "relationship": "principal",
+          "email": "marc@kestenberglitigation.com",
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.kestenberglitigation.com/meet-our-lawyers",
+          "observedAt": "2026-09-10"
+        },
+        {
+          "name": "Michael Kestenberg",
+          "relationship": "principal",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.kestenberglitigation.com/meet-our-lawyers",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-013-b013-041",
+      "recordOrigin": "reviewed_gta_prospect_batch_013",
+      "firmName": "Jewell Radimisis Jorge LLP",
+      "city": "North York / Toronto",
+      "officeCities": [
+        "North York / Toronto"
+      ],
+      "websiteUrl": "https://www.jrjlaw.com/",
+      "practiceAreas": [],
+      "observedLawyerCount": 9,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.jrjlaw.com/our-lawyers/",
+      "rosterCheckedAt": "2026-09-10",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 9-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Paul R. Jewell",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.jrjlaw.com/our-lawyers/",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-013-b013-049",
+      "recordOrigin": "reviewed_gta_prospect_batch_013",
+      "firmName": "Grosman Gale Fletcher Hopkins LLP",
+      "city": "Toronto",
+      "officeCities": [
+        "Toronto"
+      ],
+      "websiteUrl": "https://www.grosman.com/",
+      "practiceAreas": [],
+      "observedLawyerCount": 8,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.grosman.com/our-team/",
+      "rosterCheckedAt": "2026-09-10",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 8-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "lawyers@grosman.com",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://www.grosman.com/",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-013-b013-077",
+      "recordOrigin": "reviewed_gta_prospect_batch_013",
+      "firmName": "Addario Law Group LLP",
+      "city": "Toronto",
+      "officeCities": [
+        "Toronto"
+      ],
+      "websiteUrl": "https://www.addario.ca/",
+      "practiceAreas": [],
+      "observedLawyerCount": 13,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.addario.ca/lawyers",
+      "rosterCheckedAt": "2026-09-10",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Provisional review candidate: original first-party research declares an exact 13-lawyer roster within the 3–20 target; the static baseline was clear and the 2026-09-10 fresh live exact-identity check reported no match. This declaration was not independently re-enumerated in this review. A fresh preflight and separate apply authorization remain required.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Frank Addario",
+          "relationship": "founder",
+          "email": "faddario@addario.ca",
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.addario.ca/lawyers",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    }
+  ]
+}
