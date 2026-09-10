@@ -299,7 +299,6 @@ async function main() {
       if (waitMs > 0) await delay(waitMs);
       earliestNextRequest = Date.now() + 130;
 
-      const startedAt = new Date().toISOString();
       let response;
       let bodyText = '';
       try {

@@ -10,8 +10,10 @@ function fixture() {
     const n = i + 1; const id = `AE-${String(n).padStart(3, "0")}`; const host = `ae-${n}.example.test`;
     return { record_id: id, firm: `AE Firm ${n}`, domain: host, recipient: `${n === 1 ? "help" : `owner${n}`}@${host}`, owner: `AE Owner ${n}`, owner_role: "Principal", route_class: n === 1 ? "generic_owner_operated" : "named_published", evidence_observed_at: "2026-08-25T23:30:02Z", journey_path: `journeys/${id}.json`, journey_sha256: String(n + 50).padStart(64, "0"), source_urls: [`https://${host}/team/owner`] };
   });
-  const rows = [...ba.map((row) => ({ row, arm: "BA" })), ...ae.map((row) => ({ row, arm: "AE" }))];
-  const evidence = rows.map(({ row, arm }) => ({ record_id: row.record_id, arm, firm: arm === "BA" ? row.public_firm_name : row.firm, person: row.owner, email: arm === "BA" ? row.recipient_email : row.recipient, domain: row.domain, ghl_contact_id: `contact-${row.record_id}`, ghl_smart_list_id: `list-${arm}`, touch_1: { payload_sha256: arm === "BA" ? row.asset_sha256 : row.journey_sha256, provisional_idempotency_key: `prospect-activity:v1:ghl:location:workflow-${arm}:${row.record_id}:touch-1:email` } }));
+  const evidence = [
+    ...ba.map((row) => ({ record_id: row.record_id, arm: "BA", firm: row.public_firm_name, person: row.owner, email: row.recipient_email, domain: row.domain, ghl_contact_id: `contact-${row.record_id}`, ghl_smart_list_id: "list-BA", touch_1: { payload_sha256: row.asset_sha256, provisional_idempotency_key: `prospect-activity:v1:ghl:location:workflow-BA:${row.record_id}:touch-1:email` } })),
+    ...ae.map((row) => ({ record_id: row.record_id, arm: "AE", firm: row.firm, person: row.owner, email: row.recipient, domain: row.domain, ghl_contact_id: `contact-${row.record_id}`, ghl_smart_list_id: "list-AE", touch_1: { payload_sha256: row.journey_sha256, provisional_idempotency_key: `prospect-activity:v1:ghl:location:workflow-AE:${row.record_id}:touch-1:email` } })),
+  ];
   return { baManifest: ba, aeManifest: { schema_version: "AE-evidence-first-manifest.v1.4", records: ae }, evidenceManifest: { schema_version: "verified-evidence.v0.1", generated_at: "2026-09-10T12:29:58.856Z", records: evidence } };
 }
 

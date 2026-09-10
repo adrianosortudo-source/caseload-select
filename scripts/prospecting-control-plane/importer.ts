@@ -116,7 +116,11 @@ export async function executeProspectProvisioningRpc(
   operatorId: string,
   apply: boolean,
 ): Promise<ProspectProvisioningResult> {
-  const { manifest_sha256: _digest, ...rpcManifest } = manifest;
+  const rpcManifest = {
+    schema_version: manifest.schema_version,
+    generated_at: manifest.generated_at,
+    records: manifest.records,
+  };
   const { data, error } = await client.rpc("provision_prospect_source_batch", {
     p_manifest: rpcManifest,
     p_operator_id: operatorId,

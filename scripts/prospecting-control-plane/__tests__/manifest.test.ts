@@ -67,6 +67,8 @@ describe("validateProspectProvisionManifest", () => {
     const duplicateWebsite = manifest();
     duplicateWebsite.records[1].organization.website_url = duplicateWebsite.records[0].organization.website_url;
     duplicateWebsite.records[1].source_url = duplicateWebsite.records[0].source_url;
+    duplicateWebsite.records[1].person.email_attribution.evidence_url = duplicateWebsite.records[0].source_url;
+    duplicateWebsite.records[1].source_payload.evidence[0].url = duplicateWebsite.records[0].source_url;
     expect(() => validateProspectProvisionManifest(JSON.stringify(duplicateWebsite))).toThrow("Duplicate organization website");
 
     const duplicateEmail = manifest();
@@ -86,15 +88,19 @@ describe("validateProspectProvisionManifest", () => {
 
   it("always blocks a generic firm inbox from person.primary_email", () => {
     const generic = manifest();
-    generic.records[0].person!.primary_email = "info@ba-1.example.test";
-    generic.records[0].person!.email_attribution = {
+    const genericPerson = generic.records[0].person as {
+      primary_email: string | null;
+      email_attribution: null | { mailbox_type: string; person_attribution_proven: boolean; evidence_url: string };
+    };
+    genericPerson.primary_email = "info@ba-1.example.test";
+    genericPerson.email_attribution = {
       mailbox_type: "generic_firm",
       person_attribution_proven: true,
       evidence_url: "https://ba-1.example.test/team/owner",
     };
     expect(() => validateProspectProvisionManifest(JSON.stringify(generic))).toThrow("generic firm inbox");
-    generic.records[0].person!.primary_email = null;
-    generic.records[0].person!.email_attribution = null;
+    genericPerson.primary_email = null;
+    genericPerson.email_attribution = null;
     expect(validateProspectProvisionManifest(JSON.stringify(generic)).records[0].person?.primary_email).toBeNull();
   });
 
@@ -104,7 +110,7 @@ describe("validateProspectProvisionManifest", () => {
     expect(() => validateProspectProvisionManifest(JSON.stringify(unproven))).toThrow("named-person attribution");
 
     const attributionWithoutEmail = manifest();
-    attributionWithoutEmail.records[0].person!.primary_email = null;
+    (attributionWithoutEmail.records[0].person as { primary_email: string | null }).primary_email = null;
     expect(() => validateProspectProvisionManifest(JSON.stringify(attributionWithoutEmail))).toThrow("must be null");
   });
 
@@ -114,7 +120,7 @@ describe("validateProspectProvisionManifest", () => {
     expect(() => validateProspectProvisionManifest(JSON.stringify(missingFirmName))).toThrow("display_name must be a string");
 
     const shortPhone = manifest();
-    shortPhone.records[0].person!.primary_phone = "1";
+    (shortPhone.records[0].person as { primary_phone: string | null }).primary_phone = "1";
     expect(() => validateProspectProvisionManifest(JSON.stringify(shortPhone))).toThrow("3-80 characters");
 
     const missingBasis = manifest();

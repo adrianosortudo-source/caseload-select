@@ -11,8 +11,8 @@ const page = readFileSync(resolve(process.cwd(), 'src/app/admin/prospects/page.t
 
 describe('prospecting Control Plane operator surface', () => {
   it('transforms the client component successfully', async () => {
-    const module = await import('../ProspectingControlPlaneRegistry');
-    expect(module.default).toBeTypeOf('function');
+    const componentModule = await import('../ProspectingControlPlaneRegistry');
+    expect(componentModule.default).toBeTypeOf('function');
   });
 
   it('integrates alongside the existing GTA and Brazilian prospect surfaces', () => {
