@@ -1,0 +1,3628 @@
+{
+  "schema_version": "2.1",
+  "batch_id": "gta-prospect-batch-011",
+  "lane": "west-north",
+  "records": [
+    {
+      "record_id": "B011-WN-001",
+      "firm_name": "Pallett Valo LLP",
+      "canonical_domain": "pallettvalo.com",
+      "office_cities": [
+        "Mississauga",
+        "Vaughan"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 10,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1485",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-001",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=pending_central_reconciliation"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.pallettvalo.com/our-people/our-lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "First public roster page; a Load more control was visible, so the page does not establish a complete firm-wide total."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.pallettvalo.com/contact-us/",
+          "observed_on": "2026-09-08",
+          "note": "The public roster visibly labels current people as Lawyer, Partner, or Counsel and displays individual source entries addresses. The contact page identifies Mississauga and a Vaughan workspace. Ownership is not asserted."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-002",
+      "firm_name": "Wilson Vukelich LLP",
+      "canonical_domain": "wvllp.ca",
+      "office_cities": [
+        "Markham"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 23,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-868",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-002",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://wvllp.ca/lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Complete current Our Lawyers list on the observed firm page."
+        },
+        {
+          "kind": "office",
+          "url": "https://wvllp.ca/",
+          "observed_on": "2026-09-08",
+          "note": "The firm page enumerates 23 named current lawyer/counsel/partner roles and separately lists the Markham office."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://wvllp.ca/lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Managing Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-003",
+      "firm_name": "Russell Alexander Collaborative Family Lawyers",
+      "canonical_domain": "russellalexander.com",
+      "office_cities": [
+        "Concord",
+        "Markham"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 24,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5747",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5786",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5787",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5788",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-003",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.russellalexander.com/dynamic-map/",
+          "observed_on": "2026-09-08",
+          "note": "Complete 24-name Our Lawyers list on the observed firm page."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.russellalexander.com/dynamic-map/",
+          "observed_on": "2026-09-08",
+          "note": "The first-party locations page lists 24 lawyers and identifies Concord and Markham service locations. Ownership and a published firm source entries were not established from the reviewed page."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-004",
+      "firm_name": "Black Sutherland LLP",
+      "canonical_domain": "blacksutherland.com",
+      "office_cities": [
+        "North York"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 15,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "held_cross_lane_duplicate",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3004",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-004",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "cross_lane_counterpart=B011-T-01",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.blacksutherland.com/our-lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Complete public Our Lawyers page; the 15 profile links precede footer content."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.blacksutherland.com/our-lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "The page lists 15 named lawyers and a North York office. No owner/leader or public source entries is asserted where not visibly published."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-005",
+      "firm_name": "Blackburn Lawyers",
+      "canonical_domain": "blackburnlawyers.ca",
+      "office_cities": [
+        "Richmond Hill"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 9,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "ledger_projection",
+              "record_id": "offline-import:gta-prospect-001-blackburn-lawyers-richmond-hill",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-2395",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-2396",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-005",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://blackburnlawyers.ca/team/lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Complete Our Lawyers list; the following page section is explicitly Our Support Staff."
+        },
+        {
+          "kind": "office",
+          "url": "https://blackburnlawyers.ca/team/lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Nine named lawyer entries precede a separately labelled support-staff section. The observed page does not establish ownership; staff source entries are not repurposed as lawyer-owner contacts."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-006",
+      "firm_name": "Dale Streiman Law LLP",
+      "canonical_domain": "dalestreimanlaw.com",
+      "office_cities": [
+        "Brampton",
+        "Vaughan",
+        "Milton",
+        "Oakville",
+        "Burlington"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 3,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "ledger_projection",
+              "record_id": "offline-import:gta-prospect-001-dale-streiman-brampton",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-187",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-006",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.dalestreimanlaw.com/",
+          "observed_on": "2026-09-08",
+          "note": "Three lawyer biographies are visible on the observed homepage; no complete-roster boundary was established."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.dalestreimanlaw.com/",
+          "observed_on": "2026-09-08",
+          "note": "The homepage names a Brampton base and appointment locations. A full roster must be opened before count-band acceptance."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.dalestreimanlaw.com/",
+          "observed_on": "2026-09-08",
+          "note": "Senior Partner and originating founder"
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.dalestreimanlaw.com/",
+          "observed_on": "2026-09-08",
+          "note": "Managing Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-007",
+      "firm_name": "SimpsonWigle LAW LLP",
+      "canonical_domain": "simpsonwigle.com",
+      "office_cities": [
+        "Burlington"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 6,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-545",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-007",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://simpsonwigle.com/our-team/",
+          "observed_on": "2026-09-08",
+          "note": "Six current lawyer profiles are visible in the observed first-party excerpt; no full roster boundary was confirmed."
+        },
+        {
+          "kind": "office",
+          "url": "https://simpsonwigle.com/our-team/",
+          "observed_on": "2026-09-08",
+          "note": "Burlington office and individual lawyer source entries are visible. No ownership statement was observed."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-008",
+      "firm_name": "Whitten & Lublin",
+      "canonical_domain": "whittenlublin.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 19,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5539",
+              "fields": [
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-008",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://whittenlublin.com/your-team/",
+          "observed_on": "2026-09-08",
+          "note": "Complete 19-name public team list captured on the observed page."
+        },
+        {
+          "kind": "office",
+          "url": "https://whittenlublin.com/your-team/",
+          "observed_on": "2026-09-08",
+          "note": "The page names 19 lawyers and describes Burlington, Oakville, Mississauga, and Markham as service areas; it does not establish that each is an office."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://whittenlublin.com/your-team/",
+          "observed_on": "2026-09-08",
+          "note": "Founding Partner"
+        },
+        {
+          "kind": "leadership",
+          "url": "https://whittenlublin.com/your-team/",
+          "observed_on": "2026-09-08",
+          "note": "Founding Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-009",
+      "firm_name": "Miller Thomson LLP",
+      "canonical_domain": "millerthomson.com",
+      "office_cities": [
+        "Vaughan",
+        "Toronto"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 51,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "held_cross_lane_duplicate",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-009",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "cross_lane_counterpart=B011-T-25",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.millerthomson.com/en/careers/lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Firm-wide Canadian count; official firm material states approximately 500 lawyers, not a Vaughan-only count."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.millerthomson.com/en/offices/vaughan/",
+          "observed_on": "2026-09-08",
+          "note": "The firm publishes a Vaughan office and a firm-wide count above the 51+ band. It is retained as a size-band and normalization control, not a small-firm target."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-010",
+      "firm_name": "Hicks Morley Hamilton Stewart Storie LLP",
+      "canonical_domain": "hicksmorley.com",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 51,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-010",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://hicksmorley.com/about/",
+          "observed_on": "2026-09-08",
+          "note": "Firm-wide Ontario count; official firm page states over 120 lawyers."
+        },
+        {
+          "kind": "office",
+          "url": "https://hicksmorley.com/about/",
+          "observed_on": "2026-09-08",
+          "note": "A 51+ size-band control. It is not represented as a small private-practice target."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-011",
+      "firm_name": "McCague Borlack LLP",
+      "canonical_domain": "mccagueborlack.com",
+      "office_cities": [
+        "Toronto",
+        "Barrie"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 8,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "held_cross_lane_duplicate",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4527",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-011",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "cross_lane_counterpart=B011-T-45",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://mccagueborlack.com/people",
+          "observed_on": "2026-09-08",
+          "note": "First eight public lawyer results; the page offers View All and therefore does not prove a firm-wide total."
+        },
+        {
+          "kind": "office",
+          "url": "https://mccagueborlack.com/people",
+          "observed_on": "2026-09-08",
+          "note": "The firm is retained for full-roster review; its offices do not yet establish a west/north office relationship."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.mccagueborlack.com/people/howard-borlack",
+          "observed_on": "2026-09-08",
+          "note": "Founding Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-012",
+      "firm_name": "Loopstra Nixon LLP",
+      "canonical_domain": "loopstranixon.com",
+      "office_cities": [
+        "Vaughan",
+        "Toronto"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 51,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "held_cross_lane_duplicate",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1385",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1846",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3194",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4355",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4356",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5693",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5837",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-830",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-012",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "cross_lane_counterpart=B011-T-20",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.loopstranixon.com/insights/news/loopstra-nixon-elects-peter-saad-as-new-managing-partner-allan-ritchie-assumes-new-role-as-chair-of-the-firm",
+          "observed_on": "2026-09-08",
+          "note": "Firm-wide count from an official firm news page reports 118 lawyers in February 2025; current total requires refresh."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.loopstranixon.com/insights/news/loopstra-nixon-elects-peter-saad-as-new-managing-partner-allan-ritchie-assumes-new-role-as-chair-of-the-firm",
+          "observed_on": "2026-09-08",
+          "note": "A 51+ control record with a source-date limitation; it needs current roster confirmation before acceptance."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.loopstranixon.com/insights/news/loopstra-nixon-elects-peter-saad-as-new-managing-partner-allan-ritchie-assumes-new-role-as-chair-of-the-firm",
+          "observed_on": "2026-09-08",
+          "note": "Managing Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-013",
+      "firm_name": "MH Lawyers LLP",
+      "canonical_domain": "mhlawyers.ca",
+      "office_cities": [
+        "Toronto"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 18,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3179",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-4505",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-013",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=pending_central_reconciliation"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.mhlawyers.ca/our-people/",
+          "observed_on": "2026-09-08",
+          "note": "Eighteen names visible in the observed people-page excerpt; full roster completion needs confirmation."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.mhlawyers.ca/our-people/",
+          "observed_on": "2026-09-08",
+          "note": "Canonical domain differs from baseline mhalaw.ca and therefore needs name-and-office collision review rather than automatic acceptance."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-014",
+      "firm_name": "Vector Law",
+      "canonical_domain": "vectorlaw.ca",
+      "office_cities": [
+        "Vaughan"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 3,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-014",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.vectorlaw.ca/our-lawyers",
+          "observed_on": "2026-09-08",
+          "note": "Three names on the public Our Lawyers page."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.vectorlaw.ca/our-lawyers",
+          "observed_on": "2026-09-08",
+          "note": "A floor-band candidate; individual licence/role labels need an independent review before staging."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-015",
+      "firm_name": "Haider Khan Legal",
+      "canonical_domain": "haiderkhanlegal.ca",
+      "office_cities": [
+        "Mississauga"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1285",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-015",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.haiderkhanlegal.ca/",
+          "observed_on": "2026-09-08",
+          "note": "The observed page groups lawyers and paralegals but does not establish a countable current lawyer roster."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.haiderkhanlegal.ca/",
+          "observed_on": "2026-09-08",
+          "note": "Discovery candidate only; must not enter a lawyer-count band until the roles are separated."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-016",
+      "firm_name": "Lexaltico LLP",
+      "canonical_domain": "lexaltico.com",
+      "office_cities": [
+        "Oakville"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-299",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-016",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://lexaltico.com/oakville-lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "The observed office page confirms an Oakville office but does not enumerate a complete roster."
+        },
+        {
+          "kind": "office",
+          "url": "https://lexaltico.com/oakville-lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Candidate needs a firm team source before count qualification."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-017",
+      "firm_name": "AEGIS Law",
+      "canonical_domain": "aegislaws.com",
+      "office_cities": [
+        "Richmond Hill",
+        "Toronto"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-017",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://aegislaws.com/",
+          "observed_on": "2026-09-08",
+          "note": "Office page does not establish a complete current lawyer roster."
+        },
+        {
+          "kind": "office",
+          "url": "https://aegislaws.com/",
+          "observed_on": "2026-09-08",
+          "note": "Candidate must remain unbanded pending a first-party roster."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-018",
+      "firm_name": "Erudite Law",
+      "canonical_domain": "eruditelaw.com",
+      "office_cities": [
+        "Richmond Hill"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
+      "stage": "source_observed",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-018",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://eruditelaw.com/our-legal-team/",
+          "observed_on": "2026-09-08",
+          "note": "Observed page does not support a complete current lawyer count."
+        },
+        {
+          "kind": "office",
+          "url": "https://eruditelaw.com/our-legal-team/",
+          "observed_on": "2026-09-08",
+          "note": "The page distinguishes students and support staff; a full lawyer roster is still required."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-019",
+      "firm_name": "Hosseini and Hosseini LLP",
+      "canonical_domain": "hosslaw.ca",
+      "office_cities": [
+        "Aurora"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 1,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-63",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-019",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.hosslaw.ca/about",
+          "observed_on": "2026-09-08",
+          "note": "One lawyer is expressly identified on the observed firm page."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.hosslaw.ca/about",
+          "observed_on": "2026-09-08",
+          "note": "Held below the three-lawyer floor unless an independent full-roster review changes the evidence."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.hosslaw.ca/about",
+          "observed_on": "2026-09-08",
+          "note": "Principal"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-020",
+      "firm_name": "Mancini Law LLP",
+      "canonical_domain": "mancinilaw.ca",
+      "office_cities": [
+        "Vaughan"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 1,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5842",
+              "fields": [
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-020",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://mancinilaw.ca/",
+          "observed_on": "2026-09-08",
+          "note": "One named lawyer is visible in the observed homepage excerpt; full roster not established."
+        },
+        {
+          "kind": "office",
+          "url": "https://mancinilaw.ca/",
+          "observed_on": "2026-09-08",
+          "note": "Held rather than promoted because the three-lawyer floor is not supported."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-021",
+      "firm_name": "DeRusha Law Firm",
+      "canonical_domain": "derushalawfirm.com",
+      "office_cities": [
+        "Mississauga"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 3,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "missing_first_party_source",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "held_missing_first_party_roster",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-021",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "office",
+          "url": "https://derushalawfirm.com/",
+          "observed_on": "2026-09-08",
+          "note": "Held for first-party roster confirmation; regulator evidence alone does not satisfy later acceptance."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-022",
+      "firm_name": "Halpern Stockhamer",
+      "canonical_domain": "halpernstockhamer.com",
+      "office_cities": [
+        "Markham"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-905",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-022",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.halpernstockhamer.com/our-lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Two named lawyer biographies on the public Our Lawyers page."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.halpernstockhamer.com/our-lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Held below floor."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-023",
+      "firm_name": "Concorde Law",
+      "canonical_domain": "concordelaw.ca",
+      "office_cities": [
+        "Vaughan"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-587",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-023",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.concordelaw.ca/",
+          "observed_on": "2026-09-08",
+          "note": "Two named lawyer contacts appear on the observed homepage; completeness is not established."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.concordelaw.ca/",
+          "observed_on": "2026-09-08",
+          "note": "Held below floor."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-024",
+      "firm_name": "Eshel Law Firm Professional Corporation",
+      "canonical_domain": "eshellaw.ca",
+      "office_cities": [
+        "Markham"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 1,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-893",
+              "fields": [
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-894",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-024",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://eshellaw.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "note": "The public team page identifies one Lawyer and separately labels all other listed roles as non-lawyer staff."
+        },
+        {
+          "kind": "office",
+          "url": "https://eshellaw.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "note": "Held below floor; support roles were not counted as lawyers."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://eshellaw.ca/our-team/",
+          "observed_on": "2026-09-08",
+          "note": "Founder and Lawyer"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-025",
+      "firm_name": "Sabio Law LLP",
+      "canonical_domain": "sabiollp.com",
+      "office_cities": [
+        "Brampton",
+        "Burlington",
+        "North York"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-025",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://sabiollp.com/our-team/",
+          "observed_on": "2026-09-08",
+          "note": "Public Lawyers section lists one Lawyer and one Counsel, then separately labels clerks, assistant, and operations roles."
+        },
+        {
+          "kind": "office",
+          "url": "https://sabiollp.com/our-team/",
+          "observed_on": "2026-09-08",
+          "note": "Held below floor."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-026",
+      "firm_name": "Wesley Jackson Professional Corporation",
+      "canonical_domain": "wjpc.ca",
+      "office_cities": [
+        "Brampton"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 1,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-026",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.wjpc.ca/our-lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Public Our Lawyers page identifies Wesley Jackson as the sole listed lawyer."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.wjpc.ca/our-lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Held below floor."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.wjpc.ca/our-lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Founder"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-027",
+      "firm_name": "Younan Law Group",
+      "canonical_domain": "younanlaw.a0g.com",
+      "office_cities": [
+        "Vaughan"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-027",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=pending_domain_validation"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.younanlaw.a0g.com/index.php/our-lawyers",
+          "observed_on": "2026-09-08",
+          "note": "Two named lawyer roles are visible on the observed page."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.younanlaw.a0g.com/index.php/our-lawyers",
+          "observed_on": "2026-09-08",
+          "note": "Held below floor and domain verification is required before any later use."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.younanlaw.a0g.com/index.php/our-lawyers",
+          "observed_on": "2026-09-08",
+          "note": "Founding Partner"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-028",
+      "firm_name": "Brace Law",
+      "canonical_domain": "bracelaw.ca",
+      "office_cities": [
+        "Oakville"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 1,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-2024",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5813",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-028",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.bracelaw.ca/best-lawyers-oakville",
+          "observed_on": "2026-09-08",
+          "note": "The observed firm page identifies a principal lawyer but does not establish a complete roster."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.bracelaw.ca/best-lawyers-oakville",
+          "observed_on": "2026-09-08",
+          "note": "Held below floor."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.bracelaw.ca/best-lawyers-oakville",
+          "observed_on": "2026-09-08",
+          "note": "Principal Lawyer"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-029",
+      "firm_name": "Lakeshore Law",
+      "canonical_domain": "lakeshore.law",
+      "office_cities": [
+        "Oakville"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-029",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://lakeshore.law/",
+          "observed_on": "2026-09-08",
+          "note": "Public Meet our Lawyers section identifies a Managing Lawyer and Of Counsel."
+        },
+        {
+          "kind": "office",
+          "url": "https://lakeshore.law/",
+          "observed_on": "2026-09-08",
+          "note": "Held below floor."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://lakeshore.law/",
+          "observed_on": "2026-09-08",
+          "note": "Managing Lawyer"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-030",
+      "firm_name": "Hrycyna Law Professional Corporation",
+      "canonical_domain": "hlpcimmigration.law",
+      "office_cities": [
+        "Mississauga"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-030",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=pending_domain_validation"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.hlpcimmigration.law/study",
+          "observed_on": "2026-09-08",
+          "note": "The public firm history names one principal lawyer and one lawyer."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.hlpcimmigration.law/study",
+          "observed_on": "2026-09-08",
+          "note": "Held below floor; the public domain relationship needs review because the source is served from an immigration subdomain."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.hlpcimmigration.law/study",
+          "observed_on": "2026-09-08",
+          "note": "Principal Lawyer and founder"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-031",
+      "firm_name": "Faber and Oostdyk Lawyers",
+      "canonical_domain": "folaw.ca",
+      "office_cities": [
+        "Burlington"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-541",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-031",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://folaw.ca/aboutus/",
+          "observed_on": "2026-09-08",
+          "note": "Two current lawyer roles appear in the observed page excerpt; roster completion not established."
+        },
+        {
+          "kind": "office",
+          "url": "https://folaw.ca/aboutus/",
+          "observed_on": "2026-09-08",
+          "note": "Held below floor."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://folaw.ca/aboutus/",
+          "observed_on": "2026-09-08",
+          "note": "Founder and Lawyer"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-032",
+      "firm_name": "Hosseini Law Firm",
+      "canonical_domain": "hosseinilaw.com",
+      "office_cities": [
+        "Richmond Hill"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-032",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=no_exact_domain_match_in_batches_001_to_010"
+        ]
+      },
+      "access": {
+        "state": "held_access_review",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://hosseinilaw.com/lawyer-aurora/",
+          "observed_on": "2026-09-08",
+          "note": "Office page does not provide a countable firm-wide roster."
+        },
+        {
+          "kind": "office",
+          "url": "https://hosseinilaw.com/lawyer-aurora/",
+          "observed_on": "2026-09-08",
+          "note": "Held until a countable public roster is found."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-033",
+      "firm_name": "Martin and Hillyer Associates",
+      "canonical_domain": "mhalaw.ca",
+      "office_cities": [
+        "Burlington"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 8,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "ledger_projection",
+              "record_id": "offline-import:gta-prospect-004-b004-14",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-480",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-517",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-521",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-033",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batches_001_to_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.mhalaw.ca/lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Eight distinct lawyer names visible in the observed page excerpt; central registry is authoritative for any update."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.mhalaw.ca/lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Collision control; do not import as net-new."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-034",
+      "firm_name": "Lockyer and Hein LLP",
+      "canonical_domain": "lhlaw.ca",
+      "office_cities": [
+        "Brampton",
+        "Caledon",
+        "Georgetown"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 8,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "fixture",
+              "record_id": "lockyer-hein-brampton",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-034",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batches_001_to_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://lhlaw.ca/lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Eight named lawyer roles on the public page."
+        },
+        {
+          "kind": "office",
+          "url": "https://lhlaw.ca/lawyers/",
+          "observed_on": "2026-09-08",
+          "note": "Collision control; do not import as net-new."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-035",
+      "firm_name": "Bianchi Presta LLP",
+      "canonical_domain": "bianchipresta.com",
+      "office_cities": [
+        "Vaughan"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 10,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-035",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batches_001_to_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.vaughanlawyers.ca/join/lawyers",
+          "observed_on": "2026-09-08",
+          "note": "Firm career page states ten lawyers."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.vaughanlawyers.ca/join/lawyers",
+          "observed_on": "2026-09-08",
+          "note": "Collision control; do not import as net-new."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-036",
+      "firm_name": "Cattanach Hindson Sutton VanVeldhuizen LLP",
+      "canonical_domain": "cattanach.ca",
+      "office_cities": [
+        "Markham"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "ledger_projection",
+              "record_id": "offline-import:gta-prospect-001-cattanach-markham",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-870",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-036",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batches_001_to_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.cattanach.ca/",
+          "observed_on": "2026-09-08",
+          "note": "No count refresh made because the baseline collision already determines hold status."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.cattanach.ca/",
+          "observed_on": "2026-09-08",
+          "note": "Collision control; do not import as net-new."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-037",
+      "firm_name": "Sutherland Law",
+      "canonical_domain": "sutherlaw.ca",
+      "office_cities": [
+        "Vaughan"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5719",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-037",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batches_001_to_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.sutherlaw.ca/",
+          "observed_on": "2026-09-08",
+          "note": "No count refresh made because the baseline collision already determines hold status."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.sutherlaw.ca/",
+          "observed_on": "2026-09-08",
+          "note": "Collision control; do not import as net-new."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-038",
+      "firm_name": "Deo Condominium Lawyers",
+      "canonical_domain": "deocondolawyers.com",
+      "office_cities": [
+        "Vaughan"
+      ],
+      "observed_on": "2026-09-07",
+      "observed_lawyer_count": 8,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "ledger_projection",
+              "record_id": "offline-import:gta-prospect-008-b008-13",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-038",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batch_008_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "prior_first_party_source",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.deocondolawyers.com/",
+          "observed_on": "2026-09-07",
+          "note": "Prior batch 010 public-roster observation; not re-promoted here."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.deocondolawyers.com/",
+          "observed_on": "2026-09-07",
+          "note": "Collision control retaining earlier source date."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-039",
+      "firm_name": "Brattys LLP",
+      "canonical_domain": "bratty.com",
+      "office_cities": [
+        "Vaughan"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-039",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batch_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.bratty.com/our-team",
+          "observed_on": "2026-09-08",
+          "note": "No count refresh made because the baseline collision already determines hold status."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.bratty.com/contact-us",
+          "observed_on": "2026-09-08",
+          "note": "Collision control; do not import as net-new."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-040",
+      "firm_name": "Bluestone Law Professional Corporation",
+      "canonical_domain": "bluestonelaw.ca",
+      "office_cities": [
+        "Brampton"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 13,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-173",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-040",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batch_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://bluestonelaw.ca/",
+          "observed_on": "2026-09-08",
+          "note": "Firm homepage publishes 13 lawyers."
+        },
+        {
+          "kind": "office",
+          "url": "https://bluestonelaw.ca/",
+          "observed_on": "2026-09-08",
+          "note": "Collision control; do not import as net-new."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-041",
+      "firm_name": "Feldstein Family Law Group",
+      "canonical_domain": "separation.ca",
+      "office_cities": [
+        "Markham",
+        "Vaughan",
+        "Mississauga",
+        "Oakville"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": 11,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5668",
+              "fields": [
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-897",
+              "fields": [
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-041",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batch_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.separation.ca/our-locations/vaughan/",
+          "observed_on": "2026-09-08",
+          "note": "Firm location page states eleven lawyers across four GTA offices."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.separation.ca/our-locations/vaughan/",
+          "observed_on": "2026-09-08",
+          "note": "Collision control; do not import as net-new."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.separation.ca/our-locations/vaughan/",
+          "observed_on": "2026-09-08",
+          "note": "Founder"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-042",
+      "firm_name": "NIKA LAW LLP",
+      "canonical_domain": "nikalaw.ca",
+      "office_cities": [
+        "Mississauga"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1451",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-042",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batches_001_to_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://nikalaw.ca/about-us/",
+          "observed_on": "2026-09-08",
+          "note": "No count refresh made because the baseline collision already determines hold status."
+        },
+        {
+          "kind": "office",
+          "url": "https://nikalaw.ca/about-us/",
+          "observed_on": "2026-09-08",
+          "note": "Collision control; do not import as net-new."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://nikalaw.ca/about-us/",
+          "observed_on": "2026-09-08",
+          "note": "Founder"
+        },
+        {
+          "kind": "leadership",
+          "url": "https://nikalaw.ca/about-us/",
+          "observed_on": "2026-09-08",
+          "note": "Founder"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-043",
+      "firm_name": "O'Connor MacLeod Hanna LLP",
+      "canonical_domain": "omh.ca",
+      "office_cities": [
+        "Oakville"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-043",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batches_001_to_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.omh.ca/",
+          "observed_on": "2026-09-08",
+          "note": "No count refresh made because the baseline collision already determines hold status."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.omh.ca/",
+          "observed_on": "2026-09-08",
+          "note": "Collision control; do not import as net-new."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-044",
+      "firm_name": "KMB Law",
+      "canonical_domain": "kmblaw.com",
+      "office_cities": [
+        "Mississauga"
+      ],
+      "observed_on": "2026-09-08",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-044",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batches_001_to_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "reviewed_first_party",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.kmblaw.com/about/",
+          "observed_on": "2026-09-08",
+          "note": "No count refresh made because the baseline collision already determines hold status."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.kmblaw.com/about/",
+          "observed_on": "2026-09-08",
+          "note": "Collision control; do not import as net-new."
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.kmblaw.com/about/",
+          "observed_on": "2026-09-08",
+          "note": "Founder"
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.kmblaw.com/about/",
+          "observed_on": "2026-09-08",
+          "note": "Founder"
+        },
+        {
+          "kind": "leadership",
+          "url": "https://www.kmblaw.com/about/",
+          "observed_on": "2026-09-08",
+          "note": "Founder"
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-045",
+      "firm_name": "Aastha Lawyers",
+      "canonical_domain": "aasthalaw.ca",
+      "office_cities": [
+        "Mississauga"
+      ],
+      "observed_on": "2026-09-07",
+      "observed_lawyer_count": 6,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "fixture",
+              "record_id": "aastha-lawyers-mississauga",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-045",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batch_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "prior_first_party_source",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.aasthalaw.ca/our-team",
+          "observed_on": "2026-09-07",
+          "note": "Prior batch 010 public-roster observation; not re-promoted here."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.aasthalaw.ca/our-team",
+          "observed_on": "2026-09-07",
+          "note": "Collision control retaining earlier source date."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-046",
+      "firm_name": "Dhillon Murthi Law",
+      "canonical_domain": "dhillonmurthilaw.ca",
+      "office_cities": [
+        "Mississauga"
+      ],
+      "observed_on": "2026-09-07",
+      "observed_lawyer_count": 6,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "fixture",
+              "record_id": "dhillon-murthi-law-mississauga",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1197",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1251",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1594",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-1621",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-196",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-210",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-267",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-294",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-362",
+              "fields": [
+                "canonical_domain"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-764",
+              "fields": [
+                "canonical_domain"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-046",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batch_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "prior_first_party_source",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://dhillonmurthilaw.ca/about-us/our-team/",
+          "observed_on": "2026-09-07",
+          "note": "Prior batch 010 public-roster observation; not re-promoted here."
+        },
+        {
+          "kind": "office",
+          "url": "https://dhillonmurthilaw.ca/about-us/our-team/",
+          "observed_on": "2026-09-07",
+          "note": "Collision control retaining earlier source date."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-047",
+      "firm_name": "Barrett Legal",
+      "canonical_domain": "barrettlegal.ca",
+      "office_cities": [
+        "Vaughan"
+      ],
+      "observed_on": "2026-09-07",
+      "observed_lawyer_count": 11,
+      "count_qualifier": "at_least",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-047",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batch_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "prior_first_party_source",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://barrettlegal.ca/out-team/",
+          "observed_on": "2026-09-07",
+          "note": "Prior batch 010 team-page observation; roles were not consistently labelled and it remains unbounded."
+        },
+        {
+          "kind": "office",
+          "url": "https://barrettlegal.ca/out-team/",
+          "observed_on": "2026-09-07",
+          "note": "Collision control retaining earlier source date."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-048",
+      "firm_name": "GZ Legal",
+      "canonical_domain": "gzlegal.com",
+      "office_cities": [
+        "North York"
+      ],
+      "observed_on": "2026-09-07",
+      "observed_lawyer_count": 11,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "clear",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": []
+        },
+        "provenance": [
+          "source_record=B011-WN-048",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batch_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "prior_first_party_source",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.gzlegal.com/our-lawyers/",
+          "observed_on": "2026-09-07",
+          "note": "Independent batch 010 review corrected the previous count to 11 active lawyer/counsel entries."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.gzlegal.com/our-lawyers/",
+          "observed_on": "2026-09-07",
+          "note": "Collision control retaining earlier source date."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-049",
+      "firm_name": "Flaherty McCarthy LLP",
+      "canonical_domain": "fmlaw.ca",
+      "office_cities": [
+        "Markham"
+      ],
+      "observed_on": "2026-09-07",
+      "observed_lawyer_count": 15,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-2556",
+              "fields": [
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-3563",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-5761",
+              "fields": [
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-049",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batch_010_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "prior_first_party_source",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.fmlaw.ca/",
+          "observed_on": "2026-09-07",
+          "note": "Independent batch 010 review found 15 public lawyer profiles."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.fmlaw.ca/",
+          "observed_on": "2026-09-07",
+          "note": "Collision control retaining earlier source date."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    },
+    {
+      "record_id": "B011-WN-050",
+      "firm_name": "Ruso and Associates",
+      "canonical_domain": "rusolaw.ca",
+      "office_cities": [
+        "Oakville",
+        "Richmond Hill"
+      ],
+      "observed_on": "2026-09-07",
+      "observed_lawyer_count": 10,
+      "count_qualifier": "exact",
+      "roster_evidence_state": "present",
+      "stage": "held",
+      "accepted": false,
+      "import_ready": false,
+      "reconciliation": {
+        "state": "pending_operator_baseline",
+        "baseline_review": {
+          "state": "review_required",
+          "automatic_merge": false,
+          "guard": "gta-prospect-baseline-reconciliation",
+          "loaded_sources": [
+            "fixture",
+            "import_fixture",
+            "legacy_source"
+          ],
+          "live_ledger_state": "offline_pending",
+          "matches": [
+            {
+              "origin": "ledger_projection",
+              "record_id": "offline-import:gta-prospect-008-b008-19",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            },
+            {
+              "origin": "legacy_source",
+              "record_id": "legacy-gta-directory-2026-07:row-750",
+              "fields": [
+                "canonical_domain",
+                "firm_name"
+              ]
+            }
+          ]
+        },
+        "provenance": [
+          "source_record=B011-WN-050",
+          "source_commit=ace4694b41215b7691f3ee35930387545a433a44",
+          "static_baseline_records=6025",
+          "live_ledger=offline_pending",
+          "source_reconciliation=exact_canonical_domain_match_batch_008_hold_not_net_new"
+        ]
+      },
+      "access": {
+        "state": "prior_first_party_source",
+        "scope": "public_first_party_read_only"
+      },
+      "evidence": [
+        {
+          "kind": "roster",
+          "url": "https://www.rusolaw.ca/our-team",
+          "observed_on": "2026-09-07",
+          "note": "Prior batch 010 public-roster observation; not re-promoted here."
+        },
+        {
+          "kind": "office",
+          "url": "https://www.rusolaw.ca/our-team",
+          "observed_on": "2026-09-07",
+          "note": "Collision control retaining earlier source date."
+        }
+      ],
+      "public_contact_provenance": {
+        "status": "not_collected",
+        "rationale": "Public contact details were intentionally excluded; this research artifact keeps only source provenance."
+      }
+    }
+  ]
+}
