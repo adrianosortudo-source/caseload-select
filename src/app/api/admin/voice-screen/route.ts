@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireOperator } from "@/lib/admin-auth";
-import { database, liveConfig } from "@/lib/voice-screen-store";
+import { database, liveConfig, voiceScreenSubjectDigests } from "@/lib/voice-screen-store";
 
 export async function GET() {
   const denied = await requireOperator(); if (denied) return denied;
@@ -28,7 +28,12 @@ export async function POST(req: NextRequest) {
     }
     if (action === "erase_subject") {
       if (confirm !== "ERASE" || typeof contactId !== "string" || !/^[a-zA-Z0-9_-]{1,128}$/.test(contactId)) return NextResponse.json({ error: "invalid_subject" }, { status: 400 });
-      const { data, error } = await db.rpc("v2s_erase_subject", { p_firm_id: config.firmId, p_location_id: config.locationId, p_contact_id: contactId });
+      const { data, error } = await db.rpc("v2s_erase_subject", {
+        p_firm_id: config.firmId,
+        p_location_id: config.locationId,
+        p_contact_id: contactId,
+        p_subject_digest: voiceScreenSubjectDigests(config, contactId)[0],
+      });
       if (error || typeof data !== "number") throw new Error("subject_erase_failed");
       return NextResponse.json({ erased: data }, { headers: { "Cache-Control": "no-store" } });
     }
