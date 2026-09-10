@@ -61,7 +61,7 @@ export function DemoOperatorPanel({ view, contained = false }: Props) {
     : [];
 
   return (
-    <div className={`flex min-h-full flex-col bg-[#101A2A] text-white ${contained ? "min-w-0 [overflow-wrap:anywhere]" : ""}`}>
+    <div className={`flex min-h-full flex-col bg-[#101A2A] text-white ${contained ? "min-w-0 [overflow-wrap:anywhere] [text-wrap:pretty]" : ""}`}>
       <header className="border-b border-white/10 px-6 py-5" data-ui-component-content="demo-operator-header">
         <div className="space-y-3">
           <div className="min-w-0">
