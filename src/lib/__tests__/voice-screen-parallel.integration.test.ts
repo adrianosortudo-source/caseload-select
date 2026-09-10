@@ -199,12 +199,13 @@ describe.skipIf(!DB_URL)("parallel voice-to-Screen store (real Postgres)", () =>
       const ingested = await workerA.query("select public.v2s_ingest($1::jsonb) result", [payload]);
       expect(ingested.rows[0].result.created).toBe(true);
 
+      const workerBPid = Number((await workerB.query("select pg_backend_pid() pid")).rows[0].pid);
       erasePromise = service(
         workerB,
         "select public.v2s_erase_subject($1,$2,$3,$4) n",
         [firmId, payload.location_id, payload.contact_id, payload.subject_digests[0]],
       );
-      await waitForAdvisoryLockWait(workerB.processID);
+      await waitForAdvisoryLockWait(workerBPid);
 
       await workerA.query("commit");
       expect((await erasePromise).rows[0].n).toBe(1);
