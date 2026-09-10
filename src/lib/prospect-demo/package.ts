@@ -211,7 +211,10 @@ export function assetFromPackage(value: ProspectDemoPackage): ProspectDemoAsset 
   const bytes = decodeBase64(value.screenshot.dataBase64);
   return {
     assetId: value.screenshot.assetId,
-    blob: new Blob([bytes], { type: value.screenshot.mimeType }),
+    // decodeBase64 creates a fresh, exact-length ArrayBuffer, so this cast
+    // preserves that boundary while avoiding the newer typed-array generic
+    // widening to ArrayBufferLike in DOM BlobPart definitions.
+    blob: new Blob([bytes.buffer as ArrayBuffer], { type: value.screenshot.mimeType }),
     width: value.screenshot.width,
     height: value.screenshot.height,
     mimeType: value.screenshot.mimeType,
