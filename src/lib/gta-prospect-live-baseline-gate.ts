@@ -57,7 +57,12 @@ function officeStreetAddresses(record: Record<string, unknown>, lane: "west/nort
     const city = text(address.city, "address city");
     const published = text(address.published_address, "published address");
     const cityEscaped = city.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const street = published.replace(new RegExp(`,\\s*${cityEscaped}\\s*,\\s*ON\\b.*$`, "i"), "").trim();
+    const withoutCitySuffix = published.replace(new RegExp(`,\\s*${cityEscaped}\\s*,\\s*ON\\b.*$`, "i"), "").trim();
+    // West/north evidence sometimes carries a presentation label such as
+    // `Vaughan: 204-3100 Rutherford Road`.  It is not part of the street
+    // identity and would otherwise prevent the suite-preserving normalizer
+    // from matching the equivalent legacy address.
+    const street = withoutCitySuffix.replace(new RegExp(`^${cityEscaped}:\\s*`, "i"), "").trim();
     if (!street || street === published) throw new Error(`Batch 012 ${lane} published address is malformed.`);
     return { street, city };
   });
