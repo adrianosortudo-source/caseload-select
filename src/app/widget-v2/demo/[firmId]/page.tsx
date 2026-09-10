@@ -39,7 +39,7 @@ export default async function DemoSplitPage({ params }: PageProps) {
     );
   }
 
-  const displayName = (firm.name as string).replace(/\s+Test$/i, "");
+  const displayName = (firm.name as string).replace(/\s+(?:Test|\[DEMO\])$/i, "");
 
   return (
     <div style={themeToCssVars(DRG_WIDGET_THEME)}>
