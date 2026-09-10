@@ -1,0 +1,592 @@
+{
+  "schema_version": "gta-prospect-live-baseline-reconciliation.v1",
+  "batch_id": "gta-prospect-batch-012",
+  "snapshot": {
+    "generated_at": "2026-09-10T12:07:01.519Z",
+    "generated_on": "2026-09-10",
+    "record_count": 124,
+    "records_sha256": "b5b7241ddf29d2c8e398907367fe812e21719ff1cee90b5df245d56e81e1c8da"
+  },
+  "candidate_count": 32,
+  "reviews": [
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-01"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-02"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-2566-59dd3d3192e7",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-03"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-04"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-315-42d95b6dab1f",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-351-eeed9a8957ad",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-05"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-5901-91c038af01ac",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H01"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H02"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-4504-7908e434b59c",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H03"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-99-7bca8f9c09d5",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H05"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "fixture",
+          "recordId": "aastha-lawyers-mississauga",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H06"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-2322-fd65c1f21e42",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H07"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "ledger_projection",
+          "recordId": "gta-prospect-008-b008-19",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ],
+          "source_identity": {
+            "source_system": "gta_research",
+            "source_record_key": "gta-prospect-008-b008-19"
+          }
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-750-3755feb11772",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H08"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-5842-51754ea455de",
+          "fields": [
+            "firm_name",
+            "street_address"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-5867-da07ba108247",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-01"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-2084-cf1656b8eac5",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-02"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-03"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-04"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-05"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-06"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-5752-c0e512d4d0ca",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-07"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-08"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-09"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-5790-109923116035",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-5791-771609172dcc",
+          "fields": [
+            "canonical_domain",
+            "street_address"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-10"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-15-837e9428b0a4",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-5757-f8f4897f04f4",
+          "fields": [
+            "canonical_domain",
+            "firm_name",
+            "street_address"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-5758-7ed021d9fed8",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-11"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-12"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-13"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-5774-86b68df37cfc",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-14"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-15"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-16"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-91-10fc595499c3",
+          "fields": [
+            "canonical_domain"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-17"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-2904-f13584dd54a7",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-3125-e1bfd4f30890",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-3196-c8c5e6287415",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-3419-8d7d328287ef",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-4476-85cda7d67fbc",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-4680-35e2c80d5ca7",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-5110-be8e79240cea",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-5432-de6e7fa7e6be",
+          "fields": [
+            "street_address"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-18"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-2059-4a2ebfcb97d4",
+          "fields": [
+            "canonical_domain"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-19"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "matches": [
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-1634-bb5cd100e466",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ],
+          "source_identity": null
+        },
+        {
+          "origin": "legacy_source",
+          "recordId": "legacy-gta-directory-2026-07-row-1635-31c634af3f81",
+          "fields": [
+            "canonical_domain",
+            "firm_name"
+          ],
+          "source_identity": null
+        }
+      ]
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-20"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "matches": []
+    }
+  ]
+}
