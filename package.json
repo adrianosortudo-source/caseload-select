@@ -31,6 +31,7 @@
     "prospects:generate-owner-cohort": "node scripts/generate-brazilian-owner-cohort-snapshot.mjs",
     "prospects:verify-batch-012-live-baseline": "tsx scripts/verify-gta-prospect-batch-012-live-baseline.ts",
     "prospects:reconcile-batch-012-live": "tsx --require ./scripts/_load-env.js scripts/reconcile-gta-prospect-batch-012-live.ts",
+    "prospects:prepare-batch-012-import": "node scripts/prepare-gta-prospect-batch-012-import.mjs",
     "prospects:generate-batch-011": "tsx scripts/generate-gta-prospect-batch-011.ts",
     "prospects:validate-batch-011": "tsx scripts/generate-gta-prospect-batch-011.ts --check",
     "prospects:generate-batch-012": "tsx scripts/generate-gta-prospect-batch-012.ts",

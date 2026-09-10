@@ -1,0 +1,301 @@
+{
+  "schema_version": "gta-prospect-batch-012-reviewed-resolution.v1",
+  "batch_id": "gta-prospect-batch-012",
+  "reviewed_on": "2026-09-10",
+  "live_operator_baseline_count": 124,
+  "candidate_count": 32,
+  "import_count": 17,
+  "excluded_count": 15,
+  "automatic_merge": false,
+  "outreach_authorized": false,
+  "decisions": [
+    {
+      "source_record_key": "B012-WN-01",
+      "firm_name": "Arnold Foster LLP",
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "No live, fixture, or legacy identity match."
+    },
+    {
+      "source_record_key": "B012-WN-02",
+      "firm_name": "Morra Caruso Law",
+      "observed_lawyer_count": 6,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "update_existing",
+      "basis": "A legacy lawyer row shares the same published firm address; no live-ledger firm exists."
+    },
+    {
+      "source_record_key": "B012-WN-03",
+      "firm_name": "Piccin Bottos Professional Corporation",
+      "observed_lawyer_count": 6,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "No live, fixture, or legacy identity match."
+    },
+    {
+      "source_record_key": "B012-WN-04",
+      "firm_name": "Furlan Bhavsar LLP",
+      "observed_lawyer_count": 5,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "The legacy signals are differently named firms sharing the suite; neither is the candidate firm."
+    },
+    {
+      "source_record_key": "B012-WN-05",
+      "firm_name": "D'Alessio Sindhwani Law Firm",
+      "observed_lawyer_count": 7,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "update_existing",
+      "basis": "The legacy D'Alessio row is a predecessor or related published firm identity at the same suite; no live-ledger firm exists."
+    },
+    {
+      "source_record_key": "B012-WN-H01",
+      "firm_name": "Evangelista & Associates Professional Corporation",
+      "observed_lawyer_count": 3,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "First-party roster, principal, office, and public inbox evidence identify a three-lawyer firm."
+    },
+    {
+      "source_record_key": "B012-WN-H02",
+      "firm_name": "Graham Stephenson Van Vliet LLP",
+      "observed_lawyer_count": 3,
+      "count_qualifier": "at_least",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Count is at_least rather than exact."
+    },
+    {
+      "source_record_key": "B012-WN-H03",
+      "firm_name": "Neiman Callegari",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Exact two-lawyer firm; legacy match is the same firm."
+    },
+    {
+      "source_record_key": "B012-WN-H05",
+      "firm_name": "Aastha Lawyers",
+      "observed_lawyer_count": 4,
+      "count_qualifier": "at_least",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "The live reviewed fixture already contains the same firm and domain."
+    },
+    {
+      "source_record_key": "B012-WN-H06",
+      "firm_name": "Fahd & Fahd Law Professional Corporation",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Exact two-lawyer firm; legacy match is the same firm."
+    },
+    {
+      "source_record_key": "B012-WN-H07",
+      "firm_name": "Ruso & Associates",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "The live ledger already contains rusolaw.ca and its count remains unknown."
+    },
+    {
+      "source_record_key": "B012-WN-H08",
+      "firm_name": "Mancini Law LLP",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Exact two-lawyer firm; legacy signals are the same firm and a suite neighbour."
+    },
+    {
+      "source_record_key": "B012-EAST-01",
+      "firm_name": "KLF / Keliny Law",
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "update_existing",
+      "basis": "The legacy KELINY row shares the exact suite and firm identity; no live-ledger firm exists."
+    },
+    {
+      "source_record_key": "B012-EAST-02",
+      "firm_name": "Spadafora and Murphy LLP",
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "No live, fixture, or legacy identity match."
+    },
+    {
+      "source_record_key": "B012-EAST-03",
+      "firm_name": "Findlay Personal Injury Lawyers",
+      "observed_lawyer_count": 6,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "No live, fixture, or legacy identity match."
+    },
+    {
+      "source_record_key": "B012-EAST-04",
+      "firm_name": "The Alam Law",
+      "observed_lawyer_count": 7,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "No live, fixture, or legacy identity match."
+    },
+    {
+      "source_record_key": "B012-EAST-05",
+      "firm_name": "Davidson Cahill Morrison LLP",
+      "observed_lawyer_count": 11,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "No live, fixture, or legacy identity match."
+    },
+    {
+      "source_record_key": "B012-EAST-06",
+      "firm_name": "Woitzik Polsinelli LLP",
+      "observed_lawyer_count": 11,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "The site discloses a relationship with Devry Smith Frank, while Woitzik Polsinelli remains a separately published firm identity."
+    },
+    {
+      "source_record_key": "B012-EAST-07",
+      "firm_name": "ABLF Law",
+      "observed_lawyer_count": 9,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "The current first-party roster identifies nine lawyers; ownership and public email remain unknown."
+    },
+    {
+      "source_record_key": "B012-EAST-08",
+      "firm_name": "Hamilton Morrison Law",
+      "observed_lawyer_count": 6,
+      "count_qualifier": "exact",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "The website's Ontario-firm identity could not be corroborated and its published phone number is in the United States."
+    },
+    {
+      "source_record_key": "B012-EAST-09",
+      "firm_name": "Snell Balka Scovino Lawyers",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Lawyer count is unknown; legacy match is the same firm."
+    },
+    {
+      "source_record_key": "B012-EAST-10",
+      "firm_name": "Elm Law",
+      "observed_lawyer_count": null,
+      "count_qualifier": "unknown",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Lawyer count is unknown; legacy matches are the same firm."
+    },
+    {
+      "source_record_key": "B012-EAST-11",
+      "firm_name": "Koziar, Reczulski, Hunter",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Exact two-lawyer firm."
+    },
+    {
+      "source_record_key": "B012-EAST-12",
+      "firm_name": "Bird Bolt Law",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Exact two-lawyer firm."
+    },
+    {
+      "source_record_key": "B012-EAST-13",
+      "firm_name": "Lloyd & Kemper LLP",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Exact two-lawyer firm; legacy match is the same firm."
+    },
+    {
+      "source_record_key": "B012-EAST-14",
+      "firm_name": "Graydon Sheppard",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Exact two-lawyer firm."
+    },
+    {
+      "source_record_key": "B012-EAST-15",
+      "firm_name": "Titlers Professional Corporation",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Exact two-lawyer firm."
+    },
+    {
+      "source_record_key": "B012-EAST-16",
+      "firm_name": "McMackin Law",
+      "observed_lawyer_count": 2,
+      "count_qualifier": "exact",
+      "disposition": "exclude",
+      "reconciliation_status": null,
+      "basis": "Exact two-lawyer firm; legacy match is the same firm."
+    },
+    {
+      "source_record_key": "B012-EAST-17",
+      "firm_name": "Wray James LLP",
+      "observed_lawyer_count": 5,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "The eight legacy signals are unrelated firms sharing a downtown office address; none matches Wray James by name or domain."
+    },
+    {
+      "source_record_key": "B012-EAST-18",
+      "firm_name": "George Street Law Group LLP",
+      "observed_lawyer_count": 13,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "update_existing",
+      "basis": "The legacy row uses the George Street domain and represents a lawyer at the same firm; no live-ledger firm exists."
+    },
+    {
+      "source_record_key": "B012-EAST-19",
+      "firm_name": "UL Lawyers",
+      "observed_lawyer_count": 6,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "update_existing",
+      "basis": "Two legacy rows have the same UL Lawyers name and domain; no live-ledger firm exists."
+    },
+    {
+      "source_record_key": "B012-EAST-20",
+      "firm_name": "DWA Law",
+      "observed_lawyer_count": 4,
+      "count_qualifier": "exact",
+      "disposition": "import",
+      "reconciliation_status": "provisional_new",
+      "basis": "The live reconciliation found no identity match; current first-party founder and roster evidence clears the earlier hold."
+    }
+  ]
+}
