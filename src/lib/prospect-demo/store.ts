@@ -1,5 +1,6 @@
 import { ProspectDemoPackageError, validateProfile } from "./package";
 import type { ProspectDemoAsset, ProspectDemoProfile } from "./types";
+import { upgradeWalkerLawProspectDemoProfile } from "@/lib/prospect-demo-profiles/walker-law";
 
 const DATABASE = "caseload-select-prospect-demos";
 const VERSION = 1;
@@ -79,7 +80,12 @@ export async function saveProspectDemoProfile(profile: ProspectDemoProfile, asse
  */
 export async function ensureProspectDemoProfile(profile: ProspectDemoProfile, asset: ProspectDemoAsset): Promise<void> {
   const existing = await readProspectDemoProfile(profile.id);
-  if (!existing) await saveProspectDemoProfile(profile, asset);
+  if (!existing) {
+    await saveProspectDemoProfile(profile, asset);
+    return;
+  }
+  const upgraded = upgradeWalkerLawProspectDemoProfile(existing);
+  if (upgraded !== existing) await saveProspectDemoProfile(upgraded, asset);
 }
 
 export async function readProspectDemoProfile(id: string): Promise<ProspectDemoProfile | null> {

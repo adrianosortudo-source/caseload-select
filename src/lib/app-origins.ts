@@ -99,5 +99,6 @@ function isPathAtOrBelow(pathname: string, root: string): boolean {
 export function isOperatorUiPath(pathname: string): boolean {
   return isPathAtOrBelow(pathname, "/admin")
     || isPathAtOrBelow(pathname, "/operator")
+    || isPathAtOrBelow(pathname, "/demo/prospect")
     || LEGACY_OPERATOR_ROOTS.some((root) => isPathAtOrBelow(pathname, root));
 }

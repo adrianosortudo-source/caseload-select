@@ -1,6 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import Image from "next/image";
+import { screenshotDataUrl } from "@/lib/prospect-demo/browser";
+import styles from "./ProspectDemoPresentation.module.css";
 import {
   ensureProspectDemoProfile,
   listProspectDemoProfiles,
@@ -25,6 +28,8 @@ interface Props {
   /** Optional shipped profiles are seeded only once, then remain browser-local. */
   registrations?: ProspectDemoRegistration[];
   initialProfileId?: string;
+  /** Never substitute another browser-local profile when a direct presentation URL is missing. */
+  strictInitialProfile?: boolean;
 }
 
 const VIEW_LABELS: Record<ProspectDemoView, string> = {
@@ -44,40 +49,71 @@ function ScreenshotStage({
   children: ReactNode;
 }) {
   const [url, setUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
+  const [canvasWidth, setCanvasWidth] = useState(0);
+  const canvasRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    let active = true;
+    setUrl(null);
+    setImageError(false);
     if (!asset) {
-      setUrl(null);
       return;
     }
-    const nextUrl = URL.createObjectURL(asset.blob);
-    setUrl(nextUrl);
-    return () => URL.revokeObjectURL(nextUrl);
+    void screenshotDataUrl(asset.blob)
+      .then((nextUrl) => { if (active) setUrl(nextUrl); })
+      .catch(() => { if (active) setImageError(true); });
+    return () => { active = false; };
   }, [asset]);
 
-  if (!asset || !url) {
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const measure = () => {
+      const width = canvas.clientWidth;
+      // A hidden Lawyer view must not change the active intake's layout or state.
+      if (width > 0) setCanvasWidth(width);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(canvas);
+    return () => observer.disconnect();
+  }, []);
+
+  const { placement } = profile;
+  const screenshot = asset ?? profile.screenshot;
+  const imageAvailable = Boolean(url) && !imageError;
+  const compact = !imageAvailable || canvasWidth * placement.width < 320;
+  const sourceRatio = screenshot.height / screenshot.width;
+  const formStart = sourceRatio * placement.y;
+  const formHeight = sourceRatio * placement.height;
+  const formEnd = formStart + formHeight;
+  const remainingHeight = Math.max(0, sourceRatio - formEnd);
+
+  function screenshotSlice(start: number, height: number, description: string) {
     return (
-      <div className="grid min-h-[34rem] place-items-center border border-[#182538]/15 bg-[#F3F0E9] p-6 text-center text-[#182538]" data-ui-component-content="prospect-demo-stage">
-        <div className="w-full">
-          <p className="text-sm font-semibold" data-ui-copy="heading">The website screenshot is loading.</p>
-          <p className="mt-2 text-sm leading-6 text-[#566170]" data-ui-copy="supporting">This presentation remains browser-local. Reload the profile if the screenshot does not appear.</p>
-        </div>
+      <div className={styles.screenshotSlice} style={{ aspectRatio: `1 / ${height}` }} aria-hidden="true">
+        {imageAvailable && <Image src={url!} alt={description} width={screenshot.width} height={screenshot.height} unoptimized loading="eager" className={styles.screenshotImage} style={{ top: `${-(start / height) * 100}%` }} draggable={false} onError={() => setImageError(true)} />}
       </div>
     );
   }
 
-  const { placement } = profile;
   return (
-    <div className="overflow-x-auto bg-[#182538] p-3 sm:p-5" data-ui-component-content="prospect-demo-stage">
-      <div className="relative mx-auto min-w-[720px] overflow-hidden shadow-[0_24px_60px_rgba(0,0,0,0.32)]" style={{ aspectRatio: `${asset.width} / ${asset.height}`, width: "min(100%, 1170px)" }}>
-        <img src={url} alt={`Reference screenshot of ${profile.websiteTitle}`} className="pointer-events-none absolute inset-0 h-full w-full select-none object-contain" draggable={false} />
+    <div ref={canvasRef} className={styles.websiteStage} style={{ backgroundColor: profile.theme.surface }} data-ui-component-content="prospect-demo-stage" data-prospect-demo-stage-layout={compact ? "focused" : "website"}>
+      {!imageAvailable && <div className="w-full border-b border-[#182538]/15 bg-[#F3F0E9] p-4 text-[#182538]" role="status" data-ui-component-content="prospect-demo-image-status">
+        <p className="w-full text-sm leading-6" data-ui-copy="supporting">{imageError ? "The website screenshot could not load. The intake remains available below." : "Loading the website screenshot. You can begin the intake below."}</p>
+      </div>}
+      {imageAvailable && formStart > 0 && screenshotSlice(0, formStart, `Top of ${profile.websiteTitle}`)}
+      <div className={styles.formRegion} style={{ minHeight: compact ? undefined : canvasWidth * formHeight }}>
+        {!compact && imageAvailable && <div className={styles.formBackdrop} style={{ height: canvasWidth * formHeight }} aria-hidden="true">
+          <Image src={url!} alt="" width={screenshot.width} height={screenshot.height} unoptimized loading="eager" className={styles.screenshotImage} style={{ top: -(canvasWidth * formStart) }} draggable={false} onError={() => setImageError(true)} />
+        </div>}
         <section
-          className="absolute overflow-auto border-2 border-[#C59E5B]/70 bg-white shadow-[0_18px_42px_rgba(17,27,40,0.28)]"
+          className={styles.intake}
           style={{
-            left: `${placement.x * 100}%`,
-            top: `${placement.y * 100}%`,
-            width: `${placement.width * 100}%`,
-            height: `${placement.height * 100}%`,
+            marginLeft: compact ? 0 : `${placement.x * 100}%`,
+            width: compact ? "100%" : `${placement.width * 100}%`,
+            minHeight: compact ? undefined : canvasWidth * formHeight,
             backgroundColor: profile.theme.surface,
             color: profile.theme.text,
           }}
@@ -87,19 +123,25 @@ function ScreenshotStage({
           {children}
         </section>
       </div>
+      {imageAvailable && remainingHeight > 0 && screenshotSlice(formEnd, remainingHeight, `Bottom of ${profile.websiteTitle}`)}
     </div>
   );
 }
 
 function ReviewStage({ children }: { children: ReactNode }) {
   return (
-    <aside className="min-h-[34rem] bg-[#111D30] p-4 text-white sm:p-6" aria-label="Lawyer review" data-ui-component-content="prospect-demo-review">
+    <aside className="min-w-0 bg-[#111D30] p-3 text-white sm:p-5" aria-label="Lawyer review" data-ui-component-content="prospect-demo-review">
       {children}
     </aside>
   );
 }
 
-export function ProspectDemoPresentation({ sessionAdapter, registrations, initialProfileId }: Props) {
+export function ProspectDemoPresentation({
+  sessionAdapter,
+  registrations,
+  initialProfileId,
+  strictInitialProfile = false,
+}: Props) {
   const shippedProfiles = registrations ?? EMPTY_REGISTRATIONS;
   const [profiles, setProfiles] = useState<ProspectDemoProfile[]>([]);
   const [selectedId, setSelectedId] = useState(initialProfileId ?? "");
@@ -115,17 +157,28 @@ export function ProspectDemoPresentation({ sessionAdapter, registrations, initia
       await Promise.all(shippedProfiles.map(({ profile, asset: screenshot }) => ensureProspectDemoProfile(profile, screenshot)));
       const nextProfiles = await listProspectDemoProfiles();
       setProfiles(nextProfiles);
+      const initialProfileIsAvailable = Boolean(
+        initialProfileId && nextProfiles.some((profile) => profile.id === initialProfileId),
+      );
       const resolvedId = nextProfiles.some((profile) => profile.id === selectedId)
         ? selectedId
-        : initialProfileId && nextProfiles.some((profile) => profile.id === initialProfileId)
-          ? initialProfileId
-          : nextProfiles[0]?.id ?? "";
+        : initialProfileIsAvailable
+          ? initialProfileId!
+          : strictInitialProfile
+            ? ""
+            : nextProfiles[0]?.id ?? "";
       setSelectedId(resolvedId);
-      setStatus(resolvedId ? "" : "No prospect profile is available in this browser yet.");
+      setStatus(
+        resolvedId
+          ? ""
+          : strictInitialProfile
+            ? "This demonstration is not saved in this browser. Return to the prospect demo builder, save or import the profile, then open it again."
+            : "No prospect profile is available in this browser yet.",
+      );
     } catch {
       setStatus("This browser could not open the local prospect preview library.");
     }
-  }, [initialProfileId, selectedId, shippedProfiles]);
+  }, [initialProfileId, selectedId, shippedProfiles, strictInitialProfile]);
 
   useEffect(() => { void refreshProfiles(); }, [refreshProfiles]);
 
@@ -209,13 +262,13 @@ export function ProspectDemoPresentation({ sessionAdapter, registrations, initia
         </div>
       </header>
 
-      <section className="mx-auto w-full max-w-[1440px] p-3 sm:p-5">
+      <section className={styles.presentationBody}>
         {/** Both sides stay mounted. Layout changes must never discard intake answers. */}
-        <div className={view === "split" ? "grid overflow-hidden border border-[#182538]/15 xl:grid-cols-[minmax(0,3fr)_minmax(22rem,2fr)]" : ""}>
-          <div className={view === "review" ? "hidden" : ""} aria-hidden={view === "review"}>
+        <div className={`${styles.panels} ${view === "split" ? styles.split : ""}`}>
+          <div className={view === "review" ? "hidden" : "min-w-0"} aria-hidden={view === "review"}>
             <ScreenshotStage profile={profile} asset={asset}>{intake}</ScreenshotStage>
           </div>
-          <div className={view === "website" ? "hidden" : ""} aria-hidden={view === "website"}>
+          <div className={view === "website" ? "hidden" : "min-w-0"} aria-hidden={view === "website"}>
             <ReviewStage>{review}</ReviewStage>
           </div>
         </div>

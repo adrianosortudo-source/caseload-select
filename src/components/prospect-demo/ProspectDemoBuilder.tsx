@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { assetFromImageFile, downloadFile, exportPackageFile, importPackageFile, newProspectDemoId } from "@/lib/prospect-demo/browser";
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import Image from "next/image";
+import { assetFromImageFile, downloadFile, exportPackageFile, importPackageFile, newProspectDemoId, screenshotDataUrl } from "@/lib/prospect-demo/browser";
 import { listProspectDemoProfiles, readProspectDemoAsset, saveProspectDemoProfile } from "@/lib/prospect-demo/store";
 import { type ProspectDemoAsset, type ProspectDemoProfile, PROSPECT_DEMO_FORMAT_VERSION } from "@/lib/prospect-demo/types";
 
@@ -42,15 +43,21 @@ function defaultProfile(name: string, asset: ProspectDemoAsset, websiteUrl: stri
 
 export function ProspectDemoBuilder({ onPresent }: Props) {
   const screenshotInput = useRef<HTMLInputElement>(null);
+  const replacementInput = useRef<HTMLInputElement>(null);
   const packageInput = useRef<HTMLInputElement>(null);
   const [profiles, setProfiles] = useState<ProspectDemoProfile[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [asset, setAsset] = useState<ProspectDemoAsset | null>(null);
+  const [assetDirty, setAssetDirty] = useState(false);
   const [firmName, setFirmName] = useState("");
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [draft, setDraft] = useState<ProspectDemoProfile | null>(null);
   const [notice, setNotice] = useState("Your profiles and screenshots stay in this browser until you export a package.");
   const selected = useMemo(() => profiles.find((profile) => profile.id === selectedId) ?? null, [profiles, selectedId]);
+  const hasUnsavedChanges = useMemo(
+    () => assetDirty || Boolean(draft && selected && JSON.stringify(draft) !== JSON.stringify(selected)),
+    [assetDirty, draft, selected],
+  );
 
   const refresh = useCallback(async (selectId = selectedId) => {
     const next = await listProspectDemoProfiles();
@@ -60,6 +67,7 @@ export function ProspectDemoBuilder({ onPresent }: Props) {
     const profile = next.find((item) => item.id === nextId) ?? null;
     setDraft(profile);
     setAsset(profile ? await readProspectDemoAsset(profile.screenshot.assetId) : null);
+    setAssetDirty(false);
   }, [selectedId]);
 
   useEffect(() => { void refresh().catch(() => setNotice("This browser could not open the local preview library.")); }, [refresh]);
@@ -69,6 +77,7 @@ export function ProspectDemoBuilder({ onPresent }: Props) {
     const profile = profiles.find((item) => item.id === id) ?? null;
     setDraft(profile);
     setAsset(profile ? await readProspectDemoAsset(profile.screenshot.assetId) : null);
+    setAssetDirty(false);
   }
 
   async function createFromScreenshot(file: File) {
@@ -86,13 +95,37 @@ export function ProspectDemoBuilder({ onPresent }: Props) {
     }
   }
 
+  async function replaceScreenshot(file: File) {
+    if (!draft || !asset) return;
+    try {
+      const replacement = await assetFromImageFile(file, asset.assetId);
+      const nextProfile: ProspectDemoProfile = {
+        ...draft,
+        screenshot: {
+          assetId: replacement.assetId,
+          width: replacement.width,
+          height: replacement.height,
+          mimeType: replacement.mimeType,
+        },
+      };
+      setAsset(replacement);
+      setAssetDirty(true);
+      setDraft(nextProfile);
+      setNotice("Replacement screenshot is ready. Save the profile to keep it in this browser.");
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "The replacement screenshot could not be used.");
+    } finally {
+      if (replacementInput.current) replacementInput.current.value = "";
+    }
+  }
+
   async function savePlacement() {
     if (!draft || !asset) return;
     try {
       const profile = { ...draft, revision: draft.revision + 1, updatedAt: now() };
       await saveProspectDemoProfile(profile, asset);
       await refresh(profile.id);
-      setNotice("Placement and scenarios saved in this browser.");
+      setNotice("Profile settings saved in this browser.");
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "The profile could not be saved.");
     }
@@ -163,42 +196,60 @@ export function ProspectDemoBuilder({ onPresent }: Props) {
             <input ref={packageInput} type="file" accept="application/json,.json" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void importPackage(file); }} />
             <div className="grid gap-2 sm:grid-cols-3">
               <button type="button" onClick={() => packageInput.current?.click()} className="border border-[#182538]/25 bg-white px-3 py-2.5 text-sm font-bold text-[#182538] hover:border-[#182538]">Import package</button>
-              <button type="button" onClick={() => void exportCurrent()} disabled={!selected || !asset} className="border border-[#182538]/25 bg-white px-3 py-2.5 text-sm font-bold text-[#182538] hover:border-[#182538] disabled:cursor-not-allowed disabled:opacity-50">Export selected</button>
-              <button type="button" onClick={() => void duplicateCurrent()} disabled={!selected || !asset} className="border border-[#182538]/25 bg-white px-3 py-2.5 text-sm font-bold text-[#182538] hover:border-[#182538] disabled:cursor-not-allowed disabled:opacity-50">Duplicate selected</button>
+              <button type="button" onClick={() => void exportCurrent()} disabled={!selected || !asset || hasUnsavedChanges} className="border border-[#182538]/25 bg-white px-3 py-2.5 text-sm font-bold text-[#182538] hover:border-[#182538] disabled:cursor-not-allowed disabled:opacity-50">Export selected</button>
+              <button type="button" onClick={() => void duplicateCurrent()} disabled={!selected || !asset || hasUnsavedChanges} className="border border-[#182538]/25 bg-white px-3 py-2.5 text-sm font-bold text-[#182538] hover:border-[#182538] disabled:cursor-not-allowed disabled:opacity-50">Duplicate selected</button>
             </div>
           </div>
           <p className="mt-4 w-full text-xs leading-5 text-[#566170]" data-ui-copy="supporting">{notice}</p>
+          <ol className="mt-4 grid gap-1.5 border-t border-[#182538]/15 pt-4 text-xs leading-5 text-[#566170]">
+            <li>1. Enter the firm name and choose a screenshot.</li>
+            <li>2. Select the saved prospect and place the gold mask over its old form.</li>
+            <li>3. Edit the fictional scenarios, then save.</li>
+            <li>4. Select Open website demo to launch the presentation in a clean browser tab.</li>
+          </ol>
         </div>
 
         <div className="border border-[#182538]/15 p-4 sm:p-5">
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="min-w-[14rem] flex-1 text-xs font-semibold text-[#374457]">Saved prospect
+          <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-end">
+            <label className="min-w-0 w-full flex-1 text-xs font-semibold text-[#374457]">Saved prospect
               <select value={selectedId} onChange={(event) => void selectProfile(event.target.value)} className="mt-1.5 w-full border border-[#182538]/20 bg-white px-3 py-2.5 text-sm text-[#182538]">
                 <option value="">Choose a profile</option>
                 {profiles.map((profile) => <option key={profile.id} value={profile.id}>{profile.firmName}</option>)}
               </select>
             </label>
-            <button type="button" onClick={() => selected && onPresent?.(selected.id)} disabled={!selected} className="border border-[#B28B50] bg-[#F7F1E6] px-4 py-2.5 text-sm font-bold text-[#765724] disabled:opacity-50">Present this profile</button>
+            <button type="button" onClick={() => selected && onPresent?.(selected.id)} disabled={!selected || hasUnsavedChanges} className="w-full border border-[#B28B50] bg-[#F7F1E6] px-4 py-2.5 text-sm font-bold text-[#765724] disabled:opacity-50 sm:w-auto">Open website demo</button>
           </div>
-          {draft && asset ? <PlacementEditor draft={draft} asset={asset} onChange={setDraft} onSave={() => void savePlacement()} /> : <p className="mt-5 w-full text-sm leading-6 text-[#566170]" data-ui-copy="supporting">Choose a saved profile to set its old-form replacement area.</p>}
+          {hasUnsavedChanges ? <p className="mt-3 w-full text-xs leading-5 text-[#765724]" role="status">Save the profile before presenting, exporting, or duplicating it.</p> : null}
+          {draft && asset ? <PlacementEditor draft={draft} asset={asset} replacementInput={replacementInput} onChange={setDraft} onReplace={(file) => void replaceScreenshot(file)} onSave={() => void savePlacement()} /> : <p className="mt-5 w-full text-sm leading-6 text-[#566170]" data-ui-copy="supporting">Choose a saved profile to set its old-form replacement area.</p>}
         </div>
       </div>
     </section>
   );
 }
 
-function PlacementEditor({ draft, asset, onChange, onSave }: { draft: ProspectDemoProfile; asset: ProspectDemoAsset; onChange(next: ProspectDemoProfile): void; onSave(): void }) {
+function PlacementEditor({ draft, asset, replacementInput, onChange, onReplace, onSave }: { draft: ProspectDemoProfile; asset: ProspectDemoAsset; replacementInput: RefObject<HTMLInputElement | null>; onChange(next: ProspectDemoProfile): void; onReplace(file: File): void; onSave(): void }) {
   const [url, setUrl] = useState("");
+  const [imageError, setImageError] = useState("");
   useEffect(() => {
-    const next = URL.createObjectURL(asset.blob);
-    setUrl(next);
-    return () => URL.revokeObjectURL(next);
+    let current = true;
+    setUrl("");
+    setImageError("");
+    void screenshotDataUrl(asset.blob)
+      .then((next) => { if (current) setUrl(next); })
+      .catch((error: unknown) => { if (current) setImageError(error instanceof Error ? error.message : "The saved screenshot could not be displayed."); });
+    return () => { current = false; };
   }, [asset]);
   const setPlacement = (key: keyof ProspectDemoProfile["placement"], value: number) => onChange({ ...draft, placement: { ...draft.placement, [key]: value } });
   const setScenario = (index: number, key: "label" | "description", value: string) => onChange({
     ...draft,
     scenarios: draft.scenarios.map((scenario, scenarioIndex) => scenarioIndex === index ? { ...scenario, [key]: value } : scenario),
   });
+  const setFirmName = (value: string) => onChange({
+    ...draft,
+    firmName: value,
+    websiteTitle: value.trim() ? `${value.trim()} website` : draft.websiteTitle,
+  });
+  const setReferenceUrl = (value: string) => onChange({ ...draft, reference: { ...draft.reference, url: value } });
   const controls: Array<[keyof ProspectDemoProfile["placement"], string, number]> = [["x", "Left", 0], ["y", "Top", 0], ["width", "Width", 5], ["height", "Height", 5]];
   const maximumFor = (key: keyof ProspectDemoProfile["placement"]) => {
     if (key === "x") return Math.max(0, 100 - Math.round(draft.placement.width * 100));
@@ -208,8 +259,18 @@ function PlacementEditor({ draft, asset, onChange, onSave }: { draft: ProspectDe
   };
   return (
     <div className="mt-5">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-xs font-semibold text-[#374457]">Prospect name<input value={draft.firmName} onChange={(event) => setFirmName(event.target.value)} className="mt-1.5 w-full border border-[#182538]/20 bg-white px-3 py-2.5 text-sm" /></label>
+        <label className="block text-xs font-semibold text-[#374457]">Reference website<input value={draft.reference.url} onChange={(event) => setReferenceUrl(event.target.value)} type="url" className="mt-1.5 w-full border border-[#182538]/20 bg-white px-3 py-2.5 text-sm" /></label>
+      </div>
+      <input ref={replacementInput} type="file" accept="image/png,image/jpeg,image/webp" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) onReplace(file); }} />
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="w-full text-xs leading-5 text-[#566170]">Replace the screenshot before adjusting its percentage-based form mask.</p>
+        <button type="button" onClick={() => replacementInput.current?.click()} className="w-full shrink-0 border border-[#182538]/25 bg-white px-3 py-2.5 text-sm font-bold text-[#182538] hover:border-[#182538] sm:w-auto">Replace screenshot</button>
+      </div>
       <div className="relative overflow-hidden bg-[#182538]" style={{ aspectRatio: `${asset.width} / ${asset.height}` }}>
-        {url && <img src={url} alt="Reference website screenshot" className="absolute inset-0 h-full w-full object-contain" />}
+        {url ? <Image src={url} alt="Reference website screenshot" width={asset.width} height={asset.height} unoptimized className="absolute inset-0 h-full w-full object-contain" onError={() => setImageError("The saved screenshot could not be displayed.")} /> : null}
+        {imageError ? <p className="absolute inset-0 grid place-items-center bg-[#182538] px-4 text-center text-sm leading-6 text-white" role="alert">{imageError}</p> : null}
         <div className="absolute border-2 border-[#C59E5B] bg-[#C59E5B]/10" style={{ left: `${draft.placement.x * 100}%`, top: `${draft.placement.y * 100}%`, width: `${draft.placement.width * 100}%`, height: `${draft.placement.height * 100}%` }} aria-label="Widget placement" />
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -225,8 +286,8 @@ function PlacementEditor({ draft, asset, onChange, onSave }: { draft: ProspectDe
         </div>
       </div>
       <div className="mt-4 flex flex-wrap gap-3">
-        <button type="button" onClick={onSave} className="bg-[#182538] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#283A54]">Save placement and scenarios</button>
-        <p className="flex-1 text-xs leading-5 text-[#566170]">The gold rectangle masks the old form. It is stored as a percentage of the original screenshot, so it remains aligned at every presentation size.</p>
+        <button type="button" onClick={onSave} className="bg-[#182538] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#283A54]">Save profile</button>
+        <p className="w-full flex-1 text-xs leading-5 text-[#566170] sm:w-auto">The gold rectangle masks the old form. It is stored as a percentage of the original screenshot, so it remains aligned at every presentation size.</p>
       </div>
     </div>
   );
