@@ -1,18 +1,25 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-const ingestMocks = vi.hoisted(() => ({ config: vi.fn(), ingest: vi.fn(), dispatch: vi.fn() }));
-vi.mock("../voice-screen-store", () => ({ liveConfig: ingestMocks.config, ingestLiveCall: ingestMocks.ingest }));
+const ingestMocks = vi.hoisted(() => ({ config: vi.fn(), scope: vi.fn(), enabled: vi.fn(), ingest: vi.fn(), dispatch: vi.fn(), verify: vi.fn() }));
+vi.mock("../voice-screen-store", () => ({
+  liveConfig: ingestMocks.config,
+  voiceScreenScopeConfig: ingestMocks.scope,
+  voiceScreenIsEnabled: ingestMocks.enabled,
+  ingestLiveCall: ingestMocks.ingest,
+}));
 vi.mock("../voice-screen-sender", () => ({ senderConfig: () => null, dispatchInvitation: ingestMocks.dispatch }));
 vi.mock("@vercel/functions", () => ({ waitUntil: vi.fn() }));
-vi.mock("../rate-limit", () => ({ checkRateLimit: async () => ({ active: true, ok: true }), ipFromRequest: () => "fixture-ip" }));
+vi.mock("../ghl-webhook-signature", () => ({ verifyGhlWebhookSignature: ingestMocks.verify }));
 import { POST as ingestPost } from "../../app/api/integrations/voice-screen/calls/route";
 import { parseProviderCall } from "../voice-screen-provider";
 import { invitationEligible } from "../voice-screen-live";
 
 const locationId = "TH71IN0vUaIByLOxnFQY";
 const agentId = "6aa1d9d7c17e44082c31a0fc";
+const appId = "marketplace_app_test";
 const fixture = () => ({
-  id: "call_123", agentId, contactId: "contact_123", createdAt: "2026-09-09T20:00:00.000Z", duration: 120,
+  type: "VoiceAiCallEnd", id: "call_123", locationId, agentId, contactId: "contact_123", createdAt: "2026-09-09T20:00:00.000Z", duration: 120,
+  trialCall: true,
   summary: "Caller asked about a fictional business agreement.",
   extractedData: { v2s_test_call_capture: JSON.stringify({ callerType: "new", callerName: "Alex Example", callbackPhone: "+14165550100", broadNeed: "Help with a business agreement", urgency: "routine", humanRequested: "no", inquirySmsConsent: "granted", safeToText: "yes" }) },
   transcript: "bot: What phone number should the team use?\nhuman: +1 416 555 0100\nbot: May we text you a link with optional inquiry questions?\nhuman: Yes.\nbot: Is it safe to text that number?\nhuman: Yes, it is safe to text me.",
@@ -20,27 +27,108 @@ const fixture = () => ({
 
 describe("Voice AI provider adapter", () => {
   afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); vi.clearAllMocks(); });
-  it("requires the dedicated secret before provider access", async () => {
-    ingestMocks.config.mockReturnValue({ webhookSecret: "s".repeat(32) });
-    vi.stubGlobal("fetch", vi.fn());
-    const response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", { method: "POST", body: JSON.stringify({ callId: "call_123" }) }));
-    expect(response.status).toBe(401); expect(fetch).not.toHaveBeenCalled();
+  it("rejects a missing or invalid native signature before parsing", async () => {
+    ingestMocks.verify.mockReturnValue(false);
+    const response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", { method: "POST", body: JSON.stringify(fixture()) }));
+    expect(response.status).toBe(401);
+    expect(ingestMocks.scope).not.toHaveBeenCalled();
   });
-  it.each([true, false])("hydrates the exact call and persists immutable delivery created=%s", async (created) => {
-    ingestMocks.config.mockReturnValue({ webhookSecret: "s".repeat(32), locationId, agentId });
+  it.each([true, false])("persists the exact signed top-level call once created=%s", async (created) => {
+    ingestMocks.verify.mockReturnValue(true);
+    ingestMocks.scope.mockReturnValue({ firmId: "firm", locationId, agentId, appId });
+    ingestMocks.enabled.mockReturnValue(true);
+    ingestMocks.config.mockReturnValue({ firmId: "firm", locationId, agentId, key: "k".repeat(32), origin: "https://example.test", retentionDays: 7 });
     ingestMocks.ingest.mockResolvedValue({ id: "inquiry", created });
-    vi.stubEnv("V2S_GHL_VOICE_TOKEN", "fixture-read-token");
-    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://redis.test"); vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "fixture");
-    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ ...fixture(), createdAt: new Date(Date.now() - 120000).toISOString() })));
+    const body = JSON.stringify({ ...fixture(), createdAt: new Date(Date.now() - 120000).toISOString() });
     const response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", {
-      method: "POST", headers: { "x-v2s-secret": "s".repeat(32) },
-      body: JSON.stringify({ callId: "call_123", permission: "untrusted", contactId: "wrong" }),
+      method: "POST", headers: { "content-type": "application/json", "x-ghl-signature": "signed" }, body,
     }));
-    expect(response.status).toBe(created ? 201 : 200);
-    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(`https://services.leadconnectorhq.com/voice-ai/dashboard/call-logs/call_123?locationId=${locationId}`);
+    expect(response.status).toBe(200);
+    expect(ingestMocks.verify).toHaveBeenCalledWith(new Uint8Array(Buffer.from(body)), "signed");
+    expect(ingestMocks.ingest.mock.calls[0][0].callId).toBe("call_123");
     expect(ingestMocks.ingest.mock.calls[0][0].contactId).toBe("contact_123");
-    expect(await response.json()).toEqual({ id: "inquiry", created, humanFollowUp: "pending" });
+    expect(await response.json()).toEqual({ accepted: true, processed: true, created, humanFollowUp: "pending" });
     expect(ingestMocks.dispatch).not.toHaveBeenCalled();
+  });
+  it("acknowledges signed events outside the TEST agent and while disabled", async () => {
+    ingestMocks.verify.mockReturnValue(true);
+    ingestMocks.scope.mockReturnValue({ firmId: "firm", locationId, agentId, appId });
+    ingestMocks.enabled.mockReturnValue(true);
+    let response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...fixture(), agentId: "original_agent" }),
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ processed: false, reason: "outside_parallel_scope" });
+    ingestMocks.enabled.mockReturnValue(false);
+    response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(fixture()),
+    }));
+    expect(await response.json()).toMatchObject({ processed: false, reason: "parallel_journey_disabled" });
+    expect(ingestMocks.ingest).not.toHaveBeenCalled();
+  });
+  it.each([undefined, "UNINSTALL", "VoiceAiCallStart"])("acknowledges a signed non-VoiceAiCallEnd discriminator: %s", async (type) => {
+    ingestMocks.verify.mockReturnValue(true);
+    ingestMocks.scope.mockReturnValue({ firmId: "firm", locationId, agentId, appId });
+    const response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...fixture(), type }),
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ processed: false, reason: "unsupported_event_type" });
+    expect(ingestMocks.enabled).not.toHaveBeenCalled();
+    expect(ingestMocks.ingest).not.toHaveBeenCalled();
+  });
+  it("acknowledges permanent invalid/replayed events and reserves 5xx for infrastructure", async () => {
+    ingestMocks.verify.mockReturnValue(true);
+    ingestMocks.scope.mockReturnValue({ firmId: "firm", locationId, agentId, appId });
+    ingestMocks.enabled.mockReturnValue(true);
+    ingestMocks.config.mockReturnValue({ firmId: "firm", locationId, agentId, key: "k".repeat(32), origin: "https://example.test", retentionDays: 7 });
+    let response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", { method: "POST", headers: { "content-type": "application/json" }, body: "{" }));
+    expect(await response.json()).toMatchObject({ processed: false, reason: "invalid_payload" });
+    ingestMocks.ingest.mockResolvedValue({ id: null, created: false, reason: "subject_suppressed" });
+    response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...fixture(), createdAt: new Date(Date.now() - 120000).toISOString() }) }));
+    expect(await response.json()).toMatchObject({ processed: false, reason: "subject_suppressed" });
+    ingestMocks.ingest.mockRejectedValue(new Error("database unavailable"));
+    response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...fixture(), id: "call_other", createdAt: new Date(Date.now() - 120000).toISOString() }) }));
+    expect(response.status).toBe(503);
+  });
+  it("allows signed TEST-agent trial calls and acknowledges signed bodies above 256KB", async () => {
+    ingestMocks.verify.mockReturnValue(true);
+    ingestMocks.scope.mockReturnValue({ firmId: "firm", locationId, agentId, appId });
+    ingestMocks.enabled.mockReturnValue(true);
+    ingestMocks.config.mockReturnValue({ firmId: "firm", locationId, agentId, key: "k".repeat(32), origin: "https://example.test", retentionDays: 7 });
+    ingestMocks.ingest.mockResolvedValue({ id: "trial-inquiry", created: true });
+    let response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", {
+      method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ ...fixture(), createdAt: new Date(Date.now() - 120000).toISOString() }),
+    }));
+    expect(response.status).toBe(200);
+    expect(ingestMocks.ingest.mock.calls[0][0].callId).toBe("call_123");
+    ingestMocks.verify.mockClear();
+    ingestMocks.verify.mockReturnValue(true);
+    response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", {
+      method: "POST", body: "x".repeat(256 * 1024 + 1),
+    }));
+    expect(await response.json()).toMatchObject({ processed: false, reason: "payload_too_large" });
+    expect(ingestMocks.verify).not.toHaveBeenCalled();
+  });
+  it("drops oversized transport before crypto but still rejects an in-bound missing signature", async () => {
+    ingestMocks.verify.mockReturnValue(false);
+    let response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", { method: "POST", body: "x".repeat(256 * 1024 + 1) }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ processed: false, reason: "payload_too_large" });
+    expect(ingestMocks.verify).not.toHaveBeenCalled();
+    response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", {
+      method: "POST", headers: { "content-type": "application/json" }, body: "{}",
+    }));
+    expect(response.status).toBe(401);
+    expect(ingestMocks.verify).toHaveBeenCalledOnce();
+  });
+  it("acknowledges a signed unsupported-content request", async () => {
+    ingestMocks.verify.mockReturnValue(true);
+    const response = await ingestPost(new NextRequest("https://example.test/api/integrations/voice-screen/calls", {
+      method: "POST", headers: { "content-type": "text/plain" }, body: "not json",
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ processed: false, reason: "unsupported_content_type" });
   });
   it("fails closed after a change of mind or an oversized transcript", () => {
     const raw = fixture();

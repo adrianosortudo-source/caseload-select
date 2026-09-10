@@ -35,6 +35,13 @@ describe.skipIf(!DB_URL)("parallel voice-to-Screen store (real Postgres)", () =>
       "insert into intake_firms (id,name,custom_domain,subdomain) values ($1,'Voice Screen Fixture',null,$2)",
       [firmId, `voice-screen-${firmId}`],
     );
+    await owner.query(
+      `insert into voice_screen_ghl_oauth_installations
+       (firm_id,location_id,marketplace_app_id,access_token_ciphertext,refresh_token_ciphertext,encryption_key_version,
+        token_expires_at,scopes,company_id,installed_by_user_id)
+       values ($1,'location-test','marketplace-app-test',$2,$3,1,now()+interval '1 day',array['voice-ai-dashboard.readonly'],'company-test','user-test')`,
+      [firmId, `v1.${"a".repeat(50)}`, `v1.${"b".repeat(50)}`],
+    );
   }, 30_000);
 
   afterAll(async () => { await Promise.all([owner?.end(), workerA?.end(), workerB?.end()]); });
@@ -49,11 +56,26 @@ describe.skipIf(!DB_URL)("parallel voice-to-Screen store (real Postgres)", () =>
     } catch (error) { await conn.query("rollback"); throw error; }
   }
 
+  async function waitForAdvisoryLockWait(pid: number) {
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline) {
+      const activity = await owner.query(
+        "select wait_event_type,wait_event from pg_stat_activity where pid=$1",
+        [pid],
+      );
+      if (activity.rows[0]?.wait_event_type === "Lock" && activity.rows[0]?.wait_event === "advisory") return;
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+    throw new Error("concurrent erasure did not wait on the subject advisory lock");
+  }
+
   function inquiry(callId: string, hashChar = "a") {
     const ended = new Date();
     return {
       id: randomUUID(), firm_id: firmId, location_id: "location-test",
       agent_id: "parallel-agent-test", call_id: callId, contact_id: `contact-${callId}`,
+      marketplace_app_id: "marketplace-app-test",
+      subject_digests: [hashChar.repeat(64)],
       caller_facts: {
         callId, locationId: "location-test", agentId: "parallel-agent-test", endedAt: ended.toISOString(),
         endedAtSource: "provider_created_plus_duration", permissionCapturedAtSource: "call_end_bound",
@@ -124,7 +146,7 @@ describe.skipIf(!DB_URL)("parallel voice-to-Screen store (real Postgres)", () =>
 
   it("denies browser roles all table and RPC access", async () => {
     for (const role of ["anon", "authenticated"]) {
-      for (const fn of ["v2s_purge_expired(timestamptz,integer)", "v2s_erase_subject(uuid,text,text)", "v2s_reconcile_stale_dispatch(uuid,text,text)"]) {
+      for (const fn of ["v2s_purge_expired(timestamptz,integer)", "v2s_erase_subject(uuid,text,text,text)", "v2s_revoke_ghl_installation(uuid,text,text,text)", "v2s_reconcile_stale_dispatch(uuid,text,text)"]) {
         const access = await owner.query("select has_function_privilege($1,$2,'EXECUTE') allowed", [role, `public.${fn}`]);
         expect(access.rows[0].allowed).toBe(false);
       }
@@ -133,9 +155,12 @@ describe.skipIf(!DB_URL)("parallel voice-to-Screen store (real Postgres)", () =>
       const p = await owner.query(
         `select has_table_privilege($1,'public.voice_screen_inquiries','SELECT') read_inquiries,
           has_table_privilege($1,'public.voice_screen_outbox','SELECT') read_outbox,
+          has_table_privilege($1,'public.voice_screen_event_claims','SELECT') read_claims,
+          has_table_privilege($1,'public.voice_screen_subject_suppressions','SELECT') read_suppressions,
+          has_table_privilege($1,'public.voice_screen_ghl_oauth_installations','SELECT') read_oauth,
           has_function_privilege($1,'public.v2s_ingest(jsonb)','EXECUTE') ingest`, [role],
       );
-      expect(p.rows[0]).toEqual({ read_inquiries: false, read_outbox: false, ingest: false });
+      expect(p.rows[0]).toEqual({ read_inquiries: false, read_outbox: false, read_claims: false, read_suppressions: false, read_oauth: false, ingest: false });
     }
   });
   it("purges expired inquiry facts and cascades its outbox in a bounded batch", async () => {
@@ -145,13 +170,59 @@ describe.skipIf(!DB_URL)("parallel voice-to-Screen store (real Postgres)", () =>
     expect((await service(workerA, "select public.v2s_purge_expired(now(),1) n")).rows[0].n).toBe(1);
     expect((await owner.query("select count(*)::int n from voice_screen_outbox where inquiry_id=$1", [payload.id])).rows[0].n).toBe(0);
     expect((await owner.query("select count(*)::int n from voice_screen_inquiries where id=$1", [payload.id])).rows[0].n).toBe(0);
+    const replay = await service(workerA, "select public.v2s_ingest($1::jsonb) result", [payload]);
+    expect(replay.rows[0].result).toMatchObject({ id: null, created: false, reason: "event_replay" });
   });
   it("erases a verified subject only inside the supplied firm and location", async () => {
     const payload = inquiry(`erasure-${randomUUID()}`, "f");
     await service(workerA, "select public.v2s_ingest($1::jsonb)", [payload]);
-    expect((await service(workerA, "select public.v2s_erase_subject($1,$2,$3) n", [firmId, "wrong", payload.contact_id])).rows[0].n).toBe(0);
-    expect((await service(workerA, "select public.v2s_erase_subject($1,$2,$3) n", [firmId, payload.location_id, payload.contact_id])).rows[0].n).toBe(1);
+    expect((await service(workerA, "select public.v2s_erase_subject($1,$2,$3,$4) n", [firmId, "wrong", payload.contact_id, payload.subject_digests[0]])).rows[0].n).toBe(0);
+    expect((await service(workerA, "select public.v2s_erase_subject($1,$2,$3,$4) n", [firmId, payload.location_id, payload.contact_id, payload.subject_digests[0]])).rows[0].n).toBe(1);
+    const replay = await service(workerA, "select public.v2s_ingest($1::jsonb) result", [payload]);
+    expect(replay.rows[0].result).toMatchObject({ id: null, created: false, reason: "subject_suppressed" });
+    const later = inquiry(`later-${randomUUID()}`, "9");
+    later.contact_id = payload.contact_id;
+    later.subject_digests = ["8".repeat(64), payload.subject_digests[0]];
+    later.caller_facts.callId = later.call_id;
+    later.caller_facts.evidence.callId = later.call_id;
+    later.caller_facts.callback.verifiedOnCallId = later.call_id;
+    later.caller_facts.permission.callId = later.call_id;
+    later.caller_facts.safeToText.callId = later.call_id;
+    expect((await service(workerA, "select public.v2s_ingest($1::jsonb) result", [later])).rows[0].result.reason).toBe("subject_suppressed");
   });
+  it("serializes erasure behind in-flight ingest and leaves no recreatable subject", async () => {
+    const payload = inquiry(`erasure-race-${randomUUID()}`, "6");
+    let erasePromise: ReturnType<typeof service> | undefined;
+    await workerA.query("begin");
+    try {
+      await workerA.query("set local role service_role");
+      const ingested = await workerA.query("select public.v2s_ingest($1::jsonb) result", [payload]);
+      expect(ingested.rows[0].result.created).toBe(true);
+
+      erasePromise = service(
+        workerB,
+        "select public.v2s_erase_subject($1,$2,$3,$4) n",
+        [firmId, payload.location_id, payload.contact_id, payload.subject_digests[0]],
+      );
+      await waitForAdvisoryLockWait(workerB.processID);
+
+      await workerA.query("commit");
+      expect((await erasePromise).rows[0].n).toBe(1);
+      erasePromise = undefined;
+    } catch (error) {
+      await workerA.query("rollback").catch(() => undefined);
+      await erasePromise?.catch(() => undefined);
+      throw error;
+    }
+
+    const remaining = await owner.query(
+      "select count(*)::int n from voice_screen_inquiries where firm_id=$1 and location_id=$2 and contact_id=$3",
+      [firmId, payload.location_id, payload.contact_id],
+    );
+    expect(remaining.rows[0].n).toBe(0);
+    const replay = await service(workerA, "select public.v2s_ingest($1::jsonb) result", [payload]);
+    expect(replay.rows[0].result).toMatchObject({ id: null, created: false, reason: "subject_suppressed" });
+  }, 30_000);
   it("marks a crashed dispatch unknown without permitting another claim", async () => {
     const payload = inquiry(`crashed-${randomUUID()}`, "0");
     await service(workerA, "select public.v2s_ingest($1::jsonb)", [payload]);
@@ -159,5 +230,17 @@ describe.skipIf(!DB_URL)("parallel voice-to-Screen store (real Postgres)", () =>
     await owner.query("update voice_screen_outbox set claimed_at=now()-interval '6 minutes' where inquiry_id=$1", [payload.id]);
     expect((await service(workerA, "select public.v2s_reconcile_stale_dispatch($1,$2,$3) n", [firmId, payload.location_id, payload.agent_id])).rows[0].n).toBe(1);
     expect((await service(workerA, "select public.v2s_claim($1) result", [payload.id])).rows[0].result.claimed).toBe(false);
+  });
+  it("cryptoshreds a locally disconnected installation and blocks later ingest", async () => {
+    expect((await service(workerA, "select public.v2s_revoke_ghl_installation($1,$2,$3,null) n", [firmId, "marketplace-app-test", "location-test"])).rows[0].n).toBe(1);
+    const installation = await owner.query(
+      "select status,revoked_at is not null revoked,access_token_ciphertext,refresh_token_ciphertext from voice_screen_ghl_oauth_installations where firm_id=$1 and location_id='location-test'",
+      [firmId],
+    );
+    expect(installation.rows[0]).toEqual({ status: "revoked", revoked: true, access_token_ciphertext: null, refresh_token_ciphertext: null });
+    const payload = inquiry(`after-disconnect-${randomUUID()}`, "7");
+    expect((await service(workerA, "select public.v2s_ingest($1::jsonb) result", [payload])).rows[0].result).toMatchObject({
+      id: null, created: false, reason: "integration_not_installed",
+    });
   });
 });

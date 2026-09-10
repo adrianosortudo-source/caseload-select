@@ -1,7 +1,7 @@
 import { parseLiveCall, type LiveCall } from "./voice-screen-live";
 
-/** Official VoiceAiCallEnd / GET call-logs/:callId adapter. Input MUST come from
- * authenticated provider retrieval, never a caller-supplied normalized body.
+/** Official VoiceAiCallEnd adapter. Input MUST be the byte-exact body of a
+ * successfully verified X-GHL-Signature request, never caller-supplied data.
  * https://marketplace.gohighlevel.com/docs/webhook/VoiceAiCallEnd/index.html
  * No contact-history lookup, caller-ID fallback, or nearest-call matching.
  */
@@ -58,15 +58,14 @@ function proofFor(turns: Turn[], kind: "consent" | "safe") {
   return { value: result, quote: quote.slice(0, 500) };
 }
 
-/** Location may be absent in GET call-log results: expectedLocationId then comes
- * from the authenticated request's locationId query, never an untrusted body.
+/** The signed native event must carry the exact configured location identity.
  * createdAt + duration is an approximate end bound; not an exact hangup or
  * consent timestamp. Timestamp provenance is returned and must be persisted.
  */
 export function parseProviderCall(value: unknown, expectedLocationId: string): LiveCall | null {
   const raw = obj(value);
   if (!raw || !identifier(expectedLocationId) || !identifier(raw.id) || !identifier(raw.agentId) || !identifier(raw.contactId)) return null;
-  if (raw.locationId !== undefined && raw.locationId !== expectedLocationId) return null;
+  if (raw.locationId !== expectedLocationId) return null;
   const created = typeof raw.createdAt === "string" ? Date.parse(raw.createdAt) : NaN;
   if (!Number.isFinite(created) || typeof raw.duration !== "number" || !Number.isFinite(raw.duration) || raw.duration < 0 || raw.duration > 86400) return null;
   const ended = created + raw.duration * 1000;
