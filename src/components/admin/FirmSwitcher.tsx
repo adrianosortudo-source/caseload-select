@@ -74,6 +74,7 @@ const FIRM_PORTAL_LINKS = [
 // Not firm-scoped, so they sit in their own group rather than under a firm.
 const SELL_LINKS = [
   { label: "Prospect list", href: "/admin/prospects" },
+  { label: "Prospect website demos", href: "/admin/prospect-demos" },
   { label: "Agency CRM", href: "/admin/agency-crm" },
   { label: "SEO check", href: "/admin/seo-check" },
   { label: "Marketing Diagnostic 2.0", href: "/admin/prospecting-diagnostic" },

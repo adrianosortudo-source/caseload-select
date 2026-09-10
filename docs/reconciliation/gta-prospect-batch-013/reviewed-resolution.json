@@ -1,0 +1,1339 @@
+{
+  "schemaVersion": "gta-prospect-reviewed-resolution.v1",
+  "batchId": "gta-prospect-batch-013",
+  "reviewedOn": "2026-09-10",
+  "liveOperatorBaselineCount": 141,
+  "candidateCount": 100,
+  "importCount": 6,
+  "excludedCount": 28,
+  "heldCount": 66,
+  "automaticMerge": false,
+  "outreachAuthorized": false,
+  "policy": {
+    "requiredRosterProvenance": "first_party",
+    "targetCountBands": [
+      {
+        "min": 3,
+        "max": 5
+      },
+      {
+        "min": 6,
+        "max": 10
+      },
+      {
+        "min": 11,
+        "max": 20
+      }
+    ],
+    "comparisonOnlyCountBands": [
+      {
+        "min": 21,
+        "max": 50
+      }
+    ],
+    "requiresFreshLivePreflightBeforeApply": true,
+    "requiresSeparateImportAuthorization": true
+  },
+  "decisions": [
+    {
+      "sourceRecordKey": "b013-001",
+      "firmName": "Bianchi Presta LLP",
+      "observedLawyerCount": 11,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "Hold for identity conflict: the 2026-09-10 fresh post-merge read-only preflight found exact firm-name matches for Bianchi Presta LLP in both gta_prospect_firms and prospect_organizations, with existing website https://bianchipresta.com/ versus candidate https://www.vaughanlawyers.ca/. This later evidence supersedes the earlier live no-match report. The historical static result remains no_match, but neither that result nor the different candidate domain establishes net-new status. Resolve the domain/firm relationship with first-party evidence and a reviewed identity decision before considering any import; do not import, merge, or update either identity."
+    },
+    {
+      "sourceRecordKey": "b013-002",
+      "firmName": "Falcone Law",
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-003",
+      "firmName": "Spadafora and Murphy LLP",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Spadafora and Murphy LLP; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-004",
+      "firmName": "Nachla Law",
+      "observedLawyerCount": 3,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The source declares three lawyers without an enumerated roster in the supplied artifacts; confirm current names/roles and the incomplete office address. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-005",
+      "firmName": "Henry K. Hui & Associates",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-006",
+      "firmName": "FDH Lawyers LLP",
+      "observedLawyerCount": 10,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-007",
+      "firmName": "Graham Stephenson Van Vliet LLP (GSK Lawyers)",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "import",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      },
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 4-lawyer roster at https://www.gsklawyers.com/ within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Sandra Stephenson is source-labeled Founder; admin@gsklawyers.com is a general inbox. Toronto office evidence remains at https://www.gsklawyers.com/gsk-contact."
+    },
+    {
+      "sourceRecordKey": "b013-008",
+      "firmName": "Cass & Bishop",
+      "observedLawyerCount": 5,
+      "countQualifier": "exact",
+      "disposition": "import",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      },
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 5-lawyer roster at https://www.cassbishop.ca/lawyers-since-1958 within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Peter H. Cass is source-labeled Partner & President at https://www.cassbishop.ca/petercass/; this does not establish ownership. No usable prospect email was found; the careers-only opportunity@ address is excluded."
+    },
+    {
+      "sourceRecordKey": "b013-009",
+      "firmName": "Martin & Hillyer Associates",
+      "observedLawyerCount": 9,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Martin & Hillyer Associates; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-010",
+      "firmName": "KMB Law",
+      "observedLawyerCount": 12,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_dynamic_roster records 12; verify the full current roster and role/office scope. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-011",
+      "firmName": "Devry Smith Frank LLP",
+      "observedLawyerCount": 61,
+      "countQualifier": "at_least",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 61-lawyer figure (firm_wide_at_least_firm_statement) places this candidate outside the selected 3–20 cohort; larger or firm-wide/recognition counts are not converted to local exact counts. Firm-wide multi-office count, not Toronto-only; baseline duplicate status unknown."
+    },
+    {
+      "sourceRecordKey": "b013-012",
+      "firmName": "Loopstra Nixon LLP",
+      "observedLawyerCount": 11,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_visible_people records 11; verify the full current roster and role/office scope. Resolve 8 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-013",
+      "firmName": "Harcourt LLP",
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The supplement confirms Toronto context but has no street address; validate the office and exact named roster before concluding identity. The supplied supplement has no street address; obtain current first-party office evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-014",
+      "firmName": "MBB Law",
+      "observedLawyerCount": 11,
+      "countQualifier": "unknown",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: roster_listed_role_verification_required records 11; verify the full current roster and role/office scope. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-015",
+      "firmName": "TAP Law",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-016",
+      "firmName": "MacDonald & Partners LLP",
+      "observedLawyerCount": 14,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_dynamic_roster records 14; verify the full current roster and role/office scope. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-017",
+      "firmName": "Dale Streiman Law LLP",
+      "observedLawyerCount": 8,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_named_lawyers records 8; verify the full current roster and role/office scope. Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-018",
+      "firmName": "Anthony Family Law",
+      "observedLawyerCount": 3,
+      "countQualifier": "exact",
+      "disposition": "import",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      },
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 3-lawyer roster at https://anthonylaw.ca/our-team/ within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. David Anthony is represented only as Lead Counsel from https://anthonylaw.ca/our-team/. info@anthonylaw.ca is a general inbox sourced to https://anthonylaw.ca/terms-of-use-and-disclaimer-of-liability/. Ownership is not inferred."
+    },
+    {
+      "sourceRecordKey": "b013-019",
+      "firmName": "Vakili Law Group",
+      "observedLawyerCount": 3,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve whether the associated lawyer belongs in the employee roster count and review the fixture/domain signals. Resolve 3 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-020",
+      "firmName": "NIKA Law LLP",
+      "observedLawyerCount": 7,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_named_lawyers records 7; verify the full current roster and role/office scope. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-021",
+      "firmName": "Lockyer + Hein LLP",
+      "observedLawyerCount": 8,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The lhlaw.ca source redirects to Boardwalk Law; review Lockyer + Hein versus the current brand before assigning an identity. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-022",
+      "firmName": "Black Sutherland LLP",
+      "observedLawyerCount": 15,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-023",
+      "firmName": "DLA Piper (Canada) LLP",
+      "observedLawyerCount": 91,
+      "countQualifier": "at_least",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 91-lawyer figure (toronto_office_at_least_firm_statement) places this candidate outside the selected 3–20 cohort; larger or firm-wide/recognition counts are not converted to local exact counts. Large multinational firm; may be outside desired small-firm ICP; baseline duplicate status unknown."
+    },
+    {
+      "sourceRecordKey": "b013-024",
+      "firmName": "Kestenberg Litigation LLP",
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "disposition": "import",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      },
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 6-lawyer roster at https://www.kestenberglitigation.com/meet-our-lawyers within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. The re-opened roster explicitly labels Marc as Founding and Managing Partner (marc@kestenberglitigation.com) and Michael as Founding Partner (michael@kestenberglitigation.com); each named email is independently source-attributed."
+    },
+    {
+      "sourceRecordKey": "b013-025",
+      "firmName": "Feldstein Family Law Group",
+      "observedLawyerCount": 11,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Feldstein Family Law Group; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-026",
+      "firmName": "Sotos LLP",
+      "observedLawyerCount": 34,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 34-lawyer figure is outside the 3–20 import band; 21–50 records remain comparison-only pending office/roster scope review. An exact active-lawyer roster is not established: at_least_named_legal_roles records 34; verify the full current roster and role/office scope. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-027",
+      "firmName": "Jackman & Associates",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Jackman & Associates; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-028",
+      "firmName": "Oatley Vigmond LLP",
+      "observedLawyerCount": 16,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Oatley Vigmond LLP; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-029",
+      "firmName": "Minken Employment Lawyers",
+      "observedLawyerCount": 3,
+      "countQualifier": "at_least",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Minken Employment Lawyers; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-030",
+      "firmName": "Wilson Vukelich LLP",
+      "observedLawyerCount": 23,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 23-lawyer figure (exact_named_lawyer_roster) places this candidate outside the selected 3–20 cohort; larger or firm-wide/recognition counts are not converted to local exact counts. Ownership and baseline duplicate status unknown."
+    },
+    {
+      "sourceRecordKey": "b013-031",
+      "firmName": "Bogoroch & Associates LLP",
+      "observedLawyerCount": 4,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_visible_lawyers records 4; verify the full current roster and role/office scope. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-032",
+      "firmName": "Jordan Honickman Barristers",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-033",
+      "firmName": "Lundy Levy & Eski Barristers",
+      "observedLawyerCount": 10,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-034",
+      "firmName": "BE Law LLP",
+      "observedLawyerCount": 5,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Review BE Law LLP versus the Book Erskine fixture/domain signal; a domain match alone does not settle current identity. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-035",
+      "firmName": "Mand Rai LLP",
+      "observedLawyerCount": 5,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-036",
+      "firmName": "Schofield Macchia LLP",
+      "observedLawyerCount": 12,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-037",
+      "firmName": "Chernos Flaherty Svonkin LLP",
+      "observedLawyerCount": 10,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-038",
+      "firmName": "Sutherland Law",
+      "observedLawyerCount": 13,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Sutherland Law; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-039",
+      "firmName": "Affinity Law",
+      "observedLawyerCount": 13,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Affinity Law; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-040",
+      "firmName": "Weisberg Law Criminal Lawyers LLP",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-041",
+      "firmName": "Jewell Radimisis Jorge LLP",
+      "observedLawyerCount": null,
+      "countQualifier": "unknown",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      },
+      "basis": "Hold for unresolved active roster and current leadership: the 2026-09-10 first-party revalidation found eight displayed rows at https://www.jrjlaw.com/our-lawyers/, including founder Paul Jewell, whose profile https://www.jrjlaw.com/our-lawyers/paul-r-jewell-qc/ states he died in 2015. Removing Paul leaves seven displayed rows, but the cached first-party Yusra Khalid profile at https://www.jrjlaw.com/our-lawyers/yusra-khalid-ll-m-ll-b-gpllm/ is absent from the roster, leaving a 7-vs-8 active-lawyer ambiguity. No current owner or leader is established. The prior static/live no-match observations remain identity evidence only; they cannot resolve the roster gate. Exclude the mediation-specific pgalway email from prospect contacts and require current roster/leadership resolution before reconsidering import."
+    },
+    {
+      "sourceRecordKey": "b013-042",
+      "firmName": "Stringer LLP",
+      "observedLawyerCount": 7,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-043",
+      "firmName": "Cohen LLP",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 3 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-044",
+      "firmName": "Israel Foulon Wong LLP",
+      "observedLawyerCount": 12,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-045",
+      "firmName": "Whitten & Lublin",
+      "observedLawyerCount": 18,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. The supplied supplement has no street address; obtain current first-party office evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-046",
+      "firmName": "Monkhouse Law",
+      "observedLawyerCount": 18,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Monkhouse Law; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-047",
+      "firmName": "Consky & Associates",
+      "observedLawyerCount": 3,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. The supplied supplement has no street address; obtain current first-party office evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-048",
+      "firmName": "Bergmanis Preyra LLP",
+      "observedLawyerCount": 8,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-049",
+      "firmName": "Grosman Gale Fletcher Hopkins LLP",
+      "observedLawyerCount": 8,
+      "countQualifier": "exact",
+      "disposition": "import",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      },
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 8-lawyer roster at https://www.grosman.com/our-team/ within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Five partners are listed but no owner/managing partner is established; leadership remains unknown. lawyers@grosman.com is a general inbox."
+    },
+    {
+      "sourceRecordKey": "b013-050",
+      "firmName": "Adair Goldblatt Bieber LLP",
+      "observedLawyerCount": 17,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The count is a 17-lawyer lower bound, not an exact count; validate the current full team before deciding whether it falls inside 3–20. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-051",
+      "firmName": "Adelaide Barristers",
+      "observedLawyerCount": 3,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-052",
+      "firmName": "Jones Kopp Litigation Partners LLP",
+      "observedLawyerCount": 12,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Jones Kopp Litigation Partners LLP; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-053",
+      "firmName": "Friedmans LLP",
+      "observedLawyerCount": 13,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-054",
+      "firmName": "Goldmans LLP",
+      "observedLawyerCount": 5,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_named_lawyers records 5; verify the full current roster and role/office scope. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-055",
+      "firmName": "Kelly D. Jordan Family Law Firm",
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The static baseline was clear, but the street address differs from older CVs and fresh live identity review is not established for this held record. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-056",
+      "firmName": "Baker & Company",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Baker & Company; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-057",
+      "firmName": "Goldman Spring Kichler & Fischer LLP",
+      "observedLawyerCount": 8,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. The supplied supplement has no street address; obtain current first-party office evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-058",
+      "firmName": "Bozai Law",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Bozai Law; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-059",
+      "firmName": "Linmac LLP",
+      "observedLawyerCount": 20,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_lawyer_filter records 20; verify the full current roster and role/office scope. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-060",
+      "firmName": "Nichols Law PC",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The current contact page reports a move; review the Nichols Law ledger match together with the current address. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-061",
+      "firmName": "Edelson Foord Law",
+      "observedLawyerCount": 8,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Edelson Foord Law; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-062",
+      "firmName": "Hodder, Wang",
+      "observedLawyerCount": 5,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Hodder, Wang; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-063",
+      "firmName": "Pape Salter Teillet",
+      "observedLawyerCount": 24,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 24-lawyer figure is outside the 3–20 import band; 21–50 records remain comparison-only pending office/roster scope review. An exact active-lawyer roster is not established: at_least_named_legal_roles records 24; verify the full current roster and role/office scope. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-064",
+      "firmName": "Beitel Tax Law",
+      "observedLawyerCount": 11,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The supplied supplement has no street address; obtain current first-party office evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-065",
+      "firmName": "Houser Henry & Syron",
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Review the ledger identity match and current Suite 1620 against older Suite 2701 evidence; preserve suite distinctions. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-066",
+      "firmName": "Ross Nasseri LLP",
+      "observedLawyerCount": 20,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Ross Nasseri LLP; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-067",
+      "firmName": "Goldblatt Partners LLP",
+      "observedLawyerCount": 8,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_toronto_visible_lawyers records 8; verify the full current roster and role/office scope. Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-068",
+      "firmName": "Filion Wakely Thorup Angeletti LLP",
+      "observedLawyerCount": 51,
+      "countQualifier": "unknown",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 51-lawyer figure (firm_wide_exact_firm_statement) places this candidate outside the selected 3–20 cohort; larger or firm-wide/recognition counts are not converted to local exact counts. Firm-wide multi-office count; baseline duplicate status unknown."
+    },
+    {
+      "sourceRecordKey": "b013-069",
+      "firmName": "Rashidy & Associates",
+      "observedLawyerCount": 5,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The count covers Canadian-office lawyers; review associated office scope and the Rashidy fixture/domain signals. Resolve 3 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-070",
+      "firmName": "Posner Craig Stein LLP",
+      "observedLawyerCount": 6,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_named_lawyers records 6; verify the full current roster and role/office scope. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-071",
+      "firmName": "Singh Lamarche LLP",
+      "observedLawyerCount": 6,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_named_lawyers records 6; verify the full current roster and role/office scope. Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-072",
+      "firmName": "Daniel Brown Law",
+      "observedLawyerCount": 15,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-073",
+      "firmName": "Bergel Magence LLP",
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-074",
+      "firmName": "Derstine Bariteau Criminal Lawyers",
+      "observedLawyerCount": 10,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The supplied supplement has no street address; obtain current first-party office evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-075",
+      "firmName": "Levitt LLP",
+      "observedLawyerCount": 12,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_visible_lawyer_roster records 12; verify the full current roster and role/office scope. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-076",
+      "firmName": "Samfiru Tumarkin LLP",
+      "observedLawyerCount": 50,
+      "countQualifier": "at_least",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 50-lawyer figure (firm_wide_at_least_firm_statement) places this candidate outside the selected 3–20 cohort; larger or firm-wide/recognition counts are not converted to local exact counts. National, multi-office count; not Toronto-only; baseline duplicate status unknown."
+    },
+    {
+      "sourceRecordKey": "b013-077",
+      "firmName": "Addario Law Group LLP",
+      "observedLawyerCount": 13,
+      "countQualifier": "exact",
+      "disposition": "import",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      },
+      "basis": "Provisional review candidate: 2026-09-10 first-party revalidation reported by the coordinating task confirms an exact 13-lawyer roster at https://www.addario.ca/lawyers within the 3–20 target. The historical static baseline was clear and the initial live exact-identity review reported no match; a fresh live preflight and separate apply authorization remain required. Frank's founder wording is sourced to https://www.addario.ca/about (founded in 2012); https://www.addario.ca/lawyers binds faddario@addario.ca to Frank and lists info@addario.ca under Write us as a general inbox."
+    },
+    {
+      "sourceRecordKey": "b013-078",
+      "firmName": "Gluckstein Lawyers",
+      "observedLawyerCount": 13,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_practice_page_lawyers records 13; verify the full current roster and role/office scope. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-079",
+      "firmName": "Mills & Mills LLP",
+      "observedLawyerCount": 51,
+      "countQualifier": "at_least",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 51-lawyer figure (at_least_role_labeled_legal_team) places this candidate outside the selected 3–20 cohort; larger or firm-wide/recognition counts are not converted to local exact counts. Legal-team classifications and included associated professionals should be rechecked before import; baseline duplicate status unknown."
+    },
+    {
+      "sourceRecordKey": "b013-080",
+      "firmName": "Sokoloff Lawyers",
+      "observedLawyerCount": 8,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Sokoloff Lawyers; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-081",
+      "firmName": "Dhillon Murthi Law",
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 11 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-082",
+      "firmName": "McCarthy Hansen & Company LLP",
+      "observedLawyerCount": 33,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 33-lawyer figure is outside the 3–20 import band; 21–50 records remain comparison-only pending office/roster scope review. Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-083",
+      "firmName": "Merwar Lawyers",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The supplied supplement has no street address; obtain current first-party office evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-084",
+      "firmName": "Malicki Sanchez Law",
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The supplied supplement has no street address; obtain current first-party office evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-085",
+      "firmName": "Henein Hutchison Robitaille LLP",
+      "observedLawyerCount": 12,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_firm_statement records 12; verify the full current roster and role/office scope. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-086",
+      "firmName": "Thomson Rogers LLP",
+      "observedLawyerCount": 37,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 37-lawyer figure is outside the 3–20 import band; 21–50 records remain comparison-only pending office/roster scope review. An exact active-lawyer roster is not established: at_least_visible_directory_roles records 37; verify the full current roster and role/office scope. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-087",
+      "firmName": "Hicks Adams",
+      "observedLawyerCount": 12,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. The supplied supplement has no street address; obtain current first-party office evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-088",
+      "firmName": "Garson Immigration Law",
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "existing_firm_match"
+      },
+      "basis": "The 2026-09-10 fresh live exact-identity review reported an existing-firm signal for Garson Immigration Law; exclude from this proposed new-firm cohort. Preserve the source without importing, merging, or updating the existing identity."
+    },
+    {
+      "sourceRecordKey": "b013-089",
+      "firmName": "Avanessy Giordano LLP (Ava Gio)",
+      "observedLawyerCount": 6,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Resolve the conflict between six visible role-classified lawyers and the statement of a 16-lawyer team before using an exact count. Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-090",
+      "firmName": "Shulman & Partners LLP",
+      "observedLawyerCount": 8,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_visible_lawyer_roles records 8; verify the full current roster and role/office scope. Resolve 2 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-091",
+      "firmName": "Lenczner Slaght LLP",
+      "observedLawyerCount": 49,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 49-lawyer figure is outside the 3–20 import band; 21–50 records remain comparison-only pending office/roster scope review. An exact active-lawyer roster is not established: at_least_recognized_lawyers_not_full_roster records 49; verify the full current roster and role/office scope. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-092",
+      "firmName": "Lerners LLP",
+      "observedLawyerCount": 140,
+      "countQualifier": "at_least",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 140-lawyer figure (firm_wide_at_least_firm_statement) places this candidate outside the selected 3–20 cohort; larger or firm-wide/recognition counts are not converted to local exact counts. Firm-wide multi-office count, not Toronto-only; likely outside small-firm ICP; baseline duplicate status unknown."
+    },
+    {
+      "sourceRecordKey": "b013-093",
+      "firmName": "Fogler Rubinoff LLP",
+      "observedLawyerCount": 125,
+      "countQualifier": "at_least",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 125-lawyer figure (firm_wide_at_least_firm_statement) places this candidate outside the selected 3–20 cohort; larger or firm-wide/recognition counts are not converted to local exact counts. Likely outside small-firm ICP; owner and baseline duplicate status unknown."
+    },
+    {
+      "sourceRecordKey": "b013-094",
+      "firmName": "Torkin Manes LLP",
+      "observedLawyerCount": 52,
+      "countQualifier": "at_least",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 52-lawyer figure (at_least_partners_only) places this candidate outside the selected 3–20 cohort; larger or firm-wide/recognition counts are not converted to local exact counts. Count is published partner recognition, not a full roster; likely outside small-firm ICP; baseline duplicate status unknown."
+    },
+    {
+      "sourceRecordKey": "b013-095",
+      "firmName": "Davies Ward Phillips & Vineberg LLP",
+      "observedLawyerCount": 300,
+      "countQualifier": "unknown",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 300-lawyer figure (firm_wide_displayed_count) places this candidate outside the selected 3–20 cohort; larger or firm-wide/recognition counts are not converted to local exact counts. Firm-wide multi-office count; outside small-firm ICP; owner and baseline duplicate status unknown."
+    },
+    {
+      "sourceRecordKey": "b013-096",
+      "firmName": "Koskie Minsky LLP",
+      "observedLawyerCount": 10,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Only the first page of the roster was counted; enumerate all current lawyer pages and review static identity signals. Resolve 1 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-097",
+      "firmName": "Paliare Roland Rosenberg Rothstein LLP",
+      "observedLawyerCount": 28,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 28-lawyer figure is outside the 3–20 import band; 21–50 records remain comparison-only pending office/roster scope review. An exact active-lawyer roster is not established: at_least_recognized_lawyers_not_full_roster records 28; verify the full current roster and role/office scope. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-098",
+      "firmName": "Gardiner Roberts LLP",
+      "observedLawyerCount": 6,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The snapshot did not enumerate the full people directory; separate lawyers from other people and review the static domain/name matches. Resolve 6 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    },
+    {
+      "sourceRecordKey": "b013-099",
+      "firmName": "Stikeman Elliott LLP",
+      "observedLawyerCount": 189,
+      "countQualifier": "at_least",
+      "disposition": "exclude",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The observed 189-lawyer figure (firm_wide_at_least_recognized_lawyers) places this candidate outside the selected 3–20 cohort; larger or firm-wide/recognition counts are not converted to local exact counts. Recognition count is firm-wide, not Toronto office total; outside small-firm ICP; owner and baseline duplicate status unknown."
+    },
+    {
+      "sourceRecordKey": "b013-100",
+      "firmName": "Rudner Law",
+      "observedLawyerCount": 6,
+      "countQualifier": "at_least",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "An exact active-lawyer roster is not established: at_least_named_lawyers records 6; verify the full current roster and role/office scope. Resolve 3 static exact domain/name signal(s) against the retained baseline references; no identity merge is authorized. No office/alias supplement covers this candidate; collect current first-party identity evidence. Fresh live identity clearance is not recorded for this held candidate."
+    }
+  ]
+}
