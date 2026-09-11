@@ -25,7 +25,7 @@ async function checkLayout(page: Page) {
   const overflow = await page.evaluate(() => {
     const failures: string[] = [];
     const roots = document.querySelectorAll<HTMLElement>(
-      '[data-shell-layout], [data-testid="voice-screen-test-brief"]',
+      '[data-shell-layout], [data-testid="voice-screen-test-brief"], [data-ui-component-content="handoff-test"], [data-ui-component-content="message-test"]',
     );
     for (const root of roots) {
       if (!root.getClientRects().length) continue;
@@ -63,10 +63,14 @@ async function assertNoServiceDependency(page: Page, calls: string[]) {
   expect(calls).toEqual([]);
   expect(new URL(page.url()).search).toBe("");
   expect(new URL(page.url()).hash).toBe("");
-  expect(await page.evaluate(() => ({
-    local: localStorage.length,
-    session: sessionStorage.length,
-  }))).toEqual({ local: 0, session: 0 });
+  // Next's development runtime may own storage entries. Reject inquiry data,
+  // rather than treating an unrelated framework entry as app persistence.
+  const persistedInquiry = await page.evaluate(() => {
+    const entries = [...Object.entries(localStorage), ...Object.entries(sessionStorage)];
+    const fixture = /Alex Morgan|416.?555.?0142|Fictional test detail|amount_at_stake|client_phone|client_name|questionHistory/i;
+    return entries.filter(([key, value]) => fixture.test(key + " " + value));
+  });
+  expect(persistedInquiry).toEqual([]);
 }
 
 test.beforeAll(() => fs.mkdirSync(EVIDENCE, { recursive: true }));
@@ -143,6 +147,7 @@ for (const width of WIDTHS) {
     await checkLayout(page);
     await page.screenshot({ path: path.join(EVIDENCE, `${width}-brief-updated.png`), fullPage: true });
 
+    await assertNoServiceDependency(page, serviceCalls);
     await page.getByRole("button", { name: "Reset test", exact: true }).click();
     await page.getByRole("button", { name: "Caller widget", exact: true }).click();
     await expect(widget.locator(QUESTION)).toHaveText(firstQuestion);
@@ -176,5 +181,70 @@ test("finishing immediately preserves the original inquiry without requiring ans
   const brief = page.getByTestId("voice-screen-test-brief");
   await expect(brief).toContainText("Alex Morgan");
   await expect(brief.getByTestId("voice-screen-test-answer")).toHaveCount(0);
+  await assertNoServiceDependency(page, calls);
+});
+
+for (const width of WIDTHS) {
+  test(`handoff policy and SMS wording can be tested independently at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const calls = monitorServiceCalls(page);
+    await page.goto("/test/voice-screen/connections");
+    await expect(page.getByRole("heading", { name: "Connection tests", exact: true })).toBeVisible();
+    const result = page.locator('[data-ui-component-content="handoff-result"]');
+    const message = page.locator('[data-ui-component-content="message-content"]');
+    await expect(result.getByRole("heading", { name: "Text allowed", exact: true })).toBeVisible();
+    await expect(message).toContainText("Thanks for calling Example Law Firm.");
+    await expect(message).toContainText("https://example.invalid/widget/voice-continuation#inactive-test-link");
+    await expect(message.locator("a")).toHaveCount(0);
+    await checkLayout(page);
+    await page.screenshot({ path: path.join(EVIDENCE, `${width}-connections-initial.png`), fullPage: true });
+
+    const blockedChoices = [
+      { label: "Permission to text", values: ["declined", "unknown"], restore: "granted" },
+      { label: "Safe to text this number", values: ["no", "unknown"], restore: "yes" },
+      { label: "Caller relationship", values: ["existing", "other", "unknown"], restore: "new" },
+      { label: "Urgency", values: ["urgent", "unknown"], restore: "routine" },
+    ];
+    for (const choice of blockedChoices) {
+      for (const value of choice.values) {
+        await page.getByLabel(choice.label, { exact: true }).selectOption(value);
+        await expect(result.getByRole("heading", { name: "Human follow-up", exact: true })).toBeVisible();
+        await expect(result).toContainText("The callback request stays open in both cases.");
+      }
+      await page.getByLabel(choice.label, { exact: true }).selectOption(choice.restore);
+      await expect(result.getByRole("heading", { name: "Text allowed", exact: true })).toBeVisible();
+    }
+    await page.getByLabel("Caller asks for a person", { exact: true }).check();
+    await expect(result.getByRole("heading", { name: "Human follow-up", exact: true })).toBeVisible();
+    await checkLayout(page);
+    await page.screenshot({ path: path.join(EVIDENCE, `${width}-connections-human-followup.png`), fullPage: true });
+    await page.getByLabel("Caller asks for a person", { exact: true }).uncheck();
+    await expect(result.getByRole("heading", { name: "Text allowed", exact: true })).toBeVisible();
+
+    await page.getByLabel("Firm name", { exact: true }).fill("Fictional Test Law");
+    await expect(message).toContainText("Thanks for calling Fictional Test Law.");
+    await expect(message).not.toContainText("Example Law Firm");
+    await expect(message).toContainText("Reply STOP to opt out.");
+    await checkLayout(page);
+    await page.getByLabel("Firm name", { exact: true }).fill("");
+    await expect(message).toContainText("Thanks for calling Example Law Firm.");
+    await assertNoServiceDependency(page, calls);
+  });
+}
+
+test("reloading starts a fresh inquiry without retaining previous test answers", async ({ page }) => {
+  const calls = monitorServiceCalls(page);
+  await page.goto(WIDGET_ROUTE);
+  const widget = page.locator(WIDGET);
+  const initialQuestion = await widget.locator(QUESTION).innerText();
+  await page.getByRole("button", { name: "Skip this question", exact: true }).click();
+  await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
+  await expect(page.getByTestId("voice-screen-test-answer")).toHaveCount(1);
+  await assertNoServiceDependency(page, calls);
+  await page.reload();
+  await page.getByRole("button", { name: "Caller widget", exact: true }).click();
+  await expect(widget.locator(QUESTION)).toHaveText(initialQuestion);
+  await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
+  await expect(page.getByTestId("voice-screen-test-answer")).toHaveCount(0);
   await assertNoServiceDependency(page, calls);
 });

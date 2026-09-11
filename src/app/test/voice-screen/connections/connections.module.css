@@ -1,7 +1,7 @@
-.page { min-height: 100vh; background: #f4f3ef; color: #1e2f58; padding: 40px 24px 64px; font-family: var(--cls-font-body, "DM Sans", sans-serif); }
+.page { min-height: 100vh; background: #f4f3ef; color: #1e2f58; padding: 40px 24px 64px; font-family: var(--cls-font-body, "DM Sans Variable", sans-serif); }
 .container { width: 100%; max-width: 1160px; margin: 0 auto; }
 .header { width: 100%; margin-bottom: 28px; }
-.header h1 { font-family: var(--cls-font-display, Manrope, sans-serif); font-size: 36px; line-height: 1.15; margin: 8px 0 16px; font-weight: 800; }
+.header h1 { font-family: var(--font-manrope), sans-serif; font-size: 36px; line-height: 1.15; margin: 8px 0 16px; font-weight: 800; }
 .header p, .panel p { width: 100%; line-height: 1.6; margin: 0 0 16px; }
 .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; font-weight: 700; }
 .back { display: inline-flex; min-height: 44px; align-items: center; text-decoration: underline; text-underline-offset: 4px; }
@@ -22,3 +22,5 @@
 .back:focus-visible, .controls select:focus-visible, .sender input:focus-visible, .checkbox input:focus-visible { outline: 3px solid #a48a59; outline-offset: 3px; }
 @media (max-width: 899px) { .columns { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 480px) { .page { padding: 24px 16px 40px; } .header h1 { font-size: 28px; } .panel { padding: 20px; } .result, .message { padding: 16px; } }
+
+.page [data-ui-copy] { text-wrap: pretty; }

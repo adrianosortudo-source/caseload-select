@@ -27,7 +27,7 @@ export function VoiceScreenTestWorkspace({ initialSegment = "widget" }: { initia
     setGeneration(value => value + 1);
   }
 
-  return <div className="min-h-screen bg-[#F4F3EF] text-[#1E2F58] [&_[data-ui-copy]]:[text-wrap:pretty]" style={{ fontFamily: "DM Sans, sans-serif" }}>
+  return <div className="min-h-screen bg-[#F4F3EF] text-[#1E2F58] [&_[data-ui-copy]]:[text-wrap:pretty]" style={{ fontFamily: '"DM Sans Variable", sans-serif' }}>
     <header className="bg-[#172640] text-white px-5 py-4">
       <div className="mx-auto w-full max-w-[1040px] space-y-3" data-ui-component-content="test-controls">
         <p className="text-sm leading-relaxed" data-ui-copy="supporting"><strong>Independent testing.</strong> This is the production caller component and qualification engine, loaded with fictional call facts. Test answers stay in this tab. Refresh or reset to start over.</p>
@@ -50,17 +50,17 @@ export function VoiceScreenTestWorkspace({ initialSegment = "widget" }: { initia
     {segment === "brief" && <main data-testid="voice-screen-test-brief" className="mx-auto w-full max-w-[1040px] px-5 py-8 space-y-6">
       <section className="space-y-3" data-ui-component-content="test-brief-heading">
         <p className="text-sm uppercase tracking-wider" data-ui-copy="supporting">Lawyer brief test</p>
-        <h1 className="text-3xl font-bold" data-ui-copy="heading">One inquiry, with the answers together.</h1>
+        <h1 className="text-[26px] sm:text-3xl font-bold" data-ui-copy="heading">One inquiry, with the answers together.</h1>
         <p className="leading-relaxed" data-ui-copy="body">This brief uses the production report builder. It is available before any written answers and updates as qualification progresses.</p>
         <p className="text-sm" data-ui-copy="supporting">Test status: {snapshot.status}. Written answers: {snapshot.answers.length}.</p>
       </section>
-      <section className="rounded-xl border border-[#1E2F58]/15 bg-white p-5 space-y-3" data-ui-component-content="test-call-facts">
+      <section className="rounded-xl border border-[#1E2F58]/15 bg-white p-4 sm:p-5 space-y-3" data-ui-component-content="test-call-facts">
         <h2 className="text-xl font-bold" data-ui-copy="heading">From the call</h2>
         <p data-ui-copy="body">{snapshot.facts.name} · {snapshot.facts.phone}</p>
         <p className="leading-relaxed" data-ui-copy="body">{snapshot.facts.situation}</p>
         <p className="leading-relaxed" data-ui-copy="supporting">{snapshot.facts.deadline}</p>
       </section>
-      <section className="rounded-xl border border-[#1E2F58]/15 bg-white p-5 space-y-4" data-ui-component-content="test-written-answers">
+      <section className="rounded-xl border border-[#1E2F58]/15 bg-white p-4 sm:p-5 space-y-4" data-ui-component-content="test-written-answers">
         <h2 className="text-xl font-bold" data-ui-copy="heading">From qualification</h2>
         {!snapshot.answers.length && <p className="leading-relaxed" data-ui-copy="body">No written answers yet. The call information is already available for review.</p>}
         {snapshot.answers.map((answer, index) => <div key={index} data-testid="voice-screen-test-answer" className="space-y-1" data-ui-component-content="test-written-answer">
@@ -68,7 +68,7 @@ export function VoiceScreenTestWorkspace({ initialSegment = "widget" }: { initia
           <p className="leading-relaxed" data-ui-copy="body">{answer.answer}</p>
         </div>)}
       </section>
-      <section className="rounded-xl border border-[#1E2F58]/15 bg-white p-5 space-y-3" data-ui-component-content="test-engine-assessment">
+      <section className="rounded-xl border border-[#1E2F58]/15 bg-white p-4 sm:p-5 space-y-3" data-ui-component-content="test-engine-assessment">
         <h2 className="text-xl font-bold" data-ui-copy="heading">Engine assessment</h2>
         <p className="leading-relaxed" data-ui-copy="body">{snapshot.report.matter_snapshot}</p>
         <h3 className="font-semibold" data-ui-copy="heading">What to confirm</h3>

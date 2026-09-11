@@ -78,6 +78,7 @@ describe("independent caller segment", () => {
 
   it("matches the authenticated API question sequence, saved answers and normal lawyer report", async () => {
     const independent = createVoiceScreenTestSession();
+    const initialIdentity = independent.getReport();
     let live: ContinuationSession = {
       state: seedContinuationState({
         callerName: FICTIONAL_CALL.name,
@@ -113,7 +114,19 @@ describe("independent caller segment", () => {
     const response = await POST(request(payload));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual(independent.save(payload));
-    expect(independent.getReport()).toEqual(buildReport(live.state));
+    const independentReport = independent.getReport();
+    const liveReport = buildReport(live.state);
+    // Separate inquiries have separate IDs and creation times. Assessment and
+    // captured information must match, while each inquiry keeps its identity.
+    expect(independentReport.lead_id).toBe(initialIdentity.lead_id);
+    expect(independentReport.submitted_at).toBe(initialIdentity.submitted_at);
+    expect(independentReport.lead_id).toEqual(expect.any(String));
+    expect(Number.isFinite(Date.parse(independentReport.submitted_at))).toBe(true);
+    expect({
+      ...independentReport,
+      lead_id: liveReport.lead_id,
+      submitted_at: liveReport.submitted_at,
+    }).toEqual(liveReport);
     const caller = JSON.stringify(independent.getView());
     expect(caller).not.toContain(FICTIONAL_CALL.name);
     expect(caller).not.toContain(FICTIONAL_CALL.phone);

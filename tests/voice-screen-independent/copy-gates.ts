@@ -8,6 +8,7 @@ export async function assertRenderedCopyGates(page: Page) {
       document.querySelectorAll<HTMLElement>("[data-ui-component-content]"),
     );
     for (const component of components) {
+      if (!component.checkVisibility()) continue;
       const componentName = component.dataset.uiComponentContent ?? "unknown";
       const componentRect = component.getBoundingClientRect();
       const style = getComputedStyle(component);
@@ -19,7 +20,7 @@ export async function assertRenderedCopyGates(page: Page) {
       )) {
         if (copy.closest("[data-ui-component-content]") !== component) continue;
         if (copy.dataset.uiCopyException) continue;
-        if (copy.getClientRects().length === 0) continue;
+        if (!copy.checkVisibility() || copy.getClientRects().length === 0) continue;
         const rect = copy.getBoundingClientRect();
         if (Math.abs(rect.left - innerLeft) > 1.1 || Math.abs(rect.right - innerRight) > 1.1) {
           failures.push(`${componentName}:${copy.dataset.uiCopy} does not use the full content width`);

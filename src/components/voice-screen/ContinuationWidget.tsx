@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DecisionCard } from "@/components/intake-v2/DecisionCard";
 import { Shell } from "@/components/intake-v2/Shell";
 import { TextCard } from "@/components/intake-v2/TextCard";
@@ -69,7 +69,7 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
   const showQuestion = !!item && !completed && !stopped;
 
   return (
-    <div className="min-h-screen bg-[#F4F3EF] [&_main>div]:mx-auto [&_[data-ui-copy]]:[text-wrap:pretty]">
+    <div className="min-h-screen bg-[#F4F3EF] [&_main>div]:mx-auto [&_[data-ui-copy]]:[text-wrap:pretty] max-[480px]:[&_h2]:text-[22px]" style={{ "--cls-font-display": "var(--font-manrope)", "--cls-font-body": '"DM Sans Variable", sans-serif' } as CSSProperties}>
     <Shell
       layout="contained"
       totalScreens={1}
