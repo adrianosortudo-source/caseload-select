@@ -28,4 +28,4 @@
 .result p, .note, .panel[data-ui-component-content="message-test"] > p { text-wrap: pretty; }
 @media (max-width: 360px) { .panel { padding: 16px; } .result, .message { padding: 12px; } }
 
-@media (max-width: 360px) { .result p:not(:last-child) { font-size: 15px; } .message p { text-wrap: pretty; } }
+@media (max-width: 360px) { .result p:not(:last-child) { font-size: 15px; } .message p { font-size: 14px; text-wrap: pretty; } }
