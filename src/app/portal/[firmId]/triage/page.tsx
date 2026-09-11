@@ -23,6 +23,8 @@ import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
 import { sortTriageRows } from "@/lib/triage-sort";
 import TriageRefresh from "@/components/portal/TriageRefresh";
 import TriageQueueClient from "@/components/portal/TriageQueueClient";
+import VoiceRecoveryClient from "@/components/portal/VoiceRecoveryClient";
+import VoiceRecoveryTabCount from "@/components/portal/VoiceRecoveryTabCount";
 import type { QueueCardRow } from "@/components/portal/TriageQueueCard";
 
 export const dynamic = "force-dynamic";
@@ -37,7 +39,7 @@ export const revalidate = 0;
  *              dispositions. Lawyer audit trail across every finalised
  *              lead — passes, referrals, and (future) engine-spam declines.
  */
-type LifecycleView = "active" | "history";
+type LifecycleView = "active" | "history" | "recovery";
 
 const HISTORY_STATUSES = ["passed", "referred", "declined"] as const;
 
@@ -50,13 +52,17 @@ export default async function TriageQueuePage({
 }) {
   const { firmId } = await params;
   const { view: viewRaw } = await searchParams;
-  const view: LifecycleView = viewRaw === "history" ? "history" : "active";
+  const view: LifecycleView = viewRaw === "history" || viewRaw === "recovery" ? viewRaw : "active";
 
   // The layout admits client sessions (for the /m/[matterId] subtree);
   // this lawyer surface excludes them at page level.
   const session = await getPortalSession();
   if (session?.role === "client") {
     redirect("/portal/login");
+  }
+  const isOperator = session?.role === "operator";
+  if (view === "recovery" && !isOperator) {
+    redirect(`/portal/${firmId}/triage`);
   }
 
   // Active tab: single-status equality query. History tab: IN-list across the
@@ -105,10 +111,14 @@ export default async function TriageQueuePage({
 
   return (
     <div className="space-y-5">
-      <TriageRefresh streamCheckUrl={streamCheckUrl} />
+      {view !== "recovery" && <TriageRefresh streamCheckUrl={streamCheckUrl} />}
       <Header count={totalCount} view={view} />
-      <LifecycleTabRow firmId={firmId} view={view} activeCount={activeCount} historyCount={historyCount} />
-      <TriageQueueClient firmId={firmId} rows={allRows} view={view} />
+      <LifecycleTabRow firmId={firmId} view={view} activeCount={activeCount} historyCount={historyCount} showRecovery={isOperator} />
+      {view === "recovery" ? (
+        <VoiceRecoveryClient firmId={firmId} />
+      ) : (
+        <TriageQueueClient firmId={firmId} rows={allRows} view={view} />
+      )}
     </div>
   );
 }
@@ -118,15 +128,20 @@ function LifecycleTabRow({
   view,
   activeCount,
   historyCount,
+  showRecovery,
 }: {
   firmId: string;
   view: LifecycleView;
   activeCount: number;
   historyCount: number;
+  showRecovery: boolean;
 }) {
-  const tabs: Array<{ key: LifecycleView; label: string; count: number; href: string }> = [
+  const tabs: Array<{ key: LifecycleView; label: string; count: number | null; href: string }> = [
     { key: "active", label: "Active", count: activeCount, href: `/portal/${firmId}/triage` },
     { key: "history", label: "History", count: historyCount, href: `/portal/${firmId}/triage?view=history` },
+    ...(showRecovery
+      ? [{ key: "recovery" as const, label: "Recovery", count: null, href: `/portal/${firmId}/triage?view=recovery` }]
+      : []),
   ];
   return (
     <div className="flex items-center gap-1.5 flex-wrap border-b border-black/10 pb-3">
@@ -136,6 +151,7 @@ function LifecycleTabRow({
           <Link
             key={t.key}
             href={t.href}
+            aria-current={isActive ? "page" : undefined}
             className={`
               inline-flex items-center gap-2 px-4 py-2 sm:py-1.5 text-xs font-bold uppercase tracking-wider border transition-colors min-h-[40px] sm:min-h-0
               ${isActive
@@ -145,9 +161,13 @@ function LifecycleTabRow({
             `}
           >
             <span>{t.label}</span>
-            <span className={`font-mono text-[10px] ${isActive ? "text-white/70" : "text-black/40"}`}>
-              {t.count}
-            </span>
+            {t.key === "recovery" ? (
+              <VoiceRecoveryTabCount firmId={firmId} inverted={isActive} />
+            ) : (
+              <span className={`font-mono text-[10px] ${isActive ? "text-white/70" : "text-black/40"}`}>
+                {t.count}
+              </span>
+            )}
           </Link>
         );
       })}
@@ -156,8 +176,8 @@ function LifecycleTabRow({
 }
 
 function Header({ count, view }: { count: number; view: LifecycleView }) {
-  const title = view === "history" ? "Lead history" : "Active queue";
-  const eyebrow = view === "history" ? "Finalised leads" : "Lawyer triage";
+  const title = view === "history" ? "Lead history" : view === "recovery" ? "Voice recovery" : "Active queue";
+  const eyebrow = view === "history" ? "Finalised leads" : view === "recovery" ? "Operator review" : "Lawyer triage";
   const totalNoun = view === "history" ? "finalised" : "waiting";
   return (
     <div className="flex items-end justify-between">
@@ -166,7 +186,11 @@ function Header({ count, view }: { count: number; view: LifecycleView }) {
         <h1 className="text-2xl font-bold text-navy mt-1">{title}</h1>
       </div>
       <div className="text-xs text-black/50 uppercase tracking-wider">
-        {count === 0 ? "Nothing here yet" : `${count} lead${count === 1 ? "" : "s"} ${totalNoun}`}
+        {view === "recovery"
+          ? "Not yet screened"
+          : count === 0
+            ? "Nothing here yet"
+            : `${count} lead${count === 1 ? "" : "s"} ${totalNoun}`}
       </div>
     </div>
   );
