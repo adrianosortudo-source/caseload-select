@@ -134,7 +134,7 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
               Thank you. Your answers are ready for the firm.
             </h2>
             <p
-              className="mt-3 text-[16px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
+              className="mt-3 text-[16px] max-[480px]:text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
               style={{ fontFamily: "var(--cls-font-body, DM Sans, sans-serif)" }}
               data-ui-copy="body"
             >
