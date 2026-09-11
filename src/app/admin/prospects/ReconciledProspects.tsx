@@ -11,6 +11,7 @@ import {
   type PublicProspectContact,
   type ReconciledGtaProspect,
 } from "@/lib/gta-prospect-records";
+import type { DowntownGeographyStatus } from "@/lib/downtown-toronto-cohort";
 import {
   normalizedCityLabel,
   normalizedPracticeAreaLabel,
@@ -98,6 +99,11 @@ const ownerContactLabels: Record<OwnerContactFilter, string> = {
   direct_owner_email: "Direct owner email",
   needs_direct_email: "Needs direct owner email",
 };
+const downtownGeographyLabels: Record<DowntownGeographyStatus, string> = {
+  inside: "Inside Downtown Plan 41",
+  outside: "Outside Downtown Plan 41",
+  needs_manual_review: "Needs Downtown review",
+};
 
 function badgeClass(kind: UnifiedProspectSource | UnifiedIdentityState): string {
   if (kind === "shared_registry" || kind === "linked") return "border-green-200 bg-green-50 text-green-900";
@@ -167,6 +173,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const [source, setSource] = useState<UnifiedProspectSource | "">("");
   const [identity, setIdentity] = useState<UnifiedIdentityState | "">("");
   const [ownerContact, setOwnerContact] = useState<OwnerContactFilter | "">("");
+  const [downtownGeography, setDowntownGeography] = useState<DowntownGeographyStatus | "">("");
   const [page, setPage] = useState(0);
   const [contactStates, setContactStates] = useState<SourceContactStateMap>(new Map());
   const [contactStateLoading, setContactStateLoading] = useState(false);
@@ -232,9 +239,9 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
 
   const filtered = useMemo(() => filterUnifiedProspectState(filterReconciledGtaProspects(records ?? [], {
     query, city, lawyerCountBand: countFilter === "unknown" ? "unknown" : "", lawyerCountRange: selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail,
-    advertisingActivity, gbpOpportunityType,
+    advertisingActivity, gbpOpportunityType, downtownGeography,
     advertisingSourceType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, evidenceFreshness: freshness, cohortId, ownerContact,
-  }), { source, identity, quickView }), [records, query, city, countFilter, selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity, ownerContact]);
+  }), { source, identity, quickView }), [records, query, city, countFilter, selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity, ownerContact, downtownGeography]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const displayedPage = Math.min(page, pageCount - 1);
   const visibleRecords = useMemo(() => filtered.slice(displayedPage * PAGE_SIZE, (displayedPage + 1) * PAGE_SIZE), [displayedPage, filtered]);
@@ -280,13 +287,14 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
     source && { label: `Source: ${sourceLabels[source]}`, clear: () => setSource("") },
     identity && { label: `Identity: ${identityLabels[identity]}`, clear: () => setIdentity("") },
     ownerContact && { label: `Owner contact: ${ownerContactLabels[ownerContact]}`, clear: () => setOwnerContact("") },
+    downtownGeography && { label: `Downtown: ${downtownGeographyLabels[downtownGeography]}`, clear: () => setDowntownGeography("") },
   ].filter(Boolean) as { label: string; clear: () => void }[];
 
   function clearFilters() {
     setQuery(""); setCity(""); setCountFilter(""); setCustomMinimum(""); setCustomMaximum(""); setPracticeArea(""); setAdvertising(""); setGbp("");
     setAdvertisingActivity(""); setAdvertisingSourceType(""); setGbpOpportunityType(""); setWebsiteOpportunityType(""); setIntakeChannel("");
     setLawyerCountConfidence(""); setFreshness(""); setCohortId(""); setHasOwner(""); setHasPublicEmail("");
-    setSource(""); setIdentity(""); setOwnerContact("");
+    setSource(""); setIdentity(""); setOwnerContact(""); setDowntownGeography("");
   }
 
   if (error) return <div className="rounded border border-red-fail/30 bg-white px-4 py-3 text-sm text-red-fail">Firm expansion records could not be loaded: {error}</div>;
@@ -338,6 +346,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
           <SelectField label="Research cohort" value={cohortId} onChange={setCohortId}><option value="">All cohorts</option>{values.cohorts.map((value) => <option key={value} value={value}>Qualified cohort, September 7, 2026</option>)}</SelectField>
           <SelectField label="Owner identified" value={hasOwner === "" ? "" : hasOwner ? "yes" : "no"} onChange={(value) => setHasOwner(value === "" ? "" : value === "yes")}><option value="">Any availability</option><option value="yes">Owner identified</option><option value="no">Owner not identified</option></SelectField>
           <SelectField label="Public email" value={hasPublicEmail === "" ? "" : hasPublicEmail ? "yes" : "no"} onChange={(value) => setHasPublicEmail(value === "" ? "" : value === "yes")}><option value="">Any availability</option><option value="yes">Email available</option><option value="no">Email not available</option></SelectField>
+          <SelectField label="Downtown geometry" value={downtownGeography} onChange={(value) => setDowntownGeography(value as DowntownGeographyStatus | "")}><option value="">Any geometry status</option>{Object.entries(downtownGeographyLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
         </div>
       )}
       <div className="mt-3 grid gap-2 md:grid-cols-2" aria-label="Custom lawyer-count range">
@@ -359,7 +368,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
               const contactState = contactStates.get(record.id);
               return <tr key={record.id} className="border-t border-border-brand align-top">
                 <td className="px-3 py-3 font-semibold text-navy">{record.websiteUrl ? <a href={record.websiteUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">{record.firmName}</a> : record.firmName}<span className="mt-1 block text-xs font-normal text-black/55">{record.city}</span>{record.canonicalDomain && <span className="mt-1 block text-xs font-normal text-black/55">{record.canonicalDomain}</span>}</td>
-                <td className="px-3 py-3"><div className="flex flex-wrap gap-1">{prospectSources(record).map((item) => <span key={item} className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(item)}`}>{sourceLabels[item]}</span>)}<span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(identityState)}`}>{identityLabels[identityState]}</span></div>{record.legacyCrosswalk && <span className="mt-2 block text-xs leading-5 text-black/60">{record.legacyCrosswalk}</span>}{record.reconciliationNote && <span className="mt-1 block text-xs leading-5 text-black/50">{record.reconciliationNote}</span>}</td>
+                <td className="px-3 py-3"><div className="flex flex-wrap gap-1">{prospectSources(record).map((item) => <span key={item} className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(item)}`}>{sourceLabels[item]}</span>)}<span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(identityState)}`}>{identityLabels[identityState]}</span></div>{record.downtownGeography && <span className="mt-2 block text-xs leading-5 text-black/60">{downtownGeographyLabels[record.downtownGeography.status]} · {titleCase(record.downtownGeography.confidence)} confidence · observed {record.downtownGeography.observedOn}</span>}{record.legacyCrosswalk && <span className="mt-2 block text-xs leading-5 text-black/60">{record.legacyCrosswalk}</span>}{record.reconciliationNote && <span className="mt-1 block text-xs leading-5 text-black/50">{record.reconciliationNote}</span>}</td>
                 <td className="px-3 py-3"><span className="font-medium text-black/80">{observedLawyerCountLabel(record)}</span>{dossier && <><span className="mt-1 block text-xs text-black/55">{titleCase(dossier.lawyerCount.confidence)} confidence</span><span className="mt-1 block text-xs text-black/55">Observed {dossier.lawyerCount.observedAt.slice(0, 10)}</span></>}</td>
                 <td className="px-3 py-3 text-xs leading-5 text-black/70">{(() => {
                   if (record.ownerContact) return <><span className="block font-semibold text-navy">{record.ownerContact.ownerName}</span><span className="block text-black/55">{ownerRoleLabel(record.ownerContact.ownerRole)}{record.ownerContact.ownershipConfidence === "leadership_only" ? " (leadership only)" : ""}</span>{record.ownerContact.emailAvailability === "direct_owner_email" && record.ownerContact.emailAddress ? <a href={`mailto:${record.ownerContact.emailAddress}`} className="mt-1 block text-navy underline underline-offset-2">{record.ownerContact.emailAddress}</a> : <span className="mt-1 block text-black/55">{record.ownerContact.emailAvailability === "firm_general_email" ? "Firm general email only" : "Direct email not available"}</span>}</>;

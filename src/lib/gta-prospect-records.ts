@@ -89,6 +89,17 @@ export interface ReconciledGtaProspect {
    */
   ownerContact?: ProspectOwnerContactPresentation | null;
 
+  /**
+   * Private, source-backed Downtown Plan 41 conclusion. A Toronto city label
+   * alone never populates this field.
+   */
+  downtownGeography?: {
+    status: import("@/lib/downtown-toronto-cohort").DowntownGeographyStatus;
+    boundaryGeometrySha256: string;
+    observedOn: string;
+    confidence: "high" | "moderate" | "unknown";
+  } | null;
+
   /** Evidence-backed qualification detail for enriched firm-expansion records. */
   qualifiedDossier?: import("@/lib/qualified-gta-prospects").QualifiedProspectDossier;
 }
@@ -114,6 +125,7 @@ export interface ReconciledProspectFilters {
   evidenceFreshness?: import("@/lib/qualified-gta-prospects").EvidenceFreshness | "";
   cohortId?: string;
   ownerContact?: OwnerContactFilter | "";
+  downtownGeography?: import("@/lib/downtown-toronto-cohort").DowntownGeographyStatus | "";
   referenceDate?: Date;
 }
 
@@ -201,6 +213,7 @@ export function filterReconciledGtaProspects(
     if (filters.ownerContact === "identified" && !record.ownerContact) return false;
     if (filters.ownerContact === "direct_owner_email" && record.ownerContact?.emailAvailability !== "direct_owner_email") return false;
     if (filters.ownerContact === "needs_direct_email" && record.ownerContact?.emailAvailability === "direct_owner_email") return false;
+    if (filters.downtownGeography && record.downtownGeography?.status !== filters.downtownGeography) return false;
     if (filters.hasOwner !== "" && filters.hasOwner !== undefined && Boolean(record.publicContacts?.some((contact) => contact.relationship === "owner" || contact.relationship === "founder")) !== filters.hasOwner) return false;
     if (filters.hasPublicEmail !== "" && filters.hasPublicEmail !== undefined && Boolean(record.publicContacts?.some((contact) => contact.email)) !== filters.hasPublicEmail) return false;
     if (filters.qualification || filters.audit || filters.advertisingActivity || filters.advertisingSourceType || filters.gbpOpportunityType
