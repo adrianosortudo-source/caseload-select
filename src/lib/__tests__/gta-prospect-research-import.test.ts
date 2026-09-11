@@ -3,6 +3,7 @@ import { RECONCILED_GTA_PROSPECTS } from "@/app/admin/prospects/reconciled-prosp
 import {
   buildGtaProspectImportPlan,
   executeGtaProspectImport,
+  reviewGtaProspectImport,
 } from "../gta-prospect-research-import";
 
 function candidate(id: string) {
@@ -101,5 +102,18 @@ describe("GTA prospect research importer", () => {
     await expect(executeGtaProspectImport({ plan, dryRun: true, operatorAuthorized: true, writer })).resolves.toMatchObject({ state: "dry_run" });
     await expect(executeGtaProspectImport({ plan, dryRun: false, operatorAuthorized: false, writer })).resolves.toMatchObject({ state: "unauthorized" });
     expect(writer.apply).not.toHaveBeenCalled();
+  });
+
+  it("classifies only stable source keys as updates and blocks unresolved identity decisions", async () => {
+    const result = await reviewGtaProspectImport([
+      candidate("known-source"),
+      { ...candidate("identity-hold"), reconciliationStatus: "new_pending_identity" },
+      { ...candidate("known-source"), firmName: "Duplicate source key" },
+    ], new Set(["known-source"]));
+    expect(result.summary).toMatchObject({ received: 3, update: 1, duplicate: 1, reviewRequired: 1, eligibleForApply: 1 });
+    expect(result.records).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sourceRecordKey: "known-source", disposition: "update" }),
+      expect.objectContaining({ sourceRecordKey: "identity-hold", disposition: "review_required" }),
+    ]));
   });
 });
