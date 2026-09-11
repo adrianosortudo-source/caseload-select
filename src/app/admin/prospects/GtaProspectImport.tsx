@@ -33,10 +33,9 @@ type ImportReceipt = {
 };
 
 type ImportHistoryRow = {
-  id: string;
   sourceName: string;
   sourceSha256: string;
-  recordCount: number;
+  sourceRecordCount: number;
   state: string;
   appliedAt: string | null;
 };
@@ -213,8 +212,8 @@ export default function GtaProspectImport({ onImported }: { onImported?: () => v
       setHistory(rows.slice(0, 10).flatMap((row): ImportHistoryRow[] => {
         if (!row || typeof row !== "object") return [];
         const item = row as Record<string, unknown>;
-        if (typeof item.id !== "string" || typeof item.sourceName !== "string" || typeof item.sourceSha256 !== "string" || typeof item.recordCount !== "number" || typeof item.state !== "string") return [];
-        return [{ id: item.id, sourceName: item.sourceName, sourceSha256: item.sourceSha256, recordCount: item.recordCount, state: item.state, appliedAt: typeof item.appliedAt === "string" ? item.appliedAt : null }];
+        if (typeof item.sourceName !== "string" || typeof item.sourceSha256 !== "string" || typeof item.sourceRecordCount !== "number" || typeof item.state !== "string") return [];
+        return [{ sourceName: item.sourceName, sourceSha256: item.sourceSha256, sourceRecordCount: item.sourceRecordCount, state: item.state, appliedAt: typeof item.appliedAt === "string" ? item.appliedAt : null }];
       }));
       setHistoryError(null);
     } catch (cause) {
@@ -336,7 +335,7 @@ export default function GtaProspectImport({ onImported }: { onImported?: () => v
           {history === null && !historyError ? <p className="mt-1 w-full text-sm text-black/60" data-ui-copy="body">Loading the last 10 import receipts...</p> : null}
           {historyError ? <p className="mt-2 w-full rounded border border-red-fail/30 bg-red-50 p-3 text-sm text-red-fail" role="status" data-ui-copy="body">Import history is unavailable: {historyError}</p> : null}
           {history && history.length === 0 ? <p className="mt-1 w-full text-sm text-black/60" data-ui-copy="body">No import batches have been recorded yet.</p> : null}
-          {history && history.length > 0 ? <div className="mt-2 overflow-x-auto rounded border border-border-brand"><table className="w-full min-w-[640px] text-left text-sm"><thead className="bg-parchment/45 text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Source</th><th className="px-3 py-2">State</th><th className="px-3 py-2">Records</th><th className="px-3 py-2">Applied</th></tr></thead><tbody>{history.map((row) => <tr key={row.id} className="border-t border-border-brand align-top"><td className="px-3 py-2"><span className="block font-semibold text-navy">{row.sourceName}</span><span className="mt-1 block break-all text-xs text-black/55">{row.sourceSha256}</span></td><td className="px-3 py-2 text-black/70">{stateLabel(row.state)}</td><td className="px-3 py-2 text-black/70">{row.recordCount}</td><td className="px-3 py-2 text-black/70">{dateTime(row.appliedAt)}</td></tr>)}</tbody></table></div> : null}
+          {history && history.length > 0 ? <div className="mt-2 overflow-x-auto rounded border border-border-brand"><table className="w-full min-w-[640px] text-left text-sm"><thead className="bg-parchment/45 text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Source</th><th className="px-3 py-2">State</th><th className="px-3 py-2">Records</th><th className="px-3 py-2">Applied</th></tr></thead><tbody>{history.map((row) => <tr key={`${row.sourceName}-${row.sourceSha256}`} className="border-t border-border-brand align-top"><td className="px-3 py-2"><span className="block font-semibold text-navy">{row.sourceName}</span><span className="mt-1 block break-all text-xs text-black/55">{row.sourceSha256}</span></td><td className="px-3 py-2 text-black/70">{stateLabel(row.state)}</td><td className="px-3 py-2 text-black/70">{row.sourceRecordCount}</td><td className="px-3 py-2 text-black/70">{dateTime(row.appliedAt)}</td></tr>)}</tbody></table></div> : null}
         </div>
       </div>
     </section>

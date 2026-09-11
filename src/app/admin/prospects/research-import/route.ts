@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 const MAX_RECORDS = 2_000;
 const DEFAULT_SOURCE_NAME = "gta-operator-upload";
 const noStore = { "Cache-Control": "private, no-store" };
+const unauthorizedStatus = { status: 401 };
 
 type ImportRequest = Readonly<{
   sourceName: string;
@@ -43,9 +44,9 @@ async function review(request: ImportRequest) {
 
 /** Operator-only, read-only metadata for the last ten reviewed import batches. */
 export async function GET() {
-  if (!(await getOperatorSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStore });
+  if (!(await getOperatorSession())) return NextResponse.json({ error: "Unauthorized" }, { ...unauthorizedStatus, headers: noStore });
   try {
-    return NextResponse.json({ batches: await listGtaProspectImportHistoryForOperator() }, { headers: noStore });
+    return NextResponse.json({ history: await listGtaProspectImportHistoryForOperator() }, { headers: noStore });
   } catch (error) {
     console.error("[gta-prospect-research] operator import history failed", error);
     return NextResponse.json({ error: "GTA prospect import history could not be loaded." }, { status: 503, headers: noStore });
@@ -58,7 +59,7 @@ export async function GET() {
  * returns raw audit records, service credentials, CRM data, or outreach state.
  */
 export async function POST(request: Request) {
-  if (!(await getOperatorSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStore });
+  if (!(await getOperatorSession())) return NextResponse.json({ error: "Unauthorized" }, { ...unauthorizedStatus, headers: noStore });
   const parsed = await requestPayload(request);
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: parsed.status, headers: noStore });
   try {
@@ -84,7 +85,7 @@ export async function POST(request: Request) {
  * into a write by changing its payload or omitting an identity-review gate.
  */
 export async function PUT(request: Request) {
-  if (!(await getOperatorSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStore });
+  if (!(await getOperatorSession())) return NextResponse.json({ error: "Unauthorized" }, { ...unauthorizedStatus, headers: noStore });
   const parsed = await requestPayload(request);
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: parsed.status, headers: noStore });
   try {

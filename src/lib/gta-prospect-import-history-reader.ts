@@ -32,7 +32,7 @@ function parseItem(value: unknown): GtaProspectImportHistoryItem {
   if (unexpected.length) throw projectionError(`unexpected column(s): ${unexpected.join(", ")}`);
   if (typeof row.source_name !== "string" || !/^[-_a-z0-9]{1,200}$/.test(row.source_name)) throw projectionError("source_name is invalid");
   if (typeof row.source_sha256 !== "string" || !/^[0-9a-f]{64}$/.test(row.source_sha256)) throw projectionError("source_sha256 is invalid");
-  if (!Number.isInteger(row.source_record_count) || Number(row.source_record_count) < 0) throw projectionError("source_record_count is invalid");
+  if (typeof row.source_record_count !== "number" || !Number.isInteger(row.source_record_count) || row.source_record_count < 0) throw projectionError("source_record_count is invalid");
   if (row.state !== "staged" && row.state !== "applied" && row.state !== "failed") throw projectionError("state is invalid");
   if (row.applied_at !== null && !isTimestamp(row.applied_at)) throw projectionError("applied_at is invalid");
   if (!isTimestamp(row.created_at)) throw projectionError("created_at is invalid");

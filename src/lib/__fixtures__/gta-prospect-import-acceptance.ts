@@ -55,7 +55,6 @@ export type ProspectImportAcceptanceCase = Readonly<{
 }>;
 
 const row = (overrides: Partial<ProspectImportSourceRow> & Pick<ProspectImportSourceRow, "id">): ProspectImportSourceRow => ({
-  id: overrides.id,
   firmName: "Example Advocacy Law",
   city: "Toronto",
   officeCities: ["Toronto"],
@@ -76,6 +75,7 @@ const row = (overrides: Partial<ProspectImportSourceRow> & Pick<ProspectImportSo
   gbpSourceUrl: null,
   publicContacts: [],
   ...overrides,
+  id: overrides.id,
 });
 
 export const GTA_PROSPECT_IMPORT_ACCEPTANCE_CASES: readonly ProspectImportAcceptanceCase[] = Object.freeze([
