@@ -23,7 +23,7 @@ describe("GTA prospect importer operator UI", () => {
   it("requires a fresh server review and an explicit confirmation before apply", () => {
     expect(component).toContain("preview.summary.reviewRequired === 0");
     expect(component).toContain("I reviewed this package and want to import only the server-approved records.");
-    expect(component).toContain('fetch("/admin/prospects/research-import/apply"');
+    expect(component).toContain('fetch("/admin/prospects/research-import", { method: "PUT"');
     expect(component).toContain("Import stays disabled until every invalid or identity-review row is resolved");
   });
 
