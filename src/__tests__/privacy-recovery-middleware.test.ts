@@ -4,7 +4,7 @@ vi.mock('@/lib/app-origins', () => ({
   isOperatorUiPath: (pathname: string) => [
     '/admin', '/operator', '/analytics', '/conflict-register', '/domains',
     '/firms', '/leads', '/onboarding', '/pipeline', '/reviews', '/sequences',
-    '/settings',
+    '/settings', '/demo/prospect',
   ].some((root) => pathname === root || pathname.startsWith(`${root}/`)),
 }));
 
@@ -16,6 +16,8 @@ describe('privacy recovery middleware gate', () => {
     expect(isPrivacyRecoveryProtectedPath('/operator/triage')).toBe(true);
     expect(isPrivacyRecoveryProtectedPath('/conflict-register')).toBe(true);
     expect(isPrivacyRecoveryProtectedPath('/settings/security')).toBe(true);
+    expect(isPrivacyRecoveryProtectedPath('/demo/prospect/walker-law')).toBe(true);
+    expect(isPrivacyRecoveryProtectedPath('/demo/public-sample')).toBe(false);
     expect(isPrivacyRecoveryProtectedPath('/portal/firm-1')).toBe(true);
     expect(isPrivacyRecoveryProtectedPath('/api/admin/firms')).toBe(true);
     expect(isPrivacyRecoveryProtectedPath('/')).toBe(false);

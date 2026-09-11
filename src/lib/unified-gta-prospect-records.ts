@@ -49,6 +49,14 @@ export function legacyGtaDirectoryProspects(): readonly ReconciledGtaProspect[] 
     advertisingSourceUrl: null,
     gbpEvidence: source.observations.gbpObservedOn ? "observed" : "unknown",
     gbpSourceUrl: null,
+    publicContacts: source.raw.email.trim() ? [{
+      name: null,
+      relationship: "firm_inbox",
+      email: source.raw.email.trim(),
+      emailKind: "general_firm",
+      sourceUrl: null,
+      observedAt: source.observations.lsoObservedOn,
+    }] : [],
   }));
 }
 

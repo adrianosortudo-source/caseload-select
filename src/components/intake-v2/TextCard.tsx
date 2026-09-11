@@ -10,8 +10,11 @@
 import { useState } from "react";
 import type { ScreenItem } from "./types";
 import { VoiceInput } from "./VoiceInput";
+import { useAutosizeTextarea } from "./useAutosizeTextarea";
 
 interface Props {
+  /** Natural-height input for a widget placed inside a prospect mockup. */
+  contained?: boolean;
   item: ScreenItem;
   value?: string;
   onChange: (next: string) => void;
@@ -46,12 +49,14 @@ export function TextCard({
   examplePrompts,
   examplePromptsLabel = "You can start with:",
   voiceHint = "speak your answer instead of typing it",
+  contained = false,
 }: Props) {
   const [focused, setFocused] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [voiceAvailable, setVoiceAvailable] = useState(false);
   const text = typeof value === "string" ? value : "";
   const canSubmit = text.trim().length >= minChars;
+  const textareaRef = useAutosizeTextarea(contained, text);
 
   function handleTextInput(next: string) {
     onChange(next);
@@ -71,8 +76,9 @@ export function TextCard({
 
   return (
     <div className="flex flex-col gap-7">
-      <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-2.5" data-ui-component-content={contained ? "demo-text-prompt" : undefined}>
         <h2
+          data-ui-copy={contained ? "heading" : undefined}
           className="text-[24px] sm:text-[26px] leading-tight font-extrabold text-balance text-[var(--cls-text,#1E2F58)]"
           style={{ fontFamily: fontDisplay }}
         >
@@ -80,6 +86,7 @@ export function TextCard({
         </h2>
         {item.description && (
           <p
+            data-ui-copy={contained ? "body" : undefined}
             className="text-[15px] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_65%,transparent)] leading-relaxed"
             style={{ fontFamily: fontBody }}
           >
@@ -89,6 +96,7 @@ export function TextCard({
       </div>
 
       <textarea
+        ref={textareaRef}
         id="cls-text-input"
         name="cls-text-input"
         aria-label={item.question}
@@ -108,7 +116,7 @@ export function TextCard({
           "text-[var(--cls-text,#1E2F58)] placeholder:text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_35%,transparent)]",
           "focus:outline-none",
         ].join(" ")}
-        style={{ fontFamily: fontBody }}
+        style={{ fontFamily: fontBody, ...(contained ? { overflow: "hidden" } : {}) }}
       />
 
       {enableVoice && (

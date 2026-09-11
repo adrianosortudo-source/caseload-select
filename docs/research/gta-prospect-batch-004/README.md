@@ -4,7 +4,8 @@ Read-only, first-party public-web roster staging from a targeted north-GTA/Halto
 
 ## Status and scope
 
-- **15 candidates; 12 exact, 2 at-least, and 1 uncertain roster observations; 0 accepted.** Every row has `workflow_status=candidate` and `accepted=false`.
+- **15 historical candidates; 12 exact, 2 at-least, and 1 uncertain roster observations.** The source records remain immutable staging evidence with `workflow_status=candidate` and `accepted=false`.
+- A later controlled import included eight of these records in a 103-record governed research batch, applied on 2026-09-07. This is an import receipt, not a retroactive change to the staged source records. See `PRODUCTION_RECEIPT_2026-09-10.md`.
 - This package is not a CRM import, outreach list, priority ranking, contact list, legal-standing assessment, or authorization to contact a firm.
 - All evidence is a public first-party page associated with the named firm. Search results were discovery aids only; the linked roster page is the row evidence. Where a firm publishes a roster on a distinct hosted domain, the canonical firm domain and the observed roster URL remain separate fields.
 - No LSO pages or automation, bot bypass, form, chat, scheduling control, contact action, CRM, import, paid-data source, or private data was used.

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   BRAZILIAN_LAWYER_PROSPECTS,
   BUCKET_LABELS,
@@ -10,7 +10,15 @@ import {
   type DomainRelationshipState,
   type OwnerAuthorityCode,
   type ProspectBucket,
+  type ProspectResearch,
 } from "@/lib/prospect-intelligence";
+import ProspectActivityPanel from "../agency-crm/ProspectActivityPanel";
+import { ProspectContactStatus } from "./ProspectContactStatus";
+import {
+  BRAZILIAN_PROSPECT_SOURCE_SYSTEM,
+  fetchSourceContactStates,
+  type SourceContactStateMap,
+} from "./prospect-contact-operations";
 
 const buckets: Array<ProspectBucket | "all"> = ["all", "explicit", "portuguese", "affiliation_review", "dnc"];
 const ownerCodes: Array<OwnerAuthorityCode | "all"> = ["all", "O1", "O2", "O3", "O4", "O5"];
@@ -32,10 +40,32 @@ export default function BrazilianProspects() {
   const [query, setQuery] = useState("");
   const [bucket, setBucket] = useState<ProspectBucket | "all">("explicit");
   const [ownerCode, setOwnerCode] = useState<OwnerAuthorityCode | "all">("all");
+  const [contactStates, setContactStates] = useState<SourceContactStateMap>(new Map());
+  const [contactStateLoading, setContactStateLoading] = useState(false);
+  const [contactStateError, setContactStateError] = useState<string | null>(null);
+  const [selectedContact, setSelectedContact] = useState<ProspectResearch | null>(null);
+  const [contactRefreshToken, setContactRefreshToken] = useState(0);
   const rows = useMemo(() => {
     const filtered = bucket === "all" ? filterBrazilianProspects(query) : filterBrazilianProspects(query, bucket);
     return ownerCode === "all" ? filtered : filtered.filter((row) => row.cohort.ownerAuthority === ownerCode);
   }, [bucket, ownerCode, query]);
+
+  useEffect(() => {
+    const sourceRecordKeys = rows.map((row) => row.sourceRecordId ?? "").filter(Boolean);
+    if (sourceRecordKeys.length === 0) {
+      setContactStates(new Map());
+      setContactStateError(null);
+      return;
+    }
+    const controller = new AbortController();
+    setContactStateLoading(true);
+    setContactStateError(null);
+    fetchSourceContactStates(BRAZILIAN_PROSPECT_SOURCE_SYSTEM, sourceRecordKeys, controller.signal)
+      .then((states) => setContactStates(states))
+      .catch((cause: Error) => { if (cause.name !== "AbortError") { setContactStates(new Map()); setContactStateError(cause.message); } })
+      .finally(() => { if (!controller.signal.aborted) setContactStateLoading(false); });
+    return () => controller.abort();
+  }, [contactRefreshToken, rows]);
   const reset = () => {
     setQuery("");
     setBucket("explicit");
@@ -117,6 +147,7 @@ export default function BrazilianProspects() {
               <th className="p-3">Owner research state</th>
               <th className="p-3">Evidence and unknowns</th>
               <th className="p-3">Public contact and provenance</th>
+              <th className="p-3">Contact</th>
             </tr>
           </thead>
           <tbody>
@@ -162,11 +193,36 @@ export default function BrazilianProspects() {
                     {row.cohort.domainRelationships.length ? <ul className="mt-1 space-y-1">{row.cohort.domainRelationships.map((relationship) => <li key={relationship.url}><a className="break-all text-blue-700 underline" href={relationship.url} target="_blank" rel="noreferrer">{relationship.host}</a> <span className="text-black/50">({domainStateLabels[relationship.state]})</span></li>)}</ul> : <p>{empty}</p>}
                   </div>
                 </td>
+                <td className="p-3"><ProspectContactStatus
+                  state={row.sourceRecordId ? contactStates.get(row.sourceRecordId) : undefined}
+                  loading={contactStateLoading && Boolean(row.sourceRecordId)}
+                  error={contactStateError}
+                  sourceRecordKey={row.sourceRecordId}
+                  onOpenHistory={() => setSelectedContact(row)}
+                /></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {selectedContact && selectedContact.sourceRecordId && <div className="mt-4"><ProspectActivityPanel
+        prospectId={selectedContact.sourceRecordId}
+        sourceSystem={BRAZILIAN_PROSPECT_SOURCE_SYSTEM}
+        sourceRecordKey={selectedContact.sourceRecordId}
+        firmName={selectedContact.firm}
+        contactName={selectedContact.name}
+        contactEmail={selectedContact.email ?? null}
+        sourceUrl={selectedContact.website ?? selectedContact.cohort.domainRelationships.find((relationship) => relationship.state === "current_primary" || relationship.state === "professional_profile" || relationship.state === "contact_source")?.url ?? null}
+        sourcePayload={{ source_record_key: selectedContact.sourceRecordId, person_id: selectedContact.cohort.canonicalPersonId, firm_id: selectedContact.cohort.canonicalFirmId, person_name: selectedContact.name, firm_name: selectedContact.firm }}
+        provisioningBasis={`Operator-confirmed Brazilian owner-cohort source record. Authority evidence: ${selectedContact.cohort.ownerAuthorityEvidence.join('; ') || 'reviewed cohort record'}. No identity match is inferred by this action.`}
+        initialContactability={contactStates.get(selectedContact.sourceRecordId)?.contactability}
+        initialNextAction={contactStates.get(selectedContact.sourceRecordId)?.next_action}
+        initialNextActionDue={contactStates.get(selectedContact.sourceRecordId)?.next_action_due}
+        open={Boolean(selectedContact)}
+        onClose={() => setSelectedContact(null)}
+        onActivitySaved={() => { setSelectedContact(null); setContactRefreshToken((current) => current + 1); }}
+        onConversationUpdated={() => setContactRefreshToken((current) => current + 1)}
+      /></div>}
     </div>
   );
 }

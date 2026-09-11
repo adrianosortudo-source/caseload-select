@@ -69,6 +69,10 @@ describe("application origins", () => {
   it("limits operator navigation classification to UI surfaces", () => {
     expect(isOperatorUiPath("/admin/triage")).toBe(true);
     expect(isOperatorUiPath("/operator/login")).toBe(true);
+    expect(isOperatorUiPath("/demo/prospect")).toBe(true);
+    expect(isOperatorUiPath("/demo/prospect/walker-law")).toBe(true);
+    expect(isOperatorUiPath("/demo")).toBe(false);
+    expect(isOperatorUiPath("/demo/prospecting")).toBe(false);
     expect(isOperatorUiPath("/pipeline")).toBe(true);
     expect(isOperatorUiPath("/pipeline-stage")).toBe(false);
     expect(isOperatorUiPath("/api/operator/logout")).toBe(false);

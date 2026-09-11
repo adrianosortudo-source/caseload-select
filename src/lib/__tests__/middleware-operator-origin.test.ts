@@ -27,6 +27,20 @@ describe("operator origin middleware policy", () => {
     expect(res.headers.get("location")).toBe("https://admin.caseloadselect.ca/pipeline?band=A");
   });
 
+  it("moves standalone prospect demonstrations to the admin host", async () => {
+    const res = await middleware(request("https://app.caseloadselect.ca/demo/prospect/walker-law?view=split"));
+    expect(res.headers.get("location")).toBe(
+      "https://admin.caseloadselect.ca/demo/prospect/walker-law?view=split",
+    );
+  });
+
+  it("serves standalone prospect demonstrations on the admin host", async () => {
+    const res = await middleware(request("https://admin.caseloadselect.ca/demo/prospect/walker-law"));
+    expect(res.headers.get("location")).toBeNull();
+    expect(res.headers.get("x-middleware-next")).toBe("1");
+    expect(res.headers.get("x-robots-tag")).toBe("noindex, nofollow, noarchive");
+  });
+
   it("lands the admin origin root on the console", async () => {
     const res = await middleware(request("https://admin.caseloadselect.ca/?firm=firm-1"));
     expect(res.headers.get("location")).toBe("https://admin.caseloadselect.ca/admin?firm=firm-1");

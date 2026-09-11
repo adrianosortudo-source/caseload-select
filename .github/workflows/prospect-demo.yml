@@ -1,0 +1,38 @@
+name: Prospect demo browser checks
+
+on:
+  pull_request:
+    paths:
+      - 'src/components/prospect-demo/**'
+      - 'src/components/intake-v2/**'
+      - 'src/lib/prospect-demo*/**'
+      - 'src/app/admin/prospect-demos/**'
+      - 'src/app/demo/prospect/**'
+      - 'src/lib/app-origins.ts'
+      - 'src/middleware.ts'
+      - 'public/prospect-demos/**'
+      - 'tests/prospect-demo/**'
+      - 'playwright.prospect-demo.config.ts'
+      - '.github/workflows/prospect-demo.yml'
+  workflow_dispatch:
+
+jobs:
+  browser:
+    name: Prospect demo rendered journey
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npx playwright test --config=playwright.prospect-demo.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: prospect-demo-rendered-evidence
+          path: test-results/prospect-demo/
+          retention-days: 7

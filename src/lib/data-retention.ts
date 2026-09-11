@@ -69,6 +69,7 @@ const LEGACY_SESSION_PII_REPLACEMENT = {
 };
 
 export interface RetentionResult {
+  voice_screen_inquiries_purged?: number;
   leads_anonymized: number;
   sessions_cleared: number;
   screened_leads_anonymized: number;
@@ -101,6 +102,20 @@ export async function runDataRetention(): Promise<RetentionResult> {
     errors: [],
   };
   const now = new Date();
+  // Separate gate keeps the existing retention journey unchanged by default,
+  // and permits cleanup to continue after new Voice-to-Screen intake is disabled.
+  if (process.env.V2S_RETENTION_ENABLED === "true") {
+    result.voice_screen_inquiries_purged = 0;
+    try {
+      for (let batch = 0; batch < 20; batch++) {
+        const { data, error } = await supabase.rpc("v2s_purge_expired", { p_before: now.toISOString(), p_limit: 500 });
+        if (error || typeof data !== "number") throw new Error("voice_screen_retention_unavailable");
+        result.voice_screen_inquiries_purged += data;
+        if (data < 500) break;
+        if (batch === 19) result.errors.push("voice_screen_retention_batch_limit_reached");
+      }
+    } catch { result.errors.push("voice_screen_retention_unavailable"); }
+  }
 
   // Resume non-transactional cleanup from durable pending requests before
   // selecting new retention candidates. This closes the crash gap where the

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Shell } from "@/components/intake-v2/Shell";
+import { Shell, type ShellLayout } from "@/components/intake-v2/Shell";
 import { TextCard } from "@/components/intake-v2/TextCard";
 import { DecisionCard } from "@/components/intake-v2/DecisionCard";
 import type { ScreenItem } from "@/components/intake-v2/types";
@@ -27,7 +27,66 @@ import { llmExtract, mergeLlmResults } from "@/lib/screen-engine/llm/extractor";
 import { buildReport } from "@/lib/screen-engine/report";
 import { renderBriefHtmlServer } from "@/lib/screen-brief-html";
 import { getWebAttribution } from "@/lib/screen-engine/persist";
-import type { EngineState, MatterType, SlotDefinition } from "@/lib/screen-engine/types";
+import type { EngineState, LawyerReport, MatterType, SlotDefinition } from "@/lib/screen-engine/types";
+import { answerDemoState, buildDemoReport, startDemoState } from "@/lib/screen-demo";
+
+export type ScreenWidgetStage = "kickoff" | "questions" | "contact" | "done";
+export type ScreenWidgetRuntime = "live" | "demo" | "demo-live-ai";
+export type ScreenWidgetExtractionStatus = "not-requested" | "reading" | "live" | "fallback";
+
+/**
+ * Runtime capabilities are deliberately defined at the widget boundary so a
+ * presentation route cannot accidentally inherit a real intake side effect.
+ * `demo` uses a deterministic browser fixture. `demo-live-ai` may call only
+ * `/api/extract`; it never saves a lead, sends a submission, records audio,
+ * collects consent, or notifies a host page that a lead completed.
+ */
+export const SCREEN_WIDGET_EXECUTION_POLICY: Readonly<Record<ScreenWidgetRuntime, {
+  usesFixtureEngine: boolean;
+  allowsExtraction: boolean;
+  allowsPersistence: boolean;
+  allowsVoice: boolean;
+  allowsConsent: boolean;
+  isGuidedDemo: boolean;
+}>> = {
+  live: {
+    usesFixtureEngine: false,
+    allowsExtraction: true,
+    allowsPersistence: true,
+    allowsVoice: true,
+    allowsConsent: true,
+    isGuidedDemo: false,
+  },
+  demo: {
+    usesFixtureEngine: true,
+    allowsExtraction: false,
+    allowsPersistence: false,
+    allowsVoice: false,
+    allowsConsent: false,
+    isGuidedDemo: true,
+  },
+  "demo-live-ai": {
+    usesFixtureEngine: false,
+    allowsExtraction: true,
+    allowsPersistence: false,
+    allowsVoice: false,
+    allowsConsent: false,
+    isGuidedDemo: true,
+  },
+};
+
+export interface ScreenDemoView {
+  stage: ScreenWidgetStage;
+  state: EngineState | null;
+  currentQuestion: ScreenItem | null;
+  report: LawyerReport | null;
+  /** Indicates whether the live-AI demonstration is using extraction or its deterministic fallback. */
+  extraction: {
+    status: ScreenWidgetExtractionStatus;
+    reason?: string;
+  };
+  runtime: ScreenWidgetRuntime;
+}
 
 export interface ScreenEnginePublicWidgetProps {
   firmId: string;
@@ -69,9 +128,22 @@ export interface ScreenEnginePublicWidgetProps {
     status: string;
     response: unknown;
   }) => void;
+  /**
+   * `demo` is a deterministic guided fixture. `demo-live-ai` calls only the
+   * extraction endpoint and stays presentation-only: no persistence,
+   * submission, audio transcription, consent capture, or host completion
+   * signal can occur.
+   */
+  runtime?: ScreenWidgetRuntime;
+  /** Content-sized widget frame for a mockup column or card. Defaults to the existing viewport-aware frame. */
+  layout?: ShellLayout;
+  /** Read-only state bridge for the separate sales presentation panel. */
+  onDemoStateChange?: (view: ScreenDemoView) => void;
+  /** Optional fictional opening used by the presentation toolbar. */
+  initialDescription?: string;
 }
 
-type Stage = "kickoff" | "questions" | "contact" | "done";
+type Stage = ScreenWidgetStage;
 
 function resolveSubmitEndpoint(
   firmId: string,
@@ -174,14 +246,17 @@ function FreeTextAnswerCard({
   item,
   onSubmit,
   submitLabel = "Continue",
+  contained = false,
 }: {
   item: ScreenItem;
   onSubmit: (value: string) => void;
   submitLabel?: string;
+  contained?: boolean;
 }) {
   const [value, setValue] = useState("");
   return (
     <TextCard
+      contained={contained}
       item={item}
       value={value}
       onChange={setValue}
@@ -203,9 +278,15 @@ export function ScreenEnginePublicWidget({
   consentCaptureEnabled = false,
   submitEndpoint,
   onSubmitResult,
+  runtime = "live",
+  layout = "default",
+  onDemoStateChange,
+  initialDescription = "",
 }: ScreenEnginePublicWidgetProps) {
+  const policy = SCREEN_WIDGET_EXECUTION_POLICY[runtime];
+  const isDemo = policy.isGuidedDemo;
   const [stage, setStage] = useState<Stage>("kickoff");
-  const [description, setDescription] = useState("");
+  const [description, setDescription] = useState(initialDescription);
   const [state, setState] = useState<EngineState | null>(null);
   const [history, setHistory] = useState<EngineState[]>([]);
   const [isReading, setIsReading] = useState(false);
@@ -223,8 +304,11 @@ export function ScreenEnginePublicWidget({
   const [clarifyAttempts, setClarifyAttempts] = useState(0);
   const [clarifyFallback, setClarifyFallback] = useState(false);
   const [consentChecked, setConsentChecked] = useState(false);
+  const [extraction, setExtraction] = useState<ScreenDemoView["extraction"]>({
+    status: "not-requested",
+  });
 
-  const next = state ? getNextStep(state) : null;
+  const next = useMemo(() => state ? getNextStep(state) : null, [state]);
 
   // Drop-off checkpoint (qualification audit F2/F6/item 5, 2026-07-02).
   // Fires a best-effort, fire-and-forget POST after every turn advance
@@ -235,6 +319,7 @@ export function ScreenEnginePublicWidget({
   // does not create a session row. Never surfaces a failure to the UI:
   // this is telemetry for the abandonment sweep, not the intake path.
   useEffect(() => {
+    if (!policy.allowsPersistence) return;
     if (!state || persistedRef.current) return;
     const hasProgress = Object.keys(state.slot_meta ?? {}).length > 0;
     if (!hasProgress) return;
@@ -282,6 +367,29 @@ export function ScreenEnginePublicWidget({
     return slotToItem(next.slot, language, i18n);
   }, [next, language, i18n]);
 
+  const demoReport = useMemo(() => {
+    if (!isDemo || !state) return null;
+    if (
+      stage !== "done" &&
+      next?.type !== "present_insight" &&
+      next?.type !== "capture_contact" &&
+      next?.type !== "stop"
+    ) return null;
+    return buildDemoReport(state);
+  }, [isDemo, stage, state, next?.type]);
+
+  useEffect(() => {
+    if (!isDemo) return;
+    onDemoStateChange?.({
+      stage,
+      state,
+      currentQuestion: currentItem,
+      report: demoReport,
+      extraction,
+      runtime,
+    });
+  }, [isDemo, runtime, onDemoStateChange, stage, state, currentItem, demoReport, extraction]);
+
   async function start() {
     await runStart(description);
   }
@@ -294,18 +402,48 @@ export function ScreenEnginePublicWidget({
     const text = rawText.trim();
     if (text.length < 10) return;
 
+    if (policy.usesFixtureEngine) {
+      setState(startDemoState(text));
+      setStage("questions");
+      setIsReading(false);
+      setExtraction({ status: "not-requested" });
+      return;
+    }
+
     let nextState = initialiseState(text);
     nextState = runEvidencePass(text, nextState);
     nextState = scoreState(nextState);
     setState(nextState);
     setStage("questions");
     setIsReading(true);
+    if (isDemo) setExtraction({ status: "reading" });
+
+    if (!policy.allowsExtraction) {
+      setIsReading(false);
+      return;
+    }
 
     try {
       const extracted = await llmExtract(text, nextState);
       if (extracted.mode === "live") {
         nextState = scoreState(mergeLlmResults(nextState, extracted.extracted));
         setState(nextState);
+      }
+      if (isDemo) {
+        setExtraction(
+          extracted.mode === "live"
+            ? { status: "live" }
+            : { status: "fallback", reason: extracted.reason ?? "Live extraction was unavailable." },
+        );
+      }
+    } catch (error) {
+      // llmExtract normally resolves failures as { mode: "error" }, but keep
+      // the presentation state truthful if that contract is ever violated.
+      if (isDemo) {
+        setExtraction({
+          status: "fallback",
+          reason: error instanceof Error ? error.message : "Live extraction was unavailable.",
+        });
       }
     } finally {
       setIsReading(false);
@@ -348,7 +486,9 @@ export function ScreenEnginePublicWidget({
     if (!state) return;
     const value = Array.isArray(rawValue) ? rawValue.join(", ") : rawValue;
     setHistory((items) => [...items, state]);
-    mutate(applyAnswer(state, slotId, value));
+    mutate(policy.usesFixtureEngine
+      ? answerDemoState(state, slotId, value)
+      : applyAnswer(state, slotId, value));
   }
 
   function back() {
@@ -372,6 +512,7 @@ export function ScreenEnginePublicWidget({
   }
 
   async function persist(finalState: EngineState) {
+    if (!policy.allowsPersistence) return;
     if (persistedRef.current) return;
     persistedRef.current = true;
     const report = buildReport(finalState);
@@ -448,6 +589,15 @@ export function ScreenEnginePublicWidget({
 
   function submitContact(form: FormData) {
     if (!state) return;
+    if (!policy.allowsPersistence) {
+      // The contact screen remains part of the guided presentation so a
+      // prospect can see the full experience. Its fields intentionally never
+      // enter engine state, trigger a callback, or leave the browser.
+      setHistory((items) => [...items, state]);
+      setStage("done");
+      setPersistStatus("Demo only");
+      return;
+    }
     let nextState = state;
     const answers = {
       client_name: String(form.get("client_name") ?? "").trim(),
@@ -457,7 +607,11 @@ export function ScreenEnginePublicWidget({
     if (!answers.client_name || (!answers.client_phone && !answers.client_email)) return;
     setHistory((items) => [...items, state]);
     for (const [slotId, value] of Object.entries(answers)) {
-      if (value) nextState = applyAnswer(nextState, slotId, value);
+      if (value) {
+        nextState = policy.usesFixtureEngine
+          ? answerDemoState(nextState, slotId, value)
+          : applyAnswer(nextState, slotId, value);
+      }
     }
     nextState = scoreState(nextState);
     setState(nextState);
@@ -483,15 +637,18 @@ export function ScreenEnginePublicWidget({
     // a workflow step ("Continue matter review"), not a generic CTA, so
     // visitors understand they have not finished submitting yet.
     return (
-      <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel}>
+      <Shell totalScreens={1} currentScreen={0} roundLabel={roundLabel} layout={layout}>
         <TextCard
+          contained={layout === "contained"}
           item={{
             id: "situation",
             question: ws("kickoff_heading", "Tell us how a lawyer can help you today."),
-            description: ws(
-              "kickoff_helper",
-              `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, the Screen usually asks ${WEB_DISCOVERY_TARGET_MIN}–${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`,
-            ),
+            description: isDemo
+              ? `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, we usually ask ${WEB_DISCOVERY_TARGET_MIN} to ${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`
+              : ws(
+                  "kickoff_helper",
+                  `A few plain-language sentences are enough. Include what is happening, any deadline, and the documents you have. After that, the Screen usually asks ${WEB_DISCOVERY_TARGET_MIN}–${WEB_DISCOVERY_TARGET_MAX} short questions and never more than ${WEB_DISCOVERY_HARD_CAP}.`,
+                ),
             presentation: "text",
             placeholder: ws(
               "kickoff_placeholder",
@@ -503,7 +660,7 @@ export function ScreenEnginePublicWidget({
           onSubmit={start}
           submitLabel={ws("kickoff_submit", "Continue matter review")}
           minChars={10}
-          enableVoice
+          enableVoice={policy.allowsVoice}
           voiceHint={ws("voice_hint", "speak your answer instead of typing it")}
           examplePrompts={[
             ws("kickoff_example_1", "I am about to sign..."),
@@ -524,7 +681,7 @@ export function ScreenEnginePublicWidget({
   const fontBody = "var(--cls-font-body, DM Sans, sans-serif)";
 
   if (stage === "done" || next?.type === "stop") {
-    if (next?.type === "stop") void persist(state);
+    if (next?.type === "stop" && policy.allowsPersistence) void persist(state);
     // "Professional Corporation" is the formal LSO legal-entity suffix
     // on the firm's registered name; strip it for the user-facing
     // confirmation so the prospect sees the trade name (e.g. "DRG Law")
@@ -536,6 +693,9 @@ export function ScreenEnginePublicWidget({
       "A lawyer at {firmName} will read what you shared and reach out directly to talk through the legal side.",
     );
     const doneBody = doneBodyTemplate.replace(/\{firmName\}/g, trimmedFirmName);
+    const visibleDoneBody = isDemo
+      ? "The firm review brief is ready beside the intake. Nothing was saved or sent."
+      : doneBody;
     // Translate the "submitted" sentinel; pass other reason strings
     // through verbatim (they are server-supplied and not user-facing
     // copy that we author).
@@ -549,6 +709,7 @@ export function ScreenEnginePublicWidget({
         roundLabel={ws("shell_round_submitted", "Submitted")}
         onBack={back}
         backLabel={backLabel}
+        layout={layout}
       >
         <div className="flex flex-col items-center text-center gap-5 py-10">
           <div className="w-16 h-16 rounded-full bg-[var(--cls-accent,#1E2F58)] text-[var(--cls-accent-text,#FFFFFF)] flex items-center justify-center">
@@ -557,13 +718,15 @@ export function ScreenEnginePublicWidget({
             </svg>
           </div>
           <h2 className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
-            {ws("done_heading", "Your matter review was submitted.")}
+            {isDemo
+              ? "The demonstration is complete."
+              : ws("done_heading", "Your matter review was submitted.")}
           </h2>
           <p
             className="max-w-[460px] text-[15px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
             style={{ fontFamily: fontBody }}
           >
-            {doneBody}
+            {visibleDoneBody}
           </p>
           {statusLabel && (
             <p className="text-[12px] uppercase tracking-[0.12em] text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_45%,transparent)]">{statusLabel}</p>
@@ -582,6 +745,7 @@ export function ScreenEnginePublicWidget({
         roundLabel={ws("shell_round_review", "Review")}
         onBack={back}
         backLabel={backLabel}
+        layout={layout}
       >
         <div className="flex flex-col gap-5">
           <h2 className="text-[28px] font-extrabold text-balance text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: fontDisplay }}>
@@ -606,10 +770,12 @@ export function ScreenEnginePublicWidget({
             className="text-[14px] leading-relaxed text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_70%,transparent)]"
             style={{ fontFamily: fontBody }}
           >
-            {ws(
-              "insight_contact_note",
-              "A lawyer reviews what you share and reaches out directly. Add your contact details below so the firm can get back to you.",
-            )}
+            {isDemo
+              ? "Continue to see how the intake collects contact details. Nothing entered here will be saved or sent."
+              : ws(
+                  "insight_contact_note",
+                  "A lawyer reviews what you share and reaches out directly. Add your contact details below so the firm can get back to you.",
+                )}
           </p>
           <button
             type="button"
@@ -621,7 +787,9 @@ export function ScreenEnginePublicWidget({
             className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"
             style={{ fontFamily: fontBody }}
           >
-            {ws("insight_cta", "Share my contact details so the firm can reply")}
+            {isDemo
+              ? "Continue to contact details"
+              : ws("insight_cta", "Share my contact details so the firm can reply")}
           </button>
         </div>
       </Shell>
@@ -629,7 +797,9 @@ export function ScreenEnginePublicWidget({
   }
 
   if (stage === "contact" || next?.type === "capture_contact") {
-    const contactHeading = clarifyFallback
+    const contactHeading = isDemo
+      ? "How would the firm reach this client?"
+      : clarifyFallback
       ? ws("fallback_contact_heading", "We can still get this to the team.")
       : ws("contact_heading", "How should the firm reach you?");
     const contactSub = clarifyFallback
@@ -637,7 +807,9 @@ export function ScreenEnginePublicWidget({
           "fallback_contact_sub",
           "Share your contact details below and a lawyer will reach out to scope what you need.",
         )
-      : ws("contact_sub", "Share your contact details so the team can follow up after review.");
+      : isDemo
+        ? "Use fictional details to complete the demonstration. Nothing will be saved or sent."
+        : ws("contact_sub", "Share your contact details so the team can follow up after review.");
     return (
       <Shell
         totalScreens={1}
@@ -645,6 +817,7 @@ export function ScreenEnginePublicWidget({
         roundLabel={ws("shell_round_your_details", "Your details")}
         onBack={back}
         backLabel={backLabel}
+        layout={layout}
       >
         <form action={submitContact} className="flex flex-col gap-5">
           <div>
@@ -662,17 +835,17 @@ export function ScreenEnginePublicWidget({
             [
               "client_name",
               ws("contact_field_name_label", "Full name"),
-              ws("contact_field_name_placeholder", "Your name"),
+              isDemo ? "Alex Morgan" : ws("contact_field_name_placeholder", "Your name"),
             ],
             [
               "client_phone",
               ws("contact_field_phone_label", "Phone"),
-              ws("contact_field_phone_placeholder", "+1 416 555 0123"),
+              isDemo ? "(416) 555-0123" : ws("contact_field_phone_placeholder", "+1 416 555 0123"),
             ],
             [
               "client_email",
               ws("contact_field_email_label", "Email"),
-              ws("contact_field_email_placeholder", "you@example.com"),
+              isDemo ? "alex@example.com" : ws("contact_field_email_placeholder", "you@example.com"),
             ],
           ].map(([name, label, placeholder]) => (
             <label
@@ -690,7 +863,7 @@ export function ScreenEnginePublicWidget({
               />
             </label>
           ))}
-          {consentCaptureEnabled && (
+          {consentCaptureEnabled && policy.allowsConsent && (
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
@@ -714,7 +887,9 @@ export function ScreenEnginePublicWidget({
             className="min-h-[52px] rounded-full bg-[var(--cls-accent,#1E2F58)] px-8 text-[15px] font-semibold text-[var(--cls-accent-text,#FFFFFF)]"
             style={{ fontFamily: fontBody }}
           >
-            {ws("contact_submit", "Submit matter review")}
+            {isDemo
+              ? "Complete demonstration"
+              : ws("contact_submit", "Submit matter review")}
           </button>
         </form>
       </Shell>
@@ -735,6 +910,7 @@ export function ScreenEnginePublicWidget({
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
+        layout={layout}
       >
         <div className="flex flex-col items-center justify-center text-center gap-4 py-16">
           <div
@@ -823,8 +999,10 @@ export function ScreenEnginePublicWidget({
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
+        layout={layout}
       >
         <DecisionCard
+          contained={layout === "contained"}
           key={`clarify-${clarifyAttempts}`}
           item={{
             id: `clarify-${clarifyAttempts}`,
@@ -851,6 +1029,7 @@ export function ScreenEnginePublicWidget({
         roundLabel={roundLabel}
         onBack={back}
         backLabel={backLabel}
+        layout={layout}
       >
         <div className="flex flex-col items-center justify-center text-center gap-4 py-16">
           <div
@@ -888,16 +1067,18 @@ export function ScreenEnginePublicWidget({
       onSkip={skip}
       backLabel={backLabel}
       skipLabel={skipLabel}
+      layout={layout}
     >
       {isPureFreeText ? (
         <FreeTextAnswerCard
+          contained={layout === "contained"}
           key={currentItem.id}
           item={currentItem}
           onSubmit={(text) => answer(currentItem.id, `other:${text}`)}
           submitLabel={ws("free_text_continue", "Continue")}
         />
       ) : (
-        <DecisionCard item={currentItem} onChange={(value) => answer(currentItem.id, value)} />
+        <DecisionCard contained={layout === "contained"} item={currentItem} onChange={(value) => answer(currentItem.id, value)} />
       )}
     </Shell>
   );

@@ -1,0 +1,805 @@
+{
+  "schemaVersion": "gta-prospect-batch-012-reviewed-import-v1",
+  "purpose": "operator-authorized Batch 012 production import",
+  "generatedOn": "2026-09-10",
+  "sourceResolutionSha256": "32ed2ea22845796a007ebb0e46b24b86c8c75414be09b366574d77886b3c750d",
+  "expectedLiveBaselineCount": 124,
+  "expectedImportCount": 17,
+  "actionsExcluded": [
+    "CRM write",
+    "CRM contact creation",
+    "outreach",
+    "form submission",
+    "automatic identity merge"
+  ],
+  "records": [
+    {
+      "id": "gta-prospect-012-wn-01",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "Arnold Foster LLP",
+      "city": "Georgetown",
+      "officeCities": [
+        "Georgetown"
+      ],
+      "websiteUrl": "https://arnold-foster.com/",
+      "practiceAreas": [
+        "Real Estate",
+        "Estates and Succession Planning",
+        "Business",
+        "Family",
+        "Civil Litigation",
+        "Land Development"
+      ],
+      "observedLawyerCount": 4,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.arnold-foster.com/contact/",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "No live, fixture, or legacy identity match.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "reception@arnold-foster.com",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://www.arnold-foster.com/contact/",
+          "observedAt": "2026-09-08"
+        },
+        {
+          "name": "Herbert (Bert) Arnold",
+          "relationship": "founder",
+          "email": "htaesq@aol.com",
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.arnold-foster.com/staff/",
+          "observedAt": "2026-09-10"
+        },
+        {
+          "name": "Steven C. Foster",
+          "relationship": "founder",
+          "email": "sfoster@arnold-foster.com",
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.arnold-foster.com/staff/",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-wn-02",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "Morra Caruso Law",
+      "city": "Stouffville",
+      "officeCities": [
+        "Stouffville"
+      ],
+      "websiteUrl": "https://stouffvilleonlawyers.ca/",
+      "practiceAreas": [
+        "Business Law",
+        "Employment Law",
+        "Family Law",
+        "Wills and Estate Law",
+        "Real Estate",
+        "Litigation",
+        "Notarizations"
+      ],
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://stouffvilleonlawyers.ca/our-team/",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "update_existing",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": "legacy-gta-directory-2026-07:row-2566",
+      "reconciliationNote": "A legacy lawyer row shares the same published firm address; no live-ledger firm exists.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Ida Morra-Caruso",
+          "relationship": "owner",
+          "email": null,
+          "emailKind": "owner",
+          "sourceUrl": "https://stouffvilleonlawyers.ca/our-team/",
+          "observedAt": "2026-09-08"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-wn-03",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "Piccin Bottos Professional Corporation",
+      "city": "Woodbridge",
+      "officeCities": [
+        "Woodbridge"
+      ],
+      "websiteUrl": "https://piccinbottos.com/",
+      "practiceAreas": [
+        "Civil Litigation",
+        "Criminal Litigation",
+        "Mortgage Enforcement",
+        "Construction Lien Litigation",
+        "Real Estate",
+        "Estate Planning and Administration",
+        "Family Law",
+        "Corporate Law"
+      ],
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://piccinbottos.com/lawyers.html",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "No live, fixture, or legacy identity match.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Jonathan V.B. Piccin",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://piccinbottos.com/lawyers.html",
+          "observedAt": "2026-09-08"
+        },
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "pb@piccinbottos.com",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://piccinbottos.com/contact-us.html",
+          "observedAt": "2026-09-08"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-wn-04",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "Furlan Bhavsar LLP",
+      "city": "Brampton",
+      "officeCities": [
+        "Brampton"
+      ],
+      "websiteUrl": "https://furlanbhavsarlaw.com/",
+      "practiceAreas": [
+        "Divorce and Family Law",
+        "Real Estate",
+        "Wills and Powers of Attorney",
+        "Estates",
+        "Criminal Law",
+        "Immigration Law",
+        "Civil Litigation",
+        "Employment Law",
+        "Wrongful Dismissal"
+      ],
+      "observedLawyerCount": 5,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.furlanbhavsarlaw.com/team/",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": "legacy-gta-directory-2026-07:row-315; legacy-gta-directory-2026-07:row-351",
+      "reconciliationNote": "The legacy signals are differently named firms sharing the suite; neither is the candidate firm.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Daniel R. Furlan",
+          "relationship": "named_lawyer",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.furlanbhavsarlaw.com/team/",
+          "observedAt": "2026-09-08"
+        },
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "dan@fblawoffices.com",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://www.furlanbhavsarlaw.com/team/",
+          "observedAt": "2026-09-08"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-wn-05",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "D'Alessio Sindhwani Law Firm",
+      "city": "Vaughan",
+      "officeCities": [
+        "Vaughan",
+        "Bolton"
+      ],
+      "websiteUrl": "https://dslawfirm.ca/",
+      "practiceAreas": [
+        "Personal Injury",
+        "Disability Claims",
+        "Slip and Fall Claims",
+        "Real Estate",
+        "Litigation and Dispute Resolution",
+        "Corporate Commercial",
+        "Family Law",
+        "Employment Law",
+        "Wills and Estates"
+      ],
+      "observedLawyerCount": 7,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.dslawfirm.ca/our-team",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "update_existing",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": "legacy-gta-directory-2026-07:row-5901",
+      "reconciliationNote": "The legacy D'Alessio row is a predecessor or related published firm identity at the same suite; no live-ledger firm exists.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Elio D'Alessio",
+          "relationship": "named_lawyer",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.dslawfirm.ca/our-team",
+          "observedAt": "2026-09-08"
+        },
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "admin@dslawfirm.ca",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://www.dslawfirm.ca/our-team",
+          "observedAt": "2026-09-08"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-wn-h01",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "Evangelista & Associates Professional Corporation",
+      "city": "Woodbridge",
+      "officeCities": [
+        "Woodbridge"
+      ],
+      "websiteUrl": "https://evangelistalaw.ca/",
+      "practiceAreas": [
+        "Construction Liens and Litigation",
+        "Contract and Commercial Disputes",
+        "Employment Litigation",
+        "Wills and Estates Litigation",
+        "Shareholders' Disputes",
+        "Real Estate Disputes and Litigation"
+      ],
+      "observedLawyerCount": 3,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://evangelistalaw.ca/",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "First-party roster, principal, office, and public inbox evidence identify a three-lawyer firm.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Emily Evangelista",
+          "relationship": "principal",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://evangelistalaw.ca/",
+          "observedAt": "2026-09-08"
+        },
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "info@evangelistalaw.ca",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://evangelistalaw.ca/",
+          "observedAt": "2026-09-08"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-east-01",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "KLF / Keliny Law",
+      "city": "Oakville",
+      "officeCities": [
+        "Oakville",
+        "Burlington",
+        "Mississauga"
+      ],
+      "websiteUrl": "https://kelinylaw.ca/",
+      "practiceAreas": [
+        "Commercial litigation",
+        "Healthcare and regulated professionals",
+        "Fraud and asset recovery",
+        "Corporate and commercial",
+        "Construction",
+        "Franchise",
+        "Automotive",
+        "Real estate and property litigation"
+      ],
+      "observedLawyerCount": 4,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://kelinylaw.ca/lawyers",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "update_existing",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "The legacy KELINY row shares the exact suite and firm identity; no live-ledger firm exists.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Joseph H. Keliny",
+          "relationship": "named_lawyer",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://kelinylaw.ca/lawyers",
+          "observedAt": "2026-09-08"
+        },
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "operations@kelinylaw.ca",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://kelinylaw.ca/",
+          "observedAt": "2026-09-08"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-east-02",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "Spadafora and Murphy LLP",
+      "city": "Oakville",
+      "officeCities": [
+        "Oakville"
+      ],
+      "websiteUrl": "https://pssmlaw.com/",
+      "practiceAreas": [
+        "Real estate",
+        "Corporate contracts and incorporation",
+        "Wills and estates"
+      ],
+      "observedLawyerCount": 4,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://pssmlaw.com/28-team",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "No live, fixture, or legacy identity match.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Shannon Murphy",
+          "relationship": "named_lawyer",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://smurphyslaw.pssmlaw.com/contact-shannon",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-east-03",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "Findlay Personal Injury Lawyers",
+      "city": "Hamilton",
+      "officeCities": [
+        "Hamilton",
+        "Burlington",
+        "Brantford",
+        "St. Catharines"
+      ],
+      "websiteUrl": "https://findlaylaw.ca/",
+      "practiceAreas": [
+        "Personal injury",
+        "Motor vehicle claims",
+        "Serious injury claims"
+      ],
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://findlaylaw.ca/about-us/our-team/",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "No live, fixture, or legacy identity match.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Robert Findlay",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://findlaylaw.ca/",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-east-04",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "The Alam Law",
+      "city": "Ajax",
+      "officeCities": [
+        "Ajax",
+        "Hamilton",
+        "Scarborough",
+        "Mississauga",
+        "Toronto"
+      ],
+      "websiteUrl": "https://thealamlaw.com/",
+      "practiceAreas": [
+        "Motor vehicle and personal injury",
+        "Real estate",
+        "Mediation",
+        "Immigration",
+        "Criminal",
+        "Family",
+        "Wills and estates",
+        "Civil litigation",
+        "Employment"
+      ],
+      "observedLawyerCount": 7,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.thealamlaw.com/lawyers",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "No live, fixture, or legacy identity match.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "M. Aftab Alam",
+          "relationship": "principal",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.thealamlaw.com/lawyers",
+          "observedAt": "2026-09-08"
+        },
+        {
+          "name": "Muhammad M. Alam",
+          "relationship": "founder",
+          "email": "malam@thealamlaw.com",
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.thealamlaw.com/muhammad-alam",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-east-05",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "Davidson Cahill Morrison LLP",
+      "city": "Bowmanville",
+      "officeCities": [
+        "Bowmanville",
+        "Toronto",
+        "Huntsville"
+      ],
+      "websiteUrl": "https://dcmlaw.ca/",
+      "practiceAreas": [
+        "Insurance law",
+        "Medical malpractice",
+        "Appellate advocacy",
+        "Personal injury",
+        "Municipal litigation"
+      ],
+      "observedLawyerCount": 11,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://dcmlaw.ca/our-team/",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "No live, fixture, or legacy identity match.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "David Morin",
+          "relationship": "principal",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://dcmlaw.ca/our-team/",
+          "observedAt": "2026-09-08"
+        },
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "info@dcmlaw.ca",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://dcmlaw.ca/contact-us/",
+          "observedAt": "2026-09-08"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-east-06",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "Woitzik Polsinelli LLP",
+      "city": "Whitby",
+      "officeCities": [
+        "Whitby",
+        "Bowmanville"
+      ],
+      "websiteUrl": "https://durhamlawyer.ca/",
+      "practiceAreas": [
+        "Family law",
+        "Criminal law",
+        "Real estate",
+        "Wills and estates",
+        "Personal injury",
+        "Corporate and commercial",
+        "Litigation"
+      ],
+      "observedLawyerCount": 11,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://durhamlawyer.ca/meet-our-team/",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "The site discloses a relationship with Devry Smith Frank, while Woitzik Polsinelli remains a separately published firm identity.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "info@durhamlawyer.ca",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://durhamlawyer.ca/meet-our-team/",
+          "observedAt": "2026-09-08"
+        },
+        {
+          "name": "Mark Woitzik",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://durhamlawyer.ca/about-us/",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-east-07",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "ABLF Law",
+      "city": "Whitby",
+      "officeCities": [
+        "Whitby",
+        "Bowmanville",
+        "Port Hope"
+      ],
+      "websiteUrl": "https://ablflaw.ca/",
+      "practiceAreas": [
+        "Personal injury"
+      ],
+      "observedLawyerCount": 9,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://ablflaw.ca/",
+      "rosterCheckedAt": "2026-09-10",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "The current first-party roster identifies nine lawyers; ownership and public email remain unknown.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": []
+    },
+    {
+      "id": "gta-prospect-012-east-17",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "Wray James LLP",
+      "city": "Toronto",
+      "officeCities": [
+        "Toronto"
+      ],
+      "websiteUrl": "https://wrayjames.com/",
+      "practiceAreas": [],
+      "observedLawyerCount": 5,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://wrayjames.com/lawyers/",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "The eight legacy signals are unrelated firms sharing a downtown office address; none matches Wray James by name or domain.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Andrew Wray",
+          "relationship": "principal",
+          "email": "awray@wrayjames.com",
+          "emailKind": "named_person",
+          "sourceUrl": "https://wrayjames.com/contact-us/",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-east-18",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "George Street Law Group LLP",
+      "city": "Hamilton",
+      "officeCities": [
+        "Hamilton"
+      ],
+      "websiteUrl": "https://georgestreetlawgroup.com/",
+      "practiceAreas": [
+        "Business and corporate",
+        "Commercial litigation",
+        "Employment",
+        "Family",
+        "Real estate",
+        "Wills and estates"
+      ],
+      "observedLawyerCount": 13,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://georgestreetlawgroup.com/lawyers/",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "update_existing",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": "legacy-gta-directory-2026-07:row-2059",
+      "reconciliationNote": "The legacy row uses the George Street domain and represents a lawyer at the same firm; no live-ledger firm exists.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "reception@georgestreetlaw.ca",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://georgestreetlawgroup.com/contact/",
+          "observedAt": "2026-09-08"
+        },
+        {
+          "name": "Chris Rogers",
+          "relationship": "named_lawyer",
+          "email": "crogers@georgestreetlaw.ca",
+          "emailKind": "named_person",
+          "sourceUrl": "https://georgestreetlawgroup.com/chris-d-rogers/",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-east-19",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "UL Lawyers",
+      "city": "Burlington",
+      "officeCities": [
+        "Burlington"
+      ],
+      "websiteUrl": "https://ullaw.ca/",
+      "practiceAreas": [
+        "Personal injury",
+        "Disability claims",
+        "Wills and estates",
+        "Employment",
+        "Litigation",
+        "Immigration"
+      ],
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.ullaw.ca/team",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "update_existing",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": "legacy-gta-directory-2026-07:row-1634; legacy-gta-directory-2026-07:row-1635",
+      "reconciliationNote": "Two legacy rows have the same UL Lawyers name and domain; no live-ledger firm exists.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "info@ullaw.ca",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://www.ullaw.ca/team",
+          "observedAt": "2026-09-08"
+        },
+        {
+          "name": "Sunish Rai Uppal",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://ullaw.ca/",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-012-east-20",
+      "recordOrigin": "reviewed_batch_012",
+      "firmName": "DWA Law",
+      "city": "Hamilton",
+      "officeCities": [
+        "Hamilton"
+      ],
+      "websiteUrl": "https://dwalaw.ca/",
+      "practiceAreas": [],
+      "observedLawyerCount": 4,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://dwalaw.ca/",
+      "rosterCheckedAt": "2026-09-08",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "The live reconciliation found no identity match; current first-party founder and roster evidence clears the earlier hold.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Allen Wynperle",
+          "relationship": "founder",
+          "email": "allen@dwalaw.ca",
+          "emailKind": "named_person",
+          "sourceUrl": "https://dwalaw.ca/allen-wynperle/",
+          "observedAt": "2026-09-10"
+        }
+      ]
+    }
+  ]
+}

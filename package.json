@@ -17,6 +17,7 @@
     "test:secure-import-rendered": "playwright test --config=playwright.secure-import.config.ts",
     "test:operator-login-rendered": "playwright test --config=playwright.operator-login.config.ts",
     "test:prospect-qualified-rendered": "playwright test --config=playwright.prospect-qualified.config.ts",
+    "test:prospecting-control-plane": "vitest run --config vitest.prospect-control-plane.config.mjs",
     "test": "node scripts/verify-no-committed-meta-secrets.mjs && vitest run",
     "test:watch": "vitest",
     "check:engine-sync": "bash scripts/check-engine-sync.sh",
@@ -29,8 +30,16 @@
     "check:seo-calibration": "node scripts/seo-check-calibration-acceptance.mjs",
     "record:seo-calibration": "node scripts/seo-check-record-calibration-fixture.mjs",
     "prospects:generate-owner-cohort": "node scripts/generate-brazilian-owner-cohort-snapshot.mjs",
+    "prospects:verify-batch-012-live-baseline": "tsx scripts/verify-gta-prospect-batch-012-live-baseline.ts",
+    "prospects:reconcile-batch-012-live": "tsx --require ./scripts/_load-env.js scripts/reconcile-gta-prospect-batch-012-live.ts",
+    "prospects:prepare-batch-012-import": "node scripts/prepare-gta-prospect-batch-012-import.mjs",
+    "prospects:generate-batch-011": "tsx scripts/generate-gta-prospect-batch-011.ts",
+    "prospects:validate-batch-011": "tsx scripts/generate-gta-prospect-batch-011.ts --check",
+    "prospects:generate-batch-012": "tsx scripts/generate-gta-prospect-batch-012.ts",
+    "prospects:validate-batch-012": "tsx scripts/generate-gta-prospect-batch-012.ts --check",
     "drg:deploy": "tsx scripts/drg-deploy/cli.ts",
-    "drg:revise-checklists": "tsx scripts/drg-deploy/checklist-revision.ts"
+    "drg:revise-checklists": "tsx scripts/drg-deploy/checklist-revision.ts",
+    "prospects:test-batch-pipeline": "node scripts/test-gta-prospect-batch-pipeline.mjs"
   },
   "dependencies": {
     "@fontsource-variable/caveat": "5.3.0",

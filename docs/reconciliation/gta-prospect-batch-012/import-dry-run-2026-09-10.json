@@ -1,0 +1,305 @@
+{
+  "schema_version": "gta-prospect-batch-012-import-dry-run.v1",
+  "batch_id": "gta-prospect-batch-012",
+  "generated_at": "2026-09-10T12:07:01.519Z",
+  "live_identity_snapshot": {
+    "record_count": 124,
+    "records_sha256": "b5b7241ddf29d2c8e398907367fe812e21719ff1cee90b5df245d56e81e1c8da"
+  },
+  "candidate_count": 32,
+  "clear_count": 14,
+  "review_required_count": 18,
+  "database_mutations": [],
+  "automatic_merge": false,
+  "import_authorized": false,
+  "records": [
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-01"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-02"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-03"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-04"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-05"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H01"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H02"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H03"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H05"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H06"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H07"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-WN-H08"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-01"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-02"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-03"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-04"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-05"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-06"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-07"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-08"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-09"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-10"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-11"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-12"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-13"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-14"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-15"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-16"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-17"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-18"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-19"
+      },
+      "state": "review_required",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    },
+    {
+      "candidate_source": {
+        "source_system": "gta_research",
+        "source_record_key": "B012-EAST-20"
+      },
+      "state": "clear",
+      "automatic_merge": false,
+      "proposed_database_action": "none"
+    }
+  ]
+}

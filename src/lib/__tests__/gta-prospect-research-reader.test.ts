@@ -49,13 +49,34 @@ describe("GTA prospect research reader", () => {
         gbpEvidence: "observed",
       }),
     ]);
-    expect(db.rpc).toHaveBeenCalledWith("list_gta_prospect_research_for_operator");
+    expect(db.rpc).toHaveBeenCalledWith("list_gta_prospect_research_with_contacts_for_operator");
   });
 
-  it("identifies only an absent projection RPC as the pre-migration fallback state", async () => {
+  it("maps source-backed public contacts when the expanded projection is available", async () => {
+    const db = client([row({ public_contacts: [{ name: "Avery Founder", relationship: "founder", email: "avery@example.test", email_kind: "owner", source_url: "https://example.test/team", observed_at: "2026-09-07" }] })]);
+    await expect(listGtaProspectResearchForOperator(db)).resolves.toEqual([expect.objectContaining({ publicContacts: [expect.objectContaining({ name: "Avery Founder", emailKind: "owner" })] })]);
+  });
+
+  it("falls back to the established projection until the contact migration is available", async () => {
+    const db: GtaProspectResearchReaderClient = {
+      rpc: vi.fn()
+        .mockResolvedValueOnce({ data: null, error: {
+          code: "PGRST202",
+          message: "Could not find the function public.list_gta_prospect_research_with_contacts_for_operator without parameters in the schema cache",
+        } })
+        .mockResolvedValueOnce({ data: [row()], error: null }),
+    };
+    await expect(listGtaProspectResearchForOperator(db)).resolves.toEqual([
+      expect.objectContaining({ publicContacts: [] }),
+    ]);
+    expect(db.rpc).toHaveBeenNthCalledWith(1, "list_gta_prospect_research_with_contacts_for_operator");
+    expect(db.rpc).toHaveBeenNthCalledWith(2, "list_gta_prospect_research_for_operator");
+  });
+
+  it("identifies an absent legacy projection as unavailable", async () => {
     await expect(listGtaProspectResearchForOperator(client(null, {
       code: "PGRST202",
-      message: "Could not find the function public.list_gta_prospect_research_for_operator without parameters in the schema cache",
+      message: "Could not find the function public.list_gta_prospect_research_with_contacts_for_operator without parameters in the schema cache",
     }))).rejects.toBeInstanceOf(GtaProspectLedgerUnavailableError);
   });
 

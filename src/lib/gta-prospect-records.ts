@@ -7,8 +7,14 @@
  * been reviewed; it is not an authorization for outreach or CRM import.
  */
 
-export const LAWYER_COUNT_BANDS = ["1", "2", "3-5", "6-10", "11+", "unknown"] as const;
+import {
+  normalizedCityKey,
+  normalizedPracticeAreaKey,
+} from "@/lib/prospect-display-normalization";
+
+export const LAWYER_COUNT_BANDS = ["1", "2", "3", "4-5", "6-10", "11-20", "21-50", "51+", "unknown"] as const;
 export type LawyerCountBand = (typeof LAWYER_COUNT_BANDS)[number];
+export type LawyerCountRange = { min: number; max: number | null };
 
 export type ReconciliationStatus = "provisional_new" | "update_existing" | "new_pending_identity" | "duplicate" | "unresolved";
 export type EvidenceAvailability = "observed" | "none" | "unknown";
@@ -29,6 +35,14 @@ export interface ProspectOwnerContactPresentation {
   emailAvailability: "direct_owner_email" | "firm_general_email" | "unavailable";
   emailAddress: string | null;
 }
+export type PublicProspectContact = Readonly<{
+  name: string | null;
+  relationship: "owner" | "founder" | "principal" | "named_lawyer" | "firm_inbox";
+  email: string | null;
+  emailKind: "owner" | "named_person" | "general_firm";
+  sourceUrl: string | null;
+  observedAt: string;
+}>;
 
 export interface ReconciledGtaProspect {
   /** Stable source-controlled identifier, not a database id. */
@@ -66,6 +80,8 @@ export interface ReconciledGtaProspect {
   advertisingSourceUrl: string | null;
   gbpEvidence: EvidenceAvailability;
   gbpSourceUrl: string | null;
+  /** Publicly displayed contact observations. These are never an outreach authorization. */
+  publicContacts?: readonly PublicProspectContact[];
 
   /**
    * Private, operator-gated owner-contact summary. This is attached only by
@@ -81,10 +97,12 @@ export interface ReconciledProspectFilters {
   query?: string;
   city?: string;
   lawyerCountBand?: LawyerCountBand | "";
+  lawyerCountRange?: LawyerCountRange | null;
   practiceArea?: string;
   advertising?: EvidenceAvailability | "";
   gbp?: EvidenceAvailability | "";
-  exactLawyerCount?: "2" | "3" | "2-3" | "";
+  hasOwner?: boolean | "";
+  hasPublicEmail?: boolean | "";
   qualification?: import("@/lib/qualified-gta-prospects").QualificationState | "";
   audit?: import("@/lib/qualified-gta-prospects").AuditState | "";
   advertisingActivity?: import("@/lib/qualified-gta-prospects").AdvertisingActivityState | "";
@@ -103,21 +121,50 @@ export function lawyerCountBand(count: number | null): LawyerCountBand {
   if (count === null || !Number.isFinite(count) || count < 1) return "unknown";
   if (count === 1) return "1";
   if (count === 2) return "2";
-  if (count <= 5) return "3-5";
+  if (count === 3) return "3";
+  if (count <= 5) return "4-5";
   if (count <= 10) return "6-10";
-  return "11+";
+  if (count <= 20) return "11-20";
+  if (count <= 50) return "21-50";
+  return "51+";
 }
 
 export function lawyerCountBandLabel(band: LawyerCountBand): string {
   const labels: Record<LawyerCountBand, string> = {
     "1": "1 lawyer",
     "2": "2 lawyers",
-    "3-5": "3–5 lawyers",
+    "3": "3 lawyers",
+    "4-5": "4–5 lawyers",
     "6-10": "6–10 lawyers",
-    "11+": "11+ lawyers",
+    "11-20": "11–20 lawyers",
+    "21-50": "21–50 lawyers",
+    "51+": "51+ lawyers",
     unknown: "Count unknown",
   };
   return labels[band];
+}
+
+export function lawyerCountRangeForBand(band: LawyerCountBand): LawyerCountRange | null {
+  const ranges: Record<LawyerCountBand, LawyerCountRange | null> = {
+    "1": { min: 1, max: 1 }, "2": { min: 2, max: 2 }, "3": { min: 3, max: 3 },
+    "4-5": { min: 4, max: 5 }, "6-10": { min: 6, max: 10 }, "11-20": { min: 11, max: 20 },
+    "21-50": { min: 21, max: 50 }, "51+": { min: 51, max: null }, unknown: null,
+  };
+  return ranges[band];
+}
+
+/**
+ * A lower-bound roster observation can meet an open-ended minimum. It cannot
+ * prove membership in a capped range, so it stays out of those results.
+ */
+export function matchesObservedLawyerCount(
+  record: Pick<ReconciledGtaProspect, "observedLawyerCount" | "observedLawyerCountQualifier">,
+  range: LawyerCountRange,
+): boolean {
+  const count = record.observedLawyerCount;
+  if (count === null || record.observedLawyerCountQualifier === "unknown") return false;
+  if (record.observedLawyerCountQualifier === "at_least") return range.max === null && count >= range.min;
+  return count >= range.min && (range.max === null || count <= range.max);
 }
 
 export function observedLawyerCountLabel(record: Pick<ReconciledGtaProspect, "observedLawyerCount" | "observedLawyerCountQualifier" | "observedLawyerCountDisplay">): string {
@@ -134,29 +181,28 @@ export function filterReconciledGtaProspects(
   filters: ReconciledProspectFilters,
 ): ReconciledGtaProspect[] {
   const query = filters.query?.trim().toLocaleLowerCase() ?? "";
-  const city = filters.city?.trim().toLocaleLowerCase() ?? "";
-  const practiceArea = filters.practiceArea?.trim().toLocaleLowerCase() ?? "";
+  const city = filters.city ? normalizedCityKey(filters.city) : "";
+  const practiceArea = filters.practiceArea ? normalizedPracticeAreaKey(filters.practiceArea) : "";
 
   return records.filter((record) => {
     if (query) {
-      const searchable = [record.firmName, record.city, ...record.officeCities, record.websiteUrl ?? "", ...record.practiceAreas]
+      const searchable = [record.firmName, record.city, ...record.officeCities, record.websiteUrl ?? "", ...record.practiceAreas,
+        ...(record.publicContacts ?? []).flatMap((contact) => [contact.name ?? "", contact.email ?? ""])]
         .join(" ")
         .toLocaleLowerCase();
       if (!searchable.includes(query)) return false;
     }
-    if (city && !record.officeCities.some((officeCity) => officeCity.toLocaleLowerCase() === city)) return false;
+    if (city && !record.officeCities.some((officeCity) => normalizedCityKey(officeCity) === city)) return false;
     if (filters.lawyerCountBand && lawyerCountBand(record.observedLawyerCount) !== filters.lawyerCountBand) return false;
-    if (practiceArea && !record.practiceAreas.some((area) => area.toLocaleLowerCase() === practiceArea)) return false;
+    if (filters.lawyerCountRange && !matchesObservedLawyerCount(record, filters.lawyerCountRange)) return false;
+    if (practiceArea && !record.practiceAreas.some((area) => normalizedPracticeAreaKey(area) === practiceArea)) return false;
     if (filters.advertising && record.advertisingEvidence !== filters.advertising) return false;
     if (filters.gbp && record.gbpEvidence !== filters.gbp) return false;
     if (filters.ownerContact === "identified" && !record.ownerContact) return false;
     if (filters.ownerContact === "direct_owner_email" && record.ownerContact?.emailAvailability !== "direct_owner_email") return false;
     if (filters.ownerContact === "needs_direct_email" && record.ownerContact?.emailAvailability === "direct_owner_email") return false;
-    if (filters.exactLawyerCount) {
-      const count = record.observedLawyerCount;
-      if (filters.exactLawyerCount === "2-3" && count !== 2 && count !== 3) return false;
-      if (filters.exactLawyerCount !== "2-3" && count !== Number(filters.exactLawyerCount)) return false;
-    }
+    if (filters.hasOwner !== "" && filters.hasOwner !== undefined && Boolean(record.publicContacts?.some((contact) => contact.relationship === "owner" || contact.relationship === "founder")) !== filters.hasOwner) return false;
+    if (filters.hasPublicEmail !== "" && filters.hasPublicEmail !== undefined && Boolean(record.publicContacts?.some((contact) => contact.email)) !== filters.hasPublicEmail) return false;
     if (filters.qualification || filters.audit || filters.advertisingActivity || filters.advertisingSourceType || filters.gbpOpportunityType
       || filters.websiteOpportunityType || filters.intakeChannel || filters.lawyerCountConfidence
       || filters.evidenceFreshness || filters.cohortId) {

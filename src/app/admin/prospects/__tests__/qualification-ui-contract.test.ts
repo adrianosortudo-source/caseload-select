@@ -16,6 +16,12 @@ describe("Unified prospect list UI contract", () => {
     expect(list).toContain("Identity status");
     expect(list).toContain("Legacy provenance");
     expect(list).toContain("More qualification filters");
+    expect(list).toContain("Observed lawyer count");
+    expect(list).toContain("11 to 20 lawyers");
+    expect(list).toContain("Minimum lawyers");
+    expect(list).toContain("Maximum lawyers");
+    expect(list).toContain("Owner and email");
+    expect(list).toContain("Owner not identified");
   });
 
   it("exposes the evidence dimensions and the protected in-console audit route", () => {
@@ -28,6 +34,8 @@ describe("Unified prospect list UI contract", () => {
       "Lawyer-count confidence",
       "Evidence freshness",
       "Research cohort",
+      "Owner identified",
+      "Public email",
     ]) expect(list).toContain(label);
     expect(list).toContain("/admin/prospects/audits/");
     expect(audit).toContain("getQualifiedProspectByFirmId");
