@@ -17,6 +17,26 @@ export type CanonicalRecord = {
 };
 export type ValidationIssue = { sourceRecordKey: string; message: string };
 export type GtaProspectImportPlan = { accepted: CanonicalRecord[]; rejected: { sourceRecordKey: string; issues: ValidationIssue[] }[]; sourceSha256: string };
+export type GtaProspectImportDisposition = "new" | "update" | "duplicate" | "review_required" | "invalid";
+export type GtaProspectImportReview = Readonly<{
+  sourceRecordKey: string;
+  disposition: GtaProspectImportDisposition;
+  reason: string;
+}>;
+export type GtaProspectImportReviewSummary = Readonly<{
+  received: number;
+  eligibleForApply: number;
+  new: number;
+  update: number;
+  duplicate: number;
+  reviewRequired: number;
+  invalid: number;
+}>;
+export type GtaProspectImportReviewResult = Readonly<{
+  plan: GtaProspectImportPlan;
+  records: readonly GtaProspectImportReview[];
+  summary: GtaProspectImportReviewSummary;
+}>;
 
 const keys = new Set(["id", "recordOrigin", "firmName", "city", "officeCities", "websiteUrl", "practiceAreas", "observedLawyerCount", "observedLawyerCountQualifier", "observedLawyerCountDisplay", "rosterSourceUrl", "rosterCheckedAt", "reconciliationStatus", "legacyClusterLawyerCount", "legacyCrosswalk", "reconciliationNote", "advertisingEvidence", "advertisingSourceUrl", "gbpEvidence", "gbpSourceUrl", "publicContacts"]);
 const statuses = new Set<ReconciliationStatus>(["provisional_new", "update_existing", "new_pending_identity", "duplicate", "unresolved"]);
@@ -89,6 +109,67 @@ export async function buildGtaProspectImportPlan(inputs: readonly unknown[]): Pr
   const seen = new Set<string>(), accepted: CanonicalRecord[] = [], rejected: GtaProspectImportPlan["rejected"] = [];
   for (const input of inputs) { const result = project(input); if (seen.has(result.key)) result.issues.push({ sourceRecordKey: result.key, message: "duplicate source record key within batch" }); seen.add(result.key); if (result.record && result.issues.length === 0) accepted.push(result.record); else rejected.push({ sourceRecordKey: result.key, issues: result.issues }); }
   return { accepted, rejected, sourceSha256: await sha256(accepted) };
+}
+
+/**
+ * Classify a validated batch against the current, source-keyed ledger
+ * identity set.  This deliberately does not fuzzy-match names, domains, or
+ * addresses: a collision on any of those fields is a human review signal,
+ * never a merge instruction.  The database is still authoritative at apply
+ * time, so a concurrent import cannot turn this advisory plan into a blind
+ * overwrite.
+ */
+export async function reviewGtaProspectImport(
+  inputs: readonly unknown[],
+  existingSourceRecordKeys: ReadonlySet<string>,
+): Promise<GtaProspectImportReviewResult> {
+  const plan = await buildGtaProspectImportPlan(inputs);
+  const records: GtaProspectImportReview[] = [];
+
+  for (const rejected of plan.rejected) {
+    const duplicate = rejected.issues.some((issue) => issue.message === "duplicate source record key within batch");
+    records.push({
+      sourceRecordKey: rejected.sourceRecordKey,
+      disposition: duplicate ? "duplicate" : "invalid",
+      reason: duplicate ? "This source record key appears more than once in the uploaded batch." : rejected.issues.map((issue) => issue.message).join(" "),
+    });
+  }
+
+  for (const record of plan.accepted) {
+    if (record.reconciliation.status === "duplicate" || record.reconciliation.status === "new_pending_identity" || record.reconciliation.status === "unresolved") {
+      records.push({
+        sourceRecordKey: record.sourceRecordKey,
+        disposition: "review_required",
+        reason: `The reviewed reconciliation status is ${record.reconciliation.status}; it cannot be applied automatically.`,
+      });
+      continue;
+    }
+    if (existingSourceRecordKeys.has(record.sourceRecordKey)) {
+      records.push({
+        sourceRecordKey: record.sourceRecordKey,
+        disposition: "update",
+        reason: "This stable source record key already exists in the governed research ledger. The database will preserve blank optional fields and append source-backed observations.",
+      });
+      continue;
+    }
+    records.push({ sourceRecordKey: record.sourceRecordKey, disposition: "new", reason: "No matching stable source record key exists in the governed research ledger." });
+  }
+
+  records.sort((left, right) => left.sourceRecordKey.localeCompare(right.sourceRecordKey, "en-CA"));
+  const count = (disposition: GtaProspectImportDisposition) => records.filter((record) => record.disposition === disposition).length;
+  return {
+    plan,
+    records: Object.freeze(records),
+    summary: Object.freeze({
+      received: inputs.length,
+      eligibleForApply: count("new") + count("update"),
+      new: count("new"),
+      update: count("update"),
+      duplicate: count("duplicate"),
+      reviewRequired: count("review_required"),
+      invalid: count("invalid"),
+    }),
+  };
 }
 export type GtaProspectImportWriter = { apply(plan: GtaProspectImportPlan): Promise<void> };
 export async function executeGtaProspectImport({ plan, dryRun, operatorAuthorized, writer }: { plan: GtaProspectImportPlan; dryRun: boolean; operatorAuthorized: boolean; writer: GtaProspectImportWriter }) {
