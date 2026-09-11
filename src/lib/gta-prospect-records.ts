@@ -151,7 +151,7 @@ export function filterReconciledGtaProspects(
     if (filters.gbp && record.gbpEvidence !== filters.gbp) return false;
     if (filters.ownerContact === "identified" && !record.ownerContact) return false;
     if (filters.ownerContact === "direct_owner_email" && record.ownerContact?.emailAvailability !== "direct_owner_email") return false;
-    if (filters.ownerContact === "needs_direct_email" && (!record.ownerContact || record.ownerContact.emailAvailability === "direct_owner_email")) return false;
+    if (filters.ownerContact === "needs_direct_email" && record.ownerContact?.emailAvailability === "direct_owner_email") return false;
     if (filters.exactLawyerCount) {
       const count = record.observedLawyerCount;
       if (filters.exactLawyerCount === "2-3" && count !== 2 && count !== 3) return false;
