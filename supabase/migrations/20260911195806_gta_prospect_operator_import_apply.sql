@@ -226,7 +226,7 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.begin_gta_prospect_operator_import_batch(text, text, integer) FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.begin_gta_prospect_operator_import_batch(text, text, integer) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.begin_gta_prospect_operator_import_batch(text, text, integer) TO service_role;
 
 COMMENT ON FUNCTION public.begin_gta_prospect_operator_import_batch(text, text, integer) IS
