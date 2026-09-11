@@ -229,7 +229,7 @@ export default function GtaProspectImport({ onImported }: { onImported?: () => v
     return () => controller.abort();
   }, [loadHistory]);
 
-  async function useFile(file: File | null) {
+  async function readSelectedFile(file: File | null) {
     setSelectedFile(file);
     setPreview(null); setReceipt(null); setRecords(null); setReviewed(false); setError(null);
     if (!file) return;
@@ -293,7 +293,7 @@ export default function GtaProspectImport({ onImported }: { onImported?: () => v
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         <label className="block w-full rounded border border-dashed border-border-brand bg-parchment/30 p-3 text-sm text-black/70">
           <span className="block w-full font-semibold text-navy">Choose a CSV or JSON package</span>
-          <input ref={fileInput} type="file" accept=".csv,text/csv,.json,application/json" className="mt-2 block w-full text-sm" onChange={(event) => void useFile(event.currentTarget.files?.[0] ?? null)} />
+          <input ref={fileInput} type="file" accept=".csv,text/csv,.json,application/json" className="mt-2 block w-full text-sm" onChange={(event) => void readSelectedFile(event.currentTarget.files?.[0] ?? null)} />
           <span className="mt-2 block w-full text-xs leading-5 text-black/55">Up to 2 MB and 2,000 records. CSV uses pipe-separated cities and practice areas; public contacts are JSON in one cell.</span>
         </label>
         <label className="block w-full text-xs font-semibold text-field-label">Or paste a JSON package
