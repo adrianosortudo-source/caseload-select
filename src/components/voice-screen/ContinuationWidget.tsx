@@ -69,7 +69,7 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
   const showQuestion = !!item && !completed && !stopped;
 
   return (
-    <div className="min-h-screen bg-[#F4F3EF] [&_main>div]:mx-auto max-[480px]:[&_h2]:text-[22px] max-[360px]:[&_h2]:text-[20px]" style={{ "--cls-font-display": "var(--font-manrope)", "--cls-font-body": '"DM Sans Variable", sans-serif' } as CSSProperties}>
+    <div className="min-h-screen bg-[#F4F3EF] [&_main>div]:mx-auto min-[480px]:[&_h2]:[text-wrap:pretty] max-[480px]:[&_h2]:text-[22px] max-[360px]:[&_h2]:text-[20px]" style={{ "--cls-font-display": "var(--font-manrope)", "--cls-font-body": '"DM Sans Variable", sans-serif' } as CSSProperties}>
     <Shell
       layout="contained"
       totalScreens={1}
