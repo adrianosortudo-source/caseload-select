@@ -164,6 +164,16 @@ function downloadTemplate() {
   URL.revokeObjectURL(link.href);
 }
 
+function importSourceName(filename: string | null): string {
+  const basename = (filename ?? "pasted-gta-prospects")
+    .replace(/\.(?:csv|json)$/i, "")
+    .toLocaleLowerCase("en-CA")
+    .replace(/[^a-z0-9_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 180);
+  return basename || "pasted-gta-prospects";
+}
+
 function dateTime(value: string | null): string {
   if (!value) return "Not applied";
   const date = new Date(value);
@@ -187,7 +197,7 @@ export default function GtaProspectImport({ onImported }: { onImported?: () => v
   const [reviewed, setReviewed] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
-  const sourceName = selectedFile?.name ?? "pasted-gta-prospects.json";
+  const sourceName = importSourceName(selectedFile?.name ?? null);
   const sourceLabel = selectedFile ? selectedFile.name : draft.trim() ? "Pasted package" : "No package selected";
   const canApply = Boolean(preview && records && preview.accepted > 0 && preview.rejected.length === 0 && preview.summary.reviewRequired === 0 && reviewed && !busy);
   const counts = useMemo(() => preview ? [
@@ -251,11 +261,18 @@ export default function GtaProspectImport({ onImported }: { onImported?: () => v
     if (!preview || !records || !canApply) return;
     setBusy("apply"); setError(null);
     try {
-      const response = await fetch("/admin/prospects/research-import/apply", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sourceName, sourceSha256: preview.sourceSha256, records }) });
+      const response = await fetch("/admin/prospects/research-import", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify({ sourceName, sourceSha256: preview.sourceSha256, records }) });
       const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
       if (!response.ok) throw new Error(typeof payload.error === "string" ? payload.error : "The reviewed package could not be imported.");
-      const result = payload.receipt && typeof payload.receipt === "object" ? payload.receipt as Record<string, unknown> : payload;
-      setReceipt({ id: typeof result.id === "string" ? result.id : preview.sourceSha256, recordedAt: typeof result.recordedAt === "string" ? result.recordedAt : new Date().toISOString(), inserted: typeof result.inserted === "number" ? result.inserted : preview.summary.newRecords, updated: typeof result.updated === "number" ? result.updated : preview.summary.updates, duplicates: typeof result.duplicates === "number" ? result.duplicates : preview.summary.duplicates });
+      const receipts = Array.isArray(payload.receipts) ? payload.receipts.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object") : [];
+      const countState = (state: string) => receipts.filter((item) => item.state === state).length;
+      setReceipt({
+        id: typeof payload.sourceSha256 === "string" ? payload.sourceSha256 : preview.sourceSha256,
+        recordedAt: new Date().toISOString(),
+        inserted: countState("created"),
+        updated: countState("updated"),
+        duplicates: countState("already_present") + countState("already_applied"),
+      });
       setReviewed(false);
       await loadHistory();
       onImported?.();
