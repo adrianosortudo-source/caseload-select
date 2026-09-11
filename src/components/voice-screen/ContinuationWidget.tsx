@@ -125,7 +125,7 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
         )}
 
         {completed && (
-          <div className="rounded-2xl border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_15%,transparent)] bg-[var(--cls-surface,#FFFFFF)] px-6 py-7" data-ui-component-content="continuation-completion">
+          <div className="rounded-2xl border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_15%,transparent)] bg-[var(--cls-surface,#FFFFFF)] px-6 py-7 max-[480px]:px-4" data-ui-component-content="continuation-completion">
             <h2
               className="text-[24px] leading-tight font-extrabold text-[var(--cls-text,#1E2F58)]"
               style={{ fontFamily: "var(--cls-font-display, Manrope, sans-serif)" }}
