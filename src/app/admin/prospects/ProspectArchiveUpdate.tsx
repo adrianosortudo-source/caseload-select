@@ -22,6 +22,20 @@ export type ProspectArchiveUpdateReceipt = {
   unchangedRecords: number;
 };
 
+type ArchivePreviewActivity = {
+  cls_record_id: string;
+  kind: string;
+  occurred_at: string;
+  subject?: string | null;
+  body?: string | null;
+};
+
+type DirectArchiveIssue = {
+  cls_record_id: string;
+  reason: string;
+  provider_event_id?: string;
+};
+
 /**
  * The data connection owns preparation, preview and application. This surface
  * is deliberately passive until that contract is supplied by a verified API.
@@ -44,7 +58,7 @@ const sourceOptions: readonly SourceOption[] = [
   {
     value: "highlevel",
     label: "HighLevel direct sync",
-    note: "Direct sync needs a verified connection. It is not connected in this console yet.",
+    note: "Read the protected BA/AE contact history directly from the configured HighLevel connection. It makes no HighLevel changes.",
   },
   {
     value: "import",
@@ -73,13 +87,15 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
   const [reviewPermit, setReviewPermit] = useState<string | null>(null);
   const [reviewed, setReviewed] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewActivities, setPreviewActivities] = useState<ArchivePreviewActivity[]>([]);
+  const [directIssues, setDirectIssues] = useState<DirectArchiveIssue[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selected = useMemo(() => sourceOptions.find((option) => option.value === source)!, [source]);
   const activeContract = contract ?? localContract;
   const preview = activeContract.preview?.source === source ? activeContract.preview : undefined;
   const isApplying = activeContract.status === "applying";
-  const canLocalApply = Boolean(source === "import" && preview && activeContract.status === "ready" && preparedBundle && reviewPermit && reviewed && !isApplying);
+  const canLocalApply = Boolean((source === "import" || source === "highlevel") && preview && activeContract.status === "ready" && preparedBundle && reviewPermit && reviewed && !isApplying);
   const canApply = Boolean(preview && activeContract.status === "ready" && (activeContract.onApplyReviewedUpdate || canLocalApply) && !isApplying);
 
   async function applyReviewedUpdate() {
@@ -100,7 +116,7 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
         status: "ready", preview,
         receipt: {
           id: payload.bundle_digest ?? "archive-update",
-          recordedAt: new Date().toISOString(), source: "import",
+          recordedAt: new Date().toISOString(), source,
           appliedRecords: payload.receipt.events_inserted ?? 0,
           unchangedRecords: payload.receipt.events_replayed ?? 0,
         },
@@ -137,6 +153,9 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
       if (!response.ok || !payload.receipt) throw new Error(payload.error ?? "The archive preview could not be prepared.");
       setPreparedBundle(bundle);
       setReviewPermit(typeof payload.review_permit === "string" ? payload.review_permit : null);
+      setPreviewActivities(Array.isArray((payload as { preview?: { proposed_activities?: unknown[] } }).preview?.proposed_activities)
+        ? ((payload as { preview: { proposed_activities: ArchivePreviewActivity[] } }).preview.proposed_activities) : []);
+      setDirectIssues([]);
       setReviewed(false);
       setLocalContract({
         status: "ready",
@@ -144,6 +163,38 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
       });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "The history bundle could not be read.");
+      setLocalContract({ status: "unavailable" });
+    }
+  }
+
+  async function prepareDirectPreview() {
+    setError(null);
+    setPrepareRequested(true);
+    setLocalContract({ status: "preparing" });
+    try {
+      const response = await fetch("/api/admin/prospect-operations/archive-updates/direct-preview", { method: "POST" });
+      const payload = await response.json().catch(() => ({})) as {
+        error?: string; bundle?: unknown; review_permit?: string | null;
+        preview?: { proposed_activities?: ArchivePreviewActivity[]; held_events?: unknown[]; history_states?: Array<{ history_coverage?: string }> };
+        reader?: { issues?: DirectArchiveIssue[] };
+        receipt?: { prepared_at?: string; new_records?: number; unchanged_records?: number; held_records?: number; unclassified_records?: number; incomplete_records?: number };
+      };
+      if (!response.ok || !payload.bundle || !payload.preview || !payload.receipt) throw new Error(payload.error ?? "The direct archive preview could not be prepared.");
+      setPreparedBundle(payload.bundle);
+      setReviewPermit(typeof payload.review_permit === "string" ? payload.review_permit : null);
+      setPreviewActivities(payload.preview.proposed_activities ?? []);
+      setDirectIssues(payload.reader?.issues ?? []);
+      setReviewed(false);
+      setLocalContract({
+        status: "ready",
+        preview: {
+          source: "highlevel", newRecords: payload.receipt.new_records ?? 0, unchangedRecords: payload.receipt.unchanged_records ?? 0,
+          heldRecords: payload.receipt.held_records ?? 0, unclassifiedRecords: payload.receipt.unclassified_records ?? 0,
+          incompleteRecords: payload.receipt.incomplete_records ?? 0, preparedAt: payload.receipt.prepared_at ?? new Date().toISOString(),
+        },
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "The direct archive preview could not be prepared.");
       setLocalContract({ status: "unavailable" });
     }
   }
@@ -156,14 +207,14 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
     >
       <p className="w-full text-xs font-semibold uppercase tracking-wider text-gold-on-light" data-ui-copy="supporting">Archive operations</p>
       <h2 id="prospect-archive-update-heading" className="mt-1 w-full text-xl font-bold text-navy" data-ui-copy="heading">Update prospect archive</h2>
-      <p className="mt-1 w-full text-sm text-black/60" data-ui-copy="body">Prepare a safe, incremental update before any history enters the prospect archive. This panel cannot contact HighLevel, change a workflow, or send a message.</p>
+      <p className="mt-1 w-full text-sm text-black/60" data-ui-copy="body">Prepare a safe, incremental update before any history enters the prospect archive. It can read the protected HighLevel history, but cannot change HighLevel, a workflow, or send a message.</p>
 
       <fieldset className="mt-4 grid gap-2 sm:grid-cols-2" aria-describedby="archive-source-guidance">
         <legend className="w-full text-xs font-semibold uppercase tracking-wide text-field-label">Update source</legend>
           {sourceOptions.map((option) => (
             <label key={option.value} className={`cursor-pointer rounded border p-3 ${source === option.value ? "border-navy bg-navy/[0.03]" : "border-border-brand bg-parchment/30"}`}>
             <span className="flex items-start gap-2">
-              <input type="radio" name="archive-source" value={option.value} checked={source === option.value} onChange={() => { setSource(option.value); setPrepareRequested(false); setError(null); setPreparedBundle(null); setReviewPermit(null); setReviewed(false); }} className="mt-1" />
+              <input type="radio" name="archive-source" value={option.value} checked={source === option.value} onChange={() => { setSource(option.value); setPrepareRequested(false); setError(null); setPreparedBundle(null); setReviewPermit(null); setReviewed(false); setPreviewActivities([]); setDirectIssues([]); }} className="mt-1" />
               <span className="min-w-0 text-sm font-semibold text-navy">{option.label}</span>
             </span>
             <span className="mt-1 block w-full text-xs leading-5 text-black/60">{option.note}</span>
@@ -182,10 +233,10 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
       <div className="mt-4 rounded border border-amber-300/70 bg-amber-50/60 p-3" data-ui-component-content="prospect-archive-update-state">
         <p className="w-full text-xs font-semibold uppercase tracking-wide text-field-label" data-ui-copy="supporting">Preparation status</p>
         <p className="mt-1 w-full text-sm text-black/75" aria-live="polite" data-ui-copy="body">
-          {activeContract.status === "preparing" ? "Preparing a verified update preview..." : activeContract.status === "ready" && preview ? `Preview prepared ${dateTime(preview.preparedAt)}.` : activeContract.status === "applying" ? "Applying the reviewed update through the verified connection..." : prepareRequested ? "Choose a supported history bundle for preview. Direct HighLevel sync remains unavailable until its connection is verified." : "Choose a source, then prepare a preview when its connection is available."}
+          {activeContract.status === "preparing" ? "Preparing a verified update preview..." : activeContract.status === "ready" && preview ? `Preview prepared ${dateTime(preview.preparedAt)}.` : activeContract.status === "applying" ? "Applying the reviewed update through the verified connection..." : prepareRequested ? "The requested preview could not be prepared. Check the displayed error, then try again." : "Choose a source, then prepare a preview when its connection is available."}
         </p>
-        <button type="button" onClick={() => { setPrepareRequested(true); if (source === "import") inputRef.current?.click(); }} disabled={activeContract.status === "preparing" || isApplying} className="mt-3 rounded border border-navy px-3 py-2 text-sm font-semibold text-navy hover:bg-navy hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
-          {activeContract.status === "preparing" ? "Preparing preview" : source === "import" ? "Choose history bundle" : "Prepare update preview"}
+        <button type="button" onClick={() => { if (source === "import") { setPrepareRequested(true); inputRef.current?.click(); } else void prepareDirectPreview(); }} disabled={activeContract.status === "preparing" || isApplying} className="mt-3 rounded border border-navy px-3 py-2 text-sm font-semibold text-navy hover:bg-navy hover:text-white disabled:cursor-not-allowed disabled:opacity-50">
+          {activeContract.status === "preparing" ? "Preparing preview" : source === "import" ? "Choose history bundle" : "Read HighLevel history"}
         </button>
       </div>
 
@@ -195,12 +246,26 @@ export default function ProspectArchiveUpdate({ contract }: { contract?: Prospec
           {categories.map(([label, value]) => <div key={label} className="rounded border border-border-brand bg-parchment/45 p-3"><span className="block text-xs font-semibold uppercase tracking-wide text-field-label">{label}</span><strong className="mt-1 block text-xl text-navy">{typeof value === "number" ? value : "Not prepared"}</strong></div>)}
         </div>
         <p className="mt-3 w-full text-sm text-black/60" data-ui-copy="body">{preview ? "Review held, unclassified, and incomplete items before applying. Unchanged items remain untouched." : "Counts appear only after the connection produces a verified preview. This panel does not invent a successful result."}</p>
+        {previewActivities.length > 0 && <details className="mt-3 rounded border border-border-brand bg-parchment/30 p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-navy">Read the {previewActivities.length} proposed history items</summary>
+          <div className="mt-3 space-y-3">
+            {previewActivities.map((activity, index) => <article key={`${activity.cls_record_id}-${activity.occurred_at}-${index}`} className="rounded border border-border-brand bg-white p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-field-label">{activity.cls_record_id} · {activity.kind} · {dateTime(activity.occurred_at)}</p>
+              {activity.subject && <p className="mt-1 text-sm font-semibold text-navy">{activity.subject}</p>}
+              {activity.body && <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-black/70">{activity.body}</p>}
+            </article>)}
+          </div>
+        </details>}
+        {directIssues.length > 0 && <details className="mt-3 rounded border border-amber-300/70 bg-amber-50/60 p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-navy">Review {directIssues.length} held HighLevel items</summary>
+          <ul className="mt-3 space-y-1 text-sm text-black/70">{directIssues.map((issue, index) => <li key={`${issue.cls_record_id}-${issue.provider_event_id ?? index}`}>{issue.cls_record_id}: {issue.reason.replaceAll("_", " ")}</li>)}</ul>
+        </details>}
       </div>
 
       <div className="mt-4 rounded border border-border-brand bg-parchment/30 p-3" data-ui-component-content="prospect-archive-update-apply">
         <p className="w-full text-xs font-semibold uppercase tracking-wide text-field-label" data-ui-copy="supporting">Apply reviewed update</p>
-        <p className="mt-1 w-full text-sm text-black/70" data-ui-copy="body">Apply is available only for a server-verified import preview and a short-lived review permit. It writes archive history only; it cannot change HighLevel, a workflow, contactability, or the source record.</p>
-        {preview && source === "import" && <label className="mt-3 flex w-full items-start gap-2 text-sm text-black/75">
+        <p className="mt-1 w-full text-sm text-black/70" data-ui-copy="body">Apply is available only for a complete, server-verified preview and a short-lived review permit. It writes archive history only; it cannot change HighLevel, a workflow, contactability, or the source record.</p>
+        {preview && (source === "import" || source === "highlevel") && <label className="mt-3 flex w-full items-start gap-2 text-sm text-black/75">
           <input type="checkbox" checked={reviewed} onChange={(event) => setReviewed(event.currentTarget.checked)} className="mt-1" />
           <span>I reviewed the preview and understand that held, unclassified, or incomplete items cannot be applied.</span>
         </label>}

@@ -14,8 +14,9 @@ describe("prospect archive update operator surface", () => {
     expect(loadedModule.default).toBeTypeOf("function");
   });
 
-  it("keeps direct sync unavailable and makes import preview explicit", () => {
-    expect(component).toContain("Direct sync needs a verified connection");
+  it("makes the read-only direct history preview and import preview explicit", () => {
+    expect(component).toContain("Read the protected BA/AE contact history");
+    expect(component).toContain("Read HighLevel history");
     expect(component).toContain("Upload a supported history bundle");
     expect(component).toContain("This panel does not invent a successful result");
   });
@@ -24,6 +25,7 @@ describe("prospect archive update operator surface", () => {
     for (const label of ["New", "Unchanged", "Held", "Unclassified", "Incomplete", "Apply reviewed update", "Latest result", "No changes were found"]) expect(component).toContain(label);
     expect(component).toContain("onApplyReviewedUpdate");
     expect(component).toContain('/api/admin/prospect-operations/archive-updates/preview');
+    expect(component).toContain('/api/admin/prospect-operations/archive-updates/direct-preview');
     expect(component).toContain('/api/admin/prospect-operations/archive-updates/apply');
     expect(component).toContain('review_permit');
     expect(component).toContain('I reviewed the preview');
