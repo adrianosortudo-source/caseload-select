@@ -24,3 +24,6 @@
 @media (max-width: 480px) { .page { padding: 24px 16px 40px; } .header h1 { font-size: 28px; } .panel { padding: 20px; } .result, .message { padding: 16px; } }
 
 
+
+.result p, .note, .panel[data-ui-component-content="message-test"] > p { text-wrap: pretty; }
+@media (max-width: 360px) { .panel { padding: 16px; } .result, .message { padding: 12px; } }

@@ -87,7 +87,7 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
             Continue your inquiry
           </p>
           <h1
-            className="text-[30px] sm:text-[34px] leading-[1.08] font-extrabold text-[var(--cls-text,#1E2F58)]"
+            className="[text-wrap:pretty] text-[30px] sm:text-[34px] leading-[1.08] font-extrabold text-[var(--cls-text,#1E2F58)]"
             style={{ fontFamily: "var(--cls-font-display, Manrope, sans-serif)" }}
             data-ui-copy="heading"
           >
