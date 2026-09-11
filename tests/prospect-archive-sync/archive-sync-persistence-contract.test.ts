@@ -17,7 +17,7 @@ import type { ArchiveSyncPreview } from '@/lib/prospect-archive-sync/types';
 const NOW = new Date('2026-09-10T18:00:00.000Z');
 const SECRET = 'archive-review-contract-secret';
 const migration = readFileSync(
-  resolve(process.cwd(), 'supabase/migrations/20260910161644_prospect_archive_sync_apply.sql'),
+  resolve(process.cwd(), 'supabase/migrations/20260911215333_prospect_archive_sync_apply.sql'),
   'utf8',
 );
 const persistence = readFileSync(
