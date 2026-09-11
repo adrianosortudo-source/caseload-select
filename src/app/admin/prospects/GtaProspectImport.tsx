@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type ImportRecord = Record<string, unknown>;
 
@@ -30,6 +30,15 @@ type ImportReceipt = {
   inserted: number;
   updated: number;
   duplicates: number;
+};
+
+type ImportHistoryRow = {
+  id: string;
+  sourceName: string;
+  sourceSha256: string;
+  recordCount: number;
+  state: string;
+  appliedAt: string | null;
 };
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
@@ -155,12 +164,24 @@ function downloadTemplate() {
   URL.revokeObjectURL(link.href);
 }
 
+function dateTime(value: string | null): string {
+  if (!value) return "Not applied";
+  const date = new Date(value);
+  return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat("en-CA", { dateStyle: "medium", timeStyle: "short" }).format(date);
+}
+
+function stateLabel(value: string): string {
+  return value.replaceAll("_", " ").replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 export default function GtaProspectImport({ onImported }: { onImported?: () => void }) {
   const [draft, setDraft] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [records, setRecords] = useState<ImportRecord[] | null>(null);
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [receipt, setReceipt] = useState<ImportReceipt | null>(null);
+  const [history, setHistory] = useState<ImportHistoryRow[] | null>(null);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"validate" | "apply" | null>(null);
   const [reviewed, setReviewed] = useState(false);
@@ -172,6 +193,32 @@ export default function GtaProspectImport({ onImported }: { onImported?: () => v
   const counts = useMemo(() => preview ? [
     ["New", preview.summary.newRecords], ["Updates", preview.summary.updates], ["Duplicates", preview.summary.duplicates], ["Review needed", preview.summary.reviewRequired], ["Invalid", preview.summary.invalid],
   ] as const : [], [preview]);
+
+  const loadHistory = useCallback(async (signal?: AbortSignal) => {
+    try {
+      const response = await fetch("/admin/prospects/research-import", { signal, headers: { accept: "application/json" } });
+      const payload = await response.json().catch(() => ({})) as { error?: unknown; history?: unknown };
+      if (!response.ok) throw new Error(typeof payload.error === "string" ? payload.error : "Import history could not be loaded.");
+      const rows = Array.isArray(payload.history) ? payload.history : [];
+      setHistory(rows.slice(0, 10).flatMap((row): ImportHistoryRow[] => {
+        if (!row || typeof row !== "object") return [];
+        const item = row as Record<string, unknown>;
+        if (typeof item.id !== "string" || typeof item.sourceName !== "string" || typeof item.sourceSha256 !== "string" || typeof item.recordCount !== "number" || typeof item.state !== "string") return [];
+        return [{ id: item.id, sourceName: item.sourceName, sourceSha256: item.sourceSha256, recordCount: item.recordCount, state: item.state, appliedAt: typeof item.appliedAt === "string" ? item.appliedAt : null }];
+      }));
+      setHistoryError(null);
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === "AbortError") return;
+      setHistory(null);
+      setHistoryError(cause instanceof Error ? cause.message : "Import history could not be loaded.");
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadHistory(controller.signal);
+    return () => controller.abort();
+  }, [loadHistory]);
 
   async function useFile(file: File | null) {
     setSelectedFile(file);
@@ -210,6 +257,7 @@ export default function GtaProspectImport({ onImported }: { onImported?: () => v
       const result = payload.receipt && typeof payload.receipt === "object" ? payload.receipt as Record<string, unknown> : payload;
       setReceipt({ id: typeof result.id === "string" ? result.id : preview.sourceSha256, recordedAt: typeof result.recordedAt === "string" ? result.recordedAt : new Date().toISOString(), inserted: typeof result.inserted === "number" ? result.inserted : preview.summary.newRecords, updated: typeof result.updated === "number" ? result.updated : preview.summary.updates, duplicates: typeof result.duplicates === "number" ? result.duplicates : preview.summary.duplicates });
       setReviewed(false);
+      await loadHistory();
       onImported?.();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The reviewed package could not be imported."); }
     finally { setBusy(null); }
@@ -265,7 +313,14 @@ export default function GtaProspectImport({ onImported }: { onImported?: () => v
 
       <div className="mt-4 rounded border border-border-brand bg-white p-3" data-ui-component-content="gta-prospect-import-history">
         <p className="w-full text-xs font-semibold uppercase tracking-wide text-field-label" data-ui-copy="supporting">Latest import receipt</p>
-        {receipt ? <p className="mt-1 w-full text-sm text-black/70" data-ui-copy="body">Receipt {receipt.id} was recorded {new Intl.DateTimeFormat("en-CA", { dateStyle: "medium", timeStyle: "short" }).format(new Date(receipt.recordedAt))}. {receipt.inserted} new record{receipt.inserted === 1 ? "" : "s"}, {receipt.updated} update{receipt.updated === 1 ? "" : "s"}, and {receipt.duplicates} duplicate{receipt.duplicates === 1 ? "" : "s"} retained for traceability.</p> : <p className="mt-1 w-full text-sm text-black/60" data-ui-copy="body">No import receipt is available in this session. A confirmed import will appear here and in the operator import history.</p>}
+        {receipt ? <p className="mt-1 w-full text-sm text-black/70" data-ui-copy="body">Receipt {receipt.id} was recorded {dateTime(receipt.recordedAt)}. {receipt.inserted} new record{receipt.inserted === 1 ? "" : "s"}, {receipt.updated} update{receipt.updated === 1 ? "" : "s"}, and {receipt.duplicates} duplicate{receipt.duplicates === 1 ? "" : "s"} retained for traceability.</p> : <p className="mt-1 w-full text-sm text-black/60" data-ui-copy="body">No import receipt is available in this session. A confirmed import will appear here and in the operator import history.</p>}
+        <div className="mt-4 border-t border-border-brand pt-3" data-ui-component-content="gta-prospect-import-history-list">
+          <p className="w-full text-xs font-semibold uppercase tracking-wide text-field-label" data-ui-copy="supporting">Recent import history</p>
+          {history === null && !historyError ? <p className="mt-1 w-full text-sm text-black/60" data-ui-copy="body">Loading the last 10 import receipts...</p> : null}
+          {historyError ? <p className="mt-2 w-full rounded border border-red-fail/30 bg-red-50 p-3 text-sm text-red-fail" role="status" data-ui-copy="body">Import history is unavailable: {historyError}</p> : null}
+          {history && history.length === 0 ? <p className="mt-1 w-full text-sm text-black/60" data-ui-copy="body">No import batches have been recorded yet.</p> : null}
+          {history && history.length > 0 ? <div className="mt-2 overflow-x-auto rounded border border-border-brand"><table className="w-full min-w-[640px] text-left text-sm"><thead className="bg-parchment/45 text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Source</th><th className="px-3 py-2">State</th><th className="px-3 py-2">Records</th><th className="px-3 py-2">Applied</th></tr></thead><tbody>{history.map((row) => <tr key={row.id} className="border-t border-border-brand align-top"><td className="px-3 py-2"><span className="block font-semibold text-navy">{row.sourceName}</span><span className="mt-1 block break-all text-xs text-black/55">{row.sourceSha256}</span></td><td className="px-3 py-2 text-black/70">{stateLabel(row.state)}</td><td className="px-3 py-2 text-black/70">{row.recordCount}</td><td className="px-3 py-2 text-black/70">{dateTime(row.appliedAt)}</td></tr>)}</tbody></table></div> : null}
+        </div>
       </div>
     </section>
   );

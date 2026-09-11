@@ -32,6 +32,14 @@ describe("GTA prospect importer operator UI", () => {
     expect(component).toContain("Duplicate and identity-review classifications stay visible in the receipt and do not authorize contact or outreach.");
   });
 
+  it("loads a bounded, source-attributed import history on mount and after an applied batch", () => {
+    expect(component).toContain('fetch("/admin/prospects/research-import", { signal');
+    expect(component).toContain("rows.slice(0, 10)");
+    expect(component).toContain("await loadHistory()");
+    expect(component).toContain("Recent import history");
+    expect(component).toContain("No import batches have been recorded yet.");
+  });
+
   it("marks reviewed copy for the rendered quality gate and avoids em dashes", () => {
     expect(component).toContain('data-ui-component-content="gta-prospect-import"');
     expect(component).toContain('data-ui-copy="heading"');
