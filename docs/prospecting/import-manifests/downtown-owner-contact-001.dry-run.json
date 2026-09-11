@@ -1,0 +1,93 @@
+{
+  "schemaVersion": "gta-prospect-owner-contact-dry-run-v1",
+  "observationDate": "2026-09-08",
+  "actionsNotPerformed": [
+    "database connection",
+    "migration application",
+    "data import",
+    "CRM activity",
+    "contact or outreach",
+    "deployment",
+    "merge"
+  ],
+  "records": [
+    {
+      "sourceRecordKey": "gta-prospect-002-b002-11",
+      "ownerName": "Mark G. Baker",
+      "ownerRole": "owner",
+      "ownershipConfidence": "confirmed_owner",
+      "ownershipSourceUrl": "https://bakerlawyers.com/our-team/mark-g-baker/",
+      "ownershipObservedOn": "2026-09-08",
+      "emailAvailability": "direct_owner_email",
+      "emailAddress": "mbaker@bakerlawyers.com",
+      "emailSourceUrl": "https://bakerlawyers.com/our-team/mark-g-baker/",
+      "emailObservedOn": "2026-09-08",
+      "isPrimaryContact": true
+    },
+    {
+      "sourceRecordKey": "gta-prospect-002-b002-21",
+      "ownerName": "Megan MacKeigan",
+      "ownerRole": "founding_partner",
+      "ownershipConfidence": "confirmed_owner",
+      "ownershipSourceUrl": "https://andersonmackeigan.com/megan-mackeigan/",
+      "ownershipObservedOn": "2026-09-08",
+      "emailAvailability": "direct_owner_email",
+      "emailAddress": "megan@andersonmackeigan.com",
+      "emailSourceUrl": "https://andersonmackeigan.com/megan-mackeigan/",
+      "emailObservedOn": "2026-09-08",
+      "isPrimaryContact": true
+    },
+    {
+      "sourceRecordKey": "gta-prospect-003-b003-05",
+      "ownerName": "Elham Beygi",
+      "ownerRole": "founding_partner",
+      "ownershipConfidence": "confirmed_owner",
+      "ownershipSourceUrl": "https://englobelaw.com/people/",
+      "ownershipObservedOn": "2026-09-08",
+      "emailAvailability": "direct_owner_email",
+      "emailAddress": "beygi@englobelaw.com",
+      "emailSourceUrl": "https://englobelaw.com/people/",
+      "emailObservedOn": "2026-09-08",
+      "isPrimaryContact": true
+    },
+    {
+      "sourceRecordKey": "gta-prospect-005-b005-24",
+      "ownerName": "Aisling Bondy",
+      "ownerRole": "founding_partner",
+      "ownershipConfidence": "confirmed_owner",
+      "ownershipSourceUrl": "https://bondyimmigration.com/",
+      "ownershipObservedOn": "2026-09-08",
+      "emailAvailability": "direct_owner_email",
+      "emailAddress": "aisling@bondyimmigration.com",
+      "emailSourceUrl": "https://bondyimmigration.com/",
+      "emailObservedOn": "2026-09-08",
+      "isPrimaryContact": true
+    },
+    {
+      "sourceRecordKey": "gta-prospect-006-b006-17",
+      "ownerName": "Allison Hines",
+      "ownerRole": "founding_partner",
+      "ownershipConfidence": "confirmed_owner",
+      "ownershipSourceUrl": "https://www.hineslegal.ca/team-1",
+      "ownershipObservedOn": "2026-09-08",
+      "emailAvailability": "direct_owner_email",
+      "emailAddress": "allison@hineslegal.ca",
+      "emailSourceUrl": "https://www.hineslegal.ca/team-1",
+      "emailObservedOn": "2026-09-08",
+      "isPrimaryContact": true
+    },
+    {
+      "sourceRecordKey": "gta-prospect-009-b009-01",
+      "ownerName": "Daniel Naymark",
+      "ownerRole": "founding_partner",
+      "ownershipConfidence": "confirmed_owner",
+      "ownershipSourceUrl": "https://www.naymarklaw.com/team",
+      "ownershipObservedOn": "2026-09-08",
+      "emailAvailability": "direct_owner_email",
+      "emailAddress": "dnaymark@naymarklaw.com",
+      "emailSourceUrl": "https://www.naymarklaw.com/team",
+      "emailObservedOn": "2026-09-08",
+      "isPrimaryContact": true
+    }
+  ]
+}

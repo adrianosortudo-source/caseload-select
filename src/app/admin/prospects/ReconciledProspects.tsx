@@ -7,6 +7,7 @@ import {
   observedLawyerCountLabel,
   type LawyerCountBand,
   type EvidenceAvailability,
+  type OwnerContactFilter,
   type PublicProspectContact,
   type ReconciledGtaProspect,
 } from "@/lib/gta-prospect-records";
@@ -92,6 +93,11 @@ const identityLabels: Record<UnifiedIdentityState, string> = {
   review_needed: "Identity review needed",
   provisional: "Provisional identity",
 };
+const ownerContactLabels: Record<OwnerContactFilter, string> = {
+  identified: "Owner identified",
+  direct_owner_email: "Direct owner email",
+  needs_direct_email: "Needs direct owner email",
+};
 
 function badgeClass(kind: UnifiedProspectSource | UnifiedIdentityState): string {
   if (kind === "shared_registry" || kind === "linked") return "border-green-200 bg-green-50 text-green-900";
@@ -108,6 +114,10 @@ function EvidenceLink({ availability, href, label }: { availability: EvidenceAva
   const content = `${label}: ${evidenceLabel[availability]}`;
   if (!href) return <span className="text-black/50">{content}</span>;
   return <a href={href} target="_blank" rel="noreferrer" className="text-navy underline underline-offset-2">{content}</a>;
+}
+
+function ownerRoleLabel(role: NonNullable<ReconciledGtaProspect["ownerContact"]>["ownerRole"]): string {
+  return titleCase(role);
 }
 
 function SelectField({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
@@ -156,6 +166,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const [hasPublicEmail, setHasPublicEmail] = useState<boolean | "">("");
   const [source, setSource] = useState<UnifiedProspectSource | "">("");
   const [identity, setIdentity] = useState<UnifiedIdentityState | "">("");
+  const [ownerContact, setOwnerContact] = useState<OwnerContactFilter | "">("");
   const [page, setPage] = useState(0);
   const [contactStates, setContactStates] = useState<SourceContactStateMap>(new Map());
   const [contactStateLoading, setContactStateLoading] = useState(false);
@@ -222,8 +233,8 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const filtered = useMemo(() => filterUnifiedProspectState(filterReconciledGtaProspects(records ?? [], {
     query, city, lawyerCountBand: countFilter === "unknown" ? "unknown" : "", lawyerCountRange: selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail,
     advertisingActivity, gbpOpportunityType,
-    advertisingSourceType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, evidenceFreshness: freshness, cohortId,
-  }), { source, identity, quickView }), [records, query, city, countFilter, selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity]);
+    advertisingSourceType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, evidenceFreshness: freshness, cohortId, ownerContact,
+  }), { source, identity, quickView }), [records, query, city, countFilter, selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity, ownerContact]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const displayedPage = Math.min(page, pageCount - 1);
   const visibleRecords = useMemo(() => filtered.slice(displayedPage * PAGE_SIZE, (displayedPage + 1) * PAGE_SIZE), [displayedPage, filtered]);
@@ -268,13 +279,14 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
     hasPublicEmail !== "" && { label: hasPublicEmail ? "Email available" : "Email not available", clear: () => setHasPublicEmail("") },
     source && { label: `Source: ${sourceLabels[source]}`, clear: () => setSource("") },
     identity && { label: `Identity: ${identityLabels[identity]}`, clear: () => setIdentity("") },
+    ownerContact && { label: `Owner contact: ${ownerContactLabels[ownerContact]}`, clear: () => setOwnerContact("") },
   ].filter(Boolean) as { label: string; clear: () => void }[];
 
   function clearFilters() {
     setQuery(""); setCity(""); setCountFilter(""); setCustomMinimum(""); setCustomMaximum(""); setPracticeArea(""); setAdvertising(""); setGbp("");
     setAdvertisingActivity(""); setAdvertisingSourceType(""); setGbpOpportunityType(""); setWebsiteOpportunityType(""); setIntakeChannel("");
     setLawyerCountConfidence(""); setFreshness(""); setCohortId(""); setHasOwner(""); setHasPublicEmail("");
-    setSource(""); setIdentity("");
+    setSource(""); setIdentity(""); setOwnerContact("");
   }
 
   if (error) return <div className="rounded border border-red-fail/30 bg-white px-4 py-3 text-sm text-red-fail">Firm expansion records could not be loaded: {error}</div>;
@@ -303,6 +315,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
         <label className="text-xs font-semibold text-field-label">Search<input value={query} onChange={(event) => setQuery(event.target.value)} className="mt-1 w-full rounded border border-border-brand px-3 py-2 text-sm text-black" placeholder="Firm, domain, city, or practice area" /></label>
         <SelectField label="Record source" value={source} onChange={(value) => setSource(value as UnifiedProspectSource | "")}><option value="">All sources</option>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
         <SelectField label="Identity status" value={identity} onChange={(value) => setIdentity(value as UnifiedIdentityState | "")}><option value="">All identity states</option>{Object.entries(identityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
+        <SelectField label="Owner contact" value={ownerContact} onChange={(value) => setOwnerContact(value as OwnerContactFilter | "")}><option value="">All owner-contact states</option>{Object.entries(ownerContactLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
         <SelectField label="City" value={city} onChange={setCity}><option value="">All cities</option>{values.cities.map((value) => <option key={value} value={value}>{value}</option>)}</SelectField>
         <SelectField label="Observed lawyer count" value={countFilter} onChange={(value) => { setCountFilter(value as CountFilter); setCustomMinimum(""); setCustomMaximum(""); }}>
           <option value="">Any count</option><option value="1">1 lawyer</option><option value="2">2 lawyers</option><option value="3">3 lawyers</option><option value="2-3">2 or 3 lawyers</option><option value="4-5">4 to 5 lawyers</option><option value="6-10">6 to 10 lawyers</option><option value="11-20">11 to 20 lawyers</option><option value="21-50">21 to 50 lawyers</option><option value="51+">51 or more lawyers</option><option value="unknown">Count unknown</option>
@@ -338,7 +351,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
 
       {records.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No reviewed expansion records have been added yet.</div> : filtered.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No firms match the current view and filters.</div> : (
         <div className="mt-3 overflow-x-auto rounded border border-border-brand">
-          <table className="w-full min-w-[1440px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[1520px] border-collapse text-left text-sm">
             <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Source and identity</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Owner and email</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
             <tbody>{visibleRecords.map((record) => {
               const dossier = record.qualifiedDossier;
@@ -349,6 +362,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
                 <td className="px-3 py-3"><div className="flex flex-wrap gap-1">{prospectSources(record).map((item) => <span key={item} className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(item)}`}>{sourceLabels[item]}</span>)}<span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(identityState)}`}>{identityLabels[identityState]}</span></div>{record.legacyCrosswalk && <span className="mt-2 block text-xs leading-5 text-black/60">{record.legacyCrosswalk}</span>}{record.reconciliationNote && <span className="mt-1 block text-xs leading-5 text-black/50">{record.reconciliationNote}</span>}</td>
                 <td className="px-3 py-3"><span className="font-medium text-black/80">{observedLawyerCountLabel(record)}</span>{dossier && <><span className="mt-1 block text-xs text-black/55">{titleCase(dossier.lawyerCount.confidence)} confidence</span><span className="mt-1 block text-xs text-black/55">Observed {dossier.lawyerCount.observedAt.slice(0, 10)}</span></>}</td>
                 <td className="px-3 py-3 text-xs leading-5 text-black/70">{(() => {
+                  if (record.ownerContact) return <><span className="block font-semibold text-navy">{record.ownerContact.ownerName}</span><span className="block text-black/55">{ownerRoleLabel(record.ownerContact.ownerRole)}{record.ownerContact.ownershipConfidence === "leadership_only" ? " (leadership only)" : ""}</span>{record.ownerContact.emailAvailability === "direct_owner_email" && record.ownerContact.emailAddress ? <a href={`mailto:${record.ownerContact.emailAddress}`} className="mt-1 block text-navy underline underline-offset-2">{record.ownerContact.emailAddress}</a> : <span className="mt-1 block text-black/55">{record.ownerContact.emailAvailability === "firm_general_email" ? "Firm general email only" : "Direct email not available"}</span>}</>;
                   const contacts = record.publicContacts ?? [];
                   const owners = contacts.filter((contact) => contact.relationship === "owner" || contact.relationship === "founder");
                   const emails = contacts.filter((contact) => contact.email);

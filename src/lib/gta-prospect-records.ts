@@ -19,6 +19,22 @@ export type LawyerCountRange = { min: number; max: number | null };
 export type ReconciliationStatus = "provisional_new" | "update_existing" | "new_pending_identity" | "duplicate" | "unresolved";
 export type EvidenceAvailability = "observed" | "none" | "unknown";
 export type ProspectRecordOrigin = "research_ledger" | "reviewed_fixture" | "shared_registry" | "legacy_provenance";
+export type OwnerContactFilter = "identified" | "direct_owner_email" | "needs_direct_email";
+
+/**
+ * Operator-only display data from the separate owner-contact ledger.
+ *
+ * This is deliberately a read-model addition. It is not accepted by the
+ * source-controlled firm-research importer, which remains limited to public
+ * firm evidence and cannot ingest a contact by accident.
+ */
+export interface ProspectOwnerContactPresentation {
+  ownerName: string;
+  ownerRole: "sole_proprietor" | "owner" | "founding_partner" | "managing_partner" | "other_partner";
+  ownershipConfidence: "confirmed_owner" | "leadership_only";
+  emailAvailability: "direct_owner_email" | "firm_general_email" | "unavailable";
+  emailAddress: string | null;
+}
 export type PublicProspectContact = Readonly<{
   name: string | null;
   relationship: "owner" | "founder" | "principal" | "named_lawyer" | "firm_inbox";
@@ -67,6 +83,12 @@ export interface ReconciledGtaProspect {
   /** Publicly displayed contact observations. These are never an outreach authorization. */
   publicContacts?: readonly PublicProspectContact[];
 
+  /**
+   * Private, operator-gated owner-contact summary. This is attached only by
+   * the reconciled read route after its session check, never by import data.
+   */
+  ownerContact?: ProspectOwnerContactPresentation | null;
+
   /** Evidence-backed qualification detail for enriched firm-expansion records. */
   qualifiedDossier?: import("@/lib/qualified-gta-prospects").QualifiedProspectDossier;
 }
@@ -91,6 +113,7 @@ export interface ReconciledProspectFilters {
   lawyerCountConfidence?: import("@/lib/qualified-gta-prospects").QualifiedProspectConfidence | "";
   evidenceFreshness?: import("@/lib/qualified-gta-prospects").EvidenceFreshness | "";
   cohortId?: string;
+  ownerContact?: OwnerContactFilter | "";
   referenceDate?: Date;
 }
 
@@ -175,6 +198,9 @@ export function filterReconciledGtaProspects(
     if (practiceArea && !record.practiceAreas.some((area) => normalizedPracticeAreaKey(area) === practiceArea)) return false;
     if (filters.advertising && record.advertisingEvidence !== filters.advertising) return false;
     if (filters.gbp && record.gbpEvidence !== filters.gbp) return false;
+    if (filters.ownerContact === "identified" && !record.ownerContact) return false;
+    if (filters.ownerContact === "direct_owner_email" && record.ownerContact?.emailAvailability !== "direct_owner_email") return false;
+    if (filters.ownerContact === "needs_direct_email" && record.ownerContact?.emailAvailability === "direct_owner_email") return false;
     if (filters.hasOwner !== "" && filters.hasOwner !== undefined && Boolean(record.publicContacts?.some((contact) => contact.relationship === "owner" || contact.relationship === "founder")) !== filters.hasOwner) return false;
     if (filters.hasPublicEmail !== "" && filters.hasPublicEmail !== undefined && Boolean(record.publicContacts?.some((contact) => contact.email)) !== filters.hasPublicEmail) return false;
     if (filters.qualification || filters.audit || filters.advertisingActivity || filters.advertisingSourceType || filters.gbpOpportunityType
