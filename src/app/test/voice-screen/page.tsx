@@ -17,6 +17,11 @@ export default function Page() {
         <p className="leading-relaxed" data-ui-copy="body">Inspect the report from sample call facts immediately. Switch to qualification and back to see each new answer included.</p>
         <a href="/test/voice-screen/brief" className="inline-block rounded-full bg-[#1E2F58] text-white px-6 py-3">Open the lawyer brief</a>
       </section>
+      <section className="rounded-xl bg-white border border-[#1E2F58]/15 p-6 space-y-3" data-ui-component-content="connection-test-entry">
+        <h2 className="text-xl font-bold" data-ui-copy="heading">Call handoff and SMS content</h2>
+        <p className="leading-relaxed" data-ui-copy="body">Change consent, urgency, and caller type to check the handoff decision. Inspect the message text produced by the same function the SMS sender uses.</p>
+        <a href="/test/voice-screen/connections" className="inline-block rounded-full bg-[#1E2F58] text-white px-6 py-3">Open connection policy tests</a>
+      </section>
       <section className="space-y-3" data-ui-component-content="integration-tests">
         <h2 className="text-xl font-bold" data-ui-copy="heading">Integration tests are separate.</h2>
         <p className="leading-relaxed" data-ui-copy="body">Call ingestion, SMS delivery, secure link access, and database saving each need their own connection tests. A working widget does not establish that a text was delivered or a call event was received.</p>

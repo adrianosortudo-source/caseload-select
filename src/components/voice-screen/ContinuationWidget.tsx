@@ -77,7 +77,7 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
       roundLabel="Continue your inquiry"
       onSkip={showQuestion && !busy ? () => void save("", true) : undefined}
     >
-      <section className="flex flex-col gap-8 py-2" data-ui-component-content="voice-continuation-widget">
+      <section className="flex flex-col gap-8 py-2" data-ui-component-content="live-continuation">
         <div className="flex flex-col gap-2.5" data-ui-component-content="continuation-introduction">
           <p
             className="text-[12px] uppercase tracking-[0.14em] font-semibold text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_58%,transparent)]"
