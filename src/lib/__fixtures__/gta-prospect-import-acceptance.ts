@@ -162,4 +162,4 @@ export const GTA_PROSPECT_IMPORT_ACCEPTANCE_CASES: readonly ProspectImportAccept
     existing: null,
     expectedDisposition: "invalid" as const,
   }),
-]);
+]) as unknown as readonly ProspectImportAcceptanceCase[];
