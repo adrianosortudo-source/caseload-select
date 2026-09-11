@@ -30,6 +30,9 @@ From clean `origin/main` after this PR has merged, run the approved migration
 tool in dry-run mode against project `ssxryjxifwiivghglqer`.
 
 The only pending versions may be:
+`supabase db push --dry-run --include-all --linked`
+
+`--include-all` is required only because the intended importer versions precede an already-applied archive migration.
 
 - `20260911195806_gta_prospect_operator_import_apply.sql`
 - `20260911205207_gta_prospect_operator_import_history.sql`
