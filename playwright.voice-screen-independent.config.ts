@@ -8,6 +8,8 @@ export default defineConfig({
   workers: 1,
   reporter: "line",
   use: {
+    actionTimeout: 15_000,
+    navigationTimeout: 30_000,
     baseURL: "http://127.0.0.1:3111",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",

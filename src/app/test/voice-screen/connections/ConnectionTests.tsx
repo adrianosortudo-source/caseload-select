@@ -35,7 +35,7 @@ export function ConnectionTests() {
           <p className={styles.eyebrow} data-ui-copy="supporting">Voice intake tests</p>
           <h1 data-ui-copy="heading">Connection tests</h1>
           <p data-ui-copy="body">Tests message content and handoff policy. Real provider delivery and signed event verification are separate connection tests.</p>
-          <Link className={styles.back} href="/test/voice-screen">Open the intake widget</Link>
+          <Link className={styles.back} href="/test/voice-screen/widget">Open the intake widget</Link>
         </header>
         <div className={styles.columns}>
           <section className={styles.panel} data-ui-component-content="handoff-test">

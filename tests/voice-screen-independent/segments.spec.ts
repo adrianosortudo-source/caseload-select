@@ -207,11 +207,11 @@ for (const width of WIDTHS) {
     ];
     for (const choice of blockedChoices) {
       for (const value of choice.values) {
-        await page.getByLabel(choice.label, { exact: true }).selectOption(value);
+        await page.getByRole("combobox", { name: choice.label, exact: true }).selectOption(value);
         await expect(result.getByRole("heading", { name: "Human follow-up", exact: true })).toBeVisible();
         await expect(result).toContainText("The callback request stays open in both cases.");
       }
-      await page.getByLabel(choice.label, { exact: true }).selectOption(choice.restore);
+      await page.getByRole("combobox", { name: choice.label, exact: true }).selectOption(choice.restore);
       await expect(result.getByRole("heading", { name: "Text allowed", exact: true })).toBeVisible();
     }
     await page.getByLabel("Caller asks for a person", { exact: true }).check();

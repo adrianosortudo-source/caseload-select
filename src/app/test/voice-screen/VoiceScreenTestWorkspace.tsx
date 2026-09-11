@@ -27,7 +27,7 @@ export function VoiceScreenTestWorkspace({ initialSegment = "widget" }: { initia
     setGeneration(value => value + 1);
   }
 
-  return <div className="min-h-screen bg-[#F4F3EF] text-[#1E2F58] [&_[data-ui-copy]]:[text-wrap:pretty]" style={{ fontFamily: '"DM Sans Variable", sans-serif' }}>
+  return <div className="min-h-screen bg-[#F4F3EF] text-[#1E2F58]" style={{ fontFamily: '"DM Sans Variable", sans-serif' }}>
     <header className="bg-[#172640] text-white px-5 py-4">
       <div className="mx-auto w-full max-w-[1040px] space-y-3" data-ui-component-content="test-controls">
         <p className="text-sm leading-relaxed" data-ui-copy="supporting"><strong>Independent testing.</strong> This is the production caller component and qualification engine, loaded with fictional call facts. Test answers stay in this tab. Refresh or reset to start over.</p>
