@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { applyGtaProspectOperatorImport, defaultGtaProspectImportSourceName, importRecordSummary } from "@/lib/gta-prospect-operator-import";
+import { listGtaProspectImportHistoryForOperator } from "@/lib/gta-prospect-import-history-reader";
 import { reviewGtaProspectImport } from "@/lib/gta-prospect-research-import";
 import { listGtaProspectResearchForOperator } from "@/lib/gta-prospect-research-reader";
 import { getOperatorSession } from "@/lib/portal-auth";
@@ -38,6 +39,17 @@ async function requestPayload(request: Request): Promise<{ request: ImportReques
 async function review(request: ImportRequest) {
   const existing = await listGtaProspectResearchForOperator();
   return reviewGtaProspectImport(request.records, new Set(existing.map((record) => record.id)));
+}
+
+/** Operator-only, read-only metadata for the last ten reviewed import batches. */
+export async function GET() {
+  if (!(await getOperatorSession())) return NextResponse.json({ error: "Unauthorized" }, { status: 401, headers: noStore });
+  try {
+    return NextResponse.json({ batches: await listGtaProspectImportHistoryForOperator() }, { headers: noStore });
+  } catch (error) {
+    console.error("[gta-prospect-research] operator import history failed", error);
+    return NextResponse.json({ error: "GTA prospect import history could not be loaded." }, { status: 503, headers: noStore });
+  }
 }
 
 /**
