@@ -66,7 +66,7 @@ $$;
 --   * emits created, updated, or already_present accurately;
 --   * preserves a prior website when an update omits it; and
 --   * retains every changed observation as append-only evidence.
-CREATE OR REPLACE FUNCTION public.apply_gta_prospect_research_record(
+CREATE OR REPLACE FUNCTION public.apply_gta_prospect_operator_import_record(
   p_batch_id uuid,
   p_record jsonb,
   p_record_sha256 text
@@ -226,12 +226,76 @@ BEGIN
 END;
 $$;
 
+-- Preserve the established public-research RPC response contract for scripts
+-- and its existing real-Postgres integration test. The operator-only writer
+-- below consumes the detailed action receipt instead.
+CREATE OR REPLACE FUNCTION public.apply_gta_prospect_research_record(
+  p_batch_id uuid,
+  p_record jsonb,
+  p_record_sha256 text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE applied jsonb;
+BEGIN
+  applied := public.apply_gta_prospect_operator_import_record(p_batch_id, p_record, p_record_sha256);
+  IF applied->>'state' = 'already_applied' THEN
+    RETURN applied;
+  END IF;
+  RETURN jsonb_build_object('state', 'applied', 'firm_id', applied->'firm_id');
+END;
+$$;
+
+-- Keep public-contact imports on the detailed operator path so the server
+-- receipt can accurately distinguish created, updated, and already-present
+-- firm research records while retaining append-only contact observations.
+CREATE OR REPLACE FUNCTION public.apply_gta_prospect_research_record_with_contacts(
+  p_batch_id uuid,
+  p_record jsonb,
+  p_record_sha256 text
+)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE contacts jsonb; base_record jsonb; base_hash text; full_canonical jsonb; full_hash text; applied jsonb; firm uuid; item jsonb;
+BEGIN
+  IF jsonb_typeof(p_record) <> 'object' OR NOT (p_record ? 'publicContacts') THEN
+    RAISE EXCEPTION 'record must include publicContacts';
+  END IF;
+  contacts := public.gta_prospect_research_public_contacts_canonical(p_record->'publicContacts');
+  base_record := public.gta_prospect_research_canonical(p_record - 'publicContacts');
+  full_canonical := base_record || jsonb_build_object('publicContacts', contacts);
+  full_hash := encode(extensions.digest(convert_to(full_canonical::text, 'utf8'), 'sha256'), 'hex');
+  IF p_record_sha256 <> full_hash THEN RAISE EXCEPTION 'record hash does not match canonical record'; END IF;
+  base_hash := public.gta_prospect_research_record_sha256(base_record);
+  applied := public.apply_gta_prospect_operator_import_record(p_batch_id, base_record, base_hash);
+  firm := (applied->>'firm_id')::uuid;
+  FOR item IN SELECT value FROM jsonb_array_elements(contacts) LOOP
+    INSERT INTO public.gta_prospect_public_contact_observations(
+      firm_id, import_batch_id, contact_name, relationship, public_email, email_kind, source_url, observed_on
+    ) VALUES (
+      firm, p_batch_id, item->>'name', item->>'relationship', item->>'email', item->>'emailKind', item->>'sourceUrl', (item->>'observedAt')::date
+    ) ON CONFLICT DO NOTHING;
+  END LOOP;
+  RETURN applied || jsonb_build_object('public_contacts', jsonb_array_length(contacts));
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.begin_gta_prospect_operator_import_batch(text, text, integer) FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION public.begin_gta_prospect_operator_import_batch(text, text, integer) TO service_role;
+REVOKE ALL ON FUNCTION public.apply_gta_prospect_operator_import_record(uuid, jsonb, text) FROM PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.apply_gta_prospect_operator_import_record(uuid, jsonb, text) TO service_role;
 
 COMMENT ON FUNCTION public.begin_gta_prospect_operator_import_batch(text, text, integer) IS
   'Service-only replay-safe start for a reviewed GTA public-research import. Returns already_applied for an exact completed replay; it performs no CRM or outreach action.';
 COMMENT ON FUNCTION public.apply_gta_prospect_research_record(uuid, jsonb, text) IS
-  'Service-only append-only GTA research writer. Stable source keys serialize across batches, blank website updates preserve a prior website, and audit actions distinguish created, updated, and already_present.';
+  'Compatibility public-research writer. It preserves the established applied receipt while delegating to the source-key-safe operator writer.';
+COMMENT ON FUNCTION public.apply_gta_prospect_operator_import_record(uuid, jsonb, text) IS
+  'Service-only append-only GTA research writer for the operator import workflow. Stable source keys serialize across batches, blank website updates preserve a prior website, and audit actions distinguish created, updated, and already_present.';
 
 NOTIFY pgrst, 'reload schema';
