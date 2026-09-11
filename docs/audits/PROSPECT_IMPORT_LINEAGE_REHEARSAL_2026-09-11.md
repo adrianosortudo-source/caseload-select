@@ -40,3 +40,11 @@ ledger repair commands.
 
 ## Post-apply checks
 
+After a future, separately authorized normal migration push, run only
+read-only checks:
+
+1. Confirm both versions appear in the production migration ledger.
+2. Confirm the two operator RPCs exist and remain service-role-only.
+3. Confirm the audit-action constraint includes `updated`.
+4. Confirm existing aggregate counts have not changed.
+
