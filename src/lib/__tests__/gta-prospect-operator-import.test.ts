@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
+// The writer is deliberately server-only in the application. Vitest runs
+// outside Next's server compiler, so make that boundary inert for this pure
+// RPC contract.
+vi.mock("server-only", () => ({}));
+
 import { applyGtaProspectOperatorImport, defaultGtaProspectImportSourceName } from "../gta-prospect-operator-import";
 import { buildGtaProspectImportPlan } from "../gta-prospect-research-import";
 

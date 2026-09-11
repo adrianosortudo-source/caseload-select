@@ -1,4 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+// The reader is deliberately server-only in the application. Vitest runs
+// outside Next's server compiler, so make that boundary inert for this pure
+// projection contract.
+vi.mock("server-only", () => ({}));
 
 import { listGtaProspectImportHistoryForOperator } from "../gta-prospect-import-history-reader";
 
