@@ -64,7 +64,7 @@ export function VoiceScreenTestWorkspace({ initialSegment = "widget" }: { initia
         <h2 className="text-xl font-bold" data-ui-copy="heading">From qualification</h2>
         {!snapshot.answers.length && <p className="leading-relaxed" data-ui-copy="body">No written answers yet. The call information is already available for review.</p>}
         {snapshot.answers.map((answer, index) => <div key={index} data-testid="voice-screen-test-answer" className="space-y-1" data-ui-component-content="test-written-answer">
-          <h3 className="font-semibold leading-relaxed" data-ui-copy="heading">{answer.question}</h3>
+          <h3 className="font-semibold leading-relaxed max-[480px]:tracking-[-0.02em]" data-ui-copy="heading">{answer.question}</h3>
           <p className="leading-relaxed" data-ui-copy="body">{answer.answer}</p>
         </div>)}
       </section>
