@@ -202,14 +202,15 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const values = useMemo(() => {
     const list = records ?? [];
     const dossiers = list.flatMap((record) => record.qualifiedDossier ? [record.qualifiedDossier] : []);
+    const supplemental = list.flatMap((record) => record.supplementalEvidence ? [record.supplementalEvidence] : []);
     return {
       cities: uniqueNormalizedLabels(list.flatMap((record) => record.officeCities), normalizedCityLabel),
       practiceAreas: uniqueNormalizedLabels(list.flatMap((record) => record.practiceAreas), normalizedPracticeAreaLabel),
       gbpOpportunities: [...new Set(dossiers.map((dossier) => dossier.gbpOpportunity.type))].sort(),
       advertisingSourceTypes: [...new Set(dossiers.flatMap((dossier) => dossier.advertisingActivity.sourceTypes))].sort(),
-      websiteOpportunities: [...new Set(dossiers.flatMap((dossier) => dossier.websiteAndIntake.opportunityTypes))].sort(),
-      intakeChannels: [...new Set(dossiers.flatMap((dossier) => dossier.websiteAndIntake.observedChannels))].sort(),
-      cohorts: [...new Set(dossiers.map((dossier) => dossier.qualification.cohortId))].sort(),
+      websiteOpportunities: [...new Set([...dossiers.flatMap((dossier) => dossier.websiteAndIntake.opportunityTypes), ...supplemental.flatMap((item) => item.websiteIntake?.opportunityState === "supported" ? ["public_site_review"] : [])])].sort(),
+      intakeChannels: [...new Set([...dossiers.flatMap((dossier) => dossier.websiteAndIntake.observedChannels), ...supplemental.flatMap((item) => item.websiteIntake?.channels ?? [])])].sort(),
+      cohorts: [...new Set([...dossiers.map((dossier) => dossier.qualification.cohortId), ...supplemental.flatMap((item) => item.qualification ? [item.qualification.cohort] : [])])].sort(),
     };
   }, [records]);
 
@@ -231,8 +232,8 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
 
   const quickCounts = useMemo(() => {
     const list = records ?? [];
-    const sharedRegistry = list.filter((record) => Boolean(record.qualifiedDossier)).length;
-    const auditReady = list.filter((record) => record.qualifiedDossier?.audit.state === "ready").length;
+    const sharedRegistry = list.filter((record) => Boolean(record.qualifiedDossier) || record.supplementalEvidence?.identity?.matchState === "confirmed").length;
+    const auditReady = list.filter((record) => record.qualifiedDossier?.audit.state === "ready" || record.supplementalEvidence?.qualification?.state === "qualified").length;
     const identityReview = list.filter((record) => prospectIdentityState(record) === "review_needed").length;
     return { all: list.length, sharedRegistry, auditReady, identityReview };
   }, [records]);
@@ -364,6 +365,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
             <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Source and identity</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Owner and email</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
             <tbody>{visibleRecords.map((record) => {
               const dossier = record.qualifiedDossier;
+              const supplemental = record.supplementalEvidence;
               const identityState = prospectIdentityState(record);
               const contactState = contactStates.get(record.id);
               return <tr key={record.id} className="border-t border-border-brand align-top">
@@ -378,8 +380,8 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
                   return <><span className="block font-semibold text-black/75">{owners.length > 0 ? owners.map((contact) => contact.name).filter(Boolean).join(", ") : "Owner not identified"}</span>{owners.map((contact, index) => <span key={`${contact.name}-${index}`} className="block text-black/55">{contactRoleLabel(contact.relationship)} · observed {contact.observedAt}</span>)}{emails.length > 0 ? emails.map((contact, index) => <span key={`${contact.email}-${index}`} className="mt-1 block break-all"><a href={`mailto:${contact.email ?? ""}`} className="text-navy underline underline-offset-2">{contact.email}</a><span className="ml-1 text-black/55">{contact.emailKind === "owner" ? "owner email" : contact.emailKind === "named_person" ? "named-person email" : "firm email"}</span>{contact.sourceUrl && <a href={contact.sourceUrl} target="_blank" rel="noreferrer" className="ml-1 text-navy underline underline-offset-2">source</a>}<span className="ml-1 text-black/55">observed {contact.observedAt}</span></span>) : <span className="mt-1 block text-black/55">Email not found</span>}</>;
                 })()}</td>
                 <td className="px-3 py-3"><ProspectContactStatus state={contactState} loading={contactStateLoading} error={contactStateError} sourceRecordKey={record.id} onOpenHistory={() => setSelectedContact(record)} /></td>
-                <td className="px-3 py-3 text-black/75">{dossier ? <><span className="font-medium">GBP: {gbpOpportunityLabels[dossier.gbpOpportunity.type] ?? titleCase(dossier.gbpOpportunity.type)}</span><span className="mt-1 block text-xs text-black/55">Website: {dossier.websiteAndIntake.opportunityTypes.map((value) => websiteOpportunityLabels[value] ?? titleCase(value)).join(", ")}</span></> : <span className="text-black/50">Not assessed</span>}</td>
-                <td className="px-3 py-3 text-xs leading-5 text-black/70">{dossier?.websiteAndIntake.observedChannels.join(", ") || "Not assessed"}</td>
+                <td className="px-3 py-3 text-black/75">{dossier ? <><span className="font-medium">GBP: {gbpOpportunityLabels[dossier.gbpOpportunity.type] ?? titleCase(dossier.gbpOpportunity.type)}</span><span className="mt-1 block text-xs text-black/55">Website: {dossier.websiteAndIntake.opportunityTypes.map((value) => websiteOpportunityLabels[value] ?? titleCase(value)).join(", ")}</span></> : supplemental?.qualification ? <><span className="font-medium">GBP: {supplemental.qualification.criteria.gbpEvidence ? "Supported evidence" : "Needs evidence"}</span><span className="mt-1 block text-xs text-black/55">Qualification: {titleCase(supplemental.qualification.state)}</span></> : <span className="text-black/50">Not assessed</span>}</td>
+                <td className="px-3 py-3 text-xs leading-5 text-black/70">{dossier?.websiteAndIntake.observedChannels.join(", ") || supplemental?.websiteIntake?.channels.join(", ") || "Not assessed"}</td>
                 <td className="px-3 py-3 text-xs leading-5"><EvidenceLink availability={record.advertisingEvidence} href={record.advertisingSourceUrl} label="Advertising" /><br /><EvidenceLink availability={record.gbpEvidence} href={record.gbpSourceUrl} label="GBP" />{dossier && <span className="mt-1 block text-black/55">{dossier.evidenceIds.length} registered sources</span>}</td>
                 <td className="px-3 py-3">{dossier ? <><a href={`/admin/prospects/audits/${encodeURIComponent(dossier.firmId)}`} className="inline-flex rounded bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-navy/90">Open audit</a><span className="mt-2 block text-xs text-black/55">Qualified and audit ready</span></> : <span className="text-xs text-black/50">Audit unavailable</span>}</td>
               </tr>;

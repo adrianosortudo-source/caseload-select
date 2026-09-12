@@ -15,6 +15,7 @@ import GtaProspectImport from "./GtaProspectImport";
 import ProspectArchiveUpdate from "./ProspectArchiveUpdate";
 import ProspectingControlPlaneRegistry from "./ProspectingControlPlaneRegistry";
 import ReconciledProspects from "./ReconciledProspects";
+import SupplementalEvidenceImport from "./SupplementalEvidenceImport";
 
 export const dynamic = "force-dynamic";
 
@@ -33,6 +34,8 @@ export default function ProspectsPage() {
       </div>
 
       <GtaProspectImport />
+
+      <SupplementalEvidenceImport />
 
       <ProspectArchiveUpdate />
 

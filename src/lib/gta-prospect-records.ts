@@ -100,6 +100,13 @@ export interface ReconciledGtaProspect {
     confidence: "high" | "moderate" | "unknown";
   } | null;
 
+  /** Private, applied supplemental evidence from the operator evidence ledger. */
+  supplementalEvidence?: {
+    identity: { matchState: "confirmed" | "unresolved" | "distinct"; observedOn: string; confidence: "high" | "moderate" | "unknown" } | null;
+    websiteIntake: { channels: readonly string[]; opportunityState: "supported" | "not_established"; observedOn: string } | null;
+    qualification: { state: "qualified" | "needs_evidence" | "disqualified"; cohort: string; assessedOn: string; criteria: Readonly<Record<string, boolean>> } | null;
+  } | null;
+
   /** Evidence-backed qualification detail for enriched firm-expansion records. */
   qualifiedDossier?: import("@/lib/qualified-gta-prospects").QualifiedProspectDossier;
 }
@@ -220,17 +227,18 @@ export function filterReconciledGtaProspects(
       || filters.websiteOpportunityType || filters.intakeChannel || filters.lawyerCountConfidence
       || filters.evidenceFreshness || filters.cohortId) {
       const dossier = record.qualifiedDossier;
-      if (filters.qualification === "qualified" && !dossier) return false;
-      if (filters.qualification === "needs_evidence" && dossier) return false;
+      const supplemental = record.supplementalEvidence;
+      const qualificationState = supplemental?.qualification?.state ?? (dossier ? "qualified" : "needs_evidence");
+      if (filters.qualification && qualificationState !== filters.qualification) return false;
       if (filters.audit === "ready" && dossier?.audit.state !== "ready") return false;
       if (filters.audit === "not_ready" && dossier?.audit.state === "ready") return false;
       if (filters.advertisingActivity && dossier?.advertisingActivity.state !== filters.advertisingActivity) return false;
       if (filters.advertisingSourceType && !dossier?.advertisingActivity.sourceTypes.includes(filters.advertisingSourceType)) return false;
       if (filters.gbpOpportunityType && dossier?.gbpOpportunity.type !== filters.gbpOpportunityType) return false;
-      if (filters.websiteOpportunityType && !dossier?.websiteAndIntake.opportunityTypes.includes(filters.websiteOpportunityType)) return false;
-      if (filters.intakeChannel && !dossier?.websiteAndIntake.observedChannels.includes(filters.intakeChannel)) return false;
+      if (filters.websiteOpportunityType && !dossier?.websiteAndIntake.opportunityTypes.includes(filters.websiteOpportunityType) && supplemental?.websiteIntake?.opportunityState !== "supported") return false;
+      if (filters.intakeChannel && !dossier?.websiteAndIntake.observedChannels.includes(filters.intakeChannel) && !supplemental?.websiteIntake?.channels.includes(filters.intakeChannel)) return false;
       if (filters.lawyerCountConfidence && dossier?.lawyerCount.confidence !== filters.lawyerCountConfidence) return false;
-      if (filters.cohortId && dossier?.qualification.cohortId !== filters.cohortId) return false;
+      if (filters.cohortId && dossier?.qualification.cohortId !== filters.cohortId && supplemental?.qualification?.cohort !== filters.cohortId) return false;
       if (filters.evidenceFreshness) {
         // Loaded lazily in the module graph through the dossier field contract.
         const observed = dossier?.audit.observedOn ?? record.rosterCheckedAt;
