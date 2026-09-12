@@ -89,6 +89,24 @@ export interface ReconciledGtaProspect {
    */
   ownerContact?: ProspectOwnerContactPresentation | null;
 
+  /**
+   * Private, source-backed Downtown Plan 41 conclusion. A Toronto city label
+   * alone never populates this field.
+   */
+  downtownGeography?: {
+    status: import("@/lib/downtown-toronto-cohort").DowntownGeographyStatus;
+    boundaryGeometrySha256: string;
+    observedOn: string;
+    confidence: "high" | "moderate" | "unknown";
+  } | null;
+
+  /** Private, applied supplemental evidence from the operator evidence ledger. */
+  supplementalEvidence?: {
+    identity: { matchState: "confirmed" | "unresolved" | "distinct"; observedOn: string; confidence: "high" | "moderate" | "unknown" } | null;
+    websiteIntake: { channels: readonly string[]; opportunityState: "supported" | "not_established"; observedOn: string } | null;
+    qualification: { state: "qualified" | "needs_evidence" | "disqualified"; cohort: string; assessedOn: string; criteria: Readonly<Record<string, boolean>> } | null;
+  } | null;
+
   /** Evidence-backed qualification detail for enriched firm-expansion records. */
   qualifiedDossier?: import("@/lib/qualified-gta-prospects").QualifiedProspectDossier;
 }
@@ -114,6 +132,7 @@ export interface ReconciledProspectFilters {
   evidenceFreshness?: import("@/lib/qualified-gta-prospects").EvidenceFreshness | "";
   cohortId?: string;
   ownerContact?: OwnerContactFilter | "";
+  downtownGeography?: import("@/lib/downtown-toronto-cohort").DowntownGeographyStatus | "";
   referenceDate?: Date;
 }
 
@@ -201,23 +220,25 @@ export function filterReconciledGtaProspects(
     if (filters.ownerContact === "identified" && !record.ownerContact) return false;
     if (filters.ownerContact === "direct_owner_email" && record.ownerContact?.emailAvailability !== "direct_owner_email") return false;
     if (filters.ownerContact === "needs_direct_email" && record.ownerContact?.emailAvailability === "direct_owner_email") return false;
+    if (filters.downtownGeography && record.downtownGeography?.status !== filters.downtownGeography) return false;
     if (filters.hasOwner !== "" && filters.hasOwner !== undefined && Boolean(record.publicContacts?.some((contact) => contact.relationship === "owner" || contact.relationship === "founder")) !== filters.hasOwner) return false;
     if (filters.hasPublicEmail !== "" && filters.hasPublicEmail !== undefined && Boolean(record.publicContacts?.some((contact) => contact.email)) !== filters.hasPublicEmail) return false;
     if (filters.qualification || filters.audit || filters.advertisingActivity || filters.advertisingSourceType || filters.gbpOpportunityType
       || filters.websiteOpportunityType || filters.intakeChannel || filters.lawyerCountConfidence
       || filters.evidenceFreshness || filters.cohortId) {
       const dossier = record.qualifiedDossier;
-      if (filters.qualification === "qualified" && !dossier) return false;
-      if (filters.qualification === "needs_evidence" && dossier) return false;
+      const supplemental = record.supplementalEvidence;
+      const qualificationState = supplemental?.qualification?.state ?? (dossier ? "qualified" : "needs_evidence");
+      if (filters.qualification && qualificationState !== filters.qualification) return false;
       if (filters.audit === "ready" && dossier?.audit.state !== "ready") return false;
       if (filters.audit === "not_ready" && dossier?.audit.state === "ready") return false;
       if (filters.advertisingActivity && dossier?.advertisingActivity.state !== filters.advertisingActivity) return false;
       if (filters.advertisingSourceType && !dossier?.advertisingActivity.sourceTypes.includes(filters.advertisingSourceType)) return false;
       if (filters.gbpOpportunityType && dossier?.gbpOpportunity.type !== filters.gbpOpportunityType) return false;
-      if (filters.websiteOpportunityType && !dossier?.websiteAndIntake.opportunityTypes.includes(filters.websiteOpportunityType)) return false;
-      if (filters.intakeChannel && !dossier?.websiteAndIntake.observedChannels.includes(filters.intakeChannel)) return false;
+      if (filters.websiteOpportunityType && !dossier?.websiteAndIntake.opportunityTypes.includes(filters.websiteOpportunityType) && supplemental?.websiteIntake?.opportunityState !== "supported") return false;
+      if (filters.intakeChannel && !dossier?.websiteAndIntake.observedChannels.includes(filters.intakeChannel) && !supplemental?.websiteIntake?.channels.includes(filters.intakeChannel)) return false;
       if (filters.lawyerCountConfidence && dossier?.lawyerCount.confidence !== filters.lawyerCountConfidence) return false;
-      if (filters.cohortId && dossier?.qualification.cohortId !== filters.cohortId) return false;
+      if (filters.cohortId && dossier?.qualification.cohortId !== filters.cohortId && supplemental?.qualification?.cohort !== filters.cohortId) return false;
       if (filters.evidenceFreshness) {
         // Loaded lazily in the module graph through the dossier field contract.
         const observed = dossier?.audit.observedOn ?? record.rosterCheckedAt;

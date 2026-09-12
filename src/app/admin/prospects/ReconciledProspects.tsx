@@ -11,6 +11,7 @@ import {
   type PublicProspectContact,
   type ReconciledGtaProspect,
 } from "@/lib/gta-prospect-records";
+import type { DowntownGeographyStatus } from "@/lib/downtown-toronto-cohort";
 import {
   normalizedCityLabel,
   normalizedPracticeAreaLabel,
@@ -98,6 +99,11 @@ const ownerContactLabels: Record<OwnerContactFilter, string> = {
   direct_owner_email: "Direct owner email",
   needs_direct_email: "Needs direct owner email",
 };
+const downtownGeographyLabels: Record<DowntownGeographyStatus, string> = {
+  inside: "Inside Downtown Plan 41",
+  outside: "Outside Downtown Plan 41",
+  needs_manual_review: "Needs Downtown review",
+};
 
 function badgeClass(kind: UnifiedProspectSource | UnifiedIdentityState): string {
   if (kind === "shared_registry" || kind === "linked") return "border-green-200 bg-green-50 text-green-900";
@@ -167,6 +173,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const [source, setSource] = useState<UnifiedProspectSource | "">("");
   const [identity, setIdentity] = useState<UnifiedIdentityState | "">("");
   const [ownerContact, setOwnerContact] = useState<OwnerContactFilter | "">("");
+  const [downtownGeography, setDowntownGeography] = useState<DowntownGeographyStatus | "">("");
   const [page, setPage] = useState(0);
   const [contactStates, setContactStates] = useState<SourceContactStateMap>(new Map());
   const [contactStateLoading, setContactStateLoading] = useState(false);
@@ -195,14 +202,15 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const values = useMemo(() => {
     const list = records ?? [];
     const dossiers = list.flatMap((record) => record.qualifiedDossier ? [record.qualifiedDossier] : []);
+    const supplemental = list.flatMap((record) => record.supplementalEvidence ? [record.supplementalEvidence] : []);
     return {
       cities: uniqueNormalizedLabels(list.flatMap((record) => record.officeCities), normalizedCityLabel),
       practiceAreas: uniqueNormalizedLabels(list.flatMap((record) => record.practiceAreas), normalizedPracticeAreaLabel),
       gbpOpportunities: [...new Set(dossiers.map((dossier) => dossier.gbpOpportunity.type))].sort(),
       advertisingSourceTypes: [...new Set(dossiers.flatMap((dossier) => dossier.advertisingActivity.sourceTypes))].sort(),
-      websiteOpportunities: [...new Set(dossiers.flatMap((dossier) => dossier.websiteAndIntake.opportunityTypes))].sort(),
-      intakeChannels: [...new Set(dossiers.flatMap((dossier) => dossier.websiteAndIntake.observedChannels))].sort(),
-      cohorts: [...new Set(dossiers.map((dossier) => dossier.qualification.cohortId))].sort(),
+      websiteOpportunities: [...new Set([...dossiers.flatMap((dossier) => dossier.websiteAndIntake.opportunityTypes), ...supplemental.flatMap((item) => item.websiteIntake?.opportunityState === "supported" ? ["public_site_review"] : [])])].sort(),
+      intakeChannels: [...new Set([...dossiers.flatMap((dossier) => dossier.websiteAndIntake.observedChannels), ...supplemental.flatMap((item) => item.websiteIntake?.channels ?? [])])].sort(),
+      cohorts: [...new Set([...dossiers.map((dossier) => dossier.qualification.cohortId), ...supplemental.flatMap((item) => item.qualification ? [item.qualification.cohort] : [])])].sort(),
     };
   }, [records]);
 
@@ -224,17 +232,17 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
 
   const quickCounts = useMemo(() => {
     const list = records ?? [];
-    const sharedRegistry = list.filter((record) => Boolean(record.qualifiedDossier)).length;
-    const auditReady = list.filter((record) => record.qualifiedDossier?.audit.state === "ready").length;
+    const sharedRegistry = list.filter((record) => Boolean(record.qualifiedDossier) || record.supplementalEvidence?.identity?.matchState === "confirmed").length;
+    const auditReady = list.filter((record) => record.qualifiedDossier?.audit.state === "ready" || record.supplementalEvidence?.qualification?.state === "qualified").length;
     const identityReview = list.filter((record) => prospectIdentityState(record) === "review_needed").length;
     return { all: list.length, sharedRegistry, auditReady, identityReview };
   }, [records]);
 
   const filtered = useMemo(() => filterUnifiedProspectState(filterReconciledGtaProspects(records ?? [], {
     query, city, lawyerCountBand: countFilter === "unknown" ? "unknown" : "", lawyerCountRange: selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail,
-    advertisingActivity, gbpOpportunityType,
+    advertisingActivity, gbpOpportunityType, downtownGeography,
     advertisingSourceType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, evidenceFreshness: freshness, cohortId, ownerContact,
-  }), { source, identity, quickView }), [records, query, city, countFilter, selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity, ownerContact]);
+  }), { source, identity, quickView }), [records, query, city, countFilter, selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity, ownerContact, downtownGeography]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const displayedPage = Math.min(page, pageCount - 1);
   const visibleRecords = useMemo(() => filtered.slice(displayedPage * PAGE_SIZE, (displayedPage + 1) * PAGE_SIZE), [displayedPage, filtered]);
@@ -280,13 +288,14 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
     source && { label: `Source: ${sourceLabels[source]}`, clear: () => setSource("") },
     identity && { label: `Identity: ${identityLabels[identity]}`, clear: () => setIdentity("") },
     ownerContact && { label: `Owner contact: ${ownerContactLabels[ownerContact]}`, clear: () => setOwnerContact("") },
+    downtownGeography && { label: `Downtown: ${downtownGeographyLabels[downtownGeography]}`, clear: () => setDowntownGeography("") },
   ].filter(Boolean) as { label: string; clear: () => void }[];
 
   function clearFilters() {
     setQuery(""); setCity(""); setCountFilter(""); setCustomMinimum(""); setCustomMaximum(""); setPracticeArea(""); setAdvertising(""); setGbp("");
     setAdvertisingActivity(""); setAdvertisingSourceType(""); setGbpOpportunityType(""); setWebsiteOpportunityType(""); setIntakeChannel("");
     setLawyerCountConfidence(""); setFreshness(""); setCohortId(""); setHasOwner(""); setHasPublicEmail("");
-    setSource(""); setIdentity(""); setOwnerContact("");
+    setSource(""); setIdentity(""); setOwnerContact(""); setDowntownGeography("");
   }
 
   if (error) return <div className="rounded border border-red-fail/30 bg-white px-4 py-3 text-sm text-red-fail">Firm expansion records could not be loaded: {error}</div>;
@@ -338,6 +347,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
           <SelectField label="Research cohort" value={cohortId} onChange={setCohortId}><option value="">All cohorts</option>{values.cohorts.map((value) => <option key={value} value={value}>Qualified cohort, September 7, 2026</option>)}</SelectField>
           <SelectField label="Owner identified" value={hasOwner === "" ? "" : hasOwner ? "yes" : "no"} onChange={(value) => setHasOwner(value === "" ? "" : value === "yes")}><option value="">Any availability</option><option value="yes">Owner identified</option><option value="no">Owner not identified</option></SelectField>
           <SelectField label="Public email" value={hasPublicEmail === "" ? "" : hasPublicEmail ? "yes" : "no"} onChange={(value) => setHasPublicEmail(value === "" ? "" : value === "yes")}><option value="">Any availability</option><option value="yes">Email available</option><option value="no">Email not available</option></SelectField>
+          <SelectField label="Downtown geometry" value={downtownGeography} onChange={(value) => setDowntownGeography(value as DowntownGeographyStatus | "")}><option value="">Any geometry status</option>{Object.entries(downtownGeographyLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
         </div>
       )}
       <div className="mt-3 grid gap-2 md:grid-cols-2" aria-label="Custom lawyer-count range">
@@ -355,11 +365,12 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
             <thead className="bg-parchment text-xs uppercase tracking-wide text-field-label"><tr><th className="px-3 py-2">Firm</th><th className="px-3 py-2">Source and identity</th><th className="px-3 py-2">Lawyers</th><th className="px-3 py-2">Owner and email</th><th className="px-3 py-2">Contact</th><th className="px-3 py-2">Principal opportunity</th><th className="px-3 py-2">Visible intake</th><th className="px-3 py-2">Evidence</th><th className="px-3 py-2">Review</th></tr></thead>
             <tbody>{visibleRecords.map((record) => {
               const dossier = record.qualifiedDossier;
+              const supplemental = record.supplementalEvidence;
               const identityState = prospectIdentityState(record);
               const contactState = contactStates.get(record.id);
               return <tr key={record.id} className="border-t border-border-brand align-top">
                 <td className="px-3 py-3 font-semibold text-navy">{record.websiteUrl ? <a href={record.websiteUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">{record.firmName}</a> : record.firmName}<span className="mt-1 block text-xs font-normal text-black/55">{record.city}</span>{record.canonicalDomain && <span className="mt-1 block text-xs font-normal text-black/55">{record.canonicalDomain}</span>}</td>
-                <td className="px-3 py-3"><div className="flex flex-wrap gap-1">{prospectSources(record).map((item) => <span key={item} className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(item)}`}>{sourceLabels[item]}</span>)}<span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(identityState)}`}>{identityLabels[identityState]}</span></div>{record.legacyCrosswalk && <span className="mt-2 block text-xs leading-5 text-black/60">{record.legacyCrosswalk}</span>}{record.reconciliationNote && <span className="mt-1 block text-xs leading-5 text-black/50">{record.reconciliationNote}</span>}</td>
+                <td className="px-3 py-3"><div className="flex flex-wrap gap-1">{prospectSources(record).map((item) => <span key={item} className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(item)}`}>{sourceLabels[item]}</span>)}<span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(identityState)}`}>{identityLabels[identityState]}</span></div>{record.downtownGeography && <span className="mt-2 block text-xs leading-5 text-black/60">{downtownGeographyLabels[record.downtownGeography.status]} · {titleCase(record.downtownGeography.confidence)} confidence · observed {record.downtownGeography.observedOn}</span>}{record.legacyCrosswalk && <span className="mt-2 block text-xs leading-5 text-black/60">{record.legacyCrosswalk}</span>}{record.reconciliationNote && <span className="mt-1 block text-xs leading-5 text-black/50">{record.reconciliationNote}</span>}</td>
                 <td className="px-3 py-3"><span className="font-medium text-black/80">{observedLawyerCountLabel(record)}</span>{dossier && <><span className="mt-1 block text-xs text-black/55">{titleCase(dossier.lawyerCount.confidence)} confidence</span><span className="mt-1 block text-xs text-black/55">Observed {dossier.lawyerCount.observedAt.slice(0, 10)}</span></>}</td>
                 <td className="px-3 py-3 text-xs leading-5 text-black/70">{(() => {
                   if (record.ownerContact) return <><span className="block font-semibold text-navy">{record.ownerContact.ownerName}</span><span className="block text-black/55">{ownerRoleLabel(record.ownerContact.ownerRole)}{record.ownerContact.ownershipConfidence === "leadership_only" ? " (leadership only)" : ""}</span>{record.ownerContact.emailAvailability === "direct_owner_email" && record.ownerContact.emailAddress ? <a href={`mailto:${record.ownerContact.emailAddress}`} className="mt-1 block text-navy underline underline-offset-2">{record.ownerContact.emailAddress}</a> : <span className="mt-1 block text-black/55">{record.ownerContact.emailAvailability === "firm_general_email" ? "Firm general email only" : "Direct email not available"}</span>}</>;
@@ -369,8 +380,8 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
                   return <><span className="block font-semibold text-black/75">{owners.length > 0 ? owners.map((contact) => contact.name).filter(Boolean).join(", ") : "Owner not identified"}</span>{owners.map((contact, index) => <span key={`${contact.name}-${index}`} className="block text-black/55">{contactRoleLabel(contact.relationship)} · observed {contact.observedAt}</span>)}{emails.length > 0 ? emails.map((contact, index) => <span key={`${contact.email}-${index}`} className="mt-1 block break-all"><a href={`mailto:${contact.email ?? ""}`} className="text-navy underline underline-offset-2">{contact.email}</a><span className="ml-1 text-black/55">{contact.emailKind === "owner" ? "owner email" : contact.emailKind === "named_person" ? "named-person email" : "firm email"}</span>{contact.sourceUrl && <a href={contact.sourceUrl} target="_blank" rel="noreferrer" className="ml-1 text-navy underline underline-offset-2">source</a>}<span className="ml-1 text-black/55">observed {contact.observedAt}</span></span>) : <span className="mt-1 block text-black/55">Email not found</span>}</>;
                 })()}</td>
                 <td className="px-3 py-3"><ProspectContactStatus state={contactState} loading={contactStateLoading} error={contactStateError} sourceRecordKey={record.id} onOpenHistory={() => setSelectedContact(record)} /></td>
-                <td className="px-3 py-3 text-black/75">{dossier ? <><span className="font-medium">GBP: {gbpOpportunityLabels[dossier.gbpOpportunity.type] ?? titleCase(dossier.gbpOpportunity.type)}</span><span className="mt-1 block text-xs text-black/55">Website: {dossier.websiteAndIntake.opportunityTypes.map((value) => websiteOpportunityLabels[value] ?? titleCase(value)).join(", ")}</span></> : <span className="text-black/50">Not assessed</span>}</td>
-                <td className="px-3 py-3 text-xs leading-5 text-black/70">{dossier?.websiteAndIntake.observedChannels.join(", ") || "Not assessed"}</td>
+                <td className="px-3 py-3 text-black/75">{dossier ? <><span className="font-medium">GBP: {gbpOpportunityLabels[dossier.gbpOpportunity.type] ?? titleCase(dossier.gbpOpportunity.type)}</span><span className="mt-1 block text-xs text-black/55">Website: {dossier.websiteAndIntake.opportunityTypes.map((value) => websiteOpportunityLabels[value] ?? titleCase(value)).join(", ")}</span></> : supplemental?.qualification ? <><span className="font-medium">GBP: {supplemental.qualification.criteria.gbpEvidence ? "Supported evidence" : "Needs evidence"}</span><span className="mt-1 block text-xs text-black/55">Qualification: {titleCase(supplemental.qualification.state)}</span></> : <span className="text-black/50">Not assessed</span>}</td>
+                <td className="px-3 py-3 text-xs leading-5 text-black/70">{dossier?.websiteAndIntake.observedChannels.join(", ") || supplemental?.websiteIntake?.channels.join(", ") || "Not assessed"}</td>
                 <td className="px-3 py-3 text-xs leading-5"><EvidenceLink availability={record.advertisingEvidence} href={record.advertisingSourceUrl} label="Advertising" /><br /><EvidenceLink availability={record.gbpEvidence} href={record.gbpSourceUrl} label="GBP" />{dossier && <span className="mt-1 block text-black/55">{dossier.evidenceIds.length} registered sources</span>}</td>
                 <td className="px-3 py-3">{dossier ? <><a href={`/admin/prospects/audits/${encodeURIComponent(dossier.firmId)}`} className="inline-flex rounded bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-navy/90">Open audit</a><span className="mt-2 block text-xs text-black/55">Qualified and audit ready</span></> : <span className="text-xs text-black/50">Audit unavailable</span>}</td>
               </tr>;
