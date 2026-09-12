@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(
-  resolve(process.cwd(), "supabase/migrations/20260908140907_gta_prospect_downtown_geography_observations.sql"),
+  resolve(process.cwd(), "supabase/migrations-deferred/20260908140907_gta_prospect_downtown_geography_observations.sql"),
   "utf8",
 );
 const coreImport = readFileSync(resolve(process.cwd(), "src/lib/gta-prospect-research-import.ts"), "utf8");
