@@ -29,7 +29,7 @@ export function ContinuationSummary({ view, busy, final, onContinue, onCorrect }
     <section aria-label={final ? "Your inquiry summary" : "Summary of your call"} className="flex min-w-0 flex-col gap-6 rounded-2xl border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_15%,transparent)] bg-[var(--cls-surface,#FFFFFF)] p-6 max-[480px]:p-4 max-[360px]:p-3 text-[var(--cls-text,#1E2F58)]" style={{ fontFamily: "var(--cls-font-body, DM Sans, sans-serif)" }}>
       <div data-ui-component-content="continuation-summary-heading" className="flex flex-col gap-3">
         <h2 data-ui-copy="heading" className="text-[24px] leading-tight font-extrabold [text-wrap:pretty]" style={{ fontFamily: "var(--cls-font-display, Manrope, sans-serif)" }}>
-          {final ? "Your inquiry summary" : "Here is what we understood from your call."}
+          {final ? "Your inquiry summary" : "Your call summary"}
         </h2>
         <p data-ui-copy="body" className="text-[16px] leading-relaxed opacity-75" style={{ textWrap: final ? "pretty" : "wrap" }}>
           {final ? "This brings together the information from your call and the answers you added here." : "Review these details and correct anything we missed."}
