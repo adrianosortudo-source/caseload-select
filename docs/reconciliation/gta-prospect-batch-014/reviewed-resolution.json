@@ -1,0 +1,143 @@
+{
+  "schemaVersion": "gta-prospect-reviewed-resolution.v1",
+  "batchId": "gta-prospect-batch-014",
+  "reviewedOn": "2026-09-13",
+  "liveOperatorBaselineCount": 147,
+  "candidateCount": 8,
+  "importCount": 4,
+  "excludedCount": 0,
+  "heldCount": 4,
+  "automaticMerge": false,
+  "outreachAuthorized": false,
+  "policy": {
+    "requiredRosterProvenance": "first_party",
+    "targetCountBands": [
+      {
+        "min": 3,
+        "max": 5
+      },
+      {
+        "min": 6,
+        "max": 10
+      },
+      {
+        "min": 11,
+        "max": 20
+      }
+    ],
+    "comparisonOnlyCountBands": [
+      {
+        "min": 21,
+        "max": 50
+      }
+    ],
+    "requiresFreshLivePreflightBeforeApply": true,
+    "requiresSeparateImportAuthorization": true
+  },
+  "decisions": [
+    {
+      "sourceRecordKey": "b014-001",
+      "firmName": "Nachla Law",
+      "observedLawyerCount": 3,
+      "countQualifier": "exact",
+      "disposition": "import",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      },
+      "basis": "Batch 013's static reconciliation was clear. Current first-party roster and office evidence resolve the prior evidence hold, and the 2026-09-13 authenticated exact-name operator UI check returned no unified-record match. This is provisional only: obtain a fresh protected identity snapshot immediately before any import."
+    },
+    {
+      "sourceRecordKey": "b014-002",
+      "firmName": "Merwar Lawyers",
+      "observedLawyerCount": 5,
+      "countQualifier": "exact",
+      "disposition": "import",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      },
+      "basis": "Batch 013's static reconciliation was clear. Current first-party roster and Mississauga evidence resolve the prior office-evidence hold, and the 2026-09-13 authenticated exact-name operator UI check returned no unified-record match. This is provisional only: obtain a fresh protected identity snapshot immediately before any import."
+    },
+    {
+      "sourceRecordKey": "b014-003",
+      "firmName": "Kelly D. Jordan Family Law Firm",
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "disposition": "import",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      },
+      "basis": "Batch 013's static reconciliation was clear. Current first-party evidence identifies six named lawyers, a Toronto office, and Kelly Jordan as Founding Partner; the 2026-09-13 authenticated exact-name operator UI check returned no unified-record match. This is provisional only: obtain a fresh protected identity snapshot immediately before any import."
+    },
+    {
+      "sourceRecordKey": "b014-004",
+      "firmName": "Malicki Sanchez Law",
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "disposition": "import",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      },
+      "basis": "Batch 013's static reconciliation was clear. Current first-party evidence identifies six lawyers and a Mississauga practice; the 2026-09-13 authenticated exact-name operator UI check returned no unified-record match. This is provisional only: obtain a fresh protected identity snapshot immediately before any import."
+    },
+    {
+      "sourceRecordKey": "b014-005",
+      "firmName": "Bogoroch & Associates LLP",
+      "observedLawyerCount": 9,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "related_or_legacy_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Current first-party evidence resolves the roster count but the Batch 013 static baseline reported a related legacy signal. Do not convert that signal into an identity link. Obtain a protected snapshot and a separate, source-supported identity adjudication before any import, update, or merge."
+    },
+    {
+      "sourceRecordKey": "b014-006",
+      "firmName": "Goldmans LLP",
+      "observedLawyerCount": null,
+      "countQualifier": "unknown",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "The currently accessible first-party page does not prove a complete active-lawyer roster. Retain the evidence but do not import until a full current roster and fresh protected identity preflight are available."
+    },
+    {
+      "sourceRecordKey": "b014-007",
+      "firmName": "Walker Law Professional Corporation",
+      "observedLawyerCount": 7,
+      "countQualifier": "exact",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "uncertain",
+        "liveBaseline": "uncertain"
+      },
+      "basis": "Current first-party evidence supports a seven-lawyer Toronto roster and identifies Tanya Walker as founder. A similarly named legacy row (J. Walker Law Professional Corporation, different domain and city) appeared in the exact-name operator UI search. It is not an identity bridge. Run the static normalizer and protected snapshot before deciding whether this is net-new."
+    },
+    {
+      "sourceRecordKey": "b014-008",
+      "firmName": "Aitken Robertson Criminal & DUI Defence",
+      "observedLawyerCount": null,
+      "countQualifier": "unknown",
+      "disposition": "hold",
+      "reconciliationStatus": null,
+      "reconciliation": {
+        "staticBaseline": "uncertain",
+        "liveBaseline": "no_match"
+      },
+      "basis": "The current firm-wide roster has an eleven-versus-thirteen conflict and the Toronto page's four people are not a proven office-specific firm roster. The practice is multi-office across Ontario. Do not import or infer a GTA-only count without a first-party resolution of roster and local scope."
+    }
+  ]
+}
