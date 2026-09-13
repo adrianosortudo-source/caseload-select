@@ -15,6 +15,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const path = usePathname();
   const isPortal = path.startsWith("/portal");
   const isWidget = path.startsWith("/widget");
+  const isVoiceScreenTest = path === "/test/voice-screen" || path.startsWith("/test/voice-screen/");
   const isDemo = path.startsWith("/demo");
   const isOperatorConsole = path.startsWith("/admin");
   const isOperatorAuth = path.startsWith("/operator");
@@ -46,6 +47,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     isPortal ||
     isWidget ||
     isDemo ||
+    isVoiceScreenTest ||
     isOperatorConsole ||
     isOperatorAuth ||
     isProspectQualificationPreview ||

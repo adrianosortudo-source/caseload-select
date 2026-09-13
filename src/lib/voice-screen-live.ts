@@ -1,11 +1,5 @@
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { initialiseState } from "./screen-engine/extractor";
-import { runEvidencePass } from "./screen-engine/slotEvidence";
-import { applyAnswer, getNextStep } from "./screen-engine/control";
 import { SLOT_REGISTRY } from "./screen-engine/slotRegistry";
-import { computeBand } from "./screen-engine/band";
-import { computeCoreCompleteness, getDecisionGap } from "./screen-engine/selector";
-import type { EngineState } from "./screen-engine/types";
 import { planVoiceScreenCall, type VoiceScreenCall } from "./voice-screen-bridge";
 
 export interface LiveCall extends VoiceScreenCall {
@@ -46,18 +40,7 @@ export function invitationEligible(call: LiveCall, scope: { locationId: string; 
     Date.parse(call.endedAt) <= now && now - Date.parse(call.endedAt) < 24 * 60 * 60 * 1000;
 }
 
-export function seedLiveState(call: LiveCall): EngineState {
-  let state = runEvidencePass(call.broadNeed, initialiseState(call.broadNeed));
-  for (const [slot, value] of Object.entries(call.capturedSlots)) state = applyAnswer(state, slot, value);
-  if (call.callerName) state = applyAnswer(state, "client_name", call.callerName);
-  if (call.callback.number) state = applyAnswer(state, "client_phone", call.callback.number);
-  return scoreLiveState({ ...state, questionHistory: [], contactCaptureStarted: false });
-}
-
-export function scoreLiveState(state: EngineState): EngineState {
-  const band = computeBand(state);
-  return { ...state, band: band.band, confidence: band.confidence, coreCompleteness: computeCoreCompleteness(state), currentGap: getDecisionGap(state) };
-}
+export { seedContinuationState as seedLiveState, scoreContinuationState as scoreLiveState, continuationView } from "./voice-screen-continuation";
 
 export function tokenForNonce(nonce: string, secret: string) {
   if (secret.length < 32) throw new Error("continuation_key_unconfigured");
@@ -75,14 +58,3 @@ export function secretMatches(provided: string | null, expected: string | undefi
   return timingSafeEqual(createHash("sha256").update(provided).digest(), createHash("sha256").update(expected).digest());
 }
 
-export function continuationView(state: EngineState, revision: number, status: string) {
-  const next = getNextStep(state);
-  // Caller receives no engine state, contact details, scores or lawyer report.
-  return {
-    revision, status,
-    question: status === "completed" || status === "stopped" || !next.slot ? null : {
-      id: next.slot.id, text: next.slot.question,
-      options: (next.slot.options ?? []).map(o => ({ value: o.value, label: o.label })),
-    },
-  };
-}

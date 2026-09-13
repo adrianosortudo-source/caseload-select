@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { continuationView, scoreLiveState, validToken } from "@/lib/voice-screen-live";
+import { validToken } from "@/lib/voice-screen-live";
+import { ContinuationError, continuationView, transitionContinuation } from "@/lib/voice-screen-continuation";
 import { inquiryByToken, liveConfig, saveInquiry } from "@/lib/voice-screen-store";
-import { applyAnswer, getNextStep } from "@/lib/screen-engine/control";
 import { checkRateLimit, ipFromRequest } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -28,23 +28,14 @@ export async function POST(req: NextRequest) {
     const a = await access(req); if (a.denied) return a.denied;
     const inquiry = a.inquiry!;
     const raw = await req.text(); if (Buffer.byteLength(raw) > 4000) return reply({ error: "payload_too_large" }, 413);
-    const body = JSON.parse(raw) as { revision?: number; slotId?: string; value?: string; skip?: boolean; finish?: boolean };
-    if (!body || typeof body !== "object" || Array.isArray(body)) return reply({ error: "invalid_answer" }, 400);
-    if (!Number.isInteger(body.revision) || (body.skip !== undefined && typeof body.skip !== "boolean") || (body.finish !== undefined && typeof body.finish !== "boolean") || Object.keys(body).some(key => !["revision", "slotId", "value", "skip", "finish"].includes(key))) return reply({ error: "invalid_answer" }, 400);
-    if (body.finish === true && (body.slotId !== undefined || body.value !== undefined || body.skip !== undefined)) return reply({ error: "invalid_answer" }, 400);
-    if (body.revision !== inquiry.revision || inquiry.status === "completed") return reply({ error: "refresh_required" }, 409);
-    const next = getNextStep(inquiry.engine_state);
-    let state = inquiry.engine_state;
-    const answers = [...inquiry.answers];
-    if (body.finish !== true) {
-      if (!next.slot || body.slotId !== next.slot.id || typeof body.value !== "string" || body.value.length > 1500 || (!body.skip && !body.value.trim())) return reply({ error: "invalid_answer" }, 400);
-      const value = body.skip ? "Not sure" : body.value.trim();
-      if (!body.skip && next.slot.options?.length && !next.slot.options.some(option => option.value === value)) return reply({ error: "invalid_answer" }, 400);
-      state = scoreLiveState(applyAnswer(state, next.slot.id, value));
-      answers.push({ question: next.slot.question, answer: body.skip ? "Skipped by caller" : value, source: "screen", at: new Date().toISOString() });
-    }
-    const status = body.finish ? "completed" : "partial";
-    if (!await saveInquiry(inquiry, state, answers, status)) return reply({ error: "refresh_required" }, 409);
-    return reply(continuationView(state, inquiry.revision + 1, status));
-  } catch (error) { return reply({ error: error instanceof SyntaxError ? "invalid_json" : "save_unavailable" }, error instanceof SyntaxError ? 400 : 503); }
+    const next = transitionContinuation({
+      state: inquiry.engine_state, answers: inquiry.answers,
+      status: inquiry.status, revision: inquiry.revision,
+    }, JSON.parse(raw));
+    if (!await saveInquiry(inquiry, next.state, next.answers, next.status)) return reply({ error: "refresh_required" }, 409);
+    return reply(continuationView(next.state, next.revision, next.status));
+  } catch (error) {
+    if (error instanceof ContinuationError) return reply({ error: error.code }, error.status);
+    return reply({ error: error instanceof SyntaxError ? "invalid_json" : "save_unavailable" }, error instanceof SyntaxError ? 400 : 503);
+  }
 }

@@ -2,6 +2,7 @@ import "server-only";
 import { hashToken, tokenForNonce } from "./voice-screen-live";
 import { database, liveConfig, type Inquiry } from "./voice-screen-store";
 import { normalizeVoiceScreenPhone } from "./voice-screen-phone";
+import { buildVoiceScreenSms } from "./voice-screen-message";
 
 const API = "https://services.leadconnectorhq.com";
 export function senderConfig() {
@@ -49,7 +50,7 @@ export async function dispatchInvitation(inquiryId: string) {
     const { data: latest } = await db.from("voice_screen_inquiries").select("human_status,status,invitation_eligible,expires_at").eq("id", inquiry.id).maybeSingle();
     if (!latest || latest.human_status !== "pending" || latest.status === "stopped" || !latest.invitation_eligible || Date.parse(latest.expires_at) <= Date.now()) return finish("cancelled");
     const link = `${config.origin}/widget/voice-continuation#${token}`;
-    const message = `Thanks for calling ${sender.name}. Here is the link we discussed to help our team prepare: ${link} You can skip questions. Please avoid confidential details or documents. Reply STOP to opt out.`;
+    const message = buildVoiceScreenSms(sender.name, link);
     const response = await fetch(`${API}/conversations/messages`, {
       method: "POST", headers,
       body: JSON.stringify({ type: "SMS", contactId: inquiry.contact_id, message }),
