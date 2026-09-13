@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "gta-prospect-reviewed-resolution.v1",
+  "batchId": "gta-prospect-batch-015",
+  "reviewedOn": "2026-09-13",
+  "candidateCount": 7,
+  "importCount": 0,
+  "heldCount": 7,
+  "automaticMerge": false,
+  "outreachAuthorized": false,
+  "nextRequiredChecks": ["Run the historical static normalizer for b015-001 through b015-003.", "Run a protected identity snapshot immediately before any import consideration.", "Keep all collisions, related rows, and changed roster facts on hold.", "Require separate explicit authorization for every import."],
+  "decisions": [
+    { "sourceRecordKey": "b015-001", "firmName": "Sun & Kang Law Group", "observedLawyerCount": 3, "countQualifier": "exact", "disposition": "hold", "reconciliationStatus": null, "basis": "Current first-party roster and Markham office evidence are clear; identity reconciliation is pending." },
+    { "sourceRecordKey": "b015-002", "firmName": "Workly Law Professional Corporation", "observedLawyerCount": 5, "countQualifier": "exact", "disposition": "hold", "reconciliationStatus": null, "basis": "Current first-party roster, Toronto office, founder, and firm inbox are clear; identity reconciliation is pending." },
+    { "sourceRecordKey": "b015-003", "firmName": "Michael Coristine Law Professional Corporation", "observedLawyerCount": 3, "countQualifier": "exact", "disposition": "hold", "reconciliationStatus": null, "basis": "Current first-party roster, North York office, founder, named-person email, and firm inbox are clear; identity reconciliation is pending." },
+    { "sourceRecordKey": "b015-004", "firmName": "Bogoroch & Associates LLP", "observedLawyerCount": 9, "countQualifier": "exact", "disposition": "hold", "reconciliationStatus": null, "basis": "Inherited Batch 014 related-legacy identity hold." },
+    { "sourceRecordKey": "b015-005", "firmName": "Goldmans LLP", "observedLawyerCount": null, "countQualifier": "unknown", "disposition": "hold", "reconciliationStatus": null, "basis": "Inherited Batch 014 incomplete-roster hold." },
+    { "sourceRecordKey": "b015-006", "firmName": "Walker Law Professional Corporation", "observedLawyerCount": 7, "countQualifier": "exact", "disposition": "hold", "reconciliationStatus": null, "basis": "Inherited Batch 014 similarly-named legacy-row hold." },
+    { "sourceRecordKey": "b015-007", "firmName": "Aitken Robertson Criminal & DUI Defence", "observedLawyerCount": null, "countQualifier": "unknown", "disposition": "hold", "reconciliationStatus": null, "basis": "Inherited Batch 014 roster-conflict and geographic-scope hold." }
+  ]
+}
