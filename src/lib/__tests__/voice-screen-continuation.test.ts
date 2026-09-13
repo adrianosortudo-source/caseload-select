@@ -67,7 +67,9 @@ describe("caller continuation review and corrections", () => {
     session = transitionContinuation(session, { revision: 0, slotId: question.id, value: "other: We agreed on the delivery by email." });
     expect(session.state.slots[question.id]).toBe("other: We agreed on the delivery by email.");
     expect(session.answers[0].answer).toBe("We agreed on the delivery by email.");
-    expect(view(session).summary.answers).toEqual([{ question: question.text, answer: "We agreed on the delivery by email." }]);
+    expect(view(session).summary.answers).toEqual([{ question: question.text, answer: "We agreed on the delivery by email.", label: "Delivery evidence" }]);
+    const legacyAnswers = session.answers.map(({ question, answer, source, at }) => ({ question, answer, source, at }));
+    expect(continuationView(session.state, session.revision, session.status, legacyAnswers).summary.answers[0].label).toBe("Delivery evidence");
     expect(view(session).question?.id).not.toBe(question.id);
     session = transitionContinuation(session, { revision: 1, finish: true });
     expect(view(session).summary.answers).toHaveLength(1);

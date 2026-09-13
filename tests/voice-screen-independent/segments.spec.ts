@@ -123,6 +123,7 @@ for (const width of WIDTHS) {
       ? widget.locator(QUESTION).innerText() : "").not.toBe(firstQuestion);
     await widget.getByRole("button", { name: "View your summary", exact: true }).click();
     await expect(widget).toContainText("Alex Taylor");
+    await expect(widget).toContainText("Delivery evidence");
     await expect(widget).toContainText(explanation);
     await expect(widget).not.toContainText("other:");
     await expect(widget).not.toContainText("This draft should not be saved.");

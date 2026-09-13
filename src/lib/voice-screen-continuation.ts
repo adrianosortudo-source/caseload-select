@@ -5,6 +5,7 @@ import { computeBand } from "./screen-engine/band";
 import { computeCoreCompleteness, getDecisionGap } from "./screen-engine/selector";
 import type { EngineState } from "./screen-engine/types";
 import { SLOT_REGISTRY } from "./screen-engine/slotRegistry";
+import { SLOT_LABELS } from "./screen-engine/report";
 import { normalizeVoiceScreenPhone } from "./voice-screen-phone";
 
 /** Browser-safe domain logic shared by the caller API and independent tests. */
@@ -53,6 +54,15 @@ const SUMMARY_LABELS: Record<string, string> = {
 };
 const plainAnswer = (value: string) => value.startsWith("other:") ? value.slice(6).trim() : value;
 const displayAnswer = (slotId: string, value: string) => SLOT_REGISTRY.find(slot => slot.id === slotId)?.options?.find(option => option.value === value)?.label ?? plainAnswer(value);
+function answerLabel(answer: ContinuationAnswer): string {
+  const id = SLOT_REGISTRY.find(slot => answer.slotId ? slot.id === answer.slotId : slot.question === answer.question)?.id;
+  if (!id) return "Additional detail";
+  if (id === "proof_of_performance") return "Delivery evidence";
+  if (id === "other_counsel") return "Other legal help";
+  if (id === "decision_authority") return "Who decides";
+  if (id.startsWith("desired_outcome")) return "Outcome you want";
+  return SUMMARY_LABELS[id] ?? SLOT_LABELS[id] ?? "Additional detail";
+}
 const maskPhone = (value: string) => {
   const digits = value.replace(/\D/g, "");
   return digits.length >= 4 ? `••• ••• ${digits.slice(-4)}` : "Not captured";
@@ -76,7 +86,7 @@ export interface ContinuationView {
   status: string;
   question: { id: string; text: string; options: Array<{ value: string; label: string }> } | null;
   reviewConfirmed: boolean;
-  summary: { fields: ContinuationSummaryField[]; answers: Array<{ question: string; answer: string }> };
+  summary: { fields: ContinuationSummaryField[]; answers: Array<{ question: string; answer: string; label?: string }> };
 }
 
 export interface ContinuationPayload {
@@ -143,6 +153,7 @@ export function continuationView(state: EngineState, revision: number, status: s
     reviewConfirmed: review.confirmed,
     summary: { fields, answers: answers.filter(answer => !answer.superseded).map(answer => ({
       question: answer.question,
+      label: answerLabel(answer),
       answer: answer.slotId === "client_phone" || SLOT_REGISTRY.find(slot => slot.id === "client_phone")?.question === answer.question ? maskPhone(answer.answer) : plainAnswer(answer.answer),
     })) },
     question: status === "completed" || status === "stopped" || !next.slot ? null : {

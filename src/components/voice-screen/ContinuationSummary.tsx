@@ -31,7 +31,7 @@ export function ContinuationSummary({ view, busy, final, onContinue, onCorrect }
         <h2 data-ui-copy="heading" className="text-[24px] leading-tight font-extrabold [text-wrap:pretty]" style={{ fontFamily: "var(--cls-font-display, Manrope, sans-serif)" }}>
           {final ? "Your inquiry summary" : "Here is what we understood from your call."}
         </h2>
-        <p data-ui-copy="body" className="text-[16px] leading-relaxed opacity-75" style={{ textWrap: "wrap" }}>
+        <p data-ui-copy="body" className="text-[16px] leading-relaxed opacity-75" style={{ textWrap: final ? "pretty" : "wrap" }}>
           {final ? "This brings together the information from your call and the answers you added here." : "Review these details and correct anything we missed."}
         </p>
       </div>
@@ -71,7 +71,7 @@ export function ContinuationSummary({ view, busy, final, onContinue, onCorrect }
           <h3 className="m-0 text-[18px] font-bold">What you added here</h3>
           {view.summary.answers.map((answer, index) => (
             <div key={`${index}-${answer.question}`} className="flex min-w-0 flex-col gap-2 border-t border-slate-200 pt-4" data-ui-component-content={`continuation-summary-answer-${index}`}>
-              <p data-ui-copy="supporting" className="text-[14px] font-semibold leading-relaxed">{answer.question}</p>
+              <p data-ui-copy="supporting" className="text-[14px] font-semibold leading-relaxed" style={{ textWrap: "wrap" }}>{answer.label ?? answer.question}</p>
               <p data-ui-copy="body" className="whitespace-pre-wrap break-words text-[16px] leading-relaxed">{answer.answer}</p>
             </div>
           ))}
