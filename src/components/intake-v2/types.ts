@@ -44,6 +44,8 @@ export interface ScreenItem {
    * language bundle).
    */
   freeTextLabel?: string;
+  /** Maximum explanation length, excluding the other: answer prefix. */
+  maxFreeTextLength?: number;
 }
 
 /** Sentinel value stored in the answers map when the user picks "Other". */

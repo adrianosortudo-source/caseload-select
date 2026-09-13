@@ -3,7 +3,7 @@ import type { LawyerReport } from "./screen-engine/types";
 import { FICTIONAL_CALL } from "./voice-screen-demo";
 import {
   continuationView, seedContinuationState, transitionContinuation,
-  type ContinuationAnswer, type ContinuationSession,
+  type ContinuationAnswer, type ContinuationSession, type ContinuationView,
 } from "./voice-screen-continuation";
 
 export interface VoiceScreenTestSnapshot {
@@ -12,6 +12,7 @@ export interface VoiceScreenTestSnapshot {
   status: string;
   revision: number;
   report: LawyerReport;
+  summary: ContinuationView["summary"];
 }
 
 /**
@@ -27,6 +28,7 @@ export function createVoiceScreenTestSession() {
         broadNeed: facts.situation,
         callback: { number: facts.phone },
         capturedSlots: facts.capturedSlots,
+        deadline: facts.deadline,
       }),
       answers: [],
       revision: 0,
@@ -34,7 +36,7 @@ export function createVoiceScreenTestSession() {
     };
   }
   let session = initial();
-  function getView() { return continuationView(session.state, session.revision, session.status); }
+  function getView() { return continuationView(session.state, session.revision, session.status, session.answers); }
   return {
     getView,
     save(payload: unknown) {
@@ -54,6 +56,7 @@ export function createVoiceScreenTestSession() {
         status: session.status,
         revision: session.revision,
         report: buildReport(session.state),
+        summary: getView().summary,
       });
     },
   };

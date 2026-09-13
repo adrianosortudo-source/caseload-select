@@ -81,12 +81,12 @@ describe("live Voice to Screen primitives", () => {
     expect(invitationEligible(call, call, now + 86400000)).toBe(false);
     expect(invitationEligible({ ...call, humanRequested: true }, call, now)).toBe(false);
   });
-  it("keeps captured facts and exposes only the next question to the caller", () => {
+  it("keeps captured facts and exposes an allowlisted caller summary with the next question", () => {
     const state = seedLiveState(call); expect(state.slots.amount_at_stake).toBe("$25,000–$100,000");
     const view = continuationView(state, 4, "partial");
     expect(view.revision).toBe(4);
     const serialized = JSON.stringify(view);
-    expect(serialized).not.toContain(call.callerName); expect(serialized).not.toContain(call.callback.number);
+    expect(serialized).toContain(call.callerName); expect(serialized).not.toContain(call.callback.number);
     expect(serialized).not.toContain("token"); expect(serialized).not.toContain("lawyer_time_priority");
     expect(continuationView(state, 5, "completed").question).toBe(null);
   });

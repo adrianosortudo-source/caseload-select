@@ -3,6 +3,7 @@ import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState }
 import { DecisionCard } from "@/components/intake-v2/DecisionCard";
 import { Shell } from "@/components/intake-v2/Shell";
 import { TextCard } from "@/components/intake-v2/TextCard";
+import { ContinuationSummary } from "./ContinuationSummary";
 import type { ScreenItem } from "@/components/intake-v2/types";
 import type { ContinuationView, ContinuationPayload } from "@/lib/voice-screen-continuation";
 
@@ -17,6 +18,7 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
   const [error, setError] = useState("");
   const [answer, setAnswer] = useState("");
   const [busy, setBusy] = useState(true);
+  const [summaryOpen, setSummaryOpen] = useState(false);
   const inFlight = useRef(false);
   const load = useCallback(async () => {
     setBusy(true);
@@ -26,29 +28,43 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
     finally { setBusy(false); }
   }, [transport]);
   useEffect(() => { void load(); }, [load]);
+  // A corrected situation or a refresh can select a different question. Keep
+  // drafts through same-question failures and summary review, never across IDs.
+  useEffect(() => { setAnswer(""); }, [view?.question?.id]);
 
-  async function save(value: string, skip = false, finish = false) {
-    if (!view || busy || inFlight.current || (!finish && !view.question)) return;
+  async function persist(payload: ContinuationPayload): Promise<boolean> {
+    if (!view || busy || inFlight.current) return false;
     inFlight.current = true;
     setBusy(true);
     setError("");
     try {
-      const payload: ContinuationPayload = finish
-        ? { revision: view.revision, finish: true }
-        : { revision: view.revision, slotId: view.question!.id, value, skip };
       setView(await transport.save(payload));
-      setAnswer("");
+      if (payload.slotId || payload.finish) setAnswer("");
+      return true;
     } catch (reason) {
       if (reason && typeof reason === "object" && "status" in reason && reason.status === 409) {
         try {
           setView(await transport.load());
-          setAnswer("");
-          setError("Your inquiry changed in another window. Please review the current question.");
+          setSummaryOpen(true);
+          setError("Your inquiry changed in another window. Please review the updated summary before trying again.");
         } catch { setError("Your inquiry could not be refreshed. Reopen your text link to continue."); }
       } else {
         setError(reason instanceof Error ? reason.message : "Your answer could not be saved. Please try again.");
       }
+      return false;
     } finally { inFlight.current = false; setBusy(false); }
+  }
+
+  async function save(value: string, skip = false, finish = false) {
+    if (!view || (!finish && !view.question)) return;
+    await persist(finish
+      ? { revision: view.revision, finish: true }
+      : { revision: view.revision, slotId: view.question!.id, value, skip });
+  }
+
+  async function continueFromSummary() {
+    if (!view) return;
+    if (view.reviewConfirmed || await persist({ revision: view.revision, confirmReview: true })) setSummaryOpen(false);
   }
 
   const item = useMemo<ScreenItem | null>(() => {
@@ -60,13 +76,17 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
       question: view.question.text,
       presentation: hasOptions ? "card" : "text",
       options: hasOptions ? view.question.options : undefined,
+      allowFreeText: hasOptions,
+      freeTextLabel: "Something else, I will explain",
+      maxFreeTextLength: 1494,
       placeholder: "Answer in your own words...",
     };
   }, [view?.question]);
 
   const completed = view?.status === "completed";
   const stopped = view?.status === "stopped";
-  const showQuestion = !!item && !completed && !stopped;
+  const showSummary = !!view && (!view.reviewConfirmed || summaryOpen || completed);
+  const showQuestion = !!item && !completed && !stopped && !showSummary;
 
   return (
     <div className="min-h-screen bg-[#F4F3EF] [&_main>div]:mx-auto min-[641px]:[&_h2]:[text-wrap:pretty] max-[640px]:[&_h2]:text-[22px] max-[360px]:[&_h2]:text-[20px]" style={{ "--cls-font-display": "var(--font-manrope)", "--cls-font-body": '"DM Sans Variable", sans-serif' } as CSSProperties}>
@@ -98,7 +118,7 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
             style={{ fontFamily: "var(--cls-font-body, DM Sans, sans-serif)" }}
             data-ui-copy="body"
           >
-            We have the essentials from your call. Share only what you can. Please avoid confidential details or documents before the firm reviews your inquiry.
+            Share only what you can. Please avoid confidential details or documents before the firm reviews your inquiry.
           </p>
         </div>
 
@@ -143,14 +163,30 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
           </div>
         )}
 
-        {showQuestion && <fieldset disabled={busy} className="min-w-0 border-0 m-0 p-0 disabled:opacity-60" aria-busy={busy}>
+        {showSummary && view && (
+          <ContinuationSummary
+            view={view}
+            busy={busy}
+            final={completed || stopped}
+            onContinue={() => void continueFromSummary()}
+            onCorrect={(fieldId, value) => persist({ revision: view.revision, correction: { fieldId, value } })}
+          />
+        )}
+
+        {view?.reviewConfirmed && !showSummary && !stopped && (
+          <button type="button" disabled={busy} onClick={() => setSummaryOpen(true)} className="self-start rounded-full px-1 py-2 text-[15px] font-medium text-[var(--cls-text,#1E2F58)] underline underline-offset-4 disabled:opacity-50">
+            View your summary
+          </button>
+        )}
+
+        {view?.reviewConfirmed && item && !completed && !stopped && <fieldset hidden={!showQuestion} disabled={busy || !showQuestion} className="min-w-0 border-0 m-0 p-0 disabled:opacity-60" aria-busy={busy}>
         {item.options?.length ? (
           <DecisionCard
             contained
             item={item}
             onChange={next => void save(Array.isArray(next) ? next.join(", ") : next)}
           />
-        ) : showQuestion && item ? (
+        ) : (
           <TextCard
             contained
             item={item}
@@ -159,12 +195,12 @@ export function ContinuationWidget({ transport }: { transport: ContinuationTrans
             onSubmit={() => void save(answer)}
             submitLabel="Save and continue"
           />
-        ) : null}
+        )}
         </fieldset>}
 
-        {view && !item && !completed && !stopped && <p role="status" data-ui-copy="body">That is enough for the initial review. Your answers are saved. You can finish below.</p>}
+        {view && !item && !completed && !stopped && !showSummary && <p role="status" data-ui-copy="body">That is enough for the initial review. Your answers are saved. You can finish below.</p>}
         {stopped && <p role="status" data-ui-copy="body">This inquiry is now with the team. Please contact the firm if you need to add anything.</p>}
-        {view && !completed && !stopped && (
+        {view && !completed && !stopped && !showSummary && (
           <button
             type="button"
             onClick={() => void save("", false, true)}

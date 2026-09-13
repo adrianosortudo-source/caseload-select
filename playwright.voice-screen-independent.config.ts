@@ -1,5 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
+const externalBaseURL = process.env.VOICE_SCREEN_TEST_BASE_URL;
+
 export default defineConfig({
   testDir: "./tests/voice-screen-independent",
   timeout: 120_000,
@@ -10,11 +12,11 @@ export default defineConfig({
   use: {
     actionTimeout: 15_000,
     navigationTimeout: 30_000,
-    baseURL: "http://127.0.0.1:3111",
+    baseURL: externalBaseURL ?? "http://127.0.0.1:3111",
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
-  webServer: {
+  webServer: externalBaseURL ? undefined : {
     command: "npm run dev -- --hostname 127.0.0.1 --port 3111",
     url: "http://127.0.0.1:3111/test/voice-screen/widget",
     reuseExistingServer: false,

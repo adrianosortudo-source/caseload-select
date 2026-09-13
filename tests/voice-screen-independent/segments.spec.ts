@@ -19,6 +19,15 @@ async function settle(page: Page) {
   });
 }
 
+async function confirmCallSummary(page: Page) {
+  const widget = page.locator(WIDGET);
+  const confirm = widget.getByRole("button", { name: "That's right, continue", exact: true });
+  await expect(confirm).toBeVisible();
+  await expect(widget).toContainText("Alex Morgan");
+  await expect(widget).not.toContainText("+1 416-555-0142");
+  await confirm.click();
+}
+
 async function checkLayout(page: Page) {
   await settle(page);
   await assertRenderedCopyGates(page);
@@ -76,12 +85,73 @@ async function assertNoServiceDependency(page: Page, calls: string[]) {
 test.beforeAll(() => fs.mkdirSync(EVIDENCE, { recursive: true }));
 
 for (const width of WIDTHS) {
+  test(`caller reviews, corrects and explains in their own words at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const calls = monitorServiceCalls(page);
+    await page.goto(WIDGET_ROUTE);
+    const widget = page.locator(WIDGET);
+    await expect(widget.getByRole("button", { name: "That's right, continue", exact: true })).toBeVisible();
+    await expect(widget.locator(QUESTION)).toHaveCount(0);
+    await checkLayout(page);
+    await widget.getByRole("button", { name: "Correct something", exact: true }).click();
+    await widget.getByRole("button", { name: /Edit (?:your )?name/i }).click();
+    const nameInput = widget.getByRole("textbox", { name: /(?:your )?name/i });
+    await nameInput.fill("Alex Taylor");
+    await widget.getByRole("button", { name: "Save correction", exact: true }).click();
+    await expect(widget).toContainText("Alex Taylor");
+    await expect(widget).not.toContainText("Alex Morgan");
+    await checkLayout(page);
+    await widget.getByRole("button", { name: "That's right, continue", exact: true }).click();
+    const firstQuestion = await widget.locator(QUESTION).innerText();
+    const explain = widget.getByRole("button", { name: "Something else, I will explain", exact: true });
+    await explain.click();
+    const input = widget.getByRole("textbox", { name: "In your own words" });
+    await expect(input).toBeFocused();
+    await expect(widget.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
+    await input.fill("This draft should not be saved.");
+    await widget.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(input).toHaveCount(0);
+    await expect(widget.locator(QUESTION)).toHaveText(firstQuestion);
+    await explain.click();
+    await expect(input).toHaveValue("");
+    const explanation = "Fictional test detail: delivery was acknowledged verbally, but the written acceptance is still missing. ".repeat(9).trim();
+    await input.fill(explanation);
+    await checkLayout(page);
+    await page.screenshot({ path: path.join(EVIDENCE, `${width}-caller-explanation.png`), fullPage: true });
+    await widget.getByRole("button", { name: "Continue", exact: true }).click();
+    await expect.poll(async () => await widget.locator(QUESTION).count()
+      ? widget.locator(QUESTION).innerText() : "").not.toBe(firstQuestion);
+    await widget.getByRole("button", { name: "View your summary", exact: true }).click();
+    await expect(widget).toContainText("Alex Taylor");
+    await expect(widget).toContainText(explanation);
+    await expect(widget).not.toContainText("other:");
+    await expect(widget).not.toContainText("This draft should not be saved.");
+    await checkLayout(page);
+    await widget.getByRole("button", { name: "Continue your inquiry", exact: true }).click();
+    await widget.getByRole("button", { name: "Finish with what I have shared", exact: true }).click();
+    await expect(widget.getByRole("heading", { name: "Your inquiry summary", exact: true })).toBeVisible();
+    await expect(widget).toContainText("Alex Taylor");
+    await expect(widget).toContainText(explanation);
+    await checkLayout(page);
+    await page.screenshot({ path: path.join(EVIDENCE, `${width}-combined-summary.png`), fullPage: true });
+    await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
+    const brief = page.getByTestId("voice-screen-test-brief");
+    await expect(brief).toContainText(explanation);
+    await expect(brief).not.toContainText("other:");
+    await brief.getByText("Current caller summary", { exact: true }).click();
+    await expect(brief.locator('[data-ui-component-content="test-current-client_name"]')).toContainText("Alex Taylor");
+    await assertNoServiceDependency(page, calls);
+  });
+
   test(`widget starts independently, qualifies, updates its brief and resets at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     const serviceCalls = monitorServiceCalls(page);
     await page.goto(WIDGET_ROUTE);
     const widget = page.locator(WIDGET);
     await expect(widget.getByRole("heading", { name: "Pick up where you left off." })).toBeVisible();
+    await checkLayout(page);
+    await page.screenshot({ path: path.join(EVIDENCE, `${width}-call-summary.png`), fullPage: true });
+    await confirmCallSummary(page);
     await expect(widget.locator(QUESTION)).toHaveCount(1);
     await checkLayout(page);
     await page.screenshot({ path: path.join(EVIDENCE, `${width}-widget-initial.png`), fullPage: true });
@@ -112,7 +182,7 @@ for (const width of WIDTHS) {
           await checkLayout(page);
           await widget.getByRole("button", { name: "Save and continue", exact: true }).click();
         } else {
-          await widget.getByRole("button").filter({ hasNotText: "Finish with what I have shared" }).first().click();
+          await widget.locator("fieldset").getByRole("button").first().click();
         }
       }
       savedAnswers += 1;
@@ -150,6 +220,7 @@ for (const width of WIDTHS) {
     await assertNoServiceDependency(page, serviceCalls);
     await page.getByRole("button", { name: "Reset test", exact: true }).click();
     await page.getByRole("button", { name: "Caller widget", exact: true }).click();
+    await confirmCallSummary(page);
     await expect(widget.locator(QUESTION)).toHaveText(firstQuestion);
     await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
     await expect(brief.getByTestId("voice-screen-test-answer")).toHaveCount(0);
@@ -175,6 +246,7 @@ test("finishing immediately preserves the original inquiry without requiring ans
   const calls = monitorServiceCalls(page);
   await page.goto(WIDGET_ROUTE);
   const widget = page.locator(WIDGET);
+  await confirmCallSummary(page);
   await widget.getByRole("button", { name: "Finish with what I have shared", exact: true }).click();
   await expect(widget.getByRole("heading", { name: "Thank you. Your answers are ready for the firm." })).toBeVisible();
   await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
@@ -236,6 +308,7 @@ test("reloading starts a fresh inquiry without retaining previous test answers",
   const calls = monitorServiceCalls(page);
   await page.goto(WIDGET_ROUTE);
   const widget = page.locator(WIDGET);
+  await confirmCallSummary(page);
   const initialQuestion = await widget.locator(QUESTION).innerText();
   await page.getByRole("button", { name: "Skip this question", exact: true }).click();
   await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
@@ -243,6 +316,7 @@ test("reloading starts a fresh inquiry without retaining previous test answers",
   await assertNoServiceDependency(page, calls);
   await page.reload();
   await page.getByRole("button", { name: "Caller widget", exact: true }).click();
+  await confirmCallSummary(page);
   await expect(widget.locator(QUESTION)).toHaveText(initialQuestion);
   await page.getByRole("button", { name: "Lawyer brief", exact: true }).click();
   await expect(page.getByTestId("voice-screen-test-answer")).toHaveCount(0);
