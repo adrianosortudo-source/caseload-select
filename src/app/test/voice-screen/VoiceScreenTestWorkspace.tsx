@@ -47,7 +47,7 @@ export function VoiceScreenTestWorkspace({ initialSegment = "widget" }: { initia
       </div>
     </header>
     <div hidden={segment !== "widget"}><ContinuationWidget key={generation} transport={transport} /></div>
-    {segment === "brief" && <main data-testid="voice-screen-test-brief" className="mx-auto w-full max-w-[1040px] px-5 py-8 space-y-6">
+    {segment === "brief" && <main data-testid="voice-screen-test-brief" className="mx-auto w-full max-w-[1040px] px-5 py-8 space-y-6 max-[360px]:px-3">
       <section className="space-y-3" data-ui-component-content="test-brief-heading">
         <p className="text-sm uppercase tracking-wider" data-ui-copy="supporting">Lawyer brief test</p>
         <h1 className="text-[26px] sm:text-3xl font-bold" data-ui-copy="heading">One inquiry, with the answers together.</h1>
@@ -60,7 +60,7 @@ export function VoiceScreenTestWorkspace({ initialSegment = "widget" }: { initia
         <p className="leading-relaxed" data-ui-copy="body">{snapshot.facts.situation}</p>
         <p className="leading-relaxed" data-ui-copy="supporting">{snapshot.facts.deadline}</p>
       </section>
-      <section className="rounded-xl border border-[#1E2F58]/15 bg-white p-4 max-[480px]:p-3 sm:p-5 space-y-4" data-ui-component-content="test-written-answers">
+      <section className="rounded-xl border border-[#1E2F58]/15 bg-white p-4 max-[480px]:p-3 max-[360px]:p-2 sm:p-5 space-y-4" data-ui-component-content="test-written-answers">
         <h2 className="text-xl font-bold" data-ui-copy="heading">From qualification</h2>
         {!snapshot.answers.length && <p className="leading-relaxed" data-ui-copy="body">No written answers yet. The call information is already available for review.</p>}
         {snapshot.answers.map((answer, index) => <div key={index} data-testid="voice-screen-test-answer" className="space-y-1" data-ui-component-content="test-written-answer">
