@@ -1,0 +1,153 @@
+name: Reviewed GTA prospect migrations
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Validate the reviewed plan, or apply it after environment approval.
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+      confirmation:
+        description: Required only for apply: APPLY-FOUR-GTA-PROSPECT-MIGRATIONS
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gta-prospect-migrations-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.ref == 'refs/heads/main'
+    name: ${{ inputs.operation == 'apply' && 'Apply reviewed migration set' || 'Validate reviewed migration set' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: Production prospect migrations
+    env:
+      PROJECT_REF: ssxryjxifwiivghglqer
+      OPERATION: ${{ inputs.operation }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+
+      - name: Validate source, credentials, and exact migration plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset SUPABASE_DB_PASSWORD
+
+          if [[ -z "${SUPABASE_ACCESS_TOKEN:-}" ]]; then
+            echo "The environment-scoped Supabase access token is not available."
+            exit 1
+          fi
+          if [[ "$GITHUB_REF" != "refs/heads/main" ]]; then
+            echo "This workflow must run from main."
+            exit 1
+          fi
+
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+
+          cat > "$RUNNER_TEMP/expected-migrations.sha256" <<'EOF'
+a1f97a0dfe570bbd1295afe3dccae54f9b27a93445360e082902f55e272a18ab  supabase/migrations/20260908140907_gta_prospect_downtown_geography_observations.sql
+661199da3bbb806f2730ef1618d58f92b2058a66b126abac39fa5de6608588ad  supabase/migrations/20260911195806_gta_prospect_operator_import_apply.sql
+15cdf1b35dea5eafd70af8595a141e74eeda65968c651de8513fa70de9077ca4  supabase/migrations/20260911205207_gta_prospect_operator_import_history.sql
+5130080a025e9d64ad4ec34409b230c4324ce331d7f75b6386329ee1f6011b13  supabase/migrations/20260912131132_gta_prospect_supplemental_evidence_import.sql
+EOF
+          sha256sum --check --strict "$RUNNER_TEMP/expected-migrations.sha256"
+          test ! -e supabase/migrations/20260908134358_gta_prospect_owner_contact_research.sql
+          test -f supabase/migrations-deferred/20260908134358_gta_prospect_owner_contact_research.sql
+
+          supabase db push \
+            --dry-run \
+            --include-all \
+            --skip-vault \
+            --project-ref "$PROJECT_REF" \
+            --output-format json > "$RUNNER_TEMP/plan.json"
+
+          expected='["20260908140907_gta_prospect_downtown_geography_observations.sql","20260911195806_gta_prospect_operator_import_apply.sql","20260911205207_gta_prospect_operator_import_history.sql","20260912131132_gta_prospect_supplemental_evidence_import.sql"]'
+          jq -e --argjson expected "$expected" '
+            .dryRun == true and
+            .upToDate == false and
+            .migrations == $expected and
+            .seeds == [] and
+            .roles == []
+          ' "$RUNNER_TEMP/plan.json"
+
+      - name: Stop after the default dry run
+        if: inputs.operation == 'dry-run'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Dry run matched the approved four-migration plan. No database change was made."
+
+      - name: Apply the approved migration plan
+        if: inputs.operation == 'apply'
+        shell: bash
+        run: |
+          set -euo pipefail
+          unset SUPABASE_DB_PASSWORD
+          test "$CONFIRMATION" = "APPLY-FOUR-GTA-PROSPECT-MIGRATIONS"
+
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
+          sha256sum --check --strict "$RUNNER_TEMP/expected-migrations.sha256"
+
+          supabase db push \
+            --yes \
+            --include-all \
+            --skip-vault \
+            --project-ref "$PROJECT_REF" \
+            --output-format json > "$RUNNER_TEMP/apply.json"
+
+          expected='["20260908140907_gta_prospect_downtown_geography_observations.sql","20260911195806_gta_prospect_operator_import_apply.sql","20260911205207_gta_prospect_operator_import_history.sql","20260912131132_gta_prospect_supplemental_evidence_import.sql"]'
+          jq -e --argjson expected "$expected" '
+            .dryRun == false and
+            .migrations == $expected and
+            .seeds == [] and
+            .roles == []
+          ' "$RUNNER_TEMP/apply.json"
+
+          supabase db push \
+            --dry-run \
+            --include-all \
+            --skip-vault \
+            --project-ref "$PROJECT_REF" \
+            --output-format json > "$RUNNER_TEMP/post-apply-plan.json"
+
+          jq -e '
+            .dryRun == true and
+            .upToDate == true and
+            .migrations == [] and
+            .seeds == [] and
+            .roles == []
+          ' "$RUNNER_TEMP/post-apply-plan.json"
+
+      - name: Upload migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gta-prospect-migration-evidence
+          path: |
+            ${{ runner.temp }}/plan.json
+            ${{ runner.temp }}/apply.json
+            ${{ runner.temp }}/post-apply-plan.json
+          if-no-files-found: ignore
