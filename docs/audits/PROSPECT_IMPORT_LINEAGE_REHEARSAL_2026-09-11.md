@@ -20,9 +20,15 @@ alter a database, import a prospect, create a contact, or initiate outreach.
    version `20260911215333`. Its source file previously used
    `20260910161644`, so the file is renamed to match the production ledger.
    The SQL content is unchanged.
-2. Two unrelated, never-applied experimental GTA research migrations are moved
-   to `supabase/migrations-deferred/`. Their SQL is retained verbatim with an
-   explicit deferral record; they are not prerequisites of the importer.
+2. The never-applied owner-contact experiment
+   `20260908134358_gta_prospect_owner_contact_research.sql` remains in
+   `supabase/migrations-deferred/`. Its SQL is retained verbatim with an
+   explicit deferral record: no executable importer or supplemental-evidence
+   migration depends on its table or RPC.
+3. `20260908140907_gta_prospect_downtown_geography_observations.sql` remains
+   an active migration. The supplemental-evidence migration added after this
+   rehearsal extends and writes to that geography ledger, so deferring it
+   would make a fresh migration replay fail.
 
 ## Required pre-apply rehearsal
 

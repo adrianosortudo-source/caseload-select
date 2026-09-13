@@ -3,10 +3,14 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(
-  resolve(process.cwd(), "supabase/migrations-deferred/20260908140907_gta_prospect_downtown_geography_observations.sql"),
+  resolve(process.cwd(), "supabase/migrations/20260908140907_gta_prospect_downtown_geography_observations.sql"),
   "utf8",
 );
 const coreImport = readFileSync(resolve(process.cwd(), "src/lib/gta-prospect-research-import.ts"), "utf8");
+const supplementalEvidenceMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260912131132_gta_prospect_supplemental_evidence_import.sql"),
+  "utf8",
+);
 
 describe("GTA Downtown geography migration contract", () => {
   it("keeps boundary evidence private, append-only, and service-role-only", () => {
@@ -26,5 +30,14 @@ describe("GTA Downtown geography migration contract", () => {
     expect(migration).toContain("boundary_geometry_sha256");
     expect(migration).toContain("geography_status = 'needs_manual_review'");
     expect(coreImport).not.toMatch(/normalizedAddress|boundaryGeometrySha256|coordinateSource|geographyStatus/i);
+  });
+
+  it("remains executable because supplemental evidence extends this evidence ledger", () => {
+    expect(supplementalEvidenceMigration).toContain(
+      "ALTER TABLE public.gta_prospect_downtown_geography_observations",
+    );
+    expect(supplementalEvidenceMigration).toContain(
+      "INSERT INTO public.gta_prospect_downtown_geography_observations",
+    );
   });
 });
