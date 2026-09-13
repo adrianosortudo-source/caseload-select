@@ -1,0 +1,86 @@
+{
+  "schemaVersion": "gta-prospect-execution-reconciliation.v1",
+  "batchId": "gta-prospect-batch-015",
+  "executedOn": "2026-09-13",
+  "purpose": "Read-only identity checks performed before a narrowly authorized operator import. No automatic identity merge is authorized.",
+  "staticBaseline": {
+    "source": "legacy-gta-directory-2026-07",
+    "sourceRows": 5902,
+    "normalizer": "suite-preserving exact domain, normalized firm name, and street-address comparison",
+    "results": [
+      {
+        "sourceRecordKey": "b015-001",
+        "firmName": "Sun & Kang Law Group",
+        "state": "clear",
+        "matches": []
+      },
+      {
+        "sourceRecordKey": "b015-002",
+        "firmName": "Workly Law Professional Corporation",
+        "state": "clear",
+        "matches": []
+      },
+      {
+        "sourceRecordKey": "b015-003",
+        "firmName": "Michael Coristine Law Professional Corporation",
+        "state": "review_required",
+        "matches": [
+          {
+            "origin": "legacy_source",
+            "recordId": "legacy-gta-directory-2026-07:row-4565",
+            "fields": ["canonical_domain", "firm_name"]
+          }
+        ]
+      }
+    ]
+  },
+  "operatorUiCheck": {
+    "observedOn": "2026-09-13",
+    "scope": "Authenticated unified prospect list (6,093 records), exact-name search",
+    "results": [
+      { "sourceRecordKey": "b015-001", "result": "no_exact_result" },
+      { "sourceRecordKey": "b015-002", "result": "no_exact_result" },
+      { "sourceRecordKey": "b015-003", "result": "no_exact_result" }
+    ],
+    "limitation": "The search is corroborating evidence only. The server re-runs its own current-ledger review before an import can write."
+  },
+  "decisions": [
+    {
+      "sourceRecordKey": "b015-001",
+      "disposition": "provisional_new",
+      "basis": "First-party roster evidence, clear static baseline, and no exact unified-list result."
+    },
+    {
+      "sourceRecordKey": "b015-002",
+      "disposition": "provisional_new",
+      "basis": "First-party roster evidence, clear static baseline, and no exact unified-list result."
+    },
+    {
+      "sourceRecordKey": "b015-003",
+      "disposition": "hold",
+      "basis": "The legacy source matches both domain and normalized firm name; no merge or import is authorized."
+    },
+    {
+      "sourceRecordKey": "b015-004",
+      "disposition": "hold",
+      "basis": "Inherited related-legacy identity hold."
+    },
+    {
+      "sourceRecordKey": "b015-005",
+      "disposition": "hold",
+      "basis": "Inherited incomplete-roster hold."
+    },
+    {
+      "sourceRecordKey": "b015-006",
+      "disposition": "hold",
+      "basis": "Inherited similarly-named legacy-row hold."
+    },
+    {
+      "sourceRecordKey": "b015-007",
+      "disposition": "hold",
+      "basis": "Inherited roster-conflict and geographic-scope hold."
+    }
+  ],
+  "automaticMerge": false,
+  "outreachAuthorized": false
+}

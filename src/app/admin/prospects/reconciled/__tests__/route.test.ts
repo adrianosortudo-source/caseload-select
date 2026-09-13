@@ -10,6 +10,7 @@ const h = vi.hoisted(() => {
     ownerContacts: [] as unknown[],
     ownerFailure: null as Error | null,
     stableIdentities: [] as unknown[],
+    geographyFailure: null as Error | null,
   };
   return {
     state,
@@ -38,7 +39,10 @@ vi.mock("@/lib/gta-prospect-owner-contact-reader", () => ({
 }));
 vi.mock("@/lib/gta-prospect-downtown-geography-reader", () => ({
   GtaProspectDowntownGeographyLedgerUnavailableError: class extends Error {},
-  listGtaProspectDowntownGeographyForOperator: () => Promise.resolve([]),
+  listGtaProspectDowntownGeographyForOperator: () => {
+    if (h.state.geographyFailure) return Promise.reject(h.state.geographyFailure);
+    return Promise.resolve([]);
+  },
 }));
 vi.mock("@/lib/gta-prospect-supplemental-evidence-reader", () => ({
   GtaProspectSupplementalEvidenceLedgerUnavailableError: class extends Error {},
@@ -58,6 +62,7 @@ beforeEach(() => {
   h.state.ownerContacts = [];
   h.state.ownerFailure = null;
   h.state.stableIdentities = [];
+  h.state.geographyFailure = null;
   h.read.mockClear();
   h.ownerRead.mockClear();
   h.stableRead.mockClear();
@@ -156,6 +161,19 @@ describe("reviewed GTA prospects route", () => {
     const body = await response.json();
     expect(body.records).toHaveLength(5_942);
     expect(body.records.every((record: { ownerContact: unknown }) => record.ownerContact === null)).toBe(true);
+  });
+
+  it("keeps the primary registry available when optional geography evidence is malformed", async () => {
+    h.state.session = { role: "operator" };
+    h.state.records = [RECONCILED_GTA_PROSPECTS[0]];
+    h.state.geographyFailure = new Error("Invalid GTA prospect Downtown geography projection: boundary_source_url is invalid");
+
+    const response = await GET();
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.records).toHaveLength(5_942);
+    expect(body.records.find((record: { id: string }) => record.id === RECONCILED_GTA_PROSPECTS[0].id).downtownGeography).toBeNull();
   });
 
   it("shows a 103-record ledger batch alongside the 20 disjoint fixtures", async () => {

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "gta-prospect-reviewed-import.v1",
+  "purpose": "reviewed GTA prospect production-import candidate; Batch 15 execution of two clear records only",
+  "generatedOn": "2026-09-13",
+  "sourceReviewFile": "review.json",
+  "sourceResolutionSha256": "d203f0e4002f9ae2bebf0fd8537fbcbf48feb9c531d7f20d6dd16729712dcc75",
+  "expectedLiveBaselineCount": 151,
+  "expectedImportCount": 2,
+  "actionsExcluded": [
+    "CRM write",
+    "CRM contact creation",
+    "outreach",
+    "form submission",
+    "automatic identity merge"
+  ],
+  "records": [
+    {
+      "id": "gta-prospect-015-b015-001",
+      "recordOrigin": "reviewed_gta_prospect_batch_015",
+      "firmName": "Sun & Kang Law Group",
+      "city": "Markham",
+      "officeCities": ["Markham"],
+      "websiteUrl": "https://www.sunkanglaw.com/team",
+      "practiceAreas": ["Family law", "Real estate law", "Corporate law", "Civil litigation"],
+      "observedLawyerCount": 3,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.sunkanglaw.com/team",
+      "rosterCheckedAt": "2026-09-13",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "First-party roster and Markham office evidence are current. The 5,902-row suite-preserving legacy normalization found no matching domain, normalized firm name, or full street address, and the authenticated unified-list exact-name check returned no result. The operator server rechecks its current ledger immediately before applying; this record remains provisional and authorizes neither a merge nor outreach.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Xin Sun",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.sunkanglaw.com/team",
+          "observedAt": "2026-09-13"
+        },
+        {
+          "name": "Jian Kang",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.sunkanglaw.com/team",
+          "observedAt": "2026-09-13"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-015-b015-002",
+      "recordOrigin": "reviewed_gta_prospect_batch_015",
+      "firmName": "Workly Law Professional Corporation",
+      "city": "Toronto",
+      "officeCities": ["Toronto"],
+      "websiteUrl": "https://worklylaw.com/team",
+      "practiceAreas": ["Employment law", "Workplace investigations", "Corporate and startup law"],
+      "observedLawyerCount": 5,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://worklylaw.com/team",
+      "rosterCheckedAt": "2026-09-13",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "First-party roster, Toronto office, founder, and public firm inbox evidence are current. The 5,902-row suite-preserving legacy normalization found no matching domain, normalized firm name, or full street address, and the authenticated unified-list exact-name check returned no result. The operator server rechecks its current ledger immediately before applying; this record remains provisional and authorizes neither a merge nor outreach.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Sunira Chaudhri",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://worklylaw.com/team",
+          "observedAt": "2026-09-13"
+        },
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "info@worklylaw.com",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://worklylaw.com/team",
+          "observedAt": "2026-09-13"
+        }
+      ]
+    }
+  ]
+}
