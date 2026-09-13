@@ -31,8 +31,8 @@ export function ContinuationSummary({ view, busy, final, onContinue, onCorrect }
         <h2 data-ui-copy="heading" className="text-[24px] leading-tight font-extrabold [text-wrap:pretty]" style={{ fontFamily: "var(--cls-font-display, Manrope, sans-serif)" }}>
           {final ? "Your inquiry summary" : "Here is what we understood from your call."}
         </h2>
-        <p data-ui-copy="body" className="text-[16px] leading-relaxed opacity-75" style={{ textWrap: "pretty" }}>
-          {final ? "This brings together the information from your call and the answers you added here." : "Please check what we captured. You can correct anything before continuing."}
+        <p data-ui-copy="body" className="text-[16px] leading-relaxed opacity-75" style={{ textWrap: "wrap" }}>
+          {final ? "This brings together the information from your call and the answers you added here." : "Review these details and correct anything we missed."}
         </p>
       </div>
 
