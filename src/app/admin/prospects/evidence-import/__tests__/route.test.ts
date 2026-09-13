@@ -23,6 +23,7 @@ vi.mock("@/lib/gta-prospect-evidence-import", () => ({
 }));
 vi.mock("@/lib/gta-prospect-operator-evidence-import", () => ({ applyGtaProspectOperatorEvidenceImport: h.apply }));
 vi.mock("@/lib/gta-prospect-research-reader", () => ({ listGtaProspectResearchForOperator: () => Promise.resolve([{ id: "gta-prospect-001" }]) }));
+vi.mock("@/lib/gta-prospect-stable-identity-reader", () => ({ listGtaProspectStableIdentitiesForOperator: () => Promise.resolve([]) }));
 vi.mock("@/lib/gta-prospect-research-import", () => ({ sha256: () => Promise.resolve("c".repeat(64)) }));
 
 import { POST, PUT } from "../route";

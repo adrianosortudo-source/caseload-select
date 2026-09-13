@@ -99,10 +99,18 @@ describe("GTA prospect supplemental evidence package", () => {
     expect(result.rejected).toEqual(expect.arrayContaining([expect.objectContaining({ message: "qualified requires every evidence-bearing criterion to be true" })]));
   });
 
-  it("uses the one service-only atomic RPC and accepts an exact replay", async () => {
+  it("allocates the authoritative identity before it records evidence and accepts an exact replay", async () => {
     const plan = await buildGtaProspectEvidenceImportPlan(packageRecord(), { appliedSourceRecordKeys: new Set([sourceKey]) });
-    const rpc = vi.fn(async () => ({ data: { state: "already_applied", batch_id: "00000000-0000-0000-0000-000000000001" }, error: null }));
+    const rpc = vi.fn(async (name: string) => name === "register_gta_prospect_stable_identity"
+      ? ({ data: null, error: null })
+      : ({ data: { state: "already_applied", batch_id: "00000000-0000-0000-0000-000000000001" }, error: null }));
     await expect(applyGtaProspectOperatorEvidenceImport({ plan, client: { rpc } })).resolves.toMatchObject({ state: "already_applied", packageId: "downtown-batch-2026-09-12" });
+    expect(rpc).toHaveBeenCalledWith("register_gta_prospect_stable_identity", expect.objectContaining({
+      p_source_record_key: sourceKey,
+      p_stable_firm_id: firmId,
+      p_canonical_domain: "example.test",
+      p_source_url: "https://example.test/team",
+    }));
     expect(rpc).toHaveBeenCalledWith("begin_gta_prospect_supplemental_evidence_import", expect.objectContaining({ p_package_sha256: plan.payloadSha256 }));
   });
 });

@@ -9,6 +9,7 @@ const h = vi.hoisted(() => {
     failure: null as Error | null,
     ownerContacts: [] as unknown[],
     ownerFailure: null as Error | null,
+    stableIdentities: [] as unknown[],
   };
   return {
     state,
@@ -20,6 +21,7 @@ const h = vi.hoisted(() => {
       if (state.ownerFailure) throw state.ownerFailure;
       return state.ownerContacts;
     }),
+    stableRead: vi.fn(async () => state.stableIdentities),
     Unavailable,
     OwnerUnavailable: class OwnerUnavailable extends Error {},
   };
@@ -42,6 +44,10 @@ vi.mock("@/lib/gta-prospect-supplemental-evidence-reader", () => ({
   GtaProspectSupplementalEvidenceLedgerUnavailableError: class extends Error {},
   listGtaProspectSupplementalEvidenceForOperator: () => Promise.resolve([]),
 }));
+vi.mock("@/lib/gta-prospect-stable-identity-reader", () => ({
+  GtaProspectStableIdentityRegistryUnavailableError: class extends Error {},
+  listGtaProspectStableIdentitiesForOperator: h.stableRead,
+}));
 
 import { GET } from "../route";
 
@@ -51,8 +57,10 @@ beforeEach(() => {
   h.state.failure = null;
   h.state.ownerContacts = [];
   h.state.ownerFailure = null;
+  h.state.stableIdentities = [];
   h.read.mockClear();
   h.ownerRead.mockClear();
+  h.stableRead.mockClear();
 });
 
 describe("reviewed GTA prospects route", () => {
@@ -191,11 +199,36 @@ describe("reviewed GTA prospects route", () => {
     const body = await response.json();
     expect(response.status).toBe(200);
     expect(body.qualifiedImport).toMatchObject({ added: 19, updated: 1, ambiguous: 0 });
-    expect(body.records.filter((record: { canonicalDomain?: string }) => record.canonicalDomain === "strutherslaw.ca")).toHaveLength(1);
+    expect(body.records.filter((record: { canonicalDomain?: string }) => record.canonicalDomain === "strutherslaw.ca")).toHaveLength(0);
     expect(body.records.find((record: { id: string }) => record.id === "ledger-struthers")).toMatchObject({
       firmName: "Struthers Law from ledger",
-      firmId: "FIRM-7XGYP723JDAXDAB2J76RVNSVD5",
+      firmId: null,
       observedLawyerCount: 2,
+    });
+  });
+
+  it("uses an authoritative registry allocation for the visible shared identity and evidence source", async () => {
+    h.state.session = { role: "operator" };
+    h.state.records = [RECONCILED_GTA_PROSPECTS[0]];
+    h.state.stableIdentities = [{
+      sourceRecordKey: RECONCILED_GTA_PROSPECTS[0].id,
+      firmId: "FIRM-7XGYP723JDAXDAB2J76RVNSVD5",
+      canonicalDomain: "strutherslaw.ca",
+      sourceUrl: "https://www.strutherslaw.ca/contact.html",
+      observedOn: "2026-09-13",
+      confidence: "high",
+    }];
+
+    const response = await GET();
+    const body = await response.json();
+    expect(body.records.find((record: { id: string }) => record.id === RECONCILED_GTA_PROSPECTS[0].id)).toMatchObject({
+      firmId: "FIRM-7XGYP723JDAXDAB2J76RVNSVD5",
+      canonicalDomain: "strutherslaw.ca",
+      firmIdentity: {
+        sourceUrl: "https://www.strutherslaw.ca/contact.html",
+        observedOn: "2026-09-13",
+        confidence: "high",
+      },
     });
   });
 

@@ -53,6 +53,12 @@ export interface ReconciledGtaProspect {
   firmId?: string | null;
   /** Normalized host used for deterministic cross-source reconciliation. */
   canonicalDomain?: string | null;
+  /** Source-backed allocation metadata for the shared firm identity. */
+  firmIdentity?: {
+    sourceUrl: string;
+    observedOn: string;
+    confidence: "high";
+  } | null;
   firmName: string;
   /** Display label for the recorded office location or locations. */
   city: string;
