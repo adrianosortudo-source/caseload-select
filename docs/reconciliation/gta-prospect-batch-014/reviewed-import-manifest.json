@@ -1,0 +1,177 @@
+{
+  "schemaVersion": "gta-prospect-reviewed-import.v1",
+  "purpose": "reviewed GTA prospect production-import candidate; apply requires separate authorization",
+  "generatedOn": "2026-09-13",
+  "sourceReviewFile": "review.json",
+  "sourceResolutionSha256": "d4412b23a8b88ab5f5fdd92c23586595aafc47a4682e39fa532d10ba9964d520",
+  "expectedLiveBaselineCount": 147,
+  "expectedImportCount": 4,
+  "actionsExcluded": [
+    "CRM write",
+    "CRM contact creation",
+    "outreach",
+    "form submission",
+    "automatic identity merge"
+  ],
+  "records": [
+    {
+      "id": "gta-prospect-014-b014-001",
+      "recordOrigin": "reviewed_gta_prospect_batch_014",
+      "firmName": "Nachla Law",
+      "city": "Oakville",
+      "officeCities": [
+        "Oakville"
+      ],
+      "websiteUrl": "https://www.nachlaw.com/",
+      "practiceAreas": [
+        "Family law",
+        "Real estate law",
+        "Wills and estates"
+      ],
+      "observedLawyerCount": 3,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.nachlaw.com/team/",
+      "rosterCheckedAt": "2026-09-13",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Batch 013's static reconciliation was clear. Current first-party roster and office evidence resolve the prior evidence hold, and the 2026-09-13 authenticated exact-name operator UI check returned no unified-record match. This is provisional only: obtain a fresh protected identity snapshot immediately before any import.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Dorisa Nachla",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.nachlaw.com/",
+          "observedAt": "2026-09-13"
+        },
+        {
+          "name": null,
+          "relationship": "firm_inbox",
+          "email": "office@nachlaw.com",
+          "emailKind": "general_firm",
+          "sourceUrl": "https://www.nachlaw.com/team/",
+          "observedAt": "2026-09-13"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-014-b014-002",
+      "recordOrigin": "reviewed_gta_prospect_batch_014",
+      "firmName": "Merwar Lawyers",
+      "city": "Mississauga",
+      "officeCities": [
+        "Mississauga"
+      ],
+      "websiteUrl": "https://www.merwars.com/",
+      "practiceAreas": [
+        "Business law",
+        "Personal injury"
+      ],
+      "observedLawyerCount": 5,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://www.merwars.com/",
+      "rosterCheckedAt": "2026-09-13",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Batch 013's static reconciliation was clear. Current first-party roster and Mississauga evidence resolve the prior office-evidence hold, and the 2026-09-13 authenticated exact-name operator UI check returned no unified-record match. This is provisional only: obtain a fresh protected identity snapshot immediately before any import.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Hardip Singh Merwar",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.merwars.com/",
+          "observedAt": "2026-09-13"
+        },
+        {
+          "name": "Satwant Singh Merwar",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://www.merwars.com/",
+          "observedAt": "2026-09-13"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-014-b014-003",
+      "recordOrigin": "reviewed_gta_prospect_batch_014",
+      "firmName": "Kelly D. Jordan Family Law Firm",
+      "city": "Toronto",
+      "officeCities": [
+        "Toronto"
+      ],
+      "websiteUrl": "https://kellyjordanfamilylaw.com/",
+      "practiceAreas": [
+        "Family law",
+        "Mediation",
+        "Wills and estates"
+      ],
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://kellyjordanfamilylaw.com/",
+      "rosterCheckedAt": "2026-09-13",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Batch 013's static reconciliation was clear. Current first-party evidence identifies six named lawyers, a Toronto office, and Kelly Jordan as Founding Partner; the 2026-09-13 authenticated exact-name operator UI check returned no unified-record match. This is provisional only: obtain a fresh protected identity snapshot immediately before any import.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": [
+        {
+          "name": "Kelly Jordan",
+          "relationship": "founder",
+          "email": null,
+          "emailKind": "named_person",
+          "sourceUrl": "https://kellyjordanfamilylaw.com/",
+          "observedAt": "2026-09-13"
+        }
+      ]
+    },
+    {
+      "id": "gta-prospect-014-b014-004",
+      "recordOrigin": "reviewed_gta_prospect_batch_014",
+      "firmName": "Malicki Sanchez Law",
+      "city": "Mississauga",
+      "officeCities": [
+        "Mississauga"
+      ],
+      "websiteUrl": "https://malickisanchezlaw.com/",
+      "practiceAreas": [
+        "Family law",
+        "Business law",
+        "Real estate law",
+        "Wills and estates"
+      ],
+      "observedLawyerCount": 6,
+      "observedLawyerCountQualifier": "exact",
+      "observedLawyerCountDisplay": null,
+      "rosterSourceUrl": "https://malickisanchezlaw.com/our-team/",
+      "rosterCheckedAt": "2026-09-13",
+      "reconciliationStatus": "provisional_new",
+      "legacyClusterLawyerCount": null,
+      "legacyCrosswalk": null,
+      "reconciliationNote": "Batch 013's static reconciliation was clear. Current first-party evidence identifies six lawyers and a Mississauga practice; the 2026-09-13 authenticated exact-name operator UI check returned no unified-record match. This is provisional only: obtain a fresh protected identity snapshot immediately before any import.",
+      "advertisingEvidence": "unknown",
+      "advertisingSourceUrl": null,
+      "gbpEvidence": "unknown",
+      "gbpSourceUrl": null,
+      "publicContacts": []
+    }
+  ]
+}
