@@ -72,7 +72,7 @@ jobs:
           661199da3bbb806f2730ef1618d58f92b2058a66b126abac39fa5de6608588ad  supabase/migrations/20260911195806_gta_prospect_operator_import_apply.sql
           15cdf1b35dea5eafd70af8595a141e74eeda65968c651de8513fa70de9077ca4  supabase/migrations/20260911205207_gta_prospect_operator_import_history.sql
           5130080a025e9d64ad4ec34409b230c4324ce331d7f75b6386329ee1f6011b13  supabase/migrations/20260912131132_gta_prospect_supplemental_evidence_import.sql
-          37efebbd898a572f465ec926bc24d39bdec4e3636a847f41ff1f20590185f303  supabase/migrations/20260913213058_gta_prospect_stable_identity_registry.sql
+          9e3335eb7f288849e2e13fcd127e3ef452aa84f8a95f8f38a1bb91c30318c82f  supabase/migrations/20260913213058_gta_prospect_stable_identity_registry.sql
           EOF
           sha256sum --check --strict "$RUNNER_TEMP/expected-migrations.sha256"
           test ! -e supabase/migrations/20260908134358_gta_prospect_owner_contact_research.sql
