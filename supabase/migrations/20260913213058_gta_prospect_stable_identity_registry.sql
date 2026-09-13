@@ -60,8 +60,8 @@ $$;
 
 REVOKE ALL ON FUNCTION public.assert_gta_prospect_registered_identity_observation() FROM PUBLIC, anon, authenticated, service_role;
 
-CREATE TRIGGER gta_prospect_identity_observations_require_registered_identity
-  BEFORE INSERT ON public.gta_prospect_identity_observations
+CREATE TRIGGER gta_prospect_shared_identity_observations_require_registered_identity
+  BEFORE INSERT ON public.gta_prospect_shared_identity_observations
   FOR EACH ROW EXECUTE FUNCTION public.assert_gta_prospect_registered_identity_observation();
 
 -- The service-only allocator is idempotent only for the same fully evidenced
