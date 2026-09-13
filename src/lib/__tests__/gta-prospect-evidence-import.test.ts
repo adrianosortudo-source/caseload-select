@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { buildGtaProspectEvidenceImportPlan } from "../gta-prospect-evidence-import";
+import { buildGtaProspectEvidenceImportPlan, DOWNTOWN_PLAN_41_BOUNDARY_ID } from "../gta-prospect-evidence-import";
 
 vi.mock("server-only", () => ({}));
 
@@ -28,7 +28,7 @@ function packageRecord(overrides: Record<string, unknown> = {}) {
     }],
     downtownGeography: [{
       observationId: "geo-baker-2026-09-12", evidenceIds: ["plan-41"], geography: {
-        sourceRecordKey: sourceKey, boundaryId: "toronto-downtown-secondary-plan-41", status: "inside", normalizedAddress: "1 Example Street, Toronto, ON",
+        sourceRecordKey: sourceKey, boundaryId: DOWNTOWN_PLAN_41_BOUNDARY_ID, status: "inside", normalizedAddress: "1 Example Street, Toronto, ON",
         latitude: 43.65, longitude: -79.38, coordinateSourceType: "reviewed_geocoder", coordinateSourceUrl: "https://example.test/address",
         boundarySourceUrl: plan41Url, boundaryGeometrySha256: "a".repeat(64), observedOn: "2026-09-12", confidence: "high", note: null,
       },
@@ -70,6 +70,22 @@ describe("GTA prospect supplemental evidence package", () => {
       "must be false for a no-contact evidence package",
       "does not exist in the applied GTA prospect ledger",
     ]));
+  });
+
+  it("accepts only the database-canonical Plan 41 boundary ID", async () => {
+    const accepted = await buildGtaProspectEvidenceImportPlan(packageRecord(), { appliedSourceRecordKeys: new Set([sourceKey]) });
+    const rejected = await buildGtaProspectEvidenceImportPlan(packageRecord({
+      downtownGeography: [{
+        ...packageRecord().downtownGeography[0],
+        geography: { ...packageRecord().downtownGeography[0].geography, boundaryId: "toronto-downtown-secondary-plan-41" },
+      }],
+    }), { appliedSourceRecordKeys: new Set([sourceKey]) });
+    expect(accepted.rejected).toEqual([]);
+    expect(rejected.accepted).toBeNull();
+    expect(rejected.rejected).toEqual(expect.arrayContaining([expect.objectContaining({
+      path: "downtownGeography[0].geography.boundaryId",
+      message: "must be the canonical Toronto Downtown Plan (Secondary Plan 41) boundary ID",
+    })]));
   });
 
   it("does not let a qualified assessment conceal an unsupported criterion", async () => {
