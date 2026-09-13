@@ -1,6 +1,6 @@
 name: Reviewed GTA prospect migrations
 
-on:
+'on':
   workflow_dispatch:
     inputs:
       operation:
