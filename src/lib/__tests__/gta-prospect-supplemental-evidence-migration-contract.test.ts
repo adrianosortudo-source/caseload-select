@@ -2,6 +2,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
+import { DOWNTOWN_PLAN_41_BOUNDARY_ID } from "../gta-prospect-evidence-import";
+
 const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260912131132_gta_prospect_supplemental_evidence_import.sql"), "utf8");
 
 describe("GTA supplemental prospect evidence migration", () => {
@@ -23,5 +25,11 @@ describe("GTA supplemental prospect evidence migration", () => {
     expect(migration).toContain("GRANT EXECUTE ON FUNCTION public.list_gta_prospect_supplemental_evidence_for_operator() TO service_role");
     expect(migration).toContain("batch.state = 'applied'");
     expect(migration).not.toContain("GRANT EXECUTE ON FUNCTION public.apply_gta_prospect_supplemental_evidence_record(uuid, jsonb, text) TO anon");
+  });
+
+  it("uses the same canonical Plan 41 boundary ID as the geography table", () => {
+    const geographyMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260908140907_gta_prospect_downtown_geography_observations.sql"), "utf8");
+    expect(geographyMigration).toContain(`boundary_id = '${DOWNTOWN_PLAN_41_BOUNDARY_ID}'`);
+    expect(DOWNTOWN_PLAN_41_BOUNDARY_ID).toBe("toronto-official-plan-secondary-plan-41");
   });
 });

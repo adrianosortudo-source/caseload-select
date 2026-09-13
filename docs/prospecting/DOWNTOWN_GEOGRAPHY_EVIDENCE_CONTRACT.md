@@ -16,7 +16,7 @@ deduplicate one.
 Every record carries:
 
 - a normalized, firm-confirmed office address;
-- the fixed Downtown Plan boundary identifier and authoritative ArcGIS source;
+- the fixed `toronto-official-plan-secondary-plan-41` boundary identifier and authoritative ArcGIS source;
 - an SHA-256 hash of the exact boundary geometry used;
 - the date observed and an explicit confidence value; and
 - an `inside`, `outside`, or `needs_manual_review` conclusion.
@@ -25,6 +25,11 @@ Every record carries:
 the coordinate-source URL. `needs_manual_review` may retain an address without
 coordinates, but cannot be treated as cohort eligible. The cohort helper still
 requires an exact 1–10 published lawyer count separately.
+
+The public package validator and the append-only database table use this same
+canonical identifier. Legacy package value `toronto-downtown-secondary-plan-41`
+is not accepted as an alias: a package must be regenerated from its preserved
+evidence rather than silently rewritten during import.
 
 ## Privacy and operational boundary
 
