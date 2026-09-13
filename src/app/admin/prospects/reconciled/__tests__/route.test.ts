@@ -34,6 +34,14 @@ vi.mock("@/lib/gta-prospect-owner-contact-reader", () => ({
   GtaProspectOwnerContactLedgerUnavailableError: h.OwnerUnavailable,
   listGtaProspectOwnerContactsForOperator: h.ownerRead,
 }));
+vi.mock("@/lib/gta-prospect-downtown-geography-reader", () => ({
+  GtaProspectDowntownGeographyLedgerUnavailableError: class extends Error {},
+  listGtaProspectDowntownGeographyForOperator: () => Promise.resolve([]),
+}));
+vi.mock("@/lib/gta-prospect-supplemental-evidence-reader", () => ({
+  GtaProspectSupplementalEvidenceLedgerUnavailableError: class extends Error {},
+  listGtaProspectSupplementalEvidenceForOperator: () => Promise.resolve([]),
+}));
 
 import { GET } from "../route";
 

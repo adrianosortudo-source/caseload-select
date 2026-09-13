@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import ReconciledProspects from "@/app/admin/prospects/ReconciledProspects";
+import SupplementalEvidenceImport from "@/app/admin/prospects/SupplementalEvidenceImport";
 import { RECONCILED_GTA_PROSPECTS } from "@/app/admin/prospects/reconciled-prospects";
 import { mergeQualifiedProspects } from "@/lib/qualified-gta-prospects";
 import QualifiedProspectAuditPage from "@/app/admin/prospects/audits/[firmId]/page";
@@ -14,7 +15,8 @@ export default async function ProspectQualifiedPreviewPage({ searchParams }: { s
   }
   const merged = mergeQualifiedProspects(RECONCILED_GTA_PROSPECTS);
   return (
-    <main className="min-h-screen bg-parchment p-4 sm:p-6">
+    <main className="min-h-screen bg-parchment p-4 sm:p-6 space-y-4">
+      <SupplementalEvidenceImport />
       <ReconciledProspects initialData={{
         records: merged.records,
         source: "fixture",
