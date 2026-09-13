@@ -19,6 +19,11 @@ import {
   listGtaProspectSupplementalEvidenceForOperator,
   type GtaProspectSupplementalEvidenceSummary,
 } from "@/lib/gta-prospect-supplemental-evidence-reader";
+import {
+  GtaProspectStableIdentityRegistryUnavailableError,
+  listGtaProspectStableIdentitiesForOperator,
+  type GtaProspectStableIdentity,
+} from "@/lib/gta-prospect-stable-identity-reader";
 import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
 import { RECONCILED_GTA_PROSPECTS } from "../reconciled-prospects";
 import {
@@ -102,6 +107,35 @@ function attachSupplementalEvidence(
   });
 }
 
+/**
+ * Only the registry can make a portable FIRM ID visible as the shared firm
+ * identity. Historic supplemental observations remain visible as evidence,
+ * but cannot create an authoritative cross-system link on their own.
+ */
+function attachStableIdentities(
+  records: readonly ReconciledGtaProspect[],
+  identities: readonly GtaProspectStableIdentity[],
+): ReconciledGtaProspect[] {
+  const bySourceRecordKey = new Map(identities.map((identity) => [identity.sourceRecordKey, identity]));
+  return records.map((record) => {
+    const identity = bySourceRecordKey.get(record.id);
+    if (identity) {
+      return {
+        ...record,
+        firmId: identity.firmId,
+        canonicalDomain: identity.canonicalDomain,
+        firmIdentity: { sourceUrl: identity.sourceUrl, observedOn: identity.observedOn, confidence: identity.confidence },
+      };
+    }
+    return {
+      ...record,
+      firmId: null,
+      canonicalDomain: null,
+      firmIdentity: null,
+    };
+  });
+}
+
 async function ownerContactsForPresentation(): Promise<readonly GtaProspectOwnerContactSummary[]> {
   try {
     return await listGtaProspectOwnerContactsForOperator();
@@ -131,6 +165,17 @@ async function supplementalEvidenceForPresentation(): Promise<readonly GtaProspe
   }
 }
 
+async function stableIdentitiesForPresentation(): Promise<readonly GtaProspectStableIdentity[]> {
+  try {
+    return await listGtaProspectStableIdentitiesForOperator();
+  } catch (error) {
+    // The registry is a new authority layer. Before its migration is present,
+    // keep every record unlinked rather than relying on a supplemental claim.
+    if (error instanceof GtaProspectStableIdentityRegistryUnavailableError) return [];
+    throw error;
+  }
+}
+
 async function fixtureResponse(
   fallbackReason: ReconciledProspectFallbackReason,
   ownerContacts?: readonly GtaProspectOwnerContactSummary[],
@@ -139,7 +184,10 @@ async function fixtureResponse(
   const resolvedOwnerContacts = ownerContacts ?? await ownerContactsForPresentation();
   return NextResponse.json<RecordsResponse>(
     {
-    records: attachSupplementalEvidence(attachDowntownGeography(attachOwnerContacts(combineUnifiedGtaProspects(merged.records), resolvedOwnerContacts), await downtownGeographyForPresentation()), await supplementalEvidenceForPresentation()),
+    records: attachStableIdentities(
+      attachSupplementalEvidence(attachDowntownGeography(attachOwnerContacts(combineUnifiedGtaProspects(merged.records), resolvedOwnerContacts), await downtownGeographyForPresentation()), await supplementalEvidenceForPresentation()),
+      await stableIdentitiesForPresentation(),
+    ),
       source: "fixture",
       sourceCounts: { ledger: 0, fixture: RECONCILED_GTA_PROSPECTS.length },
       qualifiedImport: merged.report,
@@ -172,14 +220,21 @@ export async function GET() {
   try {
     const ownerContacts = await ownerContactsForPresentation();
     const records = await listGtaProspectResearchForOperator();
-    const [geography, supplementalEvidence] = await Promise.all([downtownGeographyForPresentation(), supplementalEvidenceForPresentation()]);
+    const [geography, supplementalEvidence, stableIdentities] = await Promise.all([
+      downtownGeographyForPresentation(),
+      supplementalEvidenceForPresentation(),
+      stableIdentitiesForPresentation(),
+    ]);
     if (records.length === 0) return fixtureResponse("ledger_empty", ownerContacts);
 
     const merged = mergeLedgerAndFixtureRecords(records);
     const qualified = mergeQualifiedProspects(merged.records);
     return NextResponse.json<RecordsResponse>(
       {
-        records: attachSupplementalEvidence(attachDowntownGeography(attachOwnerContacts(combineUnifiedGtaProspects(qualified.records), ownerContacts), geography), supplementalEvidence),
+        records: attachStableIdentities(
+          attachSupplementalEvidence(attachDowntownGeography(attachOwnerContacts(combineUnifiedGtaProspects(qualified.records), ownerContacts), geography), supplementalEvidence),
+          stableIdentities,
+        ),
         source: merged.missingFixtureCount > 0 ? "hybrid" : "ledger",
         sourceCounts: { ledger: records.length, fixture: merged.missingFixtureCount },
         qualifiedImport: qualified.report,

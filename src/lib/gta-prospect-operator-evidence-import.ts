@@ -50,6 +50,33 @@ function parseRecordReceipt(value: unknown, sourceRecordKey: string) {
   }
 }
 
+/**
+ * A confirmed evidence mapping carries the source and date needed to allocate
+ * its portable identity. The database refuses the later supplemental row
+ * unless this allocation exists for the exact applied firm UUID.
+ */
+async function registerConfirmedStableIdentities(
+  plan: GtaProspectEvidenceImportPlan,
+  db: GtaProspectOperatorEvidenceImportClient,
+): Promise<void> {
+  if (!plan.accepted) return;
+  const evidenceById = new Map(plan.accepted.evidence.map((item) => [item.evidenceId, item]));
+  for (const mapping of plan.accepted.identityMappings) {
+    if (mapping.matchState !== "confirmed" || !mapping.firmId || !mapping.canonicalDomain) continue;
+    const evidence = mapping.evidenceIds.map((id) => evidenceById.get(id)).find((item) => Boolean(item));
+    if (!evidence) throw new Error(`${mapping.sourceRecordKey}: confirmed identity has no source evidence.`);
+    const registered = await db.rpc("register_gta_prospect_stable_identity", {
+      p_source_record_key: mapping.sourceRecordKey,
+      p_stable_firm_id: mapping.firmId,
+      p_canonical_domain: mapping.canonicalDomain,
+      p_source_url: evidence.sourceUrl,
+      p_observed_on: mapping.observedOn,
+      p_adjudication_basis: mapping.reason,
+    });
+    if (registered.error) throw rpcError(registered.error, `${mapping.sourceRecordKey}: could not allocate the authoritative stable firm identity.`);
+  }
+}
+
 /** Adapts the public, versioned envelope to one append-only DB record per source key. */
 export function buildGtaProspectOperatorEvidenceRecords(plan: GtaProspectEvidenceImportPlan): readonly OperatorRecord[] {
   if (!plan.accepted) throw new Error("A rejected GTA prospect evidence package has no operator records.");
@@ -135,6 +162,7 @@ export async function applyGtaProspectOperatorEvidenceImport({
     return supabaseAdmin as unknown as GtaProspectOperatorEvidenceImportClient;
   })();
   const records = buildGtaProspectOperatorEvidenceRecords(plan);
+  await registerConfirmedStableIdentities(plan, db);
   const started = await db.rpc("begin_gta_prospect_supplemental_evidence_import", {
     p_package_id: plan.accepted.packageId,
     p_package_sha256: plan.payloadSha256,
