@@ -12,7 +12,7 @@ name: Reviewed GTA prospect migrations
           - dry-run
           - apply
       confirmation:
-        description: Required only for apply: APPLY-FOUR-GTA-PROSPECT-MIGRATIONS
+        description: "Required only for apply: APPLY-FOUR-GTA-PROSPECT-MIGRATIONS"
         required: false
         type: string
 
@@ -68,11 +68,11 @@ jobs:
           test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
 
           cat > "$RUNNER_TEMP/expected-migrations.sha256" <<'EOF'
-a1f97a0dfe570bbd1295afe3dccae54f9b27a93445360e082902f55e272a18ab  supabase/migrations/20260908140907_gta_prospect_downtown_geography_observations.sql
-661199da3bbb806f2730ef1618d58f92b2058a66b126abac39fa5de6608588ad  supabase/migrations/20260911195806_gta_prospect_operator_import_apply.sql
-15cdf1b35dea5eafd70af8595a141e74eeda65968c651de8513fa70de9077ca4  supabase/migrations/20260911205207_gta_prospect_operator_import_history.sql
-5130080a025e9d64ad4ec34409b230c4324ce331d7f75b6386329ee1f6011b13  supabase/migrations/20260912131132_gta_prospect_supplemental_evidence_import.sql
-EOF
+          a1f97a0dfe570bbd1295afe3dccae54f9b27a93445360e082902f55e272a18ab  supabase/migrations/20260908140907_gta_prospect_downtown_geography_observations.sql
+          661199da3bbb806f2730ef1618d58f92b2058a66b126abac39fa5de6608588ad  supabase/migrations/20260911195806_gta_prospect_operator_import_apply.sql
+          15cdf1b35dea5eafd70af8595a141e74eeda65968c651de8513fa70de9077ca4  supabase/migrations/20260911205207_gta_prospect_operator_import_history.sql
+          5130080a025e9d64ad4ec34409b230c4324ce331d7f75b6386329ee1f6011b13  supabase/migrations/20260912131132_gta_prospect_supplemental_evidence_import.sql
+          EOF
           sha256sum --check --strict "$RUNNER_TEMP/expected-migrations.sha256"
           test ! -e supabase/migrations/20260908134358_gta_prospect_owner_contact_research.sql
           test -f supabase/migrations-deferred/20260908134358_gta_prospect_owner_contact_research.sql
