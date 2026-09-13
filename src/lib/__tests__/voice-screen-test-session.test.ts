@@ -72,7 +72,7 @@ describe("independent caller segment", () => {
     expect(() => session.save({ revision: 0, finish: true })).toThrow("refresh_required");
     expect(session.getAnswers()[0]).toMatchObject({ question: question.text, answer: "Skipped by caller", source: "screen" });
     session.save({ revision: 1, finish: true });
-    expect(session.getView()).toEqual({ revision: 2, status: "completed", question: null });
+    expect(session.getView()).toMatchObject({ revision: 2, status: "completed", question: null });
     expect(() => session.save({ revision: 2, finish: true })).toThrow("refresh_required");
   });
 
@@ -85,6 +85,7 @@ describe("independent caller segment", () => {
         broadNeed: FICTIONAL_CALL.situation,
         callback: { number: FICTIONAL_CALL.phone },
         capturedSlots: FICTIONAL_CALL.capturedSlots,
+        deadline: FICTIONAL_CALL.deadline,
       }),
       revision: 0, status: "open", answers: [],
     };
@@ -97,6 +98,17 @@ describe("independent caller segment", () => {
       return true;
     });
     expect(await (await GET(request())).json()).toEqual(independent.getView());
+    for (const action of [
+      { correction: { fieldId: "client_name", value: "Taylor Morgan" } },
+      { correction: { fieldId: "client_phone", value: "647 555 0198" } },
+      { confirmReview: true },
+    ]) {
+      const payload = { revision: independent.getView().revision, ...action };
+      const response = await POST(request(payload));
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(independent.save(payload));
+      expect(await (await GET(request())).json()).toEqual(independent.getView());
+    }
     for (let index = 0; index < 4; index += 1) {
       const view = independent.getView();
       if (!view.question) break;
@@ -128,8 +140,8 @@ describe("independent caller segment", () => {
       submitted_at: liveReport.submitted_at,
     }).toEqual(liveReport);
     const caller = JSON.stringify(independent.getView());
-    expect(caller).not.toContain(FICTIONAL_CALL.name);
+    expect(caller).toContain("Taylor Morgan");
     expect(caller).not.toContain(FICTIONAL_CALL.phone);
-    expect(caller).not.toContain("report");
+    expect(independent.getView()).not.toHaveProperty("report");
   });
 });

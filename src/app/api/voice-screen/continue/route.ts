@@ -20,20 +20,21 @@ async function access(req: NextRequest) {
   return inquiry ? { inquiry } : { denied: reply({ error: "link_unavailable" }, 404) };
 }
 export async function GET(req: NextRequest) {
-  try { const a = await access(req); return a.denied ?? reply(continuationView(a.inquiry!.engine_state, a.inquiry!.revision, a.inquiry!.status)); }
+  try { const a = await access(req); return a.denied ?? reply(continuationView(a.inquiry!.engine_state, a.inquiry!.revision, a.inquiry!.status, a.inquiry!.answers, a.inquiry!.caller_facts)); }
   catch { return reply({ error: "continuation_unavailable" }, 503); }
 }
 export async function POST(req: NextRequest) {
   try {
     const a = await access(req); if (a.denied) return a.denied;
     const inquiry = a.inquiry!;
-    const raw = await req.text(); if (Buffer.byteLength(raw) > 4000) return reply({ error: "payload_too_large" }, 413);
+    const raw = await req.text(); if (Buffer.byteLength(raw) > 8192) return reply({ error: "payload_too_large" }, 413);
     const next = transitionContinuation({
       state: inquiry.engine_state, answers: inquiry.answers,
       status: inquiry.status, revision: inquiry.revision,
+      call: inquiry.caller_facts,
     }, JSON.parse(raw));
     if (!await saveInquiry(inquiry, next.state, next.answers, next.status)) return reply({ error: "refresh_required" }, 409);
-    return reply(continuationView(next.state, next.revision, next.status));
+    return reply(continuationView(next.state, next.revision, next.status, next.answers));
   } catch (error) {
     if (error instanceof ContinuationError) return reply({ error: error.code }, error.status);
     return reply({ error: error instanceof SyntaxError ? "invalid_json" : "save_unavailable" }, error instanceof SyntaxError ? 400 : 503);

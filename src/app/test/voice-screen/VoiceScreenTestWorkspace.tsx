@@ -59,11 +59,20 @@ export function VoiceScreenTestWorkspace({ initialSegment = "widget" }: { initia
         <p data-ui-copy="body">{snapshot.facts.name} · {snapshot.facts.phone}</p>
         <p className="leading-relaxed" data-ui-copy="body">{snapshot.facts.situation}</p>
         <p className="leading-relaxed" data-ui-copy="supporting">{snapshot.facts.deadline}</p>
+        <details>
+          <summary className="cursor-pointer py-2 font-semibold">Current caller summary</summary>
+          <dl className="space-y-3 pt-3">
+            {snapshot.summary.fields.map(field => <div key={field.id} data-ui-component-content={`test-current-${field.id}`}>
+              <dt className="text-sm font-semibold" data-ui-copy="supporting">{field.label}</dt>
+              <dd className="m-0 break-words leading-relaxed" data-ui-copy="body">{field.value}</dd>
+            </div>)}
+          </dl>
+        </details>
       </section>
       <section className="rounded-xl border border-[#1E2F58]/15 bg-white p-4 max-[480px]:p-3 max-[360px]:p-2 sm:p-5 space-y-4" data-ui-component-content="test-written-answers">
         <h2 className="text-xl font-bold" data-ui-copy="heading">From qualification</h2>
         {!snapshot.answers.length && <p className="leading-relaxed" data-ui-copy="body">No written answers yet. The call information is already available for review.</p>}
-        {snapshot.answers.map((answer, index) => <div key={index} data-testid="voice-screen-test-answer" className="space-y-1" data-ui-component-content="test-written-answer">
+        {snapshot.answers.filter(answer => !answer.superseded).map((answer, index) => <div key={index} data-testid="voice-screen-test-answer" className="space-y-1" data-ui-component-content="test-written-answer">
           <h3 className="font-semibold leading-relaxed max-[480px]:text-[12px] max-[480px]:tracking-[-0.02em] max-[480px]:[text-wrap:pretty]" data-ui-copy="heading">{answer.question}</h3>
           <p className="leading-relaxed" data-ui-copy="body">{answer.answer}</p>
         </div>)}

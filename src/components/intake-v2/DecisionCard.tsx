@@ -15,7 +15,7 @@
  * parent (widget controller) decides whether to advance or wait for "Continue".
  */
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { ScreenItem } from "./types";
 import { OTHER_VALUE } from "./types";
 import { useAutosizeTextarea } from "./useAutosizeTextarea";
@@ -31,6 +31,7 @@ interface Props {
 
 export function DecisionCard({ item, value, onChange, contained = false }: Props) {
   const multi = !!item.multiSelect;
+  const explanationId = useId();
   const selected = multi
     ? Array.isArray(value) ? value : []
     : typeof value === "string" ? value : null;
@@ -137,23 +138,26 @@ export function DecisionCard({ item, value, onChange, contained = false }: Props
 
       {otherMode && (
         <div className="flex flex-col gap-3 rounded-xl border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_15%,transparent)] bg-[var(--cls-surface,#FFFFFF)] p-5">
-          <p
+          <label
+            htmlFor={explanationId}
             className="text-[14px] font-semibold text-[var(--cls-text,#1E2F58)]"
             style={{ fontFamily: fontBody }}
           >
             In your own words:
-          </p>
+          </label>
           <textarea
+            id={explanationId}
             ref={textareaRef}
             rows={4}
             autoFocus
             value={otherText}
+            maxLength={item.maxFreeTextLength}
             placeholder="Describe what happened in your situation..."
             onChange={e => setOtherText(e.target.value)}
             className="w-full px-4 py-3 rounded-lg text-[15px] leading-relaxed resize-none bg-[var(--cls-surface,#FFFFFF)] border border-[color-mix(in_srgb,var(--cls-accent,#1E2F58)_20%,transparent)] focus:border-[var(--cls-accent,#1E2F58)] focus:outline-none text-[var(--cls-text,#1E2F58)] placeholder:text-[color-mix(in_srgb,var(--cls-text,#1E2F58)_35%,transparent)]"
             style={{ fontFamily: fontBody, ...(contained ? { overflow: "hidden" } : {}) }}
           />
-          <div className="flex gap-2 justify-end">
+          <div className="flex flex-wrap gap-2 justify-end">
             <button
               type="button"
               onClick={() => { setOtherMode(false); setOtherText(""); }}
