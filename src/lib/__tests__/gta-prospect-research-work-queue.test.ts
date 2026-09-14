@@ -80,7 +80,7 @@ describe("GTA prospect research work queue", () => {
   });
 
   it("requires an owned lease to resolve or defer work", async () => {
-    const rpc = vi.fn(async () => ({ data: null, error: null }));
+    const rpc = vi.fn(async (_name: string) => ({ data: null, error: null }));
     await resolveGtaProspectResearchWorkItem({ itemId: item.id, workerId: "worker-a", resolution: "insufficient_evidence", note: "First-party roster page has no current team roster.", client: { rpc } });
     await renewGtaProspectResearchWorkItemLease({ itemId: item.id, workerId: "worker-a", client: { rpc: async () => ({ data: "2026-09-14T15:00:00Z", error: null }) } });
     await deferGtaProspectResearchWorkItem({ itemId: item.id, workerId: "worker-a", error: "Transient origin timeout.", retryAt: "2026-09-14T14:00:00Z", client: { rpc } });
