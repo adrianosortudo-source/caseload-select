@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "gta-prospect-batch-review.v1",
+  "batchId": "gta-prospect-batch-016",
+  "reviewedOn": "2026-09-13",
+  "status": "discovery_started_review_only",
+  "policy": {
+    "requiredRosterProvenance": "first_party",
+    "targetCountBands": [{ "min": 3, "max": 5 }, { "min": 6, "max": 10 }, { "min": 11, "max": 20 }],
+    "requiresFreshStaticReconciliationBeforeManifest": true,
+    "requiresProtectedServerReviewBeforeApply": true,
+    "requiresSeparateImportAuthorization": true
+  },
+  "reviewMetadata": {
+    "researchMode": "public_first_party_only",
+    "purpose": "Start the next GTA firm-discovery queue without making a database, CRM, contact, or outreach change.",
+    "sourceRules": ["No anti-bot bypass or automated website traversal", "No form submission or contact", "No CRM or database write", "Public owner or email evidence is not outreach permission", "No automatic identity merge", "A search-result excerpt is discovery evidence only, never import evidence"]
+  },
+  "candidates": [
+    {
+      "recordId": "b016-001",
+      "origin": { "kind": "new_public_web_discovery" },
+      "firmName": "Consky & Associates Professional Corporation",
+      "canonicalDomain": "consky.ca",
+      "websiteUrl": "https://www.consky.ca/our-team/",
+      "officeCities": [],
+      "observedLawyerCount": 3,
+      "countQualifier": "exact_pending_fresh_first_party_capture",
+      "observedOn": "2026-09-13",
+      "evidence": [{ "kind": "roster_discovery", "provenance": "first_party", "url": "https://www.consky.ca/our-team/", "observedOn": "2026-09-13", "note": "The firm's current Our Lawyers page names Harvey Consky, Jennifer Mendelsohn, and Cindy Leung separately from its staff section. Office location, current roster capture, identity reconciliation, and public-contact review remain pending." }]
+    },
+    {
+      "recordId": "b016-002",
+      "origin": { "kind": "new_public_web_discovery" },
+      "firmName": "Harcourt LLP",
+      "canonicalDomain": "harcourtspllp.com",
+      "websiteUrl": "https://www.harcourtspllp.com/who-we-are/index.html",
+      "officeCities": ["Toronto"],
+      "observedLawyerCount": 5,
+      "countQualifier": "at_least_pending_fresh_first_party_capture",
+      "observedOn": "2026-09-13",
+      "evidence": [{ "kind": "roster_discovery", "provenance": "first_party", "url": "https://www.harcourtspllp.com/who-we-are/index.html", "observedOn": "2026-09-13", "note": "The firm describes itself as Toronto-based and lists Douglas White, Victor E. Clark, Phillip K. Doolin, Alfonzo Higgins, and R. Antonio Viera under Our Lawyers. Fresh roster capture and identity reconciliation remain pending." }]
+    },
+    {
+      "recordId": "b016-003",
+      "origin": { "kind": "new_public_web_discovery" },
+      "firmName": "Black Sutherland LLP",
+      "canonicalDomain": "blacksutherland.com",
+      "websiteUrl": "https://www.blacksutherland.com/our-lawyers/",
+      "officeCities": ["North York"],
+      "observedLawyerCount": 15,
+      "countQualifier": "at_least_pending_fresh_first_party_capture",
+      "observedOn": "2026-09-13",
+      "evidence": [{ "kind": "roster_discovery", "provenance": "first_party", "url": "https://www.blacksutherland.com/our-lawyers/", "observedOn": "2026-09-13", "note": "The firm's current Our Lawyers page lists fifteen people beneath its lawyer roster and gives a North York office address. A retained legacy-source text check contains the canonical domain, so this candidate is held for full identity reconciliation; lawyer-role verification and fresh roster capture also remain pending." }]
+    }
+  ],
+  "decisions": [
+    { "recordId": "b016-001", "disposition": "hold", "basis": "Discovery only: location confirmation, fresh first-party roster capture, and static identity reconciliation are pending." },
+    { "recordId": "b016-002", "disposition": "hold", "basis": "Discovery only: fresh first-party roster capture and static identity reconciliation are pending." },
+    { "recordId": "b016-003", "disposition": "hold", "basis": "A retained legacy-source presence check found the canonical domain; no merge or import is authorized. Lawyer-role verification and fresh first-party roster capture are also pending." }
+  ],
+  "automaticMerge": false,
+  "outreachAuthorized": false,
+  "importAuthorized": false
+}
