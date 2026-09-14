@@ -52,4 +52,15 @@ describe('prospect list contact tracking UI contract', () => {
     expect(source).toContain('STATUS_CLASSES[state.status]');
     expect(source).toContain('${statusClass}');
   });
+
+  it('refreshes imported prospect data without requiring a page reload', () => {
+    const source = read('ReconciledProspects.tsx');
+    const events = read('prospect-data-events.ts');
+    const supplementalImport = read('SupplementalEvidenceImport.tsx');
+    expect(events).toContain('PROSPECT_DATA_CHANGED_EVENT');
+    expect(events).toContain('window.dispatchEvent');
+    expect(source).toContain('window.addEventListener(PROSPECT_DATA_CHANGED_EVENT, refresh)');
+    expect(source).toContain('[initialData, prospectDataRefreshToken]');
+    expect(supplementalImport).toContain('notifyProspectDataChanged();');
+  });
 });
