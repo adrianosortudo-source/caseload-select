@@ -120,7 +120,9 @@ function parseItem(value: unknown): GtaProspectResearchWorkItem {
     if (candidate === null || candidate === undefined) return null;
     return requireText(candidate, `Queue item ${field}`, maxLength);
   };
-  if (typeof value.id !== "string" || typeof value.source_system !== "string" || typeof value.source_record_key !== "string" || typeof value.candidate_name !== "string" || !Number.isInteger(value.priority) || !Number.isInteger(value.attempt_count)) {
+  const priority = value.priority;
+  const attemptCount = value.attempt_count;
+  if (typeof value.id !== "string" || typeof value.source_system !== "string" || typeof value.source_record_key !== "string" || typeof value.candidate_name !== "string" || typeof priority !== "number" || !Number.isInteger(priority) || typeof attemptCount !== "number" || !Number.isInteger(attemptCount)) {
     throw new Error("Queue RPC returned a malformed work item.");
   }
   const candidateSnapshot = isObject(value.candidate_snapshot) ? Object.freeze(value.candidate_snapshot) : null;
@@ -133,11 +135,11 @@ function parseItem(value: unknown): GtaProspectResearchWorkItem {
     candidateAddress: nullableText("candidate_address", 1_000),
     sourceUrls: Object.freeze(sourceUrls.map((url) => requireUrl(url, "Queue item source URL"))),
     candidateSnapshot,
-    priority: value.priority,
+    priority,
     state: parseState(value.state),
     leaseOwner: nullableText("lease_owner", 120),
     leaseExpiresAt: nullableText("lease_expires_at", 64),
-    attemptCount: value.attempt_count,
+    attemptCount,
     nextAttemptAt: nullableText("next_attempt_at", 64),
     lastError: nullableText("last_error", 2_000),
     resolution: parseResolution(value.resolution),
