@@ -151,8 +151,13 @@ async function downtownGeographyForPresentation(): Promise<readonly GtaProspectD
   try {
     return await listGtaProspectDowntownGeographyForOperator();
   } catch (error) {
+    // Geography is optional enrichment. A malformed or superseded observation
+    // must remain visible to maintainers through the server log, but it cannot
+    // make the primary prospect registry (or newly imported, valid records)
+    // unavailable to the operator.
     if (error instanceof GtaProspectDowntownGeographyLedgerUnavailableError) return [];
-    throw error;
+    console.error("[gta-prospect-research] optional Downtown geography read failed", error);
+    return [];
   }
 }
 
