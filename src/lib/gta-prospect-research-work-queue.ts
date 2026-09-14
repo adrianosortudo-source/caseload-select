@@ -286,11 +286,14 @@ export async function listGtaProspectResearchWorkQueue({ limit = 50, offset = 0,
   })();
   const response = await db.rpc("list_gta_prospect_research_work_queue_for_operator", { p_limit: limit, p_offset: offset });
   if (response.error) throw rpcError(response.error, "Could not read GTA prospect research queue.");
-  if (!isObject(response.data) || !isObject(response.data.counts) || !Array.isArray(response.data.items)) throw new Error("Queue listing RPC returned an invalid payload.");
+  const payload = response.data;
+  if (!isObject(payload) || !isObject(payload.counts) || !Array.isArray(payload.items)) throw new Error("Queue listing RPC returned an invalid payload.");
+  const payloadCounts = payload.counts;
+  const payloadItems = payload.items;
   const counts = Object.fromEntries(GTA_PROSPECT_RESEARCH_QUEUE_STATES.map((state) => {
-    const count = response.data.counts[state];
+    const count = payloadCounts[state];
     if (typeof count !== "number" || !Number.isInteger(count) || count < 0) throw new Error("Queue listing RPC returned invalid counts.");
     return [state, count];
   })) as Record<GtaProspectResearchQueueState, number>;
-  return Object.freeze({ counts: Object.freeze(counts), items: Object.freeze(response.data.items.map(parseItem)) });
+  return Object.freeze({ counts: Object.freeze(counts), items: Object.freeze(payloadItems.map(parseItem)) });
 }
