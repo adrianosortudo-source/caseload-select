@@ -3,7 +3,7 @@ import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
 
 export type QualifiedProspectConfidence = "high" | "moderate";
 export type AdvertisingActivityState = "observable_current" | "observable_recent" | "observable_historical";
-export type QualificationState = "qualified" | "needs_evidence";
+export type QualificationState = "qualified" | "needs_evidence" | "disqualified";
 export type AuditState = "ready" | "not_ready";
 export type EvidenceFreshness = "last_30_days" | "31_to_180_days" | "older_than_180_days" | "unknown";
 

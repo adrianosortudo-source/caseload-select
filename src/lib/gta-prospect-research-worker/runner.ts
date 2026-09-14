@@ -5,6 +5,7 @@ import {
   type GtaProspectResearchCapsule,
   type GtaProspectResearchWorkerOptions,
 } from "./index";
+export type { GtaProspectResearchCapsule } from "./index";
 
 export type GtaProspectResearchQueueWorkerGateway = Readonly<{
   claim: (input: Readonly<{ workerId: string; limit: number; leaseMinutes: number }>) => Promise<readonly GtaProspectResearchWorkItem[]>;
@@ -20,7 +21,7 @@ export type GtaProspectResearchWorkerRun = Readonly<{
   claimed: number;
   capturesPersisted: number;
   deferred: number;
-  failures: readonly Readonly<{ itemId: string; reason: string }>;
+  failures: readonly Readonly<{ itemId: string; reason: string }>[];
 }>;
 
 export type RunGtaProspectResearchWorkerOptions = GtaProspectResearchWorkerOptions & Readonly<{

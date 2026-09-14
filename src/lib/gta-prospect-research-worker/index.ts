@@ -170,6 +170,14 @@ function extractSignals(evidence: readonly WorkerEvidence[]): readonly VisibleSi
   const signals: VisibleSignal[] = [];
   for (const page of evidence) {
     const text = htmlToText(page.body);
+    for (const match of page.body.matchAll(/\bhref\s*=\s*["']mailto:([^"'?]+)[^"']*["']/gi)) {
+      const email = decodeURIComponent(match[1]).trim().toLowerCase();
+      if (EMAIL.test(email)) signals.push({ kind: "public_email", value: email, sourceUrl: page.url, excerpt: null });
+    }
+    for (const match of page.body.matchAll(/\bhref\s*=\s*["']mailto:([^"'?]+)[^"']*["']/gi)) {
+      const email = decodeURIComponent(match[1]).trim().toLowerCase();
+      if (EMAIL.test(email)) signals.push({ kind: "public_email", value: email, sourceUrl: page.url, excerpt: null });
+    }
     for (const email of text.match(EMAIL) ?? []) signals.push({ kind: "public_email", value: email.toLowerCase(), sourceUrl: page.url, excerpt: safeExcerpt(text, email) });
     for (const match of page.body.matchAll(/\bhref\s*=\s*["']tel:([^"']+)["']/gi)) signals.push({ kind: "phone", value: decodeURIComponent(match[1]).replace(/\s+/g, " "), sourceUrl: page.url, excerpt: null });
     for (const match of page.body.matchAll(/<form\b[^>]*>/gi)) signals.push({ kind: "form", value: "visible_html_form", sourceUrl: page.url, excerpt: match[0].slice(0, 400) });
@@ -181,7 +189,8 @@ function extractSignals(evidence: readonly WorkerEvidence[]): readonly VisibleSi
     }
     if (/intercom|drift|tawk\.to|livechat|olark|zendesk.*chat/i.test(page.body)) signals.push({ kind: "chat", value: "visible_chat_provider_marker", sourceUrl: page.url, excerpt: null });
     for (const match of text.matchAll(/([A-Z][a-z]+(?:\s+[A-Z][a-z.'-]+){1,3})\s*[,:–-]\s*([^.!?]{0,100}\b(?:founder|co-founder|owner|principal|managing partner|managing lawyer|partner)\b[^.!?]{0,100})/gi)) {
-      signals.push({ kind: "owner_name", value: match[1], sourceUrl: page.url, excerpt: match[0].slice(0, 400) });
+      const ownerName = match[1].replace(/^(?:(?:our|team|email|contact)\s+)+/i, "").trim();
+      if (ownerName) signals.push({ kind: "owner_name", value: ownerName, sourceUrl: page.url, excerpt: match[0].slice(0, 400) });
       signals.push({ kind: "owner_title", value: match[2].trim(), sourceUrl: page.url, excerpt: match[0].slice(0, 400) });
     }
     if (OWNER.test(text) && !signals.some((signal) => signal.sourceUrl === page.url && signal.kind === "owner_title")) {
@@ -312,7 +321,7 @@ export async function researchGtaProspectWorkItem(item: GtaProspectResearchWorkI
       candidateAddress: item.candidateAddress,
       sourceUrl: home.url,
       observedAt,
-      status: item.candidateAddress ? "address_observed" : "address_missing",
+      status: item.candidateAddress ? "address_observed" as const : "address_missing" as const,
       coordinate: null,
       boundary: null,
     }]), failure: null, actionsNotPerformed: Object.freeze(["form submission", "chat interaction", "booking", "message", "contact", "outreach", "CRM write"]) });
