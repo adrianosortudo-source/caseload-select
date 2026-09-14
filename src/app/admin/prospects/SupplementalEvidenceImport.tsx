@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
+import { notifyProspectDataChanged } from "./prospect-data-events";
 
 type EvidenceIssue = { sourceRecordKey: string; message: string };
 type EvidenceSummary = { identityMappings: number; downtownGeography: number; websiteIntakeFindings: number; qualificationAssessments: number; reviewRequired: number };
@@ -96,6 +97,7 @@ export default function SupplementalEvidenceImport({ onImported }: { onImported?
       if (!response.ok) throw new Error(typeof body.error === "string" ? body.error : "The reviewed evidence package could not be applied.");
       setReceipt(typeof body.sourceSha256 === "string" ? body.sourceSha256 : review.sourceSha256);
       setConfirmed(false);
+      notifyProspectDataChanged();
       onImported?.();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The reviewed evidence package could not be applied."); }
     finally { setBusy(null); }

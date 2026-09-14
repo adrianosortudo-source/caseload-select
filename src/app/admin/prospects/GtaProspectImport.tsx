@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { notifyProspectDataChanged } from "./prospect-data-events";
 
 type ImportRecord = Record<string, unknown>;
 
@@ -274,6 +275,7 @@ export default function GtaProspectImport({ onImported }: { onImported?: () => v
       });
       setReviewed(false);
       await loadHistory();
+      notifyProspectDataChanged();
       onImported?.();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The reviewed package could not be imported."); }
     finally { setBusy(null); }

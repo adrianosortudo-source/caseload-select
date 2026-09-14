@@ -43,6 +43,7 @@ import {
   GTA_PROSPECT_SOURCE_SYSTEM,
   type SourceContactStateMap,
 } from "./prospect-contact-operations";
+import { PROSPECT_DATA_CHANGED_EVENT } from "./prospect-data-events";
 
 export type RecordsResponse = {
   records?: ReconciledGtaProspect[];
@@ -180,10 +181,18 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const [contactStateError, setContactStateError] = useState<string | null>(null);
   const [selectedContact, setSelectedContact] = useState<ReconciledGtaProspect | null>(null);
   const [contactRefreshToken, setContactRefreshToken] = useState(0);
+  const [prospectDataRefreshToken, setProspectDataRefreshToken] = useState(0);
 
   useEffect(() => {
-    if (initialData) return;
+    const refresh = () => setProspectDataRefreshToken((current) => current + 1);
+    window.addEventListener(PROSPECT_DATA_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(PROSPECT_DATA_CHANGED_EVENT, refresh);
+  }, []);
+
+  useEffect(() => {
+    if (initialData && prospectDataRefreshToken === 0) return;
     let cancelled = false;
+    setError(null);
     fetch("/admin/prospects/reconciled")
       .then(async (response) => {
         const body = (await response.json()) as RecordsResponse;
@@ -197,7 +206,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
       .then((result) => { if (!cancelled) { setRecords(result.records); setSourceDetails(result); } })
       .catch((cause: Error) => { if (!cancelled) setError(cause.message); });
     return () => { cancelled = true; };
-  }, [initialData]);
+  }, [initialData, prospectDataRefreshToken]);
 
   const values = useMemo(() => {
     const list = records ?? [];
