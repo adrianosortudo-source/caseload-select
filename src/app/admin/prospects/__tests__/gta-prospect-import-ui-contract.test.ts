@@ -40,6 +40,11 @@ describe("GTA prospect importer operator UI", () => {
     expect(component).toContain("No import batches have been recorded yet.");
   });
 
+  it("refreshes the unified prospect list after a reviewed import succeeds", () => {
+    expect(component).toContain('import { notifyProspectDataChanged } from "./prospect-data-events"');
+    expect(component).toContain("notifyProspectDataChanged();");
+  });
+
   it("marks reviewed copy for the rendered quality gate and avoids em dashes", () => {
     expect(component).toContain('data-ui-component-content="gta-prospect-import"');
     expect(component).toContain('data-ui-copy="heading"');
