@@ -175,9 +175,10 @@ export function validateGtaProspectResearchWorkSeed(value: unknown): GtaProspect
     const candidateAddress = raw.candidateAddress === null || raw.candidateAddress === undefined || raw.candidateAddress === "" ? null : requireText(raw.candidateAddress, `items[${index}].candidateAddress`, 1_000);
     if (!Array.isArray(raw.sourceUrls) || raw.sourceUrls.length === 0 || raw.sourceUrls.length > 12) throw new Error(`items[${index}].sourceUrls must contain 1 to 12 URLs.`);
     const sourceUrls = [...new Set(raw.sourceUrls.map((url, urlIndex) => requireUrl(url, `items[${index}].sourceUrls[${urlIndex}]`)))].sort();
-    if (!Number.isInteger(raw.priority) || raw.priority < 0 || raw.priority > 10_000) throw new Error(`items[${index}].priority must be an integer from 0 to 10,000.`);
+    const priority = raw.priority;
+    if (typeof priority !== "number" || !Number.isInteger(priority) || priority < 0 || priority > 10_000) throw new Error(`items[${index}].priority must be an integer from 0 to 10,000.`);
     if (!isObject(raw.candidateSnapshot)) throw new Error(`items[${index}].candidateSnapshot must be an object.`);
-    return Object.freeze({ sourceRecordKey, candidateName, canonicalDomain, candidateAddress, sourceUrls: Object.freeze(sourceUrls), priority: raw.priority, candidateSnapshot: raw.candidateSnapshot });
+    return Object.freeze({ sourceRecordKey, candidateName, canonicalDomain, candidateAddress, sourceUrls: Object.freeze(sourceUrls), priority, candidateSnapshot: raw.candidateSnapshot });
   });
   return Object.freeze({ sourceSystem, sourceSha256, items: Object.freeze(items) });
 }
@@ -185,9 +186,13 @@ export function validateGtaProspectResearchWorkSeed(value: unknown): GtaProspect
 export type GtaProspectResearchQueueSeedReceipt = Readonly<{ state: "seeded" | "already_seeded"; itemCount: number; inserted: number; alreadySeeded: number }>;
 
 function parseSeedReceipt(value: unknown): GtaProspectResearchQueueSeedReceipt {
-  if (!isObject(value) || (value.state !== "seeded" && value.state !== "already_seeded") || !Number.isInteger(value.item_count) || !Number.isInteger(value.inserted) || !Number.isInteger(value.already_seeded)) throw new Error("Queue seed RPC returned an invalid receipt.");
-  if (value.inserted < 0 || value.already_seeded < 0 || value.inserted + value.already_seeded !== value.item_count) throw new Error("Queue seed RPC returned inconsistent counts.");
-  return { state: value.state, itemCount: value.item_count, inserted: value.inserted, alreadySeeded: value.already_seeded };
+  if (!isObject(value) || (value.state !== "seeded" && value.state !== "already_seeded")) throw new Error("Queue seed RPC returned an invalid receipt.");
+  const itemCount = value.item_count;
+  const inserted = value.inserted;
+  const alreadySeeded = value.already_seeded;
+  if (typeof itemCount !== "number" || typeof inserted !== "number" || typeof alreadySeeded !== "number" || !Number.isInteger(itemCount) || !Number.isInteger(inserted) || !Number.isInteger(alreadySeeded)) throw new Error("Queue seed RPC returned an invalid receipt.");
+  if (inserted < 0 || alreadySeeded < 0 || inserted + alreadySeeded !== itemCount) throw new Error("Queue seed RPC returned inconsistent counts.");
+  return { state: value.state, itemCount, inserted, alreadySeeded };
 }
 
 export async function seedGtaProspectResearchWorkQueue({ seed, client }: Readonly<{ seed: GtaProspectResearchWorkSeed; client?: GtaProspectResearchWorkQueueClient }>): Promise<GtaProspectResearchQueueSeedReceipt> {
@@ -284,7 +289,7 @@ export async function listGtaProspectResearchWorkQueue({ limit = 50, offset = 0,
   if (!isObject(response.data) || !isObject(response.data.counts) || !Array.isArray(response.data.items)) throw new Error("Queue listing RPC returned an invalid payload.");
   const counts = Object.fromEntries(GTA_PROSPECT_RESEARCH_QUEUE_STATES.map((state) => {
     const count = response.data.counts[state];
-    if (!Number.isInteger(count) || count < 0) throw new Error("Queue listing RPC returned invalid counts.");
+    if (typeof count !== "number" || !Number.isInteger(count) || count < 0) throw new Error("Queue listing RPC returned invalid counts.");
     return [state, count];
   })) as Record<GtaProspectResearchQueueState, number>;
   return Object.freeze({ counts: Object.freeze(counts), items: Object.freeze(response.data.items.map(parseItem)) });
