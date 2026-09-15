@@ -12,7 +12,7 @@ name: Reviewed GTA prospect migrations
           - dry-run
           - apply
       confirmation:
-        description: "Required only for apply: APPLY-STABLE-IDENTITY-REGISTRY-MIGRATION"
+        description: "Required only for apply: APPLY-WORKER-EVIDENCE-DRAFT-MIGRATION"
         required: false
         type: string
 
@@ -73,6 +73,7 @@ jobs:
           15cdf1b35dea5eafd70af8595a141e74eeda65968c651de8513fa70de9077ca4  supabase/migrations/20260911205207_gta_prospect_operator_import_history.sql
           5130080a025e9d64ad4ec34409b230c4324ce331d7f75b6386329ee1f6011b13  supabase/migrations/20260912131132_gta_prospect_supplemental_evidence_import.sql
           9e3335eb7f288849e2e13fcd127e3ef452aa84f8a95f8f38a1bb91c30318c82f  supabase/migrations/20260913213058_gta_prospect_stable_identity_registry.sql
+          463b3f6a19f3ea55f0e7ed2379063885f6074605289c06c62612190bc84dbcae  supabase/migrations/20260914202504_gta_prospect_worker_evidence_drafts.sql
           EOF
           sha256sum --check --strict "$RUNNER_TEMP/expected-migrations.sha256"
           test ! -e supabase/migrations/20260908134358_gta_prospect_owner_contact_research.sql
@@ -85,7 +86,7 @@ jobs:
             --project-ref "$PROJECT_REF" \
             --output-format json > "$RUNNER_TEMP/plan.json"
 
-          expected='["20260913213058_gta_prospect_stable_identity_registry.sql"]'
+          expected='["20260914202504_gta_prospect_worker_evidence_drafts.sql"]'
           jq -e --argjson expected "$expected" '
             .dryRun == true and
             .upToDate == false and
@@ -99,7 +100,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo "Dry run matched the approved stable-identity registry migration plan. No schema or data migration was applied."
+          echo "Dry run matched the approved worker-evidence-draft migration plan. No schema or data migration was applied."
 
       - name: Apply the approved migration plan
         if: inputs.operation == 'apply'
@@ -109,7 +110,7 @@ jobs:
         run: |
           set -euo pipefail
           unset SUPABASE_DB_PASSWORD
-          test "$CONFIRMATION" = "APPLY-STABLE-IDENTITY-REGISTRY-MIGRATION"
+          test "$CONFIRMATION" = "APPLY-WORKER-EVIDENCE-DRAFT-MIGRATION"
 
           git fetch --no-tags origin main
           test "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)"
@@ -122,7 +123,7 @@ jobs:
             --project-ref "$PROJECT_REF" \
             --output-format json > "$RUNNER_TEMP/apply.json"
 
-          expected='["20260913213058_gta_prospect_stable_identity_registry.sql"]'
+          expected='["20260914202504_gta_prospect_worker_evidence_drafts.sql"]'
           jq -e --argjson expected "$expected" '
             .dryRun == false and
             .migrations == $expected and
