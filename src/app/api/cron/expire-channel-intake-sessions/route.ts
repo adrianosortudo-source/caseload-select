@@ -54,6 +54,11 @@ import {
   type MetaChannel,
 } from '@/lib/channel-intake-processor';
 import type { EngineState, LawyerReport } from '@/lib/screen-engine/types';
+import {
+  EMPTY_CHANNEL_INTAKE_HISTORY,
+  INCOMPLETE_CHANNEL_INTAKE_HISTORY,
+  parseChannelIntakeHistory,
+} from '@/lib/channel-intake-history';
 
 const BATCH_LIMIT = 100;
 
@@ -63,6 +68,7 @@ interface ExpiredSession {
   channel: string;
   sender_id: string;
   engine_state: EngineState;
+  intake_exchanges: unknown;
   follow_up_count: number;
 }
 
@@ -160,7 +166,7 @@ export async function GET(req: NextRequest) {
 
   const { data: expired, error } = await supabase
     .from('channel_intake_sessions')
-    .select('id, firm_id, channel, sender_id, engine_state, follow_up_count')
+    .select('id, firm_id, channel, sender_id, engine_state, intake_exchanges, follow_up_count')
     .eq('finalized', false)
     .lt('expires_at', nowIso)
     .order('expires_at', { ascending: true })
@@ -195,6 +201,12 @@ export async function GET(req: NextRequest) {
     }
 
     if (state && report && report.contact_complete) {
+      const parsedIntakeExchanges = parseChannelIntakeHistory(row.intake_exchanges);
+      if (!parsedIntakeExchanges) {
+        console.warn(
+          '[expire-channel-sessions] invalid intake exchange envelope; marking history incomplete',
+        );
+      }
       const firm = await loadFirmContext(row.firm_id, firmCache);
       const sender = buildSweepSender(
         row.channel as MetaChannel,
@@ -239,6 +251,7 @@ export async function GET(req: NextRequest) {
         decisionDeadline,
         whaleNurture,
         sessionId: row.id,
+        intakeExchanges: parsedIntakeExchanges ?? INCOMPLETE_CHANNEL_INTAKE_HISTORY,
         priorFollowUpCount: row.follow_up_count,
         isResume: true,
         fallbackTranscript: state.input ?? '',
@@ -311,6 +324,7 @@ export async function GET(req: NextRequest) {
       .from('channel_intake_sessions')
       .update({
         finalized: true,
+        intake_exchanges: EMPTY_CHANNEL_INTAKE_HISTORY,
         last_activity_at: nowIso,
       })
       .eq('id', row.id);

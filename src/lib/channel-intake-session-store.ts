@@ -14,6 +14,12 @@
  */
 
 import { supabaseAdmin as supabase } from '@/lib/supabase-admin';
+import {
+  EMPTY_CHANNEL_INTAKE_HISTORY,
+  INCOMPLETE_CHANNEL_INTAKE_HISTORY,
+  parseChannelIntakeHistory,
+  type ChannelIntakeHistoryV1,
+} from '@/lib/channel-intake-history';
 import type { EngineState } from '@/lib/screen-engine/types';
 import type { MetaChannel } from '@/lib/channel-intake-processor';
 
@@ -30,6 +36,7 @@ export interface ChannelSessionRow {
   channel: MetaChannel;
   sender_id: string;
   engine_state: EngineState;
+  intake_exchanges: ChannelIntakeHistoryV1;
   follow_up_count: number;
   max_follow_ups: number;
   finalized: boolean;
@@ -51,13 +58,27 @@ export interface LoadSessionArgs {
   senderId: string;
 }
 
+function normalizeLoadedSession(data: unknown): ChannelSessionRow {
+  const row = data as Omit<ChannelSessionRow, 'intake_exchanges'> & {
+    intake_exchanges?: unknown;
+  };
+  const intakeExchanges = parseChannelIntakeHistory(row.intake_exchanges);
+  if (!intakeExchanges) {
+    console.warn('[channel-session-store] invalid intake exchange envelope; marking history incomplete');
+  }
+  return {
+    ...row,
+    intake_exchanges: intakeExchanges ?? INCOMPLETE_CHANNEL_INTAKE_HISTORY,
+  };
+}
+
 export async function loadOpenChannelSession(
   args: LoadSessionArgs,
 ): Promise<ChannelSessionRow | null> {
   const { data, error } = await supabase
     .from('channel_intake_sessions')
     .select(
-      'id, firm_id, channel, sender_id, engine_state, follow_up_count, max_follow_ups, finalized, screened_lead_id, expires_at, created_at',
+      'id, firm_id, channel, sender_id, engine_state, intake_exchanges, follow_up_count, max_follow_ups, finalized, screened_lead_id, expires_at, created_at',
     )
     .eq('firm_id', args.firmId)
     .eq('channel', args.channel)
@@ -70,7 +91,7 @@ export async function loadOpenChannelSession(
     return null;
   }
   if (!data) return null;
-  return data as ChannelSessionRow;
+  return normalizeLoadedSession(data);
 }
 
 export interface CreateSessionArgs {
@@ -78,6 +99,7 @@ export interface CreateSessionArgs {
   channel: MetaChannel;
   senderId: string;
   engineState: EngineState;
+  intakeExchanges?: ChannelIntakeHistoryV1;
   maxFollowUps?: number;
 }
 
@@ -91,6 +113,7 @@ export async function createChannelSession(
       channel: args.channel,
       sender_id: args.senderId,
       engine_state: args.engineState,
+      intake_exchanges: args.intakeExchanges ?? EMPTY_CHANNEL_INTAKE_HISTORY,
       follow_up_count: 1,
       max_follow_ups: args.maxFollowUps ?? 3,
     })
@@ -103,6 +126,7 @@ export async function createChannelSession(
 export interface UpdateSessionArgs {
   sessionId: string;
   engineState: EngineState;
+  intakeExchanges?: ChannelIntakeHistoryV1;
   followUpCount: number;
 }
 
@@ -113,6 +137,7 @@ export async function updateChannelSession(
     .from('channel_intake_sessions')
     .update({
       engine_state: args.engineState,
+      ...(args.intakeExchanges ? { intake_exchanges: args.intakeExchanges } : {}),
       follow_up_count: args.followUpCount,
       last_activity_at: new Date().toISOString(),
       // Sliding expiry (launch audit B3, 2026-06-09). expires_at was set
@@ -147,7 +172,14 @@ export async function finalizeChannelSession(
     finalized: true,
     last_activity_at: new Date().toISOString(),
   };
-  if (screenedLeadId) update.screened_lead_id = screenedLeadId;
+  if (screenedLeadId) {
+    update.screened_lead_id = screenedLeadId;
+  } else {
+    // No lawyer report can use this history. Drop the duplicate message bodies
+    // immediately; the existing unconfirmed-inquiry path owns any required
+    // operational record for abandoned/exhausted sessions.
+    update.intake_exchanges = EMPTY_CHANNEL_INTAKE_HISTORY;
+  }
 
   const { error } = await supabase
     .from('channel_intake_sessions')
@@ -200,7 +232,7 @@ export async function loadRecentFinalizedSession(
   const { data, error } = await supabase
     .from('channel_intake_sessions')
     .select(
-      'id, firm_id, channel, sender_id, engine_state, follow_up_count, max_follow_ups, finalized, screened_lead_id, expires_at, created_at, last_activity_at',
+      'id, firm_id, channel, sender_id, engine_state, intake_exchanges, follow_up_count, max_follow_ups, finalized, screened_lead_id, expires_at, created_at, last_activity_at',
     )
     .eq('firm_id', args.firmId)
     .eq('channel', args.channel)
@@ -217,5 +249,5 @@ export async function loadRecentFinalizedSession(
     return null;
   }
   if (!data) return null;
-  return data as ChannelSessionRow;
+  return normalizeLoadedSession(data);
 }

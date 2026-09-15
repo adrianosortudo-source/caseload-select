@@ -15,6 +15,10 @@ const pageSource = fs.readFileSync(
   ),
   "utf8",
 );
+const layoutSource = fs.readFileSync(
+  path.join(process.cwd(), "src", "components", "portal", "lead-report-layout.ts"),
+  "utf8",
+);
 
 describe("triage lead conversation integration", () => {
   it("limits the panel to Facebook, Instagram, and WhatsApp leads", () => {
@@ -23,9 +27,17 @@ describe("triage lead conversation integration", () => {
     );
   });
 
-  it("renders the conversation directly after the triage action bar", () => {
+  it("mounts the conversation in a stable v2 report-rail slot", () => {
+    expect(pageSource).toContain("ensureConversationRailSlot(originalBriefHtml)");
+    expect(layoutSource).toContain("data-channel-conversation-slot");
     expect(pageSource).toMatch(
-      /<TriageActionBar[\s\S]*?\/>\s*\{conversationChannel && \(\s*<ChannelConversationPanel/,
+      /<BriefFrame html=\{briefBottomHtml\}[\s\S]*?<ConversationRailPortal/,
+    );
+  });
+
+  it("keeps a below-report conversation fallback for legacy briefs without a rail", () => {
+    expect(pageSource).toMatch(
+      /conversationChannel && !conversationSlotResult\.inserted[\s\S]*?<ChannelConversationPanel/,
     );
   });
 
@@ -36,9 +48,12 @@ describe("triage lead conversation integration", () => {
     expect(pageSource).not.toMatch(/replyEndpoint=.*(?:page_id|sender_|igsid|wa_id)/);
   });
 
-  it("passes the legacy raw transcript separately from ledger messages", () => {
+  it("keeps ledger messages in the reply panel and moves intake evidence to the final panel", () => {
     expect(pageSource).toContain("messages={conversation?.messages ?? []}");
-    expect(pageSource).toContain("intakeTranscript={row.raw_transcript}");
+    expect(pageSource).toContain("reconstructLegacyChannelIntakeHistory");
+    expect(pageSource).toContain("rawTranscript: row.raw_transcript");
+    expect(pageSource).toContain("<IntakeTranscriptPanel history={intakeHistory} />");
+    expect(pageSource).not.toContain("intakeTranscript={row.raw_transcript}");
   });
 
   it("fails the composer closed when the portal session lacks a stable actor UUID", () => {

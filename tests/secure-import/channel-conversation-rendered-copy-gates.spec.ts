@@ -57,7 +57,7 @@ for (const width of VIEWPORT_WIDTHS) {
     await waitForStableLayout(page);
 
     await expect(page.locator("[data-ui-component-content]")).toHaveCount(4);
-    await expect(page.locator("[data-ui-copy]")).toHaveCount(5);
+    await expect(page.locator("[data-ui-copy]")).toHaveCount(6);
 
     const audit = await page.evaluate(() => {
       const tolerance = 1;

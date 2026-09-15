@@ -206,6 +206,7 @@ function expiredSessionRow(overrides: Record<string, unknown> = {}): Record<stri
     channel: 'whatsapp',
     sender_id: '16475492106',
     engine_state: engineState(),
+    intake_exchanges: { version: 1, events: [], truncated: false },
     follow_up_count: 1,
     ...overrides,
   };

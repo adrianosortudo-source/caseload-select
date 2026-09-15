@@ -36,8 +36,8 @@ const mocks = vi.hoisted(() => ({
   renderBriefHtmlServer: vi.fn(() => '<div class="brief">brief</div>'),
   notifyLawyersOfNewLead: vi.fn(() => Promise.resolve()),
   loadOpenChannelSession: vi.fn(() => Promise.resolve(null)),
-  createChannelSession: vi.fn(() => Promise.resolve('session-uuid')),
-  updateChannelSession: vi.fn(() => Promise.resolve()),
+  createChannelSession: vi.fn(() => Promise.resolve({ ok: true, id: 'session-uuid' })),
+  updateChannelSession: vi.fn(() => Promise.resolve({ ok: true })),
   finalizeChannelSession: vi.fn(() => Promise.resolve()),
   persistUnconfirmedInquiry: vi.fn(() => Promise.resolve()),
   insertedRow: {
@@ -142,9 +142,9 @@ beforeEach(() => {
   mocks.persistUnconfirmedInquiry.mockReset();
   mocks.persistUnconfirmedInquiry.mockResolvedValue(undefined);
   mocks.createChannelSession.mockReset();
-  mocks.createChannelSession.mockResolvedValue('session-uuid');
+  mocks.createChannelSession.mockResolvedValue({ ok: true, id: 'session-uuid' });
   mocks.updateChannelSession.mockReset();
-  mocks.updateChannelSession.mockResolvedValue(undefined);
+  mocks.updateChannelSession.mockResolvedValue({ ok: true });
   mocks.finalizeChannelSession.mockReset();
   mocks.finalizeChannelSession.mockResolvedValue(undefined);
   mocks.insertPayload = null;
@@ -219,7 +219,8 @@ describe('processChannelInbound: unknown-lane classification re-runs regex evide
     expect(r.followUpSent).toBe(true);
 
     // The session was updated (resume turn), not created fresh.
-    expect(mocks.updateChannelSession).toHaveBeenCalledTimes(1);
+    // Pending history is saved before the send, then settled afterward.
+    expect(mocks.updateChannelSession).toHaveBeenCalledTimes(2);
     const updateCall = (mocks.updateChannelSession.mock.calls as unknown as Array<
       Array<{
         engineState: {

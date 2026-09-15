@@ -36,8 +36,8 @@ const mocks = vi.hoisted(() => ({
   renderBriefHtmlServer: vi.fn(() => '<div class="brief">brief</div>'),
   notifyLawyersOfNewLead: vi.fn(() => Promise.resolve()),
   loadOpenChannelSession: vi.fn(() => Promise.resolve(null)),
-  createChannelSession: vi.fn(() => Promise.resolve('session-uuid')),
-  updateChannelSession: vi.fn(() => Promise.resolve()),
+  createChannelSession: vi.fn(() => Promise.resolve({ ok: true, id: 'session-uuid' })),
+  updateChannelSession: vi.fn(() => Promise.resolve({ ok: true })),
   finalizeChannelSession: vi.fn(() => Promise.resolve()),
   persistUnconfirmedInquiry: vi.fn(() => Promise.resolve()),
   insertedRow: {
@@ -131,9 +131,9 @@ beforeEach(() => {
   mocks.persistUnconfirmedInquiry.mockReset();
   mocks.persistUnconfirmedInquiry.mockResolvedValue(undefined);
   mocks.createChannelSession.mockReset();
-  mocks.createChannelSession.mockResolvedValue('session-uuid');
+  mocks.createChannelSession.mockResolvedValue({ ok: true, id: 'session-uuid' });
   mocks.updateChannelSession.mockReset();
-  mocks.updateChannelSession.mockResolvedValue(undefined);
+  mocks.updateChannelSession.mockResolvedValue({ ok: true });
   mocks.finalizeChannelSession.mockReset();
   mocks.finalizeChannelSession.mockResolvedValue(undefined);
   mocks.insertPayload = null;

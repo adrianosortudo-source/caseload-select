@@ -35,6 +35,20 @@
  * Source: D:\00_Work\01_CaseLoad_Select\01_Brand\BrandBook\BrandBook_ACTS_V1.html
  */
 
+.lead-report-page {
+  width: min(1168px, calc(100vw - 2rem));
+  margin-left: 50%;
+  transform: translateX(-50%);
+}
+
+@media (min-width: 768px) {
+  .lead-report-page[data-operator-console] {
+    /* The operator console owns a 240px rail. Subtract it before centring the
+       report inside the remaining portal column and keep a 16px outer gutter. */
+    width: min(1168px, calc(100vw - 17rem));
+  }
+}
+
 .brief-frame {
   /* Local variables so .brief-frame styles don't depend on the portal's
      globals or Tailwind tokens. Mirrors the brand book Ch 4 palette. */
@@ -606,7 +620,7 @@
    Top-level shapes:
      .brief-cover       black hero (eyebrow + h1 + calibration) + decision band aside
      .brief-notice-bar  parchment notice strip
-     .brief-main-grid   2-column grid (1.7fr left content / 0.95fr right sidebar)
+     .brief-main-grid   dominant report column + bounded live-action rail
      .sidebar-card      symmetric-bordered cards in the right column
      .call-structure-callout  navy callout panel with numbered steps inside Call prep
      .axis-grid         2-column grid for the four-axis breakdown
@@ -778,14 +792,9 @@
 
 .brief-frame .brief-main-grid {
   display: grid;
-  /* 2026-06-07: rebalance main-vs-rail. The previous 1.7/0.95 split made
-     the main column 645px at the 1024px portal width, which forced the
-     3-up grids (scope, callprep) down to ~185px per cell. Shifting to
-     2.2/0.85 gives the main column an extra ~65px and brings each 3-up
-     cell to ~210px, restoring comfortable line lengths in the Decision,
-     Call prep, and Resolved facts blocks. The right rail loses ~78px but
-     stays above 270px, which is enough for the status modules. */
-  grid-template-columns: 2.2fr 0.85fr;
+  /* The wider report route gives the legal analysis comfortable line lengths
+     while this bounded rail keeps the reply composer practical. */
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 300px);
   gap: 22px;
   align-items: start;
 }
@@ -801,8 +810,15 @@
   display: flex;
   flex-direction: column;
   gap: 14px;
-  position: sticky;
-  top: 18px;
+  position: static;
+}
+
+.brief-frame .brief-conversation-slot {
+  min-width: 0;
+}
+
+.brief-frame .brief-conversation-slot:empty {
+  display: none;
 }
 
 .brief-frame .brief-main-left .brief-group {
@@ -1025,6 +1041,9 @@
   .brief-frame .brief-cover {
     grid-template-columns: 1fr;
   }
+}
+
+@media (max-width: 1100px) {
   .brief-frame .brief-main-grid {
     grid-template-columns: 1fr;
   }
@@ -1384,17 +1403,17 @@
   padding-top: 14px;
 }
 
-/* ─── Mobile reordering (under 1180px) ───────────────────────────────── */
+/* ─── Narrow-layout reordering (under 1100px) ────────────────────────── */
 /*
  * The brief-main-grid flattens its two children into a single flex column
  * via display:contents, then explicit `order` values weave the right-rail
  * content into the natural reading flow. Decision -> Commercial ->
  * Call prep -> Watchpoints -> Open questions -> Inferred signals ->
- * Resolved facts -> Queue posture. The lawyer sees triage-critical content
- * first; audit-style content (facts table, queue meta) sits at the bottom.
+ * Resolved facts -> Queue posture -> Conversation. The lawyer sees
+ * triage-critical report content first; response controls follow the report.
  */
 
-@media (max-width: 1180px) {
+@media (max-width: 1100px) {
   .brief-frame .brief-main-grid {
     display: flex;
     flex-direction: column;
@@ -1412,6 +1431,7 @@
   .brief-frame .sidebar-card-signals                 { order: 6; }
   .brief-frame .brief-group[data-group="facts"]      { order: 7; }
   .brief-frame .sidebar-card-posture                 { order: 8; }
+  .brief-frame .brief-conversation-slot              { order: 9; }
   /* When flattened, the demoted sidebar modules need a frame back, but
      the per-module accent rule should survive (watchpoints stays navy-led,
      questions stays gold-led, signals stays neutral). Redeclare each

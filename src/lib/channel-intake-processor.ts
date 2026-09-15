@@ -98,6 +98,15 @@ import { meetsDiscoveryFloor } from '@/lib/discovery-floor';
 import { applyPendingSlotReply, isUserGroundedFill } from '@/lib/pending-slot-reply';
 import { SLOT_REGISTRY } from '@/lib/screen-engine/slotRegistry';
 import { buildScoringDeltaForInsert } from '@/lib/scoring-port-read';
+import {
+  EMPTY_CHANNEL_INTAKE_HISTORY,
+  annotateInboundAnswers,
+  appendInboundExchange,
+  appendOutboundQuestion,
+  optionSnapshotsForSlot,
+  settleOutboundQuestion,
+  type ChannelIntakeHistoryV1,
+} from '@/lib/channel-intake-history';
 
 // ── Channel type ────────────────────────────────────────────────────────
 
@@ -234,6 +243,56 @@ function getSenderId(sender: ChannelSender): string {
   }
 }
 
+interface PersistQuestionStateArgs {
+  sessionId?: string;
+  firmId: string;
+  channel: MetaChannel;
+  senderId: string;
+  engineState: EngineState;
+  intakeExchanges: ChannelIntakeHistoryV1;
+  followUpCount: number;
+}
+
+async function persistQuestionState(
+  args: PersistQuestionStateArgs,
+): Promise<{ ok: true; sessionId: string } | { ok: false; error: string }> {
+  if (args.sessionId) {
+    const updated = await updateChannelSession({
+      sessionId: args.sessionId,
+      engineState: args.engineState,
+      intakeExchanges: args.intakeExchanges,
+      followUpCount: args.followUpCount,
+    });
+    return updated.ok
+      ? { ok: true, sessionId: args.sessionId }
+      : { ok: false, error: updated.error ?? 'session update failed' };
+  }
+
+  const created = await createChannelSession({
+    firmId: args.firmId,
+    channel: args.channel,
+    senderId: args.senderId,
+    engineState: args.engineState,
+    intakeExchanges: args.intakeExchanges,
+    maxFollowUps: MAX_FOLLOW_UPS,
+  });
+  return created.ok && created.id
+    ? { ok: true, sessionId: created.id }
+    : { ok: false, error: created.error ?? 'session creation failed' };
+}
+
+async function persistSettledQuestion(args: {
+  sessionId: string;
+  engineState: EngineState;
+  intakeExchanges: ChannelIntakeHistoryV1;
+  followUpCount: number;
+}): Promise<void> {
+  const settled = await updateChannelSession(args);
+  if (!settled.ok) {
+    console.error('[channel-intake] could not settle persisted intake question');
+  }
+}
+
 /** Channel-specific metadata blob persisted with screened_leads / unconfirmed_inquiries. */
 function buildChannelMeta(sender: ChannelSender): Record<string, unknown> {
   switch (sender.channel) {
@@ -352,6 +411,8 @@ export async function processChannelInbound(
   let priorFollowUpCount = 0;
   let sessionId: string | undefined;
   let isResume = false;
+  let sendClosingMessageOnFinalize = true;
+  let intakeHistory: ChannelIntakeHistoryV1 = existing?.intake_exchanges ?? EMPTY_CHANNEL_INTAKE_HISTORY;
 
   if (existing) {
     isResume = true;
@@ -443,6 +504,33 @@ export async function processChannelInbound(
     }
   }
 
+  // Exact report transcript. Capture the verified inbound only after the
+  // post-finalization secretary branch has had a chance to return: those
+  // messages belong to the conversation ledger for an existing report, not
+  // to a new intake questionnaire.
+  const stateBeforeTurn: EngineState = {
+    ...state,
+    slots: isResume ? { ...state.slots } : {},
+    slot_meta: isResume ? { ...state.slot_meta } : {},
+    slot_evidence: isResume ? { ...state.slot_evidence } : {},
+  };
+  const appendedInbound = appendInboundExchange(intakeHistory, {
+    body: trimmed,
+    occurredAt: authoritativeInboundAt,
+    providerMessageId: sender.messageMid,
+  });
+  intakeHistory = appendedInbound.history;
+  const inboundHistoryEventId = appendedInbound.eventId;
+  const captureCurrentAnswers = (): ChannelIntakeHistoryV1 => {
+    intakeHistory = annotateInboundAnswers(
+      intakeHistory,
+      inboundHistoryEventId,
+      stateBeforeTurn,
+      state,
+    );
+    return intakeHistory;
+  };
+
   // Evidence pass: regex deepening on the NEW turn text. Slot
   // extraction layer; does not re-classify matter_type / practice_area
   // (those are owned by initialiseState on turn 1 and preserved on resume).
@@ -530,6 +618,7 @@ export async function processChannelInbound(
       await updateChannelSession({
         sessionId,
         engineState: { ...state, contactCaptureStarted: true },
+        intakeExchanges: captureCurrentAnswers(),
         followUpCount: priorFollowUpCount,
       });
     }
@@ -547,23 +636,56 @@ export async function processChannelInbound(
     const oorDigit = detectOutOfRangeDigitReply(trimmed, state);
     if (oorDigit) {
       const clarificationText = buildOutOfRangeDigitReply(oorDigit);
+      captureCurrentAnswers();
+      const clarification = appendOutboundQuestion(intakeHistory, {
+        body: clarificationText,
+        occurredAt: new Date().toISOString(),
+        kind: 'clarification',
+        slotIds: [oorDigit.slot.id],
+        options: optionSnapshotsForSlot(oorDigit.slot.id, state.language),
+      });
+      intakeHistory = clarification.history;
+      const pendingSave = await persistQuestionState({
+        sessionId,
+        firmId,
+        channel,
+        senderId,
+        engineState: state,
+        intakeExchanges: intakeHistory,
+        followUpCount: priorFollowUpCount,
+      });
+      if (!pendingSave.ok) {
+        console.error('[channel-intake] clarification not sent because session persistence failed');
+        return {
+          persisted: false,
+          reason: `session_persist_failed: ${pendingSave.error}`,
+          followUpSent: false,
+        };
+      }
+      sessionId = pendingSave.sessionId;
       const sendResult = await sendChannelMessage({
         firmId,
         sender,
         text: clarificationText,
         authoritativeInboundAt,
       });
+      intakeHistory = settleOutboundQuestion(intakeHistory, {
+        eventId: clarification.eventId,
+        sent: sendResult.sent,
+        deliveryUnknown: sendResult.deliveryUnknown,
+        providerMessageId: sendResult.messageId,
+        failureReason: sendResult.reason,
+      });
       // Persist state UNCHANGED so the next inbound resumes from the
       // same getNextStep slot. follow_up_count is NOT incremented —
       // the lead's typo shouldn't count against the contact-capture
       // budget or the discovery budget.
-      if (sessionId) {
-        await updateChannelSession({
-          sessionId,
-          engineState: state,
-          followUpCount: priorFollowUpCount,
-        });
-      }
+      await persistSettledQuestion({
+        sessionId,
+        engineState: state,
+        intakeExchanges: intakeHistory,
+        followUpCount: priorFollowUpCount,
+      });
       console.log(
         `[channel-intake] out-of-range digit "${oorDigit.digit}" for slot=${oorDigit.slot.id} (max=${oorDigit.maxOption}); sent clarification`,
       );
@@ -900,11 +1022,69 @@ export async function processChannelInbound(
           (state.language ?? 'en') as SupportedLanguage,
           contactCaptureFirstAsk(gate.missing ?? 'both', (state.language ?? 'en') as SupportedLanguage),
         );
+    const contactSlotIds = gate.missing === 'name'
+      ? ['client_name']
+      : gate.missing === 'reachability'
+        ? ['client_email', 'client_phone']
+        : ['client_name', 'client_email', 'client_phone'];
+    captureCurrentAnswers();
+    const contactQuestion = appendOutboundQuestion(intakeHistory, {
+      body: followUpText,
+      occurredAt: new Date().toISOString(),
+      kind: 'contact_question',
+      slotIds: contactSlotIds,
+    });
+    intakeHistory = contactQuestion.history;
+    const newCount = priorFollowUpCount + 1;
+    const persistedState: EngineState = { ...state, contactCaptureStarted: true };
+    const pendingSave = await persistQuestionState({
+      sessionId,
+      firmId,
+      channel,
+      senderId,
+      engineState: persistedState,
+      intakeExchanges: intakeHistory,
+      followUpCount: newCount,
+    });
+    if (!pendingSave.ok) {
+      console.error('[channel-intake] contact question not sent because session persistence failed');
+      await persistUnconfirmedInquiry({
+        firmId,
+        channel,
+        senderId,
+        senderMeta: channelMeta,
+        rawTranscript: state.input ?? trimmed,
+        matterType: state.matter_type,
+        practiceArea: state.practice_area,
+        intakeLanguage: state.language ?? 'en',
+        reason: 'no_contact_provided',
+        followUpAttempts: priorFollowUpCount,
+      });
+      return {
+        persisted: false,
+        reason: `session_persist_failed: ${pendingSave.error}`,
+        followUpSent: false,
+      };
+    }
+    sessionId = pendingSave.sessionId;
     const sendResult = await sendChannelMessage({
       firmId,
       sender,
       text: followUpText,
       authoritativeInboundAt,
+    });
+    intakeHistory = settleOutboundQuestion(intakeHistory, {
+      eventId: contactQuestion.eventId,
+      sent: sendResult.sent,
+      deliveryUnknown: sendResult.deliveryUnknown,
+      providerMessageId: sendResult.messageId,
+      failureReason: sendResult.reason,
+    });
+    await persistSettledQuestion({
+      sessionId,
+      engineState: persistedState,
+      intakeExchanges: intakeHistory,
+      followUpCount: newCount,
     });
 
     if (!sendResult.sent) {
@@ -943,23 +1123,6 @@ export async function processChannelInbound(
     // and the gate fails again — Messenger looped 3x asking for the name
     // it had already been given. Phase C (the discovery loop below) has
     // set this flag correctly since it was introduced; Phase A never did.
-    const newCount = priorFollowUpCount + 1;
-    const persistedState: EngineState = { ...state, contactCaptureStarted: true };
-    if (sessionId) {
-      await updateChannelSession({
-        sessionId,
-        engineState: persistedState,
-        followUpCount: newCount,
-      });
-    } else {
-      await createChannelSession({
-        firmId,
-        channel,
-        senderId,
-        engineState: persistedState,
-        maxFollowUps: MAX_FOLLOW_UPS,
-      });
-    }
     console.log(
       `[channel-intake] follow-up sent firm=${firmId} channel=${channel} attempt=${newCount}/${MAX_FOLLOW_UPS} missing=${gate.missing}`,
     );
@@ -1066,45 +1229,71 @@ export async function processChannelInbound(
             (state.language ?? 'en') as SupportedLanguage,
             describeSituationFirstAsk((state.language ?? 'en') as SupportedLanguage),
           );
-      const sendResult = await sendChannelMessage({
-        firmId,
-        sender,
-        text: openingQuestion,
-        authoritativeInboundAt,
+      captureCurrentAnswers();
+      const openingQuestionEvent = appendOutboundQuestion(intakeHistory, {
+        body: openingQuestion,
+        occurredAt: new Date().toISOString(),
+        kind: 'discovery_question',
+        slotIds: ['matter_description'],
       });
-      if (sendResult.sent) {
-        const persistedState: EngineState = {
-          ...state,
-          contactCaptureStarted: true,
-          discoveryFollowUpCount: discoveryCount + 1,
-        };
-        if (sessionId) {
-          await updateChannelSession({
-            sessionId,
-            engineState: persistedState,
-            followUpCount: priorFollowUpCount,
-          });
-        } else {
-          await createChannelSession({
-            firmId,
-            channel,
-            senderId,
-            engineState: persistedState,
-            maxFollowUps: MAX_FOLLOW_UPS,
-          });
+      intakeHistory = openingQuestionEvent.history;
+      const persistedState: EngineState = {
+        ...state,
+        contactCaptureStarted: true,
+        discoveryFollowUpCount: discoveryCount + 1,
+      };
+      const pendingSave = await persistQuestionState({
+        sessionId,
+        firmId,
+        channel,
+        senderId,
+        engineState: persistedState,
+        intakeExchanges: intakeHistory,
+        followUpCount: priorFollowUpCount,
+      });
+      if (!pendingSave.ok) {
+        console.error('[channel-intake] opening question not sent because session persistence failed');
+        sendClosingMessageOnFinalize = false;
+        intakeHistory = settleOutboundQuestion(intakeHistory, {
+          eventId: openingQuestionEvent.eventId,
+          sent: false,
+          failureReason: 'question not sent because session persistence failed',
+        });
+      } else {
+        sessionId = pendingSave.sessionId;
+        const sendResult = await sendChannelMessage({
+          firmId,
+          sender,
+          text: openingQuestion,
+          authoritativeInboundAt,
+        });
+        intakeHistory = settleOutboundQuestion(intakeHistory, {
+          eventId: openingQuestionEvent.eventId,
+          sent: sendResult.sent,
+          deliveryUnknown: sendResult.deliveryUnknown,
+          providerMessageId: sendResult.messageId,
+          failureReason: sendResult.reason,
+        });
+        await persistSettledQuestion({
+          sessionId,
+          engineState: persistedState,
+          intakeExchanges: intakeHistory,
+          followUpCount: priorFollowUpCount,
+        });
+        if (sendResult.sent) {
+          console.log(
+            `[channel-intake] unknown-matter opening question sent firm=${firmId} channel=${channel}`,
+          );
+          return {
+            persisted: false,
+            reason: 'awaiting_situation_description',
+            followUpSent: true,
+          };
         }
-        console.log(
-          `[channel-intake] unknown-matter opening question sent firm=${firmId} channel=${channel}`,
+        console.warn(
+          `[channel-intake] unknown-matter opening question send failed firm=${firmId} channel=${channel}: ${sendResult.reason ?? 'unknown'}; finalising with what we have`,
         );
-        return {
-          persisted: false,
-          reason: 'awaiting_situation_description',
-          followUpSent: true,
-        };
       }
-      console.warn(
-        `[channel-intake] unknown-matter opening question send failed firm=${firmId} channel=${channel}: ${sendResult.reason ?? 'unknown'}; finalising with what we have`,
-      );
       // Send failed: fall through to the existing floor/finalize logic
       // below with what we have, same fallback discipline as Phase C.
     }
@@ -1214,58 +1403,79 @@ export async function processChannelInbound(
       if (!isResume) {
         questionText = withFirstAskIntro(language, questionText);
       }
-      const sendResult = await sendChannelMessage({
-        firmId,
-        sender,
-        text: questionText,
-        authoritativeInboundAt,
+      captureCurrentAnswers();
+      const discoveryQuestion = appendOutboundQuestion(intakeHistory, {
+        body: questionText,
+        occurredAt: new Date().toISOString(),
+        kind: clarifyReask ? 'clarification' : 'discovery_question',
+        slotIds: [slotToAsk.id],
+        options: optionSnapshotsForSlot(slotToAsk.id, language),
       });
-
-      if (sendResult.sent) {
-        const newDiscoveryCount = discoveryCount + 1;
-        // pendingAskedSlotId (#172): record the slot we just asked so
-        // the NEXT inbound's applyPendingSlotReply can route the reply
-        // to this exact slot, independent of what getNextStep prefers
-        // by that point. Without this, a reply to advisory_path can be
-        // lost when the engine has shifted to wanting capture_contact
-        // by the time the lead responds.
-        const persistedState: EngineState = {
-          ...state,
-          contactCaptureStarted: true,
-          discoveryFollowUpCount: newDiscoveryCount,
-          pendingAskedSlotId: slotToAsk.id,
-        };
-
-        if (sessionId) {
-          await updateChannelSession({
-            sessionId,
-            engineState: persistedState,
-            followUpCount: priorFollowUpCount,
-          });
-        } else {
-          await createChannelSession({
-            firmId,
-            channel,
-            senderId,
-            engineState: persistedState,
-            maxFollowUps: MAX_FOLLOW_UPS,
-          });
+      intakeHistory = discoveryQuestion.history;
+      const newDiscoveryCount = discoveryCount + 1;
+      // Persist the routing state with the pending question so a reply can
+      // still be associated with this exact slot after an interrupted send.
+      const persistedState: EngineState = {
+        ...state,
+        contactCaptureStarted: true,
+        discoveryFollowUpCount: newDiscoveryCount,
+        pendingAskedSlotId: slotToAsk.id,
+      };
+      const pendingSave = await persistQuestionState({
+        sessionId,
+        firmId,
+        channel,
+        senderId,
+        engineState: persistedState,
+        intakeExchanges: intakeHistory,
+        followUpCount: priorFollowUpCount,
+      });
+      if (!pendingSave.ok) {
+        console.error('[channel-intake] discovery question not sent because session persistence failed');
+        sendClosingMessageOnFinalize = false;
+        intakeHistory = settleOutboundQuestion(intakeHistory, {
+          eventId: discoveryQuestion.eventId,
+          sent: false,
+          failureReason: 'question not sent because session persistence failed',
+        });
+      } else {
+        sessionId = pendingSave.sessionId;
+        const sendResult = await sendChannelMessage({
+          firmId,
+          sender,
+          text: questionText,
+          authoritativeInboundAt,
+        });
+        intakeHistory = settleOutboundQuestion(intakeHistory, {
+          eventId: discoveryQuestion.eventId,
+          sent: sendResult.sent,
+          deliveryUnknown: sendResult.deliveryUnknown,
+          providerMessageId: sendResult.messageId,
+          failureReason: sendResult.reason,
+        });
+        await persistSettledQuestion({
+          sessionId,
+          engineState: persistedState,
+          intakeExchanges: intakeHistory,
+          followUpCount: priorFollowUpCount,
+        });
+        if (sendResult.sent) {
+          console.log(
+            `[channel-intake] discovery question sent firm=${firmId} channel=${channel} attempt=${newDiscoveryCount}/${DISCOVERY_FOLLOW_UP_CAP} slot=${slotToAsk.id} reason=${askReason} floorMet=${floorMet} engineType=${nextStep.type}`,
+          );
+          return {
+            persisted: false,
+            reason: askReason,
+            followUpSent: true,
+          };
         }
-        console.log(
-          `[channel-intake] discovery question sent firm=${firmId} channel=${channel} attempt=${newDiscoveryCount}/${DISCOVERY_FOLLOW_UP_CAP} slot=${slotToAsk.id} reason=${askReason} floorMet=${floorMet} engineType=${nextStep.type}`,
-        );
-        return {
-          persisted: false,
-          reason: askReason,
-          followUpSent: true,
-        };
-      }
 
-      // Send failed: fall through to finalise. We have contact, the brief
-      // is buildable; better to land a thin brief than to drop the lead.
-      console.warn(
-        `[channel-intake] discovery question send failed firm=${firmId} channel=${channel}: ${sendResult.reason ?? 'unknown'}; finalising with what we have`,
-      );
+        // Send failed: fall through to finalise. We have contact, the brief
+        // is buildable; better to land a thin brief than to drop the lead.
+        console.warn(
+          `[channel-intake] discovery question send failed firm=${firmId} channel=${channel}: ${sendResult.reason ?? 'unknown'}; finalising with what we have`,
+        );
+      }
     }
     // Either:
     //   - Floor met AND engine returned stop / present_insight / clarify
@@ -1277,6 +1487,15 @@ export async function processChannelInbound(
   // ── Gate passed (and discovery complete or skipped): finalise ──────────
   // Reuse the deadline + whale flag computed above (before the renderer call)
   // so the brief and the persisted row never disagree on the deadline.
+  captureCurrentAnswers();
+  if (sessionId) {
+    await updateChannelSession({
+      sessionId,
+      engineState: state,
+      intakeExchanges: intakeHistory,
+      followUpCount: priorFollowUpCount,
+    });
+  }
   return finalizeChannelLead({
     firmId,
     sender,
@@ -1288,9 +1507,11 @@ export async function processChannelInbound(
     decisionDeadline: channelIntakeDeadline,
     whaleNurture: channelIntakeWhale,
     sessionId,
+    intakeExchanges: intakeHistory,
     priorFollowUpCount,
     isResume,
     fallbackTranscript: trimmed,
+    sendClosingMessage: sendClosingMessageOnFinalize,
     inboundEvent: sender.messageMid && authoritativeInboundAt
       ? {
           body: trimmed,
@@ -1314,6 +1535,7 @@ export interface FinalizeChannelLeadArgs {
   decisionDeadline: Date;
   whaleNurture: boolean;
   sessionId?: string;
+  intakeExchanges?: ChannelIntakeHistoryV1;
   priorFollowUpCount: number;
   isResume: boolean;
   /**
@@ -1362,6 +1584,7 @@ export async function finalizeChannelLead(
     decisionDeadline,
     whaleNurture,
     sessionId,
+    intakeExchanges,
     priorFollowUpCount,
     isResume,
     fallbackTranscript,
@@ -1410,6 +1633,7 @@ export async function finalizeChannelLead(
     // unlike the voice route's questionHistory field: Meta channels DO run
     // the engine's own turn-by-turn selector loop.
     questionHistory: state.questionHistory,
+    ...(intakeExchanges ? { intake_exchanges: intakeExchanges } : {}),
     ...channelMetaForSlotAnswers,
   };
   const scoringDelta = buildScoringDeltaForInsert(slotAnswers, state.matter_type, band);

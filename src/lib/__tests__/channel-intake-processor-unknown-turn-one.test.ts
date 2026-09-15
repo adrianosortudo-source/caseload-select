@@ -49,8 +49,14 @@ const mocks = vi.hoisted(() => ({
   renderBriefHtmlServer: vi.fn(() => '<div class="brief">brief</div>'),
   notifyLawyersOfNewLead: vi.fn(() => Promise.resolve()),
   loadOpenChannelSession: vi.fn(() => Promise.resolve(null)),
-  createChannelSession: vi.fn(() => Promise.resolve('session-uuid')),
-  updateChannelSession: vi.fn(() => Promise.resolve()),
+  createChannelSession: vi.fn(() =>
+    Promise.resolve({
+      ok: true,
+      id: 'session-uuid' as string | undefined,
+      error: undefined as string | undefined,
+    }),
+  ),
+  updateChannelSession: vi.fn(() => Promise.resolve({ ok: true })),
   finalizeChannelSession: vi.fn(() => Promise.resolve()),
   persistUnconfirmedInquiry: vi.fn(() => Promise.resolve()),
   insertedRow: {
@@ -144,9 +150,13 @@ beforeEach(() => {
   mocks.persistUnconfirmedInquiry.mockReset();
   mocks.persistUnconfirmedInquiry.mockResolvedValue(undefined);
   mocks.createChannelSession.mockReset();
-  mocks.createChannelSession.mockResolvedValue('session-uuid');
+  mocks.createChannelSession.mockResolvedValue({
+    ok: true,
+    id: 'session-uuid',
+    error: undefined,
+  });
   mocks.updateChannelSession.mockReset();
-  mocks.updateChannelSession.mockResolvedValue(undefined);
+  mocks.updateChannelSession.mockResolvedValue({ ok: true });
   mocks.finalizeChannelSession.mockReset();
   mocks.finalizeChannelSession.mockResolvedValue(undefined);
   mocks.insertPayload = null;
@@ -178,10 +188,77 @@ describe('Unknown-matter turn-one guard (F2)', () => {
     // Session persisted so the next inbound resumes.
     expect(mocks.createChannelSession).toHaveBeenCalledTimes(1);
     const sessionPayload = (mocks.createChannelSession.mock.calls as unknown as Array<
-      Array<{ engineState: { discoveryFollowUpCount?: number; matter_type: string } }>
+      Array<{
+        engineState: { discoveryFollowUpCount?: number; matter_type: string };
+        intakeExchanges: {
+          events: Array<{
+            direction: string;
+            body: string;
+            status: string;
+            providerMessageId?: string | null;
+          }>;
+        };
+      }>
     >)[0][0];
     expect(sessionPayload.engineState.matter_type).toBe('unknown');
     expect(sessionPayload.engineState.discoveryFollowUpCount).toBe(1);
+    expect(sessionPayload.intakeExchanges.events).toHaveLength(2);
+    expect(sessionPayload.intakeExchanges.events[0]).toMatchObject({
+      direction: 'inbound',
+      body: 'i want to speak to a lawyer',
+      status: 'received',
+      providerMessageId: 'mid_unknown_1',
+    });
+    expect(sessionPayload.intakeExchanges.events[1]).toMatchObject({
+      direction: 'outbound',
+      body: sentText,
+      status: 'pending',
+    });
+    expect(mocks.createChannelSession.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.sendChannelMessage.mock.invocationCallOrder[0],
+    );
+
+    expect(mocks.updateChannelSession).toHaveBeenCalledTimes(1);
+    const settledPayload = (mocks.updateChannelSession.mock.calls as unknown as Array<
+      Array<{
+        sessionId: string;
+        intakeExchanges: {
+          events: Array<{ status: string; providerMessageId?: string | null }>;
+        };
+      }>
+    >)[0][0];
+    expect(settledPayload.sessionId).toBe('session-uuid');
+    expect(settledPayload.intakeExchanges.events[1]).toMatchObject({
+      status: 'sent',
+      providerMessageId: 'mid_out',
+    });
+    expect(mocks.sendChannelMessage.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.updateChannelSession.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('does not send the question or closing message when the pending history cannot be created', async () => {
+    mocks.createChannelSession.mockResolvedValueOnce({
+      ok: false,
+      id: undefined,
+      error: 'database unavailable',
+    });
+
+    const result = await processChannelInbound({
+      firmId: FIRM_ID,
+      text: 'i want to speak to a lawyer',
+      sender: whatsappSender('Adriano'),
+    });
+
+    expect(result.persisted).toBe(true);
+    expect(mocks.sendChannelMessage).not.toHaveBeenCalled();
+    expect(mocks.updateChannelSession).not.toHaveBeenCalled();
+    const slotAnswers = mocks.insertPayload?.slot_answers as {
+      intake_exchanges?: { events: Array<{ direction: string; status: string }> };
+    };
+    expect(slotAnswers.intake_exchanges?.events).toContainEqual(
+      expect.objectContaining({ direction: 'outbound', status: 'failed' }),
+    );
   });
 
   it('out_of_scope is structurally excluded from the F2 guard on any turn', async () => {
@@ -319,6 +396,15 @@ describe('Unknown-matter turn-one guard (F2)', () => {
 
     expect(r.persisted).toBe(true);
     expect(mocks.insertPayload).not.toBeNull();
+    const slotAnswers = mocks.insertPayload?.slot_answers as {
+      intake_exchanges?: { events: Array<{ body: string; direction: string }> };
+    };
+    expect(slotAnswers.intake_exchanges?.events).toContainEqual(
+      expect.objectContaining({
+        body: 'I have a contract dispute with my landlord about the lease renewal',
+        direction: 'inbound',
+      }),
+    );
   });
 
   it('turn two with live LLM classification: reclassifies away from unknown and continues discovery in the SAME turn (the normal, common-case path — added 2026-08-07 to lock in the corrected understanding)', async () => {

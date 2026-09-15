@@ -31,7 +31,7 @@ function renderPanel(
     replyWindow: ChannelReplyWindow;
     supportPreview: boolean;
     actorIdentityAvailable: boolean;
-    intakeTranscript: string | null;
+    compact: boolean;
   }> = {},
 ) {
   return render(
@@ -44,7 +44,7 @@ function renderPanel(
       supportPreview: overrides.supportPreview ?? false,
       actorIdentityAvailable: overrides.actorIdentityAvailable ?? true,
       replyEndpoint: "/api/portal/firm-1/triage/lead-1/reply",
-      intakeTranscript: overrides.intakeTranscript,
+      compact: overrides.compact,
     }),
   );
 }
@@ -66,7 +66,6 @@ describe("ChannelConversationPanel", () => {
     renderPanel({
       channel: "instagram",
       messages: [{ ...MESSAGE, direction: "outbound", status: "failed" }],
-      intakeTranscript: "Legacy intake answer",
     });
 
     expect(screen.getByRole("heading", { name: "Message thread" })).toBeTruthy();
@@ -78,15 +77,15 @@ describe("ChannelConversationPanel", () => {
     expect(assetLabel.parentElement?.textContent).toContain("page-123");
     expect(screen.queryByText(/Connected as/i)).toBeNull();
     expect(screen.getByText("failed")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Inbound intake transcript" })).toBeTruthy();
-    expect(screen.getByText(/shown separately from message history/i)).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: /intake transcript/i })).toBeNull();
   });
 
-  it("disables replies with a clear reason in support preview", () => {
+  it("shows a compact unavailable state instead of a disabled composer in support preview", () => {
     renderPanel({ supportPreview: true });
 
-    expect((screen.getByRole("textbox", { name: "Write a reply" }) as HTMLTextAreaElement).disabled).toBe(true);
-    expect((screen.getByRole("button", { name: "Send reply" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByRole("textbox", { name: "Write a reply" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Send reply" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Reply unavailable" })).toBeTruthy();
     expect(screen.getByText(/support preview is read-only/i)).toBeTruthy();
   });
 
@@ -99,7 +98,7 @@ describe("ChannelConversationPanel", () => {
       },
     });
 
-    expect((screen.getByRole("textbox", { name: "Write a reply" }) as HTMLTextAreaElement).disabled).toBe(true);
+    expect(screen.queryByRole("textbox", { name: "Write a reply" })).toBeNull();
     expect(screen.getByText(/no authoritative inbound message timestamp/i)).toBeTruthy();
   });
 
@@ -112,7 +111,7 @@ describe("ChannelConversationPanel", () => {
       },
     });
 
-    expect((screen.getByRole("textbox", { name: "Write a reply" }) as HTMLTextAreaElement).disabled).toBe(true);
+    expect(screen.queryByRole("textbox", { name: "Write a reply" })).toBeNull();
     expect(screen.getByText(/24-hour response window has closed/i)).toBeTruthy();
   });
 
@@ -183,8 +182,18 @@ describe("ChannelConversationPanel", () => {
   it("requires a stable authenticated member identity before enabling the composer", () => {
     renderPanel({ actorIdentityAvailable: false });
 
-    expect((screen.getByRole("textbox", { name: "Write a reply" }) as HTMLTextAreaElement).disabled).toBe(true);
+    expect(screen.queryByRole("textbox", { name: "Write a reply" })).toBeNull();
     expect(screen.getByText(/sign in again before sending a reply/i)).toBeTruthy();
+  });
+
+  it("uses the compact rail treatment without changing the reply contract", () => {
+    const { container } = renderPanel({ compact: true });
+
+    expect(container.querySelector(".conversation-panel-compact")).toBeTruthy();
+    expect(screen.getByRole("textbox", { name: "Write a reply" }).getAttribute("rows")).toBe("3");
+    const history = container.querySelector('[aria-label="Conversation history"]');
+    expect(history?.className).toContain("max-h-72");
+    expect(history?.getAttribute("tabindex")).toBe("0");
   });
 
   it("reuses one request ID after a timeout and a pending 409 until a verified sent event arrives", async () => {

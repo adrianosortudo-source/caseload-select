@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import ChannelConversationPanel from "@/components/portal/ChannelConversationPanel";
+import IntakeTranscriptPanel from "@/components/portal/IntakeTranscriptPanel";
 
 export default function ChannelConversationRenderedFixturePage() {
   if (process.env.NODE_ENV === "production") notFound();
@@ -37,8 +38,45 @@ export default function ChannelConversationRenderedFixturePage() {
           supportPreview={false}
           actorIdentityAvailable
           replyEndpoint="/api/test/channel-conversation/reply"
-          intakeTranscript="Fictional lead: I need advice about a recent workplace dismissal. Intake assistant: Please describe when the dismissal occurred and whether written notice was provided."
+          compact
         />
+        <div className="mt-6">
+          <IntakeTranscriptPanel
+            history={{
+              version: 1,
+              provenance: "recorded",
+              truncated: false,
+              notice: null,
+              rawTranscript: null,
+              events: [
+                {
+                  id: "fixture-intake-question",
+                  sequence: 1,
+                  direction: "outbound",
+                  body: "When did the dismissal occur?",
+                  occurredAt: "2026-09-01T14:02:00.000Z",
+                  status: "sent",
+                  kind: "discovery_question",
+                  slotIds: ["termination_date"],
+                  replyToEventId: null,
+                  normalizedAnswers: [],
+                },
+                {
+                  id: "fixture-intake-answer",
+                  sequence: 2,
+                  direction: "inbound",
+                  body: "Last Friday",
+                  occurredAt: "2026-09-01T14:03:00.000Z",
+                  status: "received",
+                  kind: "answer",
+                  slotIds: ["termination_date"],
+                  replyToEventId: "fixture-intake-question",
+                  normalizedAnswers: [{ slotId: "termination_date", value: "Last Friday" }],
+                },
+              ],
+            }}
+          />
+        </div>
       </div>
     </main>
   );

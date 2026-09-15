@@ -978,9 +978,9 @@ export interface BriefRenderOptions {
  *   [ Language callout (non-EN intakes) ]
  *   [ Truth warnings (rare) ]
  *   [ Contact strip — 4-cell NAP grid ]
- *   [ Main grid 1.7fr / 0.95fr
+ *   [ Main grid with a report column and a 300px minimum action rail
  *       Left: Decision / Commercial / Call prep / Resolved facts
- *       Right: Queue posture / Watchpoints / Open questions / Inferred signals
+ *       Right: Queue posture / Conversation slot / Watchpoints / Open questions / Inferred signals
  *   ]
  *
  * The cover headline derives from `matterType` (humanised). The decision band
@@ -1144,9 +1144,17 @@ export function renderBriefHtmlServer(
       </section>`
     : '';
 
+  // Stable mount point for the live React conversation controls. Stored briefs
+  // keep the report snapshot as HTML while the page mounts current messages and
+  // reply-window state here at read time.
+  const conversationSlot = `
+    <!-- CHANNEL_CONVERSATION_SLOT -->
+    <div class="brief-conversation-slot" data-channel-conversation-slot></div>`;
+
   const sidebar = `
     <aside class="brief-main-right">
       ${posturedCard}
+      ${conversationSlot}
       ${watchpointsCard}
       ${questionsCard}
       ${signalsCard}

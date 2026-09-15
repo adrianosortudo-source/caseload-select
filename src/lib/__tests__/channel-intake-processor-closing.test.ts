@@ -25,8 +25,8 @@ const mocks = vi.hoisted(() => ({
   renderBriefHtmlServer: vi.fn(() => '<div class="brief">brief</div>'),
   notifyLawyersOfNewLead: vi.fn(() => Promise.resolve()),
   loadOpenChannelSession: vi.fn(() => Promise.resolve(null)),
-  createChannelSession: vi.fn(() => Promise.resolve('session-uuid')),
-  updateChannelSession: vi.fn(() => Promise.resolve()),
+  createChannelSession: vi.fn(() => Promise.resolve({ ok: true, id: 'session-uuid' })),
+  updateChannelSession: vi.fn(() => Promise.resolve({ ok: true })),
   finalizeChannelSession: vi.fn(() => Promise.resolve()),
   persistUnconfirmedInquiry: vi.fn(() => Promise.resolve()),
   insertedRow: {
