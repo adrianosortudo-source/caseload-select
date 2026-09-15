@@ -92,6 +92,18 @@ function sameSecret(candidate: string, expected: string): boolean {
     && timingSafeEqual(candidateBuffer, expectedBuffer);
 }
 
+function cookieValue(cookieHeader: string | null, name: string): string | null {
+  if (!cookieHeader) return null;
+  for (const candidate of cookieHeader.split(";")) {
+    const separator = candidate.indexOf("=");
+    if (separator === -1) continue;
+    if (candidate.slice(0, separator).trim() === name) {
+      return candidate.slice(separator + 1).trim() || null;
+    }
+  }
+  return null;
+}
+
 /** True only for the exact configured Vercel preview backed by nonproduction data. */
 export function isPreviewQaEnvironment(hostname: string): boolean {
   const audience = configuredPreviewHost();
@@ -238,15 +250,47 @@ export async function verifyPreviewQaSession(token: string, hostname: string): P
  * Read-only authorization for server components. Path and method are written
  * by middleware, which overwrites any inbound values before this runs.
  */
-export async function getPreviewQaReadSession(): Promise<PreviewQaSession | null> {
-  const requestHeaders = await headers();
-  const pathname = requestHeaders.get("x-caseload-request-path") ?? "";
-  const method = requestHeaders.get("x-caseload-request-method") ?? "";
+/**
+ * `request` is supplied by route handlers when it is already available.  Its
+ * URL and method, rather than caller-controlled x-* headers, define the
+ * allowlist decision. This also keeps direct route-unit tests outside Next's
+ * async request store. Server components have no request object, so their
+ * branch uses the middleware-overwritten headers.
+ */
+export async function getPreviewQaReadSession(
+  request?: Pick<Request, "headers" | "method" | "url">,
+): Promise<PreviewQaSession | null> {
+  let pathname: string;
+  let method: string;
+  let hostname: string;
+  let raw: string | null;
+  if (request) {
+    try {
+      const url = new URL(request.url);
+      pathname = url.pathname;
+      method = request.method;
+      hostname = url.hostname;
+      raw = cookieValue(request.headers.get("cookie"), PREVIEW_QA_COOKIE_NAME);
+    } catch {
+      return null;
+    }
+  } else {
+    let requestHeaders: Headers;
+    try {
+      requestHeaders = await headers();
+    } catch {
+      // Direct server-component unit tests do not have Next's async request
+      // store. This is an authentication check, so unavailable context denies.
+      return null;
+    }
+    pathname = requestHeaders.get("x-caseload-request-path") ?? "";
+    method = requestHeaders.get("x-caseload-request-method") ?? "";
+    hostname = requestHeaders.get("host") ?? "";
+    raw = (await cookies()).get(PREVIEW_QA_COOKIE_NAME)?.value ?? null;
+  }
   if (!isPreviewQaReadRequest(pathname, method)) return null;
-
-  const raw = (await cookies()).get(PREVIEW_QA_COOKIE_NAME)?.value;
   if (!raw) return null;
-  return await verifyPreviewQaSession(raw, requestHeaders.get("host") ?? "");
+  return await verifyPreviewQaSession(raw, hostname);
 }
 
 /** Records only nonsecret identifiers suitable for the deployment audit log. */

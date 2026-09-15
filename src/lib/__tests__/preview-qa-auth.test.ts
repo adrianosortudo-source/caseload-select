@@ -92,6 +92,30 @@ describe("preview QA principal", () => {
     expect(await getPreviewQaReadSession()).toBeNull();
   });
 
+  it("uses the route URL and method rather than caller-controlled x-* headers", async () => {
+    const issued = await createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce");
+    const request = new Request(`https://${state.host}/admin/prospects`, {
+      headers: {
+        cookie: `preview_qa_session=${issued!.value}`,
+        "x-caseload-request-path": "/admin/triage",
+        "x-caseload-request-method": "POST",
+      },
+    });
+    await expect(getPreviewQaReadSession(request)).resolves.toMatchObject({
+      session_id: issued!.session.session_id,
+      capability: "read",
+    });
+
+    const forged = new Request(`https://${state.host}/admin/triage`, {
+      headers: {
+        cookie: `preview_qa_session=${issued!.value}`,
+        "x-caseload-request-path": "/admin/prospects",
+        "x-caseload-request-method": "GET",
+      },
+    });
+    await expect(getPreviewQaReadSession(forged)).resolves.toBeNull();
+  });
+
   it("fails closed outside preview and when preview data points at production", async () => {
     vi.stubEnv("VERCEL_ENV", "production");
     expect(isPreviewQaEnvironment(state.host)).toBe(false);

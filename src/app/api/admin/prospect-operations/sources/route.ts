@@ -21,7 +21,7 @@ function boundedInteger(value: string | null, fallback: number, minimum: number,
  * query parameter.
  */
 export async function GET(request: NextRequest) {
-  if (!(await getOperatorSession() ?? await getPreviewQaReadSession())) {
+  if (!(await getOperatorSession() ?? await getPreviewQaReadSession(request))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
