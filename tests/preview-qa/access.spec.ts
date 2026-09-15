@@ -36,6 +36,9 @@ type Cookie = {
   value: string;
   domain: string;
   path: string;
+  // Playwright requires this field even when the browser should treat the
+  // cookie as a session cookie. -1 is its documented session-cookie value.
+  expires: number;
   secure: boolean;
   httpOnly: boolean;
   sameSite: "Strict";
@@ -148,6 +151,7 @@ function cookieFromSetCookie(
     value,
     domain: hostname,
     path: "/",
+    expires: -1,
     secure: true,
     httpOnly: true,
     sameSite: "Strict",
