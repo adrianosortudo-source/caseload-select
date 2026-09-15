@@ -1,7 +1,21 @@
-import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
+import {
+  matchesObservedLawyerCount,
+  type ReconciledGtaProspect,
+} from "@/lib/gta-prospect-records";
 
 export type UnifiedProspectSource = "shared_registry" | "research_ledger" | "reviewed_fixture" | "legacy_provenance";
 export type UnifiedIdentityState = "linked" | "reviewed_match" | "review_needed" | "provisional";
+export type UnifiedProspectQuickView = "all" | "downtown_1_10" | "shared_registry" | "audit_ready" | "identity_review";
+
+/**
+ * This deliberately requires a source-backed downtown conclusion and an exact
+ * roster count. A Toronto city label or an "at least" count cannot establish
+ * a firm belongs in the capped one-to-ten cohort.
+ */
+export function isDowntownOneToTenProspect(record: ReconciledGtaProspect): boolean {
+  return record.downtownGeography?.status === "inside"
+    && matchesObservedLawyerCount(record, { min: 1, max: 10 });
+}
 
 export function prospectSources(record: ReconciledGtaProspect): UnifiedProspectSource[] {
   const sources: UnifiedProspectSource[] = [];
@@ -22,12 +36,13 @@ export function prospectIdentityState(record: ReconciledGtaProspect): UnifiedIde
 
 export function filterUnifiedProspectState(
   records: readonly ReconciledGtaProspect[],
-  filters: { source?: UnifiedProspectSource | ""; identity?: UnifiedIdentityState | ""; quickView?: "all" | "shared_registry" | "audit_ready" | "identity_review" },
+  filters: { source?: UnifiedProspectSource | ""; identity?: UnifiedIdentityState | ""; quickView?: UnifiedProspectQuickView },
 ): ReconciledGtaProspect[] {
   return records.filter((record) => {
     if (filters.source && !prospectSources(record).includes(filters.source)) return false;
     const identity = prospectIdentityState(record);
     if (filters.identity && identity !== filters.identity) return false;
+    if (filters.quickView === "downtown_1_10" && !isDowntownOneToTenProspect(record)) return false;
     if (filters.quickView === "shared_registry" && !record.qualifiedDossier) return false;
     if (filters.quickView === "audit_ready" && record.qualifiedDossier?.audit.state !== "ready") return false;
     if (filters.quickView === "identity_review" && identity !== "review_needed") return false;

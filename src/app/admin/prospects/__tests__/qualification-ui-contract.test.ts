@@ -6,9 +6,10 @@ const list = readFileSync(resolve(process.cwd(), "src/app/admin/prospects/Reconc
 const audit = readFileSync(resolve(process.cwd(), "src/app/admin/prospects/audits/[firmId]/page.tsx"), "utf8");
 
 describe("Unified prospect list UI contract", () => {
-  it("keeps shared registry and legacy identity work in one four-view shell", () => {
+  it("keeps shared registry and legacy identity work in one saved-view shell", () => {
     expect(list).toContain('data-ui-component-content="prospect-unified-list"');
     expect(list).toContain('["all", "All records"');
+    expect(list).toContain('["downtown_1_10", "Downtown 1–10"');
     expect(list).toContain('["shared_registry", "Shared registry"');
     expect(list).toContain('["audit_ready", "Audit ready"');
     expect(list).toContain('["identity_review", "Identity review"');
@@ -17,6 +18,7 @@ describe("Unified prospect list UI contract", () => {
     expect(list).toContain("Legacy provenance");
     expect(list).toContain("More qualification filters");
     expect(list).toContain("Observed lawyer count");
+    expect(list).toContain("1 to 10 lawyers");
     expect(list).toContain("11 to 20 lawyers");
     expect(list).toContain("Minimum lawyers");
     expect(list).toContain("Maximum lawyers");
@@ -26,16 +28,18 @@ describe("Unified prospect list UI contract", () => {
 
   it("exposes the evidence dimensions and the protected in-console audit route", () => {
     for (const label of [
-      "Advertising activity",
+      "Observable advertising activity",
       "Advertising source type",
       "GBP opportunity",
       "Website opportunity",
       "Visible intake channel",
-      "Lawyer-count confidence",
-      "Evidence freshness",
+      "Evidence confidence (lawyer count)",
+      "Verification freshness",
+      "Qualification state",
       "Research cohort",
       "Owner identified",
       "Public email",
+      "Downtown geometry",
     ]) expect(list).toContain(label);
     expect(list).toContain("/admin/prospects/audits/");
     expect(audit).toContain("getQualifiedProspectByFirmId");
