@@ -16,13 +16,25 @@ GTA_PROSPECT_RESEARCH_WORKER_ID=gta-research-worker-01
 ```
 
 The policy file passed through `--policies` is an operator-reviewed JSON array.
-Each host must supply a current same-host terms URL and its reviewed SHA-256,
-review/expiry timestamps, and exact allowed path prefixes. A missing, expired,
-changed, or malformed policy stops research for that host before its candidate
-page is requested.
+Each host must supply exactly one current policy state, review/expiry timestamps,
+and exact allowed path prefixes:
+
+- `published_terms`: a reviewed terms URL and SHA-256 hash.
+- `no_published_terms`: a separate, documented review recording a 404 or 410
+  and body hash for each conventional same-host endpoint: `/terms`,
+  `/terms-of-use`, `/terms-and-conditions`, and `/terms-of-service`.
+
+The no-published-terms state is deliberately narrow. A timeout, 429/5xx,
+redirect to an unapproved host, a page that merely appears not to contain terms,
+or an unreviewed endpoint is not proof. It remains blocked. The worker never
+performs this discovery itself and never requests a candidate page until the
+policy validates.
 
 ```json
-[{"host":"example.com","reviewedAt":"2026-09-14T00:00:00.000Z","expiresAt":"2026-10-14T00:00:00.000Z","termsUrl":"https://example.com/terms","termsSha256":"64-lowercase-hex-characters","allowedPathPrefixes":["/"]}]
+[
+  {"host":"example.com","reviewedAt":"2026-09-14T00:00:00.000Z","expiresAt":"2026-10-14T00:00:00.000Z","termsUrl":"https://example.com/terms","termsSha256":"64-lowercase-hex-characters","allowedPathPrefixes":["/"]},
+  {"host":"example.org","reviewedAt":"2026-09-14T00:00:00.000Z","expiresAt":"2026-10-14T00:00:00.000Z","noPublishedTermsReview":{"kind":"no_published_terms","attemptedUrls":[{"url":"https://example.org/terms","status":404,"bodySha256":"64-lowercase-hex-characters"},{"url":"https://example.org/terms-of-use","status":404,"bodySha256":"64-lowercase-hex-characters"},{"url":"https://example.org/terms-and-conditions","status":404,"bodySha256":"64-lowercase-hex-characters"},{"url":"https://example.org/terms-of-service","status":404,"bodySha256":"64-lowercase-hex-characters"}]},"allowedPathPrefixes":["/"]}
+]
 ```
 
 ## Invocation
