@@ -1,0 +1,1145 @@
+{
+  "schemaVersion": "gta-prospect-batch-review.v1",
+  "batchId": "gta-prospect-batch-017",
+  "reviewedOn": "2026-09-14",
+  "status": "reconciliation_complete_import_pending",
+  "policy": {
+    "requiredRosterProvenance": "first_party",
+    "targetCountBands": [
+      {
+        "min": 3,
+        "max": 5
+      },
+      {
+        "min": 6,
+        "max": 10
+      },
+      {
+        "min": 11,
+        "max": 20
+      }
+    ],
+    "requiresFreshStaticReconciliationBeforeManifest": true,
+    "requiresProtectedServerReviewBeforeApply": true,
+    "requiresSeparateImportAuthorization": true
+  },
+  "reviewMetadata": {
+    "researchMode": "public_first_party_only",
+    "purpose": "First 25-record cohort toward the 100 additional GTA-firm milestone. This is a held evidence queue, not a database import.",
+    "sourceRules": [
+      "No anti-bot bypass or automated website traversal",
+      "No form submission or contact",
+      "No CRM or database write",
+      "Public owner or email evidence is not outreach permission",
+      "No automatic identity merge",
+      "A protected server review is required before any import"
+    ]
+  },
+  "candidates": [
+    {
+      "recordId": "b017-001",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Ristich Law",
+      "canonicalDomain": "ristichlaw.ca",
+      "websiteUrl": "https://ristichlaw.ca/team/",
+      "officeCities": [
+        "Etobicoke"
+      ],
+      "observedLawyerCount": 8,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [],
+      "publicEmails": [
+        {
+          "email": "info@ristichlaw.ca",
+          "url": "https://ristichlaw.ca/team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://ristichlaw.ca/team/",
+          "observedOn": "2026-09-13",
+          "note": "Published team roster identifies eight lawyers; staff are excluded."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-002",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Harris + Harris LLP",
+      "canonicalDomain": "harrisandharris.com",
+      "websiteUrl": "https://harrisandharris.com/about/lawyers",
+      "officeCities": [
+        "Etobicoke"
+      ],
+      "observedLawyerCount": 8,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [],
+      "publicEmails": [
+        {
+          "email": "info@harrisandharris.com",
+          "url": "https://harrisandharris.com/about/lawyers",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://harrisandharris.com/about/lawyers",
+          "observedOn": "2026-09-13",
+          "note": "Published lawyers page identifies eight lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-003",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Starkman Wulkan Holmes",
+      "canonicalDomain": "swhlaw.ca",
+      "websiteUrl": "https://www.swhlaw.ca/",
+      "officeCities": [
+        "Etobicoke"
+      ],
+      "observedLawyerCount": 3,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.swhlaw.ca/",
+          "observedOn": "2026-09-13",
+          "note": "Published lawyer roster identifies David Holmes, Brian Starkman, and Robert Wulkan."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-004",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "De Bousquet PC",
+      "canonicalDomain": "debousquet.com",
+      "websiteUrl": "https://www.debousquet.com/about-us/",
+      "officeCities": [
+        "Etobicoke"
+      ],
+      "observedLawyerCount": 7,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Jean-Alexandre De Bousquet",
+          "relationship": "founder",
+          "url": "https://www.debousquet.com/about-us/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.debousquet.com/about-us/",
+          "observedOn": "2026-09-13",
+          "note": "Published about page identifies seven lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-005",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Lindsay Law",
+      "canonicalDomain": "lindsaylaw.ca",
+      "websiteUrl": "https://www.lindsaylaw.ca/our-team-lawyers/",
+      "officeCities": [
+        "North York"
+      ],
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Peter Robert Lindsay",
+          "relationship": "founder",
+          "url": "https://www.lindsaylaw.ca/our-team-lawyers/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.lindsaylaw.ca/our-team-lawyers/",
+          "observedOn": "2026-09-13",
+          "note": "Published lawyer roster identifies four lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-006",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Humber Bay Law",
+      "canonicalDomain": "humberbaylaw.com",
+      "websiteUrl": "https://www.humberbaylaw.com/team",
+      "officeCities": [
+        "Etobicoke"
+      ],
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Rahul Kesarwani",
+          "relationship": "founder",
+          "url": "https://www.humberbaylaw.com/team",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.humberbaylaw.com/team",
+          "observedOn": "2026-09-13",
+          "note": "Published team page identifies four lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-007",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "MK Law",
+      "canonicalDomain": "mklaw.ca",
+      "websiteUrl": "https://www.mklaw.ca/our-team/",
+      "officeCities": [
+        "Toronto"
+      ],
+      "observedLawyerCount": 5,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "David Kapanadze",
+          "relationship": "other_leadership",
+          "url": "https://www.mklaw.ca/our-team/",
+          "observedOn": "2026-09-13"
+        },
+        {
+          "name": "Omar Makhatadze",
+          "relationship": "other_leadership",
+          "url": "https://www.mklaw.ca/our-team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.mklaw.ca/our-team/",
+          "observedOn": "2026-09-13",
+          "note": "Published team page identifies five lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-008",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Insight Law PC",
+      "canonicalDomain": "insightlawfirm.ca",
+      "websiteUrl": "https://insightlawfirm.ca/our-team/",
+      "officeCities": [
+        "Toronto"
+      ],
+      "observedLawyerCount": 3,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Demet Altunbulakli",
+          "relationship": "founder",
+          "url": "https://insightlawfirm.ca/our-team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [
+        {
+          "email": "info@insightlawfirm.ca",
+          "url": "https://insightlawfirm.ca/our-team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://insightlawfirm.ca/our-team/",
+          "observedOn": "2026-09-13",
+          "note": "Published team page identifies three lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-009",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Israel Foulon Wong LLP",
+      "canonicalDomain": "israelfoulon.com",
+      "websiteUrl": "https://israelfoulon.com/our-team/",
+      "officeCities": [
+        "Toronto"
+      ],
+      "observedLawyerCount": 12,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Peter Israel",
+          "relationship": "founder",
+          "url": "https://israelfoulon.com/our-team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [
+        {
+          "email": "pisrael@israelfoulon.com",
+          "url": "https://israelfoulon.com/our-team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://israelfoulon.com/our-team/",
+          "observedOn": "2026-09-13",
+          "note": "Published team page identifies twelve lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-010",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Whitten & Lublin",
+      "canonicalDomain": "toronto-employmentlawyer.com",
+      "websiteUrl": "https://toronto-employmentlawyer.com/your-team/",
+      "officeCities": [
+        "Toronto"
+      ],
+      "observedLawyerCount": 18,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "David Whitten",
+          "relationship": "founder",
+          "url": "https://toronto-employmentlawyer.com/your-team/",
+          "observedOn": "2026-09-13"
+        },
+        {
+          "name": "Daniel Lublin",
+          "relationship": "founder",
+          "url": "https://toronto-employmentlawyer.com/your-team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://toronto-employmentlawyer.com/your-team/",
+          "observedOn": "2026-09-13",
+          "note": "Published team page identifies eighteen lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-011",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "VC Lawyers",
+      "canonicalDomain": "vclawyers.ca",
+      "websiteUrl": "https://www.vclawyers.ca/about-us/our-team",
+      "officeCities": [
+        "Toronto"
+      ],
+      "observedLawyerCount": 5,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Jae Hyon Cho",
+          "relationship": "managing_partner",
+          "url": "https://www.vclawyers.ca/about-us/our-team",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [
+        {
+          "email": "jcho@vclawyers.ca",
+          "url": "https://www.vclawyers.ca/about-us/our-team",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.vclawyers.ca/about-us/our-team",
+          "observedOn": "2026-09-13",
+          "note": "Published team page identifies five lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-012",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Monkhouse Law",
+      "canonicalDomain": "monkhouselaw.com",
+      "websiteUrl": "https://www.monkhouselaw.com/aboutus/",
+      "officeCities": [
+        "Toronto"
+      ],
+      "observedLawyerCount": 18,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Andrew Monkhouse",
+          "relationship": "founder",
+          "url": "https://www.monkhouselaw.com/aboutus/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.monkhouselaw.com/aboutus/",
+          "observedOn": "2026-09-13",
+          "note": "Published team page identifies eighteen lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-013",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Salehi Law",
+      "canonicalDomain": "salehilaw.ca",
+      "websiteUrl": "https://salehilaw.ca/our-team/",
+      "officeCities": [
+        "Toronto"
+      ],
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Michael Salehi",
+          "relationship": "founder",
+          "url": "https://salehilaw.ca/our-team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://salehilaw.ca/our-team/",
+          "observedOn": "2026-09-13",
+          "note": "Published team page identifies four lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-014",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Youngman Law",
+      "canonicalDomain": "youngmanlaw.com",
+      "websiteUrl": "https://www.youngmanlaw.com/our-lawyers/",
+      "officeCities": [
+        "Toronto"
+      ],
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Mark Youngman",
+          "relationship": "other_leadership",
+          "url": "https://www.youngmanlaw.com/our-lawyers/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [
+        {
+          "email": "info@youngmanlaw.com",
+          "url": "https://www.youngmanlaw.com/our-lawyers/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.youngmanlaw.com/our-lawyers/",
+          "observedOn": "2026-09-13",
+          "note": "Published lawyers page identifies six lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-015",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Harris Sheaffer LLP",
+      "canonicalDomain": "harris-sheaffer.com",
+      "websiteUrl": "https://www.harris-sheaffer.com/",
+      "officeCities": [
+        "North York"
+      ],
+      "observedLawyerCount": 16,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.harris-sheaffer.com/",
+          "observedOn": "2026-09-13",
+          "note": "Published firm roster identifies sixteen lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-016",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Brace Law",
+      "canonicalDomain": "bracelaw.ca",
+      "websiteUrl": "https://www.bracelaw.ca/our-team",
+      "officeCities": [
+        "Oakville"
+      ],
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Lusi Brace",
+          "relationship": "founder",
+          "url": "https://www.bracelaw.ca/our-team",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [
+        {
+          "email": "staff@bracelaw.ca",
+          "url": "https://www.bracelaw.ca/our-team",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.bracelaw.ca/our-team",
+          "observedOn": "2026-09-13",
+          "note": "Published team page identifies four lawyers and separately labels staff and consultants."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-017",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Brechin & Huffman LLP",
+      "canonicalDomain": "brechinandhuffman.com",
+      "websiteUrl": "https://brechinandhuffman.com/our-legal-team/",
+      "officeCities": [
+        "Burlington"
+      ],
+      "observedLawyerCount": 5,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [],
+      "publicEmails": [
+        {
+          "email": "bhhlaw@bhhlaw.net",
+          "url": "https://brechinandhuffman.com/our-legal-team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://brechinandhuffman.com/our-legal-team/",
+          "observedOn": "2026-09-13",
+          "note": "Published legal-team page identifies five active lawyers; retired lawyers are excluded."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-018",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Cass & Bishop",
+      "canonicalDomain": "cassbishop.ca",
+      "websiteUrl": "https://www.cassbishop.ca/lawyers-since-1958",
+      "officeCities": [
+        "Burlington"
+      ],
+      "observedLawyerCount": 5,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.cassbishop.ca/lawyers-since-1958",
+          "observedOn": "2026-09-13",
+          "note": "Published lawyers page identifies five lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-019",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Dale Streiman Law LLP",
+      "canonicalDomain": "dalestreimanlaw.com",
+      "websiteUrl": "https://www.dalestreimanlaw.com/about-us/",
+      "officeCities": [
+        "Brampton"
+      ],
+      "observedLawyerCount": 9,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Elliott Dale",
+          "relationship": "founder",
+          "url": "https://www.dalestreimanlaw.com/about-us/",
+          "observedOn": "2026-09-13"
+        },
+        {
+          "name": "Fred Streiman",
+          "relationship": "managing_partner",
+          "url": "https://www.dalestreimanlaw.com/about-us/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [
+        {
+          "email": "fred@dalestreimanlaw.com",
+          "url": "https://www.dalestreimanlaw.com/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.dalestreimanlaw.com/about-us/",
+          "observedOn": "2026-09-13",
+          "note": "Published firm description and roster identify nine lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-020",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "FDH Lawyers LLP",
+      "canonicalDomain": "fdhlawyers.com",
+      "websiteUrl": "https://fdhlawyers.com/legal-team/",
+      "officeCities": [
+        "Burlington"
+      ],
+      "observedLawyerCount": 10,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "James Tuck",
+          "relationship": "managing_partner",
+          "url": "https://fdhlawyers.com/legal-team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [
+        {
+          "email": "info@fdhlawyers.com",
+          "url": "https://fdhlawyers.com/legal-team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://fdhlawyers.com/legal-team/",
+          "observedOn": "2026-09-13",
+          "note": "Published legal-team page identifies ten active lawyers; retired lawyers are excluded."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-021",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Feldstein Family Law Group",
+      "canonicalDomain": "separation.ca",
+      "websiteUrl": "https://www.separation.ca/our-locations/milton/",
+      "officeCities": [
+        "Milton"
+      ],
+      "observedLawyerCount": 11,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Andrew Feldstein",
+          "relationship": "founder",
+          "url": "https://www.separation.ca/our-locations/milton/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.separation.ca/our-locations/milton/",
+          "observedOn": "2026-09-13",
+          "note": "Published location page identifies eleven lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-022",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Lawrence, Lawrence, Stevenson LLP",
+      "canonicalDomain": "lawrences.com",
+      "websiteUrl": "https://www.lawrences.com/lawyers",
+      "officeCities": [
+        "Brampton"
+      ],
+      "observedLawyerCount": 10,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Heather Picken",
+          "relationship": "managing_partner",
+          "url": "https://www.lawrences.com/lawyers",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [
+        {
+          "email": "lls@lawrences.com",
+          "url": "https://www.lawrences.com/lawyers",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.lawrences.com/lawyers",
+          "observedOn": "2026-09-13",
+          "note": "Published lawyers page identifies ten lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-023",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Lockyer + Hein LLP",
+      "canonicalDomain": "lhlaw.ca",
+      "websiteUrl": "https://lhlaw.ca/lawyers/",
+      "officeCities": [
+        "Brampton",
+        "Caledon"
+      ],
+      "observedLawyerCount": 8,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://lhlaw.ca/lawyers/",
+          "observedOn": "2026-09-13",
+          "note": "Published lawyers page identifies eight lawyers."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-024",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "MFC Lawyers",
+      "canonicalDomain": "mfclawyers.com",
+      "websiteUrl": "https://www.mfclawyers.com/our-team/",
+      "officeCities": [
+        "Milton"
+      ],
+      "observedLawyerCount": 6,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Erika MacLeod",
+          "relationship": "managing_partner",
+          "url": "https://www.mfclawyers.com/our-team/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://www.mfclawyers.com/our-team/",
+          "observedOn": "2026-09-13",
+          "note": "Published team page identifies six lawyers and separately labels support staff."
+        }
+      ]
+    },
+    {
+      "recordId": "b017-025",
+      "origin": {
+        "kind": "new_public_web_discovery"
+      },
+      "firmName": "Mann Law",
+      "canonicalDomain": "mannlaw.ca",
+      "websiteUrl": "https://mannlaw.ca/about-us/",
+      "officeCities": [
+        "Mississauga"
+      ],
+      "observedLawyerCount": 4,
+      "countQualifier": "exact",
+      "observedOn": "2026-09-13",
+      "leadership": [
+        {
+          "name": "Harry Mann",
+          "relationship": "founder",
+          "url": "https://mannlaw.ca/about-us/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "publicEmails": [
+        {
+          "email": "hsm@mannlaw.ca",
+          "url": "https://mannlaw.ca/about-us/",
+          "observedOn": "2026-09-13"
+        }
+      ],
+      "evidence": [
+        {
+          "kind": "roster",
+          "provenance": "first_party",
+          "url": "https://mannlaw.ca/about-us/",
+          "observedOn": "2026-09-13",
+          "note": "Published about page identifies four lawyers."
+        }
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "recordId": "b017-001",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-001; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-002",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-002 and gta-prospect-002-b002-25; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-003",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-003; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-004",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-004; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-005",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-005; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-006",
+      "disposition": "import",
+      "basis": "Fresh 2026-09-14 reconciliation found no matching source key, normalized firm name, or canonical domain in the 264-record applied operator projection.",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      }
+    },
+    {
+      "recordId": "b017-007",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-prospect-002-b002-17; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-008",
+      "disposition": "import",
+      "basis": "Fresh 2026-09-14 reconciliation found no matching source key, normalized firm name, or canonical domain in the 264-record applied operator projection.",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      }
+    },
+    {
+      "recordId": "b017-009",
+      "disposition": "import",
+      "basis": "Fresh 2026-09-14 reconciliation found no matching source key, normalized firm name, or canonical domain in the 264-record applied operator projection.",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      }
+    },
+    {
+      "recordId": "b017-010",
+      "disposition": "import",
+      "basis": "Fresh 2026-09-14 reconciliation found no matching source key, normalized firm name, or canonical domain in the 264-record applied operator projection.",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      }
+    },
+    {
+      "recordId": "b017-011",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-011; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-012",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-prospect-010-b010-c-19; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-013",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-013; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-014",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-014; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-015",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-015; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-016",
+      "disposition": "import",
+      "basis": "Fresh 2026-09-14 reconciliation found no matching source key, normalized firm name, or canonical domain in the 264-record applied operator projection.",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      }
+    },
+    {
+      "recordId": "b017-017",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-017; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-018",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-018 and gta-prospect-013-b013-008; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-019",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-prospect-001-dale-streiman-brampton; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-020",
+      "disposition": "import",
+      "basis": "Fresh 2026-09-14 reconciliation found no matching source key, normalized firm name, or canonical domain in the 264-record applied operator projection.",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      }
+    },
+    {
+      "recordId": "b017-021",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b029-feldstein-family-law-mississauga and gta-prospect-010-b010-wn-14; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-022",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-022; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-023",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-b017-023; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-024",
+      "disposition": "hold",
+      "basis": "Fresh 2026-09-14 reconciliation found existing applied record gta-prospect-010-b010-east-15; this package must not duplicate or merge it automatically.",
+      "reconciliation": {
+        "staticBaseline": "existing_firm_match",
+        "liveBaseline": "existing_firm_match"
+      }
+    },
+    {
+      "recordId": "b017-025",
+      "disposition": "import",
+      "basis": "Fresh 2026-09-14 reconciliation found no matching source key, normalized firm name, or canonical domain in the 264-record applied operator projection.",
+      "reconciliationStatus": "provisional_new",
+      "reconciliation": {
+        "staticBaseline": "no_match",
+        "liveBaseline": "no_match"
+      }
+    }
+  ],
+  "automaticMerge": false,
+  "outreachAuthorized": false,
+  "importAuthorized": false,
+  "expectedLiveBaselineCount": 264
+}
