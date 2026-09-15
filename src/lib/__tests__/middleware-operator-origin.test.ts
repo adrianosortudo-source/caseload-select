@@ -10,8 +10,8 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllEnvs());
 
-function request(url: string, method = "GET"): NextRequest {
-  return new NextRequest(url, { method });
+function request(url: string, method = "GET", headers?: HeadersInit): NextRequest {
+  return new NextRequest(url, { method, headers });
 }
 
 describe("operator origin middleware policy", () => {
@@ -78,5 +78,58 @@ describe("operator origin middleware policy", () => {
     expect(res.headers.get("location")).toBe(
       "https://admin.caseloadselect.ca/admin/triage?firm=firm-1",
     );
+  });
+});
+
+describe("preview QA middleware capability boundary", () => {
+  const previewHost = "preview-qa-git-example.vercel.app";
+  const qaCookie = "preview_qa_session=read-only-qa-token";
+
+  it.each([
+    ["POST", "/admin/prospects"],
+    ["PUT", "/api/admin/prospect-operations/sources"],
+    ["PATCH", "/admin/prospects/agent-drafts"],
+    ["DELETE", "/_next/static/chunks/runtime.js"],
+    ["OPTIONS", "/favicon.ico"],
+  ])("rejects QA %s requests to an otherwise allowlisted path: %s", async (method, pathname) => {
+    const res = await middleware(request(`https://${previewHost}${pathname}`, method, { cookie: qaCookie }));
+
+    expect(res.status).toBe(403);
+    expect(res.headers.get("cache-control")).toBe("no-store");
+  });
+
+  it("allows only safe reads for the explicit app and runtime asset paths", async () => {
+    const [appRead, assetHead] = await Promise.all([
+      middleware(request(`https://${previewHost}/admin/prospects`, "GET", { cookie: qaCookie })),
+      middleware(request(`https://${previewHost}/_next/static/chunks/runtime.js`, "HEAD", { cookie: qaCookie })),
+    ]);
+
+    expect(appRead.status).not.toBe(403);
+    expect(assetHead.status).not.toBe(403);
+    // NextResponse.next() does not expose an x-middleware-next response
+    // header in every test runtime. The capability contract is the
+    // authorization decision: safe paths may proceed, unsafe ones above may
+    // not.
+  });
+
+  it.each(["/admin/triage", "/api/operator/preview-qa-session", "/api/public/report.json"])(
+    "rejects a QA GET outside its exact read allowlist: %s",
+    async (pathname) => {
+      const res = await middleware(request(`https://${previewHost}${pathname}`, "GET", { cookie: qaCookie }));
+
+      expect(res.status).toBe(403);
+      expect(res.headers.get("cache-control")).toBe("no-store");
+    },
+  );
+
+  it("does not let a mixed QA and operator-cookie request reach a mutation", async () => {
+    const res = await middleware(request(
+      `https://${previewHost}/admin/prospects/research-import`,
+      "POST",
+      { cookie: `portal_session=otherwise-valid-operator-token; ${qaCookie}` },
+    ));
+
+    expect(res.status).toBe(403);
+    expect(res.headers.get("cache-control")).toBe("no-store");
   });
 });

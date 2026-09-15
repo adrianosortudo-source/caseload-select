@@ -5,6 +5,7 @@ import { listGtaProspectImportHistoryForOperator } from "@/lib/gta-prospect-impo
 import { reviewGtaProspectImport } from "@/lib/gta-prospect-research-import";
 import { listGtaProspectResearchForOperator } from "@/lib/gta-prospect-research-reader";
 import { getOperatorSession } from "@/lib/portal-auth";
+import { getPreviewQaReadSession } from "@/lib/preview-qa-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +45,7 @@ async function review(request: ImportRequest) {
 
 /** Operator-only, read-only metadata for the last ten reviewed import batches. */
 export async function GET() {
-  if (!(await getOperatorSession())) return NextResponse.json({ error: "Unauthorized" }, { ...unauthorizedStatus, headers: noStore });
+  if (!(await getOperatorSession() ?? await getPreviewQaReadSession())) return NextResponse.json({ error: "Unauthorized" }, { ...unauthorizedStatus, headers: noStore });
   try {
     return NextResponse.json({ history: await listGtaProspectImportHistoryForOperator() }, { headers: noStore });
   } catch (error) {

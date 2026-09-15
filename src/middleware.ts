@@ -50,10 +50,24 @@ import {
   PRIVACY_RECOVERY_ROUTE,
   recoveryCircuitIsOpen,
 } from "@/lib/privacy-recovery-edge";
+import {
+  PREVIEW_QA_COOKIE_NAME,
+  isPreviewQaBootstrapRequest,
+  isPreviewQaReadRequest,
+} from "@/lib/preview-qa-policy";
 
 const APP_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "caseloadselect.ca";
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
 const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
+
+function nextWithTrustedRequestContext(req: NextRequest): NextResponse {
+  const requestHeaders = new Headers(req.headers);
+  // A client cannot choose its QA allowlist route. This overwrites any inbound
+  // values before a server component evaluates the read-only policy.
+  requestHeaders.set("x-caseload-request-path", req.nextUrl.pathname);
+  requestHeaders.set("x-caseload-request-method", req.method);
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
 /** Edge-compatible mirror of the server recovery gate. Once the feature is
  * enabled, an absent/malformed breaker response is closed, never assumed open.
  * This catches operational APIs before their route code can enqueue a send or
@@ -169,9 +183,21 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   const recoveryGate = await privacyRecoveryApiGate(pathname);
   if (recoveryGate) return recoveryGate;
 
+  // A QA cookie is an unambiguous read-only principal. It cannot navigate to a
+  // different console page through an RSC request or use an unsafe method.
+  // The bootstrap exception lets a browser replace its short-lived credential.
+  if (req.cookies.has(PREVIEW_QA_COOKIE_NAME)
+    && !isPreviewQaReadRequest(pathname, req.method)
+    && !isPreviewQaBootstrapRequest(pathname, req.method)) {
+    return new NextResponse("Forbidden", {
+      status: 403,
+      headers: { "Cache-Control": "no-store" },
+    });
+  }
+
   // Local dev + Vercel preview URLs → pass through
   if (isLocalOrPreviewHost(hostname)) {
-    return NextResponse.next();
+    return nextWithTrustedRequestContext(req);
   }
 
   // Keep browser navigation on the origin that owns its host-only session.
@@ -193,14 +219,14 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   // The operator origin is deliberately noindex, including portal previews
   // and shared API responses that cannot be represented in robots.txt alone.
   if (isOperatorHost(hostname)) {
-    const response = NextResponse.next();
+    const response = nextWithTrustedRequestContext(req);
     response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
     return response;
   }
 
   // Apex of the main app domain → pass through (marketing site)
   if (hostname === APP_DOMAIN) {
-    return NextResponse.next();
+    return nextWithTrustedRequestContext(req);
   }
 
   // Subdomain under the main app domain
@@ -209,7 +235,7 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
 
     // Reserved subdomains run the main app untouched
     if (RESERVED_SUBDOMAINS.has(subdomain)) {
-      return NextResponse.next();
+      return nextWithTrustedRequestContext(req);
     }
 
     // S8 Phase 1 Story 12: try the branded-subdomain column first
@@ -219,19 +245,22 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
     // unchanged while new firms onboard via the subdomain column.
     let firmId = await firmIdForSubdomain(subdomain);
     if (!firmId) firmId = await firmIdForDomain(hostname);
-    if (!firmId) return NextResponse.next();
+    if (!firmId) return nextWithTrustedRequestContext(req);
     return rewriteForFirm(req, firmId);
   }
 
   // Fully custom domain (firm's own apex or subdomain)
   const firmId = await firmIdForDomain(hostname);
-  if (!firmId) return NextResponse.next();
+  if (!firmId) return nextWithTrustedRequestContext(req);
   return rewriteForFirm(req, firmId);
 }
 
 export const config = {
   matcher: [
-    // Run on all paths except Next.js internals and static assets
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    // QA access is a principal-wide capability boundary.  It must see static
+    // paths too, so a QA cookie cannot bypass the safe-method rule merely by
+    // targeting a route that resembles an asset.  preview-qa-policy grants
+    // only the exact runtime assets required to render an allowlisted page.
+    "/:path*",
   ],
 };
