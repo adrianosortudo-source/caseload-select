@@ -116,7 +116,8 @@ export type GtaProspectResearchWorkerOptions = Readonly<{
 
 const DEFAULT_MAX_PAGES = 8;
 const DEFAULT_MAX_BODY_BYTES = 1_000_000;
-const DEFAULT_TIMEOUT_MS = 15_000;`nconst REQUIRED_NO_TERMS_PATHS = Object.freeze(["/terms", "/terms-of-use", "/terms-and-conditions", "/terms-of-service"] as const);
+const DEFAULT_TIMEOUT_MS = 15_000;
+const REQUIRED_NO_TERMS_PATHS = Object.freeze(["/terms", "/terms-of-use", "/terms-and-conditions", "/terms-of-service"] as const);
 const INTERNAL_ROUTE = /(?:lawyer|attorney|team|people|professional|profile|our-firm|about|contact|book|consult)/i;
 const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,63}\b/gi;
 const OWNER = /\b(founder|co-founder|owner|principal|managing partner|managing lawyer|partner)\b/i;
