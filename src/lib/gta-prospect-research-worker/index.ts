@@ -17,6 +17,8 @@ export type HostResearchPolicy = Readonly<{
   termsSha256: string;
   /** Exact same-origin paths the separate terms reviewer approved. */
   allowedPathPrefixes: readonly string[];
+  /** Explicitly reviewed apex/www twin only; no arbitrary cross-host redirects. */
+  allowedHostAliases?: readonly string[];
 }>;
 
 export type WorkerEvidence = Readonly<{
@@ -96,19 +98,38 @@ function normalizeHost(value: string): string {
   return parsed.hostname;
 }
 
-function ensurePolicy(policy: HostResearchPolicy, at: Date): HostResearchPolicy {
+type ApprovedHostResearchPolicy = HostResearchPolicy & Readonly<{
+  host: string;
+  approvedHosts: readonly string[];
+}>;
+
+function approvedHosts(host: string, aliases: readonly string[] | undefined): readonly string[] {
+  if (aliases === undefined) return Object.freeze([host]);
+  if (!Array.isArray(aliases)) throw new Error(`Research policy for ${host} has invalid host aliases.`);
+  const twin = host.startsWith("www.") ? host.slice(4) : `www.${host}`;
+  const approved = new Set([host]);
+  for (const rawAlias of aliases) {
+    const alias = normalizeHost(rawAlias);
+    if (alias !== twin) throw new Error(`Research policy for ${host} may only authorize its explicit apex/www twin: ${twin}.`);
+    approved.add(alias);
+  }
+  return Object.freeze([...approved]);
+}
+
+function ensurePolicy(policy: HostResearchPolicy, at: Date): ApprovedHostResearchPolicy {
   const host = normalizeHost(policy.host);
+  const allowedHosts = approvedHosts(host, policy.allowedHostAliases);
   if (policy.termsSha256.length !== 64 || !/^[a-f0-9]{64}$/.test(policy.termsSha256)) throw new Error(`Research policy for ${host} has an invalid terms hash.`);
   const reviewedAt = Date.parse(policy.reviewedAt);
   const expiresAt = Date.parse(policy.expiresAt);
   if (!Number.isFinite(reviewedAt) || !Number.isFinite(expiresAt) || reviewedAt > at.getTime() || expiresAt <= at.getTime()) throw new Error(`Research policy for ${host} is missing, future-dated, or expired.`);
   const terms = new URL(policy.termsUrl);
   if (terms.protocol !== "https:" && terms.protocol !== "http:") throw new Error(`Research policy for ${host} has an unsafe terms URL.`);
-  if (terms.hostname !== host) throw new Error(`Research policy for ${host} must point to same-host terms.`);
+  if (!allowedHosts.includes(terms.hostname)) throw new Error(`Research policy for ${host} must point to its reviewed host or explicit apex/www twin.`);
   if (!Array.isArray(policy.allowedPathPrefixes) || policy.allowedPathPrefixes.length === 0 || policy.allowedPathPrefixes.some((path) => !path.startsWith("/") || path.includes("//"))) {
     throw new Error(`Research policy for ${host} needs at least one safe allowed path prefix.`);
   }
-  return { ...policy, host };
+  return { ...policy, host, approvedHosts: allowedHosts };
 }
 
 function isPrivateAddress(value: string): boolean {
@@ -120,8 +141,8 @@ function isPrivateAddress(value: string): boolean {
   return a === 0 || a === 10 || a === 127 || a >= 224 || (a === 100 && b >= 64 && b <= 127) || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168);
 }
 
-function sameHostUrl(url: URL, host: string, prefixes: readonly string[]): boolean {
-  return url.hostname === host
+function samePolicyUrl(url: URL, policy: ApprovedHostResearchPolicy, prefixes: readonly string[]): boolean {
+  return policy.approvedHosts.includes(url.hostname)
     && (url.protocol === "https:" || url.protocol === "http:")
     && !url.username && !url.password
     && !url.port
@@ -231,11 +252,11 @@ async function defaultResolveHost(hostname: string): Promise<readonly string[]> 
   return records.map((record) => record.address);
 }
 
-function assertPublicTarget(url: URL, policy: HostResearchPolicy): void {
-  if (!sameHostUrl(url, policy.host, policy.allowedPathPrefixes)) throw new Error(`Unsafe or unapproved research target: ${url.toString()}`);
+function assertPublicTarget(url: URL, policy: ApprovedHostResearchPolicy): void {
+  if (!samePolicyUrl(url, policy, policy.allowedPathPrefixes)) throw new Error(`Unsafe or unapproved research target: ${url.toString()}`);
 }
 
-async function fetchText({ url, policy, fetcher, resolveHost, timeoutMs, maxBodyBytes, now }: Readonly<{ url: URL; policy: HostResearchPolicy; fetcher: WorkerTransport; resolveHost: HostResolver; timeoutMs: number; maxBodyBytes: number; now: () => Date }>): Promise<WorkerEvidence> {
+async function fetchText({ url, policy, fetcher, resolveHost, timeoutMs, maxBodyBytes, now }: Readonly<{ url: URL; policy: ApprovedHostResearchPolicy; fetcher: WorkerTransport; resolveHost: HostResolver; timeoutMs: number; maxBodyBytes: number; now: () => Date }>): Promise<WorkerEvidence> {
   assertPublicTarget(url, policy);
   const addresses = await resolveHost(url.hostname);
   if (!addresses.length || addresses.some(isPrivateAddress)) throw new Error(`Unsafe DNS result for ${url.hostname}.`);
@@ -286,7 +307,7 @@ export async function researchGtaProspectWorkItem(item: GtaProspectResearchWorkI
   if (!/^[-_a-z0-9]{1,120}$/.test(workerId)) throw new Error("workerId must be a lowercase queue worker identifier.");
   const candidateUrl = item.sourceUrls[0] ? new URL(item.sourceUrls[0]) : null;
   if (!candidateUrl || !item.canonicalDomain) return failure(item, workerId, startedAt, "candidate_url_missing", "The queue item has no canonical domain and usable source URL.", 24 * 60);
-  let policy: HostResearchPolicy;
+  let policy: ApprovedHostResearchPolicy;
   try {
     const rawPolicy = options.policies.find((candidate) => candidate.host === candidateUrl.hostname.toLowerCase());
     if (!rawPolicy) return failure(item, workerId, startedAt, "terms_review_required", `No current terms policy exists for ${candidateUrl.hostname}.`, 7 * 24 * 60);
@@ -312,7 +333,7 @@ export async function researchGtaProspectWorkItem(item: GtaProspectResearchWorkI
     if (!parseRobots(robots.body, GTA_PROSPECT_RESEARCH_WORKER_USER_AGENT, homePath)) return failure(item, workerId, startedAt, "robots_disallow", `robots.txt does not permit ${homePath}.`, 30 * 24 * 60);
     const home = await fetchText({ url: candidateUrl, policy, fetcher, resolveHost, timeoutMs, maxBodyBytes, now });
     const allowedRoutes = hrefs(home.body, new URL(home.url))
-      .filter((url) => sameHostUrl(url, policy.host, policy.allowedPathPrefixes))
+      .filter((url) => samePolicyUrl(url, policy, policy.allowedPathPrefixes))
       .filter((url) => INTERNAL_ROUTE.test(url.pathname))
       .filter((url) => parseRobots(robots.body, GTA_PROSPECT_RESEARCH_WORKER_USER_AGENT, url.pathname));
     const pages = unique([home, ...await Promise.all(unique(allowedRoutes, (url) => url.toString()).slice(0, Math.max(0, maxPages - 1)).map((url) => fetchText({ url, policy, fetcher, resolveHost, timeoutMs, maxBodyBytes, now })))], (page) => page.url);
