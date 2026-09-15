@@ -9,16 +9,44 @@ import type { GtaProspectResearchWorkItem } from "@/lib/gta-prospect-research-wo
  */
 export const GTA_PROSPECT_RESEARCH_WORKER_USER_AGENT = "CaseLoadSelectResearch/1.0 (+https://caseloadselect.ca/research-policy)";
 
+export type NoPublishedTermsEvidence = Readonly<{
+  /** A conventional terms endpoint reviewed before candidate research. */
+  url: string;
+  /** Only a definitive missing-response can support this policy state. */
+  status: 404 | 410;
+  /** SHA-256 of the reviewed response body, including an empty body. */
+  bodySha256: string;
+}>;
+
+export type NoPublishedTermsReview = Readonly<{
+  kind: "no_published_terms";
+  /** Every conventional endpoint below must have been reviewed and be missing. */
+  attemptedUrls: readonly NoPublishedTermsEvidence[];
+}>;
+
 export type HostResearchPolicy = Readonly<{
   host: string;
   reviewedAt: string;
   expiresAt: string;
-  termsUrl: string;
-  termsSha256: string;
+  /** Present only when a current published terms page was reviewed. */
+  termsUrl?: string;
+  termsSha256?: string;
+  /** Present only after a bounded, documented review finds no published terms. */
+  noPublishedTermsReview?: NoPublishedTermsReview;
   /** Exact same-origin paths the separate terms reviewer approved. */
   allowedPathPrefixes: readonly string[];
   /** Explicitly reviewed apex/www twin only; no arbitrary cross-host redirects. */
   allowedHostAliases?: readonly string[];
+}>;
+
+export type PolicyReviewSnapshot = Readonly<{
+  kind: "published_terms";
+  termsUrl: string;
+  termsSha256: string;
+}> | Readonly<{
+  kind: "no_published_terms";
+  reviewedAt: string;
+  attemptedUrls: readonly NoPublishedTermsEvidence[];
 }>;
 
 export type WorkerEvidence = Readonly<{
@@ -63,6 +91,7 @@ export type GtaProspectResearchCapsule = Readonly<{
   evidence: readonly WorkerEvidence[];
   visibleSignals: readonly VisibleSignal[];
   geographyHandoff: readonly GeographyEvidenceHandoff[];
+  policyReview: PolicyReviewSnapshot | null;
   failure: string | null;
   actionsNotPerformed: readonly string[];
 }>;
@@ -87,7 +116,7 @@ export type GtaProspectResearchWorkerOptions = Readonly<{
 
 const DEFAULT_MAX_PAGES = 8;
 const DEFAULT_MAX_BODY_BYTES = 1_000_000;
-const DEFAULT_TIMEOUT_MS = 15_000;
+const DEFAULT_TIMEOUT_MS = 15_000;`nconst REQUIRED_NO_TERMS_PATHS = Object.freeze(["/terms", "/terms-of-use", "/terms-and-conditions", "/terms-of-service"] as const);
 const INTERNAL_ROUTE = /(?:lawyer|attorney|team|people|professional|profile|our-firm|about|contact|book|consult)/i;
 const EMAIL = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,63}\b/gi;
 const OWNER = /\b(founder|co-founder|owner|principal|managing partner|managing lawyer|partner)\b/i;
@@ -116,20 +145,46 @@ function approvedHosts(host: string, aliases: readonly string[] | undefined): re
   return Object.freeze([...approved]);
 }
 
+function validateNoPublishedTermsReview(review: NoPublishedTermsReview, host: string, allowedHosts: readonly string[]): void {
+  if (!review || review.kind !== "no_published_terms" || !Array.isArray(review.attemptedUrls)) throw new Error(`Research policy for ${host} has an invalid no-published-terms review.`);
+  const reviewedPaths = new Set<string>();
+  for (const evidence of review.attemptedUrls) {
+    if (!evidence || (evidence.status !== 404 && evidence.status !== 410) || !/^[a-f0-9]{64}$/.test(evidence.bodySha256)) throw new Error(`Research policy for ${host} has invalid no-published-terms evidence.`);
+    const url = new URL(evidence.url);
+    if ((url.protocol !== "https:" && url.protocol !== "http:") || !allowedHosts.includes(url.hostname) || url.username || url.password || url.port || url.search || url.hash || !REQUIRED_NO_TERMS_PATHS.includes(url.pathname as typeof REQUIRED_NO_TERMS_PATHS[number])) {
+      throw new Error(`Research policy for ${host} has an unsafe or incomplete no-published-terms review.`);
+    }
+    reviewedPaths.add(url.pathname);
+  }
+  if (REQUIRED_NO_TERMS_PATHS.some((path) => !reviewedPaths.has(path))) throw new Error(`Research policy for ${host} must document every conventional terms endpoint before using no-published-terms.`);
+}
+
 function ensurePolicy(policy: HostResearchPolicy, at: Date): ApprovedHostResearchPolicy {
   const host = normalizeHost(policy.host);
   const allowedHosts = approvedHosts(host, policy.allowedHostAliases);
-  if (policy.termsSha256.length !== 64 || !/^[a-f0-9]{64}$/.test(policy.termsSha256)) throw new Error(`Research policy for ${host} has an invalid terms hash.`);
   const reviewedAt = Date.parse(policy.reviewedAt);
   const expiresAt = Date.parse(policy.expiresAt);
   if (!Number.isFinite(reviewedAt) || !Number.isFinite(expiresAt) || reviewedAt > at.getTime() || expiresAt <= at.getTime()) throw new Error(`Research policy for ${host} is missing, future-dated, or expired.`);
-  const terms = new URL(policy.termsUrl);
-  if (terms.protocol !== "https:" && terms.protocol !== "http:") throw new Error(`Research policy for ${host} has an unsafe terms URL.`);
-  if (!allowedHosts.includes(terms.hostname)) throw new Error(`Research policy for ${host} must point to its reviewed host or explicit apex/www twin.`);
+  const hasPublishedTerms = typeof policy.termsUrl === "string" && typeof policy.termsSha256 === "string";
+  if (hasPublishedTerms) {
+    if (policy.noPublishedTermsReview || policy.termsSha256.length !== 64 || !/^[a-f0-9]{64}$/.test(policy.termsSha256)) throw new Error(`Research policy for ${host} has an invalid terms review.`);
+    const terms = new URL(policy.termsUrl);
+    if (terms.protocol !== "https:" && terms.protocol !== "http:") throw new Error(`Research policy for ${host} has an unsafe terms URL.`);
+    if (!allowedHosts.includes(terms.hostname)) throw new Error(`Research policy for ${host} must point to its reviewed host or explicit apex/www twin.`);
+  } else {
+    if (policy.termsUrl !== undefined || policy.termsSha256 !== undefined || !policy.noPublishedTermsReview) throw new Error(`Research policy for ${host} needs either reviewed published terms or documented no-published-terms evidence.`);
+    validateNoPublishedTermsReview(policy.noPublishedTermsReview, host, allowedHosts);
+  }
   if (!Array.isArray(policy.allowedPathPrefixes) || policy.allowedPathPrefixes.length === 0 || policy.allowedPathPrefixes.some((path) => !path.startsWith("/") || path.includes("//"))) {
     throw new Error(`Research policy for ${host} needs at least one safe allowed path prefix.`);
   }
   return { ...policy, host, approvedHosts: allowedHosts };
+}
+
+function policyReviewSnapshot(policy: ApprovedHostResearchPolicy): PolicyReviewSnapshot {
+  return policy.noPublishedTermsReview
+    ? Object.freeze({ kind: "no_published_terms" as const, reviewedAt: policy.reviewedAt, attemptedUrls: Object.freeze([...policy.noPublishedTermsReview.attemptedUrls]) })
+    : Object.freeze({ kind: "published_terms" as const, termsUrl: policy.termsUrl!, termsSha256: policy.termsSha256! });
 }
 
 function isPrivateAddress(value: string): boolean {
@@ -289,7 +344,7 @@ async function fetchText({ url, policy, fetcher, resolveHost, timeoutMs, maxBody
 
 function failure(item: GtaProspectResearchWorkItem, workerId: string, now: Date, code: string, message: string, retryAfterMinutes: number): ResearchResult {
   return {
-    capsule: Object.freeze({ schemaVersion: "gta-prospect-research-capsule-v1", workItemId: item.id, sourceSystem: item.sourceSystem, sourceRecordKey: item.sourceRecordKey, candidateName: item.candidateName, canonicalDomain: item.canonicalDomain, observedAt: now.toISOString(), workerId, evidence: Object.freeze([]), visibleSignals: Object.freeze([]), geographyHandoff: Object.freeze([]), failure: `${code}: ${message}`, actionsNotPerformed: Object.freeze(["form submission", "chat interaction", "booking", "message", "contact", "outreach", "CRM write"]) }),
+    capsule: Object.freeze({ schemaVersion: "gta-prospect-research-capsule-v1", workItemId: item.id, sourceSystem: item.sourceSystem, sourceRecordKey: item.sourceRecordKey, candidateName: item.candidateName, canonicalDomain: item.canonicalDomain, observedAt: now.toISOString(), workerId, evidence: Object.freeze([]), visibleSignals: Object.freeze([]), geographyHandoff: Object.freeze([]), policyReview: null, failure: `${code}: ${message}`, actionsNotPerformed: Object.freeze(["form submission", "chat interaction", "booking", "message", "contact", "outreach", "CRM write"]) }),
     failure: Object.freeze({ code, message, retryAfterMinutes }),
   };
 }
@@ -325,8 +380,8 @@ export async function researchGtaProspectWorkItem(item: GtaProspectResearchWorkI
   if (!Number.isInteger(maxBodyBytes) || maxBodyBytes < 1_024 || maxBodyBytes > 5_000_000) throw new Error("maxBodyBytes must be 1,024 to 5,000,000.");
 
   try {
-    const terms = await fetchText({ url: new URL(policy.termsUrl), policy, fetcher, resolveHost, timeoutMs, maxBodyBytes, now });
-    if (terms.bodySha256 !== policy.termsSha256) return failure(item, workerId, startedAt, "terms_changed", `The current terms hash for ${policy.host} no longer matches its reviewed policy.`, 7 * 24 * 60);
+    const terms = policy.noPublishedTermsReview ? null : await fetchText({ url: new URL(policy.termsUrl!), policy, fetcher, resolveHost, timeoutMs, maxBodyBytes, now });
+    if (terms && terms.bodySha256 !== policy.termsSha256) return failure(item, workerId, startedAt, "terms_changed", `The current terms hash for ${policy.host} no longer matches its reviewed policy.`, 7 * 24 * 60);
     const robotsUrl = new URL("/robots.txt", candidateUrl);
     const robots = await fetchText({ url: robotsUrl, policy: { ...policy, allowedPathPrefixes: [...policy.allowedPathPrefixes, "/robots.txt"] }, fetcher, resolveHost, timeoutMs, maxBodyBytes, now });
     const homePath = candidateUrl.pathname || "/";
@@ -338,14 +393,14 @@ export async function researchGtaProspectWorkItem(item: GtaProspectResearchWorkI
       .filter((url) => parseRobots(robots.body, GTA_PROSPECT_RESEARCH_WORKER_USER_AGENT, url.pathname));
     const pages = unique([home, ...await Promise.all(unique(allowedRoutes, (url) => url.toString()).slice(0, Math.max(0, maxPages - 1)).map((url) => fetchText({ url, policy, fetcher, resolveHost, timeoutMs, maxBodyBytes, now })))], (page) => page.url);
     const observedAt = startedAt.toISOString();
-    const capsule: GtaProspectResearchCapsule = Object.freeze({ schemaVersion: "gta-prospect-research-capsule-v1", workItemId: item.id, sourceSystem: item.sourceSystem, sourceRecordKey: item.sourceRecordKey, candidateName: item.candidateName, canonicalDomain: item.canonicalDomain, observedAt, workerId, evidence: Object.freeze([terms, robots, ...pages]), visibleSignals: extractSignals(pages), geographyHandoff: Object.freeze([{
+    const capsule: GtaProspectResearchCapsule = Object.freeze({ schemaVersion: "gta-prospect-research-capsule-v1", workItemId: item.id, sourceSystem: item.sourceSystem, sourceRecordKey: item.sourceRecordKey, candidateName: item.candidateName, canonicalDomain: item.canonicalDomain, observedAt, workerId, evidence: Object.freeze([...(terms ? [terms] : []), robots, ...pages]), visibleSignals: extractSignals(pages), geographyHandoff: Object.freeze([{
       candidateAddress: item.candidateAddress,
       sourceUrl: home.url,
       observedAt,
       status: item.candidateAddress ? "address_observed" as const : "address_missing" as const,
       coordinate: null,
       boundary: null,
-    }]), failure: null, actionsNotPerformed: Object.freeze(["form submission", "chat interaction", "booking", "message", "contact", "outreach", "CRM write"]) });
+    }]), policyReview: policyReviewSnapshot(policy), failure: null, actionsNotPerformed: Object.freeze(["form submission", "chat interaction", "booking", "message", "contact", "outreach", "CRM write"]) });
     return Object.freeze({ capsule, failure: null });
   } catch (error) {
     return failure(item, workerId, startedAt, "transient_fetch_failure", error instanceof Error ? error.message.slice(0, 1_500) : "Public fetch failed.", Math.min(24 * 60, Math.max(30, item.attemptCount * 30)));
