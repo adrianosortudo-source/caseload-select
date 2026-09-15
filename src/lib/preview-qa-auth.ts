@@ -105,7 +105,7 @@ export function isPreviewQaBootstrapAuthorized(hostname: string, candidateSecret
     expected
     && expectedNonce
     && isPreviewQaEnvironment(hostname)
-    && sameSecret(candidateSecret, expected),
+    && sameSecret(candidateSecret, expected)
     && sameSecret(candidateNonce, expectedNonce),
   );
 }

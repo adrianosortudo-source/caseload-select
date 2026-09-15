@@ -106,7 +106,7 @@ as $$
   );
 $$;
 
-revoke all on function public.consume_preview_qa_bootstrap_and_issue_session(uuid, text, text, timestamptz, uuid, text, uuid, text) from public;
-revoke all on function public.verify_preview_qa_session(uuid, text, text) from public;
+revoke all on function public.consume_preview_qa_bootstrap_and_issue_session(uuid, text, text, timestamptz, uuid, text, uuid, text) from public, anon, authenticated;
+revoke all on function public.verify_preview_qa_session(uuid, text, text) from public, anon, authenticated;
 grant execute on function public.consume_preview_qa_bootstrap_and_issue_session(uuid, text, text, timestamptz, uuid, text, uuid, text) to service_role;
 grant execute on function public.verify_preview_qa_session(uuid, text, text) to service_role;
