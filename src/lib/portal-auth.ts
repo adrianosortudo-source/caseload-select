@@ -30,6 +30,7 @@ import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { getPreviewIntent, type PreviewIntent } from "./preview-mode";
 import { isLocalOrPreviewHost, isOperatorHost } from "./app-origins";
+import { PREVIEW_QA_COOKIE_NAME } from "./preview-qa-policy";
 
 const COOKIE_NAME = "portal_session";
 const LINK_TTL_HOURS = 48;
@@ -259,6 +260,10 @@ export async function revalidateOperatorMembership(
  * boundary; callers must not decode the cookie independently.
  */
 export async function getPortalSession(): Promise<PortalSession | null> {
+  // A preview QA principal is never also a portal principal.  Middleware
+  // enforces the route/method allowlist first; this is the route-level
+  // backstop in case a future matcher or rewrite accidentally skips it.
+  if ((await cookies()).has(PREVIEW_QA_COOKIE_NAME)) return null;
   const session = await getRawPortalSession();
   if (!session || session.role !== "operator") return session;
   if (!await isTrustedOperatorRequestHost()) return null;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { applyGtaProspectAgentDraft, listGtaProspectAgentDraftsForOperator } from "@/lib/gta-prospect-agent-draft-inbox";
 import { getOperatorSession } from "@/lib/portal-auth";
+import { getPreviewQaReadSession } from "@/lib/preview-qa-auth";
 
 export const dynamic = "force-dynamic";
 const noStore = { "Cache-Control": "private, no-store" };
@@ -14,9 +15,13 @@ async function operatorAuthorized(): Promise<boolean> {
   return Boolean(await getOperatorSession());
 }
 
+async function readAuthorized(): Promise<boolean> {
+  return Boolean(await getOperatorSession() ?? await getPreviewQaReadSession());
+}
+
 /** Operator-only list. It exposes validation receipts, never secrets or CRM data. */
 export async function GET() {
-  if (!await operatorAuthorized()) return json({ error: "Unauthorized" }, 401);
+  if (!await readAuthorized()) return json({ error: "Unauthorized" }, 401);
   try { return json({ drafts: await listGtaProspectAgentDraftsForOperator() }); }
   catch (error) {
     console.error("[gta-prospect-agent-draft-inbox] list failed", error);

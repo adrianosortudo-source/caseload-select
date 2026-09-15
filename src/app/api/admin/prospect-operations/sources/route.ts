@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getOperatorSession } from '@/lib/portal-auth';
+import { getPreviewQaReadSession } from '@/lib/preview-qa-auth';
 import {
   listProspectingControlPlaneSources,
   PROSPECTING_CONTROL_PLANE_DEFAULT_PAGE_SIZE,
@@ -20,7 +21,7 @@ function boundedInteger(value: string | null, fallback: number, minimum: number,
  * query parameter.
  */
 export async function GET(request: NextRequest) {
-  if (!(await getOperatorSession())) {
+  if (!(await getOperatorSession() ?? await getPreviewQaReadSession())) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
