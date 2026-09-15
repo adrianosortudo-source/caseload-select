@@ -23,10 +23,11 @@ vi.mock("next/headers", () => ({
     get: (name: string) => name.toLowerCase() === "host" ? state.host : null,
   }),
   cookies: async () => ({
-    get: (name: string) => name === "portal_session" && state.cookie
-      ? { value: state.cookie }
-      : undefined,
-    has: (name: string) => name === "preview_qa_session" && state.previewQaCookie,
+    get: (name: string) => {
+      if (name === "portal_session" && state.cookie) return { value: state.cookie };
+      if (name === "preview_qa_session" && state.previewQaCookie) return { value: "qa-cookie" };
+      return undefined;
+    },
   }),
 }));
 

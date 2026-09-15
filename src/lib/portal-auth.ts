@@ -263,7 +263,7 @@ export async function getPortalSession(): Promise<PortalSession | null> {
   // A preview QA principal is never also a portal principal.  Middleware
   // enforces the route/method allowlist first; this is the route-level
   // backstop in case a future matcher or rewrite accidentally skips it.
-  if ((await cookies()).has(PREVIEW_QA_COOKIE_NAME)) return null;
+  if ((await cookies()).get(PREVIEW_QA_COOKIE_NAME)) return null;
   const session = await getRawPortalSession();
   if (!session || session.role !== "operator") return session;
   if (!await isTrustedOperatorRequestHost()) return null;
