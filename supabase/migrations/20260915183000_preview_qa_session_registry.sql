@@ -28,8 +28,12 @@ create index if not exists preview_qa_sessions_active_idx
 
 alter table public.preview_qa_sessions enable row level security;
 alter table public.preview_qa_bootstrap_grants enable row level security;
-revoke all on table public.preview_qa_sessions from anon, authenticated;
-revoke all on table public.preview_qa_bootstrap_grants from anon, authenticated;
+-- Tables and their one-time grants are never a browser-facing API.  Revoke
+-- PUBLIC as well as the Supabase browser roles: function EXECUTE privileges do
+-- not imply table access, and each table remains private even if a later
+-- default privilege changes.
+revoke all on table public.preview_qa_sessions from public, anon, authenticated;
+revoke all on table public.preview_qa_bootstrap_grants from public, anon, authenticated;
 
 create or replace function public.consume_preview_qa_bootstrap_and_issue_session(
   p_id uuid,
@@ -44,7 +48,7 @@ create or replace function public.consume_preview_qa_bootstrap_and_issue_session
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 declare
   active_grant public.preview_qa_bootstrap_grants%rowtype;
@@ -59,19 +63,19 @@ begin
     for update;
   if not found
     or active_grant.consumed_at is not null
-    or active_grant.expires_at <= now()
+    or active_grant.expires_at <= pg_catalog.now()
     or active_grant.nonce_hash <> p_bootstrap_nonce_hash then
     return false;
   end if;
 
   update public.preview_qa_bootstrap_grants
-    set consumed_at = now()
+    set consumed_at = pg_catalog.now()
     where id = p_bootstrap_grant_id and consumed_at is null;
   if not found then return false; end if;
 
   if p_previous_id is not null and p_previous_token_hash is not null then
     update public.preview_qa_sessions
-      set revoked_at = now()
+      set revoked_at = pg_catalog.now()
       where id = p_previous_id
         and audience = p_audience
         and token_hash = p_previous_token_hash
@@ -92,7 +96,7 @@ create or replace function public.verify_preview_qa_session(
 returns boolean
 language sql
 security definer
-set search_path = public
+set search_path = ''
 stable
 as $$
   select exists (
@@ -101,7 +105,7 @@ as $$
      where id = p_id
        and audience = p_audience
        and token_hash = p_token_hash
-       and expires_at > now()
+       and expires_at > pg_catalog.now()
        and revoked_at is null
   );
 $$;
