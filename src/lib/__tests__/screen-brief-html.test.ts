@@ -96,6 +96,17 @@ describe('renderBriefHtmlServer — four-axis breakdown', () => {
     expect(napIdx).toBeLessThan(decisionIdx);
   });
 
+  it('emits the live conversation slot in the right rail after Queue posture', () => {
+    const html = renderBriefHtmlServer(buildFakeReport(), 'instagram', 'en');
+    const postureIdx = html.indexOf('sidebar-card-posture');
+    const conversationIdx = html.indexOf('data-channel-conversation-slot');
+    const watchpointsIdx = html.indexOf('sidebar-card-watchpoints');
+
+    expect(postureIdx).toBeGreaterThan(-1);
+    expect(conversationIdx).toBeGreaterThan(postureIdx);
+    expect(watchpointsIdx).toBeGreaterThan(conversationIdx);
+  });
+
   it('renders the "Why this is Band X" subsection inside Decision', () => {
     const html = renderBriefHtmlServer(buildFakeReport({ band: 'B' }), 'web', 'en');
     expect(html).toContain('Why this is Band B');

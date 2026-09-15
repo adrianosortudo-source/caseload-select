@@ -131,8 +131,16 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
 
     await conn.query(
       `insert into channel_intake_sessions
-         (firm_id, channel, sender_id, engine_state, finalized, screened_lead_id)
-       values ($1, 'facebook', $2, '{"email":"person@example.test"}'::jsonb, true, $3)`,
+         (firm_id, channel, sender_id, engine_state, intake_exchanges, finalized, screened_lead_id)
+       values (
+         $1,
+         'facebook',
+         $2,
+         '{"email":"person@example.test"}'::jsonb,
+         '{"version":1,"events":[{"id":"in-1","sequence":1,"direction":"inbound","body":"private intake answer","occurredAt":"2026-09-15T12:00:00.000Z","status":"received","kind":"opening","slotIds":[],"replyToEventId":null,"normalizedAnswers":[]}],"truncated":false}'::jsonb,
+         true,
+         $3
+       )`,
       [firmId, senderId, leadPk],
     );
     await conn.query(
@@ -544,8 +552,9 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
          (select sender_id from unconfirmed_inquiries where firm_id = $1 limit 1) as unconfirmed_sender,
          (select payload from webhook_outbox where firm_id = $1 limit 1) as outbox_payload,
          (select basis_evidence from consent_log where subject_id = $3 limit 1) as consent_evidence,
-         (select evidence_payload from content_attribution_evidence where screened_lead_id = $3 limit 1) as attribution_payload,
-         (select party_name from screened_conflict_parties where conflict_check_id = $4 limit 1) as party_name`,
+          (select evidence_payload from content_attribution_evidence where screened_lead_id = $3 limit 1) as attribution_payload,
+          (select party_name from screened_conflict_parties where conflict_check_id = $4 limit 1) as party_name,
+          (select intake_exchanges from channel_intake_sessions where screened_lead_id = $3 limit 1) as session_intake_exchanges`,
       [firmId, inboundMid, leadPk, conflictCheckId],
     );
     expect(secondary.rows[0]).toMatchObject({
@@ -555,6 +564,7 @@ describe.skipIf(!DB_URL)("screened-lead privacy redaction (real Postgres)", () =
       consent_evidence: { redacted: true },
       attribution_payload: { redacted: true },
       party_name: "[redacted]",
+      session_intake_exchanges: { version: 1, events: [], truncated: false },
     });
 
     const suppressed = await serviceRpc<boolean>(

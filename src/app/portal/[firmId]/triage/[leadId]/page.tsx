@@ -27,11 +27,15 @@ import {
   loadChannelConversation,
   type ConversationChannel,
 } from "@/lib/channel-conversation";
+import { reconstructLegacyChannelIntakeHistory } from "@/lib/channel-intake-history";
 import DecisionTimer from "@/components/portal/DecisionTimer";
 import BriefLiveTimers from "@/components/portal/BriefLiveTimers";
 import ScoringPortPanel from "@/components/portal/ScoringPortPanel";
 import TriageActionBar from "@/components/portal/TriageActionBar";
 import ChannelConversationPanel from "@/components/portal/ChannelConversationPanel";
+import ConversationRailPortal from "@/components/portal/ConversationRailPortal";
+import IntakeTranscriptPanel from "@/components/portal/IntakeTranscriptPanel";
+import { ensureConversationRailSlot } from "@/components/portal/lead-report-layout";
 import "./brief.css";
 
 interface LeadRow {
@@ -51,6 +55,9 @@ interface LeadRow {
   raw_transcript: string | null;
   slot_answers: {
     channel?: string;
+    slots?: unknown;
+    questionHistory?: unknown;
+    intake_exchanges?: unknown;
     voice_meta?: { recording_url?: string | null };
     messenger_meta?: { page_id?: string | null };
     instagram_meta?: { ig_business_account_id?: string | null };
@@ -137,6 +144,13 @@ export default async function TriageLeadPage({
   const channelAssetId = conversationChannel
     ? getChannelAssetId(conversationChannel, row.slot_answers)
     : null;
+  const intakeHistory = conversationChannel
+    ? reconstructLegacyChannelIntakeHistory({
+        rawTranscript: row.raw_transcript,
+        slotAnswers: row.slot_answers,
+        intakeLanguage: row.intake_language,
+      })
+    : null;
 
   const langLabel = intakeLanguageLabel(row.intake_language);
 
@@ -190,14 +204,22 @@ export default async function TriageLeadPage({
   // as [whole, ""], which renders the action bar at the end of the brief,
   // still flush, no overlay.
   const ACTION_RAIL_MARKER = "<!-- ACTION_RAIL_SLOT -->";
-  const briefHtml = row.brief_html ?? "";
+  const originalBriefHtml = row.brief_html ?? "";
+  const conversationSlotResult = conversationChannel
+    ? ensureConversationRailSlot(originalBriefHtml)
+    : { html: originalBriefHtml, inserted: false };
+  const briefHtml = conversationSlotResult.html;
   const splitIdx = briefHtml.indexOf(ACTION_RAIL_MARKER);
   const briefTopHtml = splitIdx >= 0 ? briefHtml.slice(0, splitIdx) : briefHtml;
   const briefBottomHtml =
     splitIdx >= 0 ? briefHtml.slice(splitIdx + ACTION_RAIL_MARKER.length) : "";
 
   return (
-    <div className="space-y-4">
+    <div
+      className="lead-report-page space-y-4"
+      data-lead-report-page
+      data-operator-console={session?.role === "operator" && !inSupportPreview ? "" : undefined}
+    >
       <BackLink firmId={firmId} />
       {!hasNewLayout && (
         <Header
@@ -219,7 +241,24 @@ export default async function TriageLeadPage({
         initialStatus={row.status}
         supportPreview={inSupportPreview}
       />
-      {conversationChannel && (
+      {briefBottomHtml.length > 0 && <BriefFrame html={briefBottomHtml} />}
+      {conversationChannel && conversationSlotResult.inserted && (
+        <ConversationRailPortal
+          messages={conversation?.messages ?? []}
+          channel={conversationChannel}
+          firmName={firmName}
+          assetId={channelAssetId}
+          replyWindow={conversation?.replyWindow ?? {
+            isOpen: false,
+            closesAt: null,
+            reason: "no_authoritative_inbound",
+          }}
+          supportPreview={inSupportPreview}
+          actorIdentityAvailable={isStableActorId(session?.lawyer_id)}
+          replyEndpoint={`/api/portal/${firmId}/triage/${row.lead_id}/reply`}
+        />
+      )}
+      {conversationChannel && !conversationSlotResult.inserted && (
         <ChannelConversationPanel
           messages={conversation?.messages ?? []}
           channel={conversationChannel}
@@ -233,10 +272,13 @@ export default async function TriageLeadPage({
           supportPreview={inSupportPreview}
           actorIdentityAvailable={isStableActorId(session?.lawyer_id)}
           replyEndpoint={`/api/portal/${firmId}/triage/${row.lead_id}/reply`}
-          intakeTranscript={row.raw_transcript}
         />
       )}
-      {briefBottomHtml.length > 0 && <BriefFrame html={briefBottomHtml} />}
+      {intakeHistory && (
+        <div className="px-2 md:px-4">
+          <IntakeTranscriptPanel history={intakeHistory} />
+        </div>
+      )}
       <BriefLiveTimers />
     </div>
   );

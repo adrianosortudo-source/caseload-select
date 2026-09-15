@@ -29,7 +29,7 @@ interface Props {
   supportPreview: boolean;
   actorIdentityAvailable: boolean;
   replyEndpoint: string;
-  intakeTranscript?: string | null;
+  compact?: boolean;
 }
 
 const CHANNEL_LABELS: Record<ReplyChannel, string> = {
@@ -96,7 +96,7 @@ export default function ChannelConversationPanel({
   supportPreview,
   actorIdentityAvailable,
   replyEndpoint,
-  intakeTranscript,
+  compact = false,
 }: Props) {
   const [conversation, setConversation] = useState(messages);
   const [draft, setDraft] = useState("");
@@ -191,9 +191,17 @@ export default function ChannelConversationPanel({
   }
 
   return (
-    <section className="border border-black/10 bg-white" aria-labelledby="channel-conversation-heading">
+    <section
+      className={`border border-black/10 bg-white ${
+        compact ? "conversation-panel-compact" : ""
+      }`}
+      aria-labelledby="channel-conversation-heading"
+      data-channel-conversation-panel
+    >
       <div
-        className="border-b border-black/10 px-4 py-4 sm:px-6"
+        className={`border-b border-black/10 ${
+          compact ? "px-4 py-3" : "px-4 py-4 sm:px-6"
+        }`}
         data-ui-component-content="channel-conversation-heading"
       >
         <p
@@ -204,12 +212,18 @@ export default function ChannelConversationPanel({
         </p>
         <h2
           id="channel-conversation-heading"
-          className="mt-1 w-full text-lg font-bold text-navy text-pretty sm:text-xl"
+          className={`mt-1 w-full font-bold text-navy text-pretty ${
+            compact ? "text-base" : "text-lg sm:text-xl"
+          }`}
           data-ui-copy="heading"
         >
           Message thread
         </h2>
-        <div className="mt-2 w-full space-y-1 text-xs text-black/55">
+        <div
+          className={`w-full text-xs text-black/55 ${
+            compact ? "mt-1.5 space-y-0.5" : "mt-2 space-y-1"
+          }`}
+        >
           <p className="w-full">
             <span className="font-semibold text-black/65">Channel:</span> {CHANNEL_LABELS[channel]}
           </p>
@@ -226,8 +240,11 @@ export default function ChannelConversationPanel({
       </div>
 
       <div
-        className="space-y-3 bg-parchment px-4 py-4 sm:px-6"
+        className={`space-y-3 overflow-y-auto bg-parchment ${
+          compact ? "max-h-72 px-3 py-3" : "px-4 py-4 sm:px-6"
+        }`}
         aria-label="Conversation history"
+        tabIndex={compact ? 0 : undefined}
         data-ui-component-content="channel-conversation-history"
       >
         {conversation.length === 0 ? (
@@ -240,7 +257,9 @@ export default function ChannelConversationPanel({
             return (
               <article
                 key={message.id}
-                className={`max-w-[88%] border px-3 py-2 sm:max-w-[72%] ${
+                className={`${
+                  compact ? "max-w-full" : "max-w-[88%] sm:max-w-[72%]"
+                } border px-3 py-2 ${
                   message.direction === "outbound"
                     ? "ml-auto border-navy/20 bg-navy text-white"
                     : "mr-auto border-black/10 bg-white text-deep-black"
@@ -262,92 +281,93 @@ export default function ChannelConversationPanel({
         )}
       </div>
 
-      {intakeTranscript && (
+      {unavailableReason ? (
         <div
-          className="border-t border-black/10 px-4 py-4 sm:px-6"
-          data-ui-component-content="channel-intake-transcript"
+          className={`border-t border-black/10 bg-red-50 ${
+            compact ? "px-4 py-3" : "px-4 py-4 sm:px-6"
+          }`}
+          data-ui-component-content="channel-reply-unavailable"
         >
           <h3 className="w-full text-sm font-bold text-navy" data-ui-copy="heading">
-            Inbound intake transcript
+            Reply unavailable
           </h3>
           <p
-            className="mt-1 w-full text-xs text-black/55 text-pretty"
+            className="mt-1 w-full text-xs leading-relaxed text-red-800 text-pretty"
             data-ui-copy="supporting"
           >
-            Legacy intake text is shown separately from message history. Some exchanges may be
-            missing.
-          </p>
-          <div className="mt-3 whitespace-pre-wrap break-words border border-black/10 bg-parchment px-3 py-3 text-sm text-black/70">
-            {intakeTranscript}
-          </div>
-        </div>
-      )}
-
-      <form
-        onSubmit={sendReply}
-        className="border-t border-black/10 px-4 py-4 sm:px-6"
-        data-ui-component-content="channel-reply-composer"
-      >
-        <label
-          htmlFor="channel-reply-body"
-          className="block w-full text-sm font-bold text-navy"
-          data-ui-copy="heading"
-        >
-          Write a reply
-        </label>
-        <textarea
-          id="channel-reply-body"
-          rows={4}
-          maxLength={2000}
-          value={draft}
-          onChange={(event) => {
-            const nextDraft = event.target.value;
-            if (
-              pendingRequest.current &&
-              pendingRequest.current.body !== nextDraft.trim()
-            ) {
-              pendingRequest.current = null;
-            }
-            setDraft(nextDraft);
-          }}
-          disabled={unavailableReason !== null || sending}
-          placeholder="Write a plain-text reply"
-          className="mt-2 min-h-[112px] w-full resize-y border border-black/15 bg-parchment px-3 py-2 text-sm text-deep-black focus:border-navy focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-        />
-        <div className="mt-2 w-full space-y-1 text-xs text-black/50">
-          <p className="w-full">
-            {draft.length}/2000 characters
-            {channel === "instagram" && ` · ${instagramByteCount}/1000 Instagram bytes`}
-          </p>
-          {replyWindow.isOpen && replyWindow.closesAt && !supportPreview && (
-            <p className="w-full">
-              Reply window closes {formatOccurredAt(replyWindow.closesAt)}
-            </p>
-          )}
-        </div>
-        {unavailableReason && (
-          <p className="mt-3 w-full text-sm text-red-700 text-pretty" data-ui-copy="supporting">
             {unavailableReason}
           </p>
-        )}
-        {exceedsChannelLimit && (
-          <p className="mt-3 w-full text-sm text-red-700 text-pretty" data-ui-copy="supporting">
-            Instagram replies must be 1000 UTF-8 bytes or fewer. Shorten this reply before sending.
-          </p>
-        )}
-        <div className="mt-3 flex w-full items-center justify-end">
-          <button
-            type="submit"
-            disabled={sendDisabled}
-            className="min-h-[44px] bg-gold px-5 py-2.5 text-sm font-semibold uppercase tracking-wider text-navy disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {sending ? "Sending..." : "Send reply"}
-          </button>
         </div>
-        <p className="mt-2 min-h-5 w-full text-sm text-black/65" aria-live="polite">
-          {feedback}
-        </p>
-      </form>
+      ) : (
+        <form
+          onSubmit={sendReply}
+          className={`border-t border-black/10 ${
+            compact ? "px-4 py-3" : "px-4 py-4 sm:px-6"
+          }`}
+          data-ui-component-content="channel-reply-composer"
+        >
+          <label
+            htmlFor="channel-reply-body"
+            className="block w-full text-sm font-bold text-navy"
+            data-ui-copy="heading"
+          >
+            Write a reply
+          </label>
+          <textarea
+            id="channel-reply-body"
+            rows={compact ? 3 : 4}
+            maxLength={2000}
+            value={draft}
+            onChange={(event) => {
+              const nextDraft = event.target.value;
+              if (
+                pendingRequest.current &&
+                pendingRequest.current.body !== nextDraft.trim()
+              ) {
+                pendingRequest.current = null;
+              }
+              setDraft(nextDraft);
+            }}
+            disabled={sending}
+            placeholder="Write a plain-text reply"
+            className={`mt-2 w-full resize-y border border-black/15 bg-parchment px-3 py-2 text-sm text-deep-black focus:border-navy focus:outline-none disabled:cursor-not-allowed disabled:opacity-60 ${
+              compact ? "min-h-24" : "min-h-[112px]"
+            }`}
+          />
+          <div className="mt-2 w-full space-y-1 text-xs text-black/50">
+            <p className="w-full">
+              {draft.length}/2000 characters
+              {channel === "instagram" && ` · ${instagramByteCount}/1000 Instagram bytes`}
+            </p>
+            {replyWindow.isOpen && replyWindow.closesAt && !supportPreview && (
+              <p className="w-full">
+                Reply window closes {formatOccurredAt(replyWindow.closesAt)}
+              </p>
+            )}
+          </div>
+          {exceedsChannelLimit && (
+            <p
+              className="mt-3 w-full text-sm text-red-700 text-pretty"
+              data-ui-copy="supporting"
+            >
+              Instagram replies must be 1000 UTF-8 bytes or fewer. Shorten this reply before
+              sending.
+            </p>
+          )}
+          <div className="mt-3 flex w-full items-center justify-end">
+            <button
+              type="submit"
+              disabled={sendDisabled}
+              className="min-h-[44px] bg-gold px-5 py-2.5 text-sm font-semibold uppercase tracking-wider text-navy disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {sending ? "Sending..." : "Send reply"}
+            </button>
+          </div>
+          <p className="mt-2 min-h-5 w-full text-sm text-black/65" aria-live="polite">
+            {feedback}
+          </p>
+        </form>
+      )}
     </section>
   );
 }

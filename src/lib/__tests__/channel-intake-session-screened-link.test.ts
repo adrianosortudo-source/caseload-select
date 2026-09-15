@@ -26,6 +26,7 @@ interface CapturedUpdate {
   finalized?: boolean;
   screened_lead_id?: string;
   last_activity_at?: string;
+  intake_exchanges?: unknown;
 }
 
 const mocks = vi.hoisted(() => ({
@@ -99,6 +100,11 @@ describe("finalizeChannelSession", () => {
     expect(mocks.updateCapture?.last_activity_at).toBeDefined();
     // The key invariant: no screened_lead_id is written when none was provided.
     expect(mocks.updateCapture).not.toHaveProperty("screened_lead_id");
+    expect(mocks.updateCapture?.intake_exchanges).toEqual({
+      version: 1,
+      events: [],
+      truncated: false,
+    });
   });
 
   it("with screenedLeadId, writes the FK (successful path)", async () => {
@@ -106,6 +112,7 @@ describe("finalizeChannelSession", () => {
     expect(r.ok).toBe(true);
     expect(mocks.updateCapture?.finalized).toBe(true);
     expect(mocks.updateCapture?.screened_lead_id).toBe("lead-uuid-abc");
+    expect(mocks.updateCapture).not.toHaveProperty("intake_exchanges");
   });
 
   it("with null screenedLeadId, treats as undefined and leaves column unset", async () => {

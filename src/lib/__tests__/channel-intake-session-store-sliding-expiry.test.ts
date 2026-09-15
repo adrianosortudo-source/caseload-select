@@ -55,8 +55,14 @@ import {
   SESSION_TTL_MS,
 } from '../channel-intake-session-store';
 import type { EngineState } from '../screen-engine/types';
+import type { ChannelIntakeHistoryV1 } from '../channel-intake-history';
 
 const engineState = { slots: {}, slot_meta: {} } as unknown as EngineState;
+const intakeExchanges: ChannelIntakeHistoryV1 = {
+  version: 1,
+  events: [],
+  truncated: false,
+};
 
 beforeEach(() => {
   mocks.updateCapture = null;
@@ -86,10 +92,12 @@ describe('updateChannelSession sliding expiry', () => {
     await updateChannelSession({
       sessionId: 'session-1',
       engineState,
+      intakeExchanges,
       followUpCount: 1,
     });
     expect(mocks.updateCapture?.last_activity_at).toBeDefined();
     expect(mocks.updateCapture?.engine_state).toBe(engineState);
+    expect(mocks.updateCapture?.intake_exchanges).toBe(intakeExchanges);
     expect(mocks.updateCapture?.follow_up_count).toBe(1);
   });
 
@@ -119,5 +127,21 @@ describe('createChannelSession insert default', () => {
     });
     expect(r.ok).toBe(true);
     expect(mocks.insertCapture).not.toHaveProperty('expires_at');
+    expect(mocks.insertCapture?.intake_exchanges).toEqual({
+      version: 1,
+      events: [],
+      truncated: false,
+    });
+  });
+
+  it('persists an explicitly supplied exchange envelope', async () => {
+    await createChannelSession({
+      firmId: 'firm-1',
+      channel: 'instagram',
+      senderId: 'igsid-1',
+      engineState,
+      intakeExchanges,
+    });
+    expect(mocks.insertCapture?.intake_exchanges).toBe(intakeExchanges);
   });
 });
