@@ -100,7 +100,8 @@ export default function AiDraftInbox() {
         || typeof manifest.reviewSha256 !== "string" || manifest.recordCount !== draft.review.records.length
         || !Array.isArray(manifest.records) || manifest.records.length !== draft.review.records.length
         || !manifest.records.every((record) => record?.draftId === draft.draftId && record.reviewSha256 === manifest.reviewSha256)
-        || new Set(manifest.records.map((record) => record.sourceRecordKey)).size !== draft.review.records.length) {
+        || new Set(manifest.records.map((record) => record.sourceRecordKey)).size !== draft.review.records.length
+        || !manifest.records.every((record) => draft.review.records.some((review) => review.sourceRecordKey === record.sourceRecordKey))) {
         throw new Error(typeof payload.error === "string" ? payload.error : "The complete staged package review could not be loaded.");
       }
       setManifests((current) => ({ ...current, [draft.draftId]: manifest }));
