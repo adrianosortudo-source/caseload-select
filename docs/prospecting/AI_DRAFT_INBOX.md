@@ -2,6 +2,10 @@
 
 The AI draft inbox lets an approved research system submit a bounded public-evidence package without receiving an operator session, a Supabase service key, importer authority, CRM access, or outreach capability.
 
+## Credential rotation and activation
+
+`GTA_PROSPECT_AGENT_DRAFT_TOKEN` is a production secret. When it is rotated in Vercel, the replacement takes effect only in the next normal production deployment; do not use a direct production deploy to activate it. Verify activation after that deployment with the runner's authenticated malformed-payload probe, which must return the expected validation response and stages no draft.
+
 ## One-time deployment configuration
 
 After the reviewed migration and application code are merged and deployed, configure these server-only production variables:
