@@ -31,6 +31,7 @@
 import "server-only";
 import { NextResponse } from "next/server";
 import { getOperatorSession } from "./portal-auth";
+import { getPreviewQaReadSession } from "./preview-qa-auth";
 
 /**
  * Gates a request to operator role. Returns:
@@ -43,6 +44,21 @@ import { getOperatorSession } from "./portal-auth";
  */
 export async function requireOperator(): Promise<NextResponse | null> {
   const session = await getOperatorSession();
+  if (!session) {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 },
+    );
+  }
+  return null;
+}
+
+/**
+ * Read handlers on the explicitly allowlisted prospect QA surface can admit a
+ * preview QA principal. Mutation handlers must keep using requireOperator.
+ */
+export async function requireOperatorOrPreviewQaRead(): Promise<NextResponse | null> {
+  const session = await getOperatorSession() ?? await getPreviewQaReadSession();
   if (!session) {
     return NextResponse.json(
       { error: "Unauthorized" },

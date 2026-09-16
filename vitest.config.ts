@@ -25,6 +25,11 @@ export default defineConfig({
       // than enabling every colocated route test in the application.
       "src/app/api/internal/privacy-recovery/route.test.ts",
     ],
+    // `server-only` intentionally throws outside Next's compiler.  Tests load
+    // route and server modules in Vitest's Node runtime, so mock it here only;
+    // application builds continue to resolve the real package and retain the
+    // production client-import safeguard.
+    setupFiles: ["./tests/vitest.server-only.setup.ts"],
     globals: true,
   },
   resolve: {

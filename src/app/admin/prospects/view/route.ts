@@ -25,12 +25,13 @@
  */
 import { NextResponse } from "next/server";
 import { getOperatorSession } from "@/lib/portal-auth";
+import { getPreviewQaReadSession } from "@/lib/preview-qa-auth";
 import { PROSPECTS_HTML } from "../prospects-content";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  if (!(await getOperatorSession())) {
+  if (!(await getOperatorSession() ?? await getPreviewQaReadSession())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   return new NextResponse(PROSPECTS_HTML, {
