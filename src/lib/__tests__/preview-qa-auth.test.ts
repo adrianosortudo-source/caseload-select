@@ -151,6 +151,9 @@ describe("preview QA principal", () => {
   });
 
   it("permits only safe runtime assets in addition to the exact read allowlist", () => {
+    expect(isPreviewQaReadRequest("/operator/preview-qa", "GET")).toBe(true);
+    expect(isPreviewQaReadRequest("/operator/preview-qa", "HEAD")).toBe(true);
+    expect(isPreviewQaReadRequest("/operator/preview-qa", "POST")).toBe(false);
     expect(isPreviewQaReadRequest("/_next/static/chunks/app.js", "GET")).toBe(true);
     expect(isPreviewQaReadRequest("/_next/image", "HEAD")).toBe(true);
     expect(isPreviewQaReadRequest("/favicon.ico", "GET")).toBe(true);

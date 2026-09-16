@@ -52,6 +52,7 @@ import {
 } from "@/lib/privacy-recovery-edge";
 import {
   PREVIEW_QA_COOKIE_NAME,
+  PREVIEW_QA_BOOTSTRAP_UI_PATH,
   isPreviewQaBootstrapRequest,
   isPreviewQaReadRequest,
 } from "@/lib/preview-qa-policy";
@@ -193,6 +194,17 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
       status: 403,
       headers: { "Cache-Control": "no-store" },
     });
+  }
+
+  // The server component independently verifies the preview-only environment.
+  // These headers keep the exact bootstrap UI out of caches and search results
+  // before that component can render, including its intentional 404 elsewhere.
+  if (pathname === PREVIEW_QA_BOOTSTRAP_UI_PATH) {
+    const response = nextWithTrustedRequestContext(req);
+    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
   }
 
   // Local dev + Vercel preview URLs → pass through

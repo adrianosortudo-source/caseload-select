@@ -8,6 +8,7 @@
 export const PREVIEW_QA_COOKIE_NAME = "preview_qa_session";
 
 const PREVIEW_QA_READ_PATHS = new Set([
+  "/operator/preview-qa",
   "/admin/prospects",
   "/admin/prospects/agent-drafts",
   "/admin/prospects/reconciled",
@@ -30,6 +31,7 @@ export function isPreviewQaStaticAssetPath(pathname: string): boolean {
 }
 
 export const PREVIEW_QA_BOOTSTRAP_PATH = "/api/operator/preview-qa-session";
+export const PREVIEW_QA_BOOTSTRAP_UI_PATH = "/operator/preview-qa";
 
 export function isPreviewQaReadMethod(method: string): boolean {
   return method === "GET" || method === "HEAD";
