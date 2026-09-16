@@ -15,6 +15,14 @@ GTA_PROSPECT_RESEARCH_QUEUE_BASE_URL=https://admin.caseloadselect.ca
 GTA_PROSPECT_RESEARCH_WORKER_ID=gta-research-worker-01
 ```
 
+`GTA_PROSPECT_RESEARCH_QUEUE_TOKEN` is a production-only, server-side secret.
+Keep any worker copy DPAPI-protected on the approved operator machine; never
+place it in a repository file, a research capsule, or a draft package. When it
+is rotated, replace the Vercel value and the protected worker copy together,
+then activate the change only through the normal GitHub PR merge and
+production deployment path. Do not use a direct production deployment solely
+to refresh this credential.
+
 The policy file passed through `--policies` is an operator-reviewed JSON array.
 Each host must supply exactly one current policy state, review/expiry timestamps,
 and exact allowed path prefixes:
