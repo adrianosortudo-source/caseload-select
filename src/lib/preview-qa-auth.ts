@@ -11,9 +11,11 @@ import "server-only";
 
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "crypto";
 import { cookies, headers } from "next/headers";
+import { constantTimeEquals } from "./cron-auth";
 import { PREVIEW_QA_COOKIE_NAME, isPreviewQaReadRequest } from "./preview-qa-policy";
 
 const PREVIEW_QA_TTL_SECONDS = 15 * 60;
+const MINIMUM_SECRET_BYTES = 32;
 const PRODUCTION_SUPABASE_PROJECT_REF = "ssxryjxifwiivghglqer";
 const PURPOSE = "preview_qa_read" as const;
 
@@ -66,7 +68,26 @@ function bootstrapGrantId(): string | null {
 
 function signingKey(): string | null {
   const key = process.env.PREVIEW_QA_SIGNING_SECRET;
-  return key && key.length >= 32 ? key : null;
+  return hasMinimumSecretStrength(key) ? key : null;
+}
+
+/**
+ * Configuration can establish a cryptographic secret's entropy, while a
+ * caller can only present it. Reject under-sized configured values before
+ * they can enable preview bootstrap.
+ */
+function hasMinimumSecretStrength(value: unknown): value is string {
+  return typeof value === "string" && Buffer.byteLength(value, "utf8") >= MINIMUM_SECRET_BYTES;
+}
+
+function bootstrapAccessSecret(): string | null {
+  const secret = process.env.PREVIEW_QA_ACCESS_SECRET;
+  return hasMinimumSecretStrength(secret) ? secret : null;
+}
+
+function bootstrapNonce(): string | null {
+  const nonce = process.env.PREVIEW_QA_BOOTSTRAP_NONCE;
+  return hasMinimumSecretStrength(nonce) ? nonce : null;
 }
 
 function encode(data: object): string {
@@ -86,10 +107,7 @@ function tokenHash(token: string): string {
 }
 
 function sameSecret(candidate: string, expected: string): boolean {
-  const candidateBuffer = Buffer.from(candidate);
-  const expectedBuffer = Buffer.from(expected);
-  return candidateBuffer.length === expectedBuffer.length
-    && timingSafeEqual(candidateBuffer, expectedBuffer);
+  return constantTimeEquals(candidate, expected);
 }
 
 function cookieValue(cookieHeader: string | null, name: string): string | null {
@@ -107,12 +125,22 @@ function cookieValue(cookieHeader: string | null, name: string): string | null {
 /** True only for the exact configured Vercel preview backed by nonproduction data. */
 export function isPreviewQaEnvironment(hostname: string): boolean {
   const audience = configuredPreviewHost();
-  return Boolean(audience && normalizedHost(hostname) === audience && hasIsolatedPreviewData() && signingKey() && tokenVersion() && configuredCommitSha() && bootstrapGrantId());
+  return Boolean(
+    audience
+    && normalizedHost(hostname) === audience
+    && hasIsolatedPreviewData()
+    && signingKey()
+    && bootstrapAccessSecret()
+    && bootstrapNonce()
+    && tokenVersion()
+    && configuredCommitSha()
+    && bootstrapGrantId(),
+  );
 }
 
 export function isPreviewQaBootstrapAuthorized(hostname: string, candidateSecret: string, candidateNonce: string): boolean {
-  const expected = process.env.PREVIEW_QA_ACCESS_SECRET;
-  const expectedNonce = process.env.PREVIEW_QA_BOOTSTRAP_NONCE;
+  const expected = bootstrapAccessSecret();
+  const expectedNonce = bootstrapNonce();
   return Boolean(
     expected
     && expectedNonce

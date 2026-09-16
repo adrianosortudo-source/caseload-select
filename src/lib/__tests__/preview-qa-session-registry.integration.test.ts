@@ -124,10 +124,29 @@ describe.skipIf(!DB_URL)("preview QA registry (real Postgres)", () => {
 
     const servicePrivileges = await owner.query(
       `select
+        has_table_privilege('service_role', 'public.preview_qa_sessions', 'SELECT') as sessions_read,
+        has_table_privilege('service_role', 'public.preview_qa_sessions', 'INSERT') as sessions_insert,
+        has_table_privilege('service_role', 'public.preview_qa_sessions', 'UPDATE') as sessions_update,
+        has_table_privilege('service_role', 'public.preview_qa_sessions', 'DELETE') as sessions_delete,
+        has_table_privilege('service_role', 'public.preview_qa_bootstrap_grants', 'SELECT') as grants_read,
+        has_table_privilege('service_role', 'public.preview_qa_bootstrap_grants', 'INSERT') as grants_insert,
+        has_table_privilege('service_role', 'public.preview_qa_bootstrap_grants', 'UPDATE') as grants_update,
+        has_table_privilege('service_role', 'public.preview_qa_bootstrap_grants', 'DELETE') as grants_delete,
         has_function_privilege('service_role', 'public.consume_preview_qa_bootstrap_and_issue_session(uuid,text,text,timestamptz,uuid,text,uuid,text)', 'EXECUTE') as consume,
         has_function_privilege('service_role', 'public.verify_preview_qa_session(uuid,text,text)', 'EXECUTE') as verify`,
     );
-    expect(servicePrivileges.rows[0]).toEqual({ consume: true, verify: true });
+    expect(servicePrivileges.rows[0]).toEqual({
+      sessions_read: false,
+      sessions_insert: false,
+      sessions_update: false,
+      sessions_delete: false,
+      grants_read: false,
+      grants_insert: false,
+      grants_update: false,
+      grants_delete: false,
+      consume: true,
+      verify: true,
+    });
   });
 
   it("atomically consumes a bootstrap grant exactly once under concurrent issue attempts", async () => {

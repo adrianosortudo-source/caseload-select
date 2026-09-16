@@ -6,6 +6,7 @@ import { stageGtaProspectAgentDraft } from "@/lib/gta-prospect-agent-draft-inbox
 export const dynamic = "force-dynamic";
 
 const MAX_BODY_BYTES = 2 * 1024 * 1024;
+const MINIMUM_AGENT_TOKEN_BYTES = 32;
 const noStore = { "Cache-Control": "private, no-store" };
 
 function json(body: unknown, status = 200) {
@@ -15,7 +16,11 @@ function json(body: unknown, status = 200) {
 function agentAuthorized(request: NextRequest): boolean {
   const expected = process.env.GTA_PROSPECT_AGENT_DRAFT_TOKEN;
   const authorization = request.headers.get("authorization");
-  if (!expected || !authorization?.startsWith("Bearer ")) return false;
+  if (
+    typeof expected !== "string"
+    || Buffer.byteLength(expected, "utf8") < MINIMUM_AGENT_TOKEN_BYTES
+    || !authorization?.startsWith("Bearer ")
+  ) return false;
   const presented = authorization.slice("Bearer ".length).trim();
   return Boolean(presented) && constantTimeEquals(presented, expected);
 }
