@@ -13,6 +13,8 @@ Do not put either value in a browser, committed file, prompt transcript, client 
 
 Production environment changes take effect only on a subsequent GitHub-triggered deployment from `main`. Use the normal PR release path to activate or rotate this credential; do not invoke a direct production deployment solely to refresh it.
 
+If a token is suspected of exposure, replace the Vercel value and the protected runner copy together, then complete a normal GitHub-triggered production release before the runner submits another package.
+
 ## Agent submission contract
 
 `POST /api/internal/prospect-enrichment/drafts`
