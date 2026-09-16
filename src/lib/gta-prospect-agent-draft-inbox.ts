@@ -252,14 +252,14 @@ function recordProjection(
       observedOn: evidence.observedOn,
       value: evidence.value?.slice(0, 240) ?? null,
     })),
-    publicContacts: canonical.publicContacts.slice(0, 8).map((contact) => ({
+    publicContacts: canonical.publicContacts.flatMap((contact) => contact.sourceUrl ? [{
       name: contact.name,
       email: contact.email,
       relationship: contact.relationship,
       emailKind: contact.emailKind,
       sourceUrl: contact.sourceUrl,
       observedAt: contact.observedAt,
-    })),
+    }] : []).slice(0, 8),
   };
 }
 

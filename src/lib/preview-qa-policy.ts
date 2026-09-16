@@ -17,7 +17,7 @@ const PREVIEW_QA_READ_PATHS = new Set([
   "/api/admin/prospect-operations/sources",
 ]);
 
-const UUID_PATH_SEGMENT = "[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+const UUID_PATH_SEGMENT = "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const SOURCE_RECORD_KEY_SEGMENT = "[a-z0-9][a-z0-9-]{1,159}";
 const PREVIEW_QA_AGENT_DRAFT_MANIFEST_PATH = new RegExp(`^/admin/prospects/agent-drafts/${UUID_PATH_SEGMENT}/review$`, "i");
 const PREVIEW_QA_AGENT_DRAFT_RECORD_PATH = new RegExp(`^/admin/prospects/agent-drafts/${UUID_PATH_SEGMENT}/records/${SOURCE_RECORD_KEY_SEGMENT}$`, "i");
