@@ -34,9 +34,16 @@ export async function PUT(request: Request) {
   if (!await operatorAuthorized()) return json({ error: "Unauthorized" }, 401);
   let payload: unknown;
   try { payload = await request.json(); } catch { return json({ error: "Expected a JSON object with draftId." }, 400); }
-  if (!payload || typeof payload !== "object" || Array.isArray(payload) || typeof (payload as Record<string, unknown>).draftId !== "string") return json({ error: "Expected a JSON object with draftId." }, 400);
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)
+    || typeof (payload as Record<string, unknown>).draftId !== "string"
+    || !/^[0-9a-f]{64}$/.test(String((payload as Record<string, unknown>).reviewSha256 ?? ""))) {
+    return json({ error: "Expected a JSON object with draftId and the reviewed receipt." }, 400);
+  }
   try {
-    const result = await applyGtaProspectAgentDraft({ draftId: (payload as { draftId: string }).draftId });
+    const result = await applyGtaProspectAgentDraft({
+      draftId: (payload as { draftId: string }).draftId,
+      reviewSha256: (payload as { reviewSha256: string }).reviewSha256,
+    });
     if (result.state === "review_changed") return json({ error: "The current ledger changed this draft review. Refresh it, inspect the revised result, and confirm again.", draftId: result.draftId, summary: result.review }, 409);
     return json({ mode: result.state, draftId: result.draftId, summary: result.review, receipts: result.receipts });
   } catch (error) {
