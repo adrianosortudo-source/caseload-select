@@ -11,6 +11,8 @@ After the reviewed migration and application code are merged and deployed, confi
 
 Do not put either value in a browser, committed file, prompt transcript, client bundle, or public documentation. Rotate the token by replacing the server variable and the runner secret together. Removing the variable disables agent staging immediately.
 
+Production environment changes take effect only on a subsequent GitHub-triggered deployment from `main`. Use the normal PR release path to activate or rotate this credential; do not invoke a direct production deployment solely to refresh it.
+
 ## Agent submission contract
 
 `POST /api/internal/prospect-enrichment/drafts`
