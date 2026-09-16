@@ -28,6 +28,8 @@ create index if not exists preview_qa_sessions_active_idx
 
 alter table public.preview_qa_sessions enable row level security;
 alter table public.preview_qa_bootstrap_grants enable row level security;
+alter table public.preview_qa_sessions force row level security;
+alter table public.preview_qa_bootstrap_grants force row level security;
 -- Tables and their one-time grants are never a browser-facing API.  Revoke
 -- PUBLIC as well as the Supabase browser roles: function EXECUTE privileges do
 -- not imply table access, and each table remains private even if a later
