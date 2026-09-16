@@ -1,7 +1,7 @@
 import "server-only";
 
 import { applyGtaProspectOperatorImport, defaultGtaProspectImportSourceName, type GtaProspectOperatorImportReceipt } from "@/lib/gta-prospect-operator-import";
-import { reviewGtaProspectImport, sha256, type GtaProspectImportReview, type GtaProspectImportReviewResult, type GtaProspectImportReviewSummary } from "@/lib/gta-prospect-research-import";
+import { buildGtaProspectImportPlan, reviewGtaProspectImport, sha256, type CanonicalRecord, type GtaProspectImportReview, type GtaProspectImportReviewResult, type GtaProspectImportReviewSummary } from "@/lib/gta-prospect-research-import";
 import { listGtaProspectResearchForOperator } from "@/lib/gta-prospect-research-reader";
 
 const MAX_RECORDS = 2_000;
@@ -32,6 +32,26 @@ export type GtaProspectAgentDraftListRow = Readonly<{
   state: GtaProspectAgentDraftState;
   createdAt: string;
   appliedAt: string | null;
+}>;
+
+/** A bounded, safe projection for one staged public-evidence record. */
+export type GtaProspectAgentDraftRecordReview = Readonly<{
+  draftId: string;
+  sourceRecordKey: string;
+  firmName: string | null;
+  city: string | null;
+  officeCities: readonly string[];
+  websiteUrl: string | null;
+  practiceAreas: readonly string[];
+  observedLawyerCount: number | null;
+  observedLawyerCountQualifier: "exact" | "at_least" | "unknown" | null;
+  observedLawyerCountDisplay: string | null;
+  reconciliationStatus: string | null;
+  reviewSha256: string;
+  disposition: GtaProspectImportReview["disposition"];
+  reason: string;
+  evidence: readonly Readonly<{ type: CanonicalRecord["evidence"][number]["type"]; sourceUrl: string; observedOn: string; value: string | null }>;
+  publicContacts: readonly Readonly<{ name: string | null; email: string | null; relationship: string; emailKind: string; sourceUrl: string; observedAt: string }>;
 }>;
 
 type StoredDraft = Readonly<{
@@ -177,18 +197,105 @@ function parseStored(value: unknown): StoredDraft {
   };
 }
 
+function boundedText(value: unknown, maximum: number): string | null {
+  if (typeof value !== "string") return null;
+  const text = value.trim();
+  return text && text.length <= maximum ? text : null;
+}
+
+function boundedList(value: unknown, maximumItems: number, maximumText: number): readonly string[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((item) => {
+    const text = boundedText(item, maximumText);
+    return text ? [text] : [];
+  }).slice(0, maximumItems);
+}
+
+function rawSourceRecordKey(value: unknown): string | null {
+  return isObject(value) ? boundedText(value.id, 160) : null;
+}
+
+function recordProjection(
+  draftId: string,
+  raw: unknown,
+  review: GtaProspectImportReview,
+  canonical: CanonicalRecord | undefined,
+): GtaProspectAgentDraftRecordReview {
+  const candidate = isObject(raw) ? raw : {};
+  const qualifier = candidate.observedLawyerCountQualifier;
+  const observedLawyerCount = typeof candidate.observedLawyerCount === "number" && Number.isInteger(candidate.observedLawyerCount) && candidate.observedLawyerCount >= 0
+    ? candidate.observedLawyerCount : null;
+  return {
+    draftId,
+    sourceRecordKey: review.sourceRecordKey,
+    firmName: boundedText(candidate.firmName, 240),
+    city: boundedText(candidate.city, 120),
+    officeCities: boundedList(candidate.officeCities, 12, 120),
+    websiteUrl: boundedText(candidate.websiteUrl, 2_000),
+    practiceAreas: boundedList(candidate.practiceAreas, 20, 120),
+    observedLawyerCount,
+    observedLawyerCountQualifier: qualifier === "exact" || qualifier === "at_least" || qualifier === "unknown" ? qualifier : null,
+    observedLawyerCountDisplay: boundedText(candidate.observedLawyerCountDisplay, 240),
+    reconciliationStatus: boundedText(candidate.reconciliationStatus, 80),
+    reviewSha256: "",
+    disposition: review.disposition,
+    reason: review.reason.slice(0, 600),
+    // Re-derived canonical evidence is the only evidence returned. Invalid
+    // rows show their disposition/reason but never unvalidated raw evidence.
+    evidence: canonical?.evidence.slice(0, 4).map((evidence) => ({
+      type: evidence.type,
+      sourceUrl: evidence.sourceUrl,
+      observedOn: evidence.observedOn,
+      value: evidence.value?.slice(0, 240) ?? null,
+    })) ?? [],
+    publicContacts: canonical?.publicContacts.slice(0, 8).map((contact) => ({
+      name: contact.name,
+      email: contact.email,
+      relationship: contact.relationship,
+      emailKind: contact.emailKind,
+      sourceUrl: contact.sourceUrl,
+      observedAt: contact.observedAt,
+    })) ?? [],
+  };
+}
+
+/**
+ * Reads an existing staged package and returns one redacted review record.
+ * It deliberately excludes raw contacts, idempotency keys, hashes, CRM state,
+ * outreach state, and every other record in the package.
+ */
+export async function getGtaProspectAgentDraftRecordReview(input: Readonly<{ draftId: string; sourceRecordKey: string; client?: GtaProspectAgentDraftInboxClient }>): Promise<GtaProspectAgentDraftRecordReview | null> {
+  if (!UUID_PATTERN.test(input.draftId)) throw new Error("draftId must be a UUID.");
+  if (!/^[a-z0-9][a-z0-9-]{1,159}$/.test(input.sourceRecordKey)) throw new Error("sourceRecordKey is invalid.");
+  const db = await clientOrDefault(input.client);
+  const loaded = await db.rpc("read_gta_prospect_agent_import_draft_for_operator", { p_draft_id: input.draftId });
+  if (loaded.error) throw rpcError(loaded.error, "The staged AI package could not be loaded.");
+  if (loaded.data === null) return null;
+  const draft = parseStored(loaded.data);
+  const review = draft.review.records.find((item) => item.sourceRecordKey === input.sourceRecordKey);
+  if (!review) return null;
+  const raw = draft.records.find((item) => rawSourceRecordKey(item) === input.sourceRecordKey);
+  if (!raw) return null;
+  const plan = await buildGtaProspectImportPlan(draft.records);
+  const canonical = plan.accepted.find((item) => item.sourceRecordKey === input.sourceRecordKey);
+  return { ...recordProjection(draft.draftId, raw, review, canonical), reviewSha256: draft.reviewSha256 };
+}
+
 export type GtaProspectAgentDraftApplyResult =
   | Readonly<{ state: "applied" | "already_applied"; draftId: string; receipts: readonly GtaProspectOperatorImportReceipt[]; review: GtaProspectImportReviewSummary }>
   | Readonly<{ state: "review_changed"; draftId: string; review: GtaProspectImportReviewSummary }>;
 
 /** Operator-only final gate. It rereads and rechecks a persisted draft before using the existing import writer. */
-export async function applyGtaProspectAgentDraft(input: Readonly<{ draftId: string; client?: GtaProspectAgentDraftInboxClient }>): Promise<GtaProspectAgentDraftApplyResult> {
+export async function applyGtaProspectAgentDraft(input: Readonly<{ draftId: string; reviewSha256?: string; client?: GtaProspectAgentDraftInboxClient }>): Promise<GtaProspectAgentDraftApplyResult> {
   if (!UUID_PATTERN.test(input.draftId)) throw new Error("draftId must be a UUID.");
   const db = await clientOrDefault(input.client);
   const loaded = await db.rpc("read_gta_prospect_agent_import_draft_for_operator", { p_draft_id: input.draftId });
   if (loaded.error) throw rpcError(loaded.error, "The staged AI package could not be loaded.");
   if (loaded.data === null) throw new Error("The staged AI package no longer exists.");
   const draft = parseStored(loaded.data);
+  if (!input.reviewSha256 || input.reviewSha256 !== draft.reviewSha256) {
+    return { state: "review_changed", draftId: draft.draftId, review: draft.review.summary };
+  }
   if (draft.state === "applied") return { state: "already_applied", draftId: draft.draftId, receipts: [], review: draft.review.summary };
 
   const review = await currentReview(draft.records);
