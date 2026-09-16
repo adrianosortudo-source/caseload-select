@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getOperatorSession } from "@/lib/portal-auth";
+import { getPreviewQaReadSession } from "@/lib/preview-qa-auth";
 import {
   GtaProspectLedgerUnavailableError,
   listGtaProspectResearchForOperator,
@@ -218,7 +219,7 @@ function mergeLedgerAndFixtureRecords(records: readonly ReconciledGtaProspect[])
 
 /** Operator-gated read endpoint for the reviewed firm-expansion records. */
 export async function GET() {
-  if (!(await getOperatorSession())) {
+  if (!(await getOperatorSession() ?? await getPreviewQaReadSession())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

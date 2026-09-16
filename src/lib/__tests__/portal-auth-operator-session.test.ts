@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const state = vi.hoisted(() => ({
   host: "admin.caseloadselect.ca",
   cookie: undefined as string | undefined,
+  previewQaCookie: false,
   row: { id: "operator-1" } as { id: string } | null,
   error: null as { message: string } | null,
   throwOnRead: false,
@@ -22,9 +23,11 @@ vi.mock("next/headers", () => ({
     get: (name: string) => name.toLowerCase() === "host" ? state.host : null,
   }),
   cookies: async () => ({
-    get: (name: string) => name === "portal_session" && state.cookie
-      ? { value: state.cookie }
-      : undefined,
+    get: (name: string) => {
+      if (name === "portal_session" && state.cookie) return { value: state.cookie };
+      if (name === "preview_qa_session" && state.previewQaCookie) return { value: "qa-cookie" };
+      return undefined;
+    },
   }),
 }));
 
@@ -89,6 +92,7 @@ beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_APP_DOMAIN", "caseloadselect.ca");
   state.host = "admin.caseloadselect.ca";
   state.cookie = undefined;
+  state.previewQaCookie = false;
   state.row = { id: "operator-1" };
   state.error = null;
   state.throwOnRead = false;
@@ -206,6 +210,23 @@ describe("live operator session authorization", () => {
       }).value;
 
       expect(await getPortalSession()).toMatchObject({ role, firm_id: "firm-1" });
+      expect(state.tables).toEqual([]);
+    },
+  );
+
+  it.each(["operator", "lawyer", "client"] as const)(
+    "rejects a signed %s portal role whenever a QA cookie is present",
+    async (role) => {
+      state.host = role === "operator" ? "admin.caseloadselect.ca" : "app.caseloadselect.ca";
+      state.previewQaCookie = true;
+      state.cookie = createSessionCookie("firm-1", {
+        role,
+        lawyer_id: role === "operator" ? "operator-1" : undefined,
+        matter_id: role === "client" ? "matter-1" : undefined,
+      }).value;
+
+      expect(await getPortalSession()).toBeNull();
+      expect(await getOperatorSession()).toBeNull();
       expect(state.tables).toEqual([]);
     },
   );

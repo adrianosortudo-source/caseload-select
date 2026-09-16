@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getOperatorSession } from '@/lib/portal-auth';
+import { getPreviewQaReadSession } from '@/lib/preview-qa-auth';
 import {
   getProspectSourceConversation,
   updateProspectConversationContactControls,
@@ -19,7 +20,7 @@ function parseBoundedInteger(value: string | null, fallback: number, min: number
 
 /** Operator-only conversation lookup that preserves the requested source's history. */
 export async function GET(request: NextRequest) {
-  if (!(await getOperatorSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await getOperatorSession() ?? await getPreviewQaReadSession(request))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const sourceSystem = request.nextUrl.searchParams.get('source_system');
   const sourceRecordKey = request.nextUrl.searchParams.get('source_record_key');
   const limit = parseBoundedInteger(request.nextUrl.searchParams.get('limit'), 50, 1, 100);
