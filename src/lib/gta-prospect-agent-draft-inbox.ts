@@ -50,8 +50,16 @@ export type GtaProspectAgentDraftRecordReview = Readonly<{
   reviewSha256: string;
   disposition: GtaProspectImportReview["disposition"];
   reason: string;
-  evidence: readonly Readonly<{ type: CanonicalRecord["evidence"][number]["type"]; sourceUrl: string; observedOn: string; value: string | null }>;
-  publicContacts: readonly Readonly<{ name: string | null; email: string | null; relationship: string; emailKind: string; sourceUrl: string; observedAt: string }>;
+  evidence: readonly Readonly<{ type: CanonicalRecord["evidence"][number]["type"]; sourceUrl: string; observedOn: string; value: string | null }>[];
+  publicContacts: readonly Readonly<{ name: string | null; email: string | null; relationship: string; emailKind: string; sourceUrl: string; observedAt: string }>[];
+}>;
+
+/** Complete, bounded projection used to acknowledge one staged package. */
+export type GtaProspectAgentDraftReviewManifest = Readonly<{
+  draftId: string;
+  reviewSha256: string;
+  recordCount: number;
+  records: readonly GtaProspectAgentDraftRecordReview[];
 }>;
 
 type StoredDraft = Readonly<{
@@ -197,66 +205,85 @@ function parseStored(value: unknown): StoredDraft {
   };
 }
 
-function boundedText(value: unknown, maximum: number): string | null {
-  if (typeof value !== "string") return null;
-  const text = value.trim();
-  return text && text.length <= maximum ? text : null;
-}
-
-function boundedList(value: unknown, maximumItems: number, maximumText: number): readonly string[] {
-  if (!Array.isArray(value)) return [];
-  return value.flatMap((item) => {
-    const text = boundedText(item, maximumText);
-    return text ? [text] : [];
-  }).slice(0, maximumItems);
-}
-
-function rawSourceRecordKey(value: unknown): string | null {
-  return isObject(value) ? boundedText(value.id, 160) : null;
-}
-
 function recordProjection(
   draftId: string,
-  raw: unknown,
   review: GtaProspectImportReview,
   canonical: CanonicalRecord | undefined,
 ): GtaProspectAgentDraftRecordReview {
-  const candidate = isObject(raw) ? raw : {};
-  const qualifier = candidate.observedLawyerCountQualifier;
-  const observedLawyerCount = typeof candidate.observedLawyerCount === "number" && Number.isInteger(candidate.observedLawyerCount) && candidate.observedLawyerCount >= 0
-    ? candidate.observedLawyerCount : null;
-  return {
+  // A noncanonical record can contain arbitrary rejected source material. It
+  // never receives a field-level projection, even when its key is valid.
+  if (!canonical) return {
     draftId,
     sourceRecordKey: review.sourceRecordKey,
-    firmName: boundedText(candidate.firmName, 240),
-    city: boundedText(candidate.city, 120),
-    officeCities: boundedList(candidate.officeCities, 12, 120),
-    websiteUrl: boundedText(candidate.websiteUrl, 2_000),
-    practiceAreas: boundedList(candidate.practiceAreas, 20, 120),
-    observedLawyerCount,
-    observedLawyerCountQualifier: qualifier === "exact" || qualifier === "at_least" || qualifier === "unknown" ? qualifier : null,
-    observedLawyerCountDisplay: boundedText(candidate.observedLawyerCountDisplay, 240),
-    reconciliationStatus: boundedText(candidate.reconciliationStatus, 80),
+    firmName: null,
+    city: null,
+    officeCities: [],
+    websiteUrl: null,
+    practiceAreas: [],
+    observedLawyerCount: null,
+    observedLawyerCountQualifier: null,
+    observedLawyerCountDisplay: null,
+    reconciliationStatus: null,
     reviewSha256: "",
     disposition: review.disposition,
     reason: review.reason.slice(0, 600),
-    // Re-derived canonical evidence is the only evidence returned. Invalid
-    // rows show their disposition/reason but never unvalidated raw evidence.
-    evidence: canonical?.evidence.slice(0, 4).map((evidence) => ({
+    evidence: [],
+    publicContacts: [],
+  };
+  return {
+    draftId,
+    sourceRecordKey: review.sourceRecordKey,
+    firmName: canonical.firmName.slice(0, 240),
+    city: canonical.city.slice(0, 120),
+    officeCities: canonical.officeCities.slice(0, 12).map((city) => city.slice(0, 120)),
+    websiteUrl: canonical.websiteUrl?.slice(0, 2_000) ?? null,
+    practiceAreas: canonical.practiceAreas.slice(0, 20).map((area) => area.slice(0, 120)),
+    observedLawyerCount: canonical.roster.lawyerCount,
+    observedLawyerCountQualifier: canonical.roster.qualifier,
+    observedLawyerCountDisplay: canonical.roster.display?.slice(0, 240) ?? null,
+    reconciliationStatus: canonical.reconciliation.status,
+    reviewSha256: "",
+    disposition: review.disposition,
+    reason: review.reason.slice(0, 600),
+    // Re-derived canonical evidence is the only evidence returned.
+    evidence: canonical.evidence.slice(0, 4).map((evidence) => ({
       type: evidence.type,
       sourceUrl: evidence.sourceUrl,
       observedOn: evidence.observedOn,
       value: evidence.value?.slice(0, 240) ?? null,
-    })) ?? [],
-    publicContacts: canonical?.publicContacts.slice(0, 8).map((contact) => ({
+    })),
+    publicContacts: canonical.publicContacts.slice(0, 8).map((contact) => ({
       name: contact.name,
       email: contact.email,
       relationship: contact.relationship,
       emailKind: contact.emailKind,
       sourceUrl: contact.sourceUrl,
       observedAt: contact.observedAt,
-    })) ?? [],
+    })),
   };
+}
+
+/**
+ * Loads the complete record manifest for one staged package. Each row is
+ * bounded and projections for rejected rows are deliberately empty.
+ */
+export async function getGtaProspectAgentDraftReviewManifest(input: Readonly<{ draftId: string; client?: GtaProspectAgentDraftInboxClient }>): Promise<GtaProspectAgentDraftReviewManifest | null> {
+  if (!UUID_PATTERN.test(input.draftId)) throw new Error("draftId must be a UUID.");
+  const db = await clientOrDefault(input.client);
+  const loaded = await db.rpc("read_gta_prospect_agent_import_draft_for_operator", { p_draft_id: input.draftId });
+  if (loaded.error) throw rpcError(loaded.error, "The staged AI package could not be loaded.");
+  if (loaded.data === null) return null;
+  const draft = parseStored(loaded.data);
+  if (draft.records.length > MAX_RECORDS || draft.review.records.length > MAX_RECORDS || draft.recordCount > MAX_RECORDS) {
+    throw new Error("The staged AI package exceeds the review limit.");
+  }
+  const plan = await buildGtaProspectImportPlan(draft.records);
+  const accepted = new Map(plan.accepted.map((record) => [record.sourceRecordKey, record]));
+  const records = draft.review.records.map((review) => ({
+    ...recordProjection(draft.draftId, review, accepted.get(review.sourceRecordKey)),
+    reviewSha256: draft.reviewSha256,
+  }));
+  return { draftId: draft.draftId, reviewSha256: draft.reviewSha256, recordCount: records.length, records };
 }
 
 /**
@@ -265,20 +292,9 @@ function recordProjection(
  * outreach state, and every other record in the package.
  */
 export async function getGtaProspectAgentDraftRecordReview(input: Readonly<{ draftId: string; sourceRecordKey: string; client?: GtaProspectAgentDraftInboxClient }>): Promise<GtaProspectAgentDraftRecordReview | null> {
-  if (!UUID_PATTERN.test(input.draftId)) throw new Error("draftId must be a UUID.");
   if (!/^[a-z0-9][a-z0-9-]{1,159}$/.test(input.sourceRecordKey)) throw new Error("sourceRecordKey is invalid.");
-  const db = await clientOrDefault(input.client);
-  const loaded = await db.rpc("read_gta_prospect_agent_import_draft_for_operator", { p_draft_id: input.draftId });
-  if (loaded.error) throw rpcError(loaded.error, "The staged AI package could not be loaded.");
-  if (loaded.data === null) return null;
-  const draft = parseStored(loaded.data);
-  const review = draft.review.records.find((item) => item.sourceRecordKey === input.sourceRecordKey);
-  if (!review) return null;
-  const raw = draft.records.find((item) => rawSourceRecordKey(item) === input.sourceRecordKey);
-  if (!raw) return null;
-  const plan = await buildGtaProspectImportPlan(draft.records);
-  const canonical = plan.accepted.find((item) => item.sourceRecordKey === input.sourceRecordKey);
-  return { ...recordProjection(draft.draftId, raw, review, canonical), reviewSha256: draft.reviewSha256 };
+  const manifest = await getGtaProspectAgentDraftReviewManifest(input);
+  return manifest?.records.find((record) => record.sourceRecordKey === input.sourceRecordKey) ?? null;
 }
 
 export type GtaProspectAgentDraftApplyResult =

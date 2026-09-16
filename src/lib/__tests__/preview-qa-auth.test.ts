@@ -144,6 +144,9 @@ describe("preview QA principal", () => {
     expect(isPreviewQaReadRequest("/_next/image", "HEAD")).toBe(true);
     expect(isPreviewQaReadRequest("/favicon.ico", "GET")).toBe(true);
     expect(isPreviewQaReadRequest("/api/admin/prospect-operations/sources", "POST")).toBe(false);
+    expect(isPreviewQaReadRequest("/admin/prospects/agent-drafts/11111111-1111-4111-8111-111111111111/review", "GET")).toBe(true);
+    expect(isPreviewQaReadRequest("/admin/prospects/agent-drafts/not-a-uuid/review", "GET")).toBe(false);
+    expect(isPreviewQaReadRequest("/admin/prospects/agent-drafts/11111111-1111-4111-8111-111111111111/review", "POST")).toBe(false);
     expect(isPreviewQaReadRequest("/admin/triage", "GET")).toBe(false);
     expect(isPreviewQaReadRequest("/api/public/report.json", "GET")).toBe(false);
   });
