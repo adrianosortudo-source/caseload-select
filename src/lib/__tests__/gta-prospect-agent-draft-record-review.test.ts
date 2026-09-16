@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getGtaProspectAgentDraftRecordReview } from "../gta-prospect-agent-draft-inbox";
+import { getGtaProspectAgentDraftRecordReview, getGtaProspectAgentDraftReviewManifest } from "../gta-prospect-agent-draft-inbox";
 
 const draftId = "11111111-1111-4111-8111-111111111111";
 const sourceRecordKey = "gta-prospect-review-001";
@@ -33,5 +33,27 @@ describe("staged AI record review projection", () => {
     expect(result?.publicContacts).toEqual([expect.objectContaining({ name: "A. Owner", email: "owner@review.example", relationship: "owner", emailKind: "owner" })]);
     expect(result).not.toHaveProperty("records");
     expect(JSON.stringify(result)).not.toContain("payloadSha256");
+  });
+
+  it("loads every staged review row before a package can be acknowledged", async () => {
+    const client = { rpc: async () => ({ data: stored, error: null }) };
+    const manifest = await getGtaProspectAgentDraftReviewManifest({ draftId, client });
+    expect(manifest).toMatchObject({ draftId, reviewSha256: "b".repeat(64), recordCount: 1 });
+    expect(manifest?.records).toHaveLength(1);
+  });
+
+  it("fails closed for a rejected row and never projects its raw fields", async () => {
+    const rejected = {
+      ...stored,
+      records: [{ id: "gta-prospect-invalid-001", firmName: "Raw unvalidated firm", publicContacts: [{ email: "raw@example.test" }] }],
+      reviewRecords: [{ sourceRecordKey: "gta-prospect-invalid-001", disposition: "invalid", reason: "required roster evidence is missing" }],
+      reviewSummary: { received: 1, eligibleForApply: 0, new: 0, update: 0, duplicate: 0, reviewRequired: 0, invalid: 1 },
+      state: "review_required",
+    };
+    const client = { rpc: async () => ({ data: rejected, error: null }) };
+    const result = await getGtaProspectAgentDraftRecordReview({ draftId, sourceRecordKey: "gta-prospect-invalid-001", client });
+    expect(result).toMatchObject({ firmName: null, city: null, officeCities: [], websiteUrl: null, practiceAreas: [], evidence: [], publicContacts: [] });
+    expect(JSON.stringify(result)).not.toContain("Raw unvalidated firm");
+    expect(JSON.stringify(result)).not.toContain("raw@example.test");
   });
 });

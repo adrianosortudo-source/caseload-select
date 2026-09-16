@@ -14,8 +14,16 @@ describe("AI draft inbox operator UI", () => {
   it("keeps staging separate from the explicit operator import", () => {
     expect(component).toContain('fetch("/admin/prospects/agent-drafts"');
     expect(component).toContain('method: "PUT"');
-    expect(component).toContain("I reviewed this staged package and want the server to revalidate and import it.");
+    expect(component).toContain("Load complete review");
+    expect(component).toContain("I reviewed this complete staged package and acknowledge this exact review receipt before import.");
     expect(component).toContain("The server stops if its ledger review changed.");
+  });
+
+  it("does not let a single record unlock an unseen package", () => {
+    expect(component).toContain("/review`");
+    expect(component).toContain("manifest.records.length !== draft.review.records.length");
+    expect(component).not.toContain("draft.review.records.slice(0, 20)");
+    expect(component).toContain("Load the complete bounded manifest");
   });
 
   it("marks rendered copy and avoids em dashes", () => {
