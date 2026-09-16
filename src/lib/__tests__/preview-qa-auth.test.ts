@@ -46,8 +46,8 @@ beforeEach(() => {
   vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://preview-project.supabase.co");
   vi.stubEnv("PREVIEW_QA_ALLOWED_SUPABASE_PROJECT_REF", "preview-project");
   vi.stubEnv("PREVIEW_QA_SIGNING_SECRET", "preview-qa-signing-secret-that-is-long-enough");
-  vi.stubEnv("PREVIEW_QA_ACCESS_SECRET", "preview-qa-access-secret");
-  vi.stubEnv("PREVIEW_QA_BOOTSTRAP_NONCE", "preview-qa-bootstrap-nonce");
+  vi.stubEnv("PREVIEW_QA_ACCESS_SECRET", "preview-qa-access-secret-32bytes-0001");
+  vi.stubEnv("PREVIEW_QA_BOOTSTRAP_NONCE", "preview-qa-bootstrap-nonce-32bytes-0001");
   vi.stubEnv("PREVIEW_QA_BOOTSTRAP_GRANT_ID", "11111111-1111-4111-8111-111111111111");
   vi.stubEnv("PREVIEW_QA_TOKEN_VERSION", "preview-qa-token-v1");
   vi.stubEnv("VERCEL_GIT_COMMIT_SHA", "0123456789abcdef0123456789abcdef01234567");
@@ -61,7 +61,7 @@ afterEach(() => vi.unstubAllEnvs());
 
 describe("preview QA principal", () => {
   it("issues a separate short-lived read-only credential bound to the exact deployment", async () => {
-    const issued = await createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce");
+    const issued = await createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce-32bytes-0001");
     expect(issued).not.toBeNull();
     expect(issued?.name).toBe("preview_qa_session");
     expect(issued?.options).toMatchObject({ httpOnly: true, secure: true, sameSite: "strict", maxAge: 900 });
@@ -76,12 +76,12 @@ describe("preview QA principal", () => {
   });
 
   it("rejects a copied credential on another preview deployment", async () => {
-    const issued = await createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce");
+    const issued = await createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce-32bytes-0001");
     await expect(verifyPreviewQaSession(issued!.value, "other-preview.vercel.app")).resolves.toBeNull();
   });
 
   it("rejects tampering and never accepts a QA credential as a broad page grant", async () => {
-    const issued = await createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce");
+    const issued = await createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce-32bytes-0001");
     await expect(verifyPreviewQaSession(`${issued!.value}x`, state.host)).resolves.toBeNull();
 
     state.cookie = issued!.value;
@@ -93,7 +93,7 @@ describe("preview QA principal", () => {
   });
 
   it("uses the route URL and method rather than caller-controlled x-* headers", async () => {
-    const issued = await createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce");
+    const issued = await createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce-32bytes-0001");
     const request = new Request(`https://${state.host}/admin/prospects`, {
       headers: {
         cookie: `preview_qa_session=${issued!.value}`,
@@ -123,20 +123,31 @@ describe("preview QA principal", () => {
     vi.stubEnv("VERCEL_ENV", "preview");
     vi.stubEnv("NEXT_PUBLIC_SUPABASE_URL", "https://ssxryjxifwiivghglqer.supabase.co");
     expect(isPreviewQaEnvironment(state.host)).toBe(false);
-    await expect(createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce")).resolves.toBeNull();
+    await expect(createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce-32bytes-0001")).resolves.toBeNull();
   });
 
   it("fails closed when the live registry cannot validate the session", async () => {
-    const issued = await createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce");
+    const issued = await createPreviewQaSession(state.host, "preview-qa-bootstrap-nonce-32bytes-0001");
     state.registryActive = false;
     await expect(verifyPreviewQaSession(issued!.value, state.host)).resolves.toBeNull();
   });
 
   it("requires the dedicated bootstrap secret and exact configured host", () => {
-    expect(isPreviewQaBootstrapAuthorized(state.host, "wrong", "preview-qa-bootstrap-nonce")).toBe(false);
-    expect(isPreviewQaBootstrapAuthorized(state.host, "preview-qa-access-secret", "wrong")).toBe(false);
-    expect(isPreviewQaBootstrapAuthorized("attacker.vercel.app", "preview-qa-access-secret", "preview-qa-bootstrap-nonce")).toBe(false);
-    expect(isPreviewQaBootstrapAuthorized(state.host, "preview-qa-access-secret", "preview-qa-bootstrap-nonce")).toBe(true);
+    expect(isPreviewQaBootstrapAuthorized(state.host, "wrong", "preview-qa-bootstrap-nonce-32bytes-0001")).toBe(false);
+    expect(isPreviewQaBootstrapAuthorized(state.host, "preview-qa-access-secret-32bytes-0001", "wrong")).toBe(false);
+    expect(isPreviewQaBootstrapAuthorized("attacker.vercel.app", "preview-qa-access-secret-32bytes-0001", "preview-qa-bootstrap-nonce-32bytes-0001")).toBe(false);
+    expect(isPreviewQaBootstrapAuthorized(state.host, "preview-qa-access-secret-32bytes-0001", "preview-qa-bootstrap-nonce-32bytes-0001")).toBe(true);
+  });
+
+  it("fails closed when either configured bootstrap credential is too short", () => {
+    vi.stubEnv("PREVIEW_QA_ACCESS_SECRET", "too-short");
+    expect(isPreviewQaBootstrapAuthorized(state.host, "too-short", "preview-qa-bootstrap-nonce-32bytes-0001")).toBe(false);
+    expect(isPreviewQaEnvironment(state.host)).toBe(false);
+
+    vi.stubEnv("PREVIEW_QA_ACCESS_SECRET", "preview-qa-access-secret-32bytes-0001");
+    vi.stubEnv("PREVIEW_QA_BOOTSTRAP_NONCE", "too-short");
+    expect(isPreviewQaBootstrapAuthorized(state.host, "preview-qa-access-secret-32bytes-0001", "too-short")).toBe(false);
+    expect(isPreviewQaEnvironment(state.host)).toBe(false);
   });
 
   it("permits only safe runtime assets in addition to the exact read allowlist", () => {
