@@ -1054,3 +1054,80 @@ export async function renderUrl(url: string): Promise<RenderRunResult> {
     await withTimeout(browser.close(), CLOSE_TIMEOUT_MS, "browser_close_timeout").catch(() => undefined);
   }
 }
+export interface BrowserStartupSmokeResult {
+  ok: boolean;
+  phase: "launch" | "context" | "page" | "content";
+  elapsedMs: number;
+  browserDisconnected: boolean;
+  error?: string;
+}
+
+/**
+ * Preview-only diagnostic used to separate Chromium startup failures from
+ * context/page creation and network interception failures. It renders only
+ * in-memory HTML and never accepts a caller URL.
+ */
+export async function browserStartupSmoke(): Promise<BrowserStartupSmokeResult> {
+  const started = Date.now();
+  let phase: BrowserStartupSmokeResult["phase"] = "launch";
+  let browser: Browser | null = null;
+  let context: BrowserContext | null = null;
+  let browserDisconnected = false;
+
+  try {
+    console.log("[render:startup-smoke] launch_begin");
+    browser = await launchBrowser();
+    browser.on("disconnected", () => {
+      browserDisconnected = true;
+      console.error("[render:startup-smoke] browser_disconnected");
+    });
+    console.log("[render:startup-smoke] launch_ok", { elapsedMs: Date.now() - started });
+
+    phase = "context";
+    context = await browser.newContext({
+      viewport: VIEWPORTS.mobile,
+      userAgent: "CaseLoadSelect-RenderStartupSmoke/1.0",
+    });
+    console.log("[render:startup-smoke] context_ok", { elapsedMs: Date.now() - started });
+
+    phase = "page";
+    const page = await context.newPage();
+    console.log("[render:startup-smoke] page_ok", { elapsedMs: Date.now() - started });
+
+    phase = "content";
+    await page.setContent(
+      "<!doctype html><html><head><title>renderer smoke</title></head><body><main>ok</main></body></html>",
+      { waitUntil: "load", timeout: NAV_TIMEOUT_MS }
+    );
+    console.log("[render:startup-smoke] content_ok", { elapsedMs: Date.now() - started });
+
+    return {
+      ok: true,
+      phase,
+      elapsedMs: Date.now() - started,
+      browserDisconnected,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[render:startup-smoke] failed", {
+      phase,
+      elapsedMs: Date.now() - started,
+      browserDisconnected,
+      error: message,
+    });
+    return {
+      ok: false,
+      phase,
+      elapsedMs: Date.now() - started,
+      browserDisconnected,
+      error: message,
+    };
+  } finally {
+    if (context) {
+      await withTimeout(context.close(), CLOSE_TIMEOUT_MS, "startup_smoke_context_close_timeout").catch(() => undefined);
+    }
+    if (browser) {
+      await withTimeout(browser.close(), CLOSE_TIMEOUT_MS, "startup_smoke_browser_close_timeout").catch(() => undefined);
+    }
+  }
+}
