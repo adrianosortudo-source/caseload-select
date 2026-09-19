@@ -6,6 +6,15 @@ Deploys as its own Vercel project with **zero application secrets** — see
 `Version3_CaseLoadSelect/CaseLoadSelect_RendererIsolation_Spec_2026-08-07.md`
 in the main repo for the full "why."
 
+## Deployment configuration
+
+The main app reaches this service through `RENDER_SERVICE_URL` and a shared
+`RENDER_SERVICE_TOKEN`. Keep that token in both Vercel projects, scoped to the
+same environments. A token rotation is incomplete until both projects have
+been redeployed, because Vercel binds environment values to each deployment.
+Production releases continue through the repository's normal merged-main
+workflow.
+
 This file exists specifically to satisfy the isolation spec's §6.2: record
 which Chromium launch flags disable OS-level sandboxing, why they cannot be
 removed on this platform, and what actually bounds the residual risk. Do not

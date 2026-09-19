@@ -4,13 +4,11 @@ import { useState, useRef, useEffect } from "react";
 import WebsiteDesignCheckReport, { type DesignCheckResult } from "./WebsiteDesignCheckReport";
 
 /**
- * State machine and email gate mirror seo-check's SeoCheckTool.tsx exactly
- * (input -> scanning -> email -> report). The email gate is a client-side
- * soft lead-capture prompt only: it is never sent anywhere, matching
- * seo-check's own tool and the explicit 2026-07 operator decision that
- * CRM wiring for this tool comes later, after the tool itself works.
+ * The report is shown as soon as the scan completes. The earlier email gate
+ * collected an address locally and discarded it, so it added friction without
+ * providing a user benefit or a consented lead path.
  */
-type Step = "input" | "scanning" | "email" | "report";
+type Step = "input" | "scanning" | "report";
 
 const SCAN_PHASES = [
   "Connecting to site",
@@ -28,8 +26,6 @@ export default function WebsiteDesignCheckTool() {
   const [error, setError] = useState("");
   const [result, setResult] = useState<DesignCheckResult | null>(null);
   const [scanPhase, setScanPhase] = useState(0);
-  const [email, setEmail] = useState("");
-  const [emailError, setEmailError] = useState("");
   const phaseInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -72,8 +68,7 @@ export default function WebsiteDesignCheckTool() {
       }
 
       setResult(data);
-      await new Promise((r) => setTimeout(r, 500));
-      setStep("email");
+      setStep("report");
     } catch {
       if (phaseInterval.current) clearInterval(phaseInterval.current);
       setError("Network error. Check your connection and try again.");
@@ -81,27 +76,11 @@ export default function WebsiteDesignCheckTool() {
     }
   }
 
-  function handleEmailSubmit() {
-    const trimmedEmail = email.trim();
-    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
-      setEmailError("Enter a valid email address.");
-      return;
-    }
-    setEmailError("");
-    setStep("report");
-  }
-
-  function handleSkipEmail() {
-    setStep("report");
-  }
-
   function handleReset() {
     setStep("input");
     setDomain("");
     setResult(null);
-    setEmail("");
     setError("");
-    setEmailError("");
     setScanPhase(0);
   }
 
@@ -154,54 +133,6 @@ export default function WebsiteDesignCheckTool() {
         </div>
       )}
 
-      {step === "email" && result && (
-        <div className="dc-email-gate">
-          <div className="dc-email-card">
-            <div className="dc-email-preview">
-              <div className="dc-email-grade-peek">
-                <span
-                  className="dc-email-grade-letter"
-                  style={{ color: result.letterGrade === "A" || result.letterGrade === "B" ? "var(--navy)" : result.letterGrade === "C" ? "var(--stone-on-light)" : "var(--danger)" }}
-                >
-                  {result.letterGrade}
-                </span>
-                <span className="dc-email-grade-score">{result.score}/100</span>
-              </div>
-              <p className="dc-email-preview-text">
-                Your design report for <strong>{result.domain}</strong> is ready.
-              </p>
-            </div>
-            <div className="dc-email-form">
-              <h3 className="dc-email-title">Enter your email to view the report</h3>
-              <p className="dc-email-sub">
-                Get the full breakdown across every measured category, plus the ranked list of specific fixes and what each one is worth.
-              </p>
-              <div className="dc-email-row">
-                <input
-                  type="email"
-                  className="dc-email-input"
-                  placeholder="you@yourfirm.ca"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    setEmailError("");
-                  }}
-                  onKeyDown={(e) => e.key === "Enter" && handleEmailSubmit()}
-                  autoFocus
-                />
-                <button className="dc-email-btn" onClick={handleEmailSubmit}>
-                  View report
-                </button>
-              </div>
-              {emailError && <p className="dc-error">{emailError}</p>}
-              <button className="dc-skip-link" onClick={handleSkipEmail}>
-                Skip, show me the report
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {step === "report" && result && <WebsiteDesignCheckReport result={result} onReset={handleReset} />}
 
       <style>{`
@@ -234,25 +165,8 @@ export default function WebsiteDesignCheckTool() {
         .dc-phase-done .dc-phase-label { color: var(--text); }
         .dc-phase-active .dc-phase-label { color: var(--navy); font-weight: 600; }
 
-        .dc-email-gate { max-width: 640px; margin: 0 auto; }
-        .dc-email-card { background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-7); text-align: center; }
-        .dc-email-preview { margin-bottom: var(--sp-6); padding-bottom: var(--sp-6); border-bottom: 1px solid var(--border); }
-        .dc-email-grade-peek { display: flex; align-items: baseline; justify-content: center; gap: var(--sp-2); margin-bottom: var(--sp-3); }
-        .dc-email-grade-letter { font-family: var(--font-display); font-size: 40px; font-weight: 800; }
-        .dc-email-grade-score { font-size: 14px; color: var(--text-muted); }
-        .dc-email-preview-text { font-size: 14px; color: var(--text); margin: 0; }
-        .dc-email-title { font-family: var(--font-display); font-size: 18px; font-weight: 700; color: var(--navy); margin: 0 0 var(--sp-3); }
-        .dc-email-sub { font-size: 13px; color: var(--text-muted); line-height: 1.6; margin: 0 0 var(--sp-5); max-width: 440px; margin-left: auto; margin-right: auto; }
-        .dc-email-row { display: flex; gap: var(--sp-3); max-width: 400px; margin: 0 auto; }
-        .dc-email-input { flex: 1; font-family: var(--font-body); font-size: 14px; padding: 12px 14px; border: 1.5px solid var(--border); border-radius: var(--r-tight); outline: none; background: var(--parchment); }
-        .dc-email-input:focus { border-color: var(--navy); }
-        .dc-email-btn { font-family: var(--font-display); font-size: 12px; font-weight: 700; letter-spacing: var(--ls-button); text-transform: uppercase; color: var(--white); background: var(--navy); border: none; padding: 0 20px; border-radius: var(--r-tight); cursor: pointer; white-space: nowrap; }
-        .dc-email-btn:hover { background: var(--navy-deep); }
-        .dc-skip-link { display: block; margin: var(--sp-4) auto 0; font-size: 12.5px; color: var(--text-muted); background: none; border: none; cursor: pointer; text-decoration: underline; }
-        .dc-skip-link:hover { color: var(--navy); }
-
         @media (max-width: 640px) {
-          .dc-input-row, .dc-email-row { flex-direction: column; }
+          .dc-input-row { flex-direction: column; }
         }
       `}</style>
     </div>
