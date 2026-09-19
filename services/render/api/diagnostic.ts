@@ -25,7 +25,16 @@ export default async function handler(
 
   const authorizationHeader =
     typeof req.headers.authorization === "string" ? req.headers.authorization : null;
-  if (!isRenderRequestAuthorized(authorizationHeader)) {
+  const diagnosticKey =
+    typeof req.headers["x-render-diagnostic-key"] === "string"
+      ? req.headers["x-render-diagnostic-key"]
+      : null;
+  const keyAuthorized =
+    typeof process.env.RENDER_DIAGNOSTIC_KEY === "string" &&
+    process.env.RENDER_DIAGNOSTIC_KEY.length > 0 &&
+    diagnosticKey === process.env.RENDER_DIAGNOSTIC_KEY;
+
+  if (!isRenderRequestAuthorized(authorizationHeader) && !keyAuthorized) {
     res.statusCode = 401;
     res.setHeader("Content-Type", "application/json");
     res.end(JSON.stringify({ error: "unauthorized" }));
