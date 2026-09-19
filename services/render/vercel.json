@@ -2,6 +2,9 @@
   "functions": {
     "api/render.ts": {
       "maxDuration": 300
+    },
+    "api/diagnostic.ts": {
+      "maxDuration": 60
     }
   }
 }
