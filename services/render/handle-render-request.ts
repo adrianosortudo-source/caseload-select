@@ -87,7 +87,8 @@ export interface HandleRenderRequestOptions {
   concurrencyState?: { inFlight: number };
 }
 
-const DEFAULT_RENDER_TIMEOUT_MS = 280_000; // stays under vercel.json's 300s maxDuration
+// Stay below the app's 100s client abort so callers receive a controlled 504.
+const DEFAULT_RENDER_TIMEOUT_MS = 90_000;
 const DEFAULT_MAX_CONCURRENT_RENDERS = 2;
 
 // Shared across invocations of the real handler within one warm instance.
