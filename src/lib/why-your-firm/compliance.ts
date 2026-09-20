@@ -304,7 +304,7 @@ export const copy = {
     name: "Why Your Firm",
     /** Landing paragraph, shown above the first step */
     intro:
-      "A client choosing a lawyer sees a row of firms saying the same things. This tool works out what your firm can say that the others cannot, checks each claim against the Law Society's advertising rules, and gives you a positioning brief you can hand to whoever writes your website.",
+      "A client choosing a lawyer sees a row of firms saying the same things. This tool works out what your firm can say that the others cannot, checks each claim against the Law Society's advertising rules, and gives you a positioning brief you can hand to whoever writes your firm's website.",
     /**
      * Second landing paragraph, privacy posture, for the GATED modes:
      * accurate only when an email is collected and a PDF is sent. Dormant
