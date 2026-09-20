@@ -125,6 +125,17 @@
  *       should deny rather than silently let scripted spam through to
  *       Adriano's email.
  *
+ *   whyYourFirmReport  10 per hour
+ *     - POST /api/tools/why-your-firm/report. Dormant while the tool ships
+ *       in no_gate mode; the route rejects every call before parsing input.
+ *       The bucket remains defined for a future reviewed gated launch.
+ *
+ *   whyYourFirmAssist  20 per minute
+ *     - POST /api/tools/why-your-firm/assist. Public, same-origin, no auth.
+ *       Each explicit visitor request costs one Gemini generation. This
+ *       bucket is always fail-closed when Redis is absent or errors, so the
+ *       cost boundary cannot silently disappear.
+ *
  * Per-route bucket selection is done by the caller. Caller passes the
  * bucket name + the IP. We never trust the request body for IP
  * resolution; the helper reads x-forwarded-for and x-real-ip in that
@@ -159,7 +170,9 @@ export type RateLimitBucket =
   | "startConversation"
   | "clientImportAuthorize"
   | "clientImportVerify"
-  | "clientImportRows";
+  | "clientImportRows"
+  | "whyYourFirmReport"
+  | "whyYourFirmAssist";
 
 interface BucketConfig {
   limit: number;
@@ -188,6 +201,8 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   clientImportAuthorize: { limit: 5, windowSeconds: 600 }, // sensitive step-up email send
   clientImportVerify: { limit: 10, windowSeconds: 600 },   // second layer behind 5-attempt challenge cap
   clientImportRows: { limit: 60, windowSeconds: 60 },      // authenticated 25-row chunks
+  whyYourFirmReport: { limit: 10, windowSeconds: 3600 },   // dormant while no_gate ships
+  whyYourFirmAssist: { limit: 20, windowSeconds: 60 },     // always fail-closed; each call incurs model cost
 };
 
 /**
@@ -315,8 +330,23 @@ const FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucke
   "clientImportRows",
 ]);
 
+/**
+ * Buckets whose cost or abuse boundary must exist in every environment,
+ * independent of the legacy RATE_LIMIT_FAIL_CLOSED rollout flag.
+ */
+const ALWAYS_FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucket>([
+  "whyYourFirmAssist",
+]);
+
 function failClosedMode(): boolean {
   return process.env.RATE_LIMIT_FAIL_CLOSED === "true";
+}
+
+function shouldFailClosed(bucket: RateLimitBucket): boolean {
+  return (
+    ALWAYS_FAIL_CLOSED_BUCKETS.has(bucket) ||
+    (failClosedMode() && FAIL_CLOSED_BUCKETS.has(bucket))
+  );
 }
 
 export async function checkRateLimit(
@@ -326,7 +356,7 @@ export async function checkRateLimit(
   const limiter = getLimiter(bucket);
   const config = BUCKET_CONFIG[bucket];
   if (!limiter) {
-    if (failClosedMode() && FAIL_CLOSED_BUCKETS.has(bucket)) {
+    if (shouldFailClosed(bucket)) {
       // Defensive deny: limiter unconfigured but operator has opted into
       // fail-closed mode on a sensitive bucket.
       return { ok: false, active: false, remaining: 0, reset: 0, limit: config.limit };
@@ -343,12 +373,16 @@ export async function checkRateLimit(
       limit: result.limit,
     };
   } catch (err) {
-    // Redis hiccup. Fail open and log; never block intake on a transient
-    // rate-limiter failure.
+    // Redis hiccup. Sensitive always-fail-closed buckets deny; legacy
+    // buckets retain their rollout-flag behavior. Never include request
+    // content in this operational log.
     console.warn(
-      `[rate-limit] bucket=${bucket} identity=${identity} backing-store error, failing open:`,
+      `[rate-limit] bucket=${bucket} identity=${identity} backing-store error:`,
       err instanceof Error ? err.message : String(err),
     );
+    if (shouldFailClosed(bucket)) {
+      return { ok: false, active: false, remaining: 0, reset: 0, limit: config.limit };
+    }
     return { ok: true, active: false, remaining: config.limit, reset: 0, limit: config.limit };
   }
 }
