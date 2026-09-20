@@ -7,6 +7,7 @@ import ToolNav from "./_components/ToolNav";
 import SeoCheckTool from "@/components/seo-check/SeoCheckTool";
 
 export const metadata: Metadata = {
+  robots: { index: false, follow: false },
   title: "Free SEO & AI Visibility Check · CaseLoad Select",
   description:
     "Run a multi-page diagnostic of your law firm's SEO health and AI search visibility. Dozens of signals across nine categories including indexability, AI bot access, schema readiness, local search, and security. Free, no account required.",
