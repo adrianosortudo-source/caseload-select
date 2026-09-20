@@ -1017,40 +1017,24 @@ async function captureViewport(
   }
 }
 
-/** Renders one URL at both viewports, sequentially. One browser instance
- * shared across both. */
+/** Renders one URL at both viewports, sequentially.
+ *
+ * Each viewport gets a fresh Chromium process. @sparticuz/chromium runs with
+ * --single-process in the serverless runtime, so closing the first viewport's
+ * context can take down the shared browser before the next context is created.
+ * Isolating the launches turns that process-lifecycle failure into a bounded
+ * per-viewport failure while keeping the captures sequential and memory-safe.
+ */
 export async function renderUrl(url: string): Promise<RenderRunResult> {
   const start = Date.now();
-  const browser = await launchBrowser();
-  try {
-    // Sequential, NOT Promise.all. @sparticuz/chromium's own argument set
-    // forces --single-process (plus --no-zygote and the site-isolation
-    // disables) because Lambda-class serverless environments cannot give
-    // Chromium the process/namespace primitives it normally relies on --
-    // see README.md for the full flag rationale. Under --single-process
-    // the browser, every renderer, and the GPU process all share one OS
-    // process, and driving two BrowserContexts concurrently through it is
-    // unstable: the 2026-08-07 production renders died mid-capture with
-    // the browser process gone, for both a heavy real site (drglaw.ca)
-    // and a trivial one (example.com), which rules out page weight as the
-    // cause. Running the viewports one after the other also halves peak
-    // memory, which matters on a 2GB-capped Hobby-tier function.
-    //
-    // The cost is wall-clock: two sequential ~5-10s captures instead of
-    // two overlapping ones. That is well within this service's 300s
-    // budget and not worth trading for a browser that falls over.
-    const captures: RenderCapture[] = [];
-    for (const viewport of ["mobile", "desktop"] as const) {
+  const captures: RenderCapture[] = [];
+  for (const viewport of ["mobile", "desktop"] as const) {
+    const browser = await launchBrowser();
+    try {
       captures.push(await captureViewport(browser, url, viewport));
+    } finally {
+      await withTimeout(browser.close(), CLOSE_TIMEOUT_MS, "browser_close_timeout").catch(() => undefined);
     }
-    return { captures, totalMs: Date.now() - start };
-  } finally {
-    // Same masking rationale as captureViewport's own cleanup above, and
-    // the same unbounded-hang risk CLOSE_TIMEOUT_MS exists for: if
-    // browser.close() throws, that must not replace a real upstream
-    // error; if it never resolves at all, waiting on it forever would
-    // strand the whole function for no purpose -- the browser process is
-    // going away in either case, successfully or not.
-    await withTimeout(browser.close(), CLOSE_TIMEOUT_MS, "browser_close_timeout").catch(() => undefined);
   }
+  return { captures, totalMs: Date.now() - start };
 }
