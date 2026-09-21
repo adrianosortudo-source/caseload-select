@@ -1,5 +1,5 @@
 -- LOCAL DRAFT ONLY. Do not apply directly.
--- Target: public.prospect_firms in caseload-select-app.
+-- Target: public.gta_prospect_firms in caseload-select-app.
 -- Requires a pushed PR, CI fresh-Postgres validation, and explicit merge approval.
 -- Deliberately has no FK or trigger dependency on agency_prospects or diagnostics.
 
@@ -18,7 +18,7 @@ create table if not exists public.prospect_lso_licensees (
 create table if not exists public.prospect_firm_affiliations (
   id uuid primary key default gen_random_uuid(),
   licensee_id uuid not null references public.prospect_lso_licensees(id) on delete restrict,
-  firm_id uuid references public.prospect_firms(id) on delete restrict,
+  firm_id uuid references public.gta_prospect_firms(id) on delete restrict,
   office_label text,
   role_label text,
   mapping_status text not null check (mapping_status in ('confirmed','candidate','conflict','unresolved','superseded')),
@@ -32,7 +32,7 @@ create table if not exists public.prospect_source_record_map (
   id uuid primary key default gen_random_uuid(),
   source_system text not null,
   source_record_id text not null,
-  firm_id uuid references public.prospect_firms(id) on delete restrict,
+  firm_id uuid references public.gta_prospect_firms(id) on delete restrict,
   mapping_status text not null check (mapping_status in ('confirmed','candidate','conflict','distinct','superseded')),
   identity_decision_id text,
   evidence_ids jsonb not null default '[]'::jsonb,
@@ -44,7 +44,7 @@ create table if not exists public.prospect_source_record_map (
 
 create table if not exists public.prospect_source_captures (
   id uuid primary key default gen_random_uuid(),
-  firm_id uuid references public.prospect_firms(id) on delete restrict,
+  firm_id uuid references public.gta_prospect_firms(id) on delete restrict,
   requested_url text,
   final_url text,
   publisher text,
@@ -59,7 +59,7 @@ create table if not exists public.prospect_source_captures (
 
 create table if not exists public.prospect_research_attempts (
   id uuid primary key default gen_random_uuid(),
-  firm_id uuid references public.prospect_firms(id) on delete restrict,
+  firm_id uuid references public.gta_prospect_firms(id) on delete restrict,
   provider text not null,
   query_or_url text not null,
   outcome text not null check (outcome in ('success-positive','success-negative','robots-disallowed','policy-blocked','http-4xx','http-5xx','rate-limited','captcha-or-challenge','timeout','dns-error','tls-error','redirect-policy-failure','render-or-parse-failure','identity-conflict','unsupported-source','not-run')),
@@ -72,7 +72,7 @@ create table if not exists public.prospect_research_attempts (
 
 create table if not exists public.prospect_advertising_observations (
   id uuid primary key default gen_random_uuid(),
-  firm_id uuid references public.prospect_firms(id) on delete restrict,
+  firm_id uuid references public.gta_prospect_firms(id) on delete restrict,
   canonical_domain text,
   evidence_type text not null check (evidence_type in ('advertising-pixel','direct-ad','sponsored-placement','historical-ad')),
   vendor text,
@@ -95,7 +95,7 @@ create table if not exists public.prospect_advertising_observations (
 
 create table if not exists public.prospect_qualification_decisions (
   id uuid primary key default gen_random_uuid(),
-  firm_id uuid references public.prospect_firms(id) on delete restrict,
+  firm_id uuid references public.gta_prospect_firms(id) on delete restrict,
   run_id text not null,
   rule_version text not null,
   advertising_status text check (advertising_status in ('recent-ad-verified','historical-ad-only','pixels-detected','not-observed')),
@@ -126,7 +126,7 @@ create table if not exists public.prospect_export_runs (
 
 create table if not exists public.prospect_diagnostic_ready_profiles (
   id uuid primary key default gen_random_uuid(),
-  firm_id uuid not null references public.prospect_firms(id) on delete restrict,
+  firm_id uuid not null references public.gta_prospect_firms(id) on delete restrict,
   qualification_decision_id uuid not null references public.prospect_qualification_decisions(id) on delete restrict,
   readiness_state text not null check (readiness_state in ('ready','stale','held','rejected','reserved','exported')),
   validated_at timestamptz not null,
