@@ -11,6 +11,7 @@ import {
   normalizedCityKey,
   normalizedPracticeAreaKey,
 } from "@/lib/prospect-display-normalization";
+import type { GtaProspectQualificationEvidence } from "@/lib/gta-prospect-supplemental-evidence-reader";
 
 export const LAWYER_COUNT_BANDS = ["1", "2", "3", "4-5", "6-10", "11-20", "21-50", "51+", "unknown"] as const;
 export type LawyerCountBand = (typeof LAWYER_COUNT_BANDS)[number];
@@ -110,7 +111,7 @@ export interface ReconciledGtaProspect {
   supplementalEvidence?: {
     identity: { matchState: "confirmed" | "unresolved" | "distinct"; observedOn: string; confidence: "high" | "moderate" | "unknown" } | null;
     websiteIntake: { channels: readonly string[]; opportunityState: "supported" | "not_established"; observedOn: string } | null;
-    qualification: { state: "qualified" | "needs_evidence" | "disqualified"; cohort: string; assessedOn: string; criteria: Readonly<Record<string, boolean>> } | null;
+    qualification: { state: "qualified" | "needs_evidence" | "disqualified"; cohort: string; assessedOn: string; criteria: Readonly<Record<string, GtaProspectQualificationEvidence>> } | null;
   } | null;
 
   /** Evidence-backed qualification detail for enriched firm-expansion records. */
