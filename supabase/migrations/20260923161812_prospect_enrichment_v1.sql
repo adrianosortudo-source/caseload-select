@@ -2204,7 +2204,7 @@ BEGIN
 
   v_review_core_evidence := v_review_core->'coreEvidence';
   -- Firm name is supported by an exact public-source excerpt, never by the subject claim alone.
-  source_id := v_review_core_evidence #>> '{firmName,sourceId}';
+  v_review_source_id := v_review_core_evidence #>> '{firmName,sourceId}';
   SELECT * INTO v_review_source_row FROM public.prospect_enrichment_items
   WHERE package_id = p_package_id AND client_item_id = 'src:' || v_review_source_id AND item_kind = 'source';
   IF NOT FOUND OR v_review_source_row.provenance_state <> 'complete' OR v_review_source_row.data->>'policyState' <> 'public-source'
@@ -2220,7 +2220,7 @@ BEGIN
   ) THEN RAISE EXCEPTION 'invalid_identity'; END IF;
 
   -- The primary and all office cities come only from explicitly selected firm-fit evidence.
-  mapping := v_review_core_evidence->'city';
+  v_review_mapping := v_review_core_evidence->'city';
   IF v_review_mapping->>'itemId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN RAISE EXCEPTION 'invalid_identity'; END IF;
   SELECT * INTO v_review_mapping_item FROM public.prospect_enrichment_items WHERE id=(v_review_mapping->>'itemId')::uuid AND package_id=p_package_id;
   SELECT * INTO v_review_mapping_source FROM public.prospect_enrichment_items WHERE package_id=p_package_id AND client_item_id='src:' || (v_review_mapping->>'sourceId') AND item_kind='source';
