@@ -69,9 +69,13 @@ function packageDetailProjection(detail: PackageDetail) {
     items: ordered(detail.items.map((item) => ({
       itemId: item.itemId, clientItemId: item.clientItemId, itemKind: item.itemKind,
       sourceEventId: item.sourceEventId, dataHash: hash(item.data), sourceIds: item.sourceIds, hash: item.hash,
-      targets: ordered(item.targets.map((target) => ({ itemId: target.item_id, table: target.target_table,
-        id: target.target_id, rowSha256: target.target_row_sha256, applicationKind: target.application_kind,
-        linkedAt: target.linked_at })), (target) => target.table + ":" + target.id),
+      targets: ordered(item.targets.map((target) => {
+        if (!isRecord(target) || typeof target.item_id !== "string" || typeof target.target_table !== "string" ||
+            typeof target.target_id !== "string" || typeof target.target_row_sha256 !== "string" ||
+            typeof target.application_kind !== "string" || typeof target.linked_at !== "string") fail();
+        return { itemId: target.item_id, table: target.target_table, id: target.target_id,
+          rowSha256: target.target_row_sha256, applicationKind: target.application_kind, linkedAt: target.linked_at };
+      }), (target) => target.table + ":" + target.id),
       firmRevision: isRecord(item.currentValue) ? item.currentValue.firmRevision : null,
     })), (item) => item.itemId),
   };

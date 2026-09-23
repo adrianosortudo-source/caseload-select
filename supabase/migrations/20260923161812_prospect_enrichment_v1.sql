@@ -3194,7 +3194,7 @@ BEGIN
        'sourceCount','itemCount','targetCount','verificationVersion'] <> '{}'::jsonb
      OR NOT (NEW.details ?& ARRAY['visibilityScope','payloadSha256','readbackSha256','expectedReceiptSha256',
        'sourceCount','itemCount','targetCount','verificationVersion'])
-     OR NEW.details->>'visibilityScope' IS DISTINCT FROM CASE WHEN NEW.event_type='package_verified' THEN 'package' ELSE 'canonical' END
+     OR NEW.details->>'visibilityScope' IS DISTINCT FROM (CASE WHEN NEW.event_type='package_verified' THEN 'package' ELSE 'canonical' END)
      OR coalesce(NEW.details->>'readbackSha256','') !~ '^[a-f0-9]{64}$'
      OR NEW.details->>'verificationVersion' IS DISTINCT FROM 'prospect-enrichment-readback/v1'
      OR jsonb_typeof(NEW.details->'sourceCount') <> 'number'
