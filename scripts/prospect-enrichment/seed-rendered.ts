@@ -240,7 +240,7 @@ async function seed() {
   const suffix = randomUUID().replaceAll("-", "");
   const runKey = `run-${suffix}`;
   const sourceSystem = "prospect-enrichment-rendered-test";
-  const sourceName = "Synthetic rendered acceptance fixture";
+  const sourceName = "synthetic-rendered-acceptance-fixture";
   const sourceRecordKey = `seed-${suffix}`;
   const generatedAt = new Date().toISOString();
   const pool = new Pool({ connectionString: databaseUrl.toString(), max: 1, connectionTimeoutMillis: 10_000, idleTimeoutMillis: 5_000 });
