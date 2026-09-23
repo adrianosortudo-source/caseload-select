@@ -10,9 +10,21 @@ import {
   prospectEnrichmentSha256,
 } from "@/lib/prospect-enrichment-hash";
 
-const databaseUrl = process.env.DIRECT_DATABASE_URL ?? process.env.PROSPECT_ENRICHMENT_TEST_DATABASE_URL;
+const databaseUrlRaw = process.env.DIRECT_DATABASE_URL ?? process.env.PROSPECT_ENRICHMENT_TEST_DATABASE_URL;
+const databaseUrlText = databaseUrlRaw?.trim() ?? "";
+const databaseUrl = databaseUrlText && ((databaseUrlText.startsWith('"') && databaseUrlText.endsWith('"')) ||
+  (databaseUrlText.startsWith("'") && databaseUrlText.endsWith("'")))
+  ? databaseUrlText.slice(1, -1) : databaseUrlText;
 if (process.env.PROSPECT_ENRICHMENT_REQUIRE_DATABASE_URL === "1" && !databaseUrl) {
   throw new Error("prospect enrichment integration tests require a direct local Postgres URL");
+}
+if (databaseUrl) {
+  const parsed = new URL(databaseUrl);
+  if (!["postgres:", "postgresql:"].includes(parsed.protocol) ||
+      !["127.0.0.1", "::1"].includes(parsed.hostname.replace(/^\[|\]$/g, "")) ||
+      !parsed.port || parsed.pathname !== "/postgres") {
+    throw new Error("prospect enrichment integration tests require direct disposable loopback Postgres");
+  }
 }
 const integrationDescribe = databaseUrl ? describe : describe.skip;
 
