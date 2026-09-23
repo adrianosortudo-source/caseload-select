@@ -949,7 +949,7 @@ BEGIN
     END IF;
     expected_event_key := 'source:' || encode(extensions.digest(convert_to(
       public.prospect_enrichment_stable_json_v1(jsonb_build_array(p_research_key,source_input->>'clientItemId')),'utf8'),'sha256'),'hex');
-    semantic_content := source_input->'data' - 'sourceId';
+    semantic_content := (source_input->'data') - 'sourceId'::text;
     expected_semantic_sha256 := encode(extensions.digest(convert_to(public.prospect_enrichment_stable_json_v1(
       jsonb_build_object('itemKind','source','researchKey',p_research_key,'semanticContent',semantic_content,'sourceSystem',p_source_system)
     ),'utf8'),'sha256'),'hex');
@@ -983,11 +983,11 @@ BEGIN
          jsonb_typeof(item_data->'retractionSourceIds') <> 'array' THEN
         RAISE EXCEPTION 'observation lineage does not match its immutable item data';
       END IF;
-      SELECT coalesce(jsonb_agg(source.value->'data' - 'sourceId' ORDER BY referenced.ordinality),'[]'::jsonb)
+      SELECT coalesce(jsonb_agg((source.value->'data') - 'sourceId'::text ORDER BY referenced.ordinality),'[]'::jsonb)
         INTO source_content
       FROM jsonb_array_elements_text(item_data->'sourceIds') WITH ORDINALITY AS referenced(source_id,ordinality)
       JOIN jsonb_array_elements(p_sources) AS source(value) ON source.value->>'sourceId' = referenced.source_id;
-      SELECT coalesce(jsonb_agg(source.value->'data' - 'sourceId' ORDER BY referenced.ordinality),'[]'::jsonb)
+      SELECT coalesce(jsonb_agg((source.value->'data') - 'sourceId'::text ORDER BY referenced.ordinality),'[]'::jsonb)
         INTO retraction_source_content
       FROM jsonb_array_elements_text(item_data->'retractionSourceIds') WITH ORDINALITY AS referenced(source_id,ordinality)
       JOIN jsonb_array_elements(p_sources) AS source(value) ON source.value->>'sourceId' = referenced.source_id;
@@ -995,7 +995,7 @@ BEGIN
          jsonb_array_length(retraction_source_content) <> jsonb_array_length(item_data->'retractionSourceIds') THEN
         RAISE EXCEPTION 'observation lineage references a missing source';
       END IF;
-      semantic_content := (item_data - 'observationId' - 'existingRecord') || jsonb_build_object(
+      semantic_content := (item_data - 'observationId'::text - 'existingRecord'::text) || jsonb_build_object(
         'sourceContent',source_content,'retractionSourceContent',retraction_source_content
       );
     ELSE
@@ -1004,14 +1004,14 @@ BEGIN
          item_input->'observedOn' IS DISTINCT FROM item_data->'assessedOn' THEN
         RAISE EXCEPTION 'assessment lineage does not match its immutable item data';
       END IF;
-      SELECT coalesce(jsonb_agg(source.value->'data' - 'sourceId' ORDER BY referenced.ordinality),'[]'::jsonb)
+      SELECT coalesce(jsonb_agg((source.value->'data') - 'sourceId'::text ORDER BY referenced.ordinality),'[]'::jsonb)
         INTO source_content
       FROM jsonb_array_elements_text(item_data->'sourceIds') WITH ORDINALITY AS referenced(source_id,ordinality)
       JOIN jsonb_array_elements(p_sources) AS source(value) ON source.value->>'sourceId' = referenced.source_id;
       IF jsonb_array_length(source_content) <> jsonb_array_length(item_data->'sourceIds') THEN
         RAISE EXCEPTION 'assessment lineage references a missing source';
       END IF;
-      semantic_content := (item_data - 'assessmentId' - 'existingRecord') || jsonb_build_object('sourceContent',source_content);
+      semantic_content := (item_data - 'assessmentId'::text - 'existingRecord'::text) || jsonb_build_object('sourceContent',source_content);
     END IF;
     expected_event_key := item_input->>'itemKind' || ':' || encode(extensions.digest(convert_to(
       public.prospect_enrichment_stable_json_v1(jsonb_build_array(p_research_key,item_input->>'clientItemId')),'utf8'),'sha256'),'hex');
@@ -1613,8 +1613,8 @@ BEGIN
       NEW.enrichment_revision := coalesce(NEW.enrichment_revision, 0) + 1;
       RETURN NEW;
     ELSIF TG_OP = 'UPDATE' THEN
-      old_json := to_jsonb(OLD) - 'enrichment_revision';
-      new_json := to_jsonb(NEW) - 'enrichment_revision';
+      old_json := to_jsonb(OLD) - 'enrichment_revision'::text;
+      new_json := to_jsonb(NEW) - 'enrichment_revision'::text;
       IF old_json IS DISTINCT FROM new_json THEN
         NEW.enrichment_revision := OLD.enrichment_revision + 1;
       END IF;
@@ -1902,22 +1902,22 @@ BEGIN
     IF OLD.state NOT IN ('received','identity_hold','evidence_hold','ready_for_review')
        OR NEW.state NOT IN ('identity_hold','ready_for_review')
        OR NEW.apply_receipt IS NOT NULL OR NEW.applied_at IS NOT NULL
-       OR (to_jsonb(NEW) - ARRAY['firm_id','state','review_json','review_sha256','expected_revision_sha256','review_expires_at','updated_at'])
+       OR (to_jsonb(NEW) - ARRAY['firm_id','state','review_json','review_sha256','expected_revision_sha256','review_expires_at','updated_at']::text[])
           IS DISTINCT FROM
-          (to_jsonb(OLD) - ARRAY['firm_id','state','review_json','review_sha256','expected_revision_sha256','review_expires_at','updated_at']) THEN
+          (to_jsonb(OLD) - ARRAY['firm_id','state','review_json','review_sha256','expected_revision_sha256','review_expires_at','updated_at']::text[]) THEN
       RAISE EXCEPTION 'invalid package review transition';
     END IF;
   ELSIF mutation_kind='reject' THEN
     IF OLD.state NOT IN ('received','identity_hold','evidence_hold','ready_for_review') OR NEW.state <> 'rejected'
        OR NEW.apply_receipt IS NOT NULL OR NEW.applied_at IS NOT NULL
-       OR (to_jsonb(NEW) - ARRAY['state','updated_at']) IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['state','updated_at']) THEN
+       OR (to_jsonb(NEW) - ARRAY['state','updated_at']::text[]) IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['state','updated_at']::text[]) THEN
       RAISE EXCEPTION 'invalid package rejection transition';
     END IF;
   ELSIF mutation_kind='apply' THEN
     IF OLD.state <> 'ready_for_review' OR NEW.state <> 'applied'
        OR NEW.apply_receipt IS NULL OR NEW.applied_at IS NULL
-       OR (to_jsonb(NEW) - ARRAY['firm_id','state','apply_receipt','applied_at','updated_at'])
-          IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['firm_id','state','apply_receipt','applied_at','updated_at']) THEN
+       OR (to_jsonb(NEW) - ARRAY['firm_id','state','apply_receipt','applied_at','updated_at']::text[])
+          IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['firm_id','state','apply_receipt','applied_at','updated_at']::text[]) THEN
       RAISE EXCEPTION 'invalid package application transition';
     END IF;
   ELSE
@@ -1974,12 +1974,12 @@ BEGIN
   SELECT * INTO package_row FROM public.prospect_enrichment_packages WHERE id = p_package_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'package_not_found'; END IF;
   IF jsonb_typeof(p_review) <> 'object'
-     OR p_review - ARRAY['payloadSha256','identity','items'] <> '{}'::jsonb
+     OR p_review - ARRAY['payloadSha256','identity','items']::text[] <> '{}'::jsonb
      OR NOT (p_review ?& ARRAY['payloadSha256','identity','items'])
      OR p_review->>'payloadSha256' IS DISTINCT FROM package_row.payload_sha256
      OR jsonb_typeof(p_review->'identity') <> 'object'
      OR jsonb_typeof(p_review->'items') <> 'array'
-     OR p_review->'identity' - ARRAY['choice','firmId','coreInput'] <> '{}'::jsonb
+     OR (p_review->'identity') - ARRAY['choice','firmId','coreInput']::text[] <> '{}'::jsonb
      OR NOT (p_review->'identity' ?& ARRAY['choice','firmId','coreInput']) THEN
     RAISE EXCEPTION 'invalid_review';
   END IF;
@@ -1992,13 +1992,13 @@ BEGIN
     LEFT JOIN public.prospect_enrichment_items AS stored
       ON stored.package_id = p_package_id AND stored.id::text = requested.value->>'itemId'
     WHERE jsonb_typeof(requested.value) <> 'object'
-       OR requested.value - ARRAY['itemId','disposition','reason','profileChoice'] <> '{}'::jsonb
+       OR requested.value - ARRAY['itemId','disposition','reason','profileChoice']::text[] <> '{}'::jsonb
        OR NOT (requested.value ?& ARRAY['itemId','disposition','reason','profileChoice'])
        OR stored.id IS NULL
        OR requested.value->>'disposition' NOT IN ('accept_new','link_existing','retain_only')
        OR jsonb_typeof(requested.value->'profileChoice') NOT IN ('null','object')
        OR (jsonb_typeof(requested.value->'profileChoice')='object' AND (
-           requested.value->'profileChoice' - ARRAY['fieldKey','sourceSelector','selectedValue'] <> '{}'::jsonb
+           (requested.value->'profileChoice') - ARRAY['fieldKey','sourceSelector','selectedValue']::text[] <> '{}'::jsonb
            OR NOT (requested.value->'profileChoice' ?& ARRAY['fieldKey','sourceSelector','selectedValue'])
            OR jsonb_typeof(requested.value->'profileChoice'->'fieldKey') <> 'string'
            OR jsonb_typeof(requested.value->'profileChoice'->'sourceSelector') <> 'string'
@@ -2135,28 +2135,28 @@ BEGIN
   core := p_review->'identity'->'coreInput';
   IF core - ARRAY['id','firmName','city','officeCities','websiteUrl','practiceAreas','observedLawyerCount',
       'observedLawyerCountQualifier','observedLawyerCountDisplay','rosterSourceUrl','rosterCheckedAt',
-      'reconciliationStatus','legacyClusterLawyerCount','legacyCrosswalk','reconciliationNote','publicContacts','coreEvidence'] <> '{}'::jsonb
+      'reconciliationStatus','legacyClusterLawyerCount','legacyCrosswalk','reconciliationNote','publicContacts','coreEvidence']::text[] <> '{}'::jsonb
      OR NOT (core ?& ARRAY['id','firmName','city','officeCities','websiteUrl','practiceAreas','observedLawyerCount',
       'observedLawyerCountQualifier','observedLawyerCountDisplay','rosterSourceUrl','rosterCheckedAt',
       'reconciliationStatus','legacyClusterLawyerCount','legacyCrosswalk','reconciliationNote','publicContacts','coreEvidence'])
      OR jsonb_typeof(core->'coreEvidence') <> 'object'
-     OR core->'coreEvidence' - ARRAY['firmName','city','officeCities','websiteUrl','practiceAreas','roster'] <> '{}'::jsonb
+     OR (core->'coreEvidence') - ARRAY['firmName','city','officeCities','websiteUrl','practiceAreas','roster']::text[] <> '{}'::jsonb
      OR NOT (core->'coreEvidence' ?& ARRAY['firmName','city','officeCities','websiteUrl','practiceAreas','roster'])
      OR jsonb_typeof(core->'coreEvidence'->'firmName') <> 'object'
-     OR core->'coreEvidence'->'firmName' - ARRAY['sourceId'] <> '{}'::jsonb
+     OR (core->'coreEvidence'->'firmName') - ARRAY['sourceId']::text[] <> '{}'::jsonb
      OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'firmName')) <> 1
      OR jsonb_typeof(core->'coreEvidence'->'firmName'->'sourceId') <> 'string'
      OR jsonb_typeof(core->'coreEvidence'->'city') <> 'object'
-     OR core->'coreEvidence'->'city' - ARRAY['itemId','sourceId'] <> '{}'::jsonb
+     OR (core->'coreEvidence'->'city') - ARRAY['itemId','sourceId']::text[] <> '{}'::jsonb
      OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'city')) <> 2
      OR jsonb_typeof(core->'coreEvidence'->'officeCities') <> 'array'
      OR jsonb_typeof(core->'coreEvidence'->'practiceAreas') <> 'array'
      OR jsonb_typeof(core->'coreEvidence'->'websiteUrl') <> 'object'
-     OR core->'coreEvidence'->'websiteUrl' - ARRAY['sourceId'] <> '{}'::jsonb
+     OR (core->'coreEvidence'->'websiteUrl') - ARRAY['sourceId']::text[] <> '{}'::jsonb
      OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'websiteUrl')) <> 1
      OR (core->'coreEvidence'->'websiteUrl'->'sourceId' <> 'null'::jsonb
          AND jsonb_typeof(core->'coreEvidence'->'websiteUrl'->'sourceId') <> 'string')
-     OR core->'coreEvidence'->'roster' - ARRAY['itemId','sourceId'] <> '{}'::jsonb
+     OR (core->'coreEvidence'->'roster') - ARRAY['itemId','sourceId']::text[] <> '{}'::jsonb
      OR jsonb_typeof(core->'coreEvidence'->'roster') <> 'object'
      OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'roster')) <> 2
      OR jsonb_typeof(core->'coreEvidence'->'city'->'itemId') <> 'string'
@@ -2164,14 +2164,14 @@ BEGIN
      OR jsonb_typeof(core->'coreEvidence'->'roster'->'itemId') <> 'string'
      OR jsonb_typeof(core->'coreEvidence'->'roster'->'sourceId') <> 'string'
      OR EXISTS (SELECT 1 FROM jsonb_array_elements(core->'coreEvidence'->'officeCities') AS entry(value)
-       WHERE jsonb_typeof(entry.value) <> 'object' OR entry.value - ARRAY['itemId','sourceId'] <> '{}'::jsonb
+       WHERE jsonb_typeof(entry.value) <> 'object' OR entry.value - ARRAY['itemId','sourceId']::text[] <> '{}'::jsonb
          OR NOT (entry.value ?& ARRAY['itemId','sourceId'])
          OR jsonb_typeof(entry.value->'itemId') <> 'string'
          OR entry.value->>'itemId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
          OR jsonb_typeof(entry.value->'sourceId') <> 'string'
          OR entry.value->>'sourceId' !~ '^[a-z0-9][a-z0-9._-]{0,119}$')
      OR EXISTS (SELECT 1 FROM jsonb_array_elements(core->'coreEvidence'->'practiceAreas') AS entry(value)
-       WHERE jsonb_typeof(entry.value) <> 'object' OR entry.value - ARRAY['itemId','sourceId'] <> '{}'::jsonb
+       WHERE jsonb_typeof(entry.value) <> 'object' OR entry.value - ARRAY['itemId','sourceId']::text[] <> '{}'::jsonb
          OR NOT (entry.value ?& ARRAY['itemId','sourceId'])
          OR jsonb_typeof(entry.value->'itemId') <> 'string'
          OR entry.value->>'itemId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
@@ -3070,7 +3070,7 @@ BEGIN
   IF p_visibility_scope NOT IN ('package','canonical')
      OR jsonb_typeof(p_details) <> 'object'
      OR p_details - ARRAY['visibilityScope','payloadSha256','readbackSha256','expectedReceiptSha256',
-       'sourceCount','itemCount','targetCount','verificationVersion'] <> '{}'::jsonb
+       'sourceCount','itemCount','targetCount','verificationVersion']::text[] <> '{}'::jsonb
      OR NOT (p_details ?& ARRAY['visibilityScope','payloadSha256','readbackSha256','expectedReceiptSha256',
        'sourceCount','itemCount','targetCount','verificationVersion'])
      OR p_details->>'visibilityScope' IS DISTINCT FROM p_visibility_scope
@@ -3180,7 +3180,7 @@ BEGIN
   END IF;
 
   IF NEW.event_type='readback_failed' THEN
-    IF NEW.details - ARRAY['visibilityScope','payloadSha256','reasonCode'] <> '{}'::jsonb
+    IF NEW.details - ARRAY['visibilityScope','payloadSha256','reasonCode']::text[] <> '{}'::jsonb
        OR NOT (NEW.details ?& ARRAY['visibilityScope','payloadSha256','reasonCode'])
        OR NEW.details->>'visibilityScope' NOT IN ('package','canonical')
        OR coalesce(NEW.details->>'payloadSha256','') !~ '^[a-f0-9]{64}$'
@@ -3191,7 +3191,7 @@ BEGIN
   END IF;
 
   IF NEW.details - ARRAY['visibilityScope','payloadSha256','readbackSha256','expectedReceiptSha256',
-       'sourceCount','itemCount','targetCount','verificationVersion'] <> '{}'::jsonb
+       'sourceCount','itemCount','targetCount','verificationVersion']::text[] <> '{}'::jsonb
      OR NOT (NEW.details ?& ARRAY['visibilityScope','payloadSha256','readbackSha256','expectedReceiptSha256',
        'sourceCount','itemCount','targetCount','verificationVersion'])
      OR NEW.details->>'visibilityScope' IS DISTINCT FROM (CASE WHEN NEW.event_type='package_verified' THEN 'package' ELSE 'canonical' END)
