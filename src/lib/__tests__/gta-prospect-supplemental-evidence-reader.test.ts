@@ -58,6 +58,30 @@ describe("GTA prospect supplemental evidence reader", () => {
       .rejects.toThrow("qualification_criteria is invalid");
   });
 
+  it("retains all 39 boolean and rich supplemental research records", async () => {
+    const syntheticRows = Array.from({ length: 39 }, (_, index) => ({
+      ...row,
+      source_record_key: `fixture-${String(index + 1).padStart(2, "0")}`,
+      qualification_state: index < 5 ? "qualified" : "needs_evidence",
+      qualification_criteria: index < 5
+        ? { gbpEvidence: index % 2 === 0, roster: true }
+        : { status: "needs_evidence", observedLawyers: index + 1, missingGates: ["owner_role"], evidence: { sourceUrl: "https://fixture.example.test/team" } },
+    }));
+    const result = await listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: syntheticRows, error: null }) });
+    expect(result).toHaveLength(39);
+    expect(result.map((record) => record.qualification?.criteria)).toEqual(syntheticRows.map((item) => item.qualification_criteria));
+  });
+
+  it.each([
+    ["depth above 12", (() => { let nested: unknown = "value"; for (let depth = 0; depth < 13; depth += 1) nested = { child: nested }; return nested; })()],
+    ["serialized criteria above 256 KiB", { value: "x".repeat(256 * 1024) }],
+    ["prototype key", JSON.parse('{"__proto__":{"polluted":true}}')],
+    ["constructor key", JSON.parse('{"constructor":{"prototype":{"polluted":true}}}')],
+  ])("rejects unsafe or oversized criteria: %s", async (_label, invalidCriteria) => {
+    await expect(listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, qualification_criteria: invalidCriteria }], error: null }) }))
+      .rejects.toThrow("qualification_criteria is invalid");
+  });
+
   it("returns only the narrow applied-evidence summary", async () => {
     const result = await listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [row], error: null }) });
     expect(result).toEqual([{

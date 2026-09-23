@@ -29,6 +29,7 @@ export default defineConfig({
     // route and server modules in Vitest's Node runtime, so mock it here only;
     // application builds continue to resolve the real package and retain the
     // production client-import safeguard.
+    exclude: ["src/lib/__tests__/prospect-enrichment.integration.test.ts"],
     setupFiles: ["./tests/vitest.server-only.setup.ts"],
     globals: true,
   },

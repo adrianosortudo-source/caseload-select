@@ -39,24 +39,31 @@ function textArray(value: unknown): readonly string[] {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) throw error("website_intake_channels is invalid");
   return Object.freeze([...new Set(value.map((item) => item.trim()))]);
 }
-function evidence(value: unknown, ancestors = new Set<object>(), depth = 0): GtaProspectQualificationEvidence {
-  // The criteria root is depth zero; every property or array item adds one.
-  if (depth > 12) throw error("qualification_criteria exceeds maximum depth 12");
+const MAX_CRITERIA_DEPTH = 12;
+const MAX_CRITERIA_BYTES = 256 * 1024;
+const FORBIDDEN_CRITERIA_KEYS = new Set(["__proto__", "prototype", "constructor"]);
+
+function evidence(value: unknown, depth = 0, ancestors = new Set<object>()): GtaProspectQualificationEvidence {
+  // Root depth is zero; every property or array element adds one.
+  if (depth > MAX_CRITERIA_DEPTH) throw error("qualification_criteria exceeds maximum depth 12");
   if (value === null || typeof value === "string" || typeof value === "boolean") return value;
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value !== "object" || value === null || ancestors.has(value)) throw error("qualification_criteria is invalid");
   const next = new Set(ancestors).add(value);
-  if (Array.isArray(value)) return Object.freeze(Array.from(value, (item) => evidence(item, next, depth + 1)));
+  if (Array.isArray(value)) return Object.freeze(Array.from(value, (item) => evidence(item, depth + 1, next)));
   if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) throw error("qualification_criteria is invalid");
-  return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, item]) => [key, evidence(item, next, depth + 1)])));
+  const entries = Object.entries(value);
+  if (entries.some(([key]) => FORBIDDEN_CRITERIA_KEYS.has(key))) throw error("qualification_criteria is invalid");
+  return Object.freeze(Object.fromEntries(entries.map(([key, item]) => [key, evidence(item, depth + 1, next)])));
 }
 function criteria(value: unknown): Readonly<Record<string, GtaProspectQualificationEvidence>> {
   // The governed ledger stores JSON evidence, including both legacy boolean
   // gates and newer source-linked observations. Do not narrow it to a gate map.
   if (!object(value)) throw error("qualification_criteria is invalid");
-  const snapshot = evidence(value) as Readonly<Record<string, GtaProspectQualificationEvidence>>;
-  if (Buffer.byteLength(JSON.stringify(snapshot), "utf8") > 256 * 1024) throw error("qualification_criteria exceeds 256 KiB");
-  return snapshot;
+  const cloned = evidence(value) as Readonly<Record<string, GtaProspectQualificationEvidence>>;
+  const serialized = JSON.stringify(cloned);
+  if (Buffer.byteLength(serialized, "utf8") > MAX_CRITERIA_BYTES) throw error("qualification_criteria exceeds 256 KiB");
+  return cloned;
 }
 function row(value: unknown): GtaProspectSupplementalEvidenceSummary {
   if (!object(value)) throw error("row is not an object");

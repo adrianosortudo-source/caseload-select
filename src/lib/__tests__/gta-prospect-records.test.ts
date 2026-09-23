@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   filterReconciledGtaProspects,
+  getLegacyCriterion,
   lawyerCountBand,
   matchesObservedLawyerCount,
   observedLawyerCountLabel,
@@ -54,6 +55,16 @@ const records: ReconciledGtaProspect[] = [
 ];
 
 describe("gta prospect records", () => {
+  it("interprets only an actual boolean as an assessed legacy flag", () => {
+    const criteria = { supported: true, unsupported: false, numeric: 3, structured: { status: "unknown" }, missing: null };
+    expect(getLegacyCriterion(criteria, "supported")).toBe(true);
+    expect(getLegacyCriterion(criteria, "unsupported")).toBe(false);
+    expect(getLegacyCriterion(criteria, "numeric")).toBeNull();
+    expect(getLegacyCriterion(criteria, "structured")).toBeNull();
+    expect(getLegacyCriterion(criteria, "missing")).toBeNull();
+  });
+
+
   it("assigns display bands from an observed firm roster count", () => {
     expect(lawyerCountBand(null)).toBe("unknown");
     expect(lawyerCountBand(1)).toBe("1");

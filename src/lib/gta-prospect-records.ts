@@ -17,6 +17,11 @@ export const LAWYER_COUNT_BANDS = ["1", "2", "3", "4-5", "6-10", "11-20", "21-50
 export type LawyerCountBand = (typeof LAWYER_COUNT_BANDS)[number];
 export type LawyerCountRange = { min: number; max: number | null };
 
+export function getLegacyCriterion(criteria: Readonly<Record<string, GtaProspectQualificationEvidence>>, key: string): boolean | null {
+  const value = criteria[key];
+  return typeof value === "boolean" ? value : null;
+}
+
 export type ReconciliationStatus = "provisional_new" | "update_existing" | "new_pending_identity" | "duplicate" | "unresolved";
 export type EvidenceAvailability = "observed" | "none" | "unknown";
 export type ProspectRecordOrigin = "research_ledger" | "reviewed_fixture" | "shared_registry" | "legacy_provenance";
