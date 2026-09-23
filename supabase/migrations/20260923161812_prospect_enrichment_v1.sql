@@ -1934,49 +1934,49 @@ LANGUAGE plpgsql
 SET search_path = ''
 AS $$
 DECLARE
-  package_row public.prospect_enrichment_packages%ROWTYPE;
-  firm_row public.gta_prospect_firms%ROWTYPE;
-  item_row public.prospect_enrichment_items%ROWTYPE;
-  source_row public.prospect_enrichment_items%ROWTYPE;
-  choice jsonb;
-  source_id text;
-  expected_firm_id uuid;
-  core jsonb;
-  core_evidence jsonb;
-  mapping jsonb;
-  mapping_item public.prospect_enrichment_items%ROWTYPE;
-  mapping_source public.prospect_enrichment_items%ROWTYPE;
-  roster_item public.prospect_enrichment_items%ROWTYPE;
-  roster_source public.prospect_enrichment_items%ROWTYPE;
-  source_date date;
-  roster_date date;
-  source_record_key text;
-  expected_source_record_key text;
-  normalized_name text;
-  normalized_name_folded text;
-  domain_value text;
-  mapped_cities text[];
-  core_cities text[];
-  mapped_practice_areas text[];
-  core_practice_areas text[];
-  source_url text;
-  source_excerpt text;
-  firm_name text;
-  city text;
-  website_source_id text;
-  expected_field_key text;
-  expected_selector text;
-  expected_selected_value jsonb;
-  source_key_valid boolean;
-  package_item_count integer;
-  review_item_count integer;
+  v_review_package_row public.prospect_enrichment_packages%ROWTYPE;
+  v_review_firm_row public.gta_prospect_firms%ROWTYPE;
+  v_review_item_row public.prospect_enrichment_items%ROWTYPE;
+  v_review_source_row public.prospect_enrichment_items%ROWTYPE;
+  v_review_choice jsonb;
+  v_review_source_id text;
+  v_review_expected_firm_id uuid;
+  v_review_core jsonb;
+  v_review_core_evidence jsonb;
+  v_review_mapping jsonb;
+  v_review_mapping_item public.prospect_enrichment_items%ROWTYPE;
+  v_review_mapping_source public.prospect_enrichment_items%ROWTYPE;
+  v_review_roster_item public.prospect_enrichment_items%ROWTYPE;
+  v_review_roster_source public.prospect_enrichment_items%ROWTYPE;
+  v_review_source_date date;
+  v_review_roster_date date;
+  v_review_source_record_key text;
+  v_review_expected_source_record_key text;
+  v_review_normalized_name text;
+  v_review_normalized_name_folded text;
+  v_review_domain_value text;
+  v_review_mapped_cities text[];
+  v_review_core_cities text[];
+  v_review_mapped_practice_areas text[];
+  v_review_core_practice_areas text[];
+  v_review_source_url text;
+  v_review_source_excerpt text;
+  v_review_firm_name text;
+  v_review_city text;
+  v_review_website_source_id text;
+  v_review_expected_field_key text;
+  v_review_expected_selector text;
+  v_review_expected_selected_value jsonb;
+  v_review_source_key_valid boolean;
+  v_review_package_item_count integer;
+  v_review_review_item_count integer;
 BEGIN
-  SELECT * INTO package_row FROM public.prospect_enrichment_packages WHERE id = p_package_id;
+  SELECT * INTO v_review_package_row FROM public.prospect_enrichment_packages WHERE id = p_package_id;
   IF NOT FOUND THEN RAISE EXCEPTION 'package_not_found'; END IF;
   IF jsonb_typeof(p_review) <> 'object'
      OR p_review - ARRAY['payloadSha256','identity','items']::text[] <> '{}'::jsonb
      OR NOT (p_review ?& ARRAY['payloadSha256','identity','items'])
-     OR p_review->>'payloadSha256' IS DISTINCT FROM package_row.payload_sha256
+     OR p_review->>'payloadSha256' IS DISTINCT FROM v_review_package_row.payload_sha256
      OR jsonb_typeof(p_review->'identity') <> 'object'
      OR jsonb_typeof(p_review->'items') <> 'array'
      OR (p_review->'identity') - ARRAY['choice','firmId','coreInput']::text[] <> '{}'::jsonb
@@ -1984,9 +1984,9 @@ BEGIN
     RAISE EXCEPTION 'invalid_review';
   END IF;
 
-  SELECT count(*) INTO package_item_count FROM public.prospect_enrichment_items WHERE package_id = p_package_id;
-  review_item_count := jsonb_array_length(p_review->'items');
-  IF review_item_count <> package_item_count OR review_item_count > 1001 OR EXISTS (
+  SELECT count(*) INTO v_review_package_item_count FROM public.prospect_enrichment_items WHERE package_id = p_package_id;
+  v_review_review_item_count := jsonb_array_length(p_review->'items');
+  IF v_review_review_item_count <> v_review_package_item_count OR v_review_review_item_count > 1001 OR EXISTS (
     SELECT 1
     FROM jsonb_array_elements(p_review->'items') AS requested(value)
     LEFT JOIN public.prospect_enrichment_items AS stored
@@ -2025,31 +2025,31 @@ BEGIN
   ) THEN RAISE EXCEPTION 'invalid_review'; END IF;
 
   -- Accepted items can cite only complete, public sources from this package.
-  FOR item_row IN
+  FOR v_review_item_row IN
     SELECT stored.* FROM public.prospect_enrichment_items stored
     JOIN jsonb_array_elements(p_review->'items') requested(value)
       ON requested.value->>'itemId' = stored.id::text
     WHERE stored.package_id = p_package_id AND requested.value->>'disposition' IN ('accept_new','link_existing')
   LOOP
-    IF item_row.item_kind = 'source' THEN RAISE EXCEPTION 'invalid_item'; END IF;
-    IF jsonb_typeof(item_row.data->'sourceIds') <> 'array' OR jsonb_array_length(item_row.data->'sourceIds') = 0 THEN
+    IF v_review_item_row.item_kind = 'source' THEN RAISE EXCEPTION 'invalid_item'; END IF;
+    IF jsonb_typeof(v_review_item_row.data->'sourceIds') <> 'array' OR jsonb_array_length(v_review_item_row.data->'sourceIds') = 0 THEN
       RAISE EXCEPTION 'invalid_item';
     END IF;
-    FOR source_id IN SELECT jsonb_array_elements_text(item_row.data->'sourceIds') LOOP
-      SELECT * INTO source_row
+    FOR v_review_source_id IN SELECT jsonb_array_elements_text(v_review_item_row.data->'sourceIds') LOOP
+      SELECT * INTO v_review_source_row
       FROM public.prospect_enrichment_items source_item
       WHERE source_item.package_id = p_package_id
-        AND source_item.client_item_id = 'src:' || source_id
+        AND source_item.client_item_id = 'src:' || v_review_source_id
         AND source_item.item_kind = 'source';
-      IF NOT FOUND OR source_row.provenance_state <> 'complete' OR source_row.data->>'policyState' <> 'public-source'
-         OR coalesce(source_row.data->>'url','') !~ '^https?://' THEN
+      IF NOT FOUND OR v_review_source_row.provenance_state <> 'complete' OR v_review_source_row.data->>'policyState' <> 'public-source'
+         OR coalesce(v_review_source_row.data->>'url','') !~ '^https?://' THEN
         RAISE EXCEPTION 'invalid_item';
       END IF;
     END LOOP;
-    IF item_row.data ? 'existingRecord' AND item_row.data->'existingRecord' <> 'null'::jsonb THEN
-      IF item_row.data #>> '{existingRecord,table}' IS NULL
-         OR item_row.data #>> '{existingRecord,id}' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-         OR item_row.data #>> '{existingRecord,rowSha256}' !~ '^[a-f0-9]{64}$' THEN
+    IF v_review_item_row.data ? 'existingRecord' AND v_review_item_row.data->'existingRecord' <> 'null'::jsonb THEN
+      IF v_review_item_row.data #>> '{existingRecord,table}' IS NULL
+         OR v_review_item_row.data #>> '{existingRecord,id}' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+         OR v_review_item_row.data #>> '{existingRecord,rowSha256}' !~ '^[a-f0-9]{64}$' THEN
         RAISE EXCEPTION 'invalid_item';
       END IF;
     END IF;
@@ -2058,30 +2058,30 @@ BEGIN
   -- Profile selection is a narrow, typed projection. The client submits the
   -- exact JSON Pointer and value it reviewed; this function re-derives both
   -- from the immutable item and rejects every unsupported item kind.
-  FOR item_row IN
+  FOR v_review_item_row IN
     SELECT stored.* FROM public.prospect_enrichment_items stored
     JOIN jsonb_array_elements(p_review->'items') requested(value)
       ON requested.value->>'itemId' = stored.id::text
     WHERE stored.package_id = p_package_id
       AND jsonb_typeof(requested.value->'profileChoice') = 'object'
   LOOP
-    choice := (SELECT value FROM jsonb_array_elements(p_review->'items') requested(value)
-      WHERE requested.value->>'itemId'=item_row.id::text LIMIT 1);
-    IF item_row.item_kind='website_intake' THEN
-      expected_field_key := 'websiteUrl'; expected_selector := '/data/pageUrl';
-      expected_selected_value := item_row.data #> '{data,pageUrl}';
-    ELSIF item_row.item_kind='firm_fit' THEN
-      expected_field_key := 'office:' || item_row.client_item_id; expected_selector := '/data/office';
-      expected_selected_value := item_row.data #> '{data,office}';
-    ELSIF item_row.item_kind IN ('roster','contact','advertising','opportunity') THEN
-      expected_field_key := item_row.item_kind || ':' || item_row.client_item_id; expected_selector := '/data';
-      expected_selected_value := item_row.data->'data';
+    v_review_choice := (SELECT value FROM jsonb_array_elements(p_review->'items') requested(value)
+      WHERE requested.value->>'itemId'=v_review_item_row.id::text LIMIT 1);
+    IF v_review_item_row.item_kind='website_intake' THEN
+      v_review_expected_field_key := 'websiteUrl'; v_review_expected_selector := '/data/pageUrl';
+      v_review_expected_selected_value := v_review_item_row.data #> '{data,pageUrl}';
+    ELSIF v_review_item_row.item_kind='firm_fit' THEN
+      v_review_expected_field_key := 'office:' || v_review_item_row.client_item_id; v_review_expected_selector := '/data/office';
+      v_review_expected_selected_value := v_review_item_row.data #> '{data,office}';
+    ELSIF v_review_item_row.item_kind IN ('roster','contact','advertising','opportunity') THEN
+      v_review_expected_field_key := v_review_item_row.item_kind || ':' || v_review_item_row.client_item_id; v_review_expected_selector := '/data';
+      v_review_expected_selected_value := v_review_item_row.data->'data';
     ELSE
       RAISE EXCEPTION 'invalid_profile_choice';
     END IF;
-    IF choice->'profileChoice'->>'fieldKey' IS DISTINCT FROM expected_field_key
-       OR choice->'profileChoice'->>'sourceSelector' IS DISTINCT FROM expected_selector
-       OR choice->'profileChoice'->'selectedValue' IS DISTINCT FROM expected_selected_value THEN
+    IF v_review_choice->'profileChoice'->>'fieldKey' IS DISTINCT FROM v_review_expected_field_key
+       OR v_review_choice->'profileChoice'->>'sourceSelector' IS DISTINCT FROM v_review_expected_selector
+       OR v_review_choice->'profileChoice'->'selectedValue' IS DISTINCT FROM v_review_expected_selected_value THEN
       RAISE EXCEPTION 'invalid_profile_choice';
     END IF;
   END LOOP;
@@ -2089,8 +2089,8 @@ BEGIN
   IF p_review->'identity'->>'choice' = 'unresolved' THEN
     IF p_review->'identity'->'firmId' IS DISTINCT FROM 'null'::jsonb
        OR p_review->'identity'->'coreInput' IS DISTINCT FROM 'null'::jsonb
-       OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_review->'items') choice(value)
-                  WHERE choice.value->>'disposition' <> 'retain_only' OR choice.value->'profileChoice' <> 'null'::jsonb) THEN
+       OR EXISTS (SELECT 1 FROM jsonb_array_elements(p_review->'items') review_choice(value)
+                  WHERE review_choice.value->>'disposition' <> 'retain_only' OR review_choice.value->'profileChoice' <> 'null'::jsonb) THEN
       RAISE EXCEPTION 'invalid_identity';
     END IF;
     RETURN NULL;
@@ -2099,252 +2099,252 @@ BEGIN
        OR p_review->'identity'->'coreInput' IS DISTINCT FROM 'null'::jsonb THEN
       RAISE EXCEPTION 'invalid_identity';
     END IF;
-    expected_firm_id := (p_review->'identity'->>'firmId')::uuid;
-    SELECT * INTO firm_row FROM public.gta_prospect_firms WHERE id = expected_firm_id;
+    v_review_expected_firm_id := (p_review->'identity'->>'firmId')::uuid;
+    SELECT * INTO v_review_firm_row FROM public.gta_prospect_firms WHERE id = v_review_expected_firm_id;
     IF NOT FOUND THEN RAISE EXCEPTION 'invalid_identity'; END IF;
-    IF package_row.payload #>> '{subject,databaseFirmId}' IS NOT NULL
-       AND package_row.payload #>> '{subject,databaseFirmId}' <> expected_firm_id::text THEN
+    IF v_review_package_row.payload #>> '{subject,databaseFirmId}' IS NOT NULL
+       AND v_review_package_row.payload #>> '{subject,databaseFirmId}' <> v_review_expected_firm_id::text THEN
       RAISE EXCEPTION 'identity_conflict';
     END IF;
-    IF package_row.payload #>> '{subject,stableFirmId}' IS NOT NULL AND NOT EXISTS (
+    IF v_review_package_row.payload #>> '{subject,stableFirmId}' IS NOT NULL AND NOT EXISTS (
       SELECT 1 FROM public.gta_prospect_stable_identity_registry registry
-      WHERE registry.firm_id = expected_firm_id
-        AND registry.stable_firm_id = package_row.payload #>> '{subject,stableFirmId}'
-        AND registry.canonical_domain = package_row.payload #>> '{subject,canonicalDomain}'
+      WHERE registry.firm_id = v_review_expected_firm_id
+        AND registry.stable_firm_id = v_review_package_row.payload #>> '{subject,stableFirmId}'
+        AND registry.canonical_domain = v_review_package_row.payload #>> '{subject,canonicalDomain}'
     ) THEN RAISE EXCEPTION 'identity_conflict'; END IF;
-    domain_value := lower(regexp_replace(coalesce(package_row.payload #>> '{subject,canonicalDomain}',''), '^www\.', ''));
-    IF domain_value <> '' AND EXISTS (
+    v_review_domain_value := lower(regexp_replace(coalesce(v_review_package_row.payload #>> '{subject,canonicalDomain}',''), '^www\.', ''));
+    IF v_review_domain_value <> '' AND EXISTS (
       SELECT 1 FROM public.gta_prospect_domains domain_row
-      WHERE domain_row.normalized_domain_value = domain_value AND domain_row.firm_id <> expected_firm_id
+      WHERE domain_row.normalized_domain_value = v_review_domain_value AND domain_row.firm_id <> v_review_expected_firm_id
       UNION ALL
       SELECT 1 FROM public.gta_prospect_stable_identity_registry registry
-      WHERE registry.canonical_domain = domain_value AND registry.firm_id <> expected_firm_id
+      WHERE registry.canonical_domain = v_review_domain_value AND registry.firm_id <> v_review_expected_firm_id
     ) THEN RAISE EXCEPTION 'identity_conflict'; END IF;
-    RETURN expected_firm_id;
+    RETURN v_review_expected_firm_id;
   ELSIF p_review->'identity'->>'choice' <> 'new' THEN
     RAISE EXCEPTION 'invalid_identity';
   END IF;
 
   IF p_review->'identity'->'firmId' IS DISTINCT FROM 'null'::jsonb
-     OR package_row.identity_state <> 'unresolved'
-     OR package_row.payload #>> '{subject,databaseFirmId}' IS NOT NULL
-     OR package_row.payload #>> '{subject,stableFirmId}' IS NOT NULL
+     OR v_review_package_row.identity_state <> 'unresolved'
+     OR v_review_package_row.payload #>> '{subject,databaseFirmId}' IS NOT NULL
+     OR v_review_package_row.payload #>> '{subject,stableFirmId}' IS NOT NULL
      OR jsonb_typeof(p_review->'identity'->'coreInput') <> 'object' THEN
     RAISE EXCEPTION 'invalid_identity';
   END IF;
-  core := p_review->'identity'->'coreInput';
-  IF core - ARRAY['id','firmName','city','officeCities','websiteUrl','practiceAreas','observedLawyerCount',
+  v_review_core := p_review->'identity'->'coreInput';
+  IF v_review_core - ARRAY['id','firmName','city','officeCities','websiteUrl','practiceAreas','observedLawyerCount',
       'observedLawyerCountQualifier','observedLawyerCountDisplay','rosterSourceUrl','rosterCheckedAt',
       'reconciliationStatus','legacyClusterLawyerCount','legacyCrosswalk','reconciliationNote','publicContacts','coreEvidence']::text[] <> '{}'::jsonb
-     OR NOT (core ?& ARRAY['id','firmName','city','officeCities','websiteUrl','practiceAreas','observedLawyerCount',
+     OR NOT (v_review_core ?& ARRAY['id','firmName','city','officeCities','websiteUrl','practiceAreas','observedLawyerCount',
       'observedLawyerCountQualifier','observedLawyerCountDisplay','rosterSourceUrl','rosterCheckedAt',
       'reconciliationStatus','legacyClusterLawyerCount','legacyCrosswalk','reconciliationNote','publicContacts','coreEvidence'])
-     OR jsonb_typeof(core->'coreEvidence') <> 'object'
-     OR (core->'coreEvidence') - ARRAY['firmName','city','officeCities','websiteUrl','practiceAreas','roster']::text[] <> '{}'::jsonb
-     OR NOT (core->'coreEvidence' ?& ARRAY['firmName','city','officeCities','websiteUrl','practiceAreas','roster'])
-     OR jsonb_typeof(core->'coreEvidence'->'firmName') <> 'object'
-     OR (core->'coreEvidence'->'firmName') - ARRAY['sourceId']::text[] <> '{}'::jsonb
-     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'firmName')) <> 1
-     OR jsonb_typeof(core->'coreEvidence'->'firmName'->'sourceId') <> 'string'
-     OR jsonb_typeof(core->'coreEvidence'->'city') <> 'object'
-     OR (core->'coreEvidence'->'city') - ARRAY['itemId','sourceId']::text[] <> '{}'::jsonb
-     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'city')) <> 2
-     OR jsonb_typeof(core->'coreEvidence'->'officeCities') <> 'array'
-     OR jsonb_typeof(core->'coreEvidence'->'practiceAreas') <> 'array'
-     OR jsonb_typeof(core->'coreEvidence'->'websiteUrl') <> 'object'
-     OR (core->'coreEvidence'->'websiteUrl') - ARRAY['sourceId']::text[] <> '{}'::jsonb
-     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'websiteUrl')) <> 1
-     OR (core->'coreEvidence'->'websiteUrl'->'sourceId' <> 'null'::jsonb
-         AND jsonb_typeof(core->'coreEvidence'->'websiteUrl'->'sourceId') <> 'string')
-     OR (core->'coreEvidence'->'roster') - ARRAY['itemId','sourceId']::text[] <> '{}'::jsonb
-     OR jsonb_typeof(core->'coreEvidence'->'roster') <> 'object'
-     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'roster')) <> 2
-     OR jsonb_typeof(core->'coreEvidence'->'city'->'itemId') <> 'string'
-     OR jsonb_typeof(core->'coreEvidence'->'city'->'sourceId') <> 'string'
-     OR jsonb_typeof(core->'coreEvidence'->'roster'->'itemId') <> 'string'
-     OR jsonb_typeof(core->'coreEvidence'->'roster'->'sourceId') <> 'string'
-     OR EXISTS (SELECT 1 FROM jsonb_array_elements(core->'coreEvidence'->'officeCities') AS entry(value)
+     OR jsonb_typeof(v_review_core->'coreEvidence') <> 'object'
+     OR (v_review_core->'coreEvidence') - ARRAY['firmName','city','officeCities','websiteUrl','practiceAreas','roster']::text[] <> '{}'::jsonb
+     OR NOT (v_review_core->'coreEvidence' ?& ARRAY['firmName','city','officeCities','websiteUrl','practiceAreas','roster'])
+     OR jsonb_typeof(v_review_core->'coreEvidence'->'firmName') <> 'object'
+     OR (v_review_core->'coreEvidence'->'firmName') - ARRAY['sourceId']::text[] <> '{}'::jsonb
+     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(v_review_core->'coreEvidence'->'firmName')) <> 1
+     OR jsonb_typeof(v_review_core->'coreEvidence'->'firmName'->'sourceId') <> 'string'
+     OR jsonb_typeof(v_review_core->'coreEvidence'->'city') <> 'object'
+     OR (v_review_core->'coreEvidence'->'city') - ARRAY['itemId','sourceId']::text[] <> '{}'::jsonb
+     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(v_review_core->'coreEvidence'->'city')) <> 2
+     OR jsonb_typeof(v_review_core->'coreEvidence'->'officeCities') <> 'array'
+     OR jsonb_typeof(v_review_core->'coreEvidence'->'practiceAreas') <> 'array'
+     OR jsonb_typeof(v_review_core->'coreEvidence'->'websiteUrl') <> 'object'
+     OR (v_review_core->'coreEvidence'->'websiteUrl') - ARRAY['sourceId']::text[] <> '{}'::jsonb
+     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(v_review_core->'coreEvidence'->'websiteUrl')) <> 1
+     OR (v_review_core->'coreEvidence'->'websiteUrl'->'sourceId' <> 'null'::jsonb
+         AND jsonb_typeof(v_review_core->'coreEvidence'->'websiteUrl'->'sourceId') <> 'string')
+     OR (v_review_core->'coreEvidence'->'roster') - ARRAY['itemId','sourceId']::text[] <> '{}'::jsonb
+     OR jsonb_typeof(v_review_core->'coreEvidence'->'roster') <> 'object'
+     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(v_review_core->'coreEvidence'->'roster')) <> 2
+     OR jsonb_typeof(v_review_core->'coreEvidence'->'city'->'itemId') <> 'string'
+     OR jsonb_typeof(v_review_core->'coreEvidence'->'city'->'sourceId') <> 'string'
+     OR jsonb_typeof(v_review_core->'coreEvidence'->'roster'->'itemId') <> 'string'
+     OR jsonb_typeof(v_review_core->'coreEvidence'->'roster'->'sourceId') <> 'string'
+     OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_review_core->'coreEvidence'->'officeCities') AS entry(value)
        WHERE jsonb_typeof(entry.value) <> 'object' OR entry.value - ARRAY['itemId','sourceId']::text[] <> '{}'::jsonb
          OR NOT (entry.value ?& ARRAY['itemId','sourceId'])
          OR jsonb_typeof(entry.value->'itemId') <> 'string'
          OR entry.value->>'itemId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
          OR jsonb_typeof(entry.value->'sourceId') <> 'string'
          OR entry.value->>'sourceId' !~ '^[a-z0-9][a-z0-9._-]{0,119}$')
-     OR EXISTS (SELECT 1 FROM jsonb_array_elements(core->'coreEvidence'->'practiceAreas') AS entry(value)
+     OR EXISTS (SELECT 1 FROM jsonb_array_elements(v_review_core->'coreEvidence'->'practiceAreas') AS entry(value)
        WHERE jsonb_typeof(entry.value) <> 'object' OR entry.value - ARRAY['itemId','sourceId']::text[] <> '{}'::jsonb
          OR NOT (entry.value ?& ARRAY['itemId','sourceId'])
          OR jsonb_typeof(entry.value->'itemId') <> 'string'
          OR entry.value->>'itemId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
          OR jsonb_typeof(entry.value->'sourceId') <> 'string'
          OR entry.value->>'sourceId' !~ '^[a-z0-9][a-z0-9._-]{0,119}$')
-     OR core->>'reconciliationStatus' <> 'provisional_new'
-     OR core->'legacyClusterLawyerCount' <> 'null'::jsonb OR core->'legacyCrosswalk' <> 'null'::jsonb
-     OR core->'publicContacts' <> '[]'::jsonb
-     OR jsonb_typeof(core->'officeCities') <> 'array' OR jsonb_array_length(core->'officeCities') = 0
-     OR jsonb_typeof(core->'practiceAreas') <> 'array'
-     OR core->>'firmName' IS DISTINCT FROM package_row.payload #>> '{subject,displayName}'
-     OR core->>'city' IS DISTINCT FROM core->'officeCities'->>0
-     OR core->>'observedLawyerCountQualifier' NOT IN ('exact','at_least','unknown')
-     OR char_length(btrim(coalesce(core->>'reconciliationNote',''))) < 40
-     OR char_length(core->>'reconciliationNote') > 5000 THEN
+     OR v_review_core->>'reconciliationStatus' <> 'provisional_new'
+     OR v_review_core->'legacyClusterLawyerCount' <> 'null'::jsonb OR v_review_core->'legacyCrosswalk' <> 'null'::jsonb
+     OR v_review_core->'publicContacts' <> '[]'::jsonb
+     OR jsonb_typeof(v_review_core->'officeCities') <> 'array' OR jsonb_array_length(v_review_core->'officeCities') = 0
+     OR jsonb_typeof(v_review_core->'practiceAreas') <> 'array'
+     OR v_review_core->>'firmName' IS DISTINCT FROM v_review_package_row.payload #>> '{subject,displayName}'
+     OR v_review_core->>'city' IS DISTINCT FROM v_review_core->'officeCities'->>0
+     OR v_review_core->>'observedLawyerCountQualifier' NOT IN ('exact','at_least','unknown')
+     OR char_length(btrim(coalesce(v_review_core->>'reconciliationNote',''))) < 40
+     OR char_length(v_review_core->>'reconciliationNote') > 5000 THEN
     RAISE EXCEPTION 'invalid_identity';
   END IF;
 
-  firm_name := core->>'firmName';
-  city := core->>'city';
-  IF core->'observedLawyerCountQualifier' = '"unknown"'::jsonb THEN
-    IF core->'observedLawyerCount' <> 'null'::jsonb THEN RAISE EXCEPTION 'invalid_identity'; END IF;
-  ELSIF jsonb_typeof(core->'observedLawyerCount') <> 'number'
-        OR (core->>'observedLawyerCount')::numeric < 0 OR (core->>'observedLawyerCount')::numeric <> trunc((core->>'observedLawyerCount')::numeric) THEN
+  v_review_firm_name := v_review_core->>'firmName';
+  v_review_city := v_review_core->>'city';
+  IF v_review_core->'observedLawyerCountQualifier' = '"unknown"'::jsonb THEN
+    IF v_review_core->'observedLawyerCount' <> 'null'::jsonb THEN RAISE EXCEPTION 'invalid_identity'; END IF;
+  ELSIF jsonb_typeof(v_review_core->'observedLawyerCount') <> 'number'
+        OR (v_review_core->>'observedLawyerCount')::numeric < 0 OR (v_review_core->>'observedLawyerCount')::numeric <> trunc((v_review_core->>'observedLawyerCount')::numeric) THEN
     RAISE EXCEPTION 'invalid_identity';
   END IF;
-  IF core->'websiteUrl' <> 'null'::jsonb AND coalesce(core->>'websiteUrl','') !~ '^https?://'
-     OR jsonb_typeof(core->'practiceAreas') <> 'array'
-     OR core->'officeCities'->>0 IS DISTINCT FROM city THEN RAISE EXCEPTION 'invalid_identity'; END IF;
+  IF v_review_core->'websiteUrl' <> 'null'::jsonb AND coalesce(v_review_core->>'websiteUrl','') !~ '^https?://'
+     OR jsonb_typeof(v_review_core->'practiceAreas') <> 'array'
+     OR v_review_core->'officeCities'->>0 IS DISTINCT FROM v_review_city THEN RAISE EXCEPTION 'invalid_identity'; END IF;
 
-  core_evidence := core->'coreEvidence';
+  v_review_core_evidence := v_review_core->'coreEvidence';
   -- Firm name is supported by an exact public-source excerpt, never by the subject claim alone.
-  source_id := core_evidence #>> '{firmName,sourceId}';
-  SELECT * INTO source_row FROM public.prospect_enrichment_items
-  WHERE package_id = p_package_id AND client_item_id = 'src:' || source_id AND item_kind = 'source';
-  IF NOT FOUND OR source_row.provenance_state <> 'complete' OR source_row.data->>'policyState' <> 'public-source'
-     OR source_row.data->>'excerpt' IS NULL OR position(firm_name IN source_row.data->>'excerpt') = 0 THEN
+  source_id := v_review_core_evidence #>> '{firmName,sourceId}';
+  SELECT * INTO v_review_source_row FROM public.prospect_enrichment_items
+  WHERE package_id = p_package_id AND client_item_id = 'src:' || v_review_source_id AND item_kind = 'source';
+  IF NOT FOUND OR v_review_source_row.provenance_state <> 'complete' OR v_review_source_row.data->>'policyState' <> 'public-source'
+     OR v_review_source_row.data->>'excerpt' IS NULL OR position(v_review_firm_name IN v_review_source_row.data->>'excerpt') = 0 THEN
     RAISE EXCEPTION 'invalid_identity';
   END IF;
   IF NOT EXISTS (
     SELECT 1 FROM public.prospect_enrichment_items item
-    JOIN jsonb_array_elements(p_review->'items') choice(value) ON choice.value->>'itemId' = item.id::text
+    JOIN jsonb_array_elements(p_review->'items') review_choice(value) ON review_choice.value->>'itemId' = item.id::text
     WHERE item.package_id = p_package_id AND item.item_kind <> 'source'
-      AND choice.value->>'disposition' IN ('accept_new','link_existing')
-      AND item.data->'sourceIds' @> jsonb_build_array(source_id)
+      AND review_choice.value->>'disposition' IN ('accept_new','link_existing')
+      AND item.data->'sourceIds' @> jsonb_build_array(v_review_source_id)
   ) THEN RAISE EXCEPTION 'invalid_identity'; END IF;
 
   -- The primary and all office cities come only from explicitly selected firm-fit evidence.
-  mapping := core_evidence->'city';
-  IF mapping->>'itemId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN RAISE EXCEPTION 'invalid_identity'; END IF;
-  SELECT * INTO mapping_item FROM public.prospect_enrichment_items WHERE id=(mapping->>'itemId')::uuid AND package_id=p_package_id;
-  SELECT * INTO mapping_source FROM public.prospect_enrichment_items WHERE package_id=p_package_id AND client_item_id='src:' || (mapping->>'sourceId') AND item_kind='source';
-  IF NOT FOUND OR mapping_item.item_kind <> 'firm_fit' OR mapping_item.data #>> '{data,office,city}' IS DISTINCT FROM city
-     OR NOT mapping_item.data->'sourceIds' @> jsonb_build_array(mapping->>'sourceId')
-     OR mapping_source.data->>'policyState' <> 'public-source' OR mapping_source.provenance_state <> 'complete'
-     OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(p_review->'items') choice(value)
-       WHERE choice.value->>'itemId'=mapping_item.id::text AND choice.value->>'disposition' IN ('accept_new','link_existing')) THEN
+  mapping := v_review_core_evidence->'city';
+  IF v_review_mapping->>'itemId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN RAISE EXCEPTION 'invalid_identity'; END IF;
+  SELECT * INTO v_review_mapping_item FROM public.prospect_enrichment_items WHERE id=(v_review_mapping->>'itemId')::uuid AND package_id=p_package_id;
+  SELECT * INTO v_review_mapping_source FROM public.prospect_enrichment_items WHERE package_id=p_package_id AND client_item_id='src:' || (v_review_mapping->>'sourceId') AND item_kind='source';
+  IF NOT FOUND OR v_review_mapping_item.item_kind <> 'firm_fit' OR v_review_mapping_item.data #>> '{data,office,city}' IS DISTINCT FROM v_review_city
+     OR NOT v_review_mapping_item.data->'sourceIds' @> jsonb_build_array(v_review_mapping->>'sourceId')
+     OR v_review_mapping_source.data->>'policyState' <> 'public-source' OR v_review_mapping_source.provenance_state <> 'complete'
+     OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(p_review->'items') review_choice(value)
+       WHERE review_choice.value->>'itemId'=v_review_mapping_item.id::text AND review_choice.value->>'disposition' IN ('accept_new','link_existing')) THEN
     RAISE EXCEPTION 'invalid_identity';
   END IF;
 
-  SELECT array_agg(city_value ORDER BY ordinal), array_agg(city_value ORDER BY ordinal)
-  INTO mapped_cities, core_cities
+  SELECT array_agg(cities.city_value ORDER BY cities.ordinal), array_agg(cities.city_value ORDER BY cities.ordinal)
+  INTO v_review_mapped_cities, v_review_core_cities
   FROM (
     SELECT entry.ordinality AS ordinal,
-           mapping_item.data #>> '{data,office,city}' AS city_value
-    FROM jsonb_array_elements(core_evidence->'officeCities') WITH ORDINALITY AS entry(value,ordinality)
-    JOIN public.prospect_enrichment_items mapping_item ON mapping_item.id=(entry.value->>'itemId')::uuid
-    JOIN public.prospect_enrichment_items mapping_source ON mapping_source.package_id=p_package_id
-      AND mapping_source.client_item_id='src:' || (entry.value->>'sourceId') AND mapping_source.item_kind='source'
-    WHERE mapping_item.package_id=p_package_id AND mapping_item.item_kind='firm_fit'
-      AND mapping_item.data->'sourceIds' @> jsonb_build_array(entry.value->>'sourceId')
-      AND mapping_source.provenance_state='complete' AND mapping_source.data->>'policyState'='public-source'
-      AND EXISTS (SELECT 1 FROM jsonb_array_elements(p_review->'items') choice(value)
-        WHERE choice.value->>'itemId'=mapping_item.id::text AND choice.value->>'disposition' IN ('accept_new','link_existing'))
+           city_item.data #>> '{data,office,city}' AS city_value
+    FROM jsonb_array_elements(v_review_core_evidence->'officeCities') WITH ORDINALITY AS entry(value,ordinality)
+    JOIN public.prospect_enrichment_items city_item ON city_item.id=(entry.value->>'itemId')::uuid
+    JOIN public.prospect_enrichment_items city_source ON city_source.package_id=p_package_id
+      AND city_source.client_item_id='src:' || (entry.value->>'sourceId') AND city_source.item_kind='source'
+    WHERE city_item.package_id=p_package_id AND city_item.item_kind='firm_fit'
+      AND city_item.data->'sourceIds' @> jsonb_build_array(entry.value->>'sourceId')
+      AND city_source.provenance_state='complete' AND city_source.data->>'policyState'='public-source'
+      AND EXISTS (SELECT 1 FROM jsonb_array_elements(p_review->'items') review_choice(value)
+        WHERE review_choice.value->>'itemId'=city_item.id::text AND review_choice.value->>'disposition' IN ('accept_new','link_existing'))
   ) cities;
-  SELECT array_agg(value ORDER BY ordinality) INTO core_cities FROM jsonb_array_elements_text(core->'officeCities') WITH ORDINALITY AS listed(value,ordinality);
-  IF mapped_cities IS NULL OR mapped_cities IS DISTINCT FROM core_cities OR mapped_cities[1] IS DISTINCT FROM city
-     OR (SELECT count(DISTINCT lower(btrim(value))) FROM unnest(mapped_cities) value) <> cardinality(mapped_cities)
-     OR (SELECT count(*) FROM jsonb_array_elements(core_evidence->'officeCities')) <> cardinality(mapped_cities) THEN
+  SELECT array_agg(value ORDER BY ordinality) INTO v_review_core_cities FROM jsonb_array_elements_text(v_review_core->'officeCities') WITH ORDINALITY AS listed(value,ordinality);
+  IF v_review_mapped_cities IS NULL OR v_review_mapped_cities IS DISTINCT FROM v_review_core_cities OR v_review_mapped_cities[1] IS DISTINCT FROM v_review_city
+     OR (SELECT count(DISTINCT lower(btrim(value))) FROM unnest(v_review_mapped_cities) value) <> cardinality(v_review_mapped_cities)
+     OR (SELECT count(*) FROM jsonb_array_elements(v_review_core_evidence->'officeCities')) <> cardinality(v_review_mapped_cities) THEN
     RAISE EXCEPTION 'invalid_identity';
   END IF;
 
-  SELECT array_agg(name_value ORDER BY normalized_name COLLATE "C") INTO mapped_practice_areas
+  SELECT array_agg(services.name_value ORDER BY services.service_normalized_name COLLATE "C") INTO v_review_mapped_practice_areas
   FROM (
-    SELECT lower(btrim(item.data #>> '{data,name}')) AS normalized_name,
+    SELECT lower(btrim(item.data #>> '{data,name}') COLLATE "C") AS service_normalized_name,
            min(item.data #>> '{data,name}') AS name_value
-    FROM jsonb_array_elements(core_evidence->'practiceAreas') AS entry(value)
+    FROM jsonb_array_elements(v_review_core_evidence->'practiceAreas') AS entry(value)
     JOIN public.prospect_enrichment_items item ON item.id=(entry.value->>'itemId')::uuid AND item.package_id=p_package_id
     JOIN public.prospect_enrichment_items source_item ON source_item.package_id=p_package_id
       AND source_item.client_item_id='src:' || (entry.value->>'sourceId') AND source_item.item_kind='source'
     WHERE item.item_kind='service' AND item.data->'sourceIds' @> jsonb_build_array(entry.value->>'sourceId')
       AND source_item.provenance_state='complete' AND source_item.data->>'policyState'='public-source'
-      AND EXISTS (SELECT 1 FROM jsonb_array_elements(p_review->'items') choice(value)
-        WHERE choice.value->>'itemId'=item.id::text AND choice.value->>'disposition' IN ('accept_new','link_existing'))
+      AND EXISTS (SELECT 1 FROM jsonb_array_elements(p_review->'items') review_choice(value)
+        WHERE review_choice.value->>'itemId'=item.id::text AND review_choice.value->>'disposition' IN ('accept_new','link_existing'))
     GROUP BY lower(btrim(item.data #>> '{data,name}') COLLATE "C")
   ) services;
-  SELECT array_agg(value ORDER BY ordinality) INTO core_practice_areas FROM jsonb_array_elements_text(core->'practiceAreas') WITH ORDINALITY AS listed(value,ordinality);
-  IF coalesce(mapped_practice_areas,'{}') IS DISTINCT FROM coalesce(core_practice_areas,'{}')
-     OR (SELECT count(*) FROM jsonb_array_elements(core_evidence->'practiceAreas')) <> coalesce(cardinality(mapped_practice_areas),0) THEN
+  SELECT array_agg(value ORDER BY ordinality) INTO v_review_core_practice_areas FROM jsonb_array_elements_text(v_review_core->'practiceAreas') WITH ORDINALITY AS listed(value,ordinality);
+  IF coalesce(v_review_mapped_practice_areas,'{}') IS DISTINCT FROM coalesce(v_review_core_practice_areas,'{}')
+     OR (SELECT count(*) FROM jsonb_array_elements(v_review_core_evidence->'practiceAreas')) <> coalesce(cardinality(v_review_mapped_practice_areas),0) THEN
     RAISE EXCEPTION 'invalid_identity';
   END IF;
 
-  mapping := core_evidence->'roster';
-  IF mapping->>'itemId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN RAISE EXCEPTION 'invalid_identity'; END IF;
-  SELECT * INTO roster_item FROM public.prospect_enrichment_items WHERE id=(mapping->>'itemId')::uuid AND package_id=p_package_id;
-  SELECT * INTO roster_source FROM public.prospect_enrichment_items WHERE package_id=p_package_id AND client_item_id='src:' || (mapping->>'sourceId') AND item_kind='source';
-  IF NOT FOUND OR roster_item.item_kind <> 'roster' OR roster_item.data->>'evidenceState' <> 'asserted'
-     OR NOT roster_item.data->'sourceIds' @> jsonb_build_array(mapping->>'sourceId')
-     OR roster_source.provenance_state <> 'complete' OR roster_source.data->>'policyState' <> 'public-source'
-     OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(p_review->'items') choice(value)
-       WHERE choice.value->>'itemId'=roster_item.id::text AND choice.value->>'disposition' IN ('accept_new','link_existing')) THEN
+  v_review_mapping := v_review_core_evidence->'roster';
+  IF v_review_mapping->>'itemId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$' THEN RAISE EXCEPTION 'invalid_identity'; END IF;
+  SELECT * INTO v_review_roster_item FROM public.prospect_enrichment_items WHERE id=(v_review_mapping->>'itemId')::uuid AND package_id=p_package_id;
+  SELECT * INTO v_review_roster_source FROM public.prospect_enrichment_items WHERE package_id=p_package_id AND client_item_id='src:' || (v_review_mapping->>'sourceId') AND item_kind='source';
+  IF NOT FOUND OR v_review_roster_item.item_kind <> 'roster' OR v_review_roster_item.data->>'evidenceState' <> 'asserted'
+     OR NOT v_review_roster_item.data->'sourceIds' @> jsonb_build_array(v_review_mapping->>'sourceId')
+     OR v_review_roster_source.provenance_state <> 'complete' OR v_review_roster_source.data->>'policyState' <> 'public-source'
+     OR NOT EXISTS (SELECT 1 FROM jsonb_array_elements(p_review->'items') review_choice(value)
+       WHERE review_choice.value->>'itemId'=v_review_roster_item.id::text AND review_choice.value->>'disposition' IN ('accept_new','link_existing')) THEN
     RAISE EXCEPTION 'invalid_identity';
   END IF;
-  roster_date := coalesce(roster_item.observed_on,(roster_item.observed_at AT TIME ZONE 'UTC')::date);
-  source_date := coalesce(nullif(roster_source.data->>'observedOn','')::date,(nullif(roster_source.data->>'observedAt','')::timestamptz AT TIME ZONE 'UTC')::date);
-  IF roster_date IS NULL OR source_date IS DISTINCT FROM roster_date
-     OR core->>'rosterCheckedAt' IS DISTINCT FROM to_char(roster_date,'YYYY-MM-DD')
-     OR core->>'rosterSourceUrl' IS DISTINCT FROM roster_source.data->>'url'
-     OR core->'observedLawyerCount' IS DISTINCT FROM roster_item.data #> '{data,lawyerCount}'
-     OR core->>'observedLawyerCountQualifier' IS DISTINCT FROM roster_item.data #>> '{data,countQualifier}'
-     OR core->'observedLawyerCountDisplay' IS DISTINCT FROM roster_item.data #> '{data,display}' THEN
+  v_review_roster_date := coalesce(v_review_roster_item.observed_on,(v_review_roster_item.observed_at AT TIME ZONE 'UTC')::date);
+  v_review_source_date := coalesce(nullif(v_review_roster_source.data->>'observedOn','')::date,(nullif(v_review_roster_source.data->>'observedAt','')::timestamptz AT TIME ZONE 'UTC')::date);
+  IF v_review_roster_date IS NULL OR v_review_source_date IS DISTINCT FROM v_review_roster_date
+     OR v_review_core->>'rosterCheckedAt' IS DISTINCT FROM to_char(v_review_roster_date,'YYYY-MM-DD')
+     OR v_review_core->>'rosterSourceUrl' IS DISTINCT FROM v_review_roster_source.data->>'url'
+     OR v_review_core->'observedLawyerCount' IS DISTINCT FROM v_review_roster_item.data #> '{data,lawyerCount}'
+     OR v_review_core->>'observedLawyerCountQualifier' IS DISTINCT FROM v_review_roster_item.data #>> '{data,countQualifier}'
+     OR v_review_core->'observedLawyerCountDisplay' IS DISTINCT FROM v_review_roster_item.data #> '{data,display}' THEN
     RAISE EXCEPTION 'invalid_identity';
   END IF;
 
-  website_source_id := core_evidence #>> '{websiteUrl,sourceId}';
-  IF core->'websiteUrl' = 'null'::jsonb THEN
-    IF website_source_id IS NOT NULL THEN RAISE EXCEPTION 'invalid_identity'; END IF;
+  v_review_website_source_id := v_review_core_evidence #>> '{websiteUrl,sourceId}';
+  IF v_review_core->'websiteUrl' = 'null'::jsonb THEN
+    IF v_review_website_source_id IS NOT NULL THEN RAISE EXCEPTION 'invalid_identity'; END IF;
   ELSE
-    IF website_source_id IS NULL OR core->>'websiteUrl' !~ '^https?://' THEN RAISE EXCEPTION 'invalid_identity'; END IF;
-    SELECT * INTO source_row FROM public.prospect_enrichment_items
-    WHERE package_id=p_package_id AND client_item_id='src:' || website_source_id AND item_kind='source';
-    source_date := coalesce(nullif(source_row.data->>'observedOn','')::date,(nullif(source_row.data->>'observedAt','')::timestamptz AT TIME ZONE 'UTC')::date);
-    IF NOT FOUND OR source_row.provenance_state <> 'complete' OR source_row.data->>'policyState' <> 'public-source'
-       OR source_row.data->>'url' IS DISTINCT FROM core->>'websiteUrl' OR source_date IS DISTINCT FROM roster_date THEN
+    IF v_review_website_source_id IS NULL OR v_review_core->>'websiteUrl' !~ '^https?://' THEN RAISE EXCEPTION 'invalid_identity'; END IF;
+    SELECT * INTO v_review_source_row FROM public.prospect_enrichment_items
+    WHERE package_id=p_package_id AND client_item_id='src:' || v_review_website_source_id AND item_kind='source';
+    v_review_source_date := coalesce(nullif(v_review_source_row.data->>'observedOn','')::date,(nullif(v_review_source_row.data->>'observedAt','')::timestamptz AT TIME ZONE 'UTC')::date);
+    IF NOT FOUND OR v_review_source_row.provenance_state <> 'complete' OR v_review_source_row.data->>'policyState' <> 'public-source'
+       OR v_review_source_row.data->>'url' IS DISTINCT FROM v_review_core->>'websiteUrl' OR v_review_source_date IS DISTINCT FROM v_review_roster_date THEN
       RAISE EXCEPTION 'invalid_identity';
     END IF;
   END IF;
 
-  IF position(firm_name IN core->>'reconciliationNote') = 0
-     OR position(city IN core->>'reconciliationNote') = 0
-     OR position(to_char(roster_date,'YYYY-MM-DD') IN core->>'reconciliationNote') = 0
-     OR lower(btrim(core->>'reconciliationNote')) IN ('reviewed','new firm','verified','evidence reviewed') THEN
+  IF position(v_review_firm_name IN v_review_core->>'reconciliationNote') = 0
+     OR position(v_review_city IN v_review_core->>'reconciliationNote') = 0
+     OR position(to_char(v_review_roster_date,'YYYY-MM-DD') IN v_review_core->>'reconciliationNote') = 0
+     OR lower(btrim(v_review_core->>'reconciliationNote')) IN ('reviewed','new firm','verified','evidence reviewed') THEN
     RAISE EXCEPTION 'invalid_identity';
   END IF;
 
-  source_record_key := package_row.payload #>> '{subject,sourceRecordKey}';
-  source_key_valid := source_record_key ~ '^[a-z0-9][a-z0-9-]{0,159}$';
-  IF source_key_valid AND NOT EXISTS (SELECT 1 FROM public.gta_prospect_firms firm WHERE firm.source_record_key=source_record_key) THEN
-    expected_source_record_key := source_record_key;
+  v_review_source_record_key := v_review_package_row.payload #>> '{subject,sourceRecordKey}';
+  v_review_source_key_valid := v_review_source_record_key ~ '^[a-z0-9][a-z0-9-]{0,159}$';
+  IF v_review_source_key_valid AND NOT EXISTS (SELECT 1 FROM public.gta_prospect_firms firm WHERE firm.source_record_key=v_review_source_record_key) THEN
+    v_review_expected_source_record_key := v_review_source_record_key;
   ELSE
-    expected_source_record_key := 'pe-' || replace(p_package_id::text,'-','');
+    v_review_expected_source_record_key := 'pe-' || replace(p_package_id::text,'-','');
   END IF;
-  IF core->>'id' IS DISTINCT FROM expected_source_record_key THEN RAISE EXCEPTION 'invalid_identity'; END IF;
+  IF v_review_core->>'id' IS DISTINCT FROM v_review_expected_source_record_key THEN RAISE EXCEPTION 'invalid_identity'; END IF;
 
-  normalized_name := lower(regexp_replace(btrim(firm_name), '\s+', ' ', 'g'));
-  normalized_name_folded := btrim(regexp_replace(normalized_name, '[^a-z0-9]+', ' ', 'g'));
+  v_review_normalized_name := lower(regexp_replace(btrim(v_review_firm_name), '\s+', ' ', 'g'));
+  v_review_normalized_name_folded := btrim(regexp_replace(v_review_normalized_name, '[^a-z0-9]+', ' ', 'g'));
   IF EXISTS (
     SELECT 1 FROM public.gta_prospect_firms firm
-    WHERE lower(regexp_replace(btrim(firm.normalized_display_name), '\s+', ' ', 'g'))=normalized_name
-       OR btrim(regexp_replace(lower(firm.normalized_display_name), '[^a-z0-9]+', ' ', 'g'))=normalized_name_folded
+    WHERE lower(regexp_replace(btrim(firm.normalized_display_name), '\s+', ' ', 'g'))=v_review_normalized_name
+       OR btrim(regexp_replace(lower(firm.normalized_display_name), '[^a-z0-9]+', ' ', 'g'))=v_review_normalized_name_folded
     UNION ALL
     SELECT 1 FROM public.gta_prospect_aliases alias
-    WHERE lower(regexp_replace(btrim(alias.normalized_alias_value), '\s+', ' ', 'g'))=normalized_name
-       OR btrim(regexp_replace(lower(alias.normalized_alias_value), '[^a-z0-9]+', ' ', 'g'))=normalized_name_folded
+    WHERE lower(regexp_replace(btrim(alias.normalized_alias_value), '\s+', ' ', 'g'))=v_review_normalized_name
+       OR btrim(regexp_replace(lower(alias.normalized_alias_value), '[^a-z0-9]+', ' ', 'g'))=v_review_normalized_name_folded
   ) THEN RAISE EXCEPTION 'identity_conflict'; END IF;
 
-  IF core->'websiteUrl' <> 'null'::jsonb THEN
-    domain_value := lower(regexp_replace(split_part(split_part(regexp_replace(core->>'websiteUrl','^https?://','','i'),'/','1'),':','1'), '^www\.', ''));
-    IF domain_value = '' OR EXISTS (
-      SELECT 1 FROM public.gta_prospect_domains domain_row WHERE domain_row.normalized_domain_value=domain_value
-      UNION ALL SELECT 1 FROM public.gta_prospect_stable_identity_registry registry WHERE registry.canonical_domain=domain_value
+  IF v_review_core->'websiteUrl' <> 'null'::jsonb THEN
+    v_review_domain_value := lower(regexp_replace(split_part(split_part(regexp_replace(v_review_core->>'websiteUrl','^https?://','','i'),'/','1'),':','1'), '^www\.', ''));
+    IF v_review_domain_value = '' OR EXISTS (
+      SELECT 1 FROM public.gta_prospect_domains domain_row WHERE domain_row.normalized_domain_value=v_review_domain_value
+      UNION ALL SELECT 1 FROM public.gta_prospect_stable_identity_registry registry WHERE registry.canonical_domain=v_review_domain_value
       UNION ALL SELECT 1 FROM public.gta_prospect_firms firm
-        WHERE lower(regexp_replace(split_part(split_part(regexp_replace(coalesce(firm.website_url,''),'^https?://','','i'),'/','1'),':','1'), '^www\.', ''))=domain_value
+        WHERE lower(regexp_replace(split_part(split_part(regexp_replace(coalesce(firm.website_url,''),'^https?://','','i'),'/','1'),':','1'), '^www\.', ''))=v_review_domain_value
     ) THEN RAISE EXCEPTION 'identity_conflict'; END IF;
   END IF;
   RETURN NULL;
