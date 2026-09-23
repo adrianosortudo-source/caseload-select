@@ -562,7 +562,7 @@ DECLARE
 BEGIN
   IF p_submitted_by IS NULL OR char_length(btrim(p_submitted_by)) NOT BETWEEN 1 AND 200 OR
      jsonb_typeof(p_chunk) <> 'object' OR octet_length(p_chunk::text) > 2097152 OR
-     jsonb_object_length(p_chunk) <> 14 OR NOT (p_chunk ?& ARRAY[
+     (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(p_chunk)) <> 14 OR NOT (p_chunk ?& ARRAY[
        'schemaVersion','adapterVersion','runId','sourceSystem','sourceName','sourceManifestSha256',
        'runManifestSha256','generatedAt','expectedPackageCount','expectedEntryCount','chunkIndex',
        'chunkCount','chunkSha256','entries'
@@ -609,13 +609,13 @@ BEGIN
   IF v_computed_sha256 <> v_chunk_sha256 THEN RAISE EXCEPTION 'manifest chunk hash mismatch'; END IF;
 
   FOR v_entry IN SELECT value FROM jsonb_array_elements(p_chunk->'entries') AS entries(value) LOOP
-    IF jsonb_typeof(v_entry) <> 'object' OR jsonb_object_length(v_entry) <> 9 OR NOT (v_entry ?& ARRAY[
+    IF jsonb_typeof(v_entry) <> 'object' OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(v_entry)) <> 9 OR NOT (v_entry ?& ARRAY[
       'entryId','researchKey','clientPackageId','expectedPayloadSha256','itemCount','clientItems',
       'initialDisposition','source','errorCodes'
     ]) OR jsonb_typeof(v_entry->'entryId') <> 'string' OR
        jsonb_typeof(v_entry->'itemCount') <> 'number' OR
        jsonb_typeof(v_entry->'clientItems') <> 'array' OR jsonb_typeof(v_entry->'source') <> 'object' OR
-       jsonb_object_length(v_entry->'source') <> 4 OR NOT (v_entry->'source' ?& ARRAY[
+       (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(v_entry->'source')) <> 4 OR NOT (v_entry->'source' ?& ARRAY[
          'sourceRoot','relativePath','sourcePointer','fileSha256'
        ]) OR jsonb_typeof(v_entry #> '{source,relativePath}') <> 'string' OR
        jsonb_typeof(v_entry #> '{source,sourcePointer}') <> 'string' OR
@@ -649,7 +649,7 @@ BEGIN
       RAISE EXCEPTION 'invalid run manifest entry';
     END IF;
     FOR v_item IN SELECT value FROM jsonb_array_elements(v_entry->'clientItems') AS items(value) LOOP
-      IF jsonb_typeof(v_item) <> 'object' OR jsonb_object_length(v_item) <> 4 OR NOT (v_item ?& ARRAY[
+      IF jsonb_typeof(v_item) <> 'object' OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(v_item)) <> 4 OR NOT (v_item ?& ARRAY[
        'clientItemId','itemKind','sourceEventKey','semanticSha256'
       ]) OR jsonb_typeof(v_item->'clientItemId') <> 'string' OR
          jsonb_typeof(v_item->'itemKind') <> 'string' OR
@@ -937,7 +937,7 @@ BEGIN
   END IF;
 
   FOR source_input IN SELECT value FROM jsonb_array_elements(p_sources) AS rows(value) LOOP
-    IF jsonb_typeof(source_input) <> 'object' OR jsonb_object_length(source_input) <> 8 OR
+    IF jsonb_typeof(source_input) <> 'object' OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(source_input)) <> 8 OR
        NOT (source_input ?& ARRAY['sourceId','clientItemId','sourceEventKey','semanticSha256','data','observedAt','observedOn','provenanceState']) OR
        jsonb_typeof(source_input->'data') <> 'object' OR
        source_input->>'sourceId' IS DISTINCT FROM source_input #>> '{data,sourceId}' OR
@@ -968,7 +968,7 @@ BEGIN
 
   FOR item_input IN SELECT value FROM jsonb_array_elements(p_items) AS rows(value) LOOP
     item_data := item_input->'data';
-    IF jsonb_typeof(item_input) <> 'object' OR jsonb_object_length(item_input) <> 9 OR
+    IF jsonb_typeof(item_input) <> 'object' OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(item_input)) <> 9 OR
        NOT (item_input ?& ARRAY['clientItemId','itemKind','sourceEventKey','semanticSha256','data','sourceIds','observedAt','observedOn','provenanceState']) OR
        jsonb_typeof(item_data) <> 'object' OR jsonb_typeof(item_input->'sourceIds') <> 'array' OR
        item_input->'sourceIds' IS DISTINCT FROM item_data->'sourceIds' OR
@@ -2144,21 +2144,21 @@ BEGIN
      OR NOT (core->'coreEvidence' ?& ARRAY['firmName','city','officeCities','websiteUrl','practiceAreas','roster'])
      OR jsonb_typeof(core->'coreEvidence'->'firmName') <> 'object'
      OR core->'coreEvidence'->'firmName' - ARRAY['sourceId'] <> '{}'::jsonb
-     OR jsonb_object_length(core->'coreEvidence'->'firmName') <> 1
+     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'firmName')) <> 1
      OR jsonb_typeof(core->'coreEvidence'->'firmName'->'sourceId') <> 'string'
      OR jsonb_typeof(core->'coreEvidence'->'city') <> 'object'
      OR core->'coreEvidence'->'city' - ARRAY['itemId','sourceId'] <> '{}'::jsonb
-     OR jsonb_object_length(core->'coreEvidence'->'city') <> 2
+     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'city')) <> 2
      OR jsonb_typeof(core->'coreEvidence'->'officeCities') <> 'array'
      OR jsonb_typeof(core->'coreEvidence'->'practiceAreas') <> 'array'
      OR jsonb_typeof(core->'coreEvidence'->'websiteUrl') <> 'object'
      OR core->'coreEvidence'->'websiteUrl' - ARRAY['sourceId'] <> '{}'::jsonb
-     OR jsonb_object_length(core->'coreEvidence'->'websiteUrl') <> 1
+     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'websiteUrl')) <> 1
      OR (core->'coreEvidence'->'websiteUrl'->'sourceId' <> 'null'::jsonb
          AND jsonb_typeof(core->'coreEvidence'->'websiteUrl'->'sourceId') <> 'string')
      OR core->'coreEvidence'->'roster' - ARRAY['itemId','sourceId'] <> '{}'::jsonb
      OR jsonb_typeof(core->'coreEvidence'->'roster') <> 'object'
-     OR jsonb_object_length(core->'coreEvidence'->'roster') <> 2
+     OR (SELECT pg_catalog.count(*) FROM pg_catalog.jsonb_object_keys(core->'coreEvidence'->'roster')) <> 2
      OR jsonb_typeof(core->'coreEvidence'->'city'->'itemId') <> 'string'
      OR jsonb_typeof(core->'coreEvidence'->'city'->'sourceId') <> 'string'
      OR jsonb_typeof(core->'coreEvidence'->'roster'->'itemId') <> 'string'
