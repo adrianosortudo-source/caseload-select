@@ -831,7 +831,7 @@ CREATE OR REPLACE FUNCTION public.stage_prospect_enrichment_package_v1(
 )
 RETURNS jsonb
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
@@ -1234,7 +1234,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 STABLE
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
@@ -1402,7 +1402,7 @@ RETURNS TABLE (
 )
 LANGUAGE plpgsql
 STABLE
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 BEGIN
@@ -1827,6 +1827,7 @@ CREATE OR REPLACE FUNCTION public.prospect_enrichment_existing_target_sha256_v1(
 RETURNS text
 LANGUAGE plpgsql
 STABLE
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE row_json jsonb;
@@ -1853,6 +1854,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.prospect_enrichment_lock_existing_target_v1(p_table text,p_id uuid)
 RETURNS text
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE row_json jsonb;
@@ -1931,6 +1933,7 @@ $$;
 CREATE OR REPLACE FUNCTION public.prospect_enrichment_validate_review_v1(p_package_id uuid,p_review jsonb)
 RETURNS uuid
 LANGUAGE plpgsql
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
@@ -2356,7 +2359,7 @@ CREATE OR REPLACE FUNCTION public.review_prospect_enrichment_package_v1(
 )
 RETURNS jsonb
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
@@ -2462,7 +2465,7 @@ CREATE OR REPLACE FUNCTION public.apply_prospect_enrichment_package_v1(
 )
 RETURNS jsonb
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
@@ -3051,7 +3054,7 @@ CREATE OR REPLACE FUNCTION public.record_prospect_enrichment_verification_v1(
 )
 RETURNS jsonb
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = ''
 AS $$
 DECLARE
@@ -3248,6 +3251,42 @@ CREATE TRIGGER prospect_enrichment_verification_event_guard
 BEFORE INSERT ON public.prospect_enrichment_events
 FOR EACH ROW EXECUTE FUNCTION public.guard_prospect_enrichment_verification_event_v1();
 
+-- Operator cookies are revalidated against the live membership row. Keep the
+-- membership table private to server code and expose only the exact active
+-- operator check required by portal authentication.
+CREATE OR REPLACE FUNCTION public.revalidate_operator_membership_v1(
+  p_lawyer_id uuid,
+  p_firm_id uuid,
+  p_record_sign_in boolean DEFAULT false
+)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE
+  matched_id uuid;
+BEGIN
+  IF p_record_sign_in THEN
+    UPDATE public.firm_lawyers
+      SET last_signed_in_at = now()
+      WHERE id = p_lawyer_id
+        AND firm_id = p_firm_id
+        AND role = 'operator'
+        AND disabled = false
+      RETURNING id INTO matched_id;
+  ELSE
+    SELECT id INTO matched_id
+      FROM public.firm_lawyers
+      WHERE id = p_lawyer_id
+        AND firm_id = p_firm_id
+        AND role = 'operator'
+        AND disabled = false;
+  END IF;
+  RETURN matched_id;
+END;
+$$;
+
 REVOKE ALL ON FUNCTION public.prospect_enrichment_row_sha256_v1(jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.prospect_enrichment_new_firm_precondition_sha256_v1(uuid,text) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.prospect_enrichment_existing_target_sha256_v1(text,uuid) FROM PUBLIC, anon, authenticated;
@@ -3259,6 +3298,7 @@ REVOKE ALL ON FUNCTION public.prospect_enrichment_pending_target_add_v1(jsonb,uu
 REVOKE ALL ON FUNCTION public.apply_prospect_enrichment_package_v1(uuid,text,text,uuid) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.record_prospect_enrichment_verification_v1(uuid,text,text,jsonb) FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public.guard_prospect_enrichment_verification_event_v1() FROM PUBLIC, anon, authenticated, service_role;
+REVOKE ALL ON FUNCTION public.revalidate_operator_membership_v1(uuid,uuid,boolean) FROM PUBLIC, anon, authenticated, service_role;
 
 GRANT EXECUTE ON FUNCTION public.prospect_enrichment_row_sha256_v1(jsonb) TO service_role;
 GRANT EXECUTE ON FUNCTION public.prospect_enrichment_new_firm_precondition_sha256_v1(uuid,text) TO service_role;
@@ -3270,4 +3310,5 @@ GRANT EXECUTE ON FUNCTION public.reject_prospect_enrichment_package_v1(uuid,text
 GRANT EXECUTE ON FUNCTION public.prospect_enrichment_pending_target_add_v1(jsonb,uuid,text,uuid,text) TO service_role;
 GRANT EXECUTE ON FUNCTION public.apply_prospect_enrichment_package_v1(uuid,text,text,uuid) TO service_role;
 GRANT EXECUTE ON FUNCTION public.record_prospect_enrichment_verification_v1(uuid,text,text,jsonb) TO service_role;
+GRANT EXECUTE ON FUNCTION public.revalidate_operator_membership_v1(uuid,uuid,boolean) TO service_role;
 COMMIT;
