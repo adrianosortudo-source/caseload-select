@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { CandidateContractError, parseCandidateDetail, parseCandidateField, parseCandidateFilters, parseCandidateHistoryItem, parseCandidateMetadata, parseCandidateSummary } from "../prospect-enrichment-candidate-contract";
+import { CandidateContractError, parseCandidateDetail, parseCandidateProfileChoice, parseCandidateField, parseCandidateFilters, parseCandidateHistoryItem, parseCandidateMetadata, parseCandidateSummary } from "../prospect-enrichment-candidate-contract";
 import { candidateDetail, candidateHistory, candidateList, candidateSummaries } from "../../../tests/prospect-enrichment/candidate-fixtures";
 import { getCandidateHistory, getCandidateResearch, listCandidateResearch } from "../prospect-enrichment-candidate-reader";
 const id = candidateSummaries[0].id;
@@ -73,4 +73,41 @@ describe("candidate RPC read adapter", () => {
   it("distinguishes missing detail from an empty successful projection", async () => {
     await expect(getCandidateResearch(id, undefined, client(null))).rejects.toMatchObject({ status: 404 });
   });
+});
+
+
+describe("verified firm scope and current-choice provenance", () => {
+  const firmId = "ABCDEFAB-CDEF-4ABC-8DEF-ABCDEFABCDEF";
+  it("normalizes one verified firm UUID and rejects malformed or repeated scope", () => {
+    expect(parseCandidateFilters(new URLSearchParams({ firmId })).firmId).toBe(firmId.toLowerCase());
+    for (const query of ["firmId=claimed-source-key", `firmId=${firmId}&firmId=${firmId}`]) expect(() => parseCandidateFilters(new URLSearchParams(query))).toThrow(CandidateContractError);
+  });
+  it("returns only verified linked candidates and binds pagination to the firm scope", async () => {
+    const linked = { ...candidateSummaries[0], verifiedFirmId: firmId.toLowerCase(), identityState: "resolved" };
+    const db = client({ ...candidateList, items: [linked], nextAfterId: id });
+    const filters = { firmId: firmId.toLowerCase() };
+    const result = await listCandidateResearch({ filters, limit: 1 }, db);
+    expect(result.items).toEqual([linked]); expect(db.rpc.mock.lastCall?.[1].p_filters).toEqual(filters);
+    await expect(listCandidateResearch({ filters: {}, cursor: result.nextCursor! }, db)).rejects.toMatchObject({ status: 422 });
+    await expect(listCandidateResearch({ filters }, client({ ...candidateList, nextAfterId: null }))).rejects.toThrow(CandidateContractError);
+    await expect(listCandidateResearch({ filters }, client({ ...candidateList, items: [{ ...linked, verifiedFirmId: id }], nextAfterId: null }))).rejects.toThrow(CandidateContractError);
+  });
+  it("preserves a selected historical value while explicitly marking its source retracted", () => {
+    const choice = { selected_value: false, evidenceState: "retracted", retractions: [{ event_type: "evidence_retracted", event_data: { targetId: id }, replacementSources: [], replacementSourceState: "not_recorded" }] };
+    expect(parseCandidateProfileChoice(choice)).toEqual(choice);
+    expect(parseCandidateDetail({ ...candidateDetail(id), profileChoices: [choice] }).profileChoices).toEqual([choice]);
+    expect(parseCandidateProfileChoice({ selected_value: null, evidenceState: "retained", retractions: [] }).selected_value).toBeNull();
+  });
+  it.each([{}, { evidenceState: "retained" }, { evidenceState: "retained", retractions: [{}] }, { evidenceState: "retracted", retractions: [] }, { evidenceState: "unknown", retractions: [] }])("fails closed when current-choice retraction provenance is invalid: %j", value => {
+    expect(() => parseCandidateProfileChoice(value)).toThrow(CandidateContractError);
+  });
+});
+
+
+it("keeps a displayed provisional legacy firm unresolved when identity fields are null", async () => {
+  const fixture = { ...candidateDetail(id), candidate: { ...candidateSummaries[0], identityNamespace: "legacy:research", identityKey: "synthetic-provisional-source", originalStatuses: ["provisional_new"], verifiedFirmId: null, identityState: "unresolved" as const } };
+  const result = await getCandidateResearch(id, 42, client(fixture));
+  expect(result.candidate.verifiedFirmId).toBeNull(); expect(result.candidate.identityState).toBe("unresolved");
+  const original = { roster_count: 9, source_url: "https://synthetic.example.test/roster", observed_on: "2026-09-24", firmId: null, canonicalDomain: null, firmIdentity: null, status: "provisional_new", advertising: null, owner: null };
+  expect(parseCandidateHistoryItem({ ...candidateHistory(id).items[0], originalJson: original }).originalJson).toEqual(original);
 });

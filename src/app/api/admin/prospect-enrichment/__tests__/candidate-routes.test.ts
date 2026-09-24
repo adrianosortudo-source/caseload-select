@@ -52,3 +52,22 @@ describe("protected candidate list/profile/history actual GET paths", () => {
     expect(Object.keys(await import("../candidates/route")).sort()).toEqual(["GET", "dynamic", "runtime"]);
   });
 });
+
+
+it("scopes the protected GET to verified firm identity without promoting source statuses", async () => {
+  const firmId = "abcdefab-cdef-4abc-8def-abcdefabcdef";
+  const items = [candidateSummaries[0], candidateSummaries[2]].map((item, index) => ({ ...item, identityNamespace: `source:producer-${index}`, verifiedFirmId: firmId, identityState: "resolved" }));
+  state.rpc.mockResolvedValueOnce({ data: { ...candidateList, items, filteredCount: 2, nextAfterId: null }, error: null });
+  const response = await list(req("?firmId=" + firmId.toUpperCase()));
+  expect(response.status).toBe(200); expect((await response.json()).items).toEqual(items);
+  expect(state.rpc.mock.lastCall?.[1].p_filters).toEqual({ firmId });
+  const escaped = await list(req("?firmId=" + firmId)); expect(escaped.status).toBe(503);
+});
+
+it("returns retained retraction proof through the protected detail GET", async () => {
+  const fixture = { ...candidateDetail(id), profileChoices: [{ field_key: "websiteUrl", selected_value: "https://synthetic.example.test", evidenceState: "retracted", retractions: [{ event_type: "evidence_retracted", event_data: { targetTable: "prospect_source_captures", targetId: id } }] }] };
+  state.rpc.mockResolvedValueOnce({ data: fixture, error: null });
+  const response = await detail(req("?coverageRevision=42"), ctx); expect(response.status).toBe(200); expect(await response.json()).toEqual(fixture);
+  state.rpc.mockResolvedValueOnce({ data: { ...fixture, profileChoices: [{ selected_value: true }] }, error: null });
+  expect((await detail(req("?coverageRevision=42"), ctx)).status).toBe(503);
+});

@@ -44,6 +44,8 @@ export async function listCandidateResearch(input: { filters: CandidateFilters; 
   if (!Array.isArray(data.items) || (page.coverageRevision !== null && meta.coverageRevision !== page.coverageRevision)) throw new CandidateContractError();
   const items = data.items.map(parseCandidateSummary), inventoryCount = nonnegative(data.inventoryCount), filteredCount = nonnegative(data.filteredCount);
   if (filteredCount > inventoryCount || items.length > (input.limit ?? 25) || new Set(items.map(item => item.id)).size !== items.length) throw new CandidateContractError();
+  const requestedFirmId = input.filters.firmId?.toLowerCase();
+  if (requestedFirmId && items.some(item => item.identityState !== "resolved" || item.verifiedFirmId !== requestedFirmId)) throw new CandidateContractError();
   return { ...meta, items, inventoryCount, filteredCount, nextCursor: cursorFor(data.nextAfterId, meta.coverageRevision, cursorScope) };
 }
 export async function getCandidateResearch(id: string, coverageRevision?: number, client?: CandidateReadClient): Promise<CandidateDetail> {

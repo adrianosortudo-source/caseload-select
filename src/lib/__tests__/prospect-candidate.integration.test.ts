@@ -64,6 +64,17 @@ async function expectRejected(db: PoolClient, sql: string, values: unknown[] = [
   await db.query("ROLLBACK TO SAVEPOINT expected_denial");
   await db.query("RELEASE SAVEPOINT expected_denial");
 }
+async function governedLegacyFirm(db: PoolClient, token: string) {
+  const firmId = (await db.query<{ id: string }>(
+    "INSERT INTO public.gta_prospect_firms(source_record_key,display_name,normalized_display_name,reconciliation_status) VALUES($1,$2,$2,'provisional_new') RETURNING id",
+    [token, "Synthetic legacy " + token])).rows[0].id;
+  const batchId = (await db.query<{ id: string }>(
+    "INSERT INTO public.gta_prospect_import_batches(source_name,source_sha256,source_record_count,state,applied_at) VALUES($1,$2,1,'applied',now()) RETURNING id",
+    [token, "b".repeat(64)])).rows[0].id;
+  await db.query("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) VALUES($1,$2,$3,'accepted','created',$4,$5::jsonb)",
+    [batchId, token, "a".repeat(64), firmId, JSON.stringify({ sourceRecordKey: token, firmName: "Synthetic legacy " + token })]);
+  return { firmId, batchId };
+}
 async function register(db: PoolClient, inputs: { key: string | null; raw?: Json; disposition?: string }[], packageEntries: Entry[] = []) {
   const runKey = "candidate-run-" + randomUUID().replaceAll("-", "");
   const actor = "candidate-integration";
@@ -238,6 +249,10 @@ suite("all-candidate immutable PostgreSQL projection", () => {
         expectedPayloadSha256: p.hash, itemCount: 0, clientItems: [], initialDisposition: "ready_for_review",
         source: { sourceRoot: "synthetic", relativePath: "identity.json", sourcePointer: "", fileSha256: "a".repeat(64) }, errorCodes: [] }));
       const fixture = await register(db, [], entries);
+      const sourceCandidates = async (cutoff: number | null = null) => {
+        const result = await list(db, { text: key }, 100, null, cutoff);
+        return { ...result, items: result.items.filter(item => item.identityNamespace === "source:candidate-integration") };
+      };
       let cutoffBeforeSecond = 0;
       for (const [i, p] of packages.entries()) {
         const body = JSON.stringify(p.payload);
@@ -245,24 +260,34 @@ suite("all-candidate immutable PostgreSQL projection", () => {
           "INSERT INTO public.prospect_enrichment_packages(id,run_id,client_package_id,submitted_by,idempotency_key,raw_body,raw_body_sha256,payload,payload_sha256,schema_version,research_key,firm_id,identity_state,state,review_json,review_sha256,review_expires_at) VALUES($1,$2,$3,'candidate-integration',$4,$5,$6,$7::jsonb,$8,'prospect-enrichment/v1',$9,$10,'resolved','ready_for_review',$11::jsonb,$12,now()+interval '30 minutes')",
           [p.id, fixture.runId, p.clientId, "pe-v1-" + prospectEnrichmentProtocolHash(p.id), body, createHash("sha256").update(body).digest("hex"),
             JSON.stringify(p.payload), p.hash, key, p.firmId, JSON.stringify(p.review), p.reviewHash]);
-        if (i === 0) expect((await list(db, { text: key })).items[0].verifiedFirmId).toBeNull();
+        if (i === 0) expect((await sourceCandidates()).items[0].verifiedFirmId).toBeNull();
         await db.query("INSERT INTO public.prospect_enrichment_events(package_id,event_key,event_type,actor,details) VALUES($1,$2,'reviewed',$3,$4::jsonb)",
           [p.id, "review:" + p.reviewHash, operator, JSON.stringify({ payloadSha256: p.hash, reviewSha256: p.reviewHash })]);
         await db.query("SELECT set_config('app.prospect_enrichment_mutation','apply',true)");
         const receipt = { schemaVersion: "prospect-enrichment-apply-receipt/v1", packageId: p.id, firmId: p.firmId,
           payloadSha256: p.hash, reviewSha256: p.reviewHash, appliedBy: operator, items: [] };
         await db.query("UPDATE public.prospect_enrichment_packages SET state='applied',apply_receipt=$2::jsonb,applied_at=now() WHERE id=$1", [p.id, JSON.stringify(receipt)]);
-        const page = await list(db, { text: key });
+        const page = await sourceCandidates();
         if (i === 0) {
           expect(page.items[0]).toMatchObject({ identityState: "resolved", verifiedFirmId: p.firmId });
+          await db.query("INSERT INTO public.prospect_enrichment_profile_choices(firm_id,field_key,target_table,target_id,source_selector,selected_value,selected_provenance,package_id,reviewed_by,rationale) VALUES($1,'syntheticStatus','prospect_enrichment_packages',$2,'/payload/originalResearch/content/status','\"selected\"','{}',$2,$3,'Synthetic selected historical evidence')",
+            [p.firmId, p.id, operator]);
+          const readChoice = async (cutoff: number | null = null) => (await db.query<{ data: { profileChoices: { selected_value: string; evidenceState: string; retractions: { replacementSourceState: string }[] }[]; coverageRevision: number } }>(
+            "SELECT public.get_prospect_research_candidate_v1($1,$2) data", [page.items[0].id, cutoff])).rows[0].data;
+          const beforeRetraction = await readChoice();
+          expect(beforeRetraction.profileChoices[0]).toMatchObject({ selected_value: "selected", evidenceState: "retained", retractions: [] });
+          await db.query("INSERT INTO public.prospect_enrichment_events(package_id,event_key,event_type,actor,details) VALUES($1,'synthetic-retraction','evidence_retracted',$2,$3::jsonb)",
+            [p.id, operator, JSON.stringify({ targetTable: "prospect_enrichment_packages", targetId: p.id, rationale: "Synthetic source correction", sourceIds: [] })]);
+          expect((await readChoice()).profileChoices[0]).toMatchObject({ selected_value: "selected", evidenceState: "retracted", retractions: [{ replacementSourceState: "not_recorded" }] });
+          expect((await readChoice(beforeRetraction.coverageRevision)).profileChoices[0]).toMatchObject({ evidenceState: "retained", retractions: [] });
           cutoffBeforeSecond = page.coverageRevision;
         } else expect(page.items[0]).toMatchObject({ identityState: "conflict", verifiedFirmId: null });
       }
-      const fresh = await list(db, { text: key });
+      const fresh = await sourceCandidates();
       expect(fresh.items).toHaveLength(1);
       expect(fresh.items[0].originalStatuses).toEqual(expect.arrayContaining(["selected", "not_selected"]));
       expect(fresh.items[0].qualificationStates).toEqual(["needs_evidence"]);
-      const historical = await list(db, { text: key }, 100, null, cutoffBeforeSecond);
+      const historical = await sourceCandidates(cutoffBeforeSecond);
       expect(historical.items[0]).toMatchObject({ identityState: "resolved", verifiedFirmId: firmIds[0] });
       const revisions = await history(db, fresh.items[0].id);
       expect(revisions.items.filter(x => x.itemKind === "identity_link")).toHaveLength(2);
@@ -270,6 +295,124 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       expect(revisions.items.some(x => x.fields.some(f => f.value === "https://synthetic.example/source-only"))).toBe(true);
     } finally { await db.query("ROLLBACK"); db.release(); }
   }, 60_000);
+
+  it("unions separate producers only through a proven canonical firm and preserves frozen candidate counts", async () => {
+    const db = await pool!.connect(); await db.query("BEGIN");
+    try {
+      const token = "firmunion" + randomUUID().replaceAll("-", "");
+      const { firmId } = await governedLegacyFirm(db, token);
+      const other = await governedLegacyFirm(db, token + "other");
+      const serviceId = (await db.query<{ id: string }>("INSERT INTO public.prospect_service_observations(firm_id,service_name,matter_fit,source_url,observed_at,source_observed_on,source_observed_precision) VALUES($1,$2,'strong-match',$3,NULL,'2026-09-20','date_only') RETURNING id",
+        [firmId, "alphaservice" + token, "https://synthetic.example/alpha"])).rows[0].id;
+      await db.query("INSERT INTO public.prospect_opportunity_observations(firm_id,opportunity_type,finding,recommendation_hypothesis,source_url,observed_at,confidence) VALUES($1,'other',$2,'Synthetic gap','https://synthetic.example/beta',now(),'high')",
+        [firmId, "betafinding" + token]);
+      await db.query("INSERT INTO public.prospect_service_observations(firm_id,service_name,matter_fit,source_url,observed_at) VALUES($1,$2,'strong-match','https://synthetic.example/other',now())",
+        [other.firmId, "alphaservice" + token]);
+      const filters = { text: "alphaservice" + token + " betafinding" + token, firmId };
+      const scoped = await list(db, filters);
+      expect(scoped.items.length).toBeGreaterThanOrEqual(4);
+      expect(scoped.items.every(item => item.verifiedFirmId === firmId)).toBe(true);
+      expect(scoped.filteredCount).toBe(scoped.items.length);
+      expect(new Set(scoped.items.map(item => item.identityNamespace)).size).toBeGreaterThanOrEqual(3);
+      const global = await list(db, { text: filters.text });
+      expect(global.items.map(item => item.id).sort()).toEqual(scoped.items.map(item => item.id).sort());
+      expect((await list(db, { ...filters, firmId: other.firmId })).items).toEqual([]);
+      const source = scoped.items.find(item => item.identityKey === serviceId)!;
+      const sourceRevision = (await history(db, source.id)).items.find(item => item.itemKind === "research_revision")!;
+      expect(sourceRevision.originalJson).toMatchObject({ id: serviceId, service_name: "alphaservice" + token, source_observed_on: "2026-09-20" });
+      expect(sourceRevision.fields).toEqual(expect.arrayContaining([expect.objectContaining({ pointer: "/service_name", observedAt: "2026-09-20" })]));
+      expect((await list(db, { firmId, sourceUrl: "https://synthetic.example/alpha", observedFrom: "2026-09-20", observedTo: "2026-09-20" })).items.length).toBe(scoped.items.length);
+      await db.query("INSERT INTO public.prospect_source_captures(firm_id,requested_url,retrieval_method,observed_at,policy_state) VALUES($1,'https://synthetic.example/new','synthetic',now(),'allowed')", [firmId]);
+      const frozen = await list(db, filters, 100, null, scoped.coverageRevision);
+      expect(frozen.filteredCount).toBe(scoped.filteredCount);
+      expect((await list(db, filters)).filteredCount).toBe(scoped.filteredCount + 1);
+      await expectRejected(db, "SELECT public.list_prospect_research_candidates_v1($1,10,NULL,NULL)", [JSON.stringify({ firmId: "claimed-name" })]);
+      expect((await list(db, { firmId: firmId.toUpperCase() })).items.every(item => item.verifiedFirmId === firmId)).toBe(true);
+      const licenseeId = (await db.query<{ id: string }>("INSERT INTO public.prospect_lso_licensees(source_system,regulator_licensee_id,display_name,status,source_snapshot_id,observed_at) VALUES('synthetic',$1,$2,'active','synthetic-snapshot',now()) RETURNING id", [token, "licenseefact" + token])).rows[0].id;
+      const affiliationId = (await db.query<{ id: string }>("INSERT INTO public.prospect_firm_affiliations(licensee_id,firm_id,mapping_status,observed_at) VALUES($1,$2,'confirmed',now()) RETURNING id", [licenseeId, firmId])).rows[0].id;
+      const withLicensee = await list(db, { firmId, text: "licenseefact" + token + " betafinding" + token });
+      expect(withLicensee.items.length).toBeGreaterThan(scoped.items.length);
+      expect(withLicensee.items.every(item => item.verifiedFirmId === firmId)).toBe(true);
+      expect(withLicensee.items.some(item => item.identityNamespace === "legacy:prospect_lso_licensees")).toBe(false);
+      const affiliation = withLicensee.items.find(item => item.identityKey === affiliationId)!;
+      expect((await history(db, affiliation.id)).items.some(item => typeof item.originalJson === "object" && item.originalJson !== null && !Array.isArray(item.originalJson) && item.originalJson.id === licenseeId)).toBe(true);
+      await db.query("UPDATE public.prospect_lso_licensees SET status='inactive' WHERE id=$1", [licenseeId]);
+      const licenseeVersions = (await history(db, affiliation.id)).items.filter(item => item.itemKind === "provenance_revision" && typeof item.originalJson === "object" && item.originalJson !== null && !Array.isArray(item.originalJson) && item.originalJson.id === licenseeId);
+      expect(licenseeVersions).toHaveLength(2);
+      expect((await list(db, { firmId, fieldPointer: "/status", fieldValue: "inactive" })).items.some(item => item.id === affiliation.id)).toBe(true);
+    } finally { await db.query("ROLLBACK"); db.release(); }
+  }, 90_000);
+
+  it("retains provisional, rejected, null-ID and claimed-ID legacy candidates without inventing firm linkage", async () => {
+    const db = await pool!.connect(); await db.query("BEGIN");
+    try {
+      const token = "legacyholds" + randomUUID().replaceAll("-", "");
+      const governed = await governedLegacyFirm(db, token);
+      const provisionalId = (await db.query<{ id: string }>("INSERT INTO public.gta_prospect_firms(source_record_key,display_name,normalized_display_name,reconciliation_status) VALUES($1,'Synthetic provisional','synthetic provisional','provisional_new') RETURNING id", [token + "provisional"])).rows[0].id;
+      const provisional = (await list(db, { fieldPointer: "/id", fieldValue: provisionalId })).items[0];
+      expect(provisional).toMatchObject({ identityState: "unresolved", verifiedFirmId: null });
+      expect(provisional.readWarnings).toContain("legacy_identity_unverified");
+      const records = [
+        { sourceRecordKey: token + "one", firmName: "Synthetic provisional", firmId: governed.firmId, status: "not_selected", qualifier: null, unrecognizedFact: false },
+        { sourceRecordKey: token + "two", firmName: "Synthetic missing key", firmId: null, status: "rejected", qualificationState: "needs_evidence", gap: "missing authority" },
+      ];
+      const draftId = (await db.query<{ id: string }>("INSERT INTO public.gta_prospect_agent_import_drafts(submitted_by,source_name,idempotency_key,payload_sha256,review_sha256,import_source_sha256,record_count,records,review_records,review_summary,state) VALUES('candidate-integration',$1,$1,$2,$2,$2,2,$3::jsonb,$4::jsonb,'{}','review_required') RETURNING id",
+        [token, "e".repeat(64), JSON.stringify(records), JSON.stringify([{ sourceRecordKey: token + "one", disposition: "review_required", reason: "Unreviewed" }, { sourceRecordKey: token + "unmatched", disposition: "invalid", reason: "Source absent" }])])).rows[0].id;
+      const drafts = (await list(db, { fieldPointer: "/envelope/id", fieldValue: draftId })).items;
+      expect(drafts).toHaveLength(3);
+      expect(drafts.every(item => item.verifiedFirmId === null)).toBe(true);
+      const held = drafts.find(item => item.identityKey.endsWith("/records/0"))!;
+      expect(held.originalStatuses).toEqual(["not_selected"]);
+      const retained = (await history(db, held.id)).items.find(item => item.itemKind === "research_revision")!;
+      expect(retained.originalJson).toMatchObject({ record: records[0], sourcePointer: "/records/0" });
+      expect(retained.fields).toEqual(expect.arrayContaining([expect.objectContaining({ pointer: "/record/unrecognizedFact", value: false })]));
+      expect((await list(db, { firmId: governed.firmId })).items.some(item => drafts.some(draft => draft.id === item.id))).toBe(false);
+      const mapId = (await db.query<{ id: string }>("INSERT INTO public.prospect_source_record_map(source_system,source_record_id,firm_id,mapping_status,identity_decision_id,reviewed_at) VALUES('synthetic',$1,$2,'confirmed','synthetic-reviewed-decision',now()) RETURNING id", [token, governed.firmId])).rows[0].id;
+      const before = await list(db, { fieldPointer: "/id", fieldValue: mapId });
+      const mapping = before.items.find(item => item.identityKey === mapId)!;
+      expect(mapping.verifiedFirmId).toBe(governed.firmId);
+      await db.query("UPDATE public.prospect_source_record_map SET mapping_status='conflict' WHERE id=$1", [mapId]);
+      const after = await list(db, { fieldPointer: "/id", fieldValue: mapId });
+      expect(after.items.find(item => item.identityKey === mapId)).toMatchObject({ verifiedFirmId: null, identityState: "unresolved" });
+      expect((await list(db, { fieldPointer: "/id", fieldValue: mapId }, 100, null, before.coverageRevision)).items.find(item => item.identityKey === mapId)?.verifiedFirmId).toBe(governed.firmId);
+      await db.query("UPDATE public.prospect_source_record_map SET mapping_status='confirmed' WHERE id=$1", [mapId]);
+      const restored = (await list(db, { fieldPointer: "/id", fieldValue: mapId })).items.find(item => item.identityKey === mapId)!;
+      expect(restored.verifiedFirmId).toBe(governed.firmId);
+      expect((await history(db, mapping.id)).items.filter(item => item.itemKind === "research_revision")).toHaveLength(3);
+      // A changed authority dependency invalidates the link even with identical source bytes.
+      await db.query("UPDATE public.gta_prospect_import_batches SET state='failed',applied_at=NULL WHERE id=$1", [governed.batchId]);
+      expect((await list(db, { fieldPointer: "/id", fieldValue: mapId })).items.find(item => item.identityKey === mapId)?.verifiedFirmId).toBeNull();
+      await db.query("UPDATE public.gta_prospect_import_batches SET state='applied',applied_at=now() WHERE id=$1", [governed.batchId]);
+      expect((await list(db, { fieldPointer: "/id", fieldValue: mapId })).items.find(item => item.identityKey === mapId)?.verifiedFirmId).toBe(governed.firmId);
+      await db.query("ALTER TABLE public.prospect_source_captures DISABLE TRIGGER candidate_legacy_projection");
+      await db.query("INSERT INTO public.prospect_source_captures(requested_url,retrieval_method,observed_at,policy_state) VALUES('https://synthetic.example/unprojected','synthetic',now(),'allowed')");
+      const missing = await list(db);
+      expect(missing.complete).toBe(false);
+      expect(missing.readWarnings).toContain("legacy_source_rows_unprojected:prospect_source_captures:1");
+    } finally { await db.query("ROLLBACK"); db.release(); }
+  }, 90_000);
+
+  it("invalidates a worker link after a later reviewed hold and preserves the prior cutoff", async () => {
+    const db = await pool!.connect(); await db.query("BEGIN");
+    try {
+      const token = "workerlink" + randomUUID().replaceAll("-", "");
+      const { firmId } = await governedLegacyFirm(db, token);
+      const stableId = "FIRM-" + randomUUID().replaceAll("-", "").slice(0, 26).toUpperCase();
+      const domain = token + ".example";
+      await db.query("INSERT INTO public.gta_prospect_stable_identity_registry(firm_id,stable_firm_id,canonical_domain,source_url,observed_on,adjudication_basis) VALUES($1,$2,$3,'https://synthetic.example/identity','2026-09-20','Synthetic reviewed identity')", [firmId, stableId, domain]);
+      const workId = (await db.query<{ id: string }>("INSERT INTO public.gta_prospect_research_work_items(source_system,source_payload_sha256,source_record_key,candidate_name,source_urls,candidate_snapshot,candidate_snapshot_sha256) VALUES('synthetic',$1,$2,'Synthetic worker','[\"https://synthetic.example/worker\"]','{}',$1) RETURNING id", ["a".repeat(64), token])).rows[0].id;
+      const draftId = (await db.query<{ id: string }>("INSERT INTO public.gta_prospect_worker_evidence_drafts(work_item_id,worker_id,observation_sha256,observed_on,candidate_canonical_domain,identity_state,qualification_state,hold_states,source_artifacts,canonical_observation) VALUES($1,'synthetic',$2,'2026-09-20',$3,'confirmed','needs_evidence','[]','[]','{}') RETURNING id", [workId, "c".repeat(64), domain])).rows[0].id;
+      await db.query("INSERT INTO public.gta_prospect_worker_evidence_reconciliations(draft_id,reconciliation_state,firm_id,stable_firm_id,reconciliation_note,created_at) VALUES($1,'linked',$2,$3,'Synthetic reviewed link','2026-09-24T01:00:00Z')", [draftId, firmId, stableId]);
+      const linked = await list(db, { fieldPointer: "/id", fieldValue: draftId });
+      const candidate = linked.items.find(item => item.identityNamespace === "legacy:gta_prospect_worker_evidence_drafts")!;
+      expect(candidate.verifiedFirmId).toBe(firmId);
+      await db.query("INSERT INTO public.gta_prospect_worker_evidence_reconciliations(draft_id,reconciliation_state,hold_state,reconciliation_note,created_at) VALUES($1,'identity_hold','identity_unresolved','Synthetic later identity hold','2026-09-24T02:00:00Z')", [draftId]);
+      const current = await list(db, { fieldPointer: "/id", fieldValue: draftId });
+      expect(current.items.find(item => item.id === candidate.id)?.verifiedFirmId).toBeNull();
+      expect((await list(db, { fieldPointer: "/id", fieldValue: draftId }, 100, null, linked.coverageRevision)).items.find(item => item.id === candidate.id)?.verifiedFirmId).toBe(firmId);
+      expect((await list(db, { firmId })).items.some(item => item.id === candidate.id)).toBe(false);
+    } finally { await db.query("ROLLBACK"); db.release(); }
+  }, 90_000);
 
   it("reconstructs multiMiB and wide/deep raw evidence through bounded immutable chunks and reference facets", async () => {
     const db = await pool!.connect(); await db.query("BEGIN");

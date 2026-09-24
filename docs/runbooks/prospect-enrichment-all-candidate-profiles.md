@@ -62,3 +62,8 @@ Use a separate reviewed follow-on change after this slice. Do not extend the six
 PR #313 has merged separately. This all-candidate follow-on remains unapproved for merge, migration application, production import and cutover. The existing source-shaped intake failure can be fixed by the reader change; it does not require rewriting the four valid source-evidence objects. The optional downtown geography boundary-source error is a separate unresolved read concern and is not repaired here.
 
 Tests for this slice are synthetic only. Local dependency limitations and the exact CI result must be recorded with the pushed head; syntax transpilation is not a substitute for TypeScript semantic checking or rendered acceptance.
+
+
+## Follow-on acceptance refinement
+
+The original universal-candidate implementation did not by itself aggregate independently linked producers into the canonical firm page or index legacy governed research outside enrichment manifests. The additive firm-coverage migration and candidate UI now address that scope. See the closed source inventory, exact identity authority, source/date aggregation semantics, retraction handling, and required tests in [candidate release contract](prospect-candidate-profiles-release.md). Completion still requires the separately approved schema release and authenticated readback; source files outside governed intake remain explicitly pending. Neither a rendered list count nor an unresolved legacy row is proof of canonical firm enrichment.

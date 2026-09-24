@@ -1,6 +1,6 @@
 /** Operator-only read DTO. Candidate UUIDs never stand in for verified firm UUIDs. */
 export type CandidateJson = null | boolean | number | string | CandidateJson[] | { [key: string]: CandidateJson };
-export const CANDIDATE_FILTER_KEYS = ["text", "originalStatus", "selectionDisposition", "processingDisposition", "qualificationState", "identityState", "fieldPointer", "fieldValue", "fieldRefRevision", "fieldRefPointerSha256", "sourceUrl", "observedFrom", "observedTo", "retrievedFrom", "retrievedTo", "observedUnknown", "retrievedUnknown"] as const;
+export const CANDIDATE_FILTER_KEYS = ["firmId", "text", "originalStatus", "selectionDisposition", "processingDisposition", "qualificationState", "identityState", "fieldPointer", "fieldValue", "fieldRefRevision", "fieldRefPointerSha256", "sourceUrl", "observedFrom", "observedTo", "retrievedFrom", "retrievedTo", "observedUnknown", "retrievedUnknown"] as const;
 export type CandidateFilterKey = typeof CANDIDATE_FILTER_KEYS[number];
 export type CandidateFilters = Partial<Record<CandidateFilterKey, string>>;
 export type CandidateSummary = Readonly<{
@@ -29,7 +29,8 @@ export type CandidateReadMetadata = Readonly<{ coverageRevision: number; readWar
 export type CandidateList = CandidateReadMetadata & Readonly<{
   items: CandidateSummary[]; nextCursor: string | null; inventoryCount: number; filteredCount: number;
 }>;
-export type CandidateDetail = CandidateReadMetadata & Readonly<{ candidate: CandidateSummary; profileChoices: CandidateJson[] }>;
+export type CandidateProfileChoice = { [key: string]: CandidateJson } & Readonly<{ evidenceState: "retained" | "retracted"; retractions: CandidateJson[] }>;
+export type CandidateDetail = CandidateReadMetadata & Readonly<{ candidate: CandidateSummary; profileChoices: CandidateProfileChoice[] }>;
 export type CandidateHistory = CandidateReadMetadata & Readonly<{ items: CandidateHistoryItem[]; nextCursor: string | null }>;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -100,9 +101,14 @@ export function parseCandidateHistoryItem(value: unknown): CandidateHistoryItem 
     originalJson: json(row.originalJson), unmappedPaths: json(row.unmappedPaths), observedAt: nullable(row.observedAt), retrievedAt: nullable(row.retrievedAt), recordedAt: date(row.recordedAt), readWarnings: strings(row.readWarnings), fields: row.fields.map(parseCandidateField),
   };
 }
+export function parseCandidateProfileChoice(value: unknown): CandidateProfileChoice {
+  const row = record(value);
+  if (!["retained", "retracted"].includes(String(row.evidenceState)) || !Array.isArray(row.retractions) || (row.evidenceState === "retracted") !== (row.retractions.length > 0)) throw new CandidateContractError();
+  return json(row) as CandidateProfileChoice;
+}
 export function parseCandidateDetail(value: unknown): CandidateDetail {
   const row = record(value); if (!Array.isArray(row.profileChoices)) throw new CandidateContractError();
-  return { ...parseCandidateMetadata(row), candidate: parseCandidateSummary(row.candidate), profileChoices: row.profileChoices.map(item => json(item)) };
+  return { ...parseCandidateMetadata(row), candidate: parseCandidateSummary(row.candidate), profileChoices: row.profileChoices.map(parseCandidateProfileChoice) };
 }
 export function parseCandidateFilters(params: URLSearchParams): CandidateFilters {
   const result: CandidateFilters = {};
@@ -111,6 +117,7 @@ export function parseCandidateFilters(params: URLSearchParams): CandidateFilters
     if (params.getAll(key).length !== 1 || !value || value.length > 2048 || /[\u0000-\u001f\u007f]/.test(value)) throw new CandidateContractError("Research filters must be unique and bounded.");
     result[key] = value;
   }
+  if (result.firmId) { if (!UUID.test(result.firmId)) throw new CandidateContractError("A verified firm filter requires a firm UUID."); result.firmId = result.firmId.toLowerCase(); }
   if (result.identityState && !["unresolved", "resolved", "conflict"].includes(result.identityState)) throw new CandidateContractError("Invalid identity filter.");
   for (const key of ["observedUnknown", "retrievedUnknown"] as const) if (result[key] && result[key] !== "true") throw new CandidateContractError("Unknown-date filters require true.");
   for (const key of ["observedFrom", "observedTo", "retrievedFrom", "retrievedTo"] as const) {

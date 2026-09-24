@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { candidateFieldReference, loadCandidateRevision } from "@/lib/prospect-enrichment-candidate-content";
 import type { CandidateDetail, CandidateHistory, CandidateHistoryItem } from "@/lib/prospect-enrichment-candidate-contract";
-import { CandidateWarnings } from "./CandidateResearchList";
+import { CandidateWarnings } from "./CandidateResearchWarnings";
 import { ResearchError, ResearchJson, ResearchPanel, readResearchResponse, researchButton, researchLabel } from "./ResearchEvidence";
 
 function ExactFieldLink({ revisionId, pointer, value }: { revisionId: string; pointer: string; value: unknown }) {
@@ -61,10 +61,11 @@ export default function CandidateResearchProfile({ candidateId, coverageRevision
   return <ResearchPanel title="Candidate research" name="research-candidate-profile" description="Original research remains available across selection changes. A candidate identity is separate from a verified firm identity.">
     <Link href="/admin/prospects/candidates" className="text-sm font-semibold text-navy underline">All researched candidates</Link>
     {error ? <ResearchError message={error} retry={() => setRetry(value => value + 1)} /> : !detail ? <p>Loading candidate profile…</p> : <>
+      {detail.candidate.verifiedFirmId && <p><Link className="text-sm font-semibold text-navy underline" href={`/admin/prospects/candidates?cr_firmId=${detail.candidate.verifiedFirmId}`}>Search all research for this firm</Link></p>}
       <CandidateWarnings warnings={detail.readWarnings} complete={detail.complete} />
       <dl className="space-y-2 text-sm"><div><dt className="font-semibold">Research name</dt><dd className="w-full whitespace-pre-wrap break-words text-base font-semibold [overflow-wrap:anywhere]" data-testid="candidate-research-name">{detail.candidate.displayName}</dd></div><div><dt className="font-semibold">Candidate identity</dt><dd className="break-all">{detail.candidate.identityNamespace}: {detail.candidate.identityKey}</dd></div><div><dt className="font-semibold">Identity review</dt><dd>{researchLabel(detail.candidate.identityState)}</dd></div><div><dt className="font-semibold">Verified firm</dt><dd>{detail.candidate.verifiedFirmId ? <Link className="underline" href={`/admin/prospects/firms/${detail.candidate.verifiedFirmId}`}>{detail.candidate.verifiedFirmId}</Link> : "Not linked to a verified firm"}</dd></div><div><dt className="font-semibold">Coverage snapshot</dt><dd>{detail.coverageRevision}</dd></div></dl>
       <CandidateWarnings warnings={detail.candidate.readWarnings} complete={!detail.candidate.readWarnings.length} />
-      <h3 className="font-semibold">Explicitly reviewed profile choices</h3>{detail.profileChoices.length ? <ResearchJson value={detail.profileChoices} /> : <p className="text-sm">No explicit profile value has been selected. Research observations remain below.</p>}
+      <h3 className="font-semibold">Explicitly reviewed profile choices</h3>{detail.profileChoices.length ? <div className="space-y-3">{detail.profileChoices.map((choice, index) => <article key={index} className="rounded border border-border-brand p-3" data-testid="candidate-profile-choice">{choice.evidenceState === "retracted" ? <><p className="font-semibold text-amber-900">Retracted finding</p><p className="mt-2 text-sm">No current value selected. The original choice and its retraction remain in the research history.</p></> : <div><p className="font-semibold">{typeof choice.field_key === "string" ? researchLabel(choice.field_key) : "Reviewed profile choice"}</p><div className="mt-2"><ResearchJson value={choice.selected_value} /></div></div>}<details className="mt-3"><summary className="cursor-pointer font-semibold">Complete choice and source history</summary><ResearchJson value={choice} /></details></article>)}</div> : <p className="text-sm">No explicit profile value has been selected. Research observations remain below.</p>}
       <h3 className="font-semibold">Retained revisions and review history</h3>
       {historyError && <ResearchError message={historyError} retry={() => history ? void more() : setRetry(value => value + 1)} />}
       {!history && !historyError && <p>Loading retained research…</p>}
