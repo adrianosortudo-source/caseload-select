@@ -6,6 +6,7 @@ import { parseProspectEnrichmentReview, prospectEnrichmentReviewSha256 } from "@
 import { getProspectEnrichmentFirmDetail, getProspectEnrichmentFirmHistory, type ProspectEnrichmentEvidence } from "@/lib/prospect-enrichment-reader";
 import { readPackageDetail, type ReadDatabase } from "./_package-read";
 import { databaseRows, isRecord, READ_UUID } from "./_read-common";
+import { PROTECTED_GTA_TARGET_TABLES, readProtectedGtaTargetRows } from "./_protected-target-read";
 
 export const READBACK_VERSION = "prospect-enrichment-readback/v1";
 const SHA = /^[a-f0-9]{64}$/;
@@ -119,7 +120,9 @@ async function fullTargetRows(targets: readonly Target[], firmId: string, client
     for (let offset = 0; offset < ids.length; offset += 100) {
       const chunk = ids.slice(offset, offset + 100);
       // Full persisted JSON is necessary for receipt hashes; table names come only from the closed allowlist.
-      const values = databaseRows(await client.from(table).select("*").in("id", chunk).limit(chunk.length + 1));
+      const values = PROTECTED_GTA_TARGET_TABLES.has(table)
+        ? await readProtectedGtaTargetRows({ client, firmId, table, ids: chunk })
+        : databaseRows(await client.from(table).select("*").in("id", chunk).limit(chunk.length + 1));
       requireCheck(values.length === chunk.length && new Set(values.map((row) => row.id)).size === chunk.length,
         "canonical_target_missing", "A committed evidence target is missing from the canonical database.");
       for (const row of values) {

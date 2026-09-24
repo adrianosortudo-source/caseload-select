@@ -17,10 +17,19 @@ export async function readProspectLegacyAssessmentProjectionProof(input: {
     const target = input.parentAssessmentTarget;
     if (target.table !== "gta_prospect_qualification_assessments" || !READ_UUID.test(target.id) || !READ_UUID.test(input.firmId) || !/^[a-f0-9]{64}$/.test(target.rowSha256)) return null;
     if (input.envelope.subject.identityState !== "resolved" || input.envelope.subject.databaseFirmId !== input.firmId) return null;
-    const rows = databaseRows(await input.client.from(target.table).select("*").eq("id", target.id).eq("firm_id", input.firmId).limit(2));
+    const assessmentRead = await input.client.rpc("read_prospect_enrichment_gta_evidence_v1", {
+      p_firm_id: input.firmId, p_table: target.table, p_row_id: target.id, p_ids: null, p_after_id: null, p_limit: 2,
+    });
+    if (assessmentRead.error) return null;
+    const rows = databaseRows(assessmentRead);
     const row = rows[0];
     if (rows.length !== 1 || row.id !== target.id || row.firm_id !== input.firmId || hash(row) !== target.rowSha256 || typeof row.evidence_import_batch_id !== "string") return null;
-    const batches = databaseRows(await input.client.from("gta_prospect_supplemental_evidence_import_batches").select("id,state").eq("id", row.evidence_import_batch_id).limit(2));
+    const batchRead = await input.client.rpc("read_prospect_enrichment_gta_evidence_v1", {
+      p_firm_id: input.firmId, p_table: "gta_prospect_supplemental_evidence_import_batches", p_row_id: null,
+      p_ids: [row.evidence_import_batch_id], p_after_id: null, p_limit: 2,
+    });
+    if (batchRead.error) return null;
+    const batches = databaseRows(batchRead);
     if (batches.length !== 1 || batches[0].state !== "applied") return null;
     const derived = deriveLegacyAssessmentProjection(input.envelope, input.claim, row.criteria);
     if (!derived || !derived.criteriaSelector.startsWith("/criteria/")) return null;
@@ -40,9 +49,17 @@ export async function readProspectLegacyAssessmentProjectionProof(input: {
       seen.add(page.nextCursor); cursor = page.nextCursor;
     }
     if (!visible) return null;
-    const fresh = databaseRows(await input.client.from(target.table).select("*").eq("id", target.id).eq("firm_id", input.firmId).limit(1))[0];
+    const freshRead = await input.client.rpc("read_prospect_enrichment_gta_evidence_v1", {
+      p_firm_id: input.firmId, p_table: target.table, p_row_id: target.id, p_ids: null, p_after_id: null, p_limit: 1,
+    });
+    if (freshRead.error) return null;
+    const fresh = databaseRows(freshRead)[0];
     if (!fresh || hash(fresh) !== target.rowSha256) return null;
-    const current = databaseRows(await input.client.from("gta_prospect_firms").select("id,enrichment_revision").eq("id", input.firmId).limit(1))[0];
+    const firmRead = await input.client.rpc("read_prospect_enrichment_gta_evidence_v1", {
+      p_firm_id: input.firmId, p_table: "gta_prospect_firms", p_row_id: null, p_ids: null, p_after_id: null, p_limit: 1,
+    });
+    if (firmRead.error) return null;
+    const current = databaseRows(firmRead)[0];
     if (!current || String(current.enrichment_revision) !== revision) return null;
     return { ...derived, parentAssessmentTarget: { table: "gta_prospect_qualification_assessments" as const, id: target.id, rowSha256: target.rowSha256 }, databaseFirmId: input.firmId };
   } catch { return null; }

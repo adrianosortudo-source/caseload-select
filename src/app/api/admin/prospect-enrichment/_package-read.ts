@@ -48,17 +48,25 @@ async function allEvents(client: ReadDatabase, packageId: string) {
 async function verifiedExistingIdentity(client: ReadDatabase, payload: ProspectEnrichmentEnvelope, storedFirmId: unknown): Promise<{ firmId: string | null; holds: string[] }> {
   const supplied = payload.subject;
   if (supplied.identityState !== "resolved") return { firmId: null, holds: ["identity_" + supplied.identityState] };
+  const ids = [...new Set([storedFirmId, supplied.databaseFirmId].filter((value): value is string => typeof value === "string"))];
+  const { data, error } = await client.rpc("read_prospect_enrichment_firm_identities_v1", {
+    p_firm_ids: ids,
+    p_source_record_keys: supplied.sourceRecordKey ? [supplied.sourceRecordKey] : [],
+    p_stable_firm_ids: supplied.stableFirmId ? [supplied.stableFirmId] : [],
+  });
+  if (error) throw new ReadApiError("Firm identity read-back is unavailable.", 503);
+  const identityRows = databaseRows(data);
   const candidates: string[] = [], holds: string[] = [];
-  for (const id of [...new Set([storedFirmId, supplied.databaseFirmId].filter((value): value is string => typeof value === "string"))]) {
-    const rows = databaseRows(await client.from("gta_prospect_firms").select("id,source_record_key").eq("id", storedId(id)).limit(2));
-    if (rows.length !== 1) holds.push("database_firm_identity_missing"); else candidates.push(storedId(rows[0].id));
+  for (const id of ids) {
+    const rows = identityRows.filter((row) => String(row.firm_id).toLowerCase() === storedId(id));
+    if (rows.length !== 1) holds.push("database_firm_identity_missing"); else candidates.push(storedId(rows[0].firm_id));
   }
   if (supplied.sourceRecordKey) {
-    const rows = databaseRows(await client.from("gta_prospect_firms").select("id,source_record_key").eq("source_record_key", supplied.sourceRecordKey).limit(2));
-    if (rows.length !== 1) holds.push("source_record_identity_missing"); else candidates.push(storedId(rows[0].id));
+    const rows = identityRows.filter((row) => row.source_record_key === supplied.sourceRecordKey);
+    if (rows.length !== 1) holds.push("source_record_identity_missing"); else candidates.push(storedId(rows[0].firm_id));
   }
   if (supplied.stableFirmId) {
-    const rows = databaseRows(await client.from("gta_prospect_stable_identity_registry").select("id,firm_id,stable_firm_id,canonical_domain").eq("stable_firm_id", supplied.stableFirmId).limit(2));
+    const rows = identityRows.filter((row) => row.stable_firm_id === supplied.stableFirmId);
     if (rows.length !== 1) holds.push("stable_firm_identity_missing"); else candidates.push(storedId(rows[0].firm_id));
   }
   if (!candidates.length && !supplied.databaseFirmId && !supplied.sourceRecordKey && !supplied.stableFirmId) {
@@ -68,7 +76,7 @@ async function verifiedExistingIdentity(client: ReadDatabase, payload: ProspectE
   if (new Set(candidates).size !== 1) holds.push("identity_conflict");
   const firmId = candidates[0] ?? null;
   if (firmId && supplied.canonicalDomain) {
-    const rows = databaseRows(await client.from("gta_prospect_stable_identity_registry").select("id,firm_id,canonical_domain").eq("firm_id", firmId).limit(2));
+    const rows = identityRows.filter((row) => String(row.firm_id).toLowerCase() === firmId);
     if (rows.length !== 1 || rows[0].canonical_domain !== supplied.canonicalDomain) holds.push("canonical_domain_requires_identity_review");
   }
   return { firmId: holds.length ? null : firmId, holds };

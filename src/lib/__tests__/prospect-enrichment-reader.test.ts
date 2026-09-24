@@ -35,7 +35,7 @@ describe("complete prospect research reader", () => {
   it("preserves historical criteria and filters unapplied legacy batches", async () => {
     const { client } = clientFor({
       gta_prospect_qualification_assessments: [{ id: id(10), firm_id: firmId, evidence_import_batch_id: id(12), qualification_state: "needs_evidence", criteria: { ownerVerified: false, count: 3, unknown: null, nested: { literal: "<script>not executable</script>" } }, assessed_on: "2026-09-23" }, { id: id(11), firm_id: firmId, evidence_import_batch_id: id(13), qualification_state: "qualified", criteria: {} }],
-      gta_prospect_supplemental_evidence_import_batches: [{ id: id(12), state: "applied" }, { id: id(13), state: "staged" }],
+      gta_prospect_supplemental_evidence_import_batches: [{ id: id(12), firm_id: firmId, state: "applied" }, { id: id(13), firm_id: firmId, state: "staged" }],
     });
     const result = await getProspectEnrichmentFirmDetail({ firmId, client }); const evidence = result.sections.find((section) => section.key === "qualification")!.items;
     expect(evidence).toHaveLength(1); expect(evidence[0].qualificationCategory).toBe("Incomplete"); expect(evidence[0].legacyCriteria.find((entry) => entry.selector === "/criteria/ownerVerified")?.value).toBe(false);

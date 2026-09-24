@@ -67,6 +67,33 @@ export const PROSPECT_ENRICHMENT_SECTION_TITLES: Readonly<Record<ProspectEnrichm
 };
 const sectionOrder = Object.keys(PROSPECT_ENRICHMENT_SECTION_TITLES) as ProspectEnrichmentSectionKey[];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const protectedGtaReadTables = new Set([
+  "gta_prospect_firms", "gta_prospect_stable_identity_registry", "gta_prospect_aliases", "gta_prospect_domains",
+  "gta_prospect_offices", "gta_prospect_roster_observations", "gta_prospect_public_contact_observations",
+  "gta_prospect_evidence_links", "gta_prospect_import_audit", "gta_prospect_import_batches",
+  "gta_prospect_shared_identity_observations", "gta_prospect_downtown_geography_observations",
+  "gta_prospect_website_intake_observations", "gta_prospect_qualification_assessments",
+  "gta_prospect_supplemental_evidence_import_audit", "gta_prospect_supplemental_evidence_import_batches",
+]);
+export function isProtectedGtaEnrichmentReadTable(table: string): boolean { return protectedGtaReadTables.has(table); }
+export async function readProtectedGtaEnrichmentEvidence(
+  client: Readonly<{ rpc: (name: string, args: Record<string, unknown>) => Promise<EnrichmentReadResult> }>,
+  input: EnrichmentReadQuery,
+): Promise<EnrichmentReadResult> {
+  if (!isProtectedGtaEnrichmentReadTable(input.table)) return { data: null, error: { code: "22023", message: "The protected GTA evidence table is not allowlisted." } };
+  const firmId = input.table === "gta_prospect_firms" ? input.equals?.id : input.equals?.firm_id;
+  if (!firmId || !uuid.test(firmId)) return { data: null, error: { code: "22023", message: "A canonical firm UUID is required for protected GTA evidence." } };
+  const ids = input.in?.column === "id" ? input.in.values : undefined;
+  if (input.in && input.in.column !== "id") return { data: null, error: { code: "22023", message: "Protected GTA evidence only supports bounded ID lookups." } };
+  return await client.rpc("read_prospect_enrichment_gta_evidence_v1", {
+    p_firm_id: firmId,
+    p_table: input.table,
+    p_row_id: input.equals?.id && input.table !== "gta_prospect_firms" ? input.equals.id : null,
+    p_ids: ids ? [...ids] : null,
+    p_after_id: input.afterId ?? null,
+    p_limit: Math.min(Math.max(input.limit, 1), 501),
+  });
+}
 function requireUuid(id: string) { if (!uuid.test(id)) throw new ProspectEnrichmentReadError("A canonical firm UUID is required.", 422); }
 function rows(result: EnrichmentReadResult): Record<string, unknown>[] {
   if (result.error || !Array.isArray(result.data) || result.data.some((row) => !isEvidenceObject(row) || typeof row.id !== "string")) throw new ProspectEnrichmentReadError("Research evidence could not be loaded.");
@@ -75,6 +102,7 @@ function rows(result: EnrichmentReadResult): Record<string, unknown>[] {
 async function defaultClient(): Promise<ProspectEnrichmentReadClient> {
   const { supabaseAdmin } = await import("@/lib/supabase-admin");
   return { async read(input) {
+    if (isProtectedGtaEnrichmentReadTable(input.table)) return await readProtectedGtaEnrichmentEvidence(supabaseAdmin, input);
     let query = supabaseAdmin.from(input.table).select(input.columns);
     for (const [key, value] of Object.entries(input.equals ?? {})) query = query.eq(key, value);
     if (input.in) query = query.in(input.in.column, [...input.in.values]);
@@ -99,12 +127,12 @@ function decodeCursor(value: string, firmId: string, table: string): string {
   try { const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")); if (parsed.firmId === firmId && parsed.table === table && uuid.test(parsed.id)) return parsed.id; } catch { /* Invalid cursors never change the selected firm. */ }
   throw new ProspectEnrichmentReadError("The evidence cursor does not belong to this firm and source.", 422);
 }
-async function appliedRows(client: ProspectEnrichmentReadClient, spec: Spec, values: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
+async function appliedRows(client: ProspectEnrichmentReadClient, spec: Spec, firmId: string, values: Record<string, unknown>[]): Promise<Record<string, unknown>[]> {
   if (!spec.batch) return values;
   const key = spec.batch === "core" ? "import_batch_id" : "evidence_import_batch_id";
   const ids = [...new Set(values.flatMap((row) => typeof row[key] === "string" ? [row[key] as string] : []))];
   if (!ids.length) return values;
-  const batches = rows(await client.read({ table: spec.batch === "core" ? "gta_prospect_import_batches" : "gta_prospect_supplemental_evidence_import_batches", columns: "id,state", in: { column: "id", values: ids }, limit: ids.length }));
+  const batches = rows(await client.read({ table: spec.batch === "core" ? "gta_prospect_import_batches" : "gta_prospect_supplemental_evidence_import_batches", columns: "id,state", equals: { firm_id: firmId }, in: { column: "id", values: ids }, limit: ids.length }));
   if (batches.length !== ids.length) throw new ProspectEnrichmentReadError("Import provenance could not be verified.");
   const accepted = new Set(batches.filter((row) => row.state === "applied").map((row) => row.id));
   return values.filter((row) => row[key] === null || row[key] === undefined || accepted.has(row[key]));
@@ -112,7 +140,7 @@ async function appliedRows(client: ProspectEnrichmentReadClient, spec: Spec, val
 async function readSource(client: ProspectEnrichmentReadClient, spec: Spec, firmId: string, limit: number, now: Date, afterId?: string) {
   const values = rows(await client.read({ table: spec.table, columns: spec.columns, equals: { firm_id: firmId }, afterId, limit: limit + 1 }));
   const page = values.slice(0, limit);
-  const accepted = await appliedRows(client, spec, page);
+  const accepted = await appliedRows(client, spec, firmId, page);
   const items = accepted.map((row) => evidence(spec, row, now));
   const enriched = spec.table === "prospect_enrichment_packages" ? await withPackageEvents(client, items) : items;
   return { items: enriched, nextCursor: values.length > limit ? cursorFor(firmId, spec.table, page[page.length - 1].id as string) : null };
@@ -226,7 +254,7 @@ async function resolveProfileChoice(client: ProspectEnrichmentReadClient, choice
     lineage = [{ packageId: parent.id as string, itemId: id, sourceEventId: typeof source.source_event_id === "string" ? source.source_event_id : null, data: source.data, sources: Array.isArray(payload.sources) ? payload.sources.filter((value) => isEvidenceObject(value) && sourceIds.includes(String(value.sourceId))) : [], sourceIds, originalResearch: payload.originalResearch ?? null, runId: typeof payload.runId === "string" ? payload.runId : null, payloadSha256: typeof parent.payload_sha256 === "string" ? parent.payload_sha256 : null }];
   } else {
     if (table === "prospect_enrichment_packages" && source.state !== "applied") throw new ProspectEnrichmentReadError("Selected source package has not been applied.");
-    const accepted = await appliedRows(client, spec!, [source]);
+    const accepted = await appliedRows(client, spec!, firmId, [source]);
     if (!accepted.length) throw new ProspectEnrichmentReadError("Selected profile evidence has not been applied.");
     lineage = (await withLineage(client, [evidence(spec!, source, now)]))[0].enrichment;
   }

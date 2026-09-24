@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
+const packageDetails = vi.hoisted(() => new Map<string, unknown>());
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: { from: vi.fn() } }));
+vi.mock("../_package-read", () => ({
+  readPackageDetail: vi.fn(async ({ packageId }: { packageId: string }) => packageDetails.get(packageId)),
+}));
 import type { ComparisonExportInput } from "../../../../../../scripts/prospect-enrichment/comparison-export";
 import { prospectEnrichmentProtocolHash } from "@/lib/prospect-enrichment-hash";
 import type { ReadDatabase } from "../_package-read";
@@ -70,14 +74,38 @@ describe("comparison final consistency fence", () => {
     const proof = { observationSourceEventKey: "observation:" + "e".repeat(64), observationSemanticSha256: "f".repeat(64),
       parentAssessmentClientId: "assessment:current", parentAssessmentTarget: target, databaseFirmId: runId,
       criteriaSelector: "/criteria/score", selectedValueSha256: prospectEnrichmentProtocolHash(3) };
-    const snap = baseline({ snapshot: {
+    const itemId = "00000000-0000-4000-8000-000000000004";
+    const detail = {
+      packageId: "00000000-0000-4000-8000-000000000005", clientPackageId: "assessment-package",
+      payloadSha256: "a".repeat(64), payload: {}, state: "applied", firmId: runId, reviewJson: {},
+      reviewSha256: null, expectedRevisionSha256: null, reviewExpiresAt: null, receipt: { firmId: runId },
+      rawBodySha256: "c".repeat(64),
+      items: [{ itemId, clientItemId: "assessment:current", itemKind: "assessment", sourceEventId: null,
+        data: assessment, sourceIds: [], hash: "d".repeat(64),
+        targets: [{ item_id: itemId, target_table: target.table, target_id: target.id,
+          target_row_sha256: target.rowSha256, application_kind: "inserted", linked_at: "2026-09-23T12:00:00.000Z" }],
+        currentValue: { firmRevision: "1" } }],
+    };
+    packageDetails.set(detail.packageId, detail);
+    const snap = baseline({ packageDetails: [detail] as unknown as ComparisonFenceBaseline["packageDetails"], snapshot: {
       ...baseline().snapshot,
       events: [{ sourceEventKey: "assessment:event", semanticSha256: "b".repeat(64), researchKey: "research-1",
         targets: [target], primaryTarget: target, visible: true, legacyAssessmentProjections: [proof, proof] }],
     } as unknown as ComparisonExportInput });
-    await expect(verifyComparisonFinalFence({ baseline: snap,
-      client: db((table) => table === target.table ? [assessment] : table === "gta_prospect_supplemental_evidence_import_batches" ? [{ id: batchId, state: "applied" }] : []),
-      envelopes: [], readIdentity: async () => [],
-    })).resolves.toBeUndefined();
+    const client = {
+      ...db(() => []),
+      rpc: vi.fn(async (name: string) => ({
+        data: name === "read_prospect_enrichment_gta_target_rows_v1"
+          ? [{ row_json: assessment, row_sha256: prospectEnrichmentProtocolHash(assessment) }]
+          : name === "read_prospect_enrichment_gta_evidence_v1" ? [{ id: batchId, state: "applied" }]
+          : name === "read_prospect_enrichment_firm_identities_v1" ? [{ firm_id: runId, enrichment_revision: 1 }] : [],
+        error: null,
+      })),
+    } as unknown as ReadDatabase & { rpc: ReturnType<typeof vi.fn> };
+    await expect(verifyComparisonFinalFence({ baseline: snap, client, envelopes: [], readIdentity: async () => [] })).resolves.toBeUndefined();
+    expect(client.rpc).toHaveBeenCalledWith("read_prospect_enrichment_gta_target_rows_v1", {
+      p_firm_id: runId, p_table: target.table, p_ids: [target.id],
+    });
+    packageDetails.clear();
   });
 });

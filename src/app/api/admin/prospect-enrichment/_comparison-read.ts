@@ -1,5 +1,5 @@
 import "server-only";
-import { getProspectEnrichmentFirmDetail, getProspectEnrichmentFirmHistory, type ProspectEnrichmentEvidence, type ProspectEnrichmentFirmDetail, type ProspectEnrichmentReadClient } from "@/lib/prospect-enrichment-reader";
+import { getProspectEnrichmentFirmDetail, getProspectEnrichmentFirmHistory, isProtectedGtaEnrichmentReadTable, readProtectedGtaEnrichmentEvidence, type ProspectEnrichmentEvidence, type ProspectEnrichmentFirmDetail, type ProspectEnrichmentReadClient } from "@/lib/prospect-enrichment-reader";
 import { prospectEnrichmentProtocolHash } from "@/lib/prospect-enrichment-hash";
 import { readEvidenceJsonPointer } from "@/lib/prospect-enrichment-legacy";
 import type { ReadDatabase } from "./_package-read";
@@ -70,6 +70,7 @@ export function compareResearchItem(item: InputItem, detail: ProspectEnrichmentF
 }
 export function comparisonReadClient(client: ReadDatabase): ProspectEnrichmentReadClient {
   return { async read(input) {
+    if (isProtectedGtaEnrichmentReadTable(input.table)) return await readProtectedGtaEnrichmentEvidence(client, input);
     let query = client.from(input.table).select(input.columns);
     for (const [key, value] of Object.entries(input.equals ?? {})) query = query.eq(key, value);
     if (input.in) query = query.in(input.in.column, [...input.in.values]);

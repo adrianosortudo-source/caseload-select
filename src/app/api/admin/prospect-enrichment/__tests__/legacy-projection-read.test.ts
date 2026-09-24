@@ -9,10 +9,26 @@ vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: {} }));
 import { readProspectLegacyAssessmentProjectionProof } from "../_legacy-projection-read";
 const firmId = uuid(8), parentId = uuid(801), batchId = uuid(899);
 let tables: Record<string, Record<string, unknown>[]>;
-function client(): ReadDatabase { return { from(table: string) { let rows = [...(tables[table] ?? [])]; const query = { select() { return query; }, eq(key: string, value: unknown) { rows = rows.filter((row) => row[key] === value); return query; }, limit(limit: number) { return Promise.resolve({ data: rows.slice(0, limit), error: null }); } }; return query; } } as unknown as ReadDatabase; }
+let directTables: string[];
+function client(): ReadDatabase { return {
+  from(table: string) { directTables.push(table); let rows = [...(tables[table] ?? [])]; const query = { select() { return query; }, eq(key: string, value: unknown) { rows = rows.filter((row) => row[key] === value); return query; }, limit(limit: number) { return Promise.resolve({ data: rows.slice(0, limit), error: null }); } }; return query; },
+  async rpc(name: string, args: Record<string, unknown>) {
+    if (name !== "read_prospect_enrichment_gta_evidence_v1") return { data: null, error: { message: "unexpected RPC" } };
+    const table = String(args.p_table), firmId = String(args.p_firm_id);
+    let rows = [...(tables[table] ?? [])];
+    if (table === "gta_prospect_firms") rows = rows.filter((row) => row.id === firmId);
+    else if (table === "gta_prospect_supplemental_evidence_import_batches") {
+      const audit = tables.gta_prospect_supplemental_evidence_import_audit ?? [];
+      rows = rows.filter((row) => (args.p_ids as string[] | null)?.includes(String(row.id)) && audit.some((entry) => entry.firm_id === firmId && entry.evidence_import_batch_id === row.id));
+    } else rows = rows.filter((row) => row.firm_id === firmId && (!args.p_row_id || row.id === args.p_row_id));
+    if (args.p_table === "gta_prospect_qualification_assessments" && args.p_row_id) rows = rows.filter((row) => row.id === args.p_row_id);
+    return { data: rows.slice(0, Number(args.p_limit)), error: null };
+  },
+} as unknown as ReadDatabase; }
 function input() { return { envelope: createProspectEnrichmentFixtures()[7].envelope, claim: {} as never, parentAssessmentTarget: { table: "gta_prospect_qualification_assessments" as const, id: parentId, rowSha256: hash(tables.gta_prospect_qualification_assessments[0]) }, firmId, client: client() }; }
 beforeEach(() => {
-  tables = { gta_prospect_qualification_assessments: [{ id: parentId, firm_id: firmId, evidence_import_batch_id: batchId, criteria: { ownerVerified: false, unknown: null } }], gta_prospect_supplemental_evidence_import_batches: [{ id: batchId, state: "applied" }], gta_prospect_firms: [{ id: firmId, enrichment_revision: "7" }] };
+  directTables = [];
+  tables = { gta_prospect_qualification_assessments: [{ id: parentId, firm_id: firmId, evidence_import_batch_id: batchId, criteria: { ownerVerified: false, unknown: null } }], gta_prospect_supplemental_evidence_import_batches: [{ id: batchId, state: "applied" }], gta_prospect_supplemental_evidence_import_audit: [{ firm_id: firmId, evidence_import_batch_id: batchId }], gta_prospect_firms: [{ id: firmId, enrichment_revision: "7" }] };
   state.derive.mockReset().mockReturnValue({ observationSourceEventKey: "observation:" + "a".repeat(64), observationSemanticSha256: "b".repeat(64), parentAssessmentClientId: "assessment:synthetic-8", criteriaSelector: "/criteria/ownerVerified", selectedValueSha256: hash(false) });
   state.history.mockReset().mockResolvedValue({ table: "gta_prospect_qualification_assessments", revision: "7", revisionStable: true, items: [{ id: parentId, table: "gta_prospect_qualification_assessments", data: tables.gta_prospect_qualification_assessments[0] }], nextCursor: null });
 });
@@ -21,6 +37,9 @@ describe("independent legacy projection read proof", () => {
     const result = await readProspectLegacyAssessmentProjectionProof(input());
     expect(result).toMatchObject({ databaseFirmId: firmId, parentAssessmentTarget: { id: parentId }, selectedValueSha256: hash(false) });
     expect(state.derive).toHaveBeenCalledWith(input().envelope, {}, { ownerVerified: false, unknown: null });
+    expect(directTables).not.toContain("gta_prospect_qualification_assessments");
+    expect(directTables).not.toContain("gta_prospect_supplemental_evidence_import_batches");
+    expect(directTables).not.toContain("gta_prospect_firms");
   });
   it.each(["mapper", "rowHash", "wrongFirm", "stagedBatch", "missingTarget", "projectionMismatch", "revisionChanged", "valueHash", "unsafeSelector"])("omits proof on %s instead of asserting preservation", async (failure) => {
     const request = input();

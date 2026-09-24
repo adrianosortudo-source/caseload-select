@@ -3,6 +3,7 @@ import { prospectEnrichmentProtocolHash as hash } from "@/lib/prospect-enrichmen
 import type { ProspectEnrichmentEnvelope } from "@/lib/prospect-enrichment-contract";
 import { readPackageDetail, type ReadDatabase } from "./_package-read";
 import { databaseRows, isRecord, ReadApiError, READ_UUID } from "./_read-common";
+import { PROTECTED_GTA_TARGET_TABLES, readProtectedGtaTargetRows } from "./_protected-target-read";
 
 const MAX_FINAL_FENCE_EVENTS = 10_000;
 const MAX_FINAL_FENCE_ITEMS = 50_000;
@@ -145,12 +146,40 @@ export async function verifyComparisonFinalFence(input: {
     targetsByKey.set(key, target);
   }
   if (targetsByKey.size > MAX_FINAL_FENCE_TARGETS) fail();
+  const targetFirmIds = new Map<string, string>();
+  for (const detail of baseline.packageDetails) {
+    const detailFirmId = detail.firmId;
+    const receiptFirmId = isRecord(detail.receipt) && typeof detail.receipt.firmId === "string" ? detail.receipt.firmId : null;
+    if ((detailFirmId !== null && !READ_UUID.test(detailFirmId)) || (receiptFirmId !== null && !READ_UUID.test(receiptFirmId))
+      || (detailFirmId && receiptFirmId && detailFirmId.toLowerCase() !== receiptFirmId.toLowerCase())) fail();
+    const firmId = (receiptFirmId ?? detailFirmId)?.toLowerCase();
+    if (!firmId) continue;
+    for (const item of detail.items) for (const target of item.targets) {
+      if (!isRecord(target) || typeof target.target_table !== "string" || typeof target.target_id !== "string") continue;
+      const key = target.target_table + ":" + target.target_id;
+      const prior = targetFirmIds.get(key);
+      if (prior && prior !== firmId) fail();
+      targetFirmIds.set(key, firmId);
+    }
+  }
   const currentTargetRows = new Map<string, Record<string, unknown>>();
   for (const table of [...new Set([...targetsByKey.values()].map((target) => target.table))].sort()) {
     const ids = [...targetsByKey.values()].filter((target) => target.table === table).map((target) => target.id);
     for (let offset = 0; offset < ids.length; offset += 100) {
       const chunk = ids.slice(offset, offset + 100);
-      const rows = databaseRows(await client.from(table).select("*").in("id", chunk).limit(chunk.length + 1));
+      let rows: Record<string, unknown>[];
+      if (PROTECTED_GTA_TARGET_TABLES.has(table)) {
+        const byFirm = new Map<string, string[]>();
+        for (const targetId of chunk) {
+          const firmId = targetFirmIds.get(table + ":" + targetId);
+          if (!firmId) fail();
+          const values = byFirm.get(firmId) ?? []; values.push(targetId); byFirm.set(firmId, values);
+        }
+        rows = [];
+        for (const [firmId, firmTargetIds] of byFirm) rows.push(...await readProtectedGtaTargetRows({ client, firmId, table, ids: firmTargetIds }));
+      } else {
+        rows = databaseRows(await client.from(table).select("*").in("id", chunk).limit(chunk.length + 1));
+      }
       if (rows.length !== chunk.length || new Set(rows.map((row) => row.id)).size !== chunk.length) fail();
       for (const row of rows) currentTargetRows.set(table + ":" + String(row.id), row);
     }
@@ -162,14 +191,23 @@ export async function verifyComparisonFinalFence(input: {
 
   const legacyTargetIds = [...new Set(baseline.snapshot.events.flatMap((event) => event.legacyAssessmentProjections ?? [])
     .map((proof) => proof.parentAssessmentTarget.id))];
-  const batchIds = [...new Set(legacyTargetIds.map((id) => currentTargetRows.get("gta_prospect_qualification_assessments:" + id)?.evidence_import_batch_id)
-    .filter((id): id is string => typeof id === "string"))];
-  if (legacyTargetIds.some((id) => typeof currentTargetRows.get("gta_prospect_qualification_assessments:" + id)?.evidence_import_batch_id !== "string") ||
-      (legacyTargetIds.length > 0 && batchIds.length === 0)) fail();
-  for (let offset = 0; offset < batchIds.length; offset += 100) {
-    const chunk = batchIds.slice(offset, offset + 100);
-    const batches = databaseRows(await client.from("gta_prospect_supplemental_evidence_import_batches").select("id,state").in("id", chunk).limit(chunk.length + 1));
-    if (batches.length !== chunk.length || batches.some((batch) => batch.state !== "applied")) fail();
+  const batchIdsByFirm = new Map<string, Set<string>>();
+  for (const id of legacyTargetIds) {
+    const assessment = currentTargetRows.get("gta_prospect_qualification_assessments:" + id);
+    if (typeof assessment?.evidence_import_batch_id !== "string" || typeof assessment.firm_id !== "string" || !READ_UUID.test(assessment.firm_id)) fail();
+    const values = batchIdsByFirm.get(assessment.firm_id) ?? new Set<string>();
+    values.add(assessment.evidence_import_batch_id); batchIdsByFirm.set(assessment.firm_id, values);
+  }
+  for (const [firmId, firmBatchIds] of batchIdsByFirm) {
+    const batchIds = [...firmBatchIds];
+    for (let offset = 0; offset < batchIds.length; offset += 100) {
+      const chunk = batchIds.slice(offset, offset + 100);
+      const batches = databaseRows(await client.rpc("read_prospect_enrichment_gta_evidence_v1", {
+        p_firm_id: firmId, p_table: "gta_prospect_supplemental_evidence_import_batches", p_row_id: null,
+        p_ids: chunk, p_after_id: null, p_limit: chunk.length + 1,
+      }));
+      if (batches.length !== chunk.length || new Set(batches.map((batch) => batch.id)).size !== chunk.length || batches.some((batch) => batch.state !== "applied")) fail();
+    }
   }
 
   // Firm revisions are last so updates to canonical evidence made during any earlier
@@ -188,8 +226,10 @@ export async function verifyComparisonFinalFence(input: {
   const firmIds = [...revisionsByFirm.keys()];
   for (let offset = 0; offset < firmIds.length; offset += 100) {
     const chunk = firmIds.slice(offset, offset + 100);
-    const rows = databaseRows(await client.from("gta_prospect_firms").select("id,source_record_key,enrichment_revision").in("id", chunk).limit(chunk.length + 1));
-    if (rows.length !== chunk.length || new Set(rows.map((row) => row.id)).size !== chunk.length) fail();
-    for (const row of rows) if (!revisionsByFirm.get(String(row.id))?.has(String(row.enrichment_revision))) fail();
+    const { data, error } = await client.rpc("read_prospect_enrichment_firm_identities_v1", { p_firm_ids: chunk, p_source_record_keys: [], p_stable_firm_ids: [] });
+    if (error) fail();
+    const rows = databaseRows(data);
+    if (rows.length !== chunk.length || new Set(rows.map((row) => row.firm_id)).size !== chunk.length) fail();
+    for (const row of rows) if (!revisionsByFirm.get(String(row.firm_id))?.has(String(row.enrichment_revision))) fail();
   }
 }
