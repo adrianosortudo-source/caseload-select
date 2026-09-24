@@ -10,13 +10,18 @@ export type GtaProspectSupplementalEvidenceReaderClient = {
   rpc: (functionName: string) => Promise<{ data: unknown; error: RpcError | null }>;
 };
 
+export type GtaProspectQualificationEvidence =
+  | null | boolean | number | string
+  | readonly GtaProspectQualificationEvidence[]
+  | { readonly [key: string]: GtaProspectQualificationEvidence };
+
 export type GtaProspectSupplementalEvidenceSummary = Readonly<{
   sourceRecordKey: string;
   firmId: string | null;
   canonicalDomain: string | null;
   identity: { matchState: "confirmed" | "unresolved" | "distinct"; observedOn: string; confidence: "high" | "moderate" | "unknown" } | null;
   websiteIntake: { channels: readonly string[]; opportunityState: "supported" | "not_established"; observedOn: string } | null;
-  qualification: { state: "qualified" | "needs_evidence" | "disqualified"; cohort: string; assessedOn: string; criteria: Readonly<Record<string, boolean>> } | null;
+  qualification: { state: "qualified" | "needs_evidence" | "disqualified"; cohort: string; assessedOn: string; criteria: Readonly<Record<string, GtaProspectQualificationEvidence>> } | null;
 }>;
 
 export class GtaProspectSupplementalEvidenceLedgerUnavailableError extends Error {
@@ -34,9 +39,24 @@ function textArray(value: unknown): readonly string[] {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) throw error("website_intake_channels is invalid");
   return Object.freeze([...new Set(value.map((item) => item.trim()))]);
 }
-function criteria(value: unknown): Readonly<Record<string, boolean>> {
-  if (!object(value) || Object.values(value).some((item) => typeof item !== "boolean")) throw error("qualification_criteria is invalid");
-  return Object.freeze({ ...value } as Record<string, boolean>);
+function evidence(value: unknown, ancestors = new Set<object>(), depth = 0): GtaProspectQualificationEvidence {
+  // The criteria root is depth zero; every property or array item adds one.
+  if (depth > 12) throw error("qualification_criteria exceeds maximum depth 12");
+  if (value === null || typeof value === "string" || typeof value === "boolean") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "object" || value === null || ancestors.has(value)) throw error("qualification_criteria is invalid");
+  const next = new Set(ancestors).add(value);
+  if (Array.isArray(value)) return Object.freeze(Array.from(value, (item) => evidence(item, next, depth + 1)));
+  if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) throw error("qualification_criteria is invalid");
+  return Object.freeze(Object.fromEntries(Object.entries(value).map(([key, item]) => [key, evidence(item, next, depth + 1)])));
+}
+function criteria(value: unknown): Readonly<Record<string, GtaProspectQualificationEvidence>> {
+  // The governed ledger stores JSON evidence, including both legacy boolean
+  // gates and newer source-linked observations. Do not narrow it to a gate map.
+  if (!object(value)) throw error("qualification_criteria is invalid");
+  const snapshot = evidence(value) as Readonly<Record<string, GtaProspectQualificationEvidence>>;
+  if (Buffer.byteLength(JSON.stringify(snapshot), "utf8") > 256 * 1024) throw error("qualification_criteria exceeds 256 KiB");
+  return snapshot;
 }
 function row(value: unknown): GtaProspectSupplementalEvidenceSummary {
   if (!object(value)) throw error("row is not an object");
