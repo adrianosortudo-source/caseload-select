@@ -4,7 +4,7 @@ name: Reviewed prospect enrichment migration
   workflow_dispatch:
     inputs:
       operation:
-        description: Validate the exact plan, or apply after the separate production approval.
+        description: Validate all six exact migrations, or apply after the separate production approval.
         required: true
         default: dry-run
         type: choice
@@ -76,7 +76,7 @@ jobs:
           grep -q -- '--db-url' "$RUNNER_TEMP/db-push-help.txt"
           grep -q -- '--db-url' "$RUNNER_TEMP/db-query-help.txt"
 
-      - name: Require the exact pending migration and no seeds or roles
+      - name: Require the exact six pending migrations and no seeds or roles
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
@@ -94,7 +94,7 @@ jobs:
           set -euo pipefail
           echo "The reviewed prospect enrichment plan matches. No migration was applied."
 
-      - name: Recheck and apply the separately approved migration
+      - name: Recheck and apply the separately approved six migrations
         id: apply_migration
         if: inputs.operation == 'apply'
         env:
@@ -115,7 +115,7 @@ jobs:
             --output-format json > "$RUNNER_TEMP/apply.json"
           node scripts/prospect-enrichment/migration-gate.mjs plan apply "$RUNNER_TEMP/apply.json" > "$RUNNER_TEMP/apply-check.json"
 
-      - name: Verify applied version, complete SQL content and empty pending plan
+      - name: Verify all six versions, complete SQL content and empty pending plan
         if: always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}

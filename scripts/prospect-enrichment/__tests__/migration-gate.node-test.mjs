@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import {
-  CLI_VERSION, CONFIRMATION, MIGRATION_PATH, PROJECT_REF, RELEASE_PATH,
+  CLI_VERSION, CONFIRMATION, MIGRATION_PATHS, PROJECT_REF, RELEASE_PATH,
   createReleaseManifest, findProjectEnvFiles, ledgerQuery, sha256, verifyConfirmation, verifyDirectDatabaseUrl, verifyExecutionGate,
   verifyLedgerStatements, verifyMigrationLedger, verifyMigrationPlan, verifyReleaseManifest,
 } from "../migration-gate.mjs";
@@ -13,27 +14,47 @@ import {
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const source = Buffer.from("-- scope\nBEGIN;\nCREATE FUNCTION f() RETURNS text LANGUAGE sql AS $$ SELECT 'x;y'; $$;\nCOMMIT;\n");
 const statements = ["-- scope\nBEGIN", "CREATE FUNCTION f() RETURNS text LANGUAGE sql AS $$ SELECT 'x;y'; $$", "COMMIT"];
-const manifest = createReleaseManifest(source);
-const row = { version: manifest.migrations[0].version, name: manifest.migrations[0].name, statements };
+const sources = Object.fromEntries(MIGRATION_PATHS.map((file, index) => [file, Buffer.concat([source, Buffer.from("-- file " + index + "\nSELECT " + index + ";\n")])]));
+const manifest = createReleaseManifest(sources);
+const rows = manifest.migrations.map((migration, index) => ({ version: migration.version, name: migration.name, statements: [...statements, "-- file " + index + "\nSELECT " + index] }));
+const changedRow = (index, change) => rows.map((row, current) => current === index ? { ...row, ...change } : row);
 const reviewed = "a".repeat(40), different = "b".repeat(40);
 const databaseUrl = "postgresql://postgres:synthetic-only@db." + PROJECT_REF + ".supabase.co:5432/postgres?sslmode=verify-full";
 const gate = { event: "workflow_dispatch", ref: "refs/heads/main", repository: "adrianosortudo-source/caseload-select", operation: "dry-run", reviewedSourceSha: reviewed, configuredReviewedSha: reviewed, checkoutSha: reviewed, githubSha: reviewed, databaseUrl };
-const plan = (phase) => ({ dryRun: phase !== "apply", upToDate: phase === "post", migrations: phase === "post" ? [] : [manifest.migrations[0].filename], seeds: [], roles: [] });
+const plan = (phase) => ({ dryRun: phase !== "apply", upToDate: phase === "post", migrations: phase === "post" ? [] : manifest.migrations.map(migration => migration.filename), seeds: [], roles: [] });
 
-test("release manifest is generated from the exact committed migration bytes", () => {
-  const actual = fs.readFileSync(path.join(root, MIGRATION_PATH));
+test("release manifest covers the six committed feature migrations and exact LF Git bytes", () => {
+  const featurePaths = fs.readdirSync(path.join(root, "supabase/migrations")).filter(name => /_prospect_enrichment_|_fix_gta_prospect_operator_projection_gaps\.sql$/.test(name)).sort().map(name => "supabase/migrations/" + name);
+  assert.deepEqual([...MIGRATION_PATHS], featurePaths);
+  assert.equal(MIGRATION_PATHS.length, 6);
+  assert.ok(Object.isFrozen(MIGRATION_PATHS));
+  const actual = Object.fromEntries(MIGRATION_PATHS.map(file => {
+    const committed = execFileSync("git", ["cat-file", "blob", "HEAD:" + file], { cwd: root });
+    assert.deepEqual(Buffer.from(fs.readFileSync(path.join(root, file), "utf8").replace(/\r\n/g, "\n")), committed, "checkout must match committed SQL; only Windows CRLF differs");
+    return [file, committed];
+  }));
   const saved = JSON.parse(fs.readFileSync(path.join(root, RELEASE_PATH), "utf8"));
   assert.deepEqual(verifyReleaseManifest(saved, actual), createReleaseManifest(actual));
-  assert.equal(saved.projectRef, PROJECT_REF);
-  assert.equal(saved.cliVersion, CLI_VERSION);
-  assert.equal(saved.migrations.length, 1);
-  assert.equal(saved.migrations[0].version, "20260923161812");
-  assert.equal(saved.migrations[0].sha256, sha256(actual));
+  for (const entry of saved.migrations) assert.equal(entry.sha256, sha256(actual[entry.path]));
 });
-test("changed migration bytes and expanded allowlists fail closed", () => {
-  assert.throws(() => verifyReleaseManifest(manifest, Buffer.concat([source, Buffer.from("-- changed")])), /source_mismatch/);
-  assert.throws(() => verifyReleaseManifest({ ...manifest, migrations: [...manifest.migrations, manifest.migrations[0]] }, source), /source_mismatch/);
-  assert.throws(() => verifyReleaseManifest({ ...manifest, projectRef: "other-project" }, source), /source_mismatch/);
+for (const [index, file] of MIGRATION_PATHS.entries()) {
+  test("source inventory rejects missing migration " + index, () => {
+    const missing = { ...sources }; delete missing[file];
+    assert.throws(() => createReleaseManifest(missing), /exact_migration_sources_required/);
+  });
+  test("manifest rejects changed source or metadata at migration " + index, () => {
+    assert.throws(() => verifyReleaseManifest(manifest, { ...sources, [file]: Buffer.concat([sources[file], Buffer.from("-- changed")]) }), /source_mismatch/);
+    for (const field of ["sha256", "bytes", "version", "name", "path", "filename"]) {
+      const altered = structuredClone(manifest); altered.migrations[index][field] = field === "bytes" ? 1 : "changed";
+      assert.throws(() => verifyReleaseManifest(altered, sources), /source_mismatch/);
+    }
+  });
+}
+test("source inventory and manifest reject additions, omissions, duplicates, reorder and invalid bytes", () => {
+  assert.throws(() => createReleaseManifest({ ...sources, "supabase/migrations/20990101000000_unreviewed.sql": source }), /exact_migration_sources_required/);
+  for (const invalid of [Buffer.alloc(0), Buffer.from([0xff]), "not-bytes"]) assert.throws(() => createReleaseManifest({ ...sources, [MIGRATION_PATHS[0]]: invalid }));
+  for (const migrations of [manifest.migrations.slice(1), [...manifest.migrations, manifest.migrations[0]], [...manifest.migrations].reverse()]) assert.throws(() => verifyReleaseManifest({ ...manifest, migrations }, sources), /source_mismatch/);
+  assert.throws(() => verifyReleaseManifest({ ...manifest, projectRef: "other-project" }, sources), /source_mismatch/);
 });
 test("manual reviewed main is accepted for dry-run", () => assert.equal(verifyExecutionGate(gate).projectRef, PROJECT_REF));
 for (const [label, change] of [
@@ -57,22 +78,29 @@ for (const [label, change] of [
   ["wrong dryRun", { dryRun: false }], ["missing roles", { roles: undefined }],
 ]) test("preflight rejects " + label, () => assert.throws(() => verifyMigrationPlan({ ...plan("pre"), ...change }, manifest, "pre"), /unexpected_pending/));
 test("post-apply requires an empty pending plan", () => assert.throws(() => verifyMigrationPlan(plan("pre"), manifest, "post"), /unexpected_pending/));
-test("ledger readback covers complete source including comments and dollar bodies", () => {
-  const proof = verifyMigrationLedger([row], manifest, source);
-  assert.equal(proof.statementCount, 3);
-  assert.equal(proof.sourceSha256, sha256(source));
-  assert.equal(proof.ledgerStatementsSha256, sha256(JSON.stringify(statements)));
-  assert.equal(proof.statementContentMatchesReviewedSource, true);
+test("ledger readback covers every ordered source including comments and dollar bodies", () => {
+  const proof = verifyMigrationLedger(rows, manifest, sources);
+  assert.equal(proof.migrationCount, 6);
+  assert.equal(proof.releaseManifestContentSha256, sha256(JSON.stringify(manifest)));
+  for (const [index, item] of proof.migrations.entries()) {
+    assert.equal(item.path, MIGRATION_PATHS[index]);
+    assert.equal(item.statementCount, 4);
+    assert.equal(item.sourceSha256, sha256(sources[item.path]));
+    assert.equal(item.ledgerStatementsSha256, sha256(JSON.stringify(rows[index].statements)));
+    assert.equal(item.statementContentMatchesReviewedSource, true);
+  }
 });
-for (const [label, rows] of [
-  ["missing row", []], ["duplicate row", [row, row]], ["wrong version", [{ ...row, version: "20260923161813" }]],
-  ["wrong name", [{ ...row, name: "other" }]], ["missing statements", [{ ...row, statements: null }]],
-  ["changed literal", [{ ...row, statements: statements.map((s) => s.replace("x;y", "changed")) }]],
-  ["omitted statement", [{ ...row, statements: statements.slice(0, 2) }]],
-  ["reordered statements", [{ ...row, statements: [...statements].reverse() }]],
-  ["extra statement", [{ ...row, statements: [...statements, "DROP TABLE unexpected"] }]],
-  ["extra fields", [{ ...row, unreviewed: true }]],
-]) test("ledger rejects " + label, () => assert.throws(() => verifyMigrationLedger(rows, manifest, source)));
+for (const [label, changed] of [
+  ["missing row", rows.slice(1)], ["duplicate row", [...rows.slice(0, 5), rows[0]]], ["additional row", [...rows, rows[0]]], ["reordered rows", [...rows].reverse()],
+  ["wrong version", changedRow(0, { version: "20990101000000" })], ["wrong name", changedRow(0, { name: "other" })],
+  ["missing statements", changedRow(0, { statements: null })], ["changed literal", changedRow(0, { statements: rows[0].statements.map(s => s.replace("x;y", "changed")) })],
+  ["omitted statement", changedRow(0, { statements: rows[0].statements.slice(0, 2) })], ["reordered statements", changedRow(0, { statements: [...rows[0].statements].reverse() })],
+  ["extra statement", changedRow(0, { statements: [...rows[0].statements, "DROP TABLE unexpected"] })], ["extra fields", changedRow(0, { unreviewed: true })],
+]) test("ledger rejects " + label, () => assert.throws(() => verifyMigrationLedger(changed, manifest, sources)));
+for (const [index] of MIGRATION_PATHS.entries()) test("ledger binds full content to exact migration " + index, () => {
+  assert.throws(() => verifyMigrationLedger(changedRow(index, { statements: rows[index].statements.map(s => s.replace("SELECT " + index, "SELECT 99")) }), manifest, sources), /content_mismatch/);
+  assert.throws(() => verifyMigrationLedger(changedRow(index, { statements: rows[(index + 1) % rows.length].statements }), manifest, sources), /content_mismatch/);
+});
 test("truncated token boundaries cannot masquerade as complete statements", () => {
   assert.throws(() => verifyLedgerStatements(Buffer.from("SELECT abc;"), ["SELECT ab", "c"]), /boundary_mismatch/);
 });
@@ -80,9 +108,21 @@ test("whitespace cannot split one SQL statement into multiple ledger entries", (
   assert.throws(() => verifyLedgerStatements(Buffer.from("SELECT abc;"), ["SELECT", "abc"]), /terminator_missing/);
 });
 
-test("fixed ledger query contains only a single version-scoped SELECT", () => {
-  const query = ledgerQuery(manifest);
-  assert.equal(query, "SELECT version, name, statements FROM supabase_migrations.schema_migrations WHERE version = '20260923161812' ORDER BY version;\n");
+test("fixed ledger query is one SELECT bound to exactly the six ordered versions", () => {
+  assert.equal(ledgerQuery(manifest), "SELECT version, name, statements FROM supabase_migrations.schema_migrations WHERE version IN ('20260923161812', '20260923174500', '20260923182000', '20260923221500', '20260924071322', '20260924093317') ORDER BY version;\n");
+});
+for (const [label, migrations] of [["partial", manifest.migrations.slice(1)], ["expanded", [...manifest.migrations, manifest.migrations[0]]], ["reordered", [...manifest.migrations].reverse()], ["injected", manifest.migrations.map((m, i) => i === 0 ? { ...m, version: "0'); DELETE" } : m)]]) {
+  test("query and plan reject " + label + " release scope", () => {
+    assert.throws(() => ledgerQuery({ ...manifest, migrations }), /invalid_release_scope/);
+    assert.throws(() => verifyMigrationPlan(plan("pre"), { ...manifest, migrations }, "pre"), /invalid_release_scope/);
+  });
+}
+for (const [index] of MIGRATION_PATHS.entries()) test("plan rejects omitted migration " + index, () => {
+  const pending = plan("pre"); pending.migrations.splice(index, 1);
+  assert.throws(() => verifyMigrationPlan(pending, manifest, "pre"), /unexpected_pending/);
+});
+test("plan rejects reordered, duplicated or partially applied migration sets", () => {
+  for (const migrations of [[...plan("pre").migrations].reverse(), [...plan("pre").migrations.slice(0, 5), plan("pre").migrations[0]], plan("pre").migrations.slice(1)]) assert.throws(() => verifyMigrationPlan({ ...plan("pre"), migrations }, manifest, "pre"), /unexpected_pending/);
 });
 test("workflow is manual, main-only, protected and all external actions are pinned", () => {
   const workflow = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/prospect-enrichment-migration-gate.yml"), "utf8"));

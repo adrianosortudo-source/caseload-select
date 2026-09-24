@@ -5,7 +5,14 @@ import { fileURLToPath } from "node:url";
 
 export const PROJECT_REF = "ssxryjxifwiivghglqer";
 export const CLI_VERSION = "2.117.0";
-export const MIGRATION_PATH = "supabase/migrations/20260923161812_prospect_enrichment_v1.sql";
+export const MIGRATION_PATHS = Object.freeze([
+  "supabase/migrations/20260923161812_prospect_enrichment_v1.sql",
+  "supabase/migrations/20260923174500_prospect_enrichment_identity_read_rpc.sql",
+  "supabase/migrations/20260923182000_prospect_enrichment_operator_read_rpc.sql",
+  "supabase/migrations/20260923221500_prospect_enrichment_gta_target_read_rpc.sql",
+  "supabase/migrations/20260924071322_prospect_enrichment_manifest_hold_evidence.sql",
+  "supabase/migrations/20260924093317_fix_gta_prospect_operator_projection_gaps.sql"
+]);
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
 export const RELEASE_PATH = "scripts/prospect-enrichment/migration-release.json";
 export const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -14,21 +21,40 @@ const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const hasAsciiControl = (value, upper) => Array.from(value).some(char => char.charCodeAt(0) <= upper || char.charCodeAt(0) === 127);
 
-export function createReleaseManifest(source) {
-  const filename = path.posix.basename(MIGRATION_PATH);
-  const match = /^(\d{14})_(.+)\.sql$/.exec(filename);
-  if (!match || !Buffer.isBuffer(source) || source.length === 0) fail("invalid_migration_source");
-  if (!Buffer.from(source.toString("utf8"), "utf8").equals(source)) fail("migration_source_not_utf8");
-  return {
-    schemaVersion: "prospect-enrichment-migration-release/v1",
-    projectRef: PROJECT_REF,
-    cliVersion: CLI_VERSION,
-    migrations: [{ path: MIGRATION_PATH, filename, version: match[1], name: match[2], bytes: source.length, sha256: sha256(source) }],
-  };
+function migrationIdentities() {
+  return MIGRATION_PATHS.map(migrationPath => {
+    const filename = path.posix.basename(migrationPath);
+    const match = /^(\d{14})_(.+)\.sql$/.exec(filename);
+    if (!match) fail("invalid_migration_path");
+    return { path: migrationPath, filename, version: match[1], name: match[2] };
+  });
 }
 
-export function verifyReleaseManifest(manifest, source) {
-  const expected = createReleaseManifest(source);
+function verifyManifestScope(manifest) {
+  if (!isRecord(manifest) || !same(Object.keys(manifest).sort(), ["cliVersion", "migrations", "projectRef", "schemaVersion"]) ||
+      manifest.schemaVersion !== "prospect-enrichment-migration-release/v1" || manifest.projectRef !== PROJECT_REF ||
+      manifest.cliVersion !== CLI_VERSION || !Array.isArray(manifest.migrations) || manifest.migrations.length !== MIGRATION_PATHS.length) fail("invalid_release_scope");
+  for (const [index, expected] of migrationIdentities().entries()) {
+    const actual = manifest.migrations[index];
+    if (!isRecord(actual) || !same(Object.keys(actual).sort(), ["bytes", "filename", "name", "path", "sha256", "version"]) ||
+        Object.entries(expected).some(([key, value]) => actual[key] !== value) ||
+        !Number.isSafeInteger(actual.bytes) || actual.bytes <= 0 || !/^[a-f0-9]{64}$/.test(actual.sha256 ?? "")) fail("invalid_release_scope");
+  }
+}
+
+export function createReleaseManifest(sources) {
+  if (!isRecord(sources) || !same(Object.keys(sources).sort(), [...MIGRATION_PATHS].sort())) fail("exact_migration_sources_required");
+  const migrations = migrationIdentities().map(identity => {
+    const source = sources[identity.path];
+    if (!Buffer.isBuffer(source) || source.length === 0) fail("invalid_migration_source");
+    if (!Buffer.from(source.toString("utf8"), "utf8").equals(source)) fail("migration_source_not_utf8");
+    return { ...identity, bytes: source.length, sha256: sha256(source) };
+  });
+  return { schemaVersion: "prospect-enrichment-migration-release/v1", projectRef: PROJECT_REF, cliVersion: CLI_VERSION, migrations };
+}
+
+export function verifyReleaseManifest(manifest, sources) {
+  const expected = createReleaseManifest(sources);
   if (!same(manifest, expected)) fail("release_manifest_source_mismatch");
   return expected;
 }
@@ -64,6 +90,7 @@ export function verifyConfirmation(operation, confirmation) {
 }
 
 export function verifyMigrationPlan(plan, manifest, phase) {
+  verifyManifestScope(manifest);
   if (!isRecord(plan) || !["pre", "apply", "post"].includes(phase)) fail("invalid_migration_plan");
   const empty = phase === "post";
   const expected = empty ? [] : manifest.migrations.map((m) => m.filename);
@@ -107,19 +134,22 @@ export function verifyLedgerStatements(source, statements) {
   };
 }
 
-export function verifyMigrationLedger(rows, manifest, source) {
-  verifyReleaseManifest(manifest, source);
-  if (!Array.isArray(rows) || rows.length !== 1 || !isRecord(rows[0])) fail("exact_ledger_row_required");
-  const row = rows[0], expected = manifest.migrations[0];
-  if (row.version !== expected.version || row.name !== expected.name) fail("ledger_version_or_name_mismatch");
-  if (!same(Object.keys(row).sort(), ["name", "statements", "version"])) fail("unexpected_ledger_fields");
-  return { projectRef: PROJECT_REF, version: row.version, name: row.name, ...verifyLedgerStatements(source, row.statements) };
+export function verifyMigrationLedger(rows, manifest, sources) {
+  verifyReleaseManifest(manifest, sources);
+  if (!Array.isArray(rows) || rows.length !== MIGRATION_PATHS.length || rows.some(row => !isRecord(row))) fail("exact_ledger_rows_required");
+  const migrations = manifest.migrations.map((expected, index) => {
+    const row = rows[index];
+    if (row.version !== expected.version || row.name !== expected.name) fail("ledger_version_or_name_mismatch");
+    if (!same(Object.keys(row).sort(), ["name", "statements", "version"])) fail("unexpected_ledger_fields");
+    return { path: expected.path, version: row.version, name: row.name, ...verifyLedgerStatements(sources[expected.path], row.statements) };
+  });
+  return { projectRef: PROJECT_REF, migrationCount: migrations.length, releaseManifestContentSha256: sha256(JSON.stringify(manifest)), migrations };
 }
 
 export function ledgerQuery(manifest) {
-  if (manifest.migrations.length !== 1 || !/^\d{14}$/.test(manifest.migrations[0].version)) fail("invalid_ledger_scope");
-  return "SELECT version, name, statements FROM supabase_migrations.schema_migrations WHERE version = '" +
-    manifest.migrations[0].version + "' ORDER BY version;\n";
+  verifyManifestScope(manifest);
+  const versions = manifest.migrations.map(migration => "'" + migration.version + "'").join(", ");
+  return "SELECT version, name, statements FROM supabase_migrations.schema_migrations WHERE version IN (" + versions + ") ORDER BY version;\n";
 }
 
 export function findProjectEnvFiles(exists = fs.existsSync) {
@@ -131,15 +161,15 @@ export function findProjectEnvFiles(exists = fs.existsSync) {
 
 function main(args) {
   const [command, ...rest] = args;
-  const source = fs.readFileSync(MIGRATION_PATH);
+  const sources = Object.fromEntries(MIGRATION_PATHS.map(migrationPath => [migrationPath, fs.readFileSync(migrationPath)]));
   if (command === "generate" && rest.length === 0) {
     // Local release preparation only; generation grants no execution authority.
-    fs.writeFileSync(RELEASE_PATH, JSON.stringify(createReleaseManifest(source), null, 2) + "\n", { flag: "wx" });
+    fs.writeFileSync(RELEASE_PATH, JSON.stringify(createReleaseManifest(sources), null, 2) + "\n", { flag: "wx" });
     console.log(JSON.stringify({ manifest: RELEASE_PATH, generated: true }));
     return;
   }
   const manifest = JSON.parse(fs.readFileSync(RELEASE_PATH, "utf8"));
-  verifyReleaseManifest(manifest, source);
+  verifyReleaseManifest(manifest, sources);
   if (command === "source" && rest.length === 0) {
     const gate = verifyExecutionGate({
       event: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF,
@@ -157,7 +187,7 @@ function main(args) {
   } else if (command === "plan" && rest.length === 2) {
     console.log(JSON.stringify(verifyMigrationPlan(JSON.parse(fs.readFileSync(rest[1], "utf8")), manifest, rest[0])));
   } else if (command === "ledger" && rest.length === 1) {
-    console.log(JSON.stringify(verifyMigrationLedger(JSON.parse(fs.readFileSync(rest[0], "utf8")), manifest, source)));
+    console.log(JSON.stringify(verifyMigrationLedger(JSON.parse(fs.readFileSync(rest[0], "utf8")), manifest, sources)));
   } else fail("usage_source_connection_query_generate_plan_phase_file_or_ledger_file");
 }
 

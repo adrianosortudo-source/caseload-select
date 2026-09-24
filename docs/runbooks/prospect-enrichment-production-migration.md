@@ -1,14 +1,18 @@
 # Prospect enrichment production migration
 
-This workflow prepares and, after its own production approval, applies only
-supabase/migrations/20260923161812_prospect_enrichment_v1.sql to project
-ssxryjxifwiivghglqer. App PR merge, schema activation, pilot, backfill and active
+This workflow prepares and, after its own production approval, applies only the
+six ordered migrations in scripts/prospect-enrichment/migration-release.json to
+project ssxryjxifwiivghglqer. App PR merge, schema activation, pilot, backfill and active
 research cutover remain separate approvals. No real research is included here.
 
 The reviewed allowlist is scripts/prospect-enrichment/migration-release.json.
 It is mechanically generated from the exact migration filename and UTF-8 bytes:
-version, name, byte count and full SHA-256. The guard rejects stale checksums,
-changed targets and extra migrations. Do not edit the JSON to hide drift.
+version, name, byte count and full SHA-256 for each file. The closed ordered set is
+20260923161812, 20260923174500, 20260923182000, 20260923221500, 20260924071322,
+and 20260924093317. These provide the enrichment schema, identity/evidence/target
+read RPCs, durable held-candidate evidence, and the operator RPC-v2 projection.
+The guard rejects missing, extra, duplicate or reordered files, stale checksums
+and changed targets. Do not edit the JSON to hide drift.
 After an authorized migration-file change, regenerate the manifest through a
 reviewed local change and rerun its tests; never change an applied migration.
 
@@ -69,9 +73,11 @@ checksum, deployment evidence, exact target and rollback/read-back steps.
    origin/main must all match. The default dry-run applies no migrations, seeds,
    custom roles or vault changes. It uses only the guarded direct connection.
 2. Review the resulting prospect-enrichment-migration-evidence artifact.
-   The only pending migration must be the allowlisted enrichment file; seeds
-   and roles must both be empty. An already-applied file or an additional pending
-   migration fails closed. Do not repair history or widen the allowlist ad hoc.
+   The pending plan must contain all six allowlisted files in their exact order;
+   seeds and roles must both be empty. A missing, already-applied, duplicate,
+   reordered or additional migration fails closed. A partially applied set is
+   a blocked release, not permission to apply the remaining subset. Do not repair
+   history or widen the allowlist ad hoc.
 3. Obtain explicit approval for activation of the scoped enrichment schema and
    operator views. Dispatch again with operation apply, the same still-current
    reviewed source SHA and confirmation APPLY-PROSPECT-ENRICHMENT-V1.
@@ -79,20 +85,26 @@ checksum, deployment evidence, exact target and rollback/read-back steps.
    fresh source review and configuration, not an arbitrary SHA substitution.
 4. The apply step rechecks source/configuration/checksums and a fresh exact plan
    immediately before the single db push. It records that the guarded apply
-   attempt started, verifies the apply result, reads exactly the expected migration
-   ledger row with a fixed SELECT, and verifies a final empty pending plan. Once
-   apply starts, verification also runs after an uncertain apply error. Its SQL
+   attempt started, verifies the apply result, reads exactly the expected
+   six ledger rows with one fixed, version-scoped SELECT, and verifies a final
+   empty pending plan. Once apply starts, verification also runs after an uncertain apply error. Its SQL
    action is read-only; the connection still requires the protected, explicitly
    authorized database URL. It never retries apply or converts a failed apply
    step into success.
    A failure before the guarded apply attempt does not start this read-back.
 5. Retain source-check, plan-check, apply-check, ledger-check and post-apply-check
-   from the artifact. Ledger verification checks version/name and complete stored
-   SQL text in order against reviewed source bytes. The pinned CLI removes only
+   from the artifact. Ledger verification requires exactly six ordered unique rows,
+   checks each version/name and complete stored SQL text against that file's
+   reviewed source bytes, and rejects omitted or substituted rows. The pinned CLI
+   removes only
    outer whitespace and statement terminators; comments, literals, function
    bodies and remaining text must match. The evidence contains the reviewed
    source SHA and a separate full SHA for the returned statement array.
-   These are distinct hash domains, not interchangeable checksums.
+   The ledger proof contains six per-file source/statement hashes and
+   releaseManifestContentSha256, which hashes compact JSON.stringify(manifest).
+   source-check separately records releaseManifestSha256 for the exact saved
+   manifest-file bytes. These are distinct hash domains, not interchangeable
+   checksums.
 6. If apply succeeds but subsequent verification fails, treat the result as
    applied-but-unverified. Do not rerun apply, repair history, delete objects or
    claim success. Retain evidence and resolve through reviewed checks whose SQL
@@ -122,6 +134,12 @@ scope/hash evidence is retained.
 
 node --test scripts/prospect-enrichment/__tests__/migration-gate.node-test.mjs
 
+The focused suite covers all six committed feature migrations, source/hash
+coverage, omitted/extra/reordered plans, six-row identity/content read-back,
+per-file statement tampering and all original connection/approval protections.
+On Windows, its source-coverage fixture compares the unchanged CRLF checkout to
+the exact LF Git blobs; production verification hashes the checked-out bytes
+without normalization. The Ubuntu workflow uses the committed LF bytes.
 The tests use synthetic source/plan/ledger data and inspect the workflow contract.
 They do not run Supabase, access credentials, contact production or execute SQL.
 
