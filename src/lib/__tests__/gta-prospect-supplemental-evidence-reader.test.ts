@@ -12,6 +12,7 @@ const row = {
   identity_match_state: "confirmed",
   identity_observed_on: "2026-09-12",
   identity_confidence: "high",
+  identity_source: "supplemental_observation",
   website_intake_channels: ["phone", "contact_form"],
   website_opportunity_state: "supported",
   website_observed_on: "2026-09-12",
@@ -73,13 +74,13 @@ describe("GTA prospect supplemental evidence reader", () => {
   });
 
   it.each([
-    ["depth above 12", (() => { let nested: unknown = "value"; for (let depth = 0; depth < 13; depth += 1) nested = { child: nested }; return nested; })()],
-    ["serialized criteria above 256 KiB", { value: "x".repeat(256 * 1024) }],
+    ["depth above 12", (() => { let nested: unknown = "value"; for (let depth = 0; depth < 13; depth += 1) nested = { child: nested }; return nested; })(), "qualification_criteria exceeds maximum depth 12"],
+    ["serialized criteria above 256 KiB", { value: "x".repeat(256 * 1024) }, "qualification_criteria exceeds 256 KiB"],
     ["prototype key", JSON.parse('{"__proto__":{"polluted":true}}')],
     ["constructor key", JSON.parse('{"constructor":{"prototype":{"polluted":true}}}')],
-  ])("rejects unsafe or oversized criteria: %s", async (_label, invalidCriteria) => {
+  ])("rejects unsafe or oversized criteria: %s", async (_label, invalidCriteria, expectedError = "qualification_criteria is invalid") => {
     await expect(listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, qualification_criteria: invalidCriteria }], error: null }) }))
-      .rejects.toThrow("qualification_criteria is invalid");
+      .rejects.toThrow(expectedError);
   });
 
   it("returns only the narrow applied-evidence summary", async () => {
@@ -88,7 +89,7 @@ describe("GTA prospect supplemental evidence reader", () => {
       sourceRecordKey: "gta-prospect-002-b002-11",
       firmId: "FIRM-1C2XS2MW3NTR644JE1T3XVHFX2",
       canonicalDomain: "example.test",
-      identity: { matchState: "confirmed", observedOn: "2026-09-12", confidence: "high" },
+      identity: { matchState: "confirmed", observedOn: "2026-09-12", confidence: "high", source: "supplemental_observation" },
       websiteIntake: { channels: ["phone", "contact_form"], opportunityState: "supported", observedOn: "2026-09-12" },
       qualification: { state: "qualified", cohort: "downtown_toronto_one_to_ten", assessedOn: "2026-09-12", criteria: { lawyerCount: true, downtownGeometry: true, sharedIdentity: true } },
     }]);
@@ -145,4 +146,21 @@ describe("GTA prospect supplemental evidence reader", () => {
       .rejects.toThrow("qualification_criteria is invalid");
   });
 
+  it("accepts complete registry fallback identities with explicit provenance", async () => {
+    const registryRow = { ...row, identity_source: "stable_identity_registry" };
+    const result = await listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [registryRow], error: null }) });
+    expect(result[0].identity).toEqual({ matchState: "confirmed", observedOn: "2026-09-12", confidence: "high", source: "stable_identity_registry" });
+  });
+
+  it("preserves an explicit unresolved supplemental identity instead of masking it with registry provenance", async () => {
+    const unresolved = { ...row, identity_match_state: "unresolved", identity_source: "supplemental_observation", firm_id: null };
+    const result = await listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [unresolved], error: null }) });
+    expect(result[0].identity).toEqual({ matchState: "unresolved", observedOn: "2026-09-12", confidence: "high", source: "supplemental_observation" });
+  });
+
+  it("rejects registry fallback without complete confirmed identity", async () => {
+    const invalid = { ...row, identity_source: "stable_identity_registry", canonical_domain: null };
+    await expect(listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [invalid], error: null }) }))
+      .rejects.toThrow("registry identity is incomplete or not confirmed");
+  });
 });

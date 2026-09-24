@@ -63,7 +63,7 @@ const specs: readonly Spec[] = [
   { section: "history", table: "prospect_enrichment_profile_choices", columns: "id,firm_id,field_key,target_table,target_id,source_selector,selected_value,selected_provenance,package_id,chosen_at,supersedes_choice_id,rationale" },
 ];
 export const PROSPECT_ENRICHMENT_SECTION_TITLES: Readonly<Record<ProspectEnrichmentSectionKey, string>> = {
-  identity: "Identity and related entities", profile: "Current profile", sources: "Sources and evidence", advertising: "Advertising observations", marketing: "Marketing and intake findings", qualification: "Qualification assessments", history: "History and import receipts",
+  identity: "Firm identity", profile: "Current profile", sources: "Sources and evidence", advertising: "Advertising observations", marketing: "Marketing and intake", qualification: "Qualification assessments", history: "History and import receipts",
 };
 const sectionOrder = Object.keys(PROSPECT_ENRICHMENT_SECTION_TITLES) as ProspectEnrichmentSectionKey[];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;

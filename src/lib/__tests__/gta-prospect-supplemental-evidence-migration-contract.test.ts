@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { DOWNTOWN_PLAN_41_BOUNDARY_ID } from "../gta-prospect-evidence-import";
 
 const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260912131132_gta_prospect_supplemental_evidence_import.sql"), "utf8");
+const projectionFix = readFileSync(resolve(process.cwd(), "supabase/migrations/20260924093317_fix_gta_prospect_operator_projection_gaps.sql"), "utf8");
 
 describe("GTA supplemental prospect evidence migration", () => {
   it("keeps evidence private, append-only, and outside the core prospect import batch", () => {
@@ -31,5 +32,15 @@ describe("GTA supplemental prospect evidence migration", () => {
     const geographyMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260908140907_gta_prospect_downtown_geography_observations.sql"), "utf8");
     expect(geographyMigration).toContain(`boundary_id = '${DOWNTOWN_PLAN_41_BOUNDARY_ID}'`);
     expect(DOWNTOWN_PLAN_41_BOUNDARY_ID).toBe("toronto-official-plan-secondary-plan-41");
+  });
+
+  it("adds a versioned service-only read RPC with registry fallback and unresolved-observation precedence", () => {
+    expect(projectionFix).toContain("list_gta_prospect_supplemental_evidence_for_operator_v2");
+    expect(projectionFix).toContain("LEFT JOIN public.gta_prospect_stable_identity_registry AS registry");
+    expect(projectionFix).toContain("AND identity_observation.id IS NULL");
+    expect(projectionFix).toContain("WHEN identity_observation.id IS NOT NULL THEN 'supplemental_observation'");
+    expect(projectionFix).toContain("WHEN registry.id IS NOT NULL THEN 'stable_identity_registry'");
+    expect(projectionFix).toContain("REVOKE ALL ON FUNCTION public.list_gta_prospect_supplemental_evidence_for_operator_v2() FROM PUBLIC, anon, authenticated, service_role");
+    expect(projectionFix).toContain("GRANT EXECUTE ON FUNCTION public.list_gta_prospect_supplemental_evidence_for_operator_v2() TO service_role");
   });
 });

@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const migration = readFileSync(
-  resolve(process.cwd(), "supabase/migrations/20260907181342_gta_prospect_research_operator_read_projection.sql"),
+  resolve(process.cwd(), "supabase/migrations/20260924093317_fix_gta_prospect_operator_projection_gaps.sql"),
   "utf8",
 );
 
@@ -20,7 +20,9 @@ describe("GTA prospect research operator read projection contract", () => {
   it("returns only typed public-research display fields from applied batches", () => {
     const returnContract = migration.slice(migration.indexOf("RETURNS TABLE"), migration.indexOf("LANGUAGE sql"));
     expect(migration).toContain("batch.state = 'applied'");
-    expect(migration).toContain("ARRAY[]::text[] AS practice_areas");
+    expect(migration).toContain("audit.canonical_record->'practiceAreas'");
+    expect(migration).toContain("batch.applied_at DESC, audit.created_at DESC, audit.id DESC");
+    expect(migration).not.toContain("ARRAY[]::text[] AS practice_areas");
     expect(migration).toContain("NULL::integer AS legacy_cluster_lawyer_count");
     expect(migration).toContain("NULL::text AS legacy_crosswalk");
     expect(migration).toContain("ORDER BY observation.observed_on DESC, observation.id DESC");

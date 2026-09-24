@@ -114,7 +114,7 @@ export interface ReconciledGtaProspect {
 
   /** Private, applied supplemental evidence from the operator evidence ledger. */
   supplementalEvidence?: {
-    identity: { matchState: "confirmed" | "unresolved" | "distinct"; observedOn: string; confidence: "high" | "moderate" | "unknown" } | null;
+    identity: { matchState: "confirmed" | "unresolved" | "distinct"; observedOn: string; confidence: "high" | "moderate" | "unknown"; source: "supplemental_observation" | "stable_identity_registry" } | null;
     websiteIntake: { channels: readonly string[]; opportunityState: "supported" | "not_established"; observedOn: string } | null;
     qualification: { state: "qualified" | "needs_evidence" | "disqualified"; cohort: string; assessedOn: string; criteria: Readonly<Record<string, GtaProspectQualificationEvidence>> } | null;
   } | null;

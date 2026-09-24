@@ -25,6 +25,7 @@ describe.skipIf(!DB_URL)("GTA prospect research read projection (real Postgres)"
   const firmId = randomUUID();
   const appliedBatchId = randomUUID();
   const stagedBatchId = randomUUID();
+  const stableFirmId = `FIRM-${"0".repeat(26)}`;
   const sourceKey = `projection-fixture-${randomUUID().replaceAll("-", "")}`;
   const stagedSourceKey = `projection-staged-${randomUUID().replaceAll("-", "")}`;
 
@@ -76,8 +77,14 @@ describe.skipIf(!DB_URL)("GTA prospect research read projection (real Postgres)"
     await conn.query(
       `insert into public.gta_prospect_import_audit
          (import_batch_id, source_record_key, source_record_sha256, validation_state, action_state, firm_id, validation_errors, canonical_record)
-       values ($1, $2, repeat('c', 64), 'accepted', 'created', $3, '[]'::jsonb, '{}'::jsonb)`,
+       values ($1, $2, repeat('c', 64), 'accepted', 'created', $3, '[]'::jsonb, '{"practiceAreas":["Family law","Immigration"]}'::jsonb)`,
       [appliedBatchId, sourceKey, firmId],
+    );
+    await conn.query(
+      `insert into public.gta_prospect_stable_identity_registry
+         (firm_id, stable_firm_id, canonical_domain, source_url, observed_on, confidence, adjudication_basis)
+       values ($1, $2, 'fixture.example', 'https://fixture.example/about', '2026-09-07', 'high', 'Synthetic integration fixture identity.')`,
+      [firmId, stableFirmId],
     );
   }, 30000);
 
@@ -114,7 +121,7 @@ describe.skipIf(!DB_URL)("GTA prospect research read projection (real Postgres)"
         advertising_source_url: "https://ads.example/library",
         gbp_evidence: "unknown",
         gbp_source_url: null,
-        practice_areas: [],
+        practice_areas: ["Family law", "Immigration"],
         legacy_cluster_lawyer_count: null,
         legacy_crosswalk: null,
       }),
@@ -124,5 +131,48 @@ describe.skipIf(!DB_URL)("GTA prospect research read projection (real Postgres)"
   it("never projects a staged-only record", async () => {
     const projected = await asServiceRole("select id from public.list_gta_prospect_research_for_operator() where id = $1", [stagedSourceKey]);
     expect(projected.rows).toEqual([]);
+  });
+
+  it("projects authoritative stable identity when no supplemental identity observation exists", async () => {
+    const projected = await asServiceRole(
+      "select firm_id, canonical_domain, identity_match_state, identity_observed_on, identity_confidence, identity_source from public.list_gta_prospect_supplemental_evidence_for_operator_v2() where source_record_key = $1",
+      [sourceKey],
+    );
+    expect(projected.rows).toEqual([{
+      firm_id: stableFirmId,
+      canonical_domain: "fixture.example",
+      identity_match_state: "confirmed",
+      identity_observed_on: "2026-09-07",
+      identity_confidence: "high",
+      identity_source: "stable_identity_registry",
+    }]);
+  });
+
+  it("preserves an explicit unresolved supplemental identity over an available registry row", async () => {
+    const supplementalBatchId = randomUUID();
+    await conn.query(
+      `insert into public.gta_prospect_supplemental_evidence_import_batches
+         (id, package_id, package_sha256, source_record_count, state, applied_at)
+       values ($1, $2, repeat('d', 64), 1, 'applied', now())`,
+      [supplementalBatchId, `projection-identity-${firmId}`],
+    );
+    await conn.query(
+      `insert into public.gta_prospect_shared_identity_observations
+         (firm_id, evidence_import_batch_id, mapping_id, match_state, stable_firm_id, canonical_domain, observed_on, confidence, evidence_urls, note, raw_observation)
+       values ($1, $2, 'identity-review', 'unresolved', null, null, '2026-09-08', 'high', '[]'::jsonb, 'Identity needs review.', '{}'::jsonb)`,
+      [firmId, supplementalBatchId],
+    );
+    const projected = await asServiceRole(
+      "select firm_id, canonical_domain, identity_match_state, identity_observed_on, identity_confidence, identity_source from public.list_gta_prospect_supplemental_evidence_for_operator_v2() where source_record_key = $1",
+      [sourceKey],
+    );
+    expect(projected.rows).toEqual([{
+      firm_id: null,
+      canonical_domain: null,
+      identity_match_state: "unresolved",
+      identity_observed_on: "2026-09-08",
+      identity_confidence: "high",
+      identity_source: "supplemental_observation",
+    }]);
   });
 });
