@@ -30,7 +30,7 @@ function ComparisonExport({ sourceRunKey }: { sourceRunKey: string }) {
       const request = JSON.parse(body) as { schemaVersion?: unknown; manifest?: { runId?: unknown } };
       if (request.schemaVersion !== "prospect-enrichment-comparison-request/v1" || request.manifest?.runId !== sourceRunKey) throw new Error("Choose the complete comparison request for this exact run.");
       const response = await fetch("/api/admin/prospect-enrichment/comparison-export", { method: "POST", headers: { "Content-Type": "application/json" }, body, cache: "no-store" });
-      const result = await readResearchResponse<Record<string, unknown>>(response, "comparison");
+      const result = await readResearchResponse<Record<string, unknown>>(response);
       const signature = result.signature as { algorithm?: unknown; keyId?: unknown; signatureBase64?: unknown } | undefined;
       if (result.schemaVersion !== "prospect-enrichment-comparison/v1" || result.projectId !== "ssxryjxifwiivghglqer" || typeof result.snapshotSha256 !== "string" || signature?.algorithm !== "Ed25519" || typeof signature.keyId !== "string" || typeof signature.signatureBase64 !== "string") throw new Error("Admin returned an incomplete or unsigned comparison snapshot.");
       const blob = new Blob([JSON.stringify(result, null, 2) + "\n"], { type: "application/json" });

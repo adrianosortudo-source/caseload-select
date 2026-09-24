@@ -76,7 +76,7 @@ export default function ResearchPackageReview({ packageId, initialData }: { pack
   }
   return <div className="min-w-0 space-y-4" data-testid="research-package-review">
     <Link href="/admin/prospects" className="text-sm text-navy underline">Back to prospect list</Link>
-    <header data-ui-component-content="research-package-heading"><h1 className="w-full text-pretty text-2xl font-bold text-navy" data-ui-copy="heading">Review research package</h1><p className="mt-2 w-full text-pretty text-sm text-black/60" data-ui-copy="supporting">Keep every finding traceable to its source and review profile changes separately.</p></header>
+    <header data-ui-component-content="research-package-heading"><h1 className="w-full text-xl font-bold text-navy lg:text-2xl" data-ui-copy="heading">Review research package</h1><p className="mt-2 w-full text-sm text-black/60" data-ui-copy="supporting">Keep every finding traceable to its source and review profile changes separately.</p></header>
     {error && <ResearchError message={error} retry={() => void load()} />}{message && <p role="status" className="rounded-md border border-border-brand bg-parchment p-3 text-sm">{message}</p>}
     {!record && !error && <p role="status" className="text-sm text-black/60">Loading research package…</p>}
     {record && <>
