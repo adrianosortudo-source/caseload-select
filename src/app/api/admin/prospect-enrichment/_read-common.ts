@@ -4,7 +4,10 @@ import { prospectEnrichmentJson, requireProspectEnrichmentOperator, unexpectedEn
 import { ProspectEnrichmentReadError } from "@/lib/prospect-enrichment-reader";
 
 export const READ_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-export class ReadApiError extends Error { constructor(message: string, readonly status: 404 | 422 | 503 = 503) { super(message); this.name = "ReadApiError"; } }
+export type ReadDiagnostic = Readonly<{ databaseErrorCode: string | null; callSite: string[] }>;
+export class ReadApiError extends Error {
+  constructor(message: string, readonly status: 404 | 422 | 503 = 503, readonly diagnostic?: ReadDiagnostic) { super(message); this.name = "ReadApiError"; }
+}
 export function readId(value: unknown): string { if (typeof value !== "string" || !READ_UUID.test(value)) throw new ReadApiError("A valid database UUID is required.", 422); return value.toLowerCase(); }
 export function isRecord(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }
 export function requiredText(value: unknown, name: string): string { if (typeof value !== "string" || !value.length) throw new ReadApiError("The stored " + name + " is incomplete."); return value; }
@@ -15,6 +18,7 @@ export function databaseRows(result: { data: unknown; error: unknown }): Record<
       const errorCode = isRecord(result.error) && typeof result.error.code === "string" ? result.error.code : null;
       const callSite = new Error().stack?.split("\n").slice(2, 6).map((line) => line.trim());
       console.error("[prospect-enrichment] database read unavailable", { errorCode, callSite });
+      throw new ReadApiError("Research records could not be loaded.", 503, { databaseErrorCode: errorCode, callSite: callSite ?? [] });
     }
     throw new ReadApiError("Research records could not be loaded.");
   }
@@ -59,7 +63,7 @@ export async function readRoute(request: NextRequest, operation: string, work: (
     if (auth.operator.session.role !== "operator") return prospectEnrichmentJson({ error: "An operator session is required." }, 403);
     return prospectEnrichmentJson(await work());
   } catch (cause) {
-    if (cause instanceof ReadApiError) return prospectEnrichmentJson({ error: cause.message }, cause.status);
+    if (cause instanceof ReadApiError) return prospectEnrichmentJson({ error: cause.message, ...(process.env.PROSPECT_ENRICHMENT_TEST_DIAGNOSTICS === "1" && cause.diagnostic ? { diagnostic: cause.diagnostic } : {}) }, cause.status);
     if (cause instanceof ProspectEnrichmentReadError) return prospectEnrichmentJson({ error: cause.message, errorId: cause.errorId }, cause.status);
     return prospectEnrichmentJson(unexpectedEnrichmentError(operation), 503);
   }

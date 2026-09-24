@@ -12,7 +12,8 @@ test("comparison export binds the upload to the logical run key, not the Admin d
   const downloadPromise = page.waitForEvent("download");
   await page.locator("#prospect-comparison-request").setInputFiles(fixture.comparisonRequestPath);
   const response = await responsePromise;
-  expect(response.status()).toBe(200);
+  const exportBody = response.status() === 200 ? null : await response.json();
+  expect(response.status(), JSON.stringify(exportBody?.diagnostic ?? exportBody)).toBe(200);
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("prospect-enrichment-comparison-" + fixture.sourceRunKey + ".json");
   const snapshot = JSON.parse(readFileSync(await download.path(), "utf8")) as { signature?: { algorithm?: unknown; signatureBase64?: unknown } };

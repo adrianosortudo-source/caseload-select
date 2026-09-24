@@ -271,7 +271,7 @@ export async function POST(request: NextRequest) {
     return prospectEnrichmentJson(serializeComparisonExport(fencedSnapshot, new Date().toISOString(), { keyId, privateKeyPem }).snapshot);
   }
   catch (cause) {
-    if (cause instanceof ReadApiError) return prospectEnrichmentJson({ error: cause.message }, cause.status);
+    if (cause instanceof ReadApiError) return prospectEnrichmentJson({ error: cause.message, ...(process.env.PROSPECT_ENRICHMENT_TEST_DIAGNOSTICS === "1" && cause.diagnostic ? { diagnostic: cause.diagnostic } : {}) }, cause.status);
     console.error("[prospect-enrichment] comparison export failed", { error: "read_or_schema" });
     return prospectEnrichmentJson({ error: "A complete comparison could not be verified." }, 503);
   }
