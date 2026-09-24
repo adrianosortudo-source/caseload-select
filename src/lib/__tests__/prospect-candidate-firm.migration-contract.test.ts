@@ -37,6 +37,30 @@ describe("proven-firm candidate coverage migration", () => {
     expect(sql).not.toContain("public.prospect_conversations");
   });
 
+  it("keeps parentheses balanced in every runtime dynamic SQL template", () => {
+    const templates = [...sql.matchAll(/EXECUTE format\('((?:[^']|'')*)'/g)].map(match => match[1].replaceAll("''", "'"));
+    const check = (statement: string) => {
+      let depth = 0;
+      let quoted = false;
+      for (let index = 0; index < statement.length; index++) {
+        const character = statement[index];
+        if (character === "'") {
+          if (quoted && statement[index + 1] === "'") { index++; continue; }
+          quoted = !quoted;
+        } else if (!quoted && character === "(") depth++;
+        else if (!quoted && character === ")" && --depth < 0) throw new Error("Unmatched dynamic SQL closing parenthesis");
+      }
+      if (quoted || depth !== 0) throw new Error("Unclosed dynamic SQL expression");
+    };
+    expect(templates).toHaveLength(4);
+    for (const template of templates) expect(() => check(template)).not.toThrow();
+    const coverage = templates.find(template => template.includes("IS DISTINCT FROM"))!;
+    expect(coverage).toContain("SELECT c.snapshot->'row'");
+    expect(coverage).toMatch(/ORDER BY c\.revision DESC LIMIT 1\)$/);
+    // Reproduce CI1392's runtime-only defect: the extra ')' escaped migration parsing.
+    expect(() => check(coverage + ")")).toThrow("Unmatched dynamic SQL closing parenthesis");
+  });
+
   it("requires real applied provenance and never interprets a nested UUID claim as firm identity", () => {
     expect(sql).toContain("a.validation_state='accepted'");
     expect(sql).toContain("a.action_state IN ('created','already_present') AND b.state='applied'");
@@ -64,8 +88,24 @@ describe("proven-firm candidate coverage migration", () => {
     expect(sql).toContain("f.value_json=reference_field.value_json");
     expect(sql).toContain("f.source_urls @> ARRAY[p_filters->>'sourceUrl']");
     expect(sql).toContain("memberships AS MATERIALIZED");
-    expect(sql).toContain("coalesce(named.summary->>'identityNamespace','')");
+    expect(sql).toContain("named.identity_key||' '||named.identity_namespace");
     expect(sql).toContain("h.source_table,h.source_root,h.relative_path,h.source_pointer");
+    const coverageStart = sql.indexOf("CREATE FUNCTION prospect_candidate_private.coverage_warnings(");
+    const coverageBody = sql.slice(coverageStart, sql.indexOf("END $$;", coverageStart));
+    expect(coverageBody).toContain("WITH identities AS MATERIALIZED");
+    expect(coverageBody).toContain("count(DISTINCT verified_firm_id)");
+    expect(coverageBody).toContain("coalesce(i.n,0)<>1");
+    expect(coverageBody).not.toContain("prospect_candidate_private.full_summary(");
+  });
+
+  it("bounds expensive retained summaries to the returned page", () => {
+    const body = sql.split("CREATE OR REPLACE FUNCTION prospect_candidate_private.list_candidates(")[1].split("CREATE FUNCTION prospect_candidate_private.choice_retractions")[0];
+    const inventory = body.split("inventory AS MATERIALIZED (")[1].split("filtered AS MATERIALIZED (")[0];
+    expect(inventory).not.toContain("prospect_candidate_private.summary(");
+    expect(body).toContain("ORDER BY id LIMIT p_limit");
+    expect(body).toContain("SELECT id,prospect_candidate_private.summary(id,cutoff) data FROM page_ids");
+    const matcher = sql.split("CREATE FUNCTION prospect_candidate_private.matches_group(")[1].split("CREATE OR REPLACE FUNCTION prospect_candidate_private.matches(")[0];
+    expect(matcher).not.toContain("prospect_candidate_private.summary(");
   });
 
   it("keeps original choice values and binds retractions to their exact target, firm and cutoff", () => {

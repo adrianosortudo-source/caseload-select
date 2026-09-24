@@ -393,14 +393,18 @@ DECLARE warnings jsonb:=prospect_candidate_private.coverage_warnings_enrichment_
 BEGIN
  FOR item IN SELECT * FROM prospect_candidate_private.legacy_inventory() LOOP
    -- Current missing versions are warnings even when an older cursor is supplied.
-   EXECUTE format('SELECT count(*) FROM public.%I s WHERE prospect_candidate_private.legacy_research_row($1,to_jsonb(s)) IS DISTINCT FROM (SELECT c.snapshot->''row'' FROM public.prospect_research_candidate_coverage c WHERE c.source_table=$1 AND c.source_key=s.id::text ORDER BY c.revision DESC LIMIT 1))',item.table_name) INTO n USING item.table_name;
+   EXECUTE format('SELECT count(*) FROM public.%I s WHERE prospect_candidate_private.legacy_research_row($1,to_jsonb(s)) IS DISTINCT FROM (SELECT c.snapshot->''row'' FROM public.prospect_research_candidate_coverage c WHERE c.source_table=$1 AND c.source_key=s.id::text ORDER BY c.revision DESC LIMIT 1)',item.table_name) INTO n USING item.table_name;
    IF n>0 THEN warnings:=warnings||jsonb_build_array('legacy_source_rows_unprojected:'||item.table_name||':'||n); END IF;
    SELECT count(*) INTO n FROM information_schema.columns col WHERE col.table_schema='public' AND col.table_name=item.table_name
      AND NOT col.column_name=ANY(item.column_names||item.excluded_columns);
    IF n>0 THEN warnings:=warnings||jsonb_build_array('legacy_columns_not_projected:'||item.table_name||':'||n); END IF;
  END LOOP;
- SELECT count(*) INTO n FROM public.prospect_research_candidates c WHERE c.identity_namespace LIKE 'legacy:%' AND c.created_revision<=p_cutoff
- AND (prospect_candidate_private.full_summary(c.id,p_cutoff)->>'verifiedFirmId') IS NULL;
+ WITH identities AS MATERIALIZED (
+   SELECT candidate_id,count(DISTINCT verified_firm_id) n
+   FROM prospect_candidate_private.identity_links_at(p_cutoff) GROUP BY candidate_id
+ )
+ SELECT count(*) INTO n FROM public.prospect_research_candidates c LEFT JOIN identities i ON i.candidate_id=c.id
+ WHERE c.identity_namespace LIKE 'legacy:%' AND c.created_revision<=p_cutoff AND coalesce(i.n,0)<>1;
  IF n>0 THEN warnings:=warnings||jsonb_build_array('legacy_identity_unverified:'||n); END IF;
  RETURN warnings;
 END $$;
@@ -448,8 +452,8 @@ RETURNS boolean LANGUAGE sql STABLE SET search_path = '' AS $$
        AND f.search_document @@ plainto_tsquery('simple'::regconfig,term))
      AND NOT EXISTS(SELECT 1 FROM public.prospect_research_candidate_history h JOIN public.prospect_research_candidate_projection_issues i ON i.revision_id=h.id
        WHERE h.candidate_id=ANY((SELECT ids FROM members)::uuid[]) AND h.coverage_revision<=p_cutoff AND strpos(lower(h.original_json::text),lower(term))>0)
-     AND NOT EXISTS(SELECT 1 FROM unnest((SELECT ids FROM members)) member_id CROSS JOIN LATERAL (SELECT prospect_candidate_private.summary(member_id,p_cutoff) summary) named
-       WHERE to_tsvector('simple'::regconfig,coalesce(named.summary->>'displayName','')||' '||coalesce(named.summary->>'identityKey','')||' '||coalesce(named.summary->>'identityNamespace','')) @@ plainto_tsquery('simple'::regconfig,term))
+     AND NOT EXISTS(SELECT 1 FROM public.prospect_research_candidates named WHERE named.id=ANY((SELECT ids FROM members)::uuid[])
+       AND to_tsvector('simple'::regconfig,named.identity_key||' '||named.identity_namespace) @@ plainto_tsquery('simple'::regconfig,term))
      AND NOT EXISTS(SELECT 1 FROM public.prospect_research_candidate_history h WHERE h.candidate_id=ANY((SELECT ids FROM members)::uuid[]) AND h.coverage_revision<=p_cutoff
        AND to_tsvector('simple'::regconfig,concat_ws(' ',h.source_table,h.source_root,h.relative_path,h.source_pointer)) @@ plainto_tsquery('simple'::regconfig,term))
  ))
@@ -501,20 +505,28 @@ BEGIN
  IF p_filters ? 'fieldRefRevision' AND NOT EXISTS(SELECT 1 FROM public.prospect_research_candidate_fields f
    WHERE f.revision_id=(p_filters->>'fieldRefRevision')::uuid AND f.pointer_sha256=p_filters->>'fieldRefPointerSha256'
      AND f.coverage_revision<=cutoff) THEN RAISE EXCEPTION 'invalid candidate field reference'; END IF;
- WITH resolved AS MATERIALIZED (
-   SELECT candidate_id,min(verified_firm_id::text) firm_id FROM prospect_candidate_private.identity_links_at(cutoff)
-   GROUP BY candidate_id HAVING count(DISTINCT verified_firm_id)=1
+ WITH identities AS MATERIALIZED (
+   SELECT candidate_id,count(DISTINCT verified_firm_id) firm_count,min(verified_firm_id::text) firm_id
+   FROM prospect_candidate_private.identity_links_at(cutoff) GROUP BY candidate_id
  ), memberships AS MATERIALIZED (
-   SELECT candidate_id,array_agg(candidate_id) OVER(PARTITION BY firm_id) ids FROM resolved
+   SELECT candidate_id,array_agg(candidate_id) OVER(PARTITION BY firm_id) ids FROM identities WHERE firm_count=1
  ), inventory AS MATERIALIZED (
-   SELECT c.id,prospect_candidate_private.summary(c.id,cutoff) data,coalesce(m.ids,ARRAY[c.id]) group_ids FROM public.prospect_research_candidates c LEFT JOIN memberships m ON m.candidate_id=c.id WHERE c.created_revision<=cutoff
+   -- Counts and filters need only identity metadata. Build retained summaries for the returned page.
+   SELECT c.id,jsonb_build_object('verifiedFirmId',CASE WHEN links.firm_count=1 THEN links.firm_id ELSE NULL END,
+      'identityState',CASE WHEN links.firm_count=1 THEN 'resolved' WHEN links.firm_count>1 THEN 'conflict' ELSE 'unresolved' END) data,
+      coalesce(m.ids,ARRAY[c.id]) group_ids
+   FROM public.prospect_research_candidates c LEFT JOIN memberships m ON m.candidate_id=c.id
+   LEFT JOIN identities links ON links.candidate_id=c.id WHERE c.created_revision<=cutoff
  ), filtered AS MATERIALIZED (
-   SELECT * FROM inventory i WHERE prospect_candidate_private.matches_group(i.id,i.data,p_filters,cutoff,i.group_ids)
+   SELECT i.id FROM inventory i WHERE p_filters='{}'::jsonb OR prospect_candidate_private.matches_group(i.id,i.data,p_filters,cutoff,i.group_ids)
+ ), page_ids AS MATERIALIZED (
+   SELECT id FROM filtered WHERE p_after_id IS NULL OR id>p_after_id ORDER BY id LIMIT p_limit
+ ), summaries AS MATERIALIZED (
+   SELECT id,prospect_candidate_private.summary(id,cutoff) data FROM page_ids
  ), sized AS (
-   SELECT *,row_number() OVER(ORDER BY id) ordinal,sum(octet_length(data::text)) OVER(ORDER BY id) bytes
-   FROM filtered WHERE p_after_id IS NULL OR id>p_after_id
+   SELECT *,sum(octet_length(data::text)) OVER(ORDER BY id) bytes FROM summaries
  ), page AS (
-   SELECT * FROM sized WHERE ordinal<=p_limit AND bytes<=1040000 ORDER BY id
+   SELECT * FROM sized WHERE bytes<=1040000 ORDER BY id
  )
  SELECT jsonb_build_object('items',coalesce((SELECT jsonb_agg(data ORDER BY id) FROM page),'[]'),
    'nextAfterId',CASE WHEN EXISTS(SELECT 1 FROM filtered WHERE id>(SELECT max(id::text)::uuid FROM page))
