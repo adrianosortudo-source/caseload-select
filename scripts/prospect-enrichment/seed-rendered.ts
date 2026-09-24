@@ -270,7 +270,7 @@ async function seed() {
     const prospectFirm = await client.query<{ id: string }>(
       `INSERT INTO public.gta_prospect_firms(source_record_key,display_name,normalized_display_name,reconciliation_status)
        VALUES ($1,$2,$3,'update_existing') RETURNING id`,
-      [sourceRecordKey, `Synthetic Enrichment Fixture ${suffix.slice(0, 8)}`, `synthetic enrichment fixture ${suffix.slice(0, 8)}`],
+      [sourceRecordKey, "Synthetic Enrichment Fixture", "synthetic enrichment fixture"],
     );
     const firmId = prospectFirm.rows[0].id;
     const runEnvelopes = new Map<FixtureKind, ProspectEnrichmentEnvelope>();
