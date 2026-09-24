@@ -81,8 +81,10 @@ checksum, deployment evidence, exact target and rollback/read-back steps.
    immediately before the single db push. It records that the guarded apply
    attempt started, verifies the apply result, reads exactly the expected migration
    ledger row with a fixed SELECT, and verifies a final empty pending plan. Once
-   apply starts, this read-only verification also runs after an uncertain apply
-   error; it never retries apply or converts a failed apply step into success.
+   apply starts, verification also runs after an uncertain apply error. Its SQL
+   action is read-only; the connection still requires the protected, explicitly
+   authorized database URL. It never retries apply or converts a failed apply
+   step into success.
    A failure before the guarded apply attempt does not start this read-back.
 5. Retain source-check, plan-check, apply-check, ledger-check and post-apply-check
    from the artifact. Ledger verification checks version/name and complete stored
@@ -93,7 +95,9 @@ checksum, deployment evidence, exact target and rollback/read-back steps.
    These are distinct hash domains, not interchangeable checksums.
 6. If apply succeeds but subsequent verification fails, treat the result as
    applied-but-unverified. Do not rerun apply, repair history, delete objects or
-   claim success. Retain evidence and resolve through reviewed read-only checks.
+   claim success. Retain evidence and resolve through reviewed checks whose SQL
+   actions are read-only and whose database connectivity is separately protected
+   and authorized.
    Then verify authenticated Admin loading and existing research; this workflow
    alone does not prove application visibility or authorize pilot/backfill.
 
