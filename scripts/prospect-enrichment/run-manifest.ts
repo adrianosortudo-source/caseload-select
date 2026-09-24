@@ -1,6 +1,6 @@
 import type { CompiledPackage } from "./compiler";
 import type { SourceManifest } from "./inventory";
-import { SOURCE_NAME, SOURCE_SYSTEM, Issue, ordinal, protocolHash } from "./model";
+import { SOURCE_NAME, SOURCE_SYSTEM, Issue, canonicalJson, ordinal, protocolHash } from "./model";
 import { items } from "./reconciliation";
 import { profileConfig, type EnrichmentProfile } from "./profiles";
 
@@ -18,9 +18,12 @@ export type ExpectedManifestEntry = {
 export type CandidateCoverage = { researchKey: string; sourceRoot: string; relativePath: string; sourcePointer: string; sourceSha256: string; packageIds: string[]; issues: Issue[]; original?: unknown };
 export type HeldCandidateEvidence = { schemaVersion: "prospect-enrichment-held-candidate-evidence/v1"; runId: string; entryId: string; researchKey: string; source: ExpectedManifestEntry["source"]; originalJson: string; issues: Issue[]; evidenceSha256: string };
 export const HELD_EVIDENCE_DIGEST_PREFIX = "__held_evidence_sha256:";
-export function heldEvidenceDigest(entry: Pick<ExpectedManifestEntry, "errorCodes" | "clientPackageId" | "researchKey">): string | null {
-  const values = entry.errorCodes.filter(code => code.startsWith(HELD_EVIDENCE_DIGEST_PREFIX));
-  if (entry.clientPackageId !== null || entry.researchKey === null) return values.length ? "__invalid__" : null;
+export function heldEvidenceDigest(entry: unknown): string | null {
+  if (!entry || typeof entry !== "object" || Array.isArray(entry)) return "__invalid__";
+  const value = entry as Record<string, unknown>;
+  if (!Array.isArray(value.errorCodes) || !value.errorCodes.every(code => typeof code === "string")) return "__invalid__";
+  const values = value.errorCodes.filter((code: string) => code.startsWith(HELD_EVIDENCE_DIGEST_PREFIX));
+  if (value.clientPackageId !== null || value.researchKey === null) return values.length ? "__invalid__" : null;
   if (values.length !== 1) return "__invalid__";
   const digest = values[0].slice(HELD_EVIDENCE_DIGEST_PREFIX.length);
   return /^[a-f0-9]{64}$/.test(digest) ? digest : "__invalid__";

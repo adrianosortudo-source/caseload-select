@@ -161,7 +161,7 @@ describe("manifest-backed run selectors", () => {
     const missing = fakeDatabase({}, { get_prospect_enrichment_run_summary_v1: [run], list_prospect_enrichment_run_manifest_items_v1: [manifestRow], summarize_prospect_enrichment_manifest_hold_evidence_v1: [{ expected_evidence_count: 1, recorded_evidence_count: 0, mismatched_evidence_count: 1 }] });
     expect((await readRunDetail({ runId: id(2), limit: 25, client: missing.client })).reconciliation.inventoryState).toBe("incomplete");
     const corrupt = fakeDatabase({}, { get_prospect_enrichment_run_summary_v1: [run], list_prospect_enrichment_run_manifest_items_v1: [manifestRow], list_prospect_enrichment_manifest_hold_evidence_v1: [{ entry_id: core.entryId, evidence_sha256: "f".repeat(64), evidence }] });
-    await expect(readRunDetail({ runId: id(2), limit: 25, client: corrupt.client })).rejects.toThrow("could not be verified");
+    await expect(readRunDetail({ runId: id(2), limit: 25, client: corrupt.client })).rejects.toThrow("incomplete or mismatched");
   });
   it("does not mark an early run page complete when run-wide held evidence is missing", async () => {
     const run = runRow(); Object.assign(run, { manifest_expected_entry_count: 2, manifest_received_entry_count: 2 });
