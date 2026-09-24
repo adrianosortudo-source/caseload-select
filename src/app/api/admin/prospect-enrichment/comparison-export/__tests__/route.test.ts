@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { buildProspectEnrichmentClientItems } from "@/lib/prospect-enrichment-contract";
-import { createProspectEnrichmentFixtures } from "@/lib/__fixtures__/prospect-enrichment-v1";
+import { createProspectEnrichmentFixtures, prospectEnrichmentFixtureUuid } from "@/lib/__fixtures__/prospect-enrichment-v1";
 import { prospectEnrichmentProtocolHash } from "@/lib/prospect-enrichment-hash";
 
 const state = vi.hoisted(() => ({
@@ -14,6 +14,7 @@ vi.mock("@/lib/client-import-server", () => ({ validateSameOrigin: vi.fn(() => s
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: { from: state.from } }));
 
 import { POST } from "../route";
+import { readIdentity } from "../../_comparison-identity";
 
 const id = "00000000-0000-4000-8000-000000000001";
 function request(body: unknown) {
@@ -32,6 +33,27 @@ function comparisonRequest(sourceNameOverride?: string) {
 }
 beforeEach(() => { vi.clearAllMocks(); state.sameOrigin = true; state.session = { role: "operator", firm_id: id, lawyer_id: id, exp: 2_000_000_000 }; });
 
+describe("comparison identity read", () => {
+  it("passes the RPC data and error envelope to the database row validator", async () => {
+    const envelope = createProspectEnrichmentFixtures()[0].envelope;
+    const firmId = prospectEnrichmentFixtureUuid(991);
+    const mapQuery = { select: vi.fn(), eq: vi.fn(), limit: vi.fn(async () => ({ data: [{ firm_id: firmId, mapping_status: "confirmed" }], error: null })) };
+    mapQuery.select.mockReturnValue(mapQuery);
+    mapQuery.eq.mockReturnValue(mapQuery);
+    const client = {
+      rpc: vi.fn(async () => ({ data: [{ firm_id: firmId, source_record_key: envelope.subject.sourceRecordKey, stable_firm_id: null, canonical_domain: null, enrichment_revision: 0 }], error: null })),
+      from: vi.fn(() => mapQuery),
+    } as never;
+
+    await expect(readIdentity([envelope], client)).resolves.toEqual([{
+      researchKey: envelope.subject.researchKey,
+      databaseFirmId: firmId,
+      stableFirmId: null,
+      sourceRecordKey: envelope.subject.sourceRecordKey,
+      canonicalDomain: null,
+    }]);
+  });
+});
 describe("protected comparison export route", () => {
   it("requires an operator session before parsing or reading private research", async () => {
     state.session = null;
