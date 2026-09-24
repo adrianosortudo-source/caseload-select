@@ -73,12 +73,12 @@ describe("GTA prospect supplemental evidence reader", () => {
     expect(result.map((record) => record.qualification?.criteria)).toEqual(syntheticRows.map((item) => item.qualification_criteria));
   });
 
-  it.each([
+  it.each<[string, unknown, string]>([
     ["depth above 12", (() => { let nested: unknown = "value"; for (let depth = 0; depth < 13; depth += 1) nested = { child: nested }; return nested; })(), "qualification_criteria exceeds maximum depth 12"],
     ["serialized criteria above 256 KiB", { value: "x".repeat(256 * 1024) }, "qualification_criteria exceeds 256 KiB"],
-    ["prototype key", JSON.parse('{"__proto__":{"polluted":true}}')],
-    ["constructor key", JSON.parse('{"constructor":{"prototype":{"polluted":true}}}')],
-  ])("rejects unsafe or oversized criteria: %s", async (_label, invalidCriteria, expectedError = "qualification_criteria is invalid") => {
+    ["prototype key", JSON.parse('{"__proto__":{"polluted":true}}'), "qualification_criteria is invalid"],
+    ["constructor key", JSON.parse('{"constructor":{"prototype":{"polluted":true}}}'), "qualification_criteria is invalid"],
+  ])("rejects unsafe or oversized criteria: %s", async (_label, invalidCriteria, expectedError) => {
     await expect(listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, qualification_criteria: invalidCriteria }], error: null }) }))
       .rejects.toThrow(expectedError);
   });
@@ -123,6 +123,16 @@ describe("GTA prospect supplemental evidence reader", () => {
     if (depth === 12) expect((await reading)[0].qualification?.criteria).toEqual(qualification_criteria);
     else await expect(reading).rejects.toThrow("qualification_criteria exceeds maximum depth 12");
   });
+
+  for (const [kind, terminal] of [["object", {}], ["array", []]] as const) {
+    it.each([12, 13])("enforces inclusive depth for an empty " + kind + " node at %i", async depth => {
+      let qualification_criteria: unknown = terminal;
+      for (let level = 0; level < depth; level++) qualification_criteria = { nested: qualification_criteria };
+      const reading = listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, qualification_criteria }], error: null }) });
+      if (depth === 12) expect((await reading)[0].qualification?.criteria).toEqual(qualification_criteria);
+      else await expect(reading).rejects.toThrow("qualification_criteria exceeds maximum depth 12");
+    });
+  }
 
   it.each([262143, 262144, 262145])("enforces the exact serialized UTF-8 byte boundary: %i", async (bytes) => {
     const available = bytes - Buffer.byteLength(JSON.stringify({ note: "" }), "utf8");

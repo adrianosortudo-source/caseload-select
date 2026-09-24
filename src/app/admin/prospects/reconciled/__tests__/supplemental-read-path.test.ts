@@ -10,7 +10,7 @@ const h = vi.hoisted(() => {
     state,
     rpc: vi.fn(async (name: string) => {
       if (name === "list_gta_prospect_research_with_contacts_for_operator") return { data: state.research, error: null };
-      if (name === "list_gta_prospect_supplemental_evidence_for_operator") return { data: state.supplemental, error: null };
+      if (name === "list_gta_prospect_supplemental_evidence_for_operator_v2") return { data: state.supplemental, error: null };
       if ([
         "list_gta_prospect_owner_contacts_for_operator",
         "list_gta_prospect_downtown_geography_for_operator",
@@ -52,7 +52,7 @@ function research(id: string) {
 function supplemental(id: string, criteria: unknown) {
   return {
     source_record_key: id, firm_id: null, canonical_domain: null,
-    identity_match_state: null, identity_observed_on: null, identity_confidence: null,
+    identity_match_state: null, identity_observed_on: null, identity_confidence: null, identity_source: null,
     website_intake_channels: ["phone", "contact_form"], website_opportunity_state: "not_established",
     website_observed_on: "2026-09-24", qualification_state: "needs_evidence",
     qualification_cohort: "synthetic-route-only", qualification_assessed_on: "2026-09-24",
@@ -98,8 +98,8 @@ describe("reconciled GET with actual rich supplemental reader", () => {
     expect(body.source).toBe("ledger");
     expect(body.sourceCounts).toEqual({ ledger: 5, fixture: 0 });
     expect(body.records).toHaveLength(5);
-    expect(h.rpc).toHaveBeenCalledWith("list_gta_prospect_supplemental_evidence_for_operator");
-    expect(h.rpc.mock.calls.filter(([name]) => name === "list_gta_prospect_supplemental_evidence_for_operator")).toHaveLength(1);
+    expect(h.rpc).toHaveBeenCalledWith("list_gta_prospect_supplemental_evidence_for_operator_v2");
+    expect(h.rpc.mock.calls.filter(([name]) => name === "list_gta_prospect_supplemental_evidence_for_operator_v2")).toHaveLength(1);
 
     for (const item of cases) {
       const record = body.records.find(candidate => candidate.id === item.id)!;
@@ -118,6 +118,31 @@ describe("reconciled GET with actual rich supplemental reader", () => {
     expect(body.records.find(record => record.id === "synthetic-legacy")?.supplementalEvidence?.qualification?.criteria).toEqual(legacy);
     expect(body.records.find(record => record.id === "synthetic-no-supplement")?.supplementalEvidence).toBeNull();
     expect(body.records.some(record => record.id === "synthetic-unmatched-source")).toBe(false);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["stable_identity_registry", "stable registry"],
+    ["supplemental_observation", "supplemental observation"],
+  ] as const)("preserves and displays v2 identity provenance: %s", async (source, label) => {
+    h.state.research = [research("synthetic-provenance")];
+    h.state.supplemental = [{
+      ...supplemental("synthetic-provenance", { gbpEvidence: null }),
+      firm_id: "FIRM-00000000000000000000000000", canonical_domain: "example.test",
+      identity_match_state: "confirmed", identity_observed_on: "2026-09-24",
+      identity_confidence: "high", identity_source: source,
+    }];
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const body = await response.json() as { records: ReconciledGtaProspect[] };
+    expect(body.records).toHaveLength(1);
+    const record = body.records[0];
+    expect(record.supplementalEvidence?.identity).toEqual({ matchState: "confirmed", observedOn: "2026-09-24", confidence: "high", source });
+    // Supplemental provenance does not bypass the independent shared-registry reader.
+    expect(record.firmId).toBeNull();
+    const html = renderToStaticMarkup(createElement<{ initialData?: RecordsResponse }>(ReconciledProspects, { initialData: { records: [record], source: "ledger" } }));
+    expect(html).toContain("Identity evidence: " + label);
+    expect(html).toContain("GBP: Not assessed");
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -143,7 +168,7 @@ describe("reconciled GET with actual rich supplemental reader", () => {
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: "GTA prospect research records could not be loaded." });
     expect(errorLog).toHaveBeenCalled();
-    expect(h.rpc).toHaveBeenCalledWith("list_gta_prospect_supplemental_evidence_for_operator");
+    expect(h.rpc).toHaveBeenCalledWith("list_gta_prospect_supplemental_evidence_for_operator_v2");
     expect(fetch).not.toHaveBeenCalled();
   });
 });
