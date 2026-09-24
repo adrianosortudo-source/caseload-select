@@ -27,6 +27,12 @@ describe("source-linked dossier presentation", () => {
   });
   it("reports latest loaded observation as partial until all sections are complete", () => {
     const result = { ...detail(), sections: [{ ...detail().sections[0], items: [base] }] };
-    expect(researchFirmHeading(result)).toMatchObject({ latestObservation: "Observed September 23, 2026", complete: false, stableIds: [], identityState: "error" });
+    expect(researchFirmHeading(result)).toMatchObject({ latestObservation: "Observed September 23, 2026", freshness: "Within refresh period", complete: false, stableIds: [], identityState: "error" });
+  });
+  it("keeps freshness states concise and distinct", () => {
+    const older = { ...base, freshness: "refresh_recommended" as const };
+    const result = { ...detail(), sections: [{ ...detail().sections[0], items: [older] }] };
+    expect(researchFirmHeading(result).freshness).toBe("Refresh recommended");
+    expect(researchFirmHeading(detail()).freshness).toBe("Freshness unknown");
   });
 });
