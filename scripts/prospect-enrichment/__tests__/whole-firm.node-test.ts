@@ -12,7 +12,7 @@ import { canonicalJson, protocolHash, sha256, within } from "../model";
 import { items, assertFreshComparison } from "../reconciliation";
 import { checkApproval, enqueue, submitOne, type ApprovalManifest } from "../outbox";
 import { checkManifestApproval, prepareManifestRequests, submitManifestChunks, validateManifestChunks } from "../manifest-delivery";
-import { chunkExpectedRunManifest } from "../run-manifest";
+import { buildHeldCandidateEvidence, chunkExpectedRunManifest } from "../run-manifest";
 import { serializeSyntheticComparisonExport as serializeComparisonExport } from "../fixtures/comparison-signing";
 
 async function workspace(t: { after: (fn: () => Promise<void>) => void }) {
@@ -118,12 +118,13 @@ test("all-raw-hold whole-firm manifests dry-run without a package and cannot ski
   const dir = await workspace(t), base = wholeFirmFixture();
   const exported = { ...base.exported, revisions: base.exported.revisions.map(() => null) };
   const source = freezeWholeFirmExport(exported, sha256(canonicalJson(exported))), compiled = compileWholeFirmSnapshot(source);
-  const sourceFile = path.join(dir, "source.json"), chunksFile = path.join(dir, "chunks.jsonl"), snapshotFile = path.join(dir, "comparison.json");
+  const sourceFile = path.join(dir, "source.json"), chunksFile = path.join(dir, "chunks.jsonl"), heldEvidenceFile = path.join(dir, "held-evidence.jsonl"), snapshotFile = path.join(dir, "comparison.json");
   await fs.writeFile(sourceFile, JSON.stringify(source));
   await fs.writeFile(chunksFile, chunkExpectedRunManifest(compiled.expected, 100, 1_048_576, "whole-firm").map(c => JSON.stringify(c)).join("\n"));
+  await fs.writeFile(heldEvidenceFile, buildHeldCandidateEvidence(compiled.expected, compiled.candidates).map(c => JSON.stringify(c)).join("\n"));
   const comparison = serializeComparisonExport({ schemaVersion: "prospect-enrichment-comparison/v1", projectId: "ssxryjxifwiivghglqer", capturedAt: new Date().toISOString(), provenance: { reader: "synthetic-authenticated-reader", sourceArtifactSha256: "b".repeat(64), operatorAuthenticated: true }, identities: [], packages: [], events: [] });
   await fs.writeFile(snapshotFile, comparison.body);
-  const args = ["submit", "--profile", "whole-firm", "--manifest-only", "--manifest", sourceFile, "--manifest-chunks", chunksFile, "--snapshot", snapshotFile, "--outbox", path.join(WHOLE_FIRM_PROFILE.outputRoot, "synthetic-never-created-outbox")];
+  const args = ["submit", "--profile", "whole-firm", "--manifest-only", "--manifest", sourceFile, "--manifest-chunks", chunksFile, "--held-evidence", heldEvidenceFile, "--snapshot", snapshotFile, "--outbox", path.join(WHOLE_FIRM_PROFILE.outputRoot, "synthetic-never-created-outbox")];
   const result = await main(args) as {dryRun:boolean; networkRequests:number};
   assert.equal(result.dryRun, true); assert.equal(result.networkRequests, 0);
   await fs.writeFile(chunksFile, base.chunks.map(c => JSON.stringify(c)).join("\n"));
