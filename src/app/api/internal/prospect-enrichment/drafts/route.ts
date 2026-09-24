@@ -1,46 +1,30 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { constantTimeEquals } from "@/lib/cron-auth";
+import { parseProspectEnrichmentEnvelope, PROSPECT_ENRICHMENT_MAX_BODY_BYTES, PROSPECT_ENRICHMENT_SCHEMA_VERSION } from "@/lib/prospect-enrichment-contract";
 import { stageGtaProspectAgentDraft } from "@/lib/gta-prospect-agent-draft-inbox";
+import { readBoundedJson } from "@/lib/prospect-enrichment-auth";
+import { isProspectEnrichmentAgentAuthorized, prospectEnrichmentAgentActor } from "@/lib/prospect-enrichment-agent-auth";
+import { prospectEnrichmentIdempotencyKey } from "@/lib/prospect-enrichment-hash";
+import { ProspectEnrichmentStoreError, stageProspectEnrichmentPackage } from "@/lib/prospect-enrichment-store";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MAX_BODY_BYTES = 2 * 1024 * 1024;
-const MINIMUM_AGENT_TOKEN_BYTES = 32;
 const noStore = { "Cache-Control": "private, no-store" };
+
+type JsonRecord = Record<string, unknown>;
 
 function json(body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: noStore });
 }
 
-function agentAuthorized(request: NextRequest): boolean {
-  const expected = process.env.GTA_PROSPECT_AGENT_DRAFT_TOKEN;
-  const authorization = request.headers.get("authorization");
-  if (
-    typeof expected !== "string"
-    || Buffer.byteLength(expected, "utf8") < MINIMUM_AGENT_TOKEN_BYTES
-    || !authorization?.startsWith("Bearer ")
-  ) return false;
-  const presented = authorization.slice("Bearer ".length).trim();
-  return Boolean(presented) && constantTimeEquals(presented, expected);
-}
-
-function actor(): string {
-  const configured = process.env.GTA_PROSPECT_AGENT_DRAFT_ACTOR?.trim().toLocaleLowerCase("en-CA") ?? "authorized-agent";
-  return /^[-_a-z0-9]{1,120}$/.test(configured) ? configured : "authorized-agent";
-}
-
-async function payload(request: NextRequest): Promise<{ sourceName: string; records: unknown[]; sourceSha256?: string } | { error: string; status: number }> {
-  const text = await request.text();
-  if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) return { error: "The draft package is larger than the 2 MB limit.", status: 413 };
-  let value: unknown;
-  try { value = JSON.parse(text); } catch { return { error: "Expected a JSON object with sourceName and records.", status: 400 }; }
-  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: "Expected a JSON object with sourceName and records.", status: 400 };
-  const item = value as Record<string, unknown>;
+function legacyPayload(value: unknown): { sourceName: string; records: unknown[]; sourceSha256?: string } | { error: string } {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return { error: "Expected a JSON object with sourceName and records." };
+  const item = value as JsonRecord;
   const unexpected = Object.keys(item).filter((key) => !["sourceName", "records", "sourceSha256"].includes(key));
-  if (unexpected.length) return { error: `Unexpected field(s): ${unexpected.join(", ")}.`, status: 400 };
-  if (typeof item.sourceName !== "string" || !Array.isArray(item.records)) return { error: "sourceName and records are required.", status: 400 };
-  if (item.sourceSha256 !== undefined && (typeof item.sourceSha256 !== "string" || !/^[a-f0-9]{64}$/.test(item.sourceSha256))) return { error: "sourceSha256 must be a lowercase SHA-256 value when supplied.", status: 400 };
+  if (unexpected.length) return { error: `Unexpected field(s): ${unexpected.join(", ")}.` };
+  if (typeof item.sourceName !== "string" || !Array.isArray(item.records)) return { error: "sourceName and records are required." };
+  if (item.sourceSha256 !== undefined && (typeof item.sourceSha256 !== "string" || !/^[a-f0-9]{64}$/.test(item.sourceSha256))) return { error: "sourceSha256 must be a lowercase SHA-256 value when supplied." };
   return { sourceName: item.sourceName, records: item.records, sourceSha256: item.sourceSha256 as string | undefined };
 }
 
@@ -50,13 +34,46 @@ async function payload(request: NextRequest): Promise<{ sourceName: string; reco
  * contact submissions, chat sessions, outreach, or canonical imports.
  */
 export async function POST(request: NextRequest) {
-  if (!agentAuthorized(request)) return json({ error: "Unauthorized" }, 401);
+  if (!isProspectEnrichmentAgentAuthorized(request)) return json({ error: "Unauthorized" }, 401);
   const key = request.headers.get("idempotency-key")?.trim() ?? "";
-  const parsed = await payload(request);
-  if ("error" in parsed) return json({ error: parsed.error }, parsed.status);
+  const body = await readBoundedJson(request, PROSPECT_ENRICHMENT_MAX_BODY_BYTES);
+  if (!body.ok) return json({ error: body.error }, body.status);
+  if (body.value && typeof body.value === "object" && !Array.isArray(body.value) && Object.prototype.hasOwnProperty.call(body.value, "schemaVersion")) {
+    const candidate = body.value as JsonRecord;
+    if (candidate.schemaVersion !== PROSPECT_ENRICHMENT_SCHEMA_VERSION) return json({ error: "Unsupported prospect-enrichment schema version." }, 400);
+    const parsed = parseProspectEnrichmentEnvelope(candidate);
+    if (!parsed.ok) {
+      const hasUnknownKey = parsed.issues.some((issue) => issue.message === "unrecognized field is forbidden");
+      return json({ error: hasUnknownKey ? "The prospect-enrichment package contains an unrecognized field." : "The prospect-enrichment package is structurally invalid.", issues: parsed.issues }, hasUnknownKey ? 400 : 422);
+    }
+    if (key !== prospectEnrichmentIdempotencyKey(parsed.envelope.sourceSystem, parsed.envelope.runId, parsed.envelope.packageId)) {
+      return json({ error: "Idempotency-Key does not match this immutable run and package." }, 400);
+    }
+    try {
+      const receipt = await stageProspectEnrichmentPackage({ submittedBy: prospectEnrichmentAgentActor(), rawBody: body.text, envelope: parsed.envelope });
+      return json({
+        packageId: receipt.packageId,
+        clientPackageId: receipt.clientPackageId,
+        runId: receipt.runId,
+        payloadSha256: receipt.payloadSha256,
+        state: receipt.state,
+        identityState: receipt.identityState,
+        counts: receipt.counts,
+        receivedAt: receipt.receivedAt,
+        receiptUrl: `/api/internal/prospect-enrichment/drafts/${encodeURIComponent(receipt.packageId)}/receipt`,
+      }, receipt.outcome === "created" ? 201 : 200);
+    } catch (error) {
+      if (error instanceof ProspectEnrichmentStoreError) return json({ error: error.message, code: error.code }, error.status);
+      console.error("[prospect-enrichment] stage failed", { code: "unexpected" });
+      return json({ error: "The research package could not be staged." }, 503);
+    }
+  }
+
+  const parsed = legacyPayload(body.value);
+  if ("error" in parsed) return json({ error: parsed.error }, 400);
   try {
     const receipt = await stageGtaProspectAgentDraft({
-      submittedBy: actor(), sourceName: parsed.sourceName, idempotencyKey: key,
+      submittedBy: prospectEnrichmentAgentActor(), sourceName: parsed.sourceName, idempotencyKey: key,
       records: parsed.records, expectedPayloadSha256: parsed.sourceSha256,
     });
     return json({

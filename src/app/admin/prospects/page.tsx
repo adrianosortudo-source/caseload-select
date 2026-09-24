@@ -23,6 +23,7 @@ export default function ProspectsPage() {
         <h1 className="text-2xl font-bold text-navy mt-1">Prospect list</h1>
         <p className="text-sm text-black/50 mt-1">Search shared registry firms, reviewed research rows, and retained legacy provenance in one place.</p>
         <Link href="/admin/prospects/brazilian" className="mt-3 inline-flex rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white hover:bg-navy/90">Open Brazilian lawyer research overlay</Link>
+        <Link href="/admin/prospects/research" className="mt-3 ml-2 inline-flex rounded-md border border-navy px-3 py-2 text-sm font-semibold text-navy hover:bg-parchment">Open research updates and run reconciliation</Link>
       </div>
 
       <AiDraftInbox />

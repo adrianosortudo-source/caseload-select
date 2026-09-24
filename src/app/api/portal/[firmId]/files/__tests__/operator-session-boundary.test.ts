@@ -5,7 +5,7 @@ const state = vi.hoisted(() => ({
   host: "admin.caseloadselect.ca",
   cookie: undefined as string | undefined,
   row: { id: "operator-1" } as { id: string } | null,
-  filters: [] as Array<[string, unknown]>,
+  rpcCalls: [] as Array<{ name: string; args: Record<string, unknown> }>,
   uploadCalls: [] as unknown[],
 }));
 
@@ -24,16 +24,9 @@ vi.mock("next/headers", () => ({
 
 vi.mock("@/lib/supabase-admin", () => ({
   supabaseAdmin: {
-    from: () => {
-      const builder = {
-        select: () => builder,
-        eq: (column: string, value: unknown) => {
-          state.filters.push([column, value]);
-          return builder;
-        },
-        maybeSingle: () => Promise.resolve({ data: state.row, error: null }),
-      };
-      return builder;
+    rpc: (name: string, args: Record<string, unknown>) => {
+      state.rpcCalls.push({ name, args });
+      return Promise.resolve({ data: state.row?.id ?? null, error: null });
     },
   },
 }));
@@ -105,7 +98,7 @@ beforeEach(() => {
   state.host = "admin.caseloadselect.ca";
   state.cookie = undefined;
   state.row = { id: "operator-1" };
-  state.filters = [];
+  state.rpcCalls = [];
   state.uploadCalls = [];
 });
 
@@ -119,7 +112,7 @@ describe("portal files operator session boundary", () => {
     const response = await POST(makeRequest(), makeParams());
 
     expect(response.status).toBe(401);
-    expect(state.filters).toEqual([]);
+    expect(state.rpcCalls).toEqual([]);
     expect(state.uploadCalls).toEqual([]);
   });
 
@@ -130,12 +123,14 @@ describe("portal files operator session boundary", () => {
     const response = await POST(makeRequest(), makeParams());
 
     expect(response.status).toBe(401);
-    expect(state.filters).toEqual([
-      ["id", "operator-1"],
-      ["firm_id", "firm-1"],
-      ["role", "operator"],
-      ["disabled", false],
-    ]);
+    expect(state.rpcCalls).toEqual([{
+      name: "revalidate_operator_membership_v1",
+      args: {
+        p_lawyer_id: "operator-1",
+        p_firm_id: "firm-1",
+        p_record_sign_in: false,
+      },
+    }]);
     expect(state.uploadCalls).toEqual([]);
   });
 

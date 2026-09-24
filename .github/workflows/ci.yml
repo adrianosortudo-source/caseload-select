@@ -223,6 +223,11 @@ jobs:
           cache: 'npm'
       - name: Install dependencies
         run: npm ci
+      - name: Run prospect enrichment deterministic tests
+        run: |
+          npm run test:prospect-enrichment
+          npm run test:prospect-enrichment-cli
+          node --test scripts/prospect-enrichment/__tests__/migration-gate.node-test.mjs
       - name: Run vitest
         run: npx vitest run
 
@@ -344,8 +349,7 @@ jobs:
     name: Publication concurrency integration tests (real Postgres)
     runs-on: ubuntu-latest
     # A dedicated job, not a step tacked onto `test`: standing up the local
-    # Supabase/Docker stack adds real wall-clock time and a real (currently
-    # known-broken -- see the KNOWN BLOCKER note at the top of this file)
+    # Supabase/Docker stack adds real wall-clock time and a distinct
     # infrastructure failure mode, and isolating it here means that failure
     # blocks only this specific, clearly-named check instead of the fast
     # unit-test job everything else depends on.
@@ -416,11 +420,8 @@ jobs:
         # supabase/migrations/ in order. It blocks until every service
         # reports healthy and exits non-zero if any migration fails or a
         # service never becomes healthy -- i.e. this step itself is the
-        # "wait for ready" gate; no separate polling step is needed. See the
-        # KNOWN BLOCKER note at the top of this file for why this step is
-        # currently expected to fail until a baseline migration is added --
-        # that is a real, intentional, loud CI failure, not a bug in this
-        # step.
+        # "wait for ready" gate; no separate polling step is needed. A failure
+        # here indicates a fresh-bootstrap or service-health regression.
         run: supabase start
 
       - name: Export DIRECT_DATABASE_URL from the running stack
@@ -532,6 +533,111 @@ jobs:
 
       - name: Run publication and privacy integration tests
         run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts src/lib/__tests__/drg-manifest-deployment.integration.test.ts src/lib/__tests__/channel-conversation-acl.integration.test.ts src/lib/__tests__/privacy-screened-lead-redaction.integration.test.ts src/lib/__tests__/privacy-restore-replay.integration.test.ts src/lib/__tests__/gta-prospect-research-import-batch.integration.test.ts src/lib/__tests__/voice-screen-parallel.integration.test.ts
+
+      - name: Run prospect enrichment real PostgreSQL contract
+        env:
+          PROSPECT_ENRICHMENT_REQUIRE_DATABASE_URL: "1"
+        run: npm run test:prospect-enrichment-integration
+
+      - name: Configure bound disposable stack for prospect enrichment browser acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const { execFileSync } = require('node:child_process');
+          const { randomBytes } = require('node:crypto');
+          const { appendFileSync, mkdtempSync, readFileSync } = require('node:fs');
+          const { tmpdir } = require('node:os');
+          const path = require('node:path');
+          function refuse(message) { throw Object.assign(new Error(message), { safeMessage: message }); }
+          function unquote(value) {
+            const text = String(value ?? '').trim();
+            return /^(["']).*\1$/.test(text) ? text.slice(1, -1) : text;
+          }
+          function localUrl(value, protocols, label) {
+            const url = new URL(unquote(value));
+            const host = url.hostname.replace(/^\[|\]$/g, '');
+            if (!protocols.includes(url.protocol) || !['127.0.0.1', '::1'].includes(host) || !url.port || url.search || url.hash) {
+              refuse(label + ' is not an explicit numeric-loopback endpoint.');
+            }
+            return url;
+          }
+          function bindContainer(name, internalPort, url) {
+            const containers = JSON.parse(execFileSync('docker', ['inspect', name], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+            const container = containers[0];
+            if (containers.length !== 1 || container?.Name !== '/' + name || container?.State?.Running !== true) {
+              refuse('The expected disposable Supabase container is not uniquely running.');
+            }
+            const host = url.hostname.replace(/^\[|\]$/g, '');
+            const bindings = (container.NetworkSettings?.Ports?.[internalPort + '/tcp'] ?? []).filter((binding) =>
+              host === '127.0.0.1' ? ['127.0.0.1', '0.0.0.0'].includes(binding.HostIp) : ['::1', '::'].includes(binding.HostIp));
+            if (bindings.length !== 1 || bindings[0].HostPort !== url.port) {
+              refuse('A rendered-test endpoint does not match its exact disposable container port.');
+            }
+          }
+          try {
+            const status = JSON.parse(execFileSync('supabase', ['status', '-o', 'json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+            for (const key of ['API_URL', 'DB_URL', 'SERVICE_ROLE_KEY', 'ANON_KEY']) {
+              if (typeof status[key] !== 'string' || !status[key].trim()) refuse('Local Supabase status is missing required field ' + key + '.');
+            }
+            const database = localUrl(status.DB_URL, ['postgres:', 'postgresql:'], 'Database URL');
+            const previouslyBound = localUrl(process.env.DIRECT_DATABASE_URL, ['postgres:', 'postgresql:'], 'Previously bound database URL');
+            if (database.pathname !== '/postgres' || ['hostname', 'port', 'pathname', 'username', 'password'].some((key) => database[key] !== previouslyBound[key])) {
+              refuse('Rendered acceptance does not target the already verified disposable database.');
+            }
+            const api = localUrl(status.API_URL, ['http:'], 'Supabase API URL');
+            if (api.pathname !== '/' || api.username || api.password) refuse('Local Supabase API URL has unexpected path or credentials.');
+            const projectId = readFileSync('supabase/config.toml', 'utf8').match(/^project_id\s*=\s*"([-_A-Za-z0-9]+)"\s*$/m)?.[1];
+            if (!projectId) refuse('Disposable Supabase project ID is missing or invalid.');
+            bindContainer('supabase_db_' + projectId, '5432', database);
+            bindContainer('supabase_kong_' + projectId, '8000', api);
+            const portalSecret = 'test-prospect-enrichment-portal-' + randomBytes(32).toString('hex');
+            const agentToken = 'test-prospect-enrichment-agent-' + randomBytes(32).toString('hex');
+            const manifest = path.join(mkdtempSync(path.join(tmpdir(), 'prospect-enrichment-rendered-')), 'manifest.json');
+            const values = {
+              PROSPECT_ENRICHMENT_TEST_DATABASE_URL: database.href,
+              PROSPECT_ENRICHMENT_TEST_SUPABASE_URL: api.origin,
+              PROSPECT_ENRICHMENT_TEST_SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
+              PROSPECT_ENRICHMENT_TEST_PORTAL_SECRET: portalSecret,
+              PROSPECT_ENRICHMENT_TEST_AGENT_TOKEN: agentToken,
+              PROSPECT_ENRICHMENT_DISPOSABLE_DATABASE_CONFIRMATION: 'YES-LOCAL-DISPOSABLE-ONLY',
+              PROSPECT_ENRICHMENT_RENDERED_MANIFEST: manifest,
+              PORTAL_SECRET: portalSecret,
+              PROSPECT_ENRICHMENT_AGENT_TOKEN: agentToken,
+              GTA_PROSPECT_AGENT_DRAFT_TOKEN: agentToken,
+              GTA_PROSPECT_AGENT_DRAFT_ACTOR: 'rendered-ci-test',
+              NEXT_PUBLIC_SUPABASE_URL: api.origin,
+              NEXT_PUBLIC_SUPABASE_ANON_KEY: status.ANON_KEY,
+              SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
+              PROSPECT_ENRICHMENT_TEST_DIAGNOSTICS: '1',
+              NEXT_TELEMETRY_DISABLED: '1',
+            };
+            if (!process.env.GITHUB_ENV || Object.values(values).some((value) => /[\r\n]/.test(value))) refuse('Rendered environment export is invalid.');
+            appendFileSync(process.env.GITHUB_ENV, Object.entries(values).map(([key, value]) => key + '=' + value + '\n').join(''));
+            process.stdout.write('Rendered acceptance is bound to the verified disposable database and local API; test-only authentication is configured.\n');
+          } catch (error) {
+            process.stderr.write('::error::' + (error.safeMessage ?? 'Could not configure the verified disposable stack for rendered acceptance.') + '\n');
+            process.exitCode = 1;
+          }
+          NODE
+
+      - name: Install fixed Chromium for prospect enrichment browser acceptance
+        run: npx playwright install --with-deps chromium
+
+      - name: Seed synthetic prospect enrichment browser fixtures
+        run: npx tsx scripts/prospect-enrichment/seed-rendered.ts
+
+      - name: Run prospect enrichment rendered and intake review acceptance
+        run: npm run test:prospect-enrichment-rendered
+
+      - name: Upload prospect enrichment browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prospect-enrichment-rendered-evidence
+          path: test-results/prospect-enrichment/**
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Stop local Supabase stack
         if: always()

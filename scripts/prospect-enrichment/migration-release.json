@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "prospect-enrichment-migration-release/v1",
+  "projectRef": "ssxryjxifwiivghglqer",
+  "cliVersion": "2.117.0",
+  "migrations": [
+    {
+      "path": "supabase/migrations/20260923161812_prospect_enrichment_v1.sql",
+      "filename": "20260923161812_prospect_enrichment_v1.sql",
+      "version": "20260923161812",
+      "name": "prospect_enrichment_v1",
+      "bytes": 203766,
+      "sha256": "f716b93a3e7dcbb7bdd32741d6f55c0e96eefcc64fc52d5b6a5ca127f9b212e2"
+    },
+    {
+      "path": "supabase/migrations/20260923174500_prospect_enrichment_identity_read_rpc.sql",
+      "filename": "20260923174500_prospect_enrichment_identity_read_rpc.sql",
+      "version": "20260923174500",
+      "name": "prospect_enrichment_identity_read_rpc",
+      "bytes": 4848,
+      "sha256": "c48f2addbd7681d5867eb81dd35f33a46f45442e2bc9f9efaed8c1d40810df7f"
+    },
+    {
+      "path": "supabase/migrations/20260923182000_prospect_enrichment_operator_read_rpc.sql",
+      "filename": "20260923182000_prospect_enrichment_operator_read_rpc.sql",
+      "version": "20260923182000",
+      "name": "prospect_enrichment_operator_read_rpc",
+      "bytes": 5984,
+      "sha256": "95a2a3fef9faf11ecd468a9bcbb6fe2529a8ff292bcff5631763ec1e90d2710b"
+    },
+    {
+      "path": "supabase/migrations/20260923221500_prospect_enrichment_gta_target_read_rpc.sql",
+      "filename": "20260923221500_prospect_enrichment_gta_target_read_rpc.sql",
+      "version": "20260923221500",
+      "name": "prospect_enrichment_gta_target_read_rpc",
+      "bytes": 1926,
+      "sha256": "15260eed54b8c11b9d6adf5a7629d1b60b154c99d13bdd563e3420b4ff60da3c"
+    },
+    {
+      "path": "supabase/migrations/20260924071322_prospect_enrichment_manifest_hold_evidence.sql",
+      "filename": "20260924071322_prospect_enrichment_manifest_hold_evidence.sql",
+      "version": "20260924071322",
+      "name": "prospect_enrichment_manifest_hold_evidence",
+      "bytes": 34018,
+      "sha256": "38fbbd797bb8c0fb98d1cd62bf85cae026d6751d28fa70d949a7907f20a8edba"
+    },
+    {
+      "path": "supabase/migrations/20260924093317_fix_gta_prospect_operator_projection_gaps.sql",
+      "filename": "20260924093317_fix_gta_prospect_operator_projection_gaps.sql",
+      "version": "20260924093317",
+      "name": "fix_gta_prospect_operator_projection_gaps",
+      "bytes": 10756,
+      "sha256": "0b529b5c26231cf44d169ba7c8925b257700a5296f516444c3c494f17cb27704"
+    }
+  ]
+}

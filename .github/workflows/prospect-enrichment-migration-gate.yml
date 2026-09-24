@@ -1,0 +1,147 @@
+name: Reviewed prospect enrichment migration
+
+'on':
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Validate all six exact migrations, or apply after the separate production approval.
+        required: true
+        default: dry-run
+        type: choice
+        options:
+          - dry-run
+          - apply
+      reviewed_source_sha:
+        description: Exact reviewed 40-character current main commit SHA.
+        required: true
+        type: string
+      confirmation:
+        description: "Required only for apply: APPLY-PROSPECT-ENRICHMENT-V1"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gta-prospect-migrations-production
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
+    name: Reviewed prospect enrichment schema gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: Production prospect migrations
+    env:
+      PROJECT_REF: ssxryjxifwiivghglqer
+      OPERATION: ${{ inputs.operation }}
+      REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_ENRICHMENT_MIGRATION_REVIEWED_SHA }}
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate exact reviewed source and protected configuration
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
+          export CHECKOUT_SHA="$(git rev-parse HEAD)"
+          node scripts/prospect-enrichment/migration-gate.mjs source > "$RUNNER_TEMP/source-check.json"
+          git fetch --no-tags origin main
+          test "$CHECKOUT_SHA" = "$(git rev-parse origin/main)"
+          node scripts/prospect-enrichment/migration-gate.mjs query > "$RUNNER_TEMP/enrichment-ledger-readback.sql"
+
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.117.0
+
+      - name: Discover pinned command interfaces and verify version
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(supabase --version)" = "2.117.0"
+          supabase db push --help > "$RUNNER_TEMP/db-push-help.txt"
+          supabase db query --help > "$RUNNER_TEMP/db-query-help.txt"
+          grep -q -- '--db-url' "$RUNNER_TEMP/db-push-help.txt"
+          grep -q -- '--db-url' "$RUNNER_TEMP/db-query-help.txt"
+
+      - name: Require the exact six pending migrations and no seeds or roles
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
+          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
+            --output-format json > "$RUNNER_TEMP/plan.json"
+          node scripts/prospect-enrichment/migration-gate.mjs plan pre "$RUNNER_TEMP/plan.json" > "$RUNNER_TEMP/plan-check.json"
+
+      - name: Stop after the default dry run
+        if: inputs.operation == 'dry-run'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "The reviewed prospect enrichment plan matches. No migration was applied."
+
+      - name: Recheck and apply the separately approved six migrations
+        id: apply_migration
+        if: inputs.operation == 'apply'
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
+          export CHECKOUT_SHA="$(git rev-parse HEAD)"
+          node scripts/prospect-enrichment/migration-gate.mjs source > "$RUNNER_TEMP/apply-source-check.json"
+          git fetch --no-tags origin main
+          test "$CHECKOUT_SHA" = "$(git rev-parse origin/main)"
+          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
+            --output-format json > "$RUNNER_TEMP/immediate-plan.json"
+          node scripts/prospect-enrichment/migration-gate.mjs plan pre "$RUNNER_TEMP/immediate-plan.json" > "$RUNNER_TEMP/immediate-plan-check.json"
+          echo "apply_started=true" >> "$GITHUB_OUTPUT"
+          supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault \
+            --output-format json > "$RUNNER_TEMP/apply.json"
+          node scripts/prospect-enrichment/migration-gate.mjs plan apply "$RUNNER_TEMP/apply.json" > "$RUNNER_TEMP/apply-check.json"
+
+      - name: Verify all six versions, complete SQL content and empty pending plan
+        if: always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" \
+            --file "$RUNNER_TEMP/enrichment-ledger-readback.sql" --output json --agent no > "$RUNNER_TEMP/ledger.json"
+          node scripts/prospect-enrichment/migration-gate.mjs ledger "$RUNNER_TEMP/ledger.json" > "$RUNNER_TEMP/ledger-check.json"
+          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
+            --output-format json > "$RUNNER_TEMP/post-apply-plan.json"
+          node scripts/prospect-enrichment/migration-gate.mjs plan post "$RUNNER_TEMP/post-apply-plan.json" > "$RUNNER_TEMP/post-apply-check.json"
+
+      - name: Upload bounded migration verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prospect-enrichment-migration-evidence
+          path: |
+            scripts/prospect-enrichment/migration-release.json
+            ${{ runner.temp }}/source-check.json
+            ${{ runner.temp }}/plan-check.json
+            ${{ runner.temp }}/apply-source-check.json
+            ${{ runner.temp }}/immediate-plan-check.json
+            ${{ runner.temp }}/apply-check.json
+            ${{ runner.temp }}/ledger-check.json
+            ${{ runner.temp }}/post-apply-check.json
+          if-no-files-found: error

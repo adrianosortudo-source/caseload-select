@@ -218,28 +218,16 @@ export async function revalidateOperatorMembership(
     // Dynamic import keeps token-only consumers from initializing the
     // privileged Supabase client when they do not perform operator auth.
     const { supabaseAdmin } = await import("./supabase-admin");
-    const table = supabaseAdmin.from("firm_lawyers");
-    const query = options.recordSignIn
-      ? table
-        .update({ last_signed_in_at: new Date().toISOString() })
-        .eq("id", session.lawyer_id)
-        .eq("firm_id", session.firm_id)
-        .eq("role", "operator")
-        .eq("disabled", false)
-        .select("id")
-      : table
-        .select("id")
-        .eq("id", session.lawyer_id)
-        .eq("firm_id", session.firm_id)
-        .eq("role", "operator")
-        .eq("disabled", false);
-
-    const { data, error } = await query.maybeSingle<{ id: string }>();
+    const { data, error } = await supabaseAdmin.rpc("revalidate_operator_membership_v1", {
+      p_lawyer_id: session.lawyer_id,
+      p_firm_id: session.firm_id,
+      p_record_sign_in: options.recordSignIn === true,
+    });
     if (error) {
       console.error(`[portal-auth] operator membership revalidation failed: ${error.message}`);
       return null;
     }
-    return data;
+    return typeof data === "string" ? { id: data } : null;
   } catch (error) {
     console.error(
       `[portal-auth] operator membership revalidation failed: ${

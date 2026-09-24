@@ -1,0 +1,1 @@
+{"extends":"../../tsconfig.json","compilerOptions":{"noEmit":true,"incremental":false},"include":["./**/*.ts","../../src/lib/prospect-enrichment-contract.ts","../../src/lib/prospect-enrichment-hash.ts"],"exclude":["../../node_modules"]}

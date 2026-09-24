@@ -25,8 +25,11 @@
 import { describe, it, expect } from "vitest";
 import fs from "fs";
 import path from "path";
+import * as ts from "typescript";
 
 const APP_DIR = path.join(process.cwd(), "src", "app");
+const ENRICHMENT_API_DIR = path.join(APP_DIR, "api", "admin", "prospect-enrichment");
+const ENRICHMENT_AUTH_IMPORT = "@/lib/prospect-enrichment-auth";
 
 // ── Gated segments ──────────────────────────────────────────────────────────
 
@@ -92,6 +95,64 @@ function countHandlers(src: string): number {
   return matches?.length ?? 0;
 }
 
+function sourceTree(src: string): ts.SourceFile {
+  return ts.createSourceFile("route.ts", src, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+}
+
+/** Require the real, unaliased named import, not a comment or lookalike helper. */
+function namedImport(tree: ts.SourceFile, name: string): string | null {
+  for (const statement of tree.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)
+      || statement.importClause?.isTypeOnly) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamedImports(bindings) && bindings.elements.some((item) =>
+      !item.isTypeOnly && item.name.text === name && (!item.propertyName || item.propertyName.text === name))) {
+      return statement.moduleSpecifier.text;
+    }
+  }
+  return null;
+}
+
+/** The two leading statements must return the helper's denial before any work. */
+function hasLeadingEnrichmentGuard(statements: ts.NodeArray<ts.Statement>, mutation: boolean): boolean {
+  const [gate, denial] = statements;
+  if (!gate || !ts.isVariableStatement(gate) || gate.declarationList.declarations.length !== 1 || !denial) return false;
+  const declaration = gate.declarationList.declarations[0];
+  if (!ts.isIdentifier(declaration.name) || declaration.name.text !== "auth"
+    || !declaration.initializer || !ts.isAwaitExpression(declaration.initializer)) return false;
+  const call = declaration.initializer.expression;
+  if (!ts.isCallExpression(call) || !ts.isIdentifier(call.expression)
+    || call.expression.text !== "requireProspectEnrichmentOperator"
+    || call.arguments[0]?.getText() !== "request"
+    || (mutation && call.arguments[1]?.kind !== ts.SyntaxKind.TrueKeyword)) return false;
+  return denial.getText().replace(/\s+/g, "") === "if(!auth.ok)returnauth.response;";
+}
+
+/** Scoped recognition preserves a separate gate requirement for every handler. */
+function countEnrichmentGates(src: string, file: string): number {
+  const relative = path.relative(ENRICHMENT_API_DIR, file);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) return 0;
+  const tree = sourceTree(src);
+  const direct = namedImport(tree, "requireProspectEnrichmentOperator") === ENRICHMENT_AUTH_IMPORT;
+  const readImport = namedImport(tree, "readRoute");
+  const wrapped = Boolean(readImport?.startsWith(".")
+    && path.resolve(path.dirname(file), readImport + ".ts") === path.join(ENRICHMENT_API_DIR, "_read-common.ts"));
+  return tree.statements.filter((statement) => {
+    if (!ts.isFunctionDeclaration(statement) || !statement.body || !statement.name
+      || !statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+      || !statement.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)
+      || !/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(statement.name.text)) return false;
+    if (direct && hasLeadingEnrichmentGuard(statement.body.statements, !["GET", "HEAD", "OPTIONS"].includes(statement.name.text))) return true;
+    if (!wrapped || statement.name.text !== "GET" || statement.body.statements.length !== 1) return false;
+    const returned = statement.body.statements[0];
+    if (!ts.isReturnStatement(returned) || !returned.expression || !ts.isCallExpression(returned.expression)) return false;
+    const call = returned.expression;
+    return ts.isIdentifier(call.expression) && call.expression.text === "readRoute"
+      && call.arguments[0]?.getText() === "request" && call.arguments.length === 3
+      && ts.isArrowFunction(call.arguments[2]);
+  }).length;
+}
+
 /**
  * Counts auth-gate invocations in a route file. Recognized mechanisms:
  *
@@ -106,15 +167,52 @@ function countHandlers(src: string): number {
  *                              header against ADMIN_API_SECRET (ops-script
  *                              shared secret, predates the session gates)
  */
-function countGates(src: string): number {
+function countGates(src: string, file: string): number {
   const operatorGates = src.match(/await\s+requireOperator\(\)/g)?.length ?? 0;
   const cronGates = src.match(/isCronAuthorized\(/g)?.length ?? 0;
   const operatorSessionGates =
     src.match(/await\s+getOperatorSession\(\)/g)?.length ?? 0;
   const adminSecretGates =
     src.match(/headers\.get\(["']x-admin-secret["']\)/g)?.length ?? 0;
-  return operatorGates + cronGates + operatorSessionGates + adminSecretGates;
+  return operatorGates + cronGates + operatorSessionGates + adminSecretGates + countEnrichmentGates(src, file);
 }
+
+describe("legacy surface auth: verified prospect enrichment delegation", () => {
+  it("keeps the recognized helper bound to a current operator session", () => {
+    const tree = sourceTree(read(path.join(process.cwd(), "src/lib/prospect-enrichment-auth.ts")));
+    expect(namedImport(tree, "getOperatorSession")).toBe("@/lib/portal-auth");
+    const helper = tree.statements.find((node): node is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(node) && node.name?.text === "requireProspectEnrichmentOperator");
+    const statements = helper?.body?.statements;
+    expect(statements?.[0].getText().replace(/\s+/g, "")).toBe("constsession=awaitgetOperatorSession();");
+    expect(statements?.[1].getText().replace(/\s+/g, "")).toBe('if(!session){return{ok:false,response:prospectEnrichmentJson({error:"Unauthorized"},401)};}');
+  });
+
+  it("keeps the read wrapper's operator denial ahead of its callback", () => {
+    const tree = sourceTree(read(path.join(ENRICHMENT_API_DIR, "_read-common.ts")));
+    expect(namedImport(tree, "requireProspectEnrichmentOperator")).toBe(ENRICHMENT_AUTH_IMPORT);
+    const wrapper = tree.statements.find((node): node is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(node) && node.name?.text === "readRoute");
+    const first = wrapper?.body?.statements[0];
+    expect(first && ts.isTryStatement(first)).toBe(true);
+    if (!first || !ts.isTryStatement(first)) return;
+    expect(hasLeadingEnrichmentGuard(first.tryBlock.statements, false)).toBe(true);
+    expect(first.tryBlock.statements.slice(0, 2).some((node) => /work\s*\(/.test(node.getText()))).toBe(false);
+  });
+
+  it("does not count an import, ignored denial, wrong helper, or a second unguarded handler", () => {
+    const file = path.join(ENRICHMENT_API_DIR, "packages", "route.ts");
+    const imported = `import { requireProspectEnrichmentOperator } from "${ENRICHMENT_AUTH_IMPORT}";`;
+    const guarded = `${imported} export async function POST(request) { const auth = await requireProspectEnrichmentOperator(request, true); if (!auth.ok) return auth.response; return work(); }`;
+    expect(countEnrichmentGates(guarded, file)).toBe(1);
+    expect(countEnrichmentGates(imported + "export async function POST(request) { return work(); }", file)).toBe(0);
+    expect(countEnrichmentGates(guarded.replace("if (!auth.ok) return auth.response;", ""), file)).toBe(0);
+    expect(countEnrichmentGates(guarded.replace(ENRICHMENT_AUTH_IMPORT, "./untrusted-helper"), file)).toBe(0);
+    expect(countEnrichmentGates(guarded.replace("request, true", "request"), file)).toBe(0);
+    expect(countEnrichmentGates(guarded + " export async function GET(request) { return work(); }", file)).toBe(1);
+    expect(countEnrichmentGates(guarded, path.join(APP_DIR, "api", "leads", "route.ts"))).toBe(0);
+  });
+});
 
 // ── API routes ──────────────────────────────────────────────────────────────
 
@@ -134,8 +232,9 @@ describe("legacy surface auth: API routes", () => {
         src.includes("requireOperator") ||
           src.includes("isCronAuthorized") ||
           src.includes("getOperatorSession") ||
-          src.includes("x-admin-secret"),
-        `${rel(file as string)} must import requireOperator (from @/lib/admin-auth), isCronAuthorized (from @/lib/cron-auth), or getOperatorSession (from @/lib/portal-auth)`,
+          src.includes("x-admin-secret") ||
+          countEnrichmentGates(src, file as string) > 0,
+        `${rel(file as string)} must import an existing operator/cron gate or use the verified prospect enrichment helper`,
       ).toBe(true);
     },
   );
@@ -145,7 +244,7 @@ describe("legacy surface auth: API routes", () => {
     (_label, file) => {
       const src = read(file as string);
       const handlers = countHandlers(src);
-      const gates = countGates(src);
+      const gates = countGates(src, file as string);
       expect(handlers, `${rel(file as string)} exports no handlers?`).toBeGreaterThan(0);
       expect(
         gates,

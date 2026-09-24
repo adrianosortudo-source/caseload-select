@@ -8,8 +8,7 @@ const state = vi.hoisted(() => ({
   error: null as { message: string } | null,
   throwOnRead: false,
   tables: [] as string[],
-  filters: [] as Array<[string, unknown]>,
-  updates: [] as Array<Record<string, unknown>>,
+  rpcCalls: [] as Array<{ name: string; args: Record<string, unknown> }>,
 }));
 
 const navigation = vi.hoisted(() => ({
@@ -35,22 +34,12 @@ vi.mock("@/lib/supabase-admin", () => ({
   supabaseAdmin: {
     from: (table: string) => {
       state.tables.push(table);
-      const builder = {
-        select: () => builder,
-        update: (value: Record<string, unknown>) => {
-          state.updates.push(value);
-          return builder;
-        },
-        eq: (column: string, value: unknown) => {
-          state.filters.push([column, value]);
-          return builder;
-        },
-        maybeSingle: () => {
-          if (state.throwOnRead) throw new Error("query threw");
-          return Promise.resolve({ data: state.row, error: state.error });
-        },
-      };
-      return builder;
+      throw new Error("operator membership must use the protected RPC");
+    },
+    rpc: (name: string, args: Record<string, unknown>) => {
+      state.rpcCalls.push({ name, args });
+      if (state.throwOnRead) throw new Error("query threw");
+      return Promise.resolve({ data: state.row?.id ?? null, error: state.error });
     },
   },
 }));
@@ -97,8 +86,7 @@ beforeEach(() => {
   state.error = null;
   state.throwOnRead = false;
   state.tables = [];
-  state.filters = [];
-  state.updates = [];
+  state.rpcCalls = [];
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -114,14 +102,15 @@ describe("live operator session authorization", () => {
       role: "operator",
       lawyer_id: "operator-1",
     });
-    expect(state.tables).toEqual(["firm_lawyers"]);
-    expect(state.filters).toEqual([
-      ["id", "operator-1"],
-      ["firm_id", "firm-1"],
-      ["role", "operator"],
-      ["disabled", false],
-    ]);
-    expect(state.updates).toEqual([]);
+    expect(state.tables).toEqual([]);
+    expect(state.rpcCalls).toEqual([{
+      name: "revalidate_operator_membership_v1",
+      args: {
+        p_lawyer_id: "operator-1",
+        p_firm_id: "firm-1",
+        p_record_sign_in: false,
+      },
+    }]);
   });
 
   it.each([
@@ -190,14 +179,15 @@ describe("live operator session authorization", () => {
     const row = await revalidateOperatorMembership(session, { recordSignIn: true });
 
     expect(row).toEqual({ id: "operator-1" });
-    expect(state.filters).toEqual([
-      ["id", "operator-1"],
-      ["firm_id", "firm-1"],
-      ["role", "operator"],
-      ["disabled", false],
-    ]);
-    expect(state.updates).toHaveLength(1);
-    expect(state.updates[0]).toHaveProperty("last_signed_in_at");
+    expect(state.tables).toEqual([]);
+    expect(state.rpcCalls).toEqual([{
+      name: "revalidate_operator_membership_v1",
+      args: {
+        p_lawyer_id: "operator-1",
+        p_firm_id: "firm-1",
+        p_record_sign_in: true,
+      },
+    }]);
   });
 
   it.each(["lawyer", "client"] as const)(
@@ -248,7 +238,14 @@ describe("live operator session authorization", () => {
     await expect(requirePortalViewer("other-firm")).rejects.toThrow(
       "redirect:/portal/login",
     );
-    expect(state.filters).toContainEqual(["disabled", false]);
+    expect(state.rpcCalls).toContainEqual({
+      name: "revalidate_operator_membership_v1",
+      args: {
+        p_lawyer_id: "operator-1",
+        p_firm_id: "firm-1",
+        p_record_sign_in: false,
+      },
+    });
   });
 
   it("preserves active cross-firm operator viewing on the admin host", async () => {
