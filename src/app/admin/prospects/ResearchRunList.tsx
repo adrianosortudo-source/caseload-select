@@ -85,7 +85,7 @@ export default function ResearchRunList({ runId, initialData }: { runId?: string
     } catch (cause) { if (cause instanceof DOMException && cause.name === "AbortError") return; setError(cause instanceof Error ? cause.message : "Research runs could not be loaded."); } finally { setLoading(false); }
   }, [runId]);
   useEffect(() => { if (initialData) return; const controller = new AbortController(); queueMicrotask(() => { if (!controller.signal.aborted) void load(undefined, controller.signal); }); return () => controller.abort(); }, [initialData, load]);
-  return <ResearchPanel title="Research runs" description="See staged findings, applied changes, and Admin read-backs." name="research-runs">
+  return <ResearchPanel title="Research runs" description="Track staged findings, applied changes, and Admin read-backs." name="research-runs">
     {runId && <Link href="/admin/prospects" className="text-sm underline">Back to prospect list</Link>}
     {error && <ResearchError message={error} retry={() => void load()} />}{loading && <p role="status" className="text-sm text-black/60">Loading research runs…</p>}
     {!loading && !error && !runs.length && <p className="text-sm text-black/60">No research runs have been recorded.</p>}

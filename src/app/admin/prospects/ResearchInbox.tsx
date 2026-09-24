@@ -17,7 +17,7 @@ export default function ResearchInbox({ initialData }: { initialData?: readonly 
     catch (cause) { if (cause instanceof DOMException && cause.name === "AbortError") return; setError(cause instanceof Error ? cause.message : "Research updates could not be loaded."); } finally { setLoading(false); }
   }, [state]);
   useEffect(() => { if (initialData && state === "all") return; const controller = new AbortController(); queueMicrotask(() => { if (!controller.signal.aborted) void load(undefined, controller.signal); }); return () => controller.abort(); }, [initialData, load, state]);
-  return <ResearchPanel title="Research updates" description="Review new findings, unresolved identities, and changes proposed by research runs." name="research-updates">
+  return <ResearchPanel title="Research updates" description="Review new findings, identity issues, and run changes." name="research-updates">
     <div className="flex flex-wrap gap-2" role="group" aria-label="Filter research updates">{tabs.map((tab) => <button type="button" key={tab.value} className={`${researchButton} ${state === tab.value ? "border-navy bg-parchment" : ""}`} aria-pressed={state === tab.value} onClick={() => setState(tab.value)}>{tab.label}</button>)}</div>
     {error && <ResearchError message={error} retry={() => void load()} />}
     {loading && <p role="status" className="text-sm text-black/60">Loading research updates…</p>}
