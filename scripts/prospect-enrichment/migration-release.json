@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "prospect-enrichment-migration-release/v1",
+  "projectRef": "ssxryjxifwiivghglqer",
+  "cliVersion": "2.117.0",
+  "migrations": [
+    {
+      "path": "supabase/migrations/20260923161812_prospect_enrichment_v1.sql",
+      "filename": "20260923161812_prospect_enrichment_v1.sql",
+      "version": "20260923161812",
+      "name": "prospect_enrichment_v1",
+      "bytes": 203766,
+      "sha256": "f716b93a3e7dcbb7bdd32741d6f55c0e96eefcc64fc52d5b6a5ca127f9b212e2"
+    }
+  ]
+}

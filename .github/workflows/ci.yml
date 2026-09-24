@@ -227,6 +227,7 @@ jobs:
         run: |
           npm run test:prospect-enrichment
           npm run test:prospect-enrichment-cli
+          node --test scripts/prospect-enrichment/__tests__/migration-gate.node-test.mjs
       - name: Run vitest
         run: npx vitest run
 
