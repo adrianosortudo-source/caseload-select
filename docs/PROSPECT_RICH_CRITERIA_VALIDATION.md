@@ -15,3 +15,11 @@ Run `npx playwright test --config playwright.prospect-qualified.config.ts --grep
 The broader pre-existing default-preview suite currently fails before its copy audit because `getByLabel("Owner identified")` matches both an owner-contact select option and the Owner identified select. That selector and both selects existed at starting SHA `e14782329f8de6968a8233c0838dbee54db27df0`. The unrelated contact-status badge/action also fails the broad full-width audit in the synthetic preview. The focused GBP check does not claim those pre-existing full-page gates passed; their existing assertions are retained unchanged.
 
 Run `npx tsc --noEmit`, scoped ESLint, and all required CI checks on the pushed PR head. No migration, database write, production verification, or merge is part of these tests. Any prior approval referring to the earlier PR head must be held until the corrected head and checks are reviewable; merging still requires explicit approval for PR #312.
+
+## Reconciled GET regression
+
+`src/app/admin/prospects/reconciled/__tests__/supplemental-read-path.test.ts` invokes the actual GET route and all its actual readers. Only the Supabase transport, authentication session, and unrelated static cohorts are replaced with synthetic inputs. Network fetch is prohibited; no credentials, database or Admin system are used.
+
+The five cases verify a 200 response with `private, no-store`, lossless rich/legacy criteria attached by source key, preservation of true/false/null through JSON serialization and actual component rendering, no attachment for unmatched supplemental source keys, an authorization gate before any RPC, and route-level 500 responses for non-JSON, depth and byte-limit violations. No route or application implementation is changed by this follow-up.
+
+Run `npx vitest run src/app/admin/prospects/reconciled/__tests__/supplemental-read-path.test.ts src/app/admin/prospects/reconciled/__tests__/route.test.ts src/lib/__tests__/gta-prospect-supplemental-evidence-reader.test.ts src/app/admin/prospects/__tests__/supplemental-gbp-labels.test.ts`: 43 focused tests. The stacked PR #313 must integrate the corrected #312 semantics separately after an approved merge and rerun its own complete CI; this test does not establish that integration.
