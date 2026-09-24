@@ -12,6 +12,8 @@ Status: partial preparation. The current slice restores structured intake eviden
 
 The profile currently contains only the latest supplemental summary and other existing read-model fields. It is not the complete immutable historical research revision corpus. Manifest-only candidates are not included. Do not describe this slice as complete all-candidate enrichment or synchronized production data.
 
+The current synthetic GET, profile-search/facet and six-width browser coverage explicitly includes not_selected as retained original status while qualification remains needs_evidence. No selection status is promoted into a qualification state. The expanded profile renders only the existing operator-authorized ReconciledGtaProspect read DTO; it does not serialize sessions, credentials or arbitrary database rows. Public/owner contact summaries already returned by the protected route remain operator-only.
+
 ## Required next implementation, in order
 
 Use a separate reviewed follow-on change after this slice. Do not extend the six-migration release allowlist silently. Add a new immutable migration with a newly allocated filename and update the protected release manifest only in that separately reviewed release.

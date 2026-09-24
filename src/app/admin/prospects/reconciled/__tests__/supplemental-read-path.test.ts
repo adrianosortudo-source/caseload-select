@@ -174,8 +174,8 @@ describe("reconciled GET with actual rich supplemental reader", () => {
 });
 
 describe("all returned research states and structured intake through actual GET", () => {
-  it.each(["selected", "held", "rejected", "incomplete"] as const)("retains source evidence, dates and original %s status in the route and profile view", async originalStatus => {
-    const id = "synthetic-status-" + originalStatus;
+  it.each(["selected", "held", "rejected", "incomplete", "not_selected"] as const)("retains source evidence, dates and original %s status in the route and profile view", async originalStatus => {
+    const id = "synthetic-status-" + originalStatus.replaceAll("_", "-");
     const channels = ["phone", { kind: "web-form", sourceUrl: "https://example.test/" + originalStatus, visibleFields: ["Name", "Email", "Phone", "Service", "Message", "Consent"] }, { kind: "program-specific-free-assessment", sourceUrl: "https://example.test/assessment" }];
     const criteria = { gbpEvidence: null, originalStatus, missingGates: originalStatus === "selected" ? [] : ["roster"], office: { sourceUrl: "https://example.test/office", observedOn: "2026-09-23" } };
     h.state.research = [research(id)];
@@ -188,6 +188,7 @@ describe("all returned research states and structured intake through actual GET"
     expect(record.firmId).toBeNull();
     expect(record.supplementalEvidence?.websiteIntake).toEqual({ channels, opportunityState: "not_established", observedOn: "2026-09-24" });
     expect(record.supplementalEvidence?.qualification?.criteria).toEqual(criteria);
+    if (originalStatus === "not_selected") expect(record.supplementalEvidence?.qualification?.state).toBe("needs_evidence");
     const html = renderToStaticMarkup(createElement<{ initialData?: RecordsResponse }>(ReconciledProspects, { initialData: { records: [record], source: "ledger" } }));
     expect(html).toContain("Research profile");
     expect(html).toContain("Observed 2026-09-24");
