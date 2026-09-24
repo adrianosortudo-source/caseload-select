@@ -4,7 +4,7 @@ import { prospectEnrichmentJson, requireProspectEnrichmentOperator, unexpectedEn
 import { ProspectEnrichmentReadError } from "@/lib/prospect-enrichment-reader";
 
 export const READ_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-export type ReadDiagnostic = Readonly<{ databaseErrorCode: string | null; callSite: string[] }>;
+export type ReadDiagnostic = Readonly<{ databaseErrorCode: string | null; dataShape: string; callSite: string[] }>;
 export class ReadApiError extends Error {
   constructor(message: string, readonly status: 404 | 422 | 503 = 503, readonly diagnostic?: ReadDiagnostic) { super(message); this.name = "ReadApiError"; }
 }
@@ -14,13 +14,13 @@ export function requiredText(value: unknown, name: string): string { if (typeof 
 export function nullableText(value: unknown, name: string): string | null { return value === null ? null : requiredText(value, name); }
 export function databaseRows(result: { data: unknown; error: unknown }): Record<string, unknown>[] {
   if (result.error || !Array.isArray(result.data) || result.data.some((item) => !isRecord(item))) {
+    const errorCode = isRecord(result.error) && typeof result.error.code === "string" ? result.error.code : null;
+    const callSite = new Error().stack?.split("\n").slice(2, 6).map((line) => line.trim()) ?? [];
+    const dataShape = Array.isArray(result.data) ? `array:${result.data.length}` : result.data === null ? "null" : typeof result.data;
     if (result.error) {
-      const errorCode = isRecord(result.error) && typeof result.error.code === "string" ? result.error.code : null;
-      const callSite = new Error().stack?.split("\n").slice(2, 6).map((line) => line.trim());
       console.error("[prospect-enrichment] database read unavailable", { errorCode, callSite });
-      throw new ReadApiError("Research records could not be loaded.", 503, { databaseErrorCode: errorCode, callSite: callSite ?? [] });
     }
-    throw new ReadApiError("Research records could not be loaded.");
+    throw new ReadApiError("Research records could not be loaded.", 503, { databaseErrorCode: errorCode, dataShape, callSite });
   }
   return result.data as Record<string, unknown>[];
 }
