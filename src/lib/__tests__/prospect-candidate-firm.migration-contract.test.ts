@@ -71,6 +71,8 @@ describe("proven-firm candidate coverage migration", () => {
     expect(sql).toContain("draft_review_without_source_record");
     expect(sql).not.toMatch(/uuid_generate_v5|md5\([^)]*\)::uuid/i);
     expect(sql).toContain("sourceRowSha256");
+    expect(sql).toContain("captured.source_key=licensee_value->>'id'");
+    expect(sql).not.toContain("AND source_key=licensee_value");
     expect(sql).toContain("c.revision<=p_cutoff");
     expect(sql).toContain("legacy_identity_assessment");
     expect(sql).toContain("dependency->>'rowSha256' IS DISTINCT FROM");

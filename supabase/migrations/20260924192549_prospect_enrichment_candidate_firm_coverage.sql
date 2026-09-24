@@ -188,7 +188,7 @@ BEGIN
        FROM public.prospect_lso_licensees l WHERE l.id=(row_value->>'licensee_id')::uuid;
      IF licensee_value IS NOT NULL THEN
        PERFORM prospect_candidate_private.project_legacy('prospect_lso_licensees',licensee_value);
-       SELECT revision INTO c FROM public.prospect_research_candidate_coverage WHERE source_table='prospect_lso_licensees' AND source_key=licensee_value->>'id' ORDER BY revision DESC LIMIT 1;
+       SELECT captured.revision INTO c FROM public.prospect_research_candidate_coverage captured WHERE captured.source_table='prospect_lso_licensees' AND captured.source_key=licensee_value->>'id' ORDER BY captured.revision DESC LIMIT 1;
        PERFORM prospect_candidate_private.record_history(candidate,c,'provenance_revision','prospect_lso_licensees',
          (licensee_value->>'id')||'/affiliation/'||source_key||'/snapshot/'||c::text,NULL,NULL,NULL,licensee_value,prospect_candidate_private.hash_json(licensee_value),
          jsonb_build_object('sourceRoot','governed_database','relativePath','prospect_lso_licensees','sourcePointer','',
