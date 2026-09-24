@@ -68,7 +68,7 @@ function isTorontoBoundaryLayerUrl(value: unknown): value is string {
     const expected = new URL(DOWNTOWN_TORONTO_BOUNDARY_SOURCE_URL);
     return actual.protocol === "https:"
       && actual.origin === expected.origin
-      && actual.pathname === expected.pathname
+      && (actual.pathname === expected.pathname || actual.pathname === `${expected.pathname}/query`)
       && !actual.username
       && !actual.password
       && !actual.hash;
