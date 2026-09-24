@@ -8,6 +8,13 @@ const inventory = [...sql.matchAll(/^ \('([a-z_]+)','([a-z_]+)','([^']*)','([^']
   .map(([, table, kind, columns, excluded]) => ({ table, kind, columns: columns.split(","), excluded: excluded.split(",") }));
 
 describe("proven-firm candidate coverage migration", () => {
+  it("indexes every core audit status for firm refresh and ordered receipt lookups", () => {
+    const indexes = [...sql.matchAll(/CREATE INDEX\s+\w+\s+ON public\.gta_prospect_import_audit\s*\([^;]+;/gi)];
+    expect(indexes).toHaveLength(1);
+    expect(indexes[0][0]).toMatch(/\(firm_id,\s*id\)\s*;$/);
+    expect(indexes[0][0]).not.toMatch(/\bWHERE\b/i);
+  });
+
   it("has closed, unique SQL bodies and modifies no governed source rows", () => {
     expect(sql.match(/^BEGIN;$/gm)).toHaveLength(1);
     expect(sql.match(/^COMMIT;$/gm)).toHaveLength(1);

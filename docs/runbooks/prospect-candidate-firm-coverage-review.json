@@ -8,8 +8,8 @@
     "path": "supabase/migrations/20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
     "version": "20260924192549",
     "name": "prospect_enrichment_candidate_firm_coverage",
-    "bytes": 54715,
-    "sha256": "fae385c1958b1ba99bac164ad7958b7acedf2c92c83ca1f9b65eded6e6cf5558"
+    "bytes": 54815,
+    "sha256": "9b0d077f8f76afcf9727cf5d6e1d5b395bb38389bf70ea92da86ce90546b4a6b"
   },
   "prerequisiteCandidateReceipt": "docs/runbooks/prospect-candidate-migration-review.json",
   "prerequisiteCandidateReceiptSha256": "14e989af41a50ceda91aeccf72cb289893f084121fdbf97068e56d968fcca5bd",

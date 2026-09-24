@@ -4,6 +4,7 @@ BEGIN;
 
 CREATE INDEX prospect_candidate_identity_cutoff ON public.prospect_research_candidate_history(candidate_id,coverage_revision,verified_firm_id) WHERE item_kind='identity_link';
 CREATE INDEX prospect_candidate_source_latest ON public.prospect_research_candidate_coverage(source_table,source_key,revision DESC);
+CREATE INDEX gta_prospect_import_audit_firm_id_idx ON public.gta_prospect_import_audit(firm_id,id);
 
 CREATE FUNCTION prospect_candidate_private.legacy_inventory()
 RETURNS TABLE(table_name text,link_kind text,column_names text[],excluded_columns text[])

@@ -34,9 +34,21 @@ suite("candidate reads above the observed Admin inventory", () => {
       const batchId = (await db.query<{ id: string }>(
         "INSERT INTO public.gta_prospect_import_batches(source_name,source_sha256,source_record_count,state,applied_at) VALUES($1,$2,6000,'applied',now()) RETURNING id",
         [prefix, "b".repeat(64)])).rows[0].id;
-      await db.query(`INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record)
-        SELECT $1,f.source_record_key,$2,'accepted','created',f.id,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name)
-        FROM public.gta_prospect_firms f JOIN generate_series(1,6000) n ON f.source_record_key=$3||'-'||n`, [batchId, "a".repeat(64), prefix]);
+      // Bounded setup batches let PostgreSQL refresh statistics as the synthetic
+      // journal grows. The measured read allowance below stays exactly five seconds.
+      const auditSetupStart = performance.now();
+      await db.query("SET LOCAL statement_timeout = '60s'");
+      for (let first = 1; first <= 6000; first += 500) {
+        await db.query(`INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record)
+          SELECT $1,f.source_record_key,$2,'accepted','created',f.id,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name)
+          FROM public.gta_prospect_firms f JOIN generate_series($4::integer,$5::integer) n ON f.source_record_key=$3||'-'||n`, [batchId, "a".repeat(64), prefix, first, first + 499]);
+        for (const table of ["gta_prospect_import_audit", "prospect_research_candidate_coverage", "prospect_research_candidate_history"]) {
+          await db.query("ANALYZE public." + table);
+        }
+        const elapsed = performance.now() - auditSetupStart;
+        console.info("candidate-setup-progress", JSON.stringify({ appliedAuditRows: first + 499, milliseconds: elapsed }));
+        expect(elapsed).toBeLessThan(600_000);
+      }
       const targetFirm = (await db.query<{ id: string }>("SELECT id FROM public.gta_prospect_firms WHERE source_record_key=$1", [prefix + "-1"])).rows[0].id;
       const counts = (await db.query<{ candidates: number; histories: number; fields: number; sources: number; identityLinks: number }>(`SELECT
         (SELECT count(*)::integer FROM public.prospect_research_candidates) candidates,
@@ -54,6 +66,19 @@ suite("candidate reads above the observed Admin inventory", () => {
         await db.query("ANALYZE public." + table);
       }
       await db.query("SET LOCAL statement_timeout = '5s'");
+      const explanation = (await db.query<{ "QUERY PLAN": unknown }>(
+        "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT id FROM public.gta_prospect_import_audit WHERE firm_id=$1 ORDER BY id", [targetFirm])).rows[0]["QUERY PLAN"];
+      const indexes: string[] = [];
+      const inspectPlan = (value: unknown): void => {
+        if (!value || typeof value !== "object") return;
+        if (Array.isArray(value)) { value.forEach(inspectPlan); return; }
+        const item = value as Record<string, unknown>;
+        if (typeof item["Index Name"] === "string") indexes.push(item["Index Name"]);
+        Object.values(item).forEach(inspectPlan);
+      };
+      inspectPlan(explanation);
+      expect(indexes).toContain("gta_prospect_import_audit_firm_id_idx");
+      console.info("candidate-firm-index-plan", JSON.stringify({ indexes }));
       const timings: { label: string; milliseconds: number }[] = [];
       const read = async (label: string, filters: Record<string, unknown>) => {
         console.info("candidate-read-start", label);
@@ -82,5 +107,5 @@ suite("candidate reads above the observed Admin inventory", () => {
       console.info("candidate-read-performance", JSON.stringify({ counts, timings, p95Milliseconds: p95, statementTimeoutMilliseconds: 5000 }));
       expect(p95).toBeLessThan(5000);
     } finally { await db.query("ROLLBACK"); db.release(); }
-  }, 480_000);
+  }, 900_000);
 });
