@@ -67,3 +67,10 @@ test("authenticated candidate UI reads the transactional disposable database pro
   const history = await page.request.get(`/api/admin/prospect-enrichment/candidates/${candidate.id}/history?coverageRevision=${list.coverageRevision}`);
   expect(history.status()).toBe(200); const body = await history.json(); expect(body.items.length).toBeGreaterThan(0); expect(body.items.every((item: { candidateId: string }) => item.candidateId === candidate.id)).toBe(true);
 });
+
+test("reviewed firm identity links to the existing firm profile route", async ({ page }) => {
+  const fixture = candidateDetail(candidateSummaries[0].id), firmId = "84000000-0000-4000-8000-000000000001";
+  await page.route("**/api/admin/prospect-enrichment/candidates/**", route => route.fulfill({ json: route.request().url().includes("/history") ? candidateHistory(fixture.candidate.id) : { ...fixture, candidate: { ...fixture.candidate, identityState: "resolved", verifiedFirmId: firmId } } }));
+  await page.goto("/dev/prospect-candidate-preview?candidateId=" + fixture.candidate.id);
+  await expect(page.getByRole("link", { name: firmId, exact: true })).toHaveAttribute("href", "/admin/prospects/firms/" + firmId);
+});
