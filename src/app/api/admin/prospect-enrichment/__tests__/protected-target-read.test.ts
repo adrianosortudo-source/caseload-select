@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+vi.mock("@/lib/client-import-server", () => ({ validateSameOrigin: vi.fn(() => true) }));
 import { prospectEnrichmentProtocolHash } from "@/lib/prospect-enrichment-hash";
 import { readProtectedGtaTargetRows } from "../_protected-target-read";
 
