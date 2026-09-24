@@ -33,7 +33,7 @@ export type GtaProspectDowntownGeographySummary = {
   longitude: number | null;
   coordinateSourceType: DowntownCoordinateSourceType | null;
   coordinateSourceUrl: string | null;
-  boundarySourceUrl: typeof DOWNTOWN_TORONTO_BOUNDARY_SOURCE_URL;
+  boundarySourceUrl: string;
   boundaryGeometrySha256: string;
   observedOn: string;
   confidence: DowntownGeographyConfidence;
@@ -56,6 +56,22 @@ function isHttpUrl(value: unknown): value is string {
   try {
     const url = new URL(value);
     return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function isTorontoBoundaryLayerUrl(value: unknown): value is string {
+  if (!isHttpUrl(value)) return false;
+  try {
+    const actual = new URL(value);
+    const expected = new URL(DOWNTOWN_TORONTO_BOUNDARY_SOURCE_URL);
+    return actual.protocol === "https:"
+      && actual.origin === expected.origin
+      && actual.pathname === expected.pathname
+      && !actual.username
+      && !actual.password
+      && !actual.hash;
   } catch {
     return false;
   }
@@ -90,7 +106,7 @@ function parseRecord(value: unknown): GtaProspectDowntownGeographySummary {
   if (value.boundary_id !== DOWNTOWN_TORONTO_BOUNDARY_ID) throw projectionError("boundary_id is invalid");
   if (typeof value.geography_status !== "string" || !statuses.has(value.geography_status as DowntownGeographyStatus)) throw projectionError("geography_status is invalid");
   if (typeof value.normalized_address !== "string" || value.normalized_address.trim() === "" || value.normalized_address.length > 500) throw projectionError("normalized_address is invalid");
-  if (value.boundary_source_url !== DOWNTOWN_TORONTO_BOUNDARY_SOURCE_URL || !isHttpUrl(value.boundary_source_url)) throw projectionError("boundary_source_url is invalid");
+  if (!isTorontoBoundaryLayerUrl(value.boundary_source_url)) throw projectionError("boundary_source_url is invalid");
   if (typeof value.boundary_geometry_sha256 !== "string" || !sha256.test(value.boundary_geometry_sha256)) throw projectionError("boundary_geometry_sha256 is invalid");
   if (!isIsoDate(value.observed_on)) throw projectionError("observed_on is invalid");
   if (typeof value.confidence !== "string" || !confidences.has(value.confidence as DowntownGeographyConfidence)) throw projectionError("confidence is invalid");
@@ -116,7 +132,7 @@ function parseRecord(value: unknown): GtaProspectDowntownGeographySummary {
     longitude: value.longitude as number | null,
     coordinateSourceType: value.coordinate_source_type as DowntownCoordinateSourceType | null,
     coordinateSourceUrl: value.coordinate_source_url as string | null,
-    boundarySourceUrl: DOWNTOWN_TORONTO_BOUNDARY_SOURCE_URL,
+    boundarySourceUrl: value.boundary_source_url,
     boundaryGeometrySha256: value.boundary_geometry_sha256,
     observedOn: value.observed_on,
     confidence: value.confidence as DowntownGeographyConfidence,

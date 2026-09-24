@@ -36,9 +36,20 @@ describe("GTA prospect Downtown geography operator reader", () => {
   it("maps only the typed current summary", async () => {
     const db = client([row()]);
     await expect(listGtaProspectDowntownGeographyForOperator(db)).resolves.toEqual([
-      expect.objectContaining({ sourceRecordKey: "example-family-law", status: "inside", latitude: 43.6512 }),
+      expect.objectContaining({ sourceRecordKey: "example-family-law", status: "inside", latitude: 43.6512, boundarySourceUrl: DOWNTOWN_TORONTO_BOUNDARY_SOURCE_URL }),
     ]);
     expect(db.rpc).toHaveBeenCalledWith("list_gta_prospect_downtown_geography_for_operator");
+  });
+
+  it("preserves the complete official Toronto boundary query URL", async () => {
+    const boundarySourceUrl = "https://gis.toronto.ca/arcgis/rest/services/cot_geospatial11/MapServer/44/query?where=SECONDARY_PLAN_NUMBER%3D%2741%27&outFields=OBJECTID%2CSECONDARY_PLAN_NUMBER%2CSECONDARY_PLAN_NAME%2CSTATUS&returnGeometry=true&f=geojson&outSR=4326";
+    await expect(listGtaProspectDowntownGeographyForOperator(client([row({ boundary_source_url: boundarySourceUrl })]))).resolves.toEqual([
+      expect.objectContaining({ boundarySourceUrl }),
+    ]);
+  });
+
+  it("rejects a boundary source URL outside the official Toronto layer", async () => {
+    await expect(listGtaProspectDowntownGeographyForOperator(client([row({ boundary_source_url: "https://example.com/MapServer/44/query" })]))).rejects.toThrow("boundary_source_url is invalid");
   });
 
   it("uses fallback only when the new read projection does not exist", async () => {
