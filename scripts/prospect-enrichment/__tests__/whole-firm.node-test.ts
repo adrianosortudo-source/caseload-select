@@ -128,6 +128,7 @@ test("all-raw-hold whole-firm manifests dry-run without a package and cannot ski
   const result = await main(args) as {dryRun:boolean; networkRequests:number};
   assert.equal(result.dryRun, true); assert.equal(result.networkRequests, 0);
   await fs.writeFile(chunksFile, base.chunks.map(c => JSON.stringify(c)).join("\n"));
+  await fs.writeFile(heldEvidenceFile, buildHeldCandidateEvidence(base.compiled.expected, base.compiled.candidates).map(c => JSON.stringify(c)).join("\n"));
   await assert.rejects(main(args), /manifest_only_requires_zero_packages/);
 });
 
