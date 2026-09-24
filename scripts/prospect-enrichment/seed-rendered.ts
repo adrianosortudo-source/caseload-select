@@ -67,7 +67,7 @@ function makeEnvelope(input: {
   const { kind, suffix, runId, sourceSystem, sourceName, sourceRecordKey, firmId, generatedAt } = input;
   const researchKey = `enrichment-fixture-${kind}-${suffix}`;
   const packageId = `enrichment-fixture-${kind}-${suffix.slice(0, 12)}`;
-  const displayName = "Synthetic Enrichment Fixture";
+  const displayName = "Synthetic Firm";
   const fixtureContent = { synthetic: true, fixture: "prospect-enrichment-rendered/v1", kind, suffix };
   const resolved = kind === "review" || kind === "applied" || kind === "intake";
   const identityState = resolved ? "resolved" : kind === "conflict" ? "conflict" : "unresolved";
@@ -270,7 +270,7 @@ async function seed() {
     const prospectFirm = await client.query<{ id: string }>(
       `INSERT INTO public.gta_prospect_firms(source_record_key,display_name,normalized_display_name,reconciliation_status)
        VALUES ($1,$2,$3,'update_existing') RETURNING id`,
-      [sourceRecordKey, "Synthetic Enrichment Fixture", "synthetic enrichment fixture"],
+      [sourceRecordKey, "Synthetic Firm", "synthetic firm"],
     );
     const firmId = prospectFirm.rows[0].id;
     const runEnvelopes = new Map<FixtureKind, ProspectEnrichmentEnvelope>();
