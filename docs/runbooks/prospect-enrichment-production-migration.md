@@ -56,9 +56,12 @@ checksum, deployment evidence, exact target and rollback/read-back steps.
    The protected environment approval is required again. A moved main requires
    fresh source review and configuration, not an arbitrary SHA substitution.
 4. The apply step rechecks source/configuration/checksums and a fresh exact plan
-   immediately before the single db push. It verifies the apply result, reads
-   exactly the expected migration ledger row with a fixed SELECT, and verifies
-   a final empty pending plan.
+   immediately before the single db push. It records that the guarded apply
+   attempt started, verifies the apply result, reads exactly the expected migration
+   ledger row with a fixed SELECT, and verifies a final empty pending plan. Once
+   apply starts, this read-only verification also runs after an uncertain apply
+   error; it never retries apply or converts a failed apply step into success.
+   A failure before the guarded apply attempt does not start this read-back.
 5. Retain source-check, plan-check, apply-check, ledger-check and post-apply-check
    from the artifact. Ledger verification checks version/name and complete stored
    SQL text in order against reviewed source bytes. The pinned CLI removes only

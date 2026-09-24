@@ -95,6 +95,7 @@ jobs:
           echo "The reviewed prospect enrichment plan matches. No migration was applied."
 
       - name: Recheck and apply the separately approved migration
+        id: apply_migration
         if: inputs.operation == 'apply'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
@@ -109,12 +110,13 @@ jobs:
           supabase db push --linked --dry-run --include-all --skip-vault \
             --project-ref "$PROJECT_REF" --output-format json > "$RUNNER_TEMP/immediate-plan.json"
           node scripts/prospect-enrichment/migration-gate.mjs plan pre "$RUNNER_TEMP/immediate-plan.json" > "$RUNNER_TEMP/immediate-plan-check.json"
+          echo "apply_started=true" >> "$GITHUB_OUTPUT"
           supabase db push --linked --yes --include-all --skip-vault \
             --project-ref "$PROJECT_REF" --output-format json > "$RUNNER_TEMP/apply.json"
           node scripts/prospect-enrichment/migration-gate.mjs plan apply "$RUNNER_TEMP/apply.json" > "$RUNNER_TEMP/apply-check.json"
 
       - name: Verify applied version, complete SQL content and empty pending plan
-        if: inputs.operation == 'apply'
+        if: always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
         shell: bash

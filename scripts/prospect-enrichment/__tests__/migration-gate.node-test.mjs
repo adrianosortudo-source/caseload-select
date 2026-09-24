@@ -97,10 +97,13 @@ test("workflow is manual, main-only, protected and all external actions are pinn
   assert.ok(sourceGate >= 0 && sourceGate < firstRemote);
   const apply = job.steps.find((s) => /supabase db push --linked --yes/.test(s.run ?? ""));
   assert.equal(apply.if, "inputs.operation == 'apply'");
+  assert.equal(apply.id, "apply_migration");
+  assert.ok(apply.run.indexOf("plan pre") < apply.run.indexOf("apply_started=true"));
+  assert.ok(apply.run.indexOf("apply_started=true") < apply.run.indexOf("--yes"));
   assert.match(apply.run, /migration-gate\.mjs source/);
   assert.ok(apply.run.indexOf("plan pre") < apply.run.indexOf("--yes"));
   const readback = job.steps.find((s) => /migration-gate\.mjs ledger/.test(s.run ?? ""));
-  assert.equal(readback.if, "inputs.operation == 'apply'");
+  assert.equal(readback.if, "always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'");
   assert.match(readback.run, /--linked --project-ref "\$PROJECT_REF"/);
   assert.match(readback.run, /--output json --agent no/);
   assert.match(readback.run, /plan post/);
