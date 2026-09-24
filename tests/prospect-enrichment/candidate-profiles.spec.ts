@@ -138,8 +138,9 @@ test("canonical firm profile searches linked producers and retains retracted cho
       await expect(summary.getByRole("link", { name: "https://synthetic.example.test/research", exact: true })).toBeVisible();
     }
     await page.evaluate(async () => { await document.fonts.ready; await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); });
-    expect(await renderedCopyFailures(page), width + "px linked firm profile").toEqual([]);
+    const copyFailures = await renderedCopyFailures(page);
     await page.screenshot({ path: testInfo.outputPath(width + "-firm-candidate-profile.png"), fullPage: true });
+    expect(copyFailures, width + "px linked firm profile").toEqual([]);
   }
   expect(requests.some(url => url.searchParams.get("text") === "source evidence")).toBe(true);
 });
