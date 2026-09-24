@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 import { parseProspectEnrichmentEnvelope } from "../../src/lib/prospect-enrichment-contract";
 import { prospectEnrichmentIdempotencyKey } from "../../src/lib/prospect-enrichment-hash";
 import { compileCandidate, type CompiledPackage } from "./compiler";
+import { assertNoExclusionTokens, compileExclusionScoped, loadPrivateExclusions } from "./private-exclusions";
 import { assertEnvelopeProfile, parseProfile, profileConfig, type EnrichmentProfile } from "./profiles";
 import { assertWholeFirmManifestCoverage, compileWholeFirmSnapshot, freezeWholeFirmExport, type WholeFirmSourceManifest } from "./whole-firm";
 import { snapshotCoordinatorState } from "./whole-firm-coordinator-export";
@@ -20,7 +21,7 @@ const HELP = `Prospect enrichment local tools (dry-run by default)
   inventory [--profile legacy-backfill]
   inventory --profile whole-firm --file IMMUTABLE_COORDINATOR_EXPORT
   inventory --profile whole-firm --coordinator-state PATH
-  compile --manifest FILE --run-dir DIR [--actions FILE]
+  compile --manifest FILE --run-dir DIR [--actions FILE] [--exclusions PRIVATE_FILE]
   comparison-request --manifest FILE --packages FILE --output FILE
   validate --file FILE
   reconcile --packages FILE --snapshot FILE --output FILE
@@ -37,7 +38,7 @@ Whole-firm submit additionally requires --manifest SOURCE_MANIFEST.
 Use --manifest-only instead of --key only for whole-firm snapshots with zero packages. Default profile remains legacy-backfill.
 submit registers the expected inventory and stages a package. It never reviews/applies canonical evidence.
 Approval documents must record a real exact user authorization; a file alone does not grant it.`;
-const valueFlags = new Set(["manifest", "run-dir", "file", "packages", "snapshot", "output", "key", "outbox", "approval", "approval-sha256", "token-file", "confirm", "actions", "manifest-chunks", "held-evidence", "profile", "coordinator-state"]);
+const valueFlags = new Set(["manifest", "run-dir", "file", "packages", "snapshot", "output", "key", "outbox", "approval", "approval-sha256", "token-file", "confirm", "actions", "manifest-chunks", "held-evidence", "profile", "coordinator-state", "exclusions"]);
 function args(argv: string[]) {
   const [command = "help", ...rest] = argv, options: Record<string, string | boolean> = {};
   for (let i = 0; i < rest.length; i++) {
@@ -67,6 +68,7 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
   const profile = parseProfile(options.profile), config = profileConfig(profile);
   const privateOutput = (file: string) => profileOutput(file, profile);
   if (command === "help" || command === "--help") return HELP;
+  if (options.exclusions !== undefined && (command !== "compile" || profile !== "legacy-backfill")) throw Error("exclusions_cli_scope_invalid");
   if (options["coordinator-state"] !== undefined && (command !== "inventory" || profile !== "whole-firm")) throw Error("coordinator_state_input_scope_invalid");
   if (command === "inventory" && profile === "whole-firm") {
     if (options.file !== undefined && options["coordinator-state"] !== undefined) throw Error("whole_firm_inventory_inputs_mutually_exclusive");
@@ -107,9 +109,14 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     return coverage;
   }
   if (command === "compile") {
-    const manifest = await json<SourceManifest>(required(options, "manifest")), runDir = privateOutput(required(options, "run-dir"));
-    const archived = await archivedDocuments(manifest), candidates = [], packages: CompiledPackage[] = [], issues = [...manifest.issues, ...archived.issues];
-    for (const document of archived.documents) {
+    const originalManifest = await json<SourceManifest>(required(options, "manifest")), runDir = privateOutput(required(options, "run-dir"));
+    // Validate independent closed membership before any candidate archive is opened.
+    const exclusions = typeof options.exclusions === "string" ? await loadPrivateExclusions(originalManifest, options.exclusions) : null;
+    const manifest = exclusions?.source ?? originalManifest;
+    const archived = await archivedDocuments(manifest);
+    const scoped = exclusions ? compileExclusionScoped(exclusions, archived.documents, [...manifest.issues, ...archived.issues]) : null;
+    const candidates = scoped?.candidates ?? [], packages: CompiledPackage[] = scoped?.packages ?? [], issues = scoped?.issues ?? [...manifest.issues, ...archived.issues];
+    for (const document of scoped ? [] : archived.documents) {
       const extraction = extractCandidates(document); issues.push(...extraction.issues);
       for (const candidate of extraction.candidates) {
         const result = compileCandidate(candidate, manifest); packages.push(...result.packages); issues.push(...result.issues);
@@ -122,6 +129,13 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     }
     const expected = buildExpectedRunManifest(manifest, packages, candidates, issues);
     const heldEvidence = buildHeldCandidateEvidence(expected, candidates);
+    if (exclusions && scoped) {
+      assertNoExclusionTokens({ packages, candidates, issues, expected, heldEvidence }, exclusions);
+      // These are local provenance artifacts, never package/held-evidence transport.
+      await writeNew(path.join(runDir, "original-source-manifest.json"), JSON.stringify(originalManifest, null, 2) + "\n");
+      await writeNew(path.join(runDir, "compile-source-manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+      await writeNew(path.join(runDir, "exclusion-audit.json"), JSON.stringify(scoped.audit, null, 2) + "\n");
+    }
     await writeNew(path.join(runDir, "expected-run-manifest.json"), JSON.stringify(expected, null, 2) + "\n");
     await writeJsonl(path.join(runDir, "expected-run-manifest-chunks.jsonl"), chunkExpectedRunManifest(expected));
     await writeJsonl(path.join(runDir, "candidate-index.jsonl"), candidates);
@@ -131,7 +145,7 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     await writeJsonl(path.join(runDir, "validation-errors.jsonl"), issues);
     await writeJsonl(path.join(runDir, "identity-reconciliation.jsonl"), packages.map(p => ({ packageId: p.envelope.packageId, ...p.envelope.subject })));
     // Later phase outputs are created only when their actual evidence exists; do not pre-create empty immutable files.
-    const coverage = { manifestSha256: manifest.manifestSha256, sourceFiles: manifest.artifacts.length, candidates: candidates.length, distinctResearchKeys: new Set(candidates.map(c => c.researchKey)).size, packages: packages.length, observations: packages.reduce((n, p) => n + p.envelope.observations.length, 0), assessments: packages.filter(p => p.envelope.assessment).length, validationIssues: issues.length, submitted: 0, applied: 0, visibleVerified: 0 };
+    const coverage = { manifestSha256: manifest.manifestSha256, ...(scoped ? { exclusionAudit: scoped.audit } : {}), sourceFiles: manifest.artifacts.length, candidates: candidates.length, distinctResearchKeys: new Set(candidates.map(c => c.researchKey)).size, packages: packages.length, observations: packages.reduce((n, p) => n + p.envelope.observations.length, 0), assessments: packages.filter(p => p.envelope.assessment).length, validationIssues: issues.length, submitted: 0, applied: 0, visibleVerified: 0 };
     await writeNew(path.join(runDir, "coverage-report.json"), `${JSON.stringify(coverage, null, 2)}\n`);
     await writeNew(path.join(runDir, "RUN_REPORT.md"), `# Offline backfill compilation\n\nManifest: ${manifest.manifestSha256}\n\n${candidates.length} candidate source events retained; ${packages.length} envelopes compiled; ${issues.length} issues/provenance notices.\n\nNo research submitted, imported or marked visible. Fresh operator reconciliation and exact approval remain required.\n`);
     return coverage;

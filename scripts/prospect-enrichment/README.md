@@ -140,3 +140,8 @@ Signed bytes are UTF-8 canonical protocol JSON of `{domain:"caseload-prospect-en
 The local `reconcile --export-comparison` command only verifies and reserializes an already signed server artifact using `verifyAndSerializeComparisonExport`. It has no signing flag or private-key path and cannot turn a local reader claim into trusted provenance. Key rotation requires an explicitly configured replacement trusted key; unknown keys stop the run.
 
 Package reconciliation is exhaustive: `received`, `identity_hold`, `evidence_hold` and `ready_for_review` are resumable and may return `reuse_existing_draft`; `applied` requires explicit visibility (`true` -> `verify_existing`, `false` -> `presentation_gap`, `null` -> `receipt_unverified`); `rejected` and `superseded` return `hold_terminal`; unrecognized persisted states return `hold_schema`. Duplicate current package records return `receipt_unverified`. Terminal/unknown holds clear stale linkage and never authorize a new import.
+
+
+## Private exclusions for a bounded backfill
+
+The legacy compile command accepts `--exclusions PRIVATE_FILE` only with an independently closed frozen cohort inventory. See [PRIVATE_EXCLUSIONS.md](PRIVATE_EXCLUSIONS.md) for the exact schemas, source-claim screening, count-only holds, derived immutable run scope, no-token transport assertion and later command sequence. An open Q50 manifest or self-declared completeness fails with `exclusion_coverage_unproven` before candidate compilation. Actual private rules and identities stay outside Git.
