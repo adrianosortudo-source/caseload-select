@@ -28,6 +28,6 @@ test("comparison export binds the upload to the logical run key, not the Admin d
     name: "different-run.json", mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({ schemaVersion: "prospect-enrichment-comparison-request/v1", manifest: { runId: "run-" + "f".repeat(32) } })),
   });
-  await expect(page.getByRole("alert")).toContainText("Choose the complete comparison request for this exact run.");
+  await expect(page.locator('[aria-label="Export authenticated comparison"]').getByRole("alert")).toContainText("Choose the complete comparison request for this exact run.");
   expect(postedAfterMismatch).toBe(false);
 });

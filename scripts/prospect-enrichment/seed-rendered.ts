@@ -67,7 +67,7 @@ function makeEnvelope(input: {
   const { kind, suffix, runId, sourceSystem, sourceName, sourceRecordKey, firmId, generatedAt } = input;
   const researchKey = `enrichment-fixture-${kind}-${suffix}`;
   const packageId = `enrichment-fixture-${kind}-${suffix.slice(0, 12)}`;
-  const displayName = `Synthetic Enrichment Fixture ${suffix.slice(0, 8)}`;
+  const displayName = "Synthetic Enrichment Fixture";
   const fixtureContent = { synthetic: true, fixture: "prospect-enrichment-rendered/v1", kind, suffix };
   const resolved = kind === "review" || kind === "applied" || kind === "intake";
   const identityState = resolved ? "resolved" : kind === "conflict" ? "conflict" : "unresolved";
