@@ -99,3 +99,32 @@ for (const width of WIDTHS) {
     expect(browserErrors).toEqual([]);
   });
 }
+
+test("supplemental GBP keeps true, false and null distinct at all supported widths", async ({ page }) => {
+  const failures: string[] = [];
+  // This synthetic display check never reaches protected API handlers or a database.
+  await page.route("**/api/**", route => route.fulfill({ json: { states: [] } }));
+  await page.goto("/dev/prospect-qualified-preview?supplementalGbp=1");
+  await settle(page);
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    await settle(page);
+    const unassessed = page.getByRole("row").filter({ hasText: "Synthetic GBP unassessed" });
+    // Bring the changed column into the existing horizontal table viewport on mobile.
+    await unassessed.getByText("GBP: Not assessed", { exact: true }).scrollIntoViewIfNeeded();
+    const corrected = await unassessed.getByText("GBP: Not assessed", { exact: true }).count() === 1;
+    await page.screenshot({ path: path.join(EVIDENCE, width + "-supplemental-gbp-" + (corrected ? "after" : "before") + ".png"), fullPage: true });
+    for (const [firmName, label] of [
+      ["Synthetic GBP supported", "Supported evidence"],
+      ["Synthetic GBP needs evidence", "Needs evidence"],
+      ["Synthetic GBP unassessed", "Not assessed"],
+    ]) {
+      const row = page.getByRole("row").filter({ hasText: firmName });
+      if (await row.getByText("GBP: " + label, { exact: true }).count() !== 1) failures.push(width + ":" + firmName + ":" + label);
+    }
+    // Scope this regression to the changed evidence cells; the existing list/audit
+    // tests above retain the full-page copy audit, including contact-status UI.
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth + 1)).toBe(true);
+  }
+  expect(failures).toEqual([]);
+});

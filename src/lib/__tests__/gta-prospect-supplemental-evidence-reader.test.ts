@@ -80,4 +80,45 @@ describe("GTA prospect supplemental evidence reader", () => {
     await expect(listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [invalid], error: null }) }))
       .rejects.toThrow("confirmed identity has no stable firm_id");
   });
+
+  it.each([12, 13])("enforces the exact criteria depth boundary for objects: %i", async (depth) => {
+    let nested: unknown = "retained";
+    for (let index = 1; index < depth; index++) nested = { next: nested };
+    const qualification_criteria = { nested };
+    const reading = listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, qualification_criteria }], error: null }) });
+    if (depth === 12) expect((await reading)[0].qualification?.criteria).toEqual(qualification_criteria);
+    else await expect(reading).rejects.toThrow("qualification_criteria exceeds maximum depth 12");
+  });
+
+  it.each([12, 13])("counts array elements toward the same depth boundary: %i", async (depth) => {
+    let nested: unknown = "retained";
+    for (let index = 1; index < depth; index++) nested = [nested];
+    const qualification_criteria = { nested };
+    const reading = listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, qualification_criteria }], error: null }) });
+    if (depth === 12) expect((await reading)[0].qualification?.criteria).toEqual(qualification_criteria);
+    else await expect(reading).rejects.toThrow("qualification_criteria exceeds maximum depth 12");
+  });
+
+  it.each([262143, 262144, 262145])("enforces the exact serialized UTF-8 byte boundary: %i", async (bytes) => {
+    const available = bytes - Buffer.byteLength(JSON.stringify({ note: "" }), "utf8");
+    const qualification_criteria = { note: "é".repeat(Math.floor(available / 2)) + "x".repeat(available % 2) };
+    expect(Buffer.byteLength(JSON.stringify(qualification_criteria), "utf8")).toBe(bytes);
+    const reading = listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, qualification_criteria }], error: null }) });
+    if (bytes <= 262144) expect((await reading)[0].qualification?.criteria).toEqual(qualification_criteria);
+    else await expect(reading).rejects.toThrow("qualification_criteria exceeds 256 KiB");
+  });
+
+  it("counts JSON escaping rather than the unescaped text bytes", async () => {
+    const qualification_criteria = { note: "\n".repeat(131067) };
+    expect(Buffer.byteLength(qualification_criteria.note, "utf8")).toBeLessThan(262144);
+    expect(Buffer.byteLength(JSON.stringify(qualification_criteria), "utf8")).toBeGreaterThan(262144);
+    await expect(listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, qualification_criteria }], error: null }) }))
+      .rejects.toThrow("qualification_criteria exceeds 256 KiB");
+  });
+
+  it.each([new Date("2026-09-24"), new Map(), Object.create({ inherited: true })])("still rejects non-plain criteria roots", async (qualification_criteria) => {
+    await expect(listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, qualification_criteria }], error: null }) }))
+      .rejects.toThrow("qualification_criteria is invalid");
+  });
+
 });
