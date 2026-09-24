@@ -78,7 +78,7 @@ export function compileWholeFirmSnapshot(source: WholeFirmSourceManifest, action
   }
   if (actions) packages.splice(0, packages.length, ...bindReconciledPackages(packages, actions));
   const shim = { schemaVersion: "prospect-backfill-manifest/v1" as const, snapshotAt: source.snapshotAt, manifestSha256: source.manifestSha256, roots: [], artifacts: [], issues: [] };
-  const provisional = buildExpectedRunManifest(shim, packages, candidates, []);
+  const provisional = buildExpectedRunManifest(shim, packages, candidates, [], runId);
   const content: Omit<ExpectedRunManifest, "manifestSha256"> = { schemaVersion: provisional.schemaVersion, runId, sourceSystem: WHOLE_FIRM_PROFILE.sourceSystem, sourceName: WHOLE_FIRM_PROFILE.sourceName, sourceManifestSha256: source.manifestSha256, generatedAt: source.snapshotAt, expectedPackageCount: provisional.expectedPackageCount, entries: [...provisional.entries].sort((a, b) => ordinal(a.entryId, b.entryId)) };
   const expected = { ...content, manifestSha256: protocolHash(content) };
   if (expected.entries.length !== source.expectedRevisionCount) throw Error("whole_firm_compiled_coverage_mismatch");
@@ -91,6 +91,6 @@ export function wholeFirmRevision(revisionId: string, originalRevision: JsonValu
 export function assertWholeFirmManifestCoverage(source: WholeFirmSourceManifest, chunks: ManifestChunk[]): void {
   const prepared = compileWholeFirmSnapshot(source), expected = prepared.expected;
   if (!chunks.length || chunks[0].sourceManifestSha256 !== source.manifestSha256 || chunks[0].runId !== expected.runId || chunks[0].expectedEntryCount !== source.expectedRevisionCount) throw Error("whole_firm_manifest_source_mismatch");
-  const fields = (entries: ExpectedRunManifest["entries"]) => entries.map(e => ({ entryId: e.entryId, researchKey: e.researchKey, clientPackageId: e.clientPackageId, itemCount: e.itemCount, clientItems: e.clientItems, source: e.source })).sort((a, b) => ordinal(a.entryId, b.entryId));
+  const fields = (entries: ExpectedRunManifest["entries"]) => entries.map(e => ({ entryId: e.entryId, researchKey: e.researchKey, clientPackageId: e.clientPackageId, itemCount: e.itemCount, clientItems: e.clientItems, source: e.source, errorCodes: e.errorCodes })).sort((a, b) => ordinal(a.entryId, b.entryId));
   if (canonicalJson(fields(chunks.flatMap(c => c.entries))) !== canonicalJson(fields(expected.entries))) throw Error("whole_firm_manifest_revision_coverage_mismatch");
 }

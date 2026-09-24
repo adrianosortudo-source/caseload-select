@@ -8,6 +8,7 @@ import {
   prospectEnrichmentPayloadSha256,
   prospectEnrichmentProtocolHash,
   prospectEnrichmentSha256,
+  stableProspectEnrichmentJson,
 } from "@/lib/prospect-enrichment-hash";
 
 const databaseUrlRaw = process.env.DIRECT_DATABASE_URL ?? process.env.PROSPECT_ENRICHMENT_TEST_DATABASE_URL;
@@ -157,7 +158,24 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
         source: { sourceRoot: null, relativePath: `missing/${suffix}.json`, sourcePointer: "", fileSha256: null },
         errorCodes: ["source_read_failed"],
       };
-      const entries = [packageEntry, heldEntry].sort((a, b) => a.entryId.localeCompare(b.entryId));
+      const heldResearchKey = `integration-held-${suffix}`;
+      const heldCandidateCore = {
+        schemaVersion: "prospect-enrichment-held-candidate-evidence/v1",
+        entryId: `entry-${prospectEnrichmentProtocolHash(["held-candidate", suffix])}`,
+        researchKey: heldResearchKey,
+        source: { sourceRoot: "integration-root", relativePath: `held/${suffix}.json`, sourcePointer: "/firms/held", fileSha256: sourceDigest },
+        originalJson: stableProspectEnrichmentJson({ firm: `Held candidate ${suffix}`, status: "held", originalFinding: "Preserve the source finding.", numericExponent: 1e-7, numericPrecision: 1.2345678901234567 }),
+        issues: [{ code: "missing_identity", path: "/firmId", reason: "The candidate has no safe database identity." }],
+      };
+      const heldCandidateEvidenceSha256 = prospectEnrichmentProtocolHash(heldCandidateCore);
+      const heldCandidateEntry = {
+        entryId: heldCandidateCore.entryId, researchKey: heldResearchKey, clientPackageId: null,
+        expectedPayloadSha256: null, itemCount: 0, clientItems: [], initialDisposition: "hold_schema",
+        source: heldCandidateCore.source,
+        errorCodes: ["hold_schema", "__held_evidence_sha256:" + heldCandidateEvidenceSha256],
+      };
+      const heldCandidateEvidence = { ...heldCandidateCore, runId: runKey, evidenceSha256: heldCandidateEvidenceSha256 };
+      const entries = [packageEntry, heldEntry, heldCandidateEntry].sort((a, b) => a.entryId.localeCompare(b.entryId));
       const sourceManifestSha256 = "a".repeat(64);
       const generatedAt = "2026-09-23T16:00:00.000Z";
       const manifestBase = {
@@ -197,10 +215,20 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
       expect(await registerManifest(false)).toMatchObject({
         outcome: "chunk_registered", runId: runKey, runKey, sourceManifestSha256,
         manifestSha256, registeredChunkCount: 1, expectedChunkCount: 1,
-        receivedEntryCount: 2, expectedEntryCount: 2, receivedPackageCount: 1,
+        receivedEntryCount: 3, expectedEntryCount: 3, receivedPackageCount: 1,
         expectedPackageCount: 1, manifestState: "open",
       });
       expect(await registerManifest(false)).toMatchObject({ outcome: "chunk_replayed", manifestState: "open" });
+      await expect(registerManifest(true)).rejects.toThrow(/durable held evidence/i);
+      const heldEvidenceReceipt = async () => {
+        const result = await writerA.query<{ receipt: Record<string, unknown> }>(
+          `SELECT public.record_prospect_enrichment_manifest_hold_evidence_v1($1,$2,$3,$4::jsonb) AS receipt`,
+          [`integration-${suffix}`, runKey, heldCandidateEntry.entryId, JSON.stringify(heldCandidateEvidence)],
+        );
+        return result.rows[0].receipt;
+      };
+      expect(await heldEvidenceReceipt()).toMatchObject({ outcome: "held_evidence_recorded", runId: runKey, entryId: heldCandidateEntry.entryId, evidenceSha256: heldCandidateEvidenceSha256 });
+      expect(await heldEvidenceReceipt()).toMatchObject({ outcome: "held_evidence_replayed", runId: runKey, entryId: heldCandidateEntry.entryId, evidenceSha256: heldCandidateEvidenceSha256 });
       expect(await registerManifest(true)).toMatchObject({ outcome: "finalized", manifestState: "finalized" });
       expect(await registerManifest(true)).toMatchObject({ outcome: "already_finalized", manifestState: "finalized" });
 
@@ -289,8 +317,22 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
             JSON.stringify(lateObservations), JSON.stringify(lateSources), null,
           ],
         );
-        expect(result.rows[0].receipt).toMatchObject({ outcome: "created", clientPackageId: latePackageId, runId: lateRunKey });
-        return { envelope: lateEnvelope, items: lateItems, payloadSha256: latePayloadSha256 };
+        expect(result.rows[0].receipt).toMatchObject({ outcome: "manifest_required" });
+        return { envelope: lateEnvelope, items: lateItems, payloadSha256: latePayloadSha256, stage: async () => {
+          const retry = await writerA.query<{ receipt: Record<string, unknown> }>(
+            `SELECT public.stage_prospect_enrichment_package_v1(
+               $1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11,$12,$13::jsonb,$14::jsonb,$15
+             ) AS receipt`,
+            [
+              `integration-${suffix}`, lateRunKey, lateEnvelope.sourceSystem, lateEnvelope.sourceName, latePackageId,
+              prospectEnrichmentIdempotencyKey(lateEnvelope.sourceSystem, lateRunKey, latePackageId), raw,
+              prospectEnrichmentSha256(raw), JSON.stringify(lateEnvelope), latePayloadSha256,
+              lateEnvelope.subject.researchKey, lateEnvelope.subject.identityState,
+              JSON.stringify(lateObservations), JSON.stringify(lateSources), null,
+            ],
+          );
+          return retry.rows[0].receipt;
+        } };
       };
       const finalizeInventory = async (
         lateRunKey: string,
@@ -325,7 +367,7 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
 
       const orphanRunKey = `orphan-run-${suffix}`;
       const orphanPackageId = `orphan-package-${suffix}`;
-      const orphanStaged = await stageBeforeManifest(orphanRunKey, orphanPackageId);
+      const orphanPackage = await stageBeforeManifest(orphanRunKey, orphanPackageId);
       const orphanHeldEntry = {
         entryId: `entry-${prospectEnrichmentProtocolHash(["orphan-held", suffix])}`,
         researchKey: null, clientPackageId: null, expectedPayloadSha256: null, itemCount: 0,
@@ -333,8 +375,8 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
         source: { sourceRoot: null, relativePath: `orphan/${suffix}.json`, sourcePointer: "", fileSha256: null },
         errorCodes: ["source_read_failed"],
       };
-      await expect(finalizeInventory(orphanRunKey, orphanStaged.envelope, [orphanHeldEntry], 0, "c".repeat(64)))
-        .rejects.toThrow(/staged packages do not reconcile/i);
+      await expect(finalizeInventory(orphanRunKey, orphanPackage.envelope, [orphanHeldEntry], 0, "c".repeat(64))).resolves.toBeUndefined();
+      expect(await orphanPackage.stage()).toMatchObject({ outcome: "package_conflict" });
 
       for (const mismatchKind of ["payload", "research_key"] as const) {
         const mismatchRunKey = `${mismatchKind}-mismatch-run-${suffix}`;
@@ -356,8 +398,8 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
           errorCodes: [],
         };
         const sourceManifestHash = mismatchKind === "payload" ? "d".repeat(64) : "e".repeat(64);
-        await expect(finalizeInventory(mismatchRunKey, mismatchStaged.envelope, [mismatchEntry], 1, sourceManifestHash))
-          .rejects.toThrow(/staged packages do not reconcile/i);
+        await expect(finalizeInventory(mismatchRunKey, mismatchStaged.envelope, [mismatchEntry], 1, sourceManifestHash)).resolves.toBeUndefined();
+        expect(await mismatchStaged.stage()).toMatchObject({ outcome: "package_conflict" });
       }
 
       const stageReceipt = await stagePackage();
@@ -446,12 +488,12 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
         `SELECT * FROM public.get_prospect_enrichment_run_summary_v1($1)`, [run.rows[0].id],
       );
       expect(summary.rows[0]).toMatchObject({
-        run_id: run.rows[0].id, manifest_state: "finalized", manifest_expected_entry_count: 2,
-        manifest_received_entry_count: "2", manifest_expected_package_count: 1, manifest_received_package_count: "1",
-        candidate_count: "1", package_count: "1", missing_package_count: "0", payload_mismatch_count: "0",
+        run_id: run.rows[0].id, manifest_state: "finalized", manifest_expected_entry_count: 3,
+        manifest_received_entry_count: "3", manifest_expected_package_count: 1, manifest_received_package_count: "1",
+        candidate_count: "2", package_count: "1", missing_package_count: "0", payload_mismatch_count: "0",
         research_key_mismatch_count: "0", orphan_package_count: "0",
         visibility_counts: { packageVerified: 1, packageNotVerified: 0, canonicalVerified: 1, canonicalNotVerified: 0 },
-        needs_attention_count: "1",
+        needs_attention_count: "2",
       });
       const manifestPage = await observer.query<Record<string, unknown>>(
         `SELECT * FROM public.list_prospect_enrichment_run_manifest_items_v1($1,NULL,1)`, [run.rows[0].id],
@@ -460,7 +502,7 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
       const allManifestEntries = await observer.query<Record<string, unknown>>(
         `SELECT * FROM public.list_prospect_enrichment_run_manifest_items_v1($1,NULL,10)`, [run.rows[0].id],
       );
-      expect(allManifestEntries.rows).toHaveLength(2);
+      expect(allManifestEntries.rows).toHaveLength(3);
       const packageManifestRow = allManifestEntries.rows.find((row) => (row.manifest_entry as { clientPackageId?: string }).clientPackageId === clientPackageId);
       expect(packageManifestRow).toMatchObject({
         package_id: packageId, actual_payload_sha256: payloadSha256, package_state: "applied",
@@ -476,6 +518,14 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
       });
       const heldManifestRow = allManifestEntries.rows.find((row) => (row.manifest_entry as { clientPackageId?: string | null }).clientPackageId === null);
       expect(heldManifestRow).toMatchObject({ package_id: null, reconciliation_state: "source_hold", items: [] });
+      const heldReadback = await observer.query<Record<string, unknown>>(
+        `SELECT * FROM public.list_prospect_enrichment_manifest_hold_evidence_v1($1,$2::text[])`, [run.rows[0].id, [heldCandidateEntry.entryId]],
+      );
+      expect(heldReadback.rows).toEqual([{ entry_id: heldCandidateEntry.entryId, evidence_sha256: heldCandidateEvidenceSha256, evidence: heldCandidateEvidence }]);
+      await expect(writerA.query(
+        `UPDATE public.prospect_enrichment_manifest_hold_evidence SET evidence='{}'::jsonb WHERE run_id=$1 AND entry_id=$2`,
+        [run.rows[0].id, heldCandidateEntry.entryId],
+      )).rejects.toThrow(/append-only/i);
       await expect(writerA.query(
         `UPDATE public.prospect_enrichment_run_manifest_items SET initial_disposition='provenance_only' WHERE run_id=$1 AND entry_id=$2`,
         [run.rows[0].id, packageEntry.entryId],

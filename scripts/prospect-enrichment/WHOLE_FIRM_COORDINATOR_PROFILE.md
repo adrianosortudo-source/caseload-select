@@ -84,7 +84,7 @@ Run commands from the feature repository root. Use new immutable output filename
 
    Rebinding requires exactly one action per package and unchanged complete original research and item semantic content. Existing verified evidence is linked/retained through the supported protected review; it is not re-imported. Contradictions stay explicit. Do not run the legacy 10-case pilot selector in this profile; its approval remains a prerequisite in the release plan, not permission for a new whole-firm run.
 
-5. Use compiled-final/expected-run-manifest.json and expected-run-manifest-chunks.jsonl as the exact approval scope. delivery-index.jsonl lists each package's immutable key, SHA and packageFile. packages/PE_PACKAGE_ID.json contains the exact envelope to enqueue. No handwritten envelope extraction is needed.
+5. Use compiled-final/expected-run-manifest.json and expected-run-manifest-chunks.jsonl as the exact approval scope. Also retain compiled-final/held-candidate-evidence.jsonl; it contains every package-less revision's complete original content, structured gaps and manifest-bound digest. delivery-index.jsonl lists each package's immutable key, SHA and packageFile. packages/PE_PACKAGE_ID.json contains the exact envelope to enqueue. No handwritten envelope extraction is needed.
 
 6. Obtain the specific whole-firm run staging approval. Record it in a private approval file using:
    schemaVersion prospect-whole-firm-delivery-approval/v1;
@@ -107,7 +107,7 @@ Run commands from the feature repository root. Use new immutable output filename
    Enqueue is local and immutable. Compare the returned key/payload SHA with the delivery-index row. Any difference blocks that run. Do not substitute a package from another snapshot.
 
 8. Obtain and export a new authenticated comparison immediately before delivery. Give it a new filename. Run the dry-run first:
-   node --import tsx scripts/prospect-enrichment/cli.ts submit --profile whole-firm --manifest SOURCE_MANIFEST --manifest-chunks RUN_DIR/compiled-final/expected-run-manifest-chunks.jsonl --snapshot FRESH_COMPARISON --outbox RUN_DIR/outbox --key EXACT_KEY
+   node --import tsx scripts/prospect-enrichment/cli.ts submit --profile whole-firm --manifest SOURCE_MANIFEST --manifest-chunks RUN_DIR/compiled-final/expected-run-manifest-chunks.jsonl --held-evidence RUN_DIR/compiled-final/held-candidate-evidence.jsonl --snapshot FRESH_COMPARISON --outbox RUN_DIR/outbox --key EXACT_KEY
 
    For a manifest with zero packages, replace --key EXACT_KEY with --manifest-only. This option is rejected if any package exists. It still validates complete source coverage and still requires exact run approval for execute.
 
@@ -119,7 +119,7 @@ Only after the real scoped staging approval, append these flags to the exact suc
 
 The origin/project are fixed. The token is read only at execution and is never printed or saved. No generic URL, RPC or DML option exists. Comparison age must be <=15 minutes before any network request, including every manifest request and package POST; stale input fails closed before a request and does not consume an attempt.
 
-submit registers every manifest chunk sequentially with finalize:false, then replays the identical last chunk with finalize:true. It validates source/run hashes, runId/runKey and every expected chunk/entry/package count. Only a finalized/already_finalized receipt with state finalized permits package staging. The CLI also recompiles the frozen source manifest to verify exact full revision/item coverage; manually shortened chunks cannot pass.
+submit registers every manifest chunk sequentially with finalize:false, uploads each held-candidate evidence artifact with an exact idempotency key and verifies its receipt, then replays the identical last manifest chunk with finalize:true. The database refuses finalization unless each package-less candidate entry has its exact source-linked evidence digest stored. It validates source/run hashes, runId/runKey and every expected chunk/entry/package count. Only a finalized/already_finalized receipt with state finalized permits package staging. The CLI also recompiles the frozen source manifest to verify exact full revision/item coverage; manually shortened chunks cannot pass.
 
 For each package, inspect the returned delivery state. If received, continue to the next ordinal package. If retry_pending, retain its key/body, nextAttemptAt and snapshot/approval references; resume the same command after nextAttemptAt with a newly authenticated comparison. If manual_review, retry_exhausted, receipt mismatch, approval mismatch or coverage/hash conflict occurs, stop that run's delivery and retain the precise reason and files; continue independent authorized code/review work. Never skip a failed package and claim the whole run complete.
 

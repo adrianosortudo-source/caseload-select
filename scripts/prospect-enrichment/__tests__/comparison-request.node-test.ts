@@ -51,6 +51,16 @@ test("manifest hash, exact lineage, entry identity and profile mismatches fail c
   assert.throws(()=>serializeComparisonRequest(rehash(repeated),values),/manifest_entry_invalid/);
   assert.throws(()=>serializeComparisonRequest(manifest,values,"whole-firm"),/manifest_profile_mismatch/);
 });
+test("held candidate inventory requires one valid Admin evidence commitment",()=>{
+  const {manifest,values}=fixture(), held=manifest.entries.find(e=>e.clientPackageId===null)!;
+  assert.ok(held.errorCodes.some(code=>/^__held_evidence_sha256:[a-f0-9]{64}$/.test(code)));
+  const missing=structuredClone(manifest);missing.entries.find(e=>e.clientPackageId===null)!.errorCodes=[];
+  assert.throws(()=>serializeComparisonRequest(rehash(missing),values),/nonpackage_entry_invalid/);
+  const malformed=structuredClone(manifest);malformed.entries.find(e=>e.clientPackageId===null)!.errorCodes=["__held_evidence_sha256:not-a-hash"];
+  assert.throws(()=>serializeComparisonRequest(rehash(malformed),values),/nonpackage_entry_invalid/);
+  const duplicated=structuredClone(manifest);const entry=duplicated.entries.find(e=>e.clientPackageId===null)!;entry.errorCodes.push(entry.errorCodes.find(code=>code.startsWith("__held_evidence_sha256:"))!);
+  assert.throws(()=>serializeComparisonRequest(rehash(duplicated),values),/nonpackage_entry_invalid/);
+});
 test("projection claims must match original criteria and immutable observation/parent IDs",()=>{
   const {manifest,values}=fixture(),bad=structuredClone(values);
   bad[0].legacyAssessmentProjectionClaims[0].selectedValueSha256="0".repeat(64);

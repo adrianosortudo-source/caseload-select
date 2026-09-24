@@ -12,6 +12,7 @@ export type ResearchRunEntry = Readonly<{
   clientItems: readonly Readonly<{ clientItemId: string; itemKind: string; sourceEventKey: string; semanticSha256: string }>[];
   initialDisposition: "ready_for_review" | "identity_hold" | "evidence_hold" | "hold_schema" | "source_root_unavailable" | "source_read_failed" | "source_changed_during_snapshot" | "reference_out_of_scope" | "reference_provenance_only" | "provenance_only";
   source: Readonly<{ sourceRoot: string | null; relativePath: string; sourcePointer: string; fileSha256: string | null }>; errorCodes: readonly string[];
+  heldEvidenceSha256: string | null; heldEvidence: Readonly<{ evidenceSha256: string; original: unknown; issues: readonly Readonly<{ code: string; path: string; reason: string }>[] }> | null;
   packageId: string | null; actualPayloadSha256: string | null; packageState: string | null;
   reconciliationState: "missing_package" | "hash_mismatch" | "staged" | "rejected" | "applied" | "superseded" | "source_hold" | "retained_source_context";
   packageVisibilityVerified: boolean; canonicalVisibilityVerified: boolean; items: readonly ResearchRunItemDisposition[];
@@ -65,6 +66,8 @@ function RunInventory({ value, loading, more }: { value: ResearchRunReconciliati
       <p className="mt-1 text-sm">Research visibility: {entry.packageVisibilityVerified ? "Verified" : "Pending"}. Canonical visibility: {entry.canonicalVisibilityVerified ? "Verified" : "Pending"}.</p>
       {entry.packageId && <Link className="mt-2 inline-block text-sm text-navy underline" href={"/admin/prospects/research-packages/" + entry.packageId}>Open expected package</Link>}
       {entry.errorCodes.length > 0 && <ResearchJson value={entry.errorCodes} />}
+      {entry.heldEvidenceSha256 && !entry.heldEvidence && <ResearchError message="Held candidate source evidence is not available in Admin." />}
+      {entry.heldEvidence && <details className="mt-3"><summary className="cursor-pointer text-sm font-semibold">Original held candidate and gaps ({entry.heldEvidence.issues.length} issues)</summary><div className="mt-3 space-y-3"><p className="text-sm">Evidence hash verified: {entry.heldEvidence.evidenceSha256}</p><h5 className="text-sm font-semibold">Original source candidate</h5><ResearchJson value={entry.heldEvidence.original} /><h5 className="text-sm font-semibold">Issue codes, paths and reasons</h5><ResearchJson value={entry.heldEvidence.issues} /></div></details>}
       <details className="mt-3"><summary className="cursor-pointer text-sm font-semibold">Every item disposition ({entry.items.length} of {entry.itemCount})</summary>
         <div className="mt-3 space-y-3">{entry.items.map((item) => <div className="min-w-0 rounded-md bg-parchment p-3" key={item.clientItemId}><p className="break-all text-xs font-semibold">{item.clientItemId}</p><p className="mt-1 text-sm">{item.itemKind}: {item.disposition.replace(/_/g, " ")}{item.reason ? ". " + item.reason : ""}</p><ResearchJson value={item} /></div>)}</div>
       </details>

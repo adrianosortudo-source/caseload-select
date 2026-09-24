@@ -10,6 +10,10 @@ const identityReadMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260923174500_prospect_enrichment_identity_read_rpc.sql"),
   "utf8",
 );
+const holdEvidenceMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260924071322_prospect_enrichment_manifest_hold_evidence.sql"),
+  "utf8",
+);
 
 function functionDefinition(name: string): string {
   const start = migration.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
@@ -84,5 +88,22 @@ describe("prospect enrichment protected-table RPC boundary", () => {
     expect(identityReadMigration).toContain("GRANT EXECUTE ON FUNCTION public.lookup_prospect_enrichment_core_identity_conflicts_v1(text,text[],text[]) TO service_role");
     expect(identityReadMigration).toContain("NOTIFY pgrst, 'reload schema'");
     expect(identityReadMigration).not.toMatch(/GRANT\s+[^;]*ON\s+TABLE\s+[^;]*gta_prospect_(?:firms|stable_identity_registry|domains)[^;]*TO\s+service_role/i);
+  });
+
+  it("keeps held-candidate evidence append-only and requires it before finalization", () => {
+    expect(holdEvidenceMigration).toContain("ENABLE ROW LEVEL SECURITY");
+    expect(holdEvidenceMigration).toContain("FORCE ROW LEVEL SECURITY");
+    expect(holdEvidenceMigration).toContain("REVOKE ALL ON TABLE public.prospect_enrichment_manifest_hold_evidence FROM PUBLIC, anon, authenticated, service_role");
+    expect(holdEvidenceMigration).toContain("GRANT SELECT, INSERT ON TABLE public.prospect_enrichment_manifest_hold_evidence TO service_role");
+    expect(holdEvidenceMigration).toContain("BEFORE UPDATE OR DELETE ON public.prospect_enrichment_manifest_hold_evidence");
+    expect(holdEvidenceMigration).toContain("prospect_enrichment_manifest_hold_evidence_append_only");
+    expect(holdEvidenceMigration).toContain("manifest cannot finalize before every package-less candidate has durable held evidence");
+    expect(holdEvidenceMigration).toContain("REVOKE ALL ON FUNCTION public.record_prospect_enrichment_manifest_hold_evidence_v1(text,text,text,jsonb) FROM PUBLIC, anon, authenticated");
+    expect(holdEvidenceMigration).toContain("GRANT EXECUTE ON FUNCTION public.record_prospect_enrichment_manifest_hold_evidence_v1(text,text,text,jsonb) TO service_role");
+    expect(holdEvidenceMigration).toContain("REVOKE ALL ON FUNCTION public.summarize_prospect_enrichment_manifest_hold_evidence_v1(uuid) FROM PUBLIC, anon, authenticated");
+    expect(holdEvidenceMigration).toContain("GRANT EXECUTE ON FUNCTION public.summarize_prospect_enrichment_manifest_hold_evidence_v1(uuid) TO service_role");
+    const stage = holdEvidenceMigration.slice(holdEvidenceMigration.indexOf("CREATE OR REPLACE FUNCTION public.stage_prospect_enrichment_package_v1("));
+    expect(stage).toContain("manifest_row.client_items IS DISTINCT FROM actual_lineage");
+    expect(stage).toContain("RETURN jsonb_build_object('outcome','manifest_required')");
   });
 });

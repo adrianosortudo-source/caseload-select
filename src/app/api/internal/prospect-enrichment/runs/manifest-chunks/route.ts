@@ -35,9 +35,12 @@ function validManifestEntry(value: unknown): boolean {
     || !Array.isArray(value.errorCodes) || !value.errorCodes.every((code) => text(code, 300))) return false;
   if (!value.clientItems.every((item: unknown) => exact(item, clientItemKeys) && text(item.clientItemId, 200)
     && ["source", "observation", "assessment"].includes(String(item.itemKind)) && text(item.sourceEventKey, 160) && sha256(item.semanticSha256))) return false;
+  const evidenceMarkers = value.errorCodes.filter((code: unknown) => typeof code === "string" && code.startsWith("__held_evidence_sha256:"));
+  if (evidenceMarkers.some((code: string) => !/^__held_evidence_sha256:[a-f0-9]{64}$/.test(code)) || evidenceMarkers.length > 1) return false;
   return value.clientPackageId === null
     ? value.expectedPayloadSha256 === null && value.itemCount === 0 && value.clientItems.length === 0
-    : typeof value.researchKey === "string" && sha256(value.expectedPayloadSha256);
+      && (value.researchKey === null ? evidenceMarkers.length === 0 : evidenceMarkers.length === 1)
+    : typeof value.researchKey === "string" && sha256(value.expectedPayloadSha256) && evidenceMarkers.length === 0;
 }
 function validateChunk(value: unknown): value is Record<string, unknown> {
   if (!exact(value, chunkKeys) || value.schemaVersion !== "prospect-enrichment-run-manifest-chunk/v1"

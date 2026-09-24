@@ -15,7 +15,16 @@ export type ExpectedManifestEntry = {
   source: { sourceRoot: string | null; relativePath: string; sourcePointer: string; fileSha256: string | null };
   errorCodes: string[];
 };
-export type CandidateCoverage = { researchKey: string; sourceRoot: string; relativePath: string; sourcePointer: string; sourceSha256: string; packageIds: string[]; issues: Issue[] };
+export type CandidateCoverage = { researchKey: string; sourceRoot: string; relativePath: string; sourcePointer: string; sourceSha256: string; packageIds: string[]; issues: Issue[]; original?: unknown };
+export type HeldCandidateEvidence = { schemaVersion: "prospect-enrichment-held-candidate-evidence/v1"; runId: string; entryId: string; researchKey: string; source: ExpectedManifestEntry["source"]; originalJson: string; issues: Issue[]; evidenceSha256: string };
+export const HELD_EVIDENCE_DIGEST_PREFIX = "__held_evidence_sha256:";
+export function heldEvidenceDigest(entry: Pick<ExpectedManifestEntry, "errorCodes" | "clientPackageId" | "researchKey">): string | null {
+  const values = entry.errorCodes.filter(code => code.startsWith(HELD_EVIDENCE_DIGEST_PREFIX));
+  if (entry.clientPackageId !== null || entry.researchKey === null) return values.length ? "__invalid__" : null;
+  if (values.length !== 1) return "__invalid__";
+  const digest = values[0].slice(HELD_EVIDENCE_DIGEST_PREFIX.length);
+  return /^[a-f0-9]{64}$/.test(digest) ? digest : "__invalid__";
+}
 export type ExpectedRunManifest = {
   schemaVersion: "prospect-enrichment-run-manifest/v1";
   runId: string;
@@ -28,8 +37,9 @@ export type ExpectedRunManifest = {
   manifestSha256: string;
 };
 
-export function buildExpectedRunManifest(source: SourceManifest, packages: CompiledPackage[], candidates: CandidateCoverage[], issues: Issue[]): ExpectedRunManifest {
+export function buildExpectedRunManifest(source: SourceManifest, packages: CompiledPackage[], candidates: CandidateCoverage[], issues: Issue[], requestedRunId?: string): ExpectedRunManifest {
   const entries: ExpectedManifestEntry[] = [];
+  const runId = requestedRunId ?? "backfill-" + source.manifestSha256.slice(0, 48);
   for (const p of packages) {
     const origin = candidates.find(c => c.packageIds.includes(p.envelope.packageId));
     if (!origin) throw new Error("package_without_inventory_origin");
@@ -46,17 +56,14 @@ export function buildExpectedRunManifest(source: SourceManifest, packages: Compi
       errorCodes: [...new Set(p.issues.map(i => i.code))].sort(ordinal),
     });
   }
-  for (const c of candidates.filter(c => c.packageIds.length === 0)) entries.push({
-    entryId: "entry-" + protocolHash([source.manifestSha256, c.sourceRoot, c.relativePath, c.sourcePointer, "no-envelope"]),
-    researchKey: c.researchKey,
-    clientPackageId: null,
-    expectedPayloadSha256: null,
-    itemCount: 0,
-    clientItems: [],
-    initialDisposition: "hold_schema",
-    source: { sourceRoot: c.sourceRoot, relativePath: c.relativePath, sourcePointer: c.sourcePointer, fileSha256: c.sourceSha256 },
-    errorCodes: [...new Set(c.issues.map(i => i.code))].sort(ordinal),
-  });
+  for (const c of candidates.filter(c => c.packageIds.length === 0)) {
+    const entryId = "entry-" + protocolHash([source.manifestSha256, c.sourceRoot, c.relativePath, c.sourcePointer, "no-envelope"]);
+    const sourceRef = { sourceRoot: c.sourceRoot, relativePath: c.relativePath, sourcePointer: c.sourcePointer, fileSha256: c.sourceSha256 };
+    const issueCodes = [...new Set(c.issues.map(i => i.code))].sort(ordinal);
+    const evidenceSha256 = c.researchKey ? heldCandidateEvidenceHash({ entryId, researchKey: c.researchKey, source: sourceRef, originalJson: canonicalJson(c.original ?? null), issues: c.issues }) : null;
+    if (evidenceSha256) issueCodes.push(HELD_EVIDENCE_DIGEST_PREFIX + evidenceSha256);
+    entries.push({ entryId, researchKey: c.researchKey, clientPackageId: null, expectedPayloadSha256: null, itemCount: 0, clientItems: [], initialDisposition: "hold_schema", source: sourceRef, errorCodes: issueCodes });
+  }
   for (const issue of issues) {
     // File/line-level exceptions are expected inventory, not absent prospects.
     if (!["source_root_unavailable", "source_read_failed", "source_changed_during_snapshot", "reference_out_of_scope", "reference_provenance_only", "provenance_only", "hold_schema"].includes(issue.code)) continue;
@@ -75,8 +82,25 @@ export function buildExpectedRunManifest(source: SourceManifest, packages: Compi
     });
   }
   const unique = [...new Map(entries.map(e => [e.entryId, e])).values()].sort((a, b) => ordinal(a.entryId, b.entryId));
-  const manifest = { schemaVersion: "prospect-enrichment-run-manifest/v1" as const, runId: "backfill-" + source.manifestSha256.slice(0, 48), sourceSystem: SOURCE_SYSTEM, sourceName: SOURCE_NAME, sourceManifestSha256: source.manifestSha256, generatedAt: source.snapshotAt, expectedPackageCount: new Set(packages.map(p => p.envelope.packageId)).size, entries: unique };
+  const manifest = { schemaVersion: "prospect-enrichment-run-manifest/v1" as const, runId, sourceSystem: SOURCE_SYSTEM, sourceName: SOURCE_NAME, sourceManifestSha256: source.manifestSha256, generatedAt: source.snapshotAt, expectedPackageCount: new Set(packages.map(p => p.envelope.packageId)).size, entries: unique };
   return { ...manifest, manifestSha256: protocolHash(manifest) };
+}
+
+function heldCandidateEvidenceHash(value: { entryId: string; researchKey: string; source: ExpectedManifestEntry["source"]; originalJson: string; issues: Issue[] }): string {
+  return protocolHash({ schemaVersion: "prospect-enrichment-held-candidate-evidence/v1", entryId: value.entryId, researchKey: value.researchKey, source: value.source, originalJson: value.originalJson, issues: value.issues });
+}
+export function buildHeldCandidateEvidence(manifest: ExpectedRunManifest, candidates: CandidateCoverage[]): HeldCandidateEvidence[] {
+  const values: HeldCandidateEvidence[] = [];
+  for (const candidate of candidates.filter(item => item.packageIds.length === 0 && item.researchKey)) {
+    const entry = manifest.entries.find(item => item.clientPackageId === null && item.researchKey === candidate.researchKey && item.source.sourceRoot === candidate.sourceRoot && item.source.relativePath === candidate.relativePath && item.source.sourcePointer === candidate.sourcePointer);
+    const expectedHash = entry && heldEvidenceDigest(entry);
+    if (!entry || !expectedHash) throw new Error("held_candidate_manifest_entry_missing");
+    const value = { schemaVersion: "prospect-enrichment-held-candidate-evidence/v1" as const, runId: manifest.runId, entryId: entry.entryId, researchKey: candidate.researchKey, source: entry.source, originalJson: canonicalJson(candidate.original ?? null), issues: candidate.issues };
+    const evidenceSha256 = heldCandidateEvidenceHash(value);
+    if (evidenceSha256 !== expectedHash) throw new Error("held_candidate_evidence_hash_mismatch");
+    values.push({ ...value, evidenceSha256 });
+  }
+  return values.sort((a, b) => ordinal(a.entryId, b.entryId));
 }
 
 /** Offline chunk export only; registration remains root-owned and authorization-bound. */

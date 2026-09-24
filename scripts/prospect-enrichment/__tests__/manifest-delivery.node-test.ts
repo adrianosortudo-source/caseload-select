@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { compileCandidate } from "../compiler";
 import { candidate, snapshot } from "../fixtures/synthetic";
-import { buildExpectedRunManifest, chunkExpectedRunManifest } from "../run-manifest";
+import { buildExpectedRunManifest, buildHeldCandidateEvidence, chunkExpectedRunManifest } from "../run-manifest";
 import { assertManifestPackage, prepareManifestRequests, submitManifestChunks, validateManifestChunks, type ManifestChunk, type ManifestReceipt } from "../manifest-delivery";
 import { enqueue, type ApprovalManifest } from "../outbox";
 import { protocolHash, within } from "../model";
@@ -44,6 +44,31 @@ test("manifest registration prepares a stable run key and exact final replay wit
   assert.throws(() => prepareManifestRequests(mutated), /chunk_invalid/);
   mutated[0].chunkSha256 = protocolHash(mutated[0].entries);
   assert.throws(() => prepareManifestRequests(mutated), /full_hash_mismatch/);
+});
+test("candidate-specific source holds retain original evidence and are durably registered before finalization", () => {
+  const base = fixture();
+  const held = {
+    researchKey: "synthetic-held-candidate", sourceRoot: "root-a", relativePath: "held.json", sourcePointer: "/firms/2",
+    sourceSha256: "c".repeat(64), packageIds: [], original: { firmName: "Held Synthetic Firm", status: "held", evidence: ["source finding"] },
+    issues: [{ code: "identity_unresolved", path: "/firmId", reason: "No safe canonical firm identity was established." }],
+  };
+  const source = { schemaVersion: "prospect-backfill-manifest/v1" as const, ...snapshot, roots: [], artifacts: [], issues: [] };
+  const expected = buildExpectedRunManifest(source, base.packages, [
+    { researchKey: base.packages[0].envelope.subject.researchKey, sourceRoot: "root-a", relativePath: "synthetic.json", sourcePointer: "", sourceSha256: "b".repeat(64), packageIds: [base.packages[0].envelope.packageId], issues: [] },
+    { researchKey: base.packages[1].envelope.subject.researchKey, sourceRoot: "root-a", relativePath: "synthetic.json", sourcePointer: "", sourceSha256: "b".repeat(64), packageIds: [base.packages[1].envelope.packageId], issues: [] },
+    held,
+  ], []);
+  const evidence = buildHeldCandidateEvidence(expected, [held]);
+  assert.equal(evidence.length, 1);
+  assert.deepEqual(JSON.parse(evidence[0].originalJson), held.original);
+  assert.deepEqual(evidence[0].issues, held.issues);
+  const chunks = chunkExpectedRunManifest(expected, 1);
+  const prepared = prepareManifestRequests(chunks, "legacy-backfill", evidence);
+  assert.deepEqual(prepared.requests.map(request => request.endpoint), ["manifest-chunks", "manifest-chunks", "manifest-chunks", "held-evidence", "manifest-chunks"]);
+  assert.equal(JSON.parse(prepared.requests.at(-1)!.body).finalize, true);
+  assert.throws(() => prepareManifestRequests(chunks, "legacy-backfill", []), /held_evidence_coverage_mismatch/);
+  const changed = structuredClone(evidence); changed[0].issues[0].reason = "modified after approval";
+  assert.throws(() => prepareManifestRequests(chunks, "legacy-backfill", changed), /held_evidence_manifest_mismatch/);
 });
 test("manifest registration verifies all receipts then reuses saved finalized receipt without another request", async t => {
   const outbox = await workspace(t), { chunks, approval } = fixture(), sent: { chunk: ManifestChunk; finalize: boolean }[] = [];

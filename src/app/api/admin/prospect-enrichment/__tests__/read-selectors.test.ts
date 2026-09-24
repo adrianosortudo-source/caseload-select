@@ -4,7 +4,7 @@ import { buildProspectEnrichmentClientItems } from "@/lib/prospect-enrichment-co
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: {} }));
 import { readPackageDetail, readPackageList, type ReadDatabase } from "../_package-read";
 import { readRunDetail, readRunList } from "../_run-read";
-import { prospectEnrichmentProtocolHash, prospectEnrichmentSha256 } from "@/lib/prospect-enrichment-hash";
+import { prospectEnrichmentProtocolHash, prospectEnrichmentSha256, stableProspectEnrichmentJson } from "@/lib/prospect-enrichment-hash";
 import type { ProspectEnrichmentEnvelope } from "@/lib/prospect-enrichment-contract";
 const id = (n: number) => "00000000-0000-4000-8000-" + String(n).padStart(12, "0");
 type Row = Record<string, unknown>;
@@ -36,7 +36,7 @@ function fakeDatabase(tables: Record<string, Row[]> = {}, rpcs: Record<string, R
         .filter((row) => !Array.isArray(input.p_ids) || input.p_ids.includes(row.id))
         .filter((row) => typeof input.p_after_id !== "string" || String(row.id) > input.p_after_id)
         .slice(0, typeof input.p_limit === "number" ? input.p_limit : 100);
-      const data = rpcs[name] ?? (name === "read_prospect_enrichment_firm_identities_v1" ? identityRows : name === "read_prospect_enrichment_gta_evidence_v1" ? protectedRows : []);
+      const data = rpcs[name] ?? (name === "read_prospect_enrichment_firm_identities_v1" ? identityRows : name === "read_prospect_enrichment_gta_evidence_v1" ? protectedRows : name === "summarize_prospect_enrichment_manifest_hold_evidence_v1" ? [{ expected_evidence_count: 0, recorded_evidence_count: 0, mismatched_evidence_count: 0 }] : []);
       return Promise.resolve({ data: failed.includes(name) ? null : data, error: failed.includes(name) ? { message: "synthetic rpc failure" } : null });
     },
   } as unknown as ReadDatabase;
@@ -145,6 +145,33 @@ describe("manifest-backed run selectors", () => {
     const orphaned = runRow(); orphaned.orphan_package_count = 1;
     const orphanRead = await readRunDetail({ runId: id(2), limit: 25, client: fakeDatabase({}, { get_prospect_enrichment_run_summary_v1: [orphaned], list_prospect_enrichment_run_manifest_items_v1: [manifestRow()] }).client });
     expect(orphanRead.reconciliation.inventoryState).toBe("incomplete"); expect(orphanRead.reconciliation.orphanPackageCount).toBe(1);
+  });
+  it("reads back and verifies original candidate evidence and issue reasons for package-less holds", async () => {
+    const source = { sourceRoot: "synthetic", relativePath: "held.json", sourcePointer: "/firms/held", fileSha256: "a".repeat(64) };
+    const core = { schemaVersion: "prospect-enrichment-held-candidate-evidence/v1", runId: "synthetic-run", entryId: "entry-held", researchKey: "synthetic-held", source, originalJson: stableProspectEnrichmentJson({ firmName: "Held Synthetic Firm", finding: "Raw finding retained" }), issues: [{ code: "identity_unresolved", path: "/firmId", reason: "No safe firm identity was established." }] };
+    const evidenceSha256 = prospectEnrichmentProtocolHash({ schemaVersion: core.schemaVersion, entryId: core.entryId, researchKey: core.researchKey, source, originalJson: core.originalJson, issues: core.issues });
+    const evidence = { ...core, evidenceSha256 };
+    const entry = { entryId: core.entryId, researchKey: core.researchKey, clientPackageId: null, expectedPayloadSha256: null, itemCount: 0, clientItems: [], initialDisposition: "hold_schema", source, errorCodes: ["identity_unresolved", "__held_evidence_sha256:" + evidenceSha256] };
+    const manifestRow = { entry_id: core.entryId, manifest_entry: entry, package_id: null, actual_payload_sha256: null, package_state: null, reconciliation_state: "source_hold", package_visibility_verified: false, canonical_visibility_verified: false, items: [] };
+    const run = runRow(); Object.assign(run, { candidate_count: 1, package_count: 0, manifest_expected_entry_count: 1, manifest_received_entry_count: 1, manifest_expected_package_count: 0, manifest_received_package_count: 0, missing_package_count: 0 });
+    const withEvidence = fakeDatabase({}, { get_prospect_enrichment_run_summary_v1: [run], list_prospect_enrichment_run_manifest_items_v1: [manifestRow], list_prospect_enrichment_manifest_hold_evidence_v1: [{ entry_id: core.entryId, evidence_sha256: evidenceSha256, evidence }], summarize_prospect_enrichment_manifest_hold_evidence_v1: [{ expected_evidence_count: 1, recorded_evidence_count: 1, mismatched_evidence_count: 0 }] });
+    const result = await readRunDetail({ runId: id(2), limit: 25, client: withEvidence.client });
+    expect(result.reconciliation.inventoryState).toBe("complete");
+    expect(result.reconciliation.entries[0].heldEvidence).toMatchObject({ evidenceSha256, original: JSON.parse(core.originalJson), issues: core.issues });
+    const missing = fakeDatabase({}, { get_prospect_enrichment_run_summary_v1: [run], list_prospect_enrichment_run_manifest_items_v1: [manifestRow], summarize_prospect_enrichment_manifest_hold_evidence_v1: [{ expected_evidence_count: 1, recorded_evidence_count: 0, mismatched_evidence_count: 1 }] });
+    expect((await readRunDetail({ runId: id(2), limit: 25, client: missing.client })).reconciliation.inventoryState).toBe("incomplete");
+    const corrupt = fakeDatabase({}, { get_prospect_enrichment_run_summary_v1: [run], list_prospect_enrichment_run_manifest_items_v1: [manifestRow], list_prospect_enrichment_manifest_hold_evidence_v1: [{ entry_id: core.entryId, evidence_sha256: "f".repeat(64), evidence }] });
+    await expect(readRunDetail({ runId: id(2), limit: 25, client: corrupt.client })).rejects.toThrow("could not be verified");
+  });
+  it("does not mark an early run page complete when run-wide held evidence is missing", async () => {
+    const run = runRow(); Object.assign(run, { manifest_expected_entry_count: 2, manifest_received_entry_count: 2 });
+    const client = fakeDatabase({}, {
+      get_prospect_enrichment_run_summary_v1: [run],
+      list_prospect_enrichment_run_manifest_items_v1: [manifestRow()],
+      summarize_prospect_enrichment_manifest_hold_evidence_v1: [{ expected_evidence_count: 1, recorded_evidence_count: 0, mismatched_evidence_count: 1 }],
+    });
+    const result = await readRunDetail({ runId: id(2), limit: 1, client: client.client });
+    expect(result.reconciliation.inventoryState).toBe("incomplete");
   });
   it("treats an unregistered or incomplete inventory as incomplete despite visible packages", async () => {
     const row = runRow(); row.manifest_state = "open"; row.manifest_received_entry_count = 0;

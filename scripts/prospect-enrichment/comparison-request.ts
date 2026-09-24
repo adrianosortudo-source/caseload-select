@@ -5,6 +5,7 @@ import { validateLegacyAssessmentProjectionClaims, type LegacyAssessmentProjecti
 import { assertEnvelopeProfile, profileConfig, wholeFirmRunId, type EnrichmentProfile } from "./profiles";
 import { canonicalJson, object, protocolHash, sha256, within } from "./model";
 import type { ExpectedRunManifest } from "./run-manifest";
+import { heldEvidenceDigest } from "./run-manifest";
 
 export type ComparisonRequestPackage = {envelope:ProspectEnrichmentEnvelope;payloadSha256:string;legacyAssessmentProjectionClaims:LegacyAssessmentProjectionClaim[]};
 export type ComparisonRequest = {schemaVersion:"prospect-enrichment-comparison-request/v1";manifest:ExpectedRunManifest;packages:ComparisonRequestPackage[]};
@@ -26,8 +27,8 @@ function validManifest(value:unknown,profile:EnrichmentProfile): asserts value i
       if(!object(item)||!exact(item,["clientItemId","itemKind","sourceEventKey","semanticSha256"])||!nonempty(item.clientItemId)||ids.has(String(item.clientItemId))||!["source","observation","assessment"].includes(String(item.itemKind))||!nonempty(item.sourceEventKey)||!hash(item.semanticSha256))fail("comparison_request_manifest_item_invalid");
       ids.add(String(item.clientItemId));
     }
-    if(entry.clientPackageId===null){if(entry.expectedPayloadSha256!==null||entry.itemCount!==0)fail("comparison_request_nonpackage_entry_invalid");}
-    else {if(entry.researchKey===null||entry.expectedPayloadSha256===null||packages.has(String(entry.clientPackageId)))fail("comparison_request_package_coverage_mismatch");packages.add(String(entry.clientPackageId));}
+    if(entry.clientPackageId===null){if(entry.expectedPayloadSha256!==null||entry.itemCount!==0|| (entry.researchKey===null ? heldEvidenceDigest(entry)!==null : !hash(heldEvidenceDigest(entry))))fail("comparison_request_nonpackage_entry_invalid");}
+    else {if(entry.researchKey===null||entry.expectedPayloadSha256===null||packages.has(String(entry.clientPackageId))||heldEvidenceDigest(entry)!==null)fail("comparison_request_package_coverage_mismatch");packages.add(String(entry.clientPackageId));}
   }
   if(packages.size!==value.expectedPackageCount)fail("comparison_request_package_coverage_mismatch");
 }

@@ -25,7 +25,7 @@ for (const width of [1440, 1024, 768, 640, 375, 320]) {
     for (const [name, path] of surfaces) {
       await page.goto(localOrigin + path);
       await waitForResearch(page);
-      if (name === "conflict") await expect(researchAlerts).toContainText("More than one firm may use this website."); else await expect(researchAlerts).toHaveCount(0);
+      if (name === "conflict") await expect(researchAlerts).toContainText("Several firms may use this website."); else await expect(researchAlerts).toHaveCount(0);
       const failures = await renderedCopyFailures(page);
       await page.screenshot({ path: testInfo.outputPath(name + "-" + width + ".png"), fullPage: true });
       expect(failures, name + " at " + width).toEqual([]);

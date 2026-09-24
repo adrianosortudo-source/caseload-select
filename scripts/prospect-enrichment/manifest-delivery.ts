@@ -5,7 +5,7 @@ import { canonicalJson, object, ordinal, protocolHash, sha256 } from "./model";
 import { atomicJson, PRODUCTION_ORIGIN, retryTime, type DeliveryApproval, type OutboxEntry } from "./outbox";
 import { items } from "./reconciliation";
 import { profileConfig, wholeFirmRunId, type EnrichmentProfile } from "./profiles";
-import type { ExpectedManifestEntry, ExpectedRunManifest } from "./run-manifest";
+import { heldEvidenceDigest, type ExpectedManifestEntry, type ExpectedRunManifest, type HeldCandidateEvidence } from "./run-manifest";
 
 export type ManifestChunk = {
   schemaVersion: "prospect-enrichment-run-manifest-chunk/v1"; adapterVersion: string; runId: string;
@@ -14,13 +14,13 @@ export type ManifestChunk = {
   chunkIndex: number; chunkCount: number; chunkSha256: string; entries: ExpectedManifestEntry[];
 };
 export type ManifestReceipt = {
-  outcome: "chunk_registered" | "chunk_replayed" | "finalized" | "already_finalized";
-  runId: string; runKey: string; sourceManifestSha256: string; manifestSha256: string;
-  registeredChunkCount: number; expectedChunkCount: number; receivedEntryCount: number;
-  expectedEntryCount: number; receivedPackageCount: number; expectedPackageCount: number;
-  manifestState: string;
+  outcome: "chunk_registered" | "chunk_replayed" | "finalized" | "already_finalized" | "held_evidence_recorded" | "held_evidence_replayed";
+  runId: string; runKey?: string; sourceManifestSha256?: string; manifestSha256?: string;
+  registeredChunkCount?: number; expectedChunkCount?: number; receivedEntryCount?: number;
+  expectedEntryCount?: number; receivedPackageCount?: number; expectedPackageCount?: number;
+  manifestState?: string; entryId?: string; evidenceSha256?: string;
 };
-type ManifestRequest = { requestKey: string; body: string; bodySha256: string; chunkIndex: number; finalize: boolean };
+type ManifestRequest = { requestKey: string; body: string; bodySha256: string; chunkIndex: number; finalize: boolean; endpoint: "manifest-chunks" | "held-evidence"; heldEvidence?: HeldCandidateEvidence };
 type ManifestDeliveryState = {
   requestKey: string; attempts: number; state: "pending" | "retry_pending" | "received" | "manual_review" | "retry_exhausted";
   nextAttemptAt: string | null; lastStatus: number | null; lastError: string | null; updatedAt: string;
@@ -33,7 +33,7 @@ function validEntry(v: unknown): v is ExpectedManifestEntry {
   if (!object(v) || typeof v.entryId !== "string" || !v.entryId || !(v.researchKey === null || typeof v.researchKey === "string") || !(v.clientPackageId === null || typeof v.clientPackageId === "string") || !(v.expectedPayloadSha256 === null || hash(v.expectedPayloadSha256)) || !integer(v.itemCount) || !Array.isArray(v.clientItems) || v.itemCount !== v.clientItems.length || !dispositions.includes(String(v.initialDisposition))) return false;
   if (!object(v.source) || !(v.source.sourceRoot === null || typeof v.source.sourceRoot === "string") || typeof v.source.relativePath !== "string" || typeof v.source.sourcePointer !== "string" || !(v.source.fileSha256 === null || hash(v.source.fileSha256)) || !Array.isArray(v.errorCodes) || !v.errorCodes.every(c => typeof c === "string")) return false;
   if (!v.clientItems.every(i => object(i) && typeof i.clientItemId === "string" && ["source", "observation", "assessment"].includes(String(i.itemKind)) && typeof i.sourceEventKey === "string" && hash(i.semanticSha256))) return false;
-  return v.clientPackageId === null ? v.expectedPayloadSha256 === null && v.itemCount === 0 : typeof v.researchKey === "string" && hash(v.expectedPayloadSha256);
+  return v.clientPackageId === null ? v.expectedPayloadSha256 === null && v.itemCount === 0 && (v.researchKey === null ? heldEvidenceDigest(v) === null : hash(heldEvidenceDigest(v))) : typeof v.researchKey === "string" && hash(v.expectedPayloadSha256) && heldEvidenceDigest(v) === null;
 }
 /** Verify the complete frozen inventory before preparing any network request. */
 export function validateManifestChunks(input: unknown, profile: EnrichmentProfile = "legacy-backfill"): ManifestChunk[] {
@@ -63,17 +63,37 @@ export function checkManifestApproval(chunks: ManifestChunk[], approval: Deliver
   } else if (approval.schemaVersion !== "prospect-enrichment-delivery-approval/v1" || !["pilot", "backfill"].includes(approval.scope)) throw Error("manifest_not_in_exact_approval_scope");
 }
 
-export function prepareManifestRequests(input: unknown, profile: EnrichmentProfile = "legacy-backfill"): { chunks: ManifestChunk[]; requests: ManifestRequest[] } {
+export function prepareManifestRequests(input: unknown, profile: EnrichmentProfile = "legacy-backfill", heldEvidenceInput: unknown = []): { chunks: ManifestChunk[]; requests: ManifestRequest[] } {
   const chunks = validateManifestChunks(input, profile);
-  const sequence = [...chunks.map(chunk => ({ chunk, finalize: false })), { chunk: chunks[chunks.length - 1], finalize: true }];
-  return { chunks, requests: sequence.map(value => {
+  if (!Array.isArray(heldEvidenceInput)) throw Error("held_evidence_invalid");
+  const expectedHolds = chunks.flatMap(chunk => chunk.entries).filter(entry => heldEvidenceDigest(entry) !== null);
+  const heldEvidence = heldEvidenceInput as HeldCandidateEvidence[];
+  if (heldEvidence.length !== expectedHolds.length || new Set(heldEvidence.map(value => value?.entryId)).size !== heldEvidence.length) throw Error("held_evidence_coverage_mismatch");
+  for (const value of heldEvidence) {
+    if (!object(value) || value.schemaVersion !== "prospect-enrichment-held-candidate-evidence/v1" || value.runId !== chunks[0].runId || typeof value.entryId !== "string" || typeof value.researchKey !== "string" || !object(value.source) || typeof value.originalJson !== "string" || !hash(value.evidenceSha256) || !Array.isArray(value.issues) || !value.issues.every(issue => object(issue) && typeof issue.code === "string" && typeof issue.path === "string" && typeof issue.reason === "string")) throw Error("held_evidence_invalid");
+    const entry = expectedHolds.find(item => item.entryId === value.entryId);
+    const core = { schemaVersion: value.schemaVersion, entryId: value.entryId, researchKey: value.researchKey, source: value.source, originalJson: value.originalJson, issues: value.issues };
+    if (!entry || entry.researchKey !== value.researchKey || heldEvidenceDigest(entry) !== protocolHash(core) || heldEvidenceDigest(entry) !== value.evidenceSha256 || canonicalJson(entry.source) !== canonicalJson(value.source)) throw Error("held_evidence_manifest_mismatch");
+  }
+  const requests: ManifestRequest[] = [];
+  const add = (value: { chunk: ManifestChunk; finalize: boolean }, endpoint: "manifest-chunks" = "manifest-chunks") => {
     const body = canonicalJson(value);
     if (Buffer.byteLength(body) > 2_097_152) throw Error("manifest_request_body_limit");
-    return { requestKey: "pe-manifest-v1-" + protocolHash([value.chunk.sourceSystem, value.chunk.runId, value.chunk.runManifestSha256, value.chunk.chunkIndex, value.finalize]), body, bodySha256: sha256(body), chunkIndex: value.chunk.chunkIndex, finalize: value.finalize };
-  }) };
+    requests.push({ requestKey: "pe-manifest-v1-" + protocolHash([value.chunk.sourceSystem, value.chunk.runId, value.chunk.runManifestSha256, value.chunk.chunkIndex, value.finalize]), body, bodySha256: sha256(body), chunkIndex: value.chunk.chunkIndex, finalize: value.finalize, endpoint });
+  };
+  chunks.forEach(chunk => add({ chunk, finalize: false }));
+  for (const evidence of heldEvidence) {
+    const body = canonicalJson({ evidence });
+    if (Buffer.byteLength(body) > 8_388_608) throw Error("held_evidence_request_body_limit");
+    const requestKey = "pe-held-evidence-v1-" + protocolHash([evidence.runId, evidence.entryId, evidence.evidenceSha256]);
+    requests.push({ requestKey, body, bodySha256: sha256(body), chunkIndex: -1, finalize: false, endpoint: "held-evidence", heldEvidence: evidence });
+  }
+  add({ chunk: chunks[chunks.length - 1], finalize: true });
+  return { chunks, requests };
 }
 function verifyReceipt(value: unknown, chunks: ManifestChunk[], request: ManifestRequest): value is ManifestReceipt {
   if (!object(value)) return false;
+  if (request.endpoint === "held-evidence") return ["held_evidence_recorded", "held_evidence_replayed"].includes(String(value.outcome)) && value.runId === chunks[0].runId && value.entryId === request.heldEvidence?.entryId && value.evidenceSha256 === request.heldEvidence?.evidenceSha256;
   const first = chunks[0], registered = request.finalize ? chunks.length : request.chunkIndex + 1;
   const prefixEntries = chunks.slice(0, registered).flatMap(c => c.entries);
   const minimumPackages = new Set(prefixEntries.flatMap(e => e.clientPackageId ? [e.clientPackageId] : [])).size;
@@ -88,10 +108,10 @@ async function immutable(file: string, value: unknown): Promise<void> {
   catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; if (await fs.readFile(file, "utf8") !== body) throw Error("manifest_outbox_idempotency_conflict"); }
 }
 /** Sequential registration only; one bounded attempt per pending request, no sleep or apply. */
-export async function submitManifestChunks(options: { outbox: string; chunks: unknown; approval: DeliveryApproval; profile?: EnrichmentProfile; confirmation: string; token: string; now?: string; fetcher?: typeof fetch; beforeNetwork?: () => void }) {
+export async function submitManifestChunks(options: { outbox: string; chunks: unknown; heldEvidence?: unknown; approval: DeliveryApproval; profile?: EnrichmentProfile; confirmation: string; token: string; now?: string; fetcher?: typeof fetch; beforeNetwork?: () => void }) {
   if (options.confirmation !== "SUBMIT-APPROVED-PROSPECT-RESEARCH") throw Error("explicit_submission_confirmation_required");
   if (!options.token.trim()) throw Error("missing_agent_token");
-  const { chunks, requests } = prepareManifestRequests(options.chunks, options.profile); checkManifestApproval(chunks, options.approval, options.profile);
+  const { chunks, requests } = prepareManifestRequests(options.chunks, options.profile, options.heldEvidence ?? []); checkManifestApproval(chunks, options.approval, options.profile);
   const first = chunks[0], dir = path.join(options.outbox, "manifests", first.runManifestSha256);
   await fs.mkdir(dir, { recursive: true });
   const lockFile = path.join(options.outbox, "submission.lock"), owner = randomUUID();
@@ -119,7 +139,7 @@ export async function submitManifestChunks(options: { outbox: string; chunks: un
       await atomicJson(stateFile, state);
       try { options.beforeNetwork?.(); } catch (error) { await atomicJson(stateFile, previous); throw error; }
       let response: Response | null = null;
-      try { response = await (options.fetcher ?? fetch)(PRODUCTION_ORIGIN + "/api/internal/prospect-enrichment/runs/manifest-chunks", { method: "POST", headers: { Authorization: "Bearer " + options.token.trim(), "Content-Type": "application/json", "Idempotency-Key": request.requestKey }, body: request.body, redirect: "error", signal: AbortSignal.timeout(20_000) }); }
+      try { response = await (options.fetcher ?? fetch)(PRODUCTION_ORIGIN + "/api/internal/prospect-enrichment/runs/" + request.endpoint, { method: "POST", headers: { Authorization: "Bearer " + options.token.trim(), "Content-Type": "application/json", "Idempotency-Key": request.requestKey }, body: request.body, redirect: "error", signal: AbortSignal.timeout(20_000) }); }
       catch { state.lastError = "network_or_timeout"; state.nextAttemptAt = retryTime(state.attempts, now); state.state = state.nextAttemptAt ? "retry_pending" : "retry_exhausted"; }
       if (response) {
         state.lastStatus = response.status;

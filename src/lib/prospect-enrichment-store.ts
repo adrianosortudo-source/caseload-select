@@ -204,7 +204,7 @@ export async function stageProspectEnrichmentPackage(input: Readonly<{
   const receipt = firstRpcRecord(data);
   if (!receipt) throw new ProspectEnrichmentStoreError("The database did not return a package receipt.", 503, "invalid_database_receipt");
   const outcome = receipt.outcome;
-  if (outcome === "run_conflict" || outcome === "package_conflict" || outcome === "idempotency_conflict" || outcome === "source_event_conflict") {
+  if (outcome === "run_conflict" || outcome === "package_conflict" || outcome === "idempotency_conflict" || outcome === "source_event_conflict" || outcome === "manifest_required") {
     throw new ProspectEnrichmentStoreError("This research package conflicts with an existing immutable record.", 409, String(outcome));
   }
   if (outcome !== "created" && outcome !== "replayed") {
