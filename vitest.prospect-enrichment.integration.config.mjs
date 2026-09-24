@@ -14,7 +14,7 @@ export default defineConfig({
   root,
   test: {
     environment: "node",
-    include: ["src/lib/__tests__/prospect-enrichment.integration.test.ts"],
+    include: ["src/lib/__tests__/prospect-enrichment.integration.test.ts", "src/lib/__tests__/prospect-candidate*.integration.test.ts"],
     setupFiles: ["./tests/vitest.server-only.setup.ts"],
     pool: "threads",
     maxWorkers: 1,

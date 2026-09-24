@@ -6,6 +6,8 @@
  * authorization boundary.
  */
 import Link from "next/link";
+import { Suspense } from "react";
+import CandidateResearchList from "./CandidateResearchList";
 import AiDraftInbox from "./AiDraftInbox";
 import GtaProspectImport from "./GtaProspectImport";
 import ProspectArchiveUpdate from "./ProspectArchiveUpdate";
@@ -35,6 +37,8 @@ export default function ProspectsPage() {
       <ProspectArchiveUpdate />
 
       <ProspectingControlPlaneRegistry />
+
+      <Suspense fallback={<p>Loading candidate research…</p>}><CandidateResearchList /></Suspense>
 
       <ReconciledProspects />
 

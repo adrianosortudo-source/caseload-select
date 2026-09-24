@@ -1,6 +1,6 @@
 # All researched candidates: profile and discovery acceptance
 
-Status: partial preparation. The current slice restores structured intake evidence and makes every field returned by the existing reconciled read route visible, searchable and filterable. It does not claim that every archived or manifest-only candidate is already a firm profile.
+Status: the original #313 slice is merged. The isolated all-candidate follow-on now implements steps1–5 below; exact-head CI/review and production release/readback remain pending. See [candidate release contract](prospect-candidate-profiles-release.md). Historical slice scope: partial preparation. The current slice restores structured intake evidence and makes every field returned by the existing reconciled read route visible, searchable and filterable. It does not claim that every archived or manifest-only candidate is already a firm profile.
 
 ## Implemented read-model slice
 
@@ -59,6 +59,6 @@ Use a separate reviewed follow-on change after this slice. Do not extend the six
 
 ## Current release boundaries
 
-PR #313 stays draft. No merge, deployment, migration application, production import or cutover is implied. The existing source-shaped intake failure can be fixed by the reader change; it does not require rewriting the four valid source-evidence objects. The optional downtown geography boundary-source error is a separate unresolved read concern and is not repaired here.
+PR #313 has merged separately. This all-candidate follow-on remains unapproved for merge, migration application, production import and cutover. The existing source-shaped intake failure can be fixed by the reader change; it does not require rewriting the four valid source-evidence objects. The optional downtown geography boundary-source error is a separate unresolved read concern and is not repaired here.
 
 Tests for this slice are synthetic only. Local dependency limitations and the exact CI result must be recorded with the pushed head; syntax transpilation is not a substitute for TypeScript semantic checking or rendered acceptance.
