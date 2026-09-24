@@ -50,11 +50,11 @@ jobs:
 
       - name: Validate exact reviewed source and protected configuration
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
-          unset SUPABASE_DB_PASSWORD SUPABASE_DB_URL SUPABASE_PROJECT_ID SUPABASE_API_URL
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
           export CHECKOUT_SHA="$(git rev-parse HEAD)"
           node scripts/prospect-enrichment/migration-gate.mjs source > "$RUNNER_TEMP/source-check.json"
           git fetch --no-tags origin main
@@ -73,18 +73,18 @@ jobs:
           test "$(supabase --version)" = "2.117.0"
           supabase db push --help > "$RUNNER_TEMP/db-push-help.txt"
           supabase db query --help > "$RUNNER_TEMP/db-query-help.txt"
-          grep -q -- '--project-ref' "$RUNNER_TEMP/db-push-help.txt"
-          grep -q -- '--project-ref' "$RUNNER_TEMP/db-query-help.txt"
+          grep -q -- '--db-url' "$RUNNER_TEMP/db-push-help.txt"
+          grep -q -- '--db-url' "$RUNNER_TEMP/db-query-help.txt"
 
       - name: Require the exact pending migration and no seeds or roles
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
-          unset SUPABASE_DB_PASSWORD SUPABASE_DB_URL SUPABASE_PROJECT_ID SUPABASE_API_URL
-          supabase db push --linked --dry-run --include-all --skip-vault \
-            --project-ref "$PROJECT_REF" --output-format json > "$RUNNER_TEMP/plan.json"
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
+          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
+            --output-format json > "$RUNNER_TEMP/plan.json"
           node scripts/prospect-enrichment/migration-gate.mjs plan pre "$RUNNER_TEMP/plan.json" > "$RUNNER_TEMP/plan-check.json"
 
       - name: Stop after the default dry run
@@ -98,36 +98,36 @@ jobs:
         id: apply_migration
         if: inputs.operation == 'apply'
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
-          unset SUPABASE_DB_PASSWORD SUPABASE_DB_URL SUPABASE_PROJECT_ID SUPABASE_API_URL
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
           export CHECKOUT_SHA="$(git rev-parse HEAD)"
           node scripts/prospect-enrichment/migration-gate.mjs source > "$RUNNER_TEMP/apply-source-check.json"
           git fetch --no-tags origin main
           test "$CHECKOUT_SHA" = "$(git rev-parse origin/main)"
-          supabase db push --linked --dry-run --include-all --skip-vault \
-            --project-ref "$PROJECT_REF" --output-format json > "$RUNNER_TEMP/immediate-plan.json"
+          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
+            --output-format json > "$RUNNER_TEMP/immediate-plan.json"
           node scripts/prospect-enrichment/migration-gate.mjs plan pre "$RUNNER_TEMP/immediate-plan.json" > "$RUNNER_TEMP/immediate-plan-check.json"
           echo "apply_started=true" >> "$GITHUB_OUTPUT"
-          supabase db push --linked --yes --include-all --skip-vault \
-            --project-ref "$PROJECT_REF" --output-format json > "$RUNNER_TEMP/apply.json"
+          supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault \
+            --output-format json > "$RUNNER_TEMP/apply.json"
           node scripts/prospect-enrichment/migration-gate.mjs plan apply "$RUNNER_TEMP/apply.json" > "$RUNNER_TEMP/apply-check.json"
 
       - name: Verify applied version, complete SQL content and empty pending plan
         if: always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
-          unset SUPABASE_DB_PASSWORD SUPABASE_DB_URL SUPABASE_PROJECT_ID SUPABASE_API_URL
-          supabase db query --linked --project-ref "$PROJECT_REF" \
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" \
             --file "$RUNNER_TEMP/enrichment-ledger-readback.sql" --output json --agent no > "$RUNNER_TEMP/ledger.json"
           node scripts/prospect-enrichment/migration-gate.mjs ledger "$RUNNER_TEMP/ledger.json" > "$RUNNER_TEMP/ledger-check.json"
-          supabase db push --linked --dry-run --include-all --skip-vault \
-            --project-ref "$PROJECT_REF" --output-format json > "$RUNNER_TEMP/post-apply-plan.json"
+          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
+            --output-format json > "$RUNNER_TEMP/post-apply-plan.json"
           node scripts/prospect-enrichment/migration-gate.mjs plan post "$RUNNER_TEMP/post-apply-plan.json" > "$RUNNER_TEMP/post-apply-check.json"
 
       - name: Upload bounded migration verification evidence

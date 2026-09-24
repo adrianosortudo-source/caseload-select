@@ -12,6 +12,7 @@ export const sha256 = (value) => createHash("sha256").update(value).digest("hex"
 const fail = (code) => { throw new Error(code); };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+const hasAsciiControl = (value, upper) => Array.from(value).some(char => char.charCodeAt(0) <= upper || char.charCodeAt(0) === 127);
 
 export function createReleaseManifest(source) {
   const filename = path.posix.basename(MIGRATION_PATH);
@@ -32,14 +33,30 @@ export function verifyReleaseManifest(manifest, source) {
   return expected;
 }
 
-export function verifyExecutionGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, tokenPresent }) {
+export function verifyDirectDatabaseUrl(value, environment = {}, projectEnvFiles = []) {
+  if (Object.keys(environment).some(key => (/^(?:PG|SUPABASE_|DOTENV_)/i.test(key) || ["DOCKER_HOST", "NODE_TLS_REJECT_UNAUTHORIZED"].includes(key.toUpperCase())) && environment[key] !== undefined)) fail("ambient_database_configuration_prohibited");
+  if (!Array.isArray(projectEnvFiles) || projectEnvFiles.length) fail("project_database_env_files_prohibited");
+  if (typeof value !== "string" || !value || value.trim() !== value || hasAsciiControl(value, 32)) fail("protected_environment_database_url_missing_or_invalid");
+  let url;
+  try { url = new URL(value); } catch { fail("protected_environment_database_url_missing_or_invalid"); }
+  let username, password;
+  try { username = decodeURIComponent(url.username); password = decodeURIComponent(url.password); }
+  catch { fail("database_url_credentials_invalid"); }
+  if (url.protocol !== "postgresql:" || url.hostname !== "db." + PROJECT_REF + ".supabase.co" ||
+      url.port !== "5432" || url.pathname !== "/postgres" || url.hash || username !== "postgres" ||
+      !password || hasAsciiControl(password, 31) ||
+      !same([...url.searchParams], [["sslmode", "verify-full"]])) fail("database_url_target_or_options_prohibited");
+  return { host: url.hostname, port: 5432, database: "postgres", user: "postgres", sslmode: "verify-full", connectionMode: "explicit-db-url" };
+}
+
+export function verifyExecutionGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, databaseUrl, environment, projectEnvFiles }) {
   if (event !== "workflow_dispatch" || ref !== "refs/heads/main" || repository !== "adrianosortudo-source/caseload-select") fail("manual_main_repository_required");
   if (!["dry-run", "apply"].includes(operation)) fail("invalid_operation");
   if (!/^[a-f0-9]{40}$/.test(reviewedSourceSha ?? "")) fail("reviewed_source_sha_required");
   if (!/^[a-f0-9]{40}$/.test(configuredReviewedSha ?? "") || configuredReviewedSha !== reviewedSourceSha) fail("protected_environment_reviewed_sha_missing_or_mismatch");
   if (checkoutSha !== reviewedSourceSha || githubSha !== reviewedSourceSha) fail("reviewed_source_sha_changed");
-  if (tokenPresent !== true) fail("protected_environment_migrator_token_missing");
-  return { reviewedSourceSha, operation, projectRef: PROJECT_REF };
+  const connection = verifyDirectDatabaseUrl(databaseUrl, environment, projectEnvFiles);
+  return { reviewedSourceSha, operation, projectRef: PROJECT_REF, connection };
 }
 
 export function verifyConfirmation(operation, confirmation) {
@@ -105,6 +122,13 @@ export function ledgerQuery(manifest) {
     manifest.migrations[0].version + "' ORDER BY version;\n";
 }
 
+export function findProjectEnvFiles(exists = fs.existsSync) {
+  // The pinned CLI loads these exact defaults from supabase/ and repo root.
+  // SUPABASE_ENV overrides are prohibited above; never read their contents here.
+  return ["supabase", "."].flatMap(dir => [".env.development.local", ".env.local", ".env.development", ".env"]
+    .map(name => path.join(dir, name))).filter(file => exists(file));
+}
+
 function main(args) {
   const [command, ...rest] = args;
   const source = fs.readFileSync(MIGRATION_PATH);
@@ -122,17 +146,19 @@ function main(args) {
       repository: process.env.GITHUB_REPOSITORY, operation: process.env.OPERATION,
       reviewedSourceSha: process.env.REVIEWED_SOURCE_SHA, configuredReviewedSha: process.env.CONFIGURED_REVIEWED_SHA,
       checkoutSha: process.env.CHECKOUT_SHA, githubSha: process.env.GITHUB_SHA,
-      tokenPresent: typeof process.env.SUPABASE_ACCESS_TOKEN === "string" && process.env.SUPABASE_ACCESS_TOKEN.trim().length > 0,
+      databaseUrl: process.env.MIGRATION_DATABASE_URL, environment: process.env, projectEnvFiles: findProjectEnvFiles(),
     });
     verifyConfirmation(gate.operation, process.env.CONFIRMATION);
     console.log(JSON.stringify({ ...gate, releaseManifestSha256: sha256(fs.readFileSync(RELEASE_PATH)), migrations: manifest.migrations }));
+  } else if (command === "connection" && rest.length === 0) {
+    console.log(JSON.stringify(verifyDirectDatabaseUrl(process.env.MIGRATION_DATABASE_URL, process.env, findProjectEnvFiles())));
   } else if (command === "query" && rest.length === 0) {
     process.stdout.write(ledgerQuery(manifest));
   } else if (command === "plan" && rest.length === 2) {
     console.log(JSON.stringify(verifyMigrationPlan(JSON.parse(fs.readFileSync(rest[1], "utf8")), manifest, rest[0])));
   } else if (command === "ledger" && rest.length === 1) {
     console.log(JSON.stringify(verifyMigrationLedger(JSON.parse(fs.readFileSync(rest[0], "utf8")), manifest, source)));
-  } else fail("usage_source_query_generate_plan_phase_file_or_ledger_file");
+  } else fail("usage_source_connection_query_generate_plan_phase_file_or_ledger_file");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
