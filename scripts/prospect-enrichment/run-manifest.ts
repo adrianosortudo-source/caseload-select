@@ -1,6 +1,6 @@
 import type { CompiledPackage } from "./compiler";
 import type { SourceManifest } from "./inventory";
-import { SOURCE_NAME, SOURCE_SYSTEM, Issue, canonicalJson, ordinal, protocolHash } from "./model";
+import { SOURCE_NAME, SOURCE_SYSTEM, type Issue, canonicalJson, ordinal, protocolHash } from "./model";
 import { items } from "./reconciliation";
 import { profileConfig, type EnrichmentProfile } from "./profiles";
 

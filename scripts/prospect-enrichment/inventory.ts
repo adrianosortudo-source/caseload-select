@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { DEFAULT_ROOTS, Issue, JsonObject, object, ordinal, protocolHash, sha256, within } from "./model";
+import { DEFAULT_ROOTS, type Issue, type JsonObject, object, ordinal, protocolHash, sha256, within } from "./model";
 
 export type InventoryRoot = { id: string; path: string };
 export type Artifact = { sourceRoot: string; relativePath: string; sourcePointer: string; snapshotAt: string; size: number; fileSha256: string; archivePath: string; classification: "research" | "provenance"; status: "snapshotted" | "source_changed_during_snapshot" };

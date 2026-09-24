@@ -1,6 +1,6 @@
 import { buildProspectEnrichmentClientItems, parseProspectEnrichmentEnvelope, type ProspectEnrichmentEnvelope } from "../../src/lib/prospect-enrichment-contract";
-import { CompiledPackage } from "./compiler";
-import { Issue, canonicalJson, object, ordinal, protocolHash } from "./model";
+import type { CompiledPackage } from "./compiler";
+import { type Issue, canonicalJson, object, ordinal, protocolHash } from "./model";
 import { isCriteriaSelector, validateLegacyAssessmentProjectionClaims } from "./legacy-projections";
 import { deriveLegacyAssessmentProjection } from "./legacy-projection-mapper";
 import { verifyComparisonSignature, type ComparisonSignature, type ComparisonTrust } from "./comparison-signature";

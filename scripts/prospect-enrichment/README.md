@@ -145,3 +145,12 @@ Package reconciliation is exhaustive: `received`, `identity_hold`, `evidence_hol
 ## Private exclusions for a bounded backfill
 
 The legacy compile command accepts `--exclusions PRIVATE_FILE` only with an independently closed frozen cohort inventory. See [PRIVATE_EXCLUSIONS.md](PRIVATE_EXCLUSIONS.md) for the exact schemas, source-claim screening, count-only holds, derived immutable run scope, no-token transport assertion and later command sequence. An open Q50 manifest or self-declared completeness fails with `exclusion_coverage_unproven` before candidate compilation. Actual private rules and identities stay outside Git.
+
+
+## Native Node v24 extractor import smoke
+
+The extractor and adjacent compiler/reconciliation imports explicitly mark `Issue`, `JsonObject` and `CompiledPackage` as types. Native Node type stripping therefore does not request nonexistent runtime exports. This changes import declarations only; extraction, evidence retention, identity and exclusion behavior are unchanged.
+
+Run `node --experimental-strip-types scripts/prospect-enrichment/native-strip-types-smoke.mjs` with Node v24. The self-contained synthetic smoke registers only repository-local extensionless `.ts` and existing `@/` alias resolution using `node:module.registerHooks`; Node performs the actual loading/type stripping. It imports the exact `inventory.ts` extractor, verifies qualified/held/rejected/incomplete synthetic records retain original content/hash/pointer, and imports the adjacent CLI graph through its help-only path. It does not use tsx, a bundler, credentials, research files or networking. A source import without explicit `type` fails this smoke rather than being hidden by transpilation.
+
+The command passed on Node v24.14.0. The existing package's missing `type` declaration produces Node's harmless MODULE_TYPELESS_PACKAGE_JSON detection warning; do not change the application-wide module type to suppress it. Standard CI remains on its existing Node versions and runs the unchanged full CLI suite using tsx. Native loading success does not satisfy the independent closed-cohort prerequisite or authorize a real compile.

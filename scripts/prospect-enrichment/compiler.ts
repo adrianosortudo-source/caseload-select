@@ -1,5 +1,5 @@
 import { parseProspectEnrichmentEnvelope, type ProspectEnrichmentEnvelope, type JsonValue } from "../../src/lib/prospect-enrichment-contract";
-import { ADAPTER_VERSION, SOURCE_NAME, SOURCE_SYSTEM, Issue, canonicalJson, displayCategory, eventId, leafPointers, list, object, ordinal, pointerPart, protocolHash, publicUrl, recordedDate, selectionDisposition, sha256, strings, text, unique } from "./model";
+import { ADAPTER_VERSION, SOURCE_NAME, SOURCE_SYSTEM, type Issue, canonicalJson, displayCategory, eventId, leafPointers, list, object, ordinal, pointerPart, protocolHash, publicUrl, recordedDate, selectionDisposition, sha256, strings, text, unique } from "./model";
 import type { CandidateInput, SourceManifest } from "./inventory";
 import { projectionClaim, type LegacyAssessmentProjectionClaim } from "./legacy-projections";
 
