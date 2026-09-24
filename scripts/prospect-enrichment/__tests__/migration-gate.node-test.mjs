@@ -23,9 +23,36 @@ const databaseUrl = "postgresql://postgres:synthetic-only@db." + PROJECT_REF + "
 const gate = { event: "workflow_dispatch", ref: "refs/heads/main", repository: "adrianosortudo-source/caseload-select", operation: "dry-run", reviewedSourceSha: reviewed, configuredReviewedSha: reviewed, checkoutSha: reviewed, githubSha: reviewed, databaseUrl };
 const plan = (phase) => ({ dryRun: phase !== "apply", upToDate: phase === "post", migrations: phase === "post" ? [] : manifest.migrations.map(migration => migration.filename), seeds: [], roles: [] });
 
-test("release manifest covers the six committed feature migrations and exact LF Git bytes", () => {
+const candidateReviewPath = "docs/runbooks/prospect-candidate-migration-review.json";
+const candidateMigrationPath = "supabase/migrations/20260924172758_prospect_enrichment_candidate_profiles.sql";
+function verifyCandidateReviewOnlyReceipt(receipt, candidateBytes, prerequisiteBytes) {
+  assert.deepEqual(Object.keys(receipt).sort(), ["execution", "migration", "prerequisiteManifest", "prerequisiteManifestBlobSha256", "prerequisiteMigrations", "productionApplicationApproved", "projectRef", "reviewOnly", "schemaVersion", "sourceBaseSha"]);
+  assert.equal(receipt.schemaVersion, "prospect-candidate-migration-review/v1");
+  assert.equal(receipt.reviewOnly, true);
+  assert.equal(receipt.productionApplicationApproved, false);
+  assert.equal(receipt.projectRef, PROJECT_REF);
+  assert.match(receipt.sourceBaseSha, /^[a-f0-9]{40}$/);
+  assert.equal(receipt.prerequisiteManifest, RELEASE_PATH);
+  assert.equal(receipt.prerequisiteManifestBlobSha256, sha256(prerequisiteBytes));
+  assert.deepEqual(receipt.prerequisiteMigrations, JSON.parse(prerequisiteBytes.toString("utf8")).migrations);
+  assert.deepEqual(receipt.migration, { path: candidateMigrationPath, version: "20260924172758", name: "prospect_enrichment_candidate_profiles", bytes: candidateBytes.length, sha256: sha256(candidateBytes) });
+  assert.match(receipt.execution, /No existing workflow consumes this review receipt/);
+  return candidateMigrationPath;
+}
+
+test("release manifest keeps exactly six production migrations plus one separately documented review-only candidate migration", () => {
   const featurePaths = fs.readdirSync(path.join(root, "supabase/migrations")).filter(name => /_prospect_enrichment_|_fix_gta_prospect_operator_projection_gaps\.sql$/.test(name)).sort().map(name => "supabase/migrations/" + name);
-  assert.deepEqual([...MIGRATION_PATHS], featurePaths);
+  const candidateBytes = execFileSync("git", ["cat-file", "blob", "HEAD:" + candidateMigrationPath], { cwd: root });
+  const prerequisiteBytes = execFileSync("git", ["cat-file", "blob", "HEAD:" + RELEASE_PATH], { cwd: root });
+  const reviewOnly = JSON.parse(fs.readFileSync(path.join(root, candidateReviewPath), "utf8"));
+  const documentedAddition = verifyCandidateReviewOnlyReceipt(reviewOnly, candidateBytes, prerequisiteBytes);
+  assert.deepEqual([...MIGRATION_PATHS, documentedAddition].sort(), featurePaths, "any other feature migration requires explicit release review");
+  assert.deepEqual(Buffer.from(fs.readFileSync(path.join(root, candidateMigrationPath), "utf8").replace(/\r\n/g, "\n")), candidateBytes);
+  assert.ok(!MIGRATION_PATHS.includes(documentedAddition), "candidate review receipt must not authorize production application");
+  for (const changed of [{ ...reviewOnly, productionApplicationApproved: true }, { ...reviewOnly, reviewOnly: false }, { ...reviewOnly, migration: { ...reviewOnly.migration, sha256: "0".repeat(64) } }]) {
+    assert.throws(() => verifyCandidateReviewOnlyReceipt(changed, candidateBytes, prerequisiteBytes));
+  }
+  assert.throws(() => verifyMigrationPlan({ ...plan("pre"), migrations: [...plan("pre").migrations, path.posix.basename(documentedAddition)] }, manifest, "pre"), /unexpected_pending/);
   assert.equal(MIGRATION_PATHS.length, 6);
   assert.ok(Object.isFrozen(MIGRATION_PATHS));
   const actual = Object.fromEntries(MIGRATION_PATHS.map(file => {
