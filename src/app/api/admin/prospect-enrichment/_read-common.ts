@@ -10,7 +10,14 @@ export function isRecord(value: unknown): value is Record<string, unknown> { ret
 export function requiredText(value: unknown, name: string): string { if (typeof value !== "string" || !value.length) throw new ReadApiError("The stored " + name + " is incomplete."); return value; }
 export function nullableText(value: unknown, name: string): string | null { return value === null ? null : requiredText(value, name); }
 export function databaseRows(result: { data: unknown; error: unknown }): Record<string, unknown>[] {
-  if (result.error || !Array.isArray(result.data) || result.data.some((item) => !isRecord(item))) throw new ReadApiError("Research records could not be loaded.");
+  if (result.error || !Array.isArray(result.data) || result.data.some((item) => !isRecord(item))) {
+    if (result.error) {
+      const errorCode = isRecord(result.error) && typeof result.error.code === "string" ? result.error.code : null;
+      const callSite = new Error().stack?.split("\n").slice(2, 6).map((line) => line.trim());
+      console.error("[prospect-enrichment] database read unavailable", { errorCode, callSite });
+    }
+    throw new ReadApiError("Research records could not be loaded.");
+  }
   return result.data as Record<string, unknown>[];
 }
 export function readQuery(request: NextRequest, allowed: readonly string[]): URLSearchParams {

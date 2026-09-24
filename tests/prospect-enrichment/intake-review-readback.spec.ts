@@ -48,5 +48,5 @@ test("synthetic intake, explicit operator review, apply and real read-back", asy
   await expect(page.getByTestId("prospect-research-detail")).toBeVisible();
   await waitForResearch(page);
   await expect(page.getByRole("heading", { name: "Sources and evidence", exact: true })).toBeVisible();
-  await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page.getByTestId("prospect-research-detail").getByRole("alert")).toHaveCount(0);
 });

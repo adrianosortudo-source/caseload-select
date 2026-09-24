@@ -13,7 +13,7 @@ for (const width of [1440, 1024, 768, 640, 375, 320]) {
       else { externalRequests.push(url.origin); await route.abort(); }
     });
     const surfaces = [
-      ["inbox", "/admin/prospects"],
+      ["inbox", "/admin/prospects/research"],
       ["review", "/admin/prospects/research-packages/" + fixture.packages.review],
       ["applied", "/admin/prospects/research-packages/" + fixture.packages.applied],
       ["held", "/admin/prospects/research-packages/" + fixture.packages.held],
