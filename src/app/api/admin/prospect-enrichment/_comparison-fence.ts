@@ -228,7 +228,7 @@ export async function verifyComparisonFinalFence(input: {
     const chunk = firmIds.slice(offset, offset + 100);
     const { data, error } = await client.rpc("read_prospect_enrichment_firm_identities_v1", { p_firm_ids: chunk, p_source_record_keys: [], p_stable_firm_ids: [] });
     if (error) fail();
-    const rows = databaseRows(data);
+    const rows = databaseRows({ data, error });
     if (rows.length !== chunk.length || new Set(rows.map((row) => row.firm_id)).size !== chunk.length) fail();
     for (const row of rows) if (!revisionsByFirm.get(String(row.firm_id))?.has(String(row.enrichment_revision))) fail();
   }

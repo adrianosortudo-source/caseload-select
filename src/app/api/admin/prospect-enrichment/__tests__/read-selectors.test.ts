@@ -24,7 +24,21 @@ function fakeDatabase(tables: Record<string, Row[]> = {}, rpcs: Record<string, R
       };
       return builder;
     },
-    rpc(name: string, args: unknown) { calls.push({ name, args }); return Promise.resolve({ data: failed.includes(name) ? null : rpcs[name] ?? [], error: failed.includes(name) ? { message: "synthetic rpc failure" } : null }); },
+    rpc(name: string, args: unknown) {
+      calls.push({ name, args });
+      const input = args && typeof args === "object" ? args as Record<string, unknown> : {};
+      const firms = tables.gta_prospect_firms ?? [], registries = tables.gta_prospect_stable_identity_registry ?? [];
+      const ids = Array.isArray(input.p_firm_ids) ? input.p_firm_ids : [], keys = Array.isArray(input.p_source_record_keys) ? input.p_source_record_keys : [], stableIds = Array.isArray(input.p_stable_firm_ids) ? input.p_stable_firm_ids : [];
+      const identityRows = firms.filter((firm) => ids.includes(firm.id) || keys.includes(firm.source_record_key) || registries.some((registry) => registry.firm_id === firm.id && stableIds.includes(registry.stable_firm_id)))
+        .map((firm) => ({ firm_id: firm.id, source_record_key: firm.source_record_key, stable_firm_id: registries.find((registry) => registry.firm_id === firm.id)?.stable_firm_id ?? null, canonical_domain: registries.find((registry) => registry.firm_id === firm.id)?.canonical_domain ?? null, enrichment_revision: firm.enrichment_revision }));
+      const protectedRows = (tables[String(input.p_table)] ?? []).filter((row) => String(input.p_table) === "gta_prospect_firms" ? row.id === input.p_firm_id : row.firm_id === input.p_firm_id)
+        .filter((row) => typeof input.p_row_id !== "string" || row.id === input.p_row_id)
+        .filter((row) => !Array.isArray(input.p_ids) || input.p_ids.includes(row.id))
+        .filter((row) => typeof input.p_after_id !== "string" || String(row.id) > input.p_after_id)
+        .slice(0, typeof input.p_limit === "number" ? input.p_limit : 100);
+      const data = rpcs[name] ?? (name === "read_prospect_enrichment_firm_identities_v1" ? identityRows : name === "read_prospect_enrichment_gta_evidence_v1" ? protectedRows : []);
+      return Promise.resolve({ data: failed.includes(name) ? null : data, error: failed.includes(name) ? { message: "synthetic rpc failure" } : null });
+    },
   } as unknown as ReadDatabase;
   return { client, calls };
 }

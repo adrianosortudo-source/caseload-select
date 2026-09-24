@@ -42,6 +42,16 @@ function database(tables: Record<string, Record<string, unknown>[]> = {}, failur
       in: (field: string, values: unknown[]) => { selected = selected.filter((row) => values.includes(row[field])); return query; },
       limit: async (limit: number) => ({ data: selected.slice(0, limit), error: failure === table ? { message: "synthetic failure" } : null }) };
     return query;
+  }, async rpc(name: string, args: Record<string, unknown>) {
+    const failed = failure === name;
+    const keys = Array.isArray(args.p_source_record_keys) ? args.p_source_record_keys : [];
+    const domains = Array.isArray(args.p_domains) ? args.p_domains : [];
+    const nameMatches = (tables.gta_prospect_firms ?? []).filter((row) => typeof args.p_normalized_display_name === "string" && row.normalized_display_name === args.p_normalized_display_name).map((row) => ({ match_kind: "name", match_value: row.normalized_display_name, firm_id: row.id }));
+    const keyMatches = (tables.gta_prospect_firms ?? []).filter((row) => keys.includes(row.source_record_key)).map((row) => ({ match_kind: "source_key", match_value: row.source_record_key, firm_id: row.id }));
+    const domainMatches = [...(tables.gta_prospect_stable_identity_registry ?? []), ...(tables.gta_prospect_domains ?? [])]
+      .filter((row) => domains.includes(row.canonical_domain) || domains.includes(row.normalized_domain_value))
+      .map((row) => ({ match_kind: "domain", match_value: row.canonical_domain ?? row.normalized_domain_value, firm_id: row.firm_id }));
+    return { data: failed ? null : [...nameMatches, ...keyMatches, ...domainMatches], error: failed ? { message: "synthetic rpc failure" } : null };
   } } as unknown as ReadDatabase;
 }
 describe("source-bound new-core values", () => {
@@ -129,6 +139,6 @@ describe("authoritative new-core candidate reader", () => {
     expect(result?.eligible).toBe(false); expect(result?.holds).toContain("new_core_confirmed_mapping_requires_existing_review");
   });
   it("does not hide database errors behind an empty eligible candidate", async () => {
-    await expect(read(fixture(), database({}, "gta_prospect_firms"))).rejects.toThrow();
+    await expect(read(fixture(), database({}, "lookup_prospect_enrichment_core_identity_conflicts_v1"))).rejects.toThrow();
   });
 });

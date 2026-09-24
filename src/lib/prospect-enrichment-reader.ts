@@ -77,7 +77,7 @@ const protectedGtaReadTables = new Set([
 ]);
 export function isProtectedGtaEnrichmentReadTable(table: string): boolean { return protectedGtaReadTables.has(table); }
 export async function readProtectedGtaEnrichmentEvidence(
-  client: Readonly<{ rpc: (name: string, args: Record<string, unknown>) => Promise<EnrichmentReadResult> }>,
+  client: Readonly<{ rpc: (name: string, args: Record<string, unknown>) => PromiseLike<EnrichmentReadResult> }>,
   input: EnrichmentReadQuery,
 ): Promise<EnrichmentReadResult> {
   if (!isProtectedGtaEnrichmentReadTable(input.table)) return { data: null, error: { code: "22023", message: "The protected GTA evidence table is not allowlisted." } };

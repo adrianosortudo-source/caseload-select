@@ -55,7 +55,7 @@ async function verifiedExistingIdentity(client: ReadDatabase, payload: ProspectE
     p_stable_firm_ids: supplied.stableFirmId ? [supplied.stableFirmId] : [],
   });
   if (error) throw new ReadApiError("Firm identity read-back is unavailable.", 503);
-  const identityRows = databaseRows(data);
+  const identityRows = databaseRows({ data, error });
   const candidates: string[] = [], holds: string[] = [];
   for (const id of ids) {
     const rows = identityRows.filter((row) => String(row.firm_id).toLowerCase() === storedId(id));
