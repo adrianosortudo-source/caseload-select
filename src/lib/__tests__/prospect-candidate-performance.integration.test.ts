@@ -31,21 +31,32 @@ suite("candidate reads above the observed Admin inventory", () => {
         await db.query(`UPDATE public.gta_prospect_firms SET display_name='Synthetic throughput firm '||n||$2
           FROM generate_series(1,500) n WHERE source_record_key=$1||'-'||n`, [prefix, suffix]);
       }
-      const counts = (await db.query<{ candidates: number; histories: number; fields: number; sources: number }>(`SELECT
+      const batchId = (await db.query<{ id: string }>(
+        "INSERT INTO public.gta_prospect_import_batches(source_name,source_sha256,source_record_count,state,applied_at) VALUES($1,$2,6000,'applied',now()) RETURNING id",
+        [prefix, "b".repeat(64)])).rows[0].id;
+      await db.query(`INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record)
+        SELECT $1,f.source_record_key,$2,'accepted','created',f.id,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name)
+        FROM public.gta_prospect_firms f JOIN generate_series(1,6000) n ON f.source_record_key=$3||'-'||n`, [batchId, "a".repeat(64), prefix]);
+      const targetFirm = (await db.query<{ id: string }>("SELECT id FROM public.gta_prospect_firms WHERE source_record_key=$1", [prefix + "-1"])).rows[0].id;
+      const counts = (await db.query<{ candidates: number; histories: number; fields: number; sources: number; identityLinks: number }>(`SELECT
         (SELECT count(*)::integer FROM public.prospect_research_candidates) candidates,
         (SELECT count(*)::integer FROM public.prospect_research_candidate_history) histories,
         (SELECT count(*)::integer FROM public.prospect_research_candidate_fields) fields,
-        (SELECT count(*)::integer FROM public.gta_prospect_firms WHERE source_record_key LIKE $1||'-%') sources`, [prefix])).rows[0];
+        (SELECT count(*)::integer FROM public.gta_prospect_firms WHERE source_record_key LIKE $1||'-%') sources,
+        (SELECT count(*)::integer FROM public.prospect_research_candidate_history WHERE item_kind='identity_link') AS "identityLinks"`, [prefix])).rows[0];
       expect(counts.sources).toBe(6500);
-      expect(counts.candidates).toBeGreaterThanOrEqual(6500);
+      expect(counts.candidates).toBeGreaterThanOrEqual(12_500);
+      expect(counts.identityLinks).toBeGreaterThanOrEqual(12_000);
+      console.info("candidate-read-fixture", JSON.stringify(counts));
       expect(counts.histories).toBeGreaterThanOrEqual(7500);
       expect(counts.fields).toBeGreaterThanOrEqual(45_000);
-      for (const table of ["prospect_research_candidates", "prospect_research_candidate_history", "prospect_research_candidate_fields", "prospect_research_candidate_search_chunks", "prospect_research_candidate_coverage", "gta_prospect_firms"]) {
+      for (const table of ["prospect_research_candidates", "prospect_research_candidate_history", "prospect_research_candidate_fields", "prospect_research_candidate_search_chunks", "prospect_research_candidate_coverage", "gta_prospect_firms", "gta_prospect_import_audit", "gta_prospect_import_batches"]) {
         await db.query("ANALYZE public." + table);
       }
       await db.query("SET LOCAL statement_timeout = '5s'");
       const timings: { label: string; milliseconds: number }[] = [];
       const read = async (label: string, filters: Record<string, unknown>) => {
+        console.info("candidate-read-start", label);
         const start = performance.now();
         const page = (await db.query<{ data: Page }>("SELECT public.list_prospect_research_candidates_v1($1::jsonb,25,NULL,NULL) data", [JSON.stringify(filters)])).rows[0].data;
         timings.push({ label, milliseconds: performance.now() - start });
@@ -57,7 +68,10 @@ suite("candidate reads above the observed Admin inventory", () => {
       for (let index = 0; index < 4; index++) await read("unfiltered-repeat-" + index, {});
       expect((await read("indexed-text", { text: "throughput" })).filteredCount).toBeGreaterThanOrEqual(6500);
       expect((await read("typed-field", { fieldPointer: "/reconciliation_status", fieldValue: "provisional_new" })).filteredCount).toBeGreaterThanOrEqual(6500);
-      expect((await read("unresolved", { identityState: "unresolved" })).filteredCount).toBeGreaterThanOrEqual(6500);
+      expect((await read("unresolved", { identityState: "unresolved" })).filteredCount).toBeGreaterThanOrEqual(500);
+      const linked = await read("verified-firm", { firmId: targetFirm });
+      expect(linked.filteredCount).toBeGreaterThanOrEqual(2);
+      expect(linked.items.every(item => item.verifiedFirmId === targetFirm)).toBe(true);
       const profileStart = performance.now();
       const profile = (await db.query<{ data: { candidate: { id: string }; coverageRevision: number } }>(
         "SELECT public.get_prospect_research_candidate_v1($1,$2) data", [first.items[0].id, first.coverageRevision])).rows[0].data;
@@ -68,5 +82,5 @@ suite("candidate reads above the observed Admin inventory", () => {
       console.info("candidate-read-performance", JSON.stringify({ counts, timings, p95Milliseconds: p95, statementTimeoutMilliseconds: 5000 }));
       expect(p95).toBeLessThan(5000);
     } finally { await db.query("ROLLBACK"); db.release(); }
-  }, 240_000);
+  }, 480_000);
 });

@@ -108,6 +108,21 @@ describe("proven-firm candidate coverage migration", () => {
     expect(matcher).not.toContain("prospect_candidate_private.summary(");
   });
 
+  it("scopes identity proof validation inside each returned candidate summary", () => {
+    const helper = sql.split("CREATE FUNCTION prospect_candidate_private.identity_links_for(")[1].split("CREATE FUNCTION prospect_candidate_private.identity_links_at(")[0];
+    expect(helper).toContain("p_cutoff bigint,p_candidate uuid");
+    expect(helper).toContain("AND (p_candidate IS NULL OR h.candidate_id=p_candidate)");
+    expect(helper).toContain("h.coverage_revision<=p_cutoff");
+    expect(helper).toContain("h.original_json->>'sourceRowSha256'");
+    expect(helper).toContain("h.payload_sha256=");
+    expect(helper).toContain("dependency->>'rowSha256' IS DISTINCT FROM");
+    const summary = sql.split("CREATE OR REPLACE FUNCTION prospect_candidate_private.full_summary(")[1].split("ALTER FUNCTION prospect_candidate_private.coverage_warnings")[0];
+    expect(summary).toContain("prospect_candidate_private.identity_links_for(p_cutoff,p_candidate)");
+    expect(summary).not.toContain("prospect_candidate_private.identity_links_at(");
+    const wrapper = sql.split("CREATE FUNCTION prospect_candidate_private.identity_links_at(")[1].split("CREATE OR REPLACE FUNCTION prospect_candidate_private.full_summary(")[0];
+    expect(wrapper).toContain("prospect_candidate_private.identity_links_for(p_cutoff,NULL)");
+  });
+
   it("keeps original choice values and binds retractions to their exact target, firm and cutoff", () => {
     expect(sql).toContain("h.original_json->>'event_type'='evidence_retracted'");
     expect(sql).toContain("h.original_json#>>'{details,targetTable}'=p_choice->>'target_table'");

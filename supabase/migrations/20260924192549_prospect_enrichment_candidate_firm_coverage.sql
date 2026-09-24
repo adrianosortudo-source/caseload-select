@@ -332,11 +332,12 @@ END $$;
 CREATE TRIGGER candidate_z_firm_refresh AFTER INSERT OR UPDATE ON public.prospect_enrichment_packages
  FOR EACH ROW EXECUTE FUNCTION prospect_candidate_private.enrichment_firm_refresh_trigger();
 
-CREATE FUNCTION prospect_candidate_private.identity_links_at(p_cutoff bigint)
+CREATE FUNCTION prospect_candidate_private.identity_links_for(p_cutoff bigint,p_candidate uuid)
 RETURNS TABLE(candidate_id uuid,verified_firm_id uuid)
 LANGUAGE sql STABLE SET search_path = '' AS $$
  SELECT h.candidate_id,h.verified_firm_id FROM public.prospect_research_candidate_history h
  WHERE h.item_kind='identity_link' AND h.coverage_revision<=p_cutoff
+ AND (p_candidate IS NULL OR h.candidate_id=p_candidate)
  AND (h.source_table<>'legacy_verified_identity' OR (h.original_json->>'sourceRowSha256'=(
    SELECT c.snapshot->>'sourceRowSha256' FROM public.prospect_research_candidate_coverage c
    WHERE c.source_table=h.original_json->>'sourceTable' AND c.source_key=h.original_json->>'sourceRowId' AND c.revision<=p_cutoff
@@ -348,13 +349,19 @@ LANGUAGE sql STABLE SET search_path = '' AS $$
    WHERE c.source_table=dependency->>'table' AND c.source_key=dependency->>'key' AND c.revision<=p_cutoff ORDER BY c.revision DESC LIMIT 1))))
 $$;
 
+CREATE FUNCTION prospect_candidate_private.identity_links_at(p_cutoff bigint)
+RETURNS TABLE(candidate_id uuid,verified_firm_id uuid)
+LANGUAGE sql STABLE SET search_path = '' AS $$
+ SELECT candidate_id,verified_firm_id FROM prospect_candidate_private.identity_links_for(p_cutoff,NULL)
+$$;
+
 CREATE OR REPLACE FUNCTION prospect_candidate_private.full_summary(p_candidate uuid,p_cutoff bigint)
 RETURNS jsonb LANGUAGE sql STABLE SET search_path = '' AS $$
  WITH candidate AS (SELECT * FROM public.prospect_research_candidates WHERE id=p_candidate AND created_revision<=p_cutoff),
  history AS (SELECT * FROM public.prospect_research_candidate_history WHERE candidate_id=p_candidate AND coverage_revision<=p_cutoff),
  fields AS (SELECT f.* FROM public.prospect_research_candidate_fields f JOIN history h ON h.id=f.revision_id
    WHERE h.item_kind IN ('research_revision','provenance_revision')),
- identities AS (SELECT count(DISTINCT verified_firm_id) AS n,min(verified_firm_id::text) AS firm FROM prospect_candidate_private.identity_links_at(p_cutoff) WHERE candidate_id=p_candidate),
+ identities AS (SELECT count(DISTINCT verified_firm_id) AS n,min(verified_firm_id::text) AS firm FROM prospect_candidate_private.identity_links_for(p_cutoff,p_candidate)),
  statuses AS (
    SELECT coalesce(jsonb_agg(DISTINCT original_status) FILTER(WHERE original_status IS NOT NULL),'[]') AS original,
      coalesce(jsonb_agg(DISTINCT selection_disposition) FILTER(WHERE selection_disposition IS NOT NULL),'[]') AS selection,
