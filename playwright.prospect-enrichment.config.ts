@@ -46,6 +46,7 @@ export default defineConfig({
     timeout: 300_000,
     env: {
       ...process.env,
+      PROSPECT_QUALIFICATION_PREVIEW: "1",
       NEXT_PUBLIC_SUPABASE_URL: supabaseUrl,
       SUPABASE_SERVICE_ROLE_KEY: serviceRoleKey,
       PORTAL_SECRET: portalSecret,

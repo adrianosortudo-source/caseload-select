@@ -172,3 +172,41 @@ describe("reconciled GET with actual rich supplemental reader", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+describe("all returned research states and structured intake through actual GET", () => {
+  it.each(["selected", "held", "rejected", "incomplete"] as const)("retains source evidence, dates and original %s status in the route and profile view", async originalStatus => {
+    const id = "synthetic-status-" + originalStatus;
+    const channels = ["phone", { kind: "web-form", sourceUrl: "https://example.test/" + originalStatus, visibleFields: ["Name", "Email", "Phone", "Service", "Message", "Consent"] }, { kind: "program-specific-free-assessment", sourceUrl: "https://example.test/assessment" }];
+    const criteria = { gbpEvidence: null, originalStatus, missingGates: originalStatus === "selected" ? [] : ["roster"], office: { sourceUrl: "https://example.test/office", observedOn: "2026-09-23" } };
+    h.state.research = [research(id)];
+    h.state.supplemental = [{ ...supplemental(id, criteria), website_intake_channels: channels, qualification_state: originalStatus === "selected" ? "qualified" : originalStatus === "rejected" ? "disqualified" : "needs_evidence" }];
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const body = await response.json() as { records: ReconciledGtaProspect[] };
+    expect(body.records).toHaveLength(1);
+    const record = body.records[0];
+    expect(record.firmId).toBeNull();
+    expect(record.supplementalEvidence?.websiteIntake).toEqual({ channels, opportunityState: "not_established", observedOn: "2026-09-24" });
+    expect(record.supplementalEvidence?.qualification?.criteria).toEqual(criteria);
+    const html = renderToStaticMarkup(createElement<{ initialData?: RecordsResponse }>(ReconciledProspects, { initialData: { records: [record], source: "ledger" } }));
+    expect(html).toContain("Research profile");
+    expect(html).toContain("Observed 2026-09-24");
+    expect(html).toContain('href="https://example.test/' + originalStatus + '"');
+    expect(html).toContain("Consent");
+    expect(html).not.toContain("[object Object]");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("returns a visible held warning and raw evidence for an unsupported channel shape", async () => {
+    h.state.research = [research("synthetic-channel-warning")];
+    const raw = [{ kind: "form", sourceUrl: "javascript:alert(1)", unknown: "retained" }];
+    h.state.supplemental = [{ ...supplemental("synthetic-channel-warning", { originalStatus: "held" }), website_intake_channels: raw }];
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const body = await response.json() as { records: ReconciledGtaProspect[] };
+    expect(body.records[0].supplementalEvidence?.websiteIntake?.readWarning?.rawChannels).toEqual(raw);
+    const html = renderToStaticMarkup(createElement<{ initialData?: RecordsResponse }>(ReconciledProspects, { initialData: { records: body.records, source: "ledger" } }));
+    expect(html).toContain("Intake evidence held for review");
+    expect(html).not.toContain('href="javascript:');
+  });
+});

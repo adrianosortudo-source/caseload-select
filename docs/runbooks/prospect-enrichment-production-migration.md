@@ -150,3 +150,7 @@ https://github.com/supabase/cli/blob/v2.117.0/apps/cli/src/commands/db/query/que
 https://github.com/supabase/cli/blob/v2.117.0/apps/cli/src/command-internal/legacy-db-config.layer.ts
 https://github.com/supabase/cli/blob/v2.117.0/apps/cli/src/command-internal/legacy-db-config.parse.ts
 https://github.com/supabase/cli/blob/v2.117.0/apps/cli/src/command-internal/legacy-db-connection.sql-pg.layer.ts
+
+## All-candidate profile scope
+
+The current read-shape/profile search correction does not complete manifest-only candidate enrichment. Follow [the exact all-candidate implementation and acceptance sequence](./prospect-enrichment-all-candidate-profiles.md). Its new candidate projection requires a separately reviewed additive migration and release manifest; it is not part of this six-file allowlist or an authorization to import research.

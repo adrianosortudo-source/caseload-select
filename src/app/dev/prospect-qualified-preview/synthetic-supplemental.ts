@@ -13,8 +13,8 @@ export const SYNTHETIC_SUPPLEMENTAL_GBP_PROSPECTS: ReconciledGtaProspect[] = [
   reconciliationStatus: "new_pending_identity", legacyClusterLawyerCount: null,
   legacyCrosswalk: null, reconciliationNote: "Synthetic display verification only.",
   advertisingEvidence: "unknown", advertisingSourceUrl: null, gbpEvidence: "unknown", gbpSourceUrl: null,
-  supplementalEvidence: { identity: null, websiteIntake: null, qualification: {
+  supplementalEvidence: { identity: null, websiteIntake: { channels: [{ kind: "web-form", sourceUrl: "https://synthetic.example.test/contact", visibleFields: ["Name", "Email", "Phone", "Service", "Message", "Consent"] }], opportunityState: "not_established", observedOn: "2026-09-24" }, qualification: {
     state: "needs_evidence", cohort: "synthetic-ui-only", assessedOn: "2026-09-24",
-    criteria: { gbpEvidence: value, richEvidence: { observedOn: "2026-09-24", missingGates: ["synthetic-gap"] } },
+    criteria: { originalStatus: value === true ? "held" : value === false ? "rejected" : "incomplete", gbpEvidence: value, richEvidence: { observedOn: "2026-09-24", missingGates: ["synthetic-gap"] } },
   } },
 }));

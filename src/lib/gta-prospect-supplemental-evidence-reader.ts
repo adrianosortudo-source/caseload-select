@@ -1,4 +1,5 @@
 import "server-only";
+import { isIntakeChannel, type GtaProspectIntakeChannel } from "@/lib/gta-prospect-intake-evidence";
 
 const RPC_NAME = "list_gta_prospect_supplemental_evidence_for_operator_v2";
 const sourceKey = /^[a-z0-9][a-z0-9-]{1,159}$/;
@@ -20,7 +21,7 @@ export type GtaProspectSupplementalEvidenceSummary = Readonly<{
   firmId: string | null;
   canonicalDomain: string | null;
   identity: { matchState: "confirmed" | "unresolved" | "distinct"; observedOn: string; confidence: "high" | "moderate" | "unknown"; source: "supplemental_observation" | "stable_identity_registry" } | null;
-  websiteIntake: { channels: readonly string[]; opportunityState: "supported" | "not_established"; observedOn: string } | null;
+  websiteIntake: { channels: readonly GtaProspectIntakeChannel[]; readWarning?: { code: "unsupported_intake_evidence"; rawChannels: GtaProspectQualificationEvidence }; opportunityState: "supported" | "not_established"; observedOn: string } | null;
   qualification: { state: "qualified" | "needs_evidence" | "disqualified"; cohort: string; assessedOn: string; criteria: Readonly<Record<string, GtaProspectQualificationEvidence>> } | null;
 }>;
 
@@ -35,9 +36,14 @@ function missingProjection(errorValue: RpcError): boolean {
   const text = [errorValue.code, errorValue.message, errorValue.details, errorValue.hint].filter(Boolean).join(" ").toLowerCase();
   return errorValue.code === "PGRST202" || errorValue.code === "42883" || text.includes(`function public.${RPC_NAME} does not exist`) || text.includes(`could not find the function public.${RPC_NAME}`);
 }
-function textArray(value: unknown): readonly string[] {
-  if (!Array.isArray(value) || value.some((item) => typeof item !== "string" || !item.trim())) throw error("website_intake_channels is invalid");
-  return Object.freeze([...new Set(value.map((item) => item.trim()))]);
+function intakeEvidence(value: unknown): Pick<NonNullable<GtaProspectSupplementalEvidenceSummary["websiteIntake"]>, "channels" | "readWarning"> {
+  // Retain bounded JSON even when a source shape is not recognized. Unknown
+  // entries are explicitly held, never relabelled as validated observations.
+  const raw = criteria({ website_intake_channels: value }).website_intake_channels;
+  const items = Array.isArray(raw) ? raw : [];
+  const channels = items.filter(isIntakeChannel);
+  const supported = Array.isArray(raw) && channels.length === raw.length;
+  return { channels: Object.freeze(channels), ...(supported ? {} : { readWarning: { code: "unsupported_intake_evidence" as const, rawChannels: raw } }) };
 }
 const MAX_CRITERIA_DEPTH = 12;
 const MAX_CRITERIA_BYTES = 256 * 1024;
@@ -90,7 +96,7 @@ function row(value: unknown): GtaProspectSupplementalEvidenceSummary {
     firmId: value.firm_id as string | null,
     canonicalDomain: value.canonical_domain as string | null,
     identity: identityFull ? { matchState: value.identity_match_state as "confirmed" | "unresolved" | "distinct", observedOn: value.identity_observed_on as string, confidence: value.identity_confidence as "high" | "moderate" | "unknown", source: value.identity_source as "supplemental_observation" | "stable_identity_registry" } : null,
-    websiteIntake: websiteFull ? { channels: textArray(value.website_intake_channels), opportunityState: value.website_opportunity_state as "supported" | "not_established", observedOn: value.website_observed_on as string } : null,
+    websiteIntake: websiteFull ? { ...intakeEvidence(value.website_intake_channels), opportunityState: value.website_opportunity_state as "supported" | "not_established", observedOn: value.website_observed_on as string } : null,
     qualification: qualificationFull ? { state: value.qualification_state as "qualified" | "needs_evidence" | "disqualified", cohort: (value.qualification_cohort as string).trim(), assessedOn: value.qualification_assessed_on as string, criteria: criteria(value.qualification_criteria) } : null,
   };
 }

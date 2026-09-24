@@ -174,3 +174,41 @@ describe("GTA prospect supplemental evidence reader", () => {
       .rejects.toThrow("registry identity is incomplete or not confirmed");
   });
 });
+
+describe("structured website intake evidence", () => {
+  it("preserves mixed channel strings and objects, exact text, duplicate observations and form labels", async () => {
+    const channels = [" phone ", { kind: "web-form", sourceUrl: "https://example.test/contact?form=1", visibleFields: ["Name", "Email", "Phone", "Service", "Message", "Consent"] }, { kind: "program-specific-free-assessment", sourceUrl: "https://example.test/assessment" }, " phone "];
+    const result = await listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, website_intake_channels: channels }], error: null }) });
+    expect(result[0].websiteIntake?.channels).toEqual(channels);
+    expect(result[0].websiteIntake?.readWarning).toBeUndefined();
+    (channels[1] as { visibleFields: string[] }).visibleFields.push("Mutated");
+    expect(result[0].websiteIntake?.channels[1]).toEqual({ kind: "web-form", sourceUrl: "https://example.test/contact?form=1", visibleFields: ["Name", "Email", "Phone", "Service", "Message", "Consent"] });
+  });
+
+  it.each([
+    { kind: "form", sourceUrl: "javascript:alert(1)" },
+    { kind: "form", sourceUrl: "https://user:password@example.test" },
+    { kind: "form", sourceUrl: "https://example.test", visibleFields: [false] },
+    { kind: "form", sourceUrl: "https://example.test", unexpected: "retained" },
+    { kind: "", sourceUrl: "https://example.test" },
+    { kind: "form" },
+    null,
+  ])("holds unsupported channel evidence losslessly without promoting it: %j", async unsupported => {
+    const original = ["phone", unsupported];
+    const result = await listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, website_intake_channels: original }], error: null }) });
+    expect(result[0].websiteIntake?.channels).toEqual(["phone"]);
+    expect(result[0].websiteIntake?.readWarning).toEqual({ code: "unsupported_intake_evidence", rawChannels: original });
+    expect(result[0].qualification?.state).toBe("qualified"); // Preserve the original decision; a read warning is separate.
+  });
+
+  it("retains a non-array JSON shape as an explicit held read warning", async () => {
+    const raw = { observed: "legacy-unknown-shape" };
+    const result = await listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, website_intake_channels: raw }], error: null }) });
+    expect(result[0].websiteIntake?.channels).toEqual([]);
+    expect(result[0].websiteIntake?.readWarning?.rawChannels).toEqual(raw);
+  });
+
+  it("does not weaken unsafe JSON limits for retained unknown channels", async () => {
+    await expect(listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, website_intake_channels: JSON.parse('{"__proto__":{"bad":true}}') }], error: null }) })).rejects.toThrow("is invalid");
+  });
+});

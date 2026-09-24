@@ -47,6 +47,9 @@ import {
   GTA_PROSPECT_SOURCE_SYSTEM,
   type SourceContactStateMap,
 } from "./prospect-contact-operations";
+import ReconciledResearchProfile, { ReconciledIntakeEvidence } from "./ReconciledResearchProfile";
+import { intakeChannelKind } from "@/lib/gta-prospect-intake-evidence";
+import { prospectProfileFields, prospectProfileFieldLabel, prospectProfileValueLabel } from "@/lib/gta-prospect-profile";
 import { PROSPECT_DATA_CHANGED_EVENT } from "./prospect-data-events";
 
 export type RecordsResponse = {
@@ -163,6 +166,8 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const [quickView, setQuickView] = useState<QuickView>("all");
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [query, setQuery] = useState("");
+  const [profileField, setProfileField] = useState("");
+  const [profileValue, setProfileValue] = useState("");
   const [city, setCity] = useState("");
   const [countFilter, setCountFilter] = useState<CountFilter>("");
   const [customMinimum, setCustomMinimum] = useState("");
@@ -227,11 +232,14 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
       practiceAreas: uniqueNormalizedLabels(list.flatMap((record) => record.practiceAreas), normalizedPracticeAreaLabel),
       gbpOpportunities: [...new Set(dossiers.map((dossier) => dossier.gbpOpportunity.type))].sort(),
       advertisingSourceTypes: [...new Set(dossiers.flatMap((dossier) => dossier.advertisingActivity.sourceTypes))].sort(),
-      websiteOpportunities: [...new Set([...dossiers.flatMap((dossier) => dossier.websiteAndIntake.opportunityTypes), ...supplemental.flatMap((item) => item.websiteIntake?.opportunityState === "supported" ? ["public_site_review"] : [])])].sort(),
-      intakeChannels: [...new Set([...dossiers.flatMap((dossier) => dossier.websiteAndIntake.observedChannels), ...supplemental.flatMap((item) => item.websiteIntake?.channels ?? [])])].sort(),
+      websiteOpportunities: [...new Set([...dossiers.flatMap((dossier) => dossier.websiteAndIntake.opportunityTypes), ...supplemental.flatMap((item) => item.websiteIntake?.opportunityState === "supported" && !item.websiteIntake.readWarning ? ["public_site_review"] : [])])].sort(),
+      intakeChannels: [...new Set([...dossiers.flatMap((dossier) => dossier.websiteAndIntake.observedChannels), ...supplemental.flatMap((item) => item.websiteIntake?.channels.map(intakeChannelKind) ?? [])])].sort(),
+      profileFields: [...new Set(list.flatMap(record => prospectProfileFields(record).map(field => field.path)))].sort(),
       cohorts: [...new Set([...dossiers.map((dossier) => dossier.qualification.cohortId), ...supplemental.flatMap((item) => item.qualification ? [item.qualification.cohort] : [])])].sort(),
     };
   }, [records]);
+
+  const profileValues = useMemo(() => [...new Set((records ?? []).flatMap(record => prospectProfileFields(record).filter(field => field.path === profileField).map(field => field.value)))].sort(), [records, profileField]);
 
   const customRange = useMemo(() => {
     const minimum = customMinimum === "" ? null : Number(customMinimum);
@@ -261,10 +269,10 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   }, [records]);
 
   const filtered = useMemo(() => filterUnifiedProspectState(filterReconciledGtaProspects(records ?? [], {
-    query, city, lawyerCountBand: countFilter === "unknown" ? "unknown" : "", lawyerCountRange: selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, qualification,
+    query, profileField, profileValue, city, lawyerCountBand: countFilter === "unknown" ? "unknown" : "", lawyerCountRange: selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, qualification,
     advertisingActivity, gbpOpportunityType, downtownGeography,
     advertisingSourceType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, evidenceFreshness: freshness, cohortId, ownerContact,
-  }), { source, identity, quickView }), [records, query, city, countFilter, selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, qualification, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity, ownerContact, downtownGeography]);
+  }), { source, identity, quickView }), [records, query, profileField, profileValue, city, countFilter, selectedCountRange, practiceArea, advertising, gbp, hasOwner, hasPublicEmail, qualification, quickView, advertisingActivity, advertisingSourceType, gbpOpportunityType, websiteOpportunityType, intakeChannel, lawyerCountConfidence, freshness, cohortId, source, identity, ownerContact, downtownGeography]);
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const displayedPage = Math.min(page, pageCount - 1);
   const visibleRecords = useMemo(() => filtered.slice(displayedPage * PAGE_SIZE, (displayedPage + 1) * PAGE_SIZE), [displayedPage, filtered]);
@@ -297,6 +305,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   }, [contactRefreshToken, visibleRecords]);
 
   const filterChips = [
+    profileField && { label: "Research field: " + prospectProfileFieldLabel(profileField) + (profileValue ? ": " + prospectProfileValueLabel(profileValue) : ""), clear: () => { setProfileField(""); setProfileValue(""); } },
     query && { label: `Search: ${query}`, clear: () => setQuery("") }, city && { label: `City: ${city}`, clear: () => setCity("") },
     countFilter && { label: `Lawyers: ${countFilter === "1-10" ? "1 to 10" : countFilter === "2-3" ? "2 or 3" : lawyerCountRangeForBand(countFilter) ? countFilter.replace("-", " to ") : countFilter}`, clear: () => setCountFilter("") },
     !countFilter && customRange.value && { label: `Lawyers: ${customRange.value.min}${customRange.value.max === null ? "+" : ` to ${customRange.value.max}`}`, clear: () => { setCustomMinimum(""); setCustomMaximum(""); } },
@@ -311,7 +320,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
     lawyerCountConfidence && { label: `Count confidence: ${titleCase(lawyerCountConfidence)}`, clear: () => setLawyerCountConfidence("") },
     freshness && { label: `Verification: ${freshnessLabels[freshness]}`, clear: () => setFreshness("") },
     qualification && { label: `Qualification: ${qualificationLabels[qualification]}`, clear: () => setQualification("") },
-    cohortId && { label: "Original qualified cohort", clear: () => setCohortId("") },
+    cohortId && { label: "Cohort: " + cohortId, clear: () => setCohortId("") },
     hasOwner !== "" && { label: hasOwner ? "Owner identified" : "Owner not identified", clear: () => setHasOwner("") },
     hasPublicEmail !== "" && { label: hasPublicEmail ? "Email available" : "Email not available", clear: () => setHasPublicEmail("") },
     source && { label: `Source: ${sourceLabels[source]}`, clear: () => setSource("") },
@@ -321,7 +330,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   ].filter(Boolean) as { label: string; clear: () => void }[];
 
   function clearFilters() {
-    setQuery(""); setCity(""); setCountFilter(""); setCustomMinimum(""); setCustomMaximum(""); setPracticeArea(""); setAdvertising(""); setGbp("");
+    setQuery(""); setProfileField(""); setProfileValue(""); setCity(""); setCountFilter(""); setCustomMinimum(""); setCustomMaximum(""); setPracticeArea(""); setAdvertising(""); setGbp("");
     setAdvertisingActivity(""); setAdvertisingSourceType(""); setGbpOpportunityType(""); setWebsiteOpportunityType(""); setIntakeChannel("");
     setLawyerCountConfidence(""); setFreshness(""); setQualification(""); setCohortId(""); setHasOwner(""); setHasPublicEmail("");
     setSource(""); setIdentity(""); setOwnerContact(""); setDowntownGeography("");
@@ -350,7 +359,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
       </div>
 
       <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-4" aria-label="Prospect record filters">
-        <label className="text-xs font-semibold text-field-label">Search<input value={query} onChange={(event) => setQuery(event.target.value)} className="mt-1 w-full rounded border border-border-brand px-3 py-2 text-sm text-black" placeholder="Firm, domain, city, or practice area" /></label>
+        <label className="text-xs font-semibold text-field-label">Search<input value={query} onChange={(event) => setQuery(event.target.value)} className="mt-1 w-full rounded border border-border-brand px-3 py-2 text-sm text-black" placeholder="Firm, research, source, date, or status" /></label>
         <SelectField label="Record source" value={source} onChange={(value) => setSource(value as UnifiedProspectSource | "")}><option value="">All sources</option>{Object.entries(sourceLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
         <SelectField label="Identity status" value={identity} onChange={(value) => setIdentity(value as UnifiedIdentityState | "")}><option value="">All identity states</option>{Object.entries(identityLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
         <SelectField label="Owner identity and email" value={ownerContact} onChange={(value) => setOwnerContact(value as OwnerContactFilter | "")}><option value="">All owner-contact states</option>{Object.entries(ownerContactLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
@@ -373,8 +382,10 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
           <SelectField label="Visible intake channel" value={intakeChannel} onChange={setIntakeChannel}><option value="">All observed channels</option>{values.intakeChannels.map((value) => <option key={value} value={value}>{value}</option>)}</SelectField>
           <SelectField label="Evidence confidence (lawyer count)" value={lawyerCountConfidence} onChange={(value) => setLawyerCountConfidence(value as QualifiedProspectConfidence | "")}><option value="">Any confidence</option><option value="high">High</option><option value="moderate">Moderate</option></SelectField>
           <SelectField label="Verification freshness" value={freshness} onChange={(value) => setFreshness(value as EvidenceFreshness | "")}><option value="">Any observation age</option>{Object.entries(freshnessLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
+          <SelectField label="Research field" value={profileField} onChange={value => { setProfileField(value); setProfileValue(""); }}><option value="">All retained fields</option>{values.profileFields.map(value => <option key={value} value={value}>{prospectProfileFieldLabel(value)}</option>)}</SelectField>
+          <SelectField label="Research value" value={profileValue} onChange={setProfileValue}><option value="">Any recorded value</option>{profileValues.map(value => <option key={value} value={value}>{prospectProfileValueLabel(value)}</option>)}</SelectField>
           <SelectField label="Qualification state" value={qualification} onChange={(value) => setQualification(value as QualificationState | "")}><option value="">All qualification states</option>{Object.entries(qualificationLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
-          <SelectField label="Research cohort" value={cohortId} onChange={setCohortId}><option value="">All cohorts</option>{values.cohorts.map((value) => <option key={value} value={value}>Qualified cohort, September 7, 2026</option>)}</SelectField>
+          <SelectField label="Research cohort" value={cohortId} onChange={setCohortId}><option value="">All cohorts</option>{values.cohorts.map((value) => <option key={value} value={value}>{value}</option>)}</SelectField>
           <SelectField label="Owner identified" value={hasOwner === "" ? "" : hasOwner ? "yes" : "no"} onChange={(value) => setHasOwner(value === "" ? "" : value === "yes")}><option value="">Any availability</option><option value="yes">Owner identified</option><option value="no">Owner not identified</option></SelectField>
           <SelectField label="Public email" value={hasPublicEmail === "" ? "" : hasPublicEmail ? "yes" : "no"} onChange={(value) => setHasPublicEmail(value === "" ? "" : value === "yes")}><option value="">Any availability</option><option value="yes">Email available</option><option value="no">Email not available</option></SelectField>
           <SelectField label="Downtown geometry" value={downtownGeography} onChange={(value) => setDowntownGeography(value as DowntownGeographyStatus | "")}><option value="">Any geometry status</option>{Object.entries(downtownGeographyLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</SelectField>
@@ -411,9 +422,9 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
                 })()}</td>
                 <td className="px-3 py-3"><ProspectContactStatus state={contactState} loading={contactStateLoading} error={contactStateError} sourceRecordKey={record.id} onOpenHistory={() => setSelectedContact(record)} /></td>
                 <td className="px-3 py-3 text-black/75">{dossier ? <><span className="font-medium">GBP: {gbpOpportunityLabels[dossier.gbpOpportunity.type] ?? titleCase(dossier.gbpOpportunity.type)}</span><span className="mt-1 block text-xs text-black/55">Website: {dossier.websiteAndIntake.opportunityTypes.map((value) => websiteOpportunityLabels[value] ?? titleCase(value)).join(", ")}</span></> : supplemental?.qualification ? <><span className="font-medium">GBP: {getLegacyCriterion(supplemental.qualification.criteria, "gbpEvidence") === true ? "Supported evidence" : getLegacyCriterion(supplemental.qualification.criteria, "gbpEvidence") === false ? "Needs evidence" : "Not assessed"}</span><span className="mt-1 block text-xs text-black/55">Qualification: {titleCase(supplemental.qualification.state)}</span></> : <span className="text-black/50">Not assessed</span>}</td>
-                <td className="px-3 py-3 text-xs leading-5 text-black/70">{dossier?.websiteAndIntake.observedChannels.join(", ") || supplemental?.websiteIntake?.channels.join(", ") || "Not assessed"}</td>
+                <td className="px-3 py-3 text-xs leading-5 text-black/70"><ReconciledIntakeEvidence record={record} /></td>
                 <td className="px-3 py-3 text-xs leading-5"><EvidenceLink availability={record.advertisingEvidence} href={record.advertisingSourceUrl} label="Advertising" /><br /><EvidenceLink availability={record.gbpEvidence} href={record.gbpSourceUrl} label="GBP" />{dossier && <span className="mt-1 block text-black/55">{dossier.evidenceIds.length} registered sources</span>}</td>
-                <td className="px-3 py-3">{dossier ? <><a href={`/admin/prospects/audits/${encodeURIComponent(dossier.firmId)}`} className="inline-flex rounded bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-navy/90">Open audit</a><span className="mt-2 block text-xs text-black/55">Qualified and audit ready</span></> : <span className="text-xs text-black/50">Audit unavailable</span>}</td>
+                <td className="px-3 py-3">{dossier ? <><a href={`/admin/prospects/audits/${encodeURIComponent(dossier.firmId)}`} className="inline-flex rounded bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-navy/90">Open audit</a><span className="mt-2 block text-xs text-black/55">Qualified and audit ready</span></> : <span className="text-xs text-black/50">Audit unavailable</span>}<ReconciledResearchProfile record={record} /></td>
               </tr>;
             })}</tbody>
           </table>

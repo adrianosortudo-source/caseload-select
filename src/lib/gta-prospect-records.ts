@@ -13,6 +13,10 @@ import {
 } from "@/lib/prospect-display-normalization";
 import type { GtaProspectQualificationEvidence } from "@/lib/gta-prospect-supplemental-evidence-reader";
 
+import type { GtaProspectIntakeChannel } from "@/lib/gta-prospect-intake-evidence";
+import { intakeChannelKind } from "@/lib/gta-prospect-intake-evidence";
+import { prospectProfileFields, prospectProfileSearch } from "@/lib/gta-prospect-profile";
+
 export const LAWYER_COUNT_BANDS = ["1", "2", "3", "4-5", "6-10", "11-20", "21-50", "51+", "unknown"] as const;
 export type LawyerCountBand = (typeof LAWYER_COUNT_BANDS)[number];
 export type LawyerCountRange = { min: number; max: number | null };
@@ -115,7 +119,7 @@ export interface ReconciledGtaProspect {
   /** Private, applied supplemental evidence from the operator evidence ledger. */
   supplementalEvidence?: {
     identity: { matchState: "confirmed" | "unresolved" | "distinct"; observedOn: string; confidence: "high" | "moderate" | "unknown"; source: "supplemental_observation" | "stable_identity_registry" } | null;
-    websiteIntake: { channels: readonly string[]; opportunityState: "supported" | "not_established"; observedOn: string } | null;
+    websiteIntake: { channels: readonly GtaProspectIntakeChannel[]; readWarning?: { code: "unsupported_intake_evidence"; rawChannels: GtaProspectQualificationEvidence }; opportunityState: "supported" | "not_established"; observedOn: string } | null;
     qualification: { state: "qualified" | "needs_evidence" | "disqualified"; cohort: string; assessedOn: string; criteria: Readonly<Record<string, GtaProspectQualificationEvidence>> } | null;
   } | null;
 
@@ -125,6 +129,8 @@ export interface ReconciledGtaProspect {
 
 export interface ReconciledProspectFilters {
   query?: string;
+  profileField?: string;
+  profileValue?: string;
   city?: string;
   lawyerCountBand?: LawyerCountBand | "";
   lawyerCountRange?: LawyerCountRange | null;
@@ -217,12 +223,10 @@ export function filterReconciledGtaProspects(
 
   return records.filter((record) => {
     if (query) {
-      const searchable = [record.firmName, record.city, ...record.officeCities, record.websiteUrl ?? "", ...record.practiceAreas,
-        ...(record.publicContacts ?? []).flatMap((contact) => [contact.name ?? "", contact.email ?? ""])]
-        .join(" ")
-        .toLocaleLowerCase();
+      const searchable = prospectProfileSearch(record);
       if (!searchable.includes(query)) return false;
     }
+    if (filters.profileField && !prospectProfileFields(record).some(field => field.path === filters.profileField && (!filters.profileValue || field.value === filters.profileValue))) return false;
     if (city && !record.officeCities.some((officeCity) => normalizedCityKey(officeCity) === city)) return false;
     if (filters.lawyerCountBand && lawyerCountBand(record.observedLawyerCount) !== filters.lawyerCountBand) return false;
     if (filters.lawyerCountRange && !matchesObservedLawyerCount(record, filters.lawyerCountRange)) return false;
@@ -247,8 +251,8 @@ export function filterReconciledGtaProspects(
       if (filters.advertisingActivity && dossier?.advertisingActivity.state !== filters.advertisingActivity) return false;
       if (filters.advertisingSourceType && !dossier?.advertisingActivity.sourceTypes.includes(filters.advertisingSourceType)) return false;
       if (filters.gbpOpportunityType && dossier?.gbpOpportunity.type !== filters.gbpOpportunityType) return false;
-      if (filters.websiteOpportunityType && !dossier?.websiteAndIntake.opportunityTypes.includes(filters.websiteOpportunityType) && supplemental?.websiteIntake?.opportunityState !== "supported") return false;
-      if (filters.intakeChannel && !dossier?.websiteAndIntake.observedChannels.includes(filters.intakeChannel) && !supplemental?.websiteIntake?.channels.includes(filters.intakeChannel)) return false;
+      if (filters.websiteOpportunityType && !dossier?.websiteAndIntake.opportunityTypes.includes(filters.websiteOpportunityType) && !(filters.websiteOpportunityType === "public_site_review" && supplemental?.websiteIntake?.opportunityState === "supported" && !supplemental.websiteIntake.readWarning)) return false;
+      if (filters.intakeChannel && !dossier?.websiteAndIntake.observedChannels.includes(filters.intakeChannel) && !supplemental?.websiteIntake?.channels.some(channel => intakeChannelKind(channel) === filters.intakeChannel)) return false;
       if (filters.lawyerCountConfidence && dossier?.lawyerCount.confidence !== filters.lawyerCountConfidence) return false;
       if (filters.cohortId && dossier?.qualification.cohortId !== filters.cohortId && supplemental?.qualification?.cohort !== filters.cohortId) return false;
       if (filters.evidenceFreshness) {
