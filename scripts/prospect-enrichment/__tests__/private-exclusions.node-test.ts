@@ -10,12 +10,13 @@ import { assertNoExclusionTokens, COHORT_SCHEMA, compileExclusionScoped, contain
 
 const blockedId = "22222222-2222-4222-8222-222222222222";
 const allowedId = "11111111-1111-4111-8111-111111111111";
-function fixture() {
+function fixture(extraDomains: string[] = []) {
   const members: ExcludedMember[] = [{
     memberKey: "synthetic-closed-member",
     identities: [
       { namespace: "databaseFirmId", sourceSystem: null, value: blockedId },
       { namespace: "domain", sourceSystem: null, value: "excluded.example" },
+      ...extraDomains.map(value => ({ namespace: "domain", sourceSystem: null, value })),
       { namespace: "firmName", sourceSystem: null, value: "excluded synthetic firm" },
       { namespace: "researchKey", sourceSystem: "root-a", value: "excluded-research" },
       { namespace: "sourceRecordKey", sourceSystem: "root-a", value: "excluded-source" },
@@ -166,4 +167,34 @@ test("ancestor identity conflicts cannot be overwritten by a nested container",(
   // Give the containers no directly recognized firm identity, while retaining both domain claims.
   const result=compileExclusionScoped(context(),[{artifact:input.artifact,pointer:"",value}]);
   assert.equal(result.audit.identityUncertainHoldCount,1);assert.equal(result.packages.length,0);
+});
+
+test("every excluded domain alias is retained, hashed and matched without relaxing candidate uniqueness",()=>{
+  const f=fixture(["excluded-alias.example"]), ctx=validatePrivateExclusions(f.source,f.rules,f.bytes);
+  assert.equal(ctx.rules.filter(rule=>rule.namespace==="domain").length,2);
+  assert.notEqual(ctx.source.manifestSha256,context().source.manifestSha256);
+  assert.equal(screenCandidate(candidate({canonicalDomain:"https://www.excluded-alias.example/"}),ctx),"excluded");
+  const allowed=eligible(); allowed.original.identity={aliases:[{canonicalDomain:"other-allowed.example"}]};
+  assert.equal(screenCandidate(allowed,ctx),"identity_uncertain");
+});
+test("invalid, empty or duplicate excluded aliases fail rather than disappearing",()=>{
+  for(const alias of ["","bad/path","UPPER.example","excluded.example"]){
+    const f=fixture([alias]); assert.throws(()=>validatePrivateExclusions(f.source,f.rules,f.bytes),/exclusion_coverage_unproven/);
+  }
+});
+test("a domain alias shared across independent members makes coverage ambiguous",()=>{
+  const f=fixture(["excluded-alias.example"]);
+  f.cohort.members.push({memberKey:"synthetic-second-member",identities:[
+    {namespace:"databaseFirmId",sourceSystem:null,value:"33333333-3333-4333-8333-333333333333"},
+    {namespace:"domain",sourceSystem:null,value:"excluded-alias.example"},
+  ].sort((a,b)=>canonicalJson(a)<canonicalJson(b)?-1:1) as ExcludedMember["identities"]});
+  f.cohort.declaredMemberCount=2; f.cohort.membersSha256=protocolHash(f.cohort.members);
+  const bytes=new TextEncoder().encode(JSON.stringify(f.cohort));
+  f.source.artifacts[0].fileSha256=sha256(bytes); f.source.artifacts[0].size=bytes.length;
+  const content={...f.source}; delete (content as Partial<SourceManifest>).manifestSha256;
+  f.source.manifestSha256=protocolHash(content);
+  f.rules.sourceManifestSha256=f.source.manifestSha256;
+  f.rules.cohortInventory.fileSha256=sha256(bytes); f.rules.cohortInventory.declaredMemberCount=2;
+  f.rules.members=structuredClone(f.cohort.members);f.rules.rulesSha256=protocolHash(f.rules.members);
+  assert.throws(()=>validatePrivateExclusions(f.source,f.rules,bytes),/exclusion_coverage_unproven/);
 });

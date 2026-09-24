@@ -17,7 +17,7 @@ The supported exact inventory shape is `ClosedCohortInventory` in `private-exclu
 - `provenance`: exactly `kind: "governed-closed-cohort-export"`, immutable `exportId`, recorded UTC `exportedAt`, `membershipScope: "all-cohort-members-all-statuses"`, and `membershipPolicyVersion: "closed-cohort-membership/v1"`.
 - `declaredMemberCount`: exact positive number of unique members.
 - `membersSha256`: full protocol hash of the canonical `members` array.
-- `members`: the complete membership, including every held/rejected/incomplete subject belonging to the excluded cohort. Each member is exactly `{memberKey, identities}`. Members are ordinal-sorted by unique memberKey. Identities are ordinal-sorted by canonical JSON and globally unique; duplicate identities across members are ambiguous and rejected. Each member requires one databaseFirmId and one domain.
+- `members`: the complete membership, including every held/rejected/incomplete subject belonging to the excluded cohort. Each member is exactly `{memberKey, identities}`. Members are ordinal-sorted by unique memberKey. Identities are ordinal-sorted by canonical JSON and globally unique; duplicate identities across members are ambiguous and rejected. Each member requires one databaseFirmId and one-or-more valid normalized domains, retaining every listed alias. A domain identity shared across subjects is ambiguous and rejected. Every alias participates in the rule/scope hashes; any matching alias excludes a candidate. The candidate still requires exactly one canonical domain.
 
 The exact private rule document is `PrivateExclusions`:
 

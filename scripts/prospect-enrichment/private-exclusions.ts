@@ -71,7 +71,7 @@ function members(value: unknown): ExcludedMember[] {
       ruleOwners.add(key);
       return normalized;
     }).sort((a, b) => ordinal(canonicalJson(a), canonicalJson(b)));
-    if (identities.filter(i => i.namespace === "databaseFirmId").length !== 1 || identities.filter(i => i.namespace === "domain").length !== 1) return fail();
+    if (identities.filter(i => i.namespace === "databaseFirmId").length !== 1 || identities.filter(i => i.namespace === "domain").length < 1) return fail();
     return { memberKey: member.memberKey, identities };
   }).sort((a, b) => ordinal(a.memberKey, b.memberKey));
   // Canonical order prevents alternate hashes for identical sets.
