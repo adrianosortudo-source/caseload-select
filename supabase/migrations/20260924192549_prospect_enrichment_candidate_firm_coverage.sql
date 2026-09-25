@@ -568,12 +568,9 @@ BEGIN
    WHERE p_filters ? 'fieldPointer' AND NOT p_filters ? 'fieldValue' AND f.coverage_revision<=cutoff
      AND md5(f.pointer)=md5(p_filters->>'fieldPointer') AND f.pointer=p_filters->>'fieldPointer'
  ), typed_field_matches AS MATERIALIZED (
-   SELECT CASE WHEN identity_match.firm_count=1 THEN 'firm:'||identity_match.firm_id
-               ELSE 'candidate:'||f.candidate_id::text END group_id
-   FROM typed_field_candidates f
-   LEFT JOIN identities identity_match ON identity_match.candidate_id=f.candidate_id
-   GROUP BY CASE WHEN identity_match.firm_count=1 THEN 'firm:'||identity_match.firm_id
-                 ELSE 'candidate:'||f.candidate_id::text END
+   -- A typed field belongs to its source candidate only. Firm grouping is
+   -- retained for other filters, but must not widen an exact field match.
+   SELECT candidate_id FROM typed_field_candidates
  ), non_text_filtered AS MATERIALIZED (
    -- Keep ordinary and blank-text reads on the original predicate path.
    SELECT i.id FROM inventory i WHERE NOT (p_filters ? 'fieldPointer') AND (
@@ -589,8 +586,8 @@ BEGIN
      AND (NOT EXISTS(SELECT 1 FROM text_terms)
        OR EXISTS(SELECT 1 FROM text_matches tm WHERE tm.group_id=i.group_key))
  ), typed_field_filtered AS MATERIALIZED (
-   -- Match typed values once across the indexed field relation, then include every candidate in each firm group.
-   SELECT i.id FROM typed_field_matches tf JOIN inventory i ON i.group_key=tf.group_id
+   -- Return only candidates with the exact indexed field match.
+   SELECT i.id FROM typed_field_matches tf JOIN inventory i ON i.id=tf.candidate_id
    WHERE p_filters ? 'fieldPointer'
      AND CASE WHEN (p_filters-'fieldPointer'-'fieldValue'-'text')='{}'::jsonb THEN true
        ELSE prospect_candidate_private.matches_group(i.id,i.data,p_filters-'fieldPointer'-'fieldValue'-'text',cutoff,i.group_ids) END

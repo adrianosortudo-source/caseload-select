@@ -19,3 +19,27 @@ export const SYNTHETIC_SUPPLEMENTAL_GBP_PROSPECTS: ReconciledGtaProspect[] = [
     criteria: { originalStatus, gbpEvidence: value, richEvidence: { observedOn: "2026-09-24", missingGates: ["synthetic-gap"] } },
   } },
 }));
+
+export const SYNTHETIC_ZAREI_PROFILE_LINK: ReconciledGtaProspect = {
+  id: "q50-whole-firm-zarei-qualified-2026-09-25-v1",
+  firmName: "Synthetic Zarei profile acceptance",
+  recordOrigin: "reviewed_fixture", city: "Toronto", officeCities: ["Toronto"],
+  websiteUrl: null, practiceAreas: ["Family law"], observedLawyerCount: 2,
+  observedLawyerCountQualifier: "exact", observedLawyerCountDisplay: null,
+  rosterSourceUrl: null, rosterCheckedAt: "2026-09-25",
+  reconciliationStatus: "new_pending_identity", legacyClusterLawyerCount: null,
+  legacyCrosswalk: null, reconciliationNote: "Synthetic exact-source-key profile-link acceptance.",
+  advertisingEvidence: "unknown", advertisingSourceUrl: null, gbpEvidence: "unknown", gbpSourceUrl: null,
+  databaseFirmId: "a9989dca-8626-4a6e-93ca-797a1cb7eed2", firmId: null,
+  supplementalEvidence: { identity: null, websiteIntake: null, qualification: {
+    state: "qualified", cohort: "q50_whole_firm_2026_09_25_v1", assessedOn: "2026-09-25",
+    criteria: { sourceRecordKey: "q50-whole-firm-zarei-qualified-2026-09-25-v1", originalStatus: "not_selected", adminProspectsReadback: { state: "admin-prospects-readback-failed" } },
+  } },
+};
+
+export const SYNTHETIC_SAME_NAME_UNLINKED: ReconciledGtaProspect = {
+  ...SYNTHETIC_ZAREI_PROFILE_LINK,
+  id: "synthetic-same-name-no-verified-link",
+  databaseFirmId: undefined,
+  reconciliationNote: "Same displayed name; no exact applied database identity link.",
+};

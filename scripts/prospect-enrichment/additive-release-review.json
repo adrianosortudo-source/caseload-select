@@ -106,13 +106,21 @@
       "filename": "20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
       "version": "20260924192549",
       "name": "prospect_enrichment_candidate_firm_coverage",
-      "bytes": 59903,
-      "sha256": "71f7906da87d8563243a3c3cfceeee60584bd51b0c6ef2235411b2f392135a3f"
+      "bytes": 59633,
+      "sha256": "c86c54c80a787436b64eb01b3372637f32280ac9191716de39e42b1bc86a1a15"
+    },
+    {
+      "path": "supabase/migrations/20260925200000_gta_prospect_operator_database_firm_profile_link.sql",
+      "filename": "20260925200000_gta_prospect_operator_database_firm_profile_link.sql",
+      "version": "20260925200000",
+      "name": "gta_prospect_operator_database_firm_profile_link",
+      "bytes": 4306,
+      "sha256": "95d506502178c67467e208707a4e7a3c3701425ab827dc2ae60c5a965590c662"
     }
   ],
   "exclusions": [
     "No seeds or roles",
-    "No migration outside the ten exact ordered entries above",
+    "No migration outside the eleven exact ordered entries above",
     "The already-applied operator membership RPC is verified as a prerequisite and is never reapplied",
     "No data intake, import, identity linking, qualification change, or research-process cutover"
   ]

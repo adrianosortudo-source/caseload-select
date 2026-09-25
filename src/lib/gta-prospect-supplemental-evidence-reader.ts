@@ -1,9 +1,10 @@
 import "server-only";
 import { isIntakeChannel, type GtaProspectIntakeChannel } from "@/lib/gta-prospect-intake-evidence";
 
-const RPC_NAME = "list_gta_prospect_supplemental_evidence_for_operator_v2";
+const RPC_NAME = "list_gta_prospect_supplemental_evidence_for_operator_v3";
 const sourceKey = /^[a-z0-9][a-z0-9-]{1,159}$/;
 const stableFirmId = /^FIRM-[0-9A-HJKMNP-TV-Z]{26}$/;
+const databaseFirmId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const isoDate = /^\d{4}-\d{2}-\d{2}$/;
 
 type RpcError = { code?: string; message?: string; details?: string | null; hint?: string | null };
@@ -18,6 +19,7 @@ export type GtaProspectQualificationEvidence =
 
 export type GtaProspectSupplementalEvidenceSummary = Readonly<{
   sourceRecordKey: string;
+  databaseFirmId: string;
   firmId: string | null;
   canonicalDomain: string | null;
   identity: { matchState: "confirmed" | "unresolved" | "distinct"; observedOn: string; confidence: "high" | "moderate" | "unknown"; source: "supplemental_observation" | "stable_identity_registry" } | null;
@@ -73,10 +75,11 @@ function criteria(value: unknown): Readonly<Record<string, GtaProspectQualificat
 }
 function row(value: unknown): GtaProspectSupplementalEvidenceSummary {
   if (!object(value)) throw error("row is not an object");
-  const keys = ["source_record_key", "firm_id", "canonical_domain", "identity_match_state", "identity_observed_on", "identity_confidence", "identity_source", "website_intake_channels", "website_opportunity_state", "website_observed_on", "qualification_state", "qualification_cohort", "qualification_assessed_on", "qualification_criteria"];
+  const keys = ["source_record_key", "database_firm_id", "firm_id", "canonical_domain", "identity_match_state", "identity_observed_on", "identity_confidence", "identity_source", "website_intake_channels", "website_opportunity_state", "website_observed_on", "qualification_state", "qualification_cohort", "qualification_assessed_on", "qualification_criteria"];
   const unexpected = Object.keys(value).filter((key) => !keys.includes(key));
   if (unexpected.length) throw error(`unexpected column(s): ${unexpected.join(", ")}`);
   if (typeof value.source_record_key !== "string" || !sourceKey.test(value.source_record_key)) throw error("source_record_key is invalid");
+  if (typeof value.database_firm_id !== "string" || !databaseFirmId.test(value.database_firm_id)) throw error("database_firm_id is invalid");
   if (!absent(value.firm_id) && (typeof value.firm_id !== "string" || !stableFirmId.test(value.firm_id))) throw error("firm_id is invalid");
   if (!absent(value.canonical_domain) && (typeof value.canonical_domain !== "string" || !value.canonical_domain.trim())) throw error("canonical_domain is invalid");
   const identityEmpty = absent(value.identity_match_state) && absent(value.identity_observed_on) && absent(value.identity_confidence) && absent(value.identity_source);
@@ -93,6 +96,7 @@ function row(value: unknown): GtaProspectSupplementalEvidenceSummary {
   if (!qualificationEmpty && !qualificationFull) throw error("qualification summary is incomplete");
   return {
     sourceRecordKey: value.source_record_key,
+    databaseFirmId: value.database_firm_id,
     firmId: value.firm_id as string | null,
     canonicalDomain: value.canonical_domain as string | null,
     identity: identityFull ? { matchState: value.identity_match_state as "confirmed" | "unresolved" | "distinct", observedOn: value.identity_observed_on as string, confidence: value.identity_confidence as "high" | "moderate" | "unknown", source: value.identity_source as "supplemental_observation" | "stable_identity_registry" } : null,

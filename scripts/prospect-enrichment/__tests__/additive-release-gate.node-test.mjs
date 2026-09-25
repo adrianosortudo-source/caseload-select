@@ -51,16 +51,16 @@ const gate = {
   environment: {}, projectEnvFiles: [],
 };
 
-test("review-only receipt binds all ten ordered release migrations and the applied RPC prerequisite", () => {
-  assert.equal(MIGRATION_PATHS.length, 10);
+test("review-only receipt binds all eleven ordered release migrations and the applied RPC prerequisite", () => {
+  assert.equal(MIGRATION_PATHS.length, 11);
   assert.equal(receipt.reviewOnly, true);
   assert.equal(receipt.productionApplicationApproved, false);
   assert.deepEqual(verifyReleaseReceipt(receipt, realSources), receipt);
-  assert.equal(receipt.migrations.length, 10);
+  assert.equal(receipt.migrations.length, 11);
   const qualification = receipt.migrations.filter(m => m.path.includes("prospect_qualification_"));
-  const candidates = receipt.migrations.filter(m => m.path.includes("candidate_"));
+  const candidates = receipt.migrations.filter(m => m.path.includes("candidate_") || m.path.includes("database_firm_profile_link"));
   assert.equal(qualification.length, 2);
-  assert.equal(candidates.length, 2);
+  assert.equal(candidates.length, 3);
   assert.equal(receipt.migrations.length - qualification.length - candidates.length, 6);
   assert.equal(receipt.appliedPrerequisite.path, APPLIED_OPERATOR_RPC.path);
   assert.equal(receipt.appliedPrerequisite.expectedCatalog.definitionMd5, "625afed49f4c9cde1084c1acd175ef47");
@@ -79,20 +79,20 @@ test("receipt rejects changed, missing, extra, reordered and approval-mutated in
   assert.throws(() => createReleaseReceipt({ ...realSources, "supabase/migrations/20990101000000_unreviewed.sql": Buffer.from("SELECT 1;") }), /exact_release_sources_required/);
 });
 
-test("ledger query is fixed to the ten release migrations plus the applied RPC prerequisite", () => {
+test("ledger query is fixed to the eleven release migrations plus the applied RPC prerequisite", () => {
   const query = ledgerQuery(receipt);
   const versions = [...receipt.migrations.map(m => m.version), receipt.appliedPrerequisite.version].sort();
-  assert.equal((query.match(/\d{14}/g) ?? []).length, 11);
+  assert.equal((query.match(/\d{14}/g) ?? []).length, 12);
   for (const version of versions) assert.match(query, new RegExp(version));
   assert.match(query, /^SELECT version, name, statements FROM supabase_migrations\.schema_migrations WHERE version IN /);
   assert.match(query, /ORDER BY version;\n$/);
 });
 
 test("ledger accepts only a verified applied RPC plus an exact ordered migration prefix", () => {
-  for (const count of [0, 1, 5, 9, 10]) {
+  for (const count of [0, 1, 5, 9, 10, 11]) {
     const proof = verifyLedgerState(rowsForPrefix(count), fakeReceipt, fakeSources);
     assert.equal(proof.appliedPrefixLength, count);
-    assert.equal(proof.pending.length, 10 - count);
+    assert.equal(proof.pending.length, 11 - count);
     assert.equal(proof.appliedPrerequisite.version, APPLIED_OPERATOR_RPC.version);
   }
 });
@@ -100,7 +100,7 @@ test("ledger accepts only a verified applied RPC plus an exact ordered migration
 for (const [label, rows] of [
   ["missing applied RPC", rowsForPrefix(10).filter(row => row.version !== APPLIED_OPERATOR_RPC.version)],
   ["missing prefix entry", rowsForPrefix(4).filter(row => row.version !== "20260923161812")],
-  ["non-prefix release row", rowsForPrefix(0).concat({ version: "20260924192549", name: "prospect_enrichment_candidate_firm_coverage", statements: fakeStatements })],
+  ["non-prefix release row", rowsForPrefix(0).concat({ version: "20260925200000", name: "gta_prospect_operator_database_firm_profile_link", statements: fakeStatements })],
   ["wrong RPC name", rowsForPrefix(0).map(row => row.version === APPLIED_OPERATOR_RPC.version ? { ...row, name: "wrong" } : row)],
   ["tampered stored SQL", rowsForPrefix(1).map(row => row.version === "20260921120000" ? { ...row, statements: ["SELECT 2"] } : row)],
   ["extra ledger columns", rowsForPrefix(0).map(row => row.version === APPLIED_OPERATOR_RPC.version ? { ...row, unexpected: true } : row)],
@@ -114,7 +114,7 @@ test("plan accepts only the ledger-derived exact pending suffix and empty post-r
   assert.throws(() => verifyMigrationPlan({ ...prePlan, migrations: [...prePlan.migrations, "20990101000000_unreviewed.sql"] }, before, "pre"), /unexpected_pending/);
   assert.throws(() => verifyMigrationPlan({ ...prePlan, seeds: ["seed.sql"] }, before, "pre"), /unexpected_pending/);
   assert.throws(() => verifyMigrationPlan({ ...prePlan, roles: ["anon"] }, before, "pre"), /unexpected_pending/);
-  const complete = verifyLedgerState(rowsForPrefix(10), fakeReceipt, fakeSources);
+  const complete = verifyLedgerState(rowsForPrefix(11), fakeReceipt, fakeSources);
   const post = { dryRun: true, upToDate: true, migrations: [], seeds: [], roles: [] };
   assert.deepEqual(verifyMigrationPlan(post, complete, "pre").migrations, [], "an already-complete exact release is a read-only no-op");
   assert.deepEqual(verifyMigrationPlan(post, complete, "post").migrations, []);

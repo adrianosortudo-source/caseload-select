@@ -97,6 +97,7 @@ function attachSupplementalEvidence(
     if (!observation) return { ...record, supplementalEvidence: null };
     return {
       ...record,
+      databaseFirmId: observation.databaseFirmId,
       firmId: observation.identity?.matchState === "confirmed" ? observation.firmId : record.firmId,
       canonicalDomain: observation.identity?.matchState === "confirmed" ? observation.canonicalDomain : record.canonicalDomain,
       supplementalEvidence: {
@@ -120,7 +121,9 @@ function attachStableIdentities(
   const bySourceRecordKey = new Map(identities.map((identity) => [identity.sourceRecordKey, identity]));
   return records.map((record) => {
     const identity = bySourceRecordKey.get(record.id);
-    if (identity) {
+    const confirmedObservation = record.supplementalEvidence?.identity;
+    if (identity && confirmedObservation?.matchState === "confirmed"
+      && record.firmId === identity.firmId && record.canonicalDomain === identity.canonicalDomain) {
       return {
         ...record,
         firmId: identity.firmId,

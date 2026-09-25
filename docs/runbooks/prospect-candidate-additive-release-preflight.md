@@ -4,11 +4,11 @@ This document and its machine-readable receipt define a **review-only, read-only
 
 ## Exact source scope
 
-The receipt `scripts/prospect-enrichment/additive-release-review.json` binds the ten currently absent migrations by ordered version, path, name, byte count, and SHA-256: two qualification migrations, six prospect-enrichment migrations, and the two candidate-profile migrations. The verifier rejects any changed, missing, reordered, duplicated, or extra migration source.
+The receipt `scripts/prospect-enrichment/additive-release-review.json` binds the eleven currently absent migrations by ordered version, path, name, byte count, and SHA-256: two qualification migrations, six prospect-enrichment migrations, the two candidate-profile migrations, and the additive supplemental firm-profile-link RPC. The verifier rejects any changed, missing, reordered, duplicated, or extra migration source.
 
 The operator-membership restoration migration `20260924180541_restore_operator_membership_rpc.sql` is a separately recorded applied prerequisite, never part of the pending apply set. The preflight requires exactly one matching ledger row and verifies all stored SQL statements against that migration's source. It also checks the production catalog invariants recorded in the receipt: `public.revalidate_operator_membership_v1(uuid,uuid,boolean)`, `plpgsql`, `SECURITY DEFINER`, empty `search_path`, the reviewed definition MD5, no `PUBLIC`/`anon`/`authenticated` execute grant, and `service_role` as the sole non-owner execute grantee.
 
-For interrupted release recovery, the ten release migrations may appear only as an exact ascending-version prefix in the ledger. The preflight derives the remaining suffix from that prefix and requires Supabase CLI's pending plan to equal it exactly, with no seeds or roles. It fails on an extra ledger row, missing or changed source statement, order gap, unexpected pending migration, or catalog mismatch.
+For interrupted release recovery, the eleven release migrations may appear only as an exact ascending-version prefix in the ledger. The preflight derives the remaining suffix from that prefix and requires Supabase CLI's pending plan to equal it exactly, with no seeds or roles. It fails on an extra ledger row, missing or changed source statement, order gap, unexpected pending migration, or catalog mismatch.
 
 ## Running the read-only check
 

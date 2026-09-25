@@ -360,6 +360,7 @@ suite("all-candidate immutable PostgreSQL projection", () => {
         [token, "c".repeat(64)])).rows[0].id;
       await db.query("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) VALUES($1,$2,$3,'accepted','created',$4,$5::jsonb)",
         [coreBatchId, token, "d".repeat(64), firmId, JSON.stringify({ sourceRecordKey: token, firmName: "Zarei Law Professional Corporation" })]);
+      await db.query("INSERT INTO public.gta_prospect_stable_identity_registry(firm_id,stable_firm_id,canonical_domain,source_url,observed_on,confidence,adjudication_basis) VALUES($1,'FIRM-00000000000000000000000000','zarei-synthetic.example','https://zarei-synthetic.example/identity','2026-09-25','high','Synthetic provisional identity; not adjudicated for shared use')", [firmId]);
       const supplementalBatchId = (await db.query<{ id: string }>(
         "INSERT INTO public.gta_prospect_supplemental_evidence_import_batches(package_id,package_sha256,source_record_count,state,applied_at) VALUES($1,$2,1,'applied',now()) RETURNING id",
         [token, "e".repeat(64)])).rows[0].id;
@@ -367,6 +368,9 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       const assessmentId = (await db.query<{ id: string }>(
         "INSERT INTO public.gta_prospect_qualification_assessments(firm_id,evidence_import_batch_id,assessment_id,qualification_state,qualification_cohort,assessed_on,criteria,evidence_urls,raw_assessment) VALUES($1,$2,$3,'qualified','q50_whole_firm_2026_09_25_v1','2026-09-25',$4::jsonb,'[]'::jsonb,$5::jsonb) RETURNING id",
         [firmId, supplementalBatchId, sourceKey, JSON.stringify({ lawyerCount: true, downtownGeometry: true, sharedIdentity: true, ownerContact: true, advertisingActivity: true, gbpEvidence: true, websiteIntake: true }), JSON.stringify({ sourceRecordKey: sourceKey, adminProspectsReadback: failedReadback })])).rows[0].id;
+      const siblingAssessmentId = (await db.query<{ id: string }>(
+        "INSERT INTO public.gta_prospect_qualification_assessments(firm_id,evidence_import_batch_id,assessment_id,qualification_state,qualification_cohort,assessed_on,criteria,evidence_urls,raw_assessment) VALUES($1,$2,$3,'needs_evidence','q50_whole_firm_2026_09_25_v1','2026-09-25',$4::jsonb,'[]'::jsonb,$5::jsonb) RETURNING id",
+        [firmId, supplementalBatchId, token + "-sibling-assessment", JSON.stringify({ differentAssessment: true }), JSON.stringify({ sourceRecordKey: token + "-sibling", note: "same firm, distinct source assessment" })])).rows[0].id;
 
       const exactFirm = await list(db, { firmId, fieldPointer: "/assessment_id", fieldValue: sourceKey });
       expect(exactFirm.items).toHaveLength(1);
@@ -382,6 +386,18 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       const global = await list(db, { fieldPointer: "/assessment_id", fieldValue: sourceKey });
       expect(global.items.map(item => item.id)).toEqual([candidate.id]);
       expect(global.items[0].verifiedFirmId).toBe(firmId);
+      const profileInventory = await list(db, { firmId });
+      expect(profileInventory.items.map(item => item.identityKey)).toEqual(expect.arrayContaining([assessmentId, siblingAssessmentId]));
+      expect(profileInventory.items.find(item => item.identityKey === siblingAssessmentId)).toMatchObject({
+        identityNamespace: "legacy:gta_prospect_qualification_assessments",
+        verifiedFirmId: firmId,
+      });
+
+      const supplementalProfileRow = (await db.query<{ source_record_key: string; database_firm_id: string; firm_id: string | null }>(
+        "SELECT source_record_key,database_firm_id,firm_id FROM public.list_gta_prospect_supplemental_evidence_for_operator_v3() WHERE source_record_key=$1",
+        [token])).rows[0];
+      expect(supplementalProfileRow).toEqual({ source_record_key: token, database_firm_id: firmId, firm_id: null });
+      expect(supplementalProfileRow.database_firm_id).not.toBe(supplementalProfileRow.firm_id);
 
       const retained = (await history(db, candidate.id)).items.find(item => item.itemKind === "research_revision")!;
       expect(retained.originalJson).toMatchObject({
