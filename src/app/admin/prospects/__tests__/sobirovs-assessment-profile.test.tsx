@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { EvidenceCard } from "../ProspectResearchDetail";
 import type { ProspectEnrichmentEvidence } from "@/lib/prospect-enrichment-reader";
+import { researchEvidenceFields } from "@/lib/prospect-enrichment-presentation";
 
 // Public facts copied from the governed Sobirovs read-back dated 2026-09-24.
 // The test checks presentation, not whether the live Admin import has occurred.
@@ -30,6 +31,11 @@ const assessment: ProspectEnrichmentEvidence = {
 describe("governed qualification research in the firm profile", () => {
   it("renders Sobirovs count, owner, attributed email, advertising tag and source dates as labeled fields", () => {
     const html = renderToStaticMarkup(createElement(EvidenceCard, { item: assessment }));
+    const displayed = new Map(researchEvidenceFields(assessment)[0].map((field) => [field.label, field.value]));
+    expect(displayed.get("Observed lawyer count")).toBe(3);
+    expect(displayed.get("Named owner or decision maker")).toBe("Rakhmad Sobirov");
+    expect(displayed.get("Attributed direct email")).toBe("rakhmad@sobirovs.com");
+    expect(displayed.get("Advertising signals and sources")).toEqual(expect.arrayContaining([expect.objectContaining({ identifier: "AW-378398717", observedAt: "2026-09-24" })]));
     for (const label of ["Observed lawyer count", "Roster source", "Roster observed", "Named owner or decision maker", "Leadership role", "Role source", "Role observed", "Attributed direct email", "Email source", "Email observed", "Advertising signal status", "Advertising signals and sources", "Recent ad status"]) {
       expect(html).toContain(label);
     }
@@ -46,5 +52,39 @@ describe("governed qualification research in the firm profile", () => {
     expect(html).toContain("unknown");
     expect(html).not.toContain("rakhmad@sobirovs.com");
     expect(html).not.toContain("AW-378398717");
+  });
+
+  it("projects the root-level Englobe production assessment and its source dates", () => {
+    // Minimal slice of the stored Englobe assessment read-back, 2026-09-23.
+    const englobe = { ...assessment, data: { ...assessment.data, criteria: {
+      lawyerCount: 3,
+      lawyerCountEvidence: { count: 3, sourceUrl: "https://englobelaw.com/people/", observedAt: "2026-09-23T04:01:20.299515Z" },
+      services: [{ niche: "focused-immigration", sourceUrl: "https://englobelaw.com/practice-areas/immigration/appeal-and-judicial-review/", observedAt: "2026-09-23T04:02:10.7949803Z" }],
+      decisionMaker: { name: "Vahid Yeganeh", role: "Founding Partner", roleEvidence: { sourceUrl: "https://englobelaw.com/people/vahid-yeganeh/", observedAt: "2026-09-23T04:01:23.096096Z" } },
+      directPublishedEmail: { address: "yeganeh@englobelaw.com", attributedTo: "Vahid Yeganeh", sourceUrl: "https://englobelaw.com/people/vahid-yeganeh/", observedAt: "2026-09-23T04:01:23.096096Z" },
+      advertisingPixelStatus: "pixels-detected", advertisingStatus: "recent-ad-verified",
+      advertisingObservations: [{ vendor: "google_ads", kind: "ads-tag", identifier: "AW-16570963733", sourceUrl: "https://www.googletagmanager.com/gtag/js?id=GT-5TWNJSR4", observedAt: "2026-09-23T04:00:45.472003Z" }],
+    } } };
+    const displayed = new Map(researchEvidenceFields(englobe)[0].map((field) => [field.label, field.value]));
+    expect(displayed.get("Observed lawyer count")).toBe(3);
+    expect(displayed.get("Roster source")).toBe("https://englobelaw.com/people/");
+    expect(displayed.get("Named owner or decision maker")).toBe("Vahid Yeganeh");
+    expect(displayed.get("Role observed")).toBe("2026-09-23T04:01:23.096096Z");
+    expect(displayed.get("Attributed direct email")).toBe("yeganeh@englobelaw.com");
+    expect(displayed.get("Advertising signal status")).toBe("pixels-detected");
+    expect(displayed.get("Recent ad status")).toBe("recent-ad-verified");
+    expect(displayed.get("Advertising signals and sources")).toEqual(expect.arrayContaining([expect.objectContaining({ identifier: "AW-16570963733" })]));
+    expect(displayed.get("Practice niche evidence")).toEqual(expect.arrayContaining([expect.objectContaining({ niche: "focused-immigration" })]));
+  });
+
+  it("keeps nested firm-fit service evidence visible without promoting a held candidate", () => {
+    const held = { ...assessment, data: { ...assessment.data, qualification_state: "needs_evidence", criteria: {
+      firmFit: { services: [{ niche: "wills-estates-probate", sourceUrl: "https://valleylaw.ca/areas-of-practice/wills-and-estates/", observedAt: "2026-09-25" }] },
+      advertising: { observations: [{ kind: "ads-tag", observedAt: "2026-09-25" }] },
+    } } };
+    const displayed = new Map(researchEvidenceFields(held)[0].map((field) => [field.label, field.value]));
+    expect(displayed.get("Practice niche evidence")).toEqual(expect.arrayContaining([expect.objectContaining({ niche: "wills-estates-probate", observedAt: "2026-09-25" })]));
+    expect(displayed.get("Original decision")).toBe("needs_evidence");
+    expect(displayed.has("Attributed direct email")).toBe(false);
   });
 });

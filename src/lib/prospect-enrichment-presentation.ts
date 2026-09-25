@@ -21,14 +21,24 @@ export function researchEvidenceFields(item: ProspectEnrichmentEvidence): readon
     else if (item.table === "prospect_qualification_decisions" || item.table === "gta_prospect_qualification_assessments") {
       values = [["Original decision", row.selection_disposition ?? row.qualification_state], ["Display category", item.qualificationCategory], ["Cohort", row.cohort_id ?? row.qualification_cohort], ["Rule version", row.rule_version ?? outer.ruleVersion], ["Independent gates", { fit: selected(outer, "fitDecision", row.fit_decision), commercialRelevance: selected(outer, "commercialRelevance", row.commercial_relevance), decisionMakerAccess: selected(outer, "decisionMakerAccess", row.decision_maker_access), opportunity: selected(outer, "opportunityDecision", row.opportunity_decision) }], ["Missing gates", selected(outer, "missingGates", record(row.criteria).missingGates)], ["Reasons", row.rationale ?? row.note], ["Research failures", outer.researchFailures], ["Assessment date", item.dateLabel]];
       if (item.table === "gta_prospect_qualification_assessments") {
-        const assessment = record(record(row.criteria).record);
-        const roster = record(assessment.lawyerCount), owner = record(assessment.decisionMaker);
-        const email = record(assessment.email), advertising = record(assessment.advertising);
-        const authority = record(owner.authorityEvidence);
-        if (Object.hasOwn(assessment, "lawyerCount")) values.push(["Observed lawyer count", roster.count], ["Roster source", roster.sourceUrl], ["Roster observed", roster.observedAt]);
-        if (Object.hasOwn(assessment, "decisionMaker")) values.push(["Named owner or decision maker", owner.name], ["Leadership role", owner.role], ["Role source", authority.sourceUrl], ["Role observed", authority.observedAt]);
-        if (Object.hasOwn(assessment, "email")) values.push(["Attributed direct email", email.address], ["Email attribution", email.attributedTo], ["Email source", email.sourceUrl], ["Email observed", email.observedAt]);
-        if (Object.hasOwn(assessment, "advertising")) values.push(["Advertising signal status", advertising.status], ["Advertising signals and sources", advertising.observations], ["Recent ad status", advertising.recentAdStatus]);
+        const criteria = record(row.criteria);
+        // Historical assessments use root criteria; newer research may wrap the same facts in record.
+        const assessment = Object.hasOwn(criteria, "record") ? record(criteria.record) : criteria;
+        const fit = record(assessment.firmFit);
+        const countEvidence = record(assessment.lawyerCountEvidence ?? fit.lawyerCountEvidence ?? assessment.lawyerCount);
+        const owner = record(assessment.decisionMaker ?? fit.decisionMaker);
+        const email = record(assessment.email ?? assessment.directPublishedEmail ?? fit.directPublishedEmail);
+        const advertising = record(assessment.advertising);
+        const authority = record(owner.authorityEvidence ?? owner.roleEvidence);
+        const count = typeof assessment.lawyerCount === "number" ? assessment.lawyerCount : countEvidence.count ?? fit.lawyerCount;
+        const services = assessment.services ?? fit.services;
+        if (count !== undefined || Object.keys(countEvidence).length) values.push(["Observed lawyer count", count], ["Roster source", countEvidence.sourceUrl], ["Roster observed", countEvidence.observedAt]);
+        if (services !== undefined) values.push(["Practice niche evidence", services]);
+        if (Object.keys(owner).length) values.push(["Named owner or decision maker", owner.name], ["Leadership role", owner.role], ["Role source", authority.sourceUrl], ["Role observed", authority.observedAt]);
+        if (Object.keys(email).length) values.push(["Attributed direct email", email.address], ["Email attribution", email.attributedTo], ["Email source", email.sourceUrl], ["Email observed", email.observedAt]);
+        const adStatus = advertising.status ?? assessment.advertisingPixelStatus;
+        const adObservations = advertising.observations ?? assessment.advertisingObservations;
+        if (adStatus !== undefined || adObservations !== undefined || assessment.advertisingStatus !== undefined) values.push(["Advertising signal status", adStatus], ["Advertising signals and sources", adObservations], ["Recent ad status", advertising.recentAdStatus ?? assessment.advertisingStatus]);
       }
     }
     else if (item.table === "prospect_research_attempts") values = [["Research provider", row.provider], ["Query or URL", row.query_or_url], ["Retrieval outcome", row.outcome], ["Coverage", row.coverage], ["Failure reason", row.failure_reason]];
