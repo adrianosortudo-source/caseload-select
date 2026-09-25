@@ -580,10 +580,10 @@ BEGIN
        OR EXISTS(SELECT 1 FROM text_matches tm WHERE tm.group_id=i.group_key))
  ), typed_field_filtered AS MATERIALIZED (
    -- Match typed values once across the indexed field relation, then include every candidate in each firm group.
-   SELECT i.id FROM inventory i WHERE p_filters ? 'fieldPointer'
+   SELECT i.id FROM typed_field_matches tf JOIN inventory i ON i.group_key=tf.group_id
+   WHERE p_filters ? 'fieldPointer'
      AND CASE WHEN (p_filters-'fieldPointer'-'fieldValue'-'text')='{}'::jsonb THEN true
        ELSE prospect_candidate_private.matches_group(i.id,i.data,p_filters-'fieldPointer'-'fieldValue'-'text',cutoff,i.group_ids) END
-     AND EXISTS(SELECT 1 FROM typed_field_matches tf WHERE tf.group_id=i.group_key)
      AND (NOT p_filters ? 'text' OR btrim(p_filters->>'text')='' OR NOT EXISTS(SELECT 1 FROM text_terms)
        OR EXISTS(SELECT 1 FROM text_matches tm WHERE tm.group_id=i.group_key))
  ), filtered AS MATERIALIZED (
