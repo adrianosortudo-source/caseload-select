@@ -132,7 +132,7 @@ test("operator RPC catalog accepts only the reviewed security, definition, and e
   assert.throws(() => verifyOperatorRpcCatalog([CATALOG_EXPECTED, CATALOG_EXPECTED], receipt), /catalog_ambiguous/);
 });
 
-test("source authorization accepts only reviewed manual main dispatch with direct TLS database URL", () => {
+test("source authorization accepts only reviewed manual main dispatch with direct TLS database URL", async (t) => {
   assert.equal(verifySourceGate(gate).operation, "dry-run");
   for (const [label, change] of [
     ["push event", { event: "push" }], ["branch dispatch", { ref: "refs/heads/codex/test" }],
@@ -140,7 +140,7 @@ test("source authorization accepts only reviewed manual main dispatch with direc
     ["changed current source", { checkoutSha: "b".repeat(40) }], ["wrong protected SHA", { configuredReviewedSha: "b".repeat(40) }],
     ["non-TLS URL", { databaseUrl: gate.databaseUrl.replace("sslmode=verify-full", "sslmode=disable") }],
     ["project env file", { projectEnvFiles: [".env"] }], ["ambient DB override", { environment: { PGHOST: "unexpected" } }],
-  ]) test("source gate rejects " + label, () => assert.throws(() => verifySourceGate({ ...gate, ...change })));
+  ]) await t.test("source gate rejects " + label, () => assert.throws(() => verifySourceGate({ ...gate, ...change })));
 });
 
 test("new workflow is protected and read-only; legacy six-migration writer is unchanged", () => {
