@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
+import { desiredClientModelId, eligibleDesiredClientClarifications, runDesiredClientAnalysis } from "@/lib/desired-client/analyze";
 import { validateAnalysisRequest } from "@/lib/desired-client/validation";
-import type { AnalysisFailureCode, AnalysisFailureEnvelope } from "@/lib/desired-client/types";
+import type { AnalysisFailureCode, AnalysisFailureEnvelope, AnalysisSuccessEnvelope } from "@/lib/desired-client/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,8 +13,8 @@ const MAX_BODY_BYTES = 32_768;
 const NO_STORE = { "Cache-Control": "no-store" };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function fail(requestId: string, code: AnalysisFailureCode, status: number): NextResponse<AnalysisFailureEnvelope> {
-  return NextResponse.json({ ok: false, requestId, error: { code } }, { status, headers: NO_STORE });
+function fail(requestId: string, code: AnalysisFailureCode, status: number, extraHeaders: Record<string, string> = {}): NextResponse<AnalysisFailureEnvelope> {
+  return NextResponse.json({ ok: false, requestId, error: { code } }, { status, headers: { ...NO_STORE, ...extraHeaders } });
 }
 
 function requestIdFromBody(value: unknown): string {
@@ -46,22 +48,14 @@ async function readBodyWithinLimit(request: NextRequest): Promise<BodyReadResult
   }
   const bytes = new Uint8Array(byteLength);
   let offset = 0;
-  for (const chunk of chunks) {
-    bytes.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  try {
-    return { ok: true, text: new TextDecoder("utf-8", { fatal: true }).decode(bytes) };
-  } catch {
-    return { ok: false, reason: "INVALID_BODY" };
-  }
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  try { return { ok: true, text: new TextDecoder("utf-8", { fatal: true }).decode(bytes) }; }
+  catch { return { ok: false, reason: "INVALID_BODY" }; }
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse<AnalysisFailureEnvelope>> {
+export async function POST(request: NextRequest): Promise<NextResponse<AnalysisFailureEnvelope | AnalysisSuccessEnvelope>> {
   const contentType = request.headers.get("content-type") ?? "";
-  if (!/^application\/json(?:\s*;|\s*$)/i.test(contentType)) {
-    return fail(randomUUID(), "INVALID_REQUEST", 400);
-  }
+  if (!/^application\/json(?:\s*;|\s*$)/i.test(contentType)) return fail(randomUUID(), "INVALID_REQUEST", 400);
 
   const origin = request.headers.get("origin");
   let requestOrigin = "";
@@ -86,7 +80,39 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
   const validation = validateAnalysisRequest(parsed);
   if (!validation.valid) return fail(requestId, "INVALID_REQUEST", 400);
 
-  // Temporary safe scaffold: the external Gemini adapter remains disconnected
-  // pending explicit action-time authorization for this answer payload and destination.
-  return fail(validation.value.requestId, "AI_DISABLED", 503);
+  const apiKey = process.env.GOOGLE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim();
+  if (process.env.DESIRED_CLIENT_AI_ENABLED !== "true" || !apiKey ||
+      !process.env.UPSTASH_REDIS_REST_URL?.trim() || !process.env.UPSTASH_REDIS_REST_TOKEN?.trim()) {
+    return fail(validation.value.requestId, "AI_DISABLED", 503);
+  }
+
+  const ip = ipFromRequest(request);
+  const buckets = [
+    ["desiredClientAnalyze", ip],
+    ["desiredClientDaily", ip],
+    ["desiredClientGlobal", "all"],
+  ] as const;
+  for (const [bucket, identity] of buckets) {
+    const decision = await checkRateLimit(bucket, identity);
+    if (!decision.ok) return fail(validation.value.requestId, "RATE_LIMITED", 429, rateLimitHeaders(decision));
+  }
+
+  const eligibleCodes = eligibleDesiredClientClarifications(validation.value);
+  const outcome = await runDesiredClientAnalysis(validation.value, eligibleCodes);
+  if (outcome.mode === "unavailable") return fail(validation.value.requestId, "AI_UNAVAILABLE", 502);
+  if (outcome.mode === "invalid_output") return fail(validation.value.requestId, "INVALID_AI_OUTPUT", 502);
+
+  const response: AnalysisSuccessEnvelope = {
+    ok: true,
+    requestId: validation.value.requestId,
+    answerRevision: validation.value.answerRevision,
+    reviewRunId: validation.value.reviewRunId,
+    result: outcome.result,
+  };
+  console.info("[desired-client] analysis complete", {
+    requestId: validation.value.requestId,
+    outcome: "success",
+    model: desiredClientModelId(),
+  });
+  return NextResponse.json(response, { headers: NO_STORE });
 }
