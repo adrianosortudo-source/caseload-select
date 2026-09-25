@@ -137,3 +137,4 @@
  .dc-option:has(.dc-option__input:checked){padding:calc(.75rem - 1px)}
 }
 @media(max-width:380px){.dc-question__help{text-wrap:wrap}}
+@media(max-width:380px){.dc-stage[data-ui-component-content="desired-client-stage-4"] .dc-question__help{font-size:1.0625rem}}
