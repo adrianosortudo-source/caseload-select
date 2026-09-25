@@ -1,6 +1,6 @@
 /** Operator-only read DTO. Candidate UUIDs never stand in for verified firm UUIDs. */
 export type CandidateJson = null | boolean | number | string | CandidateJson[] | { [key: string]: CandidateJson };
-export const CANDIDATE_FILTER_KEYS = ["firmId", "text", "originalStatus", "selectionDisposition", "processingDisposition", "qualificationState", "identityState", "fieldPointer", "fieldValue", "fieldRefRevision", "fieldRefPointerSha256", "sourceUrl", "observedFrom", "observedTo", "retrievedFrom", "retrievedTo", "observedUnknown", "retrievedUnknown"] as const;
+export const CANDIDATE_FILTER_KEYS = ["firmId", "identityNamespace", "identityKey", "text", "originalStatus", "selectionDisposition", "processingDisposition", "qualificationState", "identityState", "fieldPointer", "fieldValue", "fieldRefRevision", "fieldRefPointerSha256", "sourceUrl", "observedFrom", "observedTo", "retrievedFrom", "retrievedTo", "observedUnknown", "retrievedUnknown"] as const;
 export type CandidateFilterKey = typeof CANDIDATE_FILTER_KEYS[number];
 export type CandidateFilters = Partial<Record<CandidateFilterKey, string>>;
 export type CandidateSummary = Readonly<{
@@ -118,6 +118,7 @@ export function parseCandidateFilters(params: URLSearchParams): CandidateFilters
     result[key] = value;
   }
   if (result.firmId) { if (!UUID.test(result.firmId)) throw new CandidateContractError("A verified firm filter requires a firm UUID."); result.firmId = result.firmId.toLowerCase(); }
+  if ((result.identityKey === undefined) !== (result.identityNamespace === undefined)) throw new CandidateContractError("Exact candidate lookup requires both the source namespace and key.");
   if (result.identityState && !["unresolved", "resolved", "conflict"].includes(result.identityState)) throw new CandidateContractError("Invalid identity filter.");
   for (const key of ["observedUnknown", "retrievedUnknown"] as const) if (result[key] && result[key] !== "true") throw new CandidateContractError("Unknown-date filters require true.");
   for (const key of ["observedFrom", "observedTo", "retrievedFrom", "retrievedTo"] as const) {

@@ -372,6 +372,13 @@ suite("all-candidate immutable PostgreSQL projection", () => {
         "INSERT INTO public.gta_prospect_qualification_assessments(firm_id,evidence_import_batch_id,assessment_id,qualification_state,qualification_cohort,assessed_on,criteria,evidence_urls,raw_assessment) VALUES($1,$2,$3,'needs_evidence','q50_whole_firm_2026_09_25_v1','2026-09-25',$4::jsonb,'[]'::jsonb,$5::jsonb) RETURNING id",
         [firmId, supplementalBatchId, token + "-sibling-assessment", JSON.stringify({ differentAssessment: true }), JSON.stringify({ sourceRecordKey: token + "-sibling", note: "same firm, distinct source assessment" })])).rows[0].id;
 
+      const exactBySourceIdentity = await list(db, { identityNamespace: "legacy:gta_prospect_qualification_assessments", identityKey: assessmentId });
+      expect(exactBySourceIdentity.items.map(item => item.identityKey)).toEqual([assessmentId]);
+      expect(exactBySourceIdentity.filteredCount).toBe(1);
+      const siblingBySourceIdentity = await list(db, { identityNamespace: "legacy:gta_prospect_qualification_assessments", identityKey: siblingAssessmentId });
+      expect(siblingBySourceIdentity.items.map(item => item.identityKey)).toEqual([siblingAssessmentId]);
+      expect(siblingBySourceIdentity.filteredCount).toBe(1);
+
       const exactFirm = await list(db, { firmId, fieldPointer: "/assessment_id", fieldValue: sourceKey });
       expect(exactFirm.items).toHaveLength(1);
       const candidate = exactFirm.items[0];
