@@ -263,7 +263,7 @@ test("qualification catalog comparison rejects missing tables, changed indexes, 
     "prospect_firm_fit_observations", "prospect_lso_licensees", "prospect_opportunity_observations",
     "prospect_qualification_decisions", "prospect_research_attempts", "prospect_service_observations",
     "prospect_source_captures", "prospect_source_record_map"
-  ].map(name => ({ name, present: true, columns: [{ name: "id", type: "uuid", nullable: false, default: null, anonPrivileges: { select: false }, authenticatedPrivileges: { select: false } }], constraints: [{ name: name + "_pkey", definition: "PRIMARY KEY (id)" }], indexes: [{ name: name + "_pkey", definition: "CREATE UNIQUE INDEX ON id" }], policies: [], triggers: [], anon: {}, authenticated: {}, owner: "postgres", rlsEnabled: true, forceRls: false })) };
+  ].map(name => ({ name, present: true, columns: [{ name: "id", type: "uuid", nullable: false, default: null, anonPrivileges: { select: false }, authenticatedPrivileges: { select: false }, serviceRolePrivileges: { select: true } }], constraints: [{ name: name + "_pkey", definition: "PRIMARY KEY (id)" }], indexes: [{ name: name + "_pkey", definition: "CREATE UNIQUE INDEX ON id" }], policies: [], triggers: [], anon: {}, authenticated: {}, serviceRole: {}, owner: "postgres", rlsEnabled: true, forceRls: false })) };
   const scratch = path.join(base, "scratch.json"), production = path.join(base, "production.json");
   const writeScratch = value => fs.writeFileSync(scratch, JSON.stringify([{ catalog_contract: value }]));
   const writeProduction = value => fs.writeFileSync(production, JSON.stringify({ rows: [{ catalog_contract: value }] }));
@@ -279,6 +279,7 @@ test("qualification catalog comparison rejects missing tables, changed indexes, 
     value => { value.tables[0].constraints[0].name = "renamed_constraint"; },
     value => { value.tables[0].constraints[0].definition = "CHECK (id IS NOT NULL)"; },
     value => { value.tables[0].columns[0].anonPrivileges.select = true; },
+    value => { value.tables[0].serviceRole.tablePrivileges = { select: false }; },
   ]) {
     const changed = structuredClone(expected); mutate(changed); writeProduction(changed);
     assert.throws(() => compareQualificationCatalogs(scratch, production, sourceRoot), /catalog_contract_incomplete|catalog_contract_facet_missing|production_qualification_catalog_does_not_match_source/);

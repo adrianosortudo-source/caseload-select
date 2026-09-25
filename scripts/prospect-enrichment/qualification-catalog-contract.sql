@@ -38,7 +38,12 @@ SELECT jsonb_build_object('tables', (
           'select', COALESCE(has_column_privilege('authenticated', a.oid, col.attnum, 'SELECT'), false),
           'insert', COALESCE(has_column_privilege('authenticated', a.oid, col.attnum, 'INSERT'), false),
           'update', COALESCE(has_column_privilege('authenticated', a.oid, col.attnum, 'UPDATE'), false),
-          'references', COALESCE(has_column_privilege('authenticated', a.oid, col.attnum, 'REFERENCES'), false))) ORDER BY col.attnum)
+          'references', COALESCE(has_column_privilege('authenticated', a.oid, col.attnum, 'REFERENCES'), false)),
+        'serviceRolePrivileges', jsonb_build_object(
+          'select', COALESCE(has_column_privilege('service_role', a.oid, col.attnum, 'SELECT'), false),
+          'insert', COALESCE(has_column_privilege('service_role', a.oid, col.attnum, 'INSERT'), false),
+          'update', COALESCE(has_column_privilege('service_role', a.oid, col.attnum, 'UPDATE'), false),
+          'references', COALESCE(has_column_privilege('service_role', a.oid, col.attnum, 'REFERENCES'), false))) ORDER BY col.attnum)
       FROM pg_attribute col
       LEFT JOIN pg_attrdef def ON def.adrelid = col.attrelid AND def.adnum = col.attnum
       WHERE col.attrelid = a.oid AND col.attnum > 0 AND NOT col.attisdropped
@@ -94,6 +99,19 @@ SELECT jsonb_build_object('tables', (
         'select', COALESCE(has_any_column_privilege('authenticated', a.oid, 'SELECT'), false),
         'insert', COALESCE(has_any_column_privilege('authenticated', a.oid, 'INSERT'), false),
         'update', COALESCE(has_any_column_privilege('authenticated', a.oid, 'UPDATE'), false),
-        'references', COALESCE(has_any_column_privilege('authenticated', a.oid, 'REFERENCES'), false)))
+        'references', COALESCE(has_any_column_privilege('authenticated', a.oid, 'REFERENCES'), false))),
+    'serviceRole', jsonb_build_object('tablePrivileges', jsonb_build_object(
+      'select', COALESCE(has_table_privilege('service_role', a.oid, 'SELECT'), false),
+      'insert', COALESCE(has_table_privilege('service_role', a.oid, 'INSERT'), false),
+      'update', COALESCE(has_table_privilege('service_role', a.oid, 'UPDATE'), false),
+      'delete', COALESCE(has_table_privilege('service_role', a.oid, 'DELETE'), false),
+      'truncate', COALESCE(has_table_privilege('service_role', a.oid, 'TRUNCATE'), false),
+      'references', COALESCE(has_table_privilege('service_role', a.oid, 'REFERENCES'), false),
+      'trigger', COALESCE(has_table_privilege('service_role', a.oid, 'TRIGGER'), false)),
+      'anyColumnPrivileges', jsonb_build_object(
+        'select', COALESCE(has_any_column_privilege('service_role', a.oid, 'SELECT'), false),
+        'insert', COALESCE(has_any_column_privilege('service_role', a.oid, 'INSERT'), false),
+        'update', COALESCE(has_any_column_privilege('service_role', a.oid, 'UPDATE'), false),
+        'references', COALESCE(has_any_column_privilege('service_role', a.oid, 'REFERENCES'), false)))
   ) ORDER BY a.table_name) FROM actual a
 )) AS catalog_contract;

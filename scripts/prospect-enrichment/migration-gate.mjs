@@ -214,10 +214,10 @@ function readCatalogContract(file) {
   if (!same(tableNames, expectedNames)) fail("catalog_contract_table_inventory_mismatch");
   for (const table of parsed.tables) {
     if (!isRecord(table) || table.present !== true || !Array.isArray(table.columns) || !Array.isArray(table.constraints) || !Array.isArray(table.indexes) ||
-        !Array.isArray(table.policies) || !isRecord(table.anon) || !isRecord(table.authenticated) || !Array.isArray(table.triggers) ||
+        !Array.isArray(table.policies) || !isRecord(table.anon) || !isRecord(table.authenticated) || !isRecord(table.serviceRole) || !Array.isArray(table.triggers) ||
         typeof table.owner !== "string" || typeof table.rlsEnabled !== "boolean" || typeof table.forceRls !== "boolean") fail("catalog_contract_facet_missing");
     for (const column of table.columns) {
-      if (!isRecord(column) || !isRecord(column.anonPrivileges) || !isRecord(column.authenticatedPrivileges)) fail("catalog_contract_column_privileges_missing");
+      if (!isRecord(column) || !isRecord(column.anonPrivileges) || !isRecord(column.authenticatedPrivileges) || !isRecord(column.serviceRolePrivileges)) fail("catalog_contract_column_privileges_missing");
     }
     for (const constraint of table.constraints) if (!isRecord(constraint) || typeof constraint.name !== "string" || typeof constraint.definition !== "string") fail("catalog_contract_constraint_incomplete");
     for (const index of table.indexes) if (!isRecord(index) || typeof index.name !== "string" || typeof index.definition !== "string") fail("catalog_contract_index_incomplete");
