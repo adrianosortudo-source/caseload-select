@@ -1,5 +1,5 @@
 # Desired Client V2 verification
-Date: 2026-09-24. Status: final local checks running. Not released.
+Implementation: 2026-09-24. Verification updated: 2026-09-25 UTC. Status: structured workflow ready for draft review; AI adapter blocked. Not released.
 
 ## Scope and source
 - App: `codex/desired-client-v2-app`, base `18b51a62ff79d19d0a5706deebfcd7087cfa288d`.
@@ -15,9 +15,9 @@ Date: 2026-09-24. Status: final local checks running. Not released.
 | Dependencies | `npm ci` completed. Lockfile unchanged: SHA256 `C071B15E36CDA77669B039BD73C807D3708518189A6FEC6E023FEE26429E4BE8`. |
 | Scoped unit/regression tests | PASS: 83 tests across 9 files, including the existing shared limiter tests, new fail-closed buckets, answer/output validation, draft expiry, reducer lifecycle, exports, disconnected API, and exact framing-header boundary. |
 | Full repository lint | PASS: zero errors, 373 warnings. Final changed view/harness/header files also passed focused ESLint after subsequent edits. |
-| TypeScript | Pending: rerun after the production build regenerates Next types. The earlier failure was confined to malformed generated development types. |
-| Production app build | Running: asset, marketing-copy and scheduled-route guards passed; production compilation is in progress. |
-| Combined real-browser review | PASS: 27 tests, including all six direct and embedded viewport checks. `review/review-browser-results.json` records the final combined run. |
+| TypeScript | PASS in GitHub CI at `8f5ec9d6`, and in the successful Vercel preview build. Local forced-Webpack build fails on an unchanged baseline notification-route export; see the limitation below. |
+| App production build for preview | PASS on Vercel at `8f5ec9d6`: Next 16.2.9 Turbopack, TypeScript finished, deployment READY. This is a preview, not a production release. Local Webpack compilation passed but subsequent generated-route validation failed on an inherited route export. |
+| Combined real-browser review | PASS: 27 tests at `9c4ad373`, including six direct and embedded viewport checks. `review/review-browser-results.json` records that combined run. After the phone guidance CSS refinement, the complete 20-test direct journey passed in GitHub CI at `8f5ec9d6` (run 36086975434). |
 | Structured-output semantic review | PASS for the seven fixed variants in `review/structured-fixtures.json`; see `REVIEW.md`. This is not a live AI-output assessment. |
 | Website ACTS guard | PASS before and after final static build. |
 | Website static build | PASS. Output includes the wrapper, stylesheet and embed script. The generated cleanup target was verified inside the isolated worktree. |
@@ -26,14 +26,23 @@ Date: 2026-09-24. Status: final local checks running. Not released.
 | Live AI/provider integration | NOT IMPLEMENTED: blocked on the explicit provider authorization requested below. |
 | Production configuration | NOT VERIFIED OR CHANGED. |
 | Five-lawyer usability study | NOT RUN. No recruitment messages were sent. |
-| GitHub CI | Check the attached draft PRs for current status. Local checks are not a substitute for required PR checks. |
+| GitHub CI | At `8f5ec9d6`, full Vitest, ESLint, TypeScript, direct Desired Client browser tests, other browser gates and Vercel previews passed. The real-Postgres concurrency job also passed; the complete main workflow 36086975409 finished successfully. Website PR 26 checks passed. See the PRs for later status. |
 
 ## Browser evidence and coverage
 The paired browser run uses installed Chrome, the app on localhost:3301 and the website fixture on localhost:3300. Every test uses fictional answers. The current acceptance record is `review/review-browser-results.json`; screenshots are in the same directory.
 
 Coverage includes six viewports (1440, 1024, 768, 640, 375 and 320), welcome/focus/value/review/brief presentation, native keyboard controls, dialog Escape/focus behavior, optional comparison, no-typing unknown route, no-AI completion/resume/export with zero analyze requests, AI outage/network fallback, bounded mocked clarification attempts, stale-response cancellation, clipboard denial, draft expiry/clearing, source answers in print, and iframe origin/source checks plus stable growth/shrinkage. AI-success browser scenarios use intercepted fictional responses; the actual local API is separately checked to return controlled `AI_DISABLED` with no-store.
 
+A focused local real-Chrome rerun after the final CSS change passed both 375px and 320px journeys (2/2). `review/phone-browser-results.json` and refreshed phone screenshots record this check.
+
 Before/after evidence retains `before-768-value-layout.png` and `before-1440-welcome-wrap.png`. No viewport or editorial exception was waived. These checks cover the named fixtures and states, not every possible user-written phrase or a usability study.
+
+## Local build limitation and remote evidence
+The local `npm run build -- --webpack` completed compilation but failed Next generated route validation because `src/app/api/cron/notification-batch/route.ts` exports `buildDigest`. That file has the identical Git blob (`abfd1823...`) at base `18b51a62` and implementation `8f5ec9d6`; Desired Client did not modify it. The successful Vercel build used the configured `next build` with Turbopack and completed TypeScript. The fresh CI typecheck runs `tsc` without generating the same Webpack route validators. No unrelated notification code was changed to hide this discrepancy. The default local Turbopack attempt was stopped before completion; no local production-build pass is claimed.
+
+Verified preview deployment: `dpl_2a3kwfbgQ1pfwULSeQY2kXqjsGSR`, branch `codex/desired-client-v2-app`, commit `8f5ec9d6bb4674316e2c34e9fd964c636b7f80e8`, READY, target null (preview). URL: https://caseload-select-7sntr6f7o-adrianosortudo-7282s-projects.vercel.app/tools/desired-client-matter. Vercel sign-in is required by the existing preview protection.
+
+Draft app PR: https://github.com/adrianosortudo-source/caseload-select/pull/317. Companion website PR: https://github.com/adrianosortudo-source/caseloadselect-site/pull/26.
 
 ## Provider authorization: outstanding work
 Automatic approval review rejected writing the Google Gemini adapter because trusted authorization did not explicitly specify the answer payload and external destination. Root requested permission to implement opt-in transmission of selected answers, optional wording and commercial ranges to Google Gemini, plus fictional-input tests. No answer to that request has arrived. No workaround, provider request or production setting change was attempted.
