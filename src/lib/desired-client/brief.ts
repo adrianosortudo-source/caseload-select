@@ -126,8 +126,10 @@ export function buildStructuredBrief(answers: DesiredClientAnswers): DesiredClie
     definition.text += ` Service area supplied: ${answers.focus.service_area.trim()}.`;
   }
 
-  const goalText = selectedGoals(answers).join(" ");
-  const clientGoals: DesiredClientStatement[] = [statement(goalText, answers.client.goals.includes("unknown") ? "unknown" : "preference", ["client.goals"])];
+  const clientGoals: DesiredClientStatement[] = selectedGoals(answers).map((goal) => statement(
+    goal,
+    answers.client.goals.includes("unknown") ? "unknown" : "preference", ["client.goals"],
+  ));
   if (answers.client.concerns.length) {
     const concerns = answers.client.concerns.map((id) => CONCERN_LABELS[id]).join(", ");
     const expected = route === "new" || route === "exploring";
@@ -205,7 +207,9 @@ export function buildStructuredBrief(answers: DesiredClientAnswers): DesiredClie
   const topicWork = workValue(answers).replace(/^a type of work/, "type of work");
   const suggestionSources = presentSources(answers, ["focus.work", "focus.area", "focus.route"]);
   const marketing = {
-    topic: statement(`A plain-language explanation of ${topicWork}: when a client might seek help and what they can prepare.`, "suggestion", suggestionSources),
+    topic: statement(answers.focus.work === "other" && !answers.focus.work_other.trim()
+      ? "Choose one specific type of work before drafting a marketing topic."
+      : `A plain-language explanation of ${topicWork}: when a client might seek help and what they can prepare.`, "suggestion", suggestionSources),
     inquiry_question: statement("What are you hoping to achieve, and what stage has the matter reached?", "suggestion",
       presentSources(answers, ["client.goals", "situation.timing", "focus.work"]).slice(0, 3)),
     validation_step: statement(route === "established"

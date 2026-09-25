@@ -1,4 +1,4 @@
-import { BRIEF_SECTION_HEADINGS } from "./brief";
+import { BRIEF_SECTION_HEADINGS, getDismissedClarificationText } from "./brief";
 import { BRIEF_COPY, REVIEW_COPY } from "./copy";
 import { getSourceDetails, STATEMENT_KIND_LABELS } from "./sources";
 import type { DesiredClientAnswers, DesiredClientBrief, DesiredClientStatement, SavedBrief } from "./types";
@@ -38,6 +38,17 @@ export function getServiceAreaNote(brief: DesiredClientBrief, answers: DesiredCl
   return brief.definition.text.includes(suppliedPhrase) ? null : suppliedPhrase;
 }
 
+export function getFirstContactNote(answers: DesiredClientAnswers): string | null {
+  const contact = answers.situation.contact;
+  if (!contact) return null;
+  if (contact === "unknown") return "Who makes the first contact is still to be established.";
+  const label = getSourceDetails("situation.contact", answers).answer;
+  if (!label) return null;
+  return answers.focus.route === "new" || answers.focus.route === "exploring"
+    ? `Expected first contact: ${label}. This may be someone other than the client.`
+    : `First contact: ${label}. This may be someone other than the client.`;
+}
+
 function normalized(text: string): string { return text.trim().replace(/\s+/g, " ").toLowerCase(); }
 
 function presentationNotesFor(brief: DesiredClientBrief, notes: readonly string[]): string[] {
@@ -50,6 +61,11 @@ function presentationNotesFor(brief: DesiredClientBrief, notes: readonly string[
     result.push(value);
   }
   return result;
+}
+
+function unresolvedNotesFor(saved: SavedBrief, notes: readonly string[]): string[] {
+  const durableNote = saved.openClarificationCode ? getDismissedClarificationText(saved.openClarificationCode) : null;
+  return presentationNotesFor(saved.brief, durableNote ? [...notes, durableNote] : notes);
 }
 
 function sourcePairs(statements: readonly DesiredClientStatement[], answers: DesiredClientAnswers): SourcePair[] {
@@ -108,9 +124,11 @@ export function formatBriefText(
     if (section.heading === BRIEF_SECTION_HEADINGS[0]) {
       const note = getServiceAreaNote(saved.brief, answers);
       if (note) parts.push(`- ${note}`);
+      const contactNote = getFirstContactNote(answers);
+      if (contactNote) parts.push(`- ${contactNote}`);
     }
     if (section.heading === BRIEF_SECTION_HEADINGS[5]) {
-      const notes = presentationNotesFor(saved.brief, presentationNotes);
+      const notes = unresolvedNotesFor(saved, presentationNotes);
       const statements = saved.brief.open_questions;
       if (statements.length) parts.push(...statements.map(plainStatement));
       else if (!notes.length) parts.push(`- ${EMPTY_OPEN_QUESTIONS}`);
@@ -138,9 +156,11 @@ export function formatBriefMarkdown(
     if (section.heading === BRIEF_SECTION_HEADINGS[0]) {
       const note = getServiceAreaNote(saved.brief, answers);
       if (note) parts.push(`- ${escapeMarkdownLiteral(note)}`);
+      const contactNote = getFirstContactNote(answers);
+      if (contactNote) parts.push(`- ${escapeMarkdownLiteral(contactNote)}`);
     }
     if (section.heading === BRIEF_SECTION_HEADINGS[5]) {
-      const notes = presentationNotesFor(saved.brief, presentationNotes);
+      const notes = unresolvedNotesFor(saved, presentationNotes);
       const statements = saved.brief.open_questions;
       if (statements.length) parts.push(...statements.map(markdownStatement));
       else if (!notes.length) parts.push(`- ${escapeMarkdownLiteral(EMPTY_OPEN_QUESTIONS)}`);

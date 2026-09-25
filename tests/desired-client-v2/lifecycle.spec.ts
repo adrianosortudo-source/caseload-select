@@ -96,6 +96,40 @@ test('leaving a clarification open preserves answers and makes no extra request'
   expect(saved.answers.delivery.capacity).toBe('change');
   expect(saved.answers.clarifications.CURRENT_CAPACITY_CONFLICT).toBeNull();
 });
+test('clarification answer shows review progress while the follow-up response is held', async ({ page }) => {
+  await seed(page, 'change');
+  let release: () => void = () => {};
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let calls = 0;
+  await page.route(API, async route => {
+    calls++;
+    const payload = route.request().postDataJSON();
+    if (calls === 1) {
+      await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        ok: true, requestId: payload.requestId, answerRevision: payload.answerRevision, reviewRunId: payload.reviewRunId,
+        result: { brief, clarification_code: 'CURRENT_CAPACITY_CONFLICT' },
+      }) });
+      return;
+    }
+    await gate;
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ok: true, requestId: payload.requestId, answerRevision: payload.answerRevision, reviewRunId: payload.reviewRunId,
+      result: { brief, clarification_code: null },
+    }) }).catch(() => {});
+  });
+  await openReview(page, true);
+  await page.getByRole('button', { name: 'Prepare my brief with AI', exact: true }).click();
+  await page.getByRole('button', { name: 'A limited amount now', exact: true }).click();
+  await expect.poll(() => calls).toBe(2);
+  const progress = page.getByRole('button', { name: 'Preparing your brief…', exact: true });
+  await expect(progress).toBeVisible();
+  await expect(progress).toBeDisabled();
+  await expect(page.getByRole('heading', { name: 'Does this describe the work you want more of?' })).toBeVisible();
+  release();
+  await expect(page.getByText(brief.definition.text, { exact: true })).toBeVisible();
+  await expect(page.getByText('Prepared with AI assistance from your answers.', { exact: true })).toBeVisible();
+});
+
 test('clipboard denial exposes the complete selectable brief', async ({ page }) => {
   await page.addInitScript(() => {
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new DOMException('Denied', 'NotAllowedError'); } } });

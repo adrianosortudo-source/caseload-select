@@ -4,7 +4,7 @@ This records review of the implementation, not approval to publish it.
 
 ## Product and content review
 
-Astra reviewed the deterministic outputs regenerated from the fixed fictional fixtures in `review/structured-fixtures.json` on 2026-09-24. The checks below refer to the structured path only; live model output has not been evaluated.
+Astra reviewed the deterministic outputs regenerated from the fixed fictional fixtures in `review/structured-fixtures.json` on 2026-09-24. The checks below record the original structured-path review. The separate 25 September audit now includes five real provider samples and their remaining quality limits.
 
 | Fixture | Review finding |
 |---|---|
@@ -33,8 +33,8 @@ These are review requirements. Their automated/rendered verification is recorded
 ## Outstanding review gates
 
 - Functional browser, keyboard, print and iframe checks pass. Final responsive verification is recorded in `VERIFICATION.md` and the combined browser report.
-- The optional Google Gemini adapter is disconnected pending the explicit authorization requested after automatic approval review rejected the external-data implementation.
-- No live AI semantic review, production configuration check or five-lawyer usability study has been completed.
+- The optional Gemini adapter was authorized and implemented. The 25 September audit exercised it with five fictional live profiles; see AUDIT_2026-09-25.md. Local preview AI remains disabled because preview Redis configuration is absent.
+- Astra reviewed five live fictional outputs in the 25 September audit. The full deployed AI journey and five-lawyer usability study remain outstanding.
 - No merge or deployment is authorized by this review document.
 
 A final source review verified abort/listener/observer cleanup, draft restoration/expiry and the exact framing route. The framing matcher regression covers the trailing-slash alias, similarly prefixed siblings and deeper paths. Phone spacing and the fee/effort label-value presentation are recorded in engineering amendment 25.

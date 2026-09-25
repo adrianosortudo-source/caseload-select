@@ -10,6 +10,7 @@ import {
   editAnswers,
   failAnalysis,
   initialToolState,
+  enterTool,
   recordAiAttempt,
   type ToolState,
 } from "../state";
@@ -137,15 +138,43 @@ describe("Desired Client reducer and draft-storage lifecycle", () => {
     expect(answered.reviewRunId).toBe(RUN_ID);
   });
 
+  it("returns to the review loading state while a clarification answer is being analyzed", () => {
+    const answers = structuredClone(B0);
+    answers.delivery.capacity = "change";
+    const started = beginAiRun(reviewState(answers), () => RUN_ID);
+    const pending = applyAnalysis(started, result("CURRENT_CAPACITY_CONFLICT"));
+    const answered = answerClarification(pending, "limited_now");
+    expect(answered).toMatchObject({ view: "review", stage: 7, loading: true, activeClarification: null, savedBrief: null, requestCount: 2 });
+  });
+
   it("retains a valid third response and never starts a fourth attempt", () => {
     const first = beginAiRun(reviewState(), () => RUN_ID);
     const second = recordAiAttempt(failAnalysis(first, "unavailable", true));
+    expect(second).toMatchObject({ view: "review", stage: 7, loading: true, requestCount: 2 });
     const third = recordAiAttempt(failAnalysis(second, "unavailable", true));
     expect(third.requestCount).toBe(3);
     const completed = applyAnalysis(third, result());
     expect(completed.savedBrief?.brief).toEqual(result().brief);
     expect(completed.view).toBe("brief");
     expect(recordAiAttempt(completed)).toEqual(completed);
+  });
+
+  it("preserves an unanswered clarification across save, load, and resume", () => {
+    const answers = structuredClone(B0);
+    answers.delivery.capacity = "change";
+    const started = beginAiRun(reviewState(answers), () => RUN_ID);
+    const pending = applyAnalysis(started, result("CURRENT_CAPACITY_CONFLICT"));
+    const open = answerClarification(pending, "open");
+    expect(open.savedBrief?.openClarificationCode).toBe("CURRENT_CAPACITY_CONFLICT");
+    const { storage } = memoryStorage();
+    saveDraft(storage, open.answers, 7, open.savedBrief!, NOW);
+    const loaded = loadDraft(storage, NOW);
+    expect(loaded.status).toBe("ready");
+    if (loaded.status !== "ready") return;
+    const resumed = enterTool(initialToolState(), "ai", { answers: loaded.draft.answers, stage: 7, savedBrief: loaded.draft.savedBrief });
+    expect(resumed).toMatchObject({ view: "brief", dismissedCode: "CURRENT_CAPACITY_CONFLICT", loading: false });
+    expect(resumed.savedBrief?.openClarificationCode).toBe("CURRENT_CAPACITY_CONFLICT");
+    expect(resumed.reviewRunId).toBeNull();
   });
 
   it("keeps the full generated brief and canonical answers when the user leaves a clarification open", () => {

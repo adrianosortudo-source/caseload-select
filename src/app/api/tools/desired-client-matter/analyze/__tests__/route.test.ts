@@ -157,7 +157,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     ]);
     expect(mocks.GoogleGenerativeAI).toHaveBeenCalledWith("test-provider-key");
     const [modelOptions, requestOptions] = mocks.getGenerativeModel.mock.calls[0];
-    expect(modelOptions).toMatchObject({ model: "gemini-2.5-flash", generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" } });
+    expect(modelOptions).toMatchObject({ model: "gemini-2.5-flash", generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 512 } } });
     expect(requestOptions).toEqual({ timeout: 12_000 });
     const prompt = mocks.generateContent.mock.calls[0][0] as string;
     expect(prompt).toContain("routine low-fee work");
@@ -165,6 +165,23 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(prompt).not.toContain("203.0.113.42");
     expect(prompt).not.toContain("app.caseloadselect.ca");
     await expectNoStore(response);
+  });
+
+  it("allows eligible clarification before the final attempt and forbids it on the final attempt", async () => {
+    const answers = { ...B0, delivery: { ...B0.delivery, capacity: "change" as const } };
+    mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CURRENT_CAPACITY_CONFLICT" }));
+    const early = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 1 })));
+    expect(early.status).toBe(200);
+    expect((await early.json()).result.clarification_code).toBe("CURRENT_CAPACITY_CONFLICT");
+    const earlyPrompt = JSON.parse(mocks.generateContent.mock.calls[0][0] as string);
+    expect(earlyPrompt.eligible_codes).toContain("CURRENT_CAPACITY_CONFLICT");
+
+    mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CURRENT_CAPACITY_CONFLICT" }));
+    const final = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 2 })));
+    expect(final.status).toBe(502);
+    expect((await final.json()).error.code).toBe("INVALID_AI_OUTPUT");
+    const finalPrompt = JSON.parse(mocks.generateContent.mock.calls[1][0] as string);
+    expect(finalPrompt.eligible_codes).toEqual([]);
   });
 
   it("stops at the first quota denial and never calls Gemini", async () => {

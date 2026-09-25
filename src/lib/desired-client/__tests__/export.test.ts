@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBriefMarkdown, formatBriefText, createMarkdownDownload, briefSections, escapeMarkdownLiteral } from "../export";
+import { formatBriefMarkdown, formatBriefText, createMarkdownDownload, briefSections, escapeMarkdownLiteral, getFirstContactNote } from "../export";
 import { getSourceDetails, STATEMENT_KIND_LABELS } from "../sources";
 import { emptyAnswers } from "../brief";
 import type { AnswerReferencePath, DesiredClientBrief, DesiredClientStatement, SavedBrief } from "../types";
@@ -115,5 +115,34 @@ describe("Desired Client exports", () => {
     expect(empty).toContain("No unresolved core question was identified from these answers. This profile still needs to be tested against actual work and client feedback.");
     expect(output).not.toContain("No unresolved core question was identified from these answers.");
     expect(output.match(/Still open: Confirm capacity\./g)).toHaveLength(1);
+  });
+
+  it("preserves the selected first contact in brief views and both exports", () => {
+    const { answers, saved } = fixture();
+    answers.situation.contact = "manager";
+    const establishedNote = "First contact: Manager or executive. This may be someone other than the client.";
+    expect(getFirstContactNote(answers)).toBe(establishedNote);
+    expect(formatBriefText(saved, answers)).toContain(establishedNote);
+    expect(formatBriefMarkdown(saved, answers)).toContain(escapeMarkdownLiteral(establishedNote));
+
+    answers.focus.route = "new";
+    expect(getFirstContactNote(answers)).toBe("Expected first contact: Manager or executive. This may be someone other than the client.");
+    answers.situation.contact = "unknown";
+    expect(getFirstContactNote(answers)).toBe("Who makes the first contact is still to be established.");
+    answers.situation.contact = null;
+    expect(getFirstContactNote(answers)).toBeNull();
+    expect(formatBriefText(saved, answers)).not.toContain("first contact");
+  });
+
+  it("includes a saved unanswered clarification in copied text and Markdown once", () => {
+    const { answers, saved } = fixture();
+    saved.openClarificationCode = "FEE_EFFORT_CONFLICT";
+    const note = "Check whether the fee can support the effort required.";
+    const plain = formatBriefText(saved, answers, new Date(), [note]);
+    const markdown = formatBriefMarkdown(saved, answers, new Date(), [note]);
+    expect(plain.match(new RegExp(note.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))).toHaveLength(1);
+    expect(plain.split(note)).toHaveLength(2);
+    expect(markdown).toContain(escapeMarkdownLiteral(note));
+    expect(markdown.split(escapeMarkdownLiteral(note))).toHaveLength(2);
   });
 });

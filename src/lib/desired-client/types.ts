@@ -174,6 +174,7 @@ export interface SavedBrief {
   generatedAt: string;
   wordingReviewed: boolean;
   mode: "ai" | "structured";
+  openClarificationCode?: ClarificationCode;
 }
 export interface SavedDraft {
   schemaVersion: 2;

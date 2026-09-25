@@ -1,0 +1,81 @@
+{
+  "createdAt": "2026-09-25T20:37:59.250Z",
+  "syntheticOnly": true,
+  "routeRateLimitNotExercised": true,
+  "results": [
+    {
+      "id": "commercial_ranges",
+      "elapsedMs": 1074,
+      "mode": "unavailable",
+      "answers": {
+        "schema_version": "dcm-v2.1",
+        "revision": 1,
+        "focus": {
+          "area": "business",
+          "work": "business_agreements",
+          "work_other": "",
+          "service_area": "Ontario",
+          "certainty": "chosen",
+          "route": "established",
+          "comparison": null
+        },
+        "situation": {
+          "timing": "planning",
+          "role": "business_organization",
+          "role_other": "",
+          "contact": "manager"
+        },
+        "client": {
+          "goals": [
+            "complete",
+            "protect"
+          ],
+          "concerns": [
+            "cost",
+            "next"
+          ]
+        },
+        "value": {
+          "reasons": [
+            "client_benefit",
+            "fees",
+            "skills"
+          ],
+          "fee_effort": "worthwhile",
+          "collected_fee": "15to50",
+          "team_hours": "41to100",
+          "payment": "varies"
+        },
+        "delivery": {
+          "conditions": [
+            "scope",
+            "information"
+          ],
+          "capacity": "room",
+          "limit": null
+        },
+        "direction": {
+          "aim": "more_current",
+          "evidence": [
+            "repeated",
+            "records"
+          ],
+          "less": null,
+          "less_note": ""
+        },
+        "clarifications": {
+          "FOCUS_UNCLEAR": null,
+          "CURRENT_CAPACITY_CONFLICT": null,
+          "FEE_EFFORT_CONFLICT": null,
+          "EXPERIENCE_DIRECTION_CONFLICT": null,
+          "CLIENT_GOAL_UNCLEAR": null
+        }
+      },
+      "providerError": {
+        "name": "Error",
+        "status": 400,
+        "detail": "[GoogleGenerativeAI Error]: Error fetching from [URL] [400 Bad Request] The specified schema produces a constraint that has too many states for serving. Typical causes of this error are schemas with lots of text (for example, very long property or enum names), schemas with long array length limits (especially when nested), or schemas using complex value matchers (for example, integers or numbers with minimum/maximum bounds or strings with complex formats like date-time)"
+      }
+    }
+  ]
+}

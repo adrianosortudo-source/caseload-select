@@ -1,0 +1,81 @@
+{
+  "createdAt": "2026-09-25T20:41:07.934Z",
+  "syntheticOnly": true,
+  "routeRateLimitNotExercised": true,
+  "results": [
+    {
+      "id": "commercial_ranges",
+      "elapsedMs": 12052,
+      "mode": "unavailable",
+      "answers": {
+        "schema_version": "dcm-v2.1",
+        "revision": 1,
+        "focus": {
+          "area": "business",
+          "work": "business_agreements",
+          "work_other": "",
+          "service_area": "Ontario",
+          "certainty": "chosen",
+          "route": "established",
+          "comparison": null
+        },
+        "situation": {
+          "timing": "planning",
+          "role": "business_organization",
+          "role_other": "",
+          "contact": "manager"
+        },
+        "client": {
+          "goals": [
+            "complete",
+            "protect"
+          ],
+          "concerns": [
+            "cost",
+            "next"
+          ]
+        },
+        "value": {
+          "reasons": [
+            "client_benefit",
+            "fees",
+            "skills"
+          ],
+          "fee_effort": "worthwhile",
+          "collected_fee": "15to50",
+          "team_hours": "41to100",
+          "payment": "varies"
+        },
+        "delivery": {
+          "conditions": [
+            "scope",
+            "information"
+          ],
+          "capacity": "room",
+          "limit": null
+        },
+        "direction": {
+          "aim": "more_current",
+          "evidence": [
+            "repeated",
+            "records"
+          ],
+          "less": null,
+          "less_note": ""
+        },
+        "clarifications": {
+          "FOCUS_UNCLEAR": null,
+          "CURRENT_CAPACITY_CONFLICT": null,
+          "FEE_EFFORT_CONFLICT": null,
+          "EXPERIENCE_DIRECTION_CONFLICT": null,
+          "CLIENT_GOAL_UNCLEAR": null
+        }
+      },
+      "providerError": {
+        "name": "Error",
+        "status": null,
+        "detail": "[GoogleGenerativeAI Error]: Request aborted when fetching [URL] This operation was aborted"
+      }
+    }
+  ]
+}

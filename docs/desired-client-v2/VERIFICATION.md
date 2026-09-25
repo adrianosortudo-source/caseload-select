@@ -1,4 +1,6 @@
 # Desired Client V2 verification
+
+Current audit: [25 September pre-user-test audit](AUDIT_2026-09-25.md) supersedes the earlier no-live-provider status and records the current fixes, real AI samples and remaining limits. The original implementation record below is retained as historical evidence.
 Implementation: 2026-09-24. Verification updated: 2026-09-25 UTC. Status: structured workflow and consent-gated Gemini adapter implemented; adapter CI pending. Not released.
 
 ## Scope and source

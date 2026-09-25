@@ -1,7 +1,8 @@
 import { buildStructuredBrief } from "./brief";
+import { getEligibleClarificationCodes } from "./clarifications";
 import { validateAnalysisResult } from "./output";
 import { validateDraftAnswers } from "./validation";
-import type { AnalysisResult, DesiredClientAnswers, SavedBrief, SavedDraft } from "./types";
+import type { AnalysisResult, ClarificationCode, DesiredClientAnswers, SavedBrief, SavedDraft } from "./types";
 
 export const DRAFT_STORAGE_KEY = "cls-desired-client-v2";
 export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -12,12 +13,14 @@ const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringif
 function restoreSavedBrief(value: unknown, answers: DesiredClientAnswers): SavedBrief | undefined {
   if (!isRecord(value) || value.sourceBriefRevision !== answers.revision || typeof value.generatedAt !== "string" || !Number.isFinite(Date.parse(value.generatedAt)) || typeof value.wordingReviewed !== "boolean"
     || (value.mode !== "ai" && value.mode !== "structured")) return undefined;
+  const openClarificationCode = value.openClarificationCode;
+  if (openClarificationCode !== undefined && (typeof openClarificationCode !== "string" || !getEligibleClarificationCodes(answers).includes(openClarificationCode as ClarificationCode))) return undefined;
   if (value.mode === "structured") {
     const rebuilt = buildStructuredBrief(answers);
-    return sameJson(value.brief, rebuilt) ? { brief: rebuilt, sourceBriefRevision: answers.revision, generatedAt: new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "structured" } : undefined;
+    return sameJson(value.brief, rebuilt) ? { brief: rebuilt, sourceBriefRevision: answers.revision, generatedAt: new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "structured", ...(openClarificationCode?{openClarificationCode:openClarificationCode as ClarificationCode}:{}) } : undefined;
   }
   const result = validateAnalysisResult({ brief: value.brief, clarification_code: null }, answers, []);
-  return result ? { brief: result.brief, sourceBriefRevision: answers.revision, generatedAt: new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "ai" } : undefined;
+  return result ? { brief: result.brief, sourceBriefRevision: answers.revision, generatedAt: new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "ai", ...(openClarificationCode?{openClarificationCode:openClarificationCode as ClarificationCode}:{}) } : undefined;
 }
 
 export function validateSavedDraft(value: unknown): SavedDraft | null {

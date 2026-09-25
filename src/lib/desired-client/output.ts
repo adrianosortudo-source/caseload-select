@@ -61,7 +61,7 @@ function hasReportedExperienceSource(paths: readonly AnswerReferencePath[], answ
   return paths.some((path) => !isNonExperienceSource(path, answers));
 }
 
-function validStatement(value: unknown, answers: DesiredClientAnswers, maxTextLength: number): value is DesiredClientStatement {
+function validStatement(value: unknown, answers: DesiredClientAnswers, maxTextLength: number, allowUnknownSuggestion = false): value is DesiredClientStatement {
   if (!hasExactKeys(value, ["text", "kind", "source_answer_ids"]) || typeof value.text !== "string") return false;
   const text = value.text.trim();
   if (text.length < 1 || text.length > maxTextLength || BANNED_TEXT.some((pattern) => pattern.test(text))) return false;
@@ -77,7 +77,7 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, maxTextLe
   const sources: string[] = [];
   for (const sourcePath of sourcePaths) {
     const resolved = resolveAnswerReference(sourcePath, answers);
-    if (!resolved.present || (resolved.unknown && value.kind !== "unknown")) return false;
+    if (!resolved.present || (resolved.unknown && value.kind !== "unknown" && !(allowUnknownSuggestion && value.kind === "suggestion"))) return false;
     if (resolved.value) sources.push(resolved.value);
   }
   const groundedNumbers = new Set(numericTokens(sources.join(" ")));
@@ -110,6 +110,6 @@ export function validateAnalysisResult(
       !hasExactKeys(brief.marketing, ["topic", "inquiry_question", "validation_step"]) ||
       !validStatement(brief.marketing.topic, answers, 360) ||
       !validStatement(brief.marketing.inquiry_question, answers, 360) ||
-      !validStatement(brief.marketing.validation_step, answers, 360)) return null;
+      !validStatement(brief.marketing.validation_step, answers, 360, true)) return null;
   return value as unknown as AnalysisResult;
 }

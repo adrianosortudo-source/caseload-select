@@ -64,6 +64,19 @@ describe("validateAnalysisResult", () => {
     expect(validateAnalysisResult(supported, answers, [])).not.toBeNull();
   });
 
+  it("allows only validation-step advice to resolve unknown sources", () => {
+    const answers = structuredClone(B0);
+    answers.value.collected_fee = null;
+    const candidate = result();
+    candidate.brief.marketing.validation_step = statement("Establish the fee range before relying on this direction.", "value.collected_fee", "suggestion");
+    expect(validateAnalysisResult(candidate, answers, [])).not.toBeNull();
+
+    answers.focus.work = null;
+    const invalid = result();
+    invalid.brief.marketing.topic = statement("Choose a specific work focus before proposing a topic.", "focus.work", "suggestion");
+    expect(validateAnalysisResult(invalid, answers, [])).toBeNull();
+  });
+
   it("rejects markup, external links, email, percentages and em dashes", () => {
     for (const text of ["<script>alert(1)</script>", "See https://example.com", "Write a@b.com", "[brief](https://example.com)", "A 20% increase", "Clear scope — matters"]) {
       const candidate = result();

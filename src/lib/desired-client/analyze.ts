@@ -1,5 +1,5 @@
 import "server-only";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai";
 import { getEligibleClarificationCodes } from "./clarifications";
 import {
   buildDesiredClientSystemPrompt,
@@ -35,7 +35,8 @@ export async function runDesiredClientAnalysis(
         maxOutputTokens: 4096,
         responseMimeType: "application/json",
         responseSchema: DESIRED_CLIENT_RESPONSE_SCHEMA as never,
-      },
+        thinkingConfig: { thinkingBudget: 512 },
+      } as GenerationConfig & { thinkingConfig: { thinkingBudget: number } },
     }, { timeout: REQUEST_TIMEOUT_MS });
     const response = await model.generateContent(buildDesiredClientUserPrompt(request, eligibleCodes));
     let parsed: unknown;
@@ -50,5 +51,6 @@ export async function runDesiredClientAnalysis(
 }
 
 export function eligibleDesiredClientClarifications(request: AnalysisRequestEnvelope): ClarificationCode[] {
+  if (request.analysisIndex === 2) return [];
   return getEligibleClarificationCodes(request.answers, request.clarifications.map(({ code }) => code));
 }

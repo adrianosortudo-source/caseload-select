@@ -66,4 +66,26 @@ describe("deterministic brief completeness", () => {
       "focus.work_other", "situation.role_other", "situation.timing", "focus.route", "focus.service_area",
     ]);
   });
+
+  it("keeps each selected client goal as its own statement with client-goal provenance", () => {
+    const answers = completeAnswers();
+    answers.client.goals = ["complete", "protect"];
+    const goals = buildStructuredBrief(answers).client_goals;
+    expect(goals.map((goal) => goal.text)).toEqual([
+      "Complete a planned transaction or process",
+      "Protect something important",
+    ]);
+    expect(goals.map((goal) => goal.source_answer_ids)).toEqual([["client.goals"], ["client.goals"]]);
+    expect(goals.every((goal) => goal.kind === "preference")).toBe(true);
+  });
+
+  it("retains the exact marketing topic prompt when another work type is unspecified", () => {
+    const answers = completeAnswers();
+    answers.focus.work = "other";
+    answers.focus.work_other = "   ";
+    const topic = buildStructuredBrief(answers).marketing.topic;
+    expect(topic.text).toBe("Choose one specific type of work before drafting a marketing topic.");
+    expect(topic.kind).toBe("suggestion");
+    expect(topic.source_answer_ids).toEqual(["focus.work", "focus.area", "focus.route"]);
+  });
 });
