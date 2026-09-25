@@ -1,9 +1,13 @@
 # Prospect enrichment production migration
 
-This workflow prepares and, after its own production approval, applies only the
-six ordered migrations in scripts/prospect-enrichment/migration-release.json to
-project ssxryjxifwiivghglqer. App PR merge, schema activation, pilot, backfill and active
-research cutover remain separate approvals. No real research is included here.
+This workflow first reconciles verified production migration history, then
+prepares and, after its own production approval, applies only the six ordered
+migrations in scripts/prospect-enrichment/migration-release.json to project
+ssxryjxifwiivghglqer. It stages the complete production migration source history
+in a temporary runner directory and excludes exactly two preview-only migrations
+from that temporary directory. The repository migrations remain untouched. App
+PR merge, schema activation, pilot, backfill and active research cutover remain
+separate approvals. No real research is included here.
 
 The reviewed allowlist is scripts/prospect-enrichment/migration-release.json.
 It is mechanically generated from the exact migration filename and UTF-8 bytes:
@@ -60,30 +64,28 @@ This task does not inspect or configure secrets/environment protection. GitHub
 can create an unprotected environment when a name is first referenced, so an
 environment name alone is not proof that owner-side protections exist.
 
-Merge PR #312 only after its named approval. Retarget stacked PR #313 to main,
-rerun required checks and obtain its separate named approval before its merge.
-Then prepare the private release manifest with the merged main SHA, migration
-checksum, deployment evidence, exact target and rollback/read-back steps.
+Run this workflow only from the reviewed main commit containing the production
+migration gate and its exact migration sources. Record the exact main SHA, target,
+release manifest checksum, deployment evidence and rollback/read-back steps in the
+private release record. Each dispatch must use that same still-current reviewed
+SHA; a changed main requires a fresh source review and protected environment SHA
+configuration. This documentation does not assert that any production operation
+has been run or that production was changed.
 
 ## Manual sequence after the appropriate authorization
 
-1. Dispatch Reviewed prospect enrichment migration from main with operation
-   dry-run and reviewed_source_sha equal to the current reviewed main SHA.
-   The environment's reviewed SHA, dispatch SHA, checkout SHA and freshly fetched
-   origin/main must all match. The default dry-run applies no migrations, seeds,
-   custom roles or vault changes. It uses only the guarded direct connection.
-2. Review the resulting prospect-enrichment-migration-evidence artifact.
-   The pending plan must contain all six allowlisted files in their exact order;
-   seeds and roles must both be empty. A missing, already-applied, duplicate,
-   reordered or additional migration fails closed. A partially applied set is
-   a blocked release, not permission to apply the remaining subset. Do not repair
-   history or widen the allowlist ad hoc.
-3. Obtain explicit approval for activation of the scoped enrichment schema and
-   operator views. Dispatch again with operation apply, the same still-current
-   reviewed source SHA and confirmation APPLY-PROSPECT-ENRICHMENT-V1.
-   The protected environment approval is required again. A moved main requires
-   fresh source review and configuration, not an arbitrary SHA substitution.
-4. The apply step rechecks source/configuration/checksums and a fresh exact plan
+1. Confirm the `Production prospect migrations` environment already has the reviewer protections and approved direct database URL described above. Configure `PROSPECT_ENRICHMENT_MIGRATION_REVIEWED_SHA` to the exact reviewed 40-character main SHA. Every dispatch's `reviewed_source_sha`, this configured value, checkout SHA and freshly fetched `origin/main` must match. Do not dispatch stale runs; a changed main requires renewed review/configuration.
+
+2. Run the read-only qualification catalog preflight first. Dispatch **Reviewed prospect enrichment migration** from `main`, operation `qualification-preflight`, the reviewed SHA, and no confirmation/catalog SHA. The workflow stages byte-verified full production migration history, preserves `supabase/config.toml`, and excludes only these two preview migrations from the fresh temporary staging directory: `20260915183000_preview_qa_session_registry.sql` and `20260916030440_preview_qa_registry_privilege_hardening.sql`. Repository copies remain unchanged. Every other production migration source must be present and byte-identical. Full-ledger validation requires the only pending files to be the two qualification migrations plus the six enrichment migrations; unexpected/missing/remote-only versions or name mismatches fail closed.
+
+   The workflow applies the exact qualification migration sources to a scratch PostgreSQL fixture, reads the production catalog contract, and compares all 14 tables and their columns/defaults, constraints, indexes, policies, triggers, owners, RLS flags and `anon`/`authenticated` privileges. Review artifact `qualification-catalog-preflight-evidence`, including `qualification-catalog-check.json`, the full-ledger check and staged inventory. Confirm exact catalog match; record `productionCatalogSha256` (64 hex characters) from the reviewed check artifact. This operation reads production catalog/ledger only; it applies no production SQL and changes no production history.
+
+3. Only after reviewing that artifact and explicitly approving the separate metadata repair, dispatch operation `qualification-repair` from the same reviewed SHA. Set `reviewed_catalog_sha256` to the exact `productionCatalogSha256` from the separately reviewed preflight artifact and confirmation to `RECONCILE-QUALIFICATION-HISTORY-V1`; protected environment approval is required. The workflow repeats source, full-ledger and scratch-vs-production catalog checks immediately before repair, and requires the reviewed catalog hash/confirmation. It runs only `supabase migration repair --db-url <protected-url> --status applied 20260921120000 20260921121500`. This is a metadata-only ledger repair: it does not execute those two SQL files or alter schema. It verifies the ledger delta is exactly those two versions and that exactly six enrichment migrations remain pending. Review/retain the repair delta and full-ledger evidence. Any discrepancy blocks release; do not broaden/retry repair or substitute schema changes.
+
+4. After that exact repair delta is reviewed, dispatch operation `dry-run` from the same still-current SHA. Review `prospect-enrichment-migration-evidence`: staged inventory, full-ledger check and plan check. The full history must now show precisely the six allowlisted enrichment migrations pending, in exact order; seeds and roles must be empty. Missing, applied, duplicate, reordered or additional migrations fail closed. A partial set blocks release. This dry-run applies no migrations, seeds, roles or vault changes.
+
+5. Obtain separate explicit approval to activate the scoped enrichment schema and operator views. Dispatch operation `apply`, same current reviewed SHA, confirmation `APPLY-PROSPECT-ENRICHMENT-V1`; protected environment approval is required again. A changed main restarts source review/configuration.
+6. The apply step rechecks source/configuration/checksums and a fresh exact plan
    immediately before the single db push. It records that the guarded apply
    attempt started, verifies the apply result, reads exactly the expected
    six ledger rows with one fixed, version-scoped SELECT, and verifies a final
@@ -92,7 +94,7 @@ checksum, deployment evidence, exact target and rollback/read-back steps.
    authorized database URL. It never retries apply or converts a failed apply
    step into success.
    A failure before the guarded apply attempt does not start this read-back.
-5. Retain source-check, plan-check, apply-check, ledger-check and post-apply-check
+7. Retain source-check, plan-check, apply-check, ledger-check and post-apply-check
    from the artifact. Ledger verification requires exactly six ordered unique rows,
    checks each version/name and complete stored SQL text against that file's
    reviewed source bytes, and rejects omitted or substituted rows. The pinned CLI
@@ -105,7 +107,7 @@ checksum, deployment evidence, exact target and rollback/read-back steps.
    source-check separately records releaseManifestSha256 for the exact saved
    manifest-file bytes. These are distinct hash domains, not interchangeable
    checksums.
-6. If apply succeeds but subsequent verification fails, treat the result as
+8. If apply succeeds but subsequent verification fails, treat the result as
    applied-but-unverified. Do not rerun apply, repair history, delete objects or
    claim success. Retain evidence and resolve through reviewed checks whose SQL
    actions are read-only and whose database connectivity is separately protected

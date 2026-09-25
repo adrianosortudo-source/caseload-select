@@ -13,6 +13,15 @@ export const MIGRATION_PATHS = Object.freeze([
   "supabase/migrations/20260924071322_prospect_enrichment_manifest_hold_evidence.sql",
   "supabase/migrations/20260924093317_fix_gta_prospect_operator_projection_gaps.sql"
 ]);
+export const PREVIEW_MIGRATION_PATHS = Object.freeze([
+  "supabase/migrations/20260915183000_preview_qa_session_registry.sql",
+  "supabase/migrations/20260916030440_preview_qa_registry_privilege_hardening.sql"
+]);
+export const QUALIFICATION_HISTORY = Object.freeze([
+  { path: "supabase/migrations/20260921120000_prospect_qualification_evidence.sql", version: "20260921120000", name: "prospect_qualification_evidence", sha256: "c9fff7b8f0950be5ac9557e9ba7d40f6291829548f6ab9a7b6c313cd90b717f7" },
+  { path: "supabase/migrations/20260921121500_prospect_qualification_profile_details.sql", version: "20260921121500", name: "prospect_qualification_profile_details", sha256: "ef14f2942a4db3da22080f8c6e09a0df47638af518d59e8a743183e92fef858a" }
+]);
+export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
 export const RELEASE_PATH = "scripts/prospect-enrichment/migration-release.json";
 export const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -59,6 +68,200 @@ export function verifyReleaseManifest(manifest, sources) {
   return expected;
 }
 
+const isCliMigration = (name) => /^[0-9]+_.+\.sql$/.test(name);
+const isWithin = (parent, child) => {
+  const relative = path.relative(parent, child);
+  return relative === "" || (!relative.startsWith(".." + path.sep) && relative !== ".." && !path.isAbsolute(relative));
+};
+
+function sourceMigrationInventory(sourceRoot, { requirePreviewSources = true } = {}) {
+  const root = fs.realpathSync(sourceRoot);
+  const supabaseDir = path.join(root, "supabase");
+  const supabaseStat = fs.lstatSync(supabaseDir);
+  const migrationDir = path.join(supabaseDir, "migrations");
+  const dirStat = fs.lstatSync(migrationDir);
+  if (!supabaseStat.isDirectory() || supabaseStat.isSymbolicLink() || !dirStat.isDirectory() || dirStat.isSymbolicLink()) fail("migration_source_directory_invalid");
+  const migrations = [];
+  for (const name of fs.readdirSync(migrationDir).sort()) {
+    if (!isCliMigration(name)) continue;
+    const fullPath = path.join(migrationDir, name);
+    const stat = fs.lstatSync(fullPath);
+    if (stat.isSymbolicLink() || !stat.isFile()) fail("migration_source_file_invalid");
+    const version = name.slice(0, name.indexOf("_"));
+    const migrationName = name.slice(name.indexOf("_") + 1, -4);
+    const bytes = fs.readFileSync(fullPath);
+    if (!bytes.length || !Buffer.from(bytes.toString("utf8"), "utf8").equals(bytes)) fail("migration_source_not_utf8");
+    migrations.push({ path: "supabase/migrations/" + name, filename: name, version, name: migrationName, bytes: bytes.length, sha256: sha256(bytes) });
+  }
+  if (new Set(migrations.map(item => item.version)).size !== migrations.length) fail("duplicate_migration_version");
+  if (requirePreviewSources) for (const excluded of PREVIEW_MIGRATION_PATHS) {
+    if (!migrations.some(item => item.path === excluded)) fail("preview_migration_source_missing");
+  }
+  return { root, migrations };
+}
+
+/** Copy a complete, byte-verified production CLI history into a fresh staging directory. */
+export function stageProductionWorkdir(sourceRoot, destinationRoot) {
+  const source = sourceMigrationInventory(sourceRoot);
+  const requestedDestination = path.resolve(destinationRoot);
+  let destinationExists = false;
+  try { fs.lstatSync(requestedDestination); destinationExists = true; } catch (error) { if (error.code !== "ENOENT") throw error; }
+  if (!path.isAbsolute(destinationRoot) || destinationExists) fail("staging_destination_must_be_fresh_absolute_path");
+  const parent = fs.realpathSync(path.dirname(requestedDestination));
+  const destination = path.join(parent, path.basename(requestedDestination));
+  if (!isWithin(parent, destination) || isWithin(source.root, destination) || isWithin(destination, source.root)) fail("staging_path_containment_failed");
+  const excluded = new Set(PREVIEW_MIGRATION_PATHS);
+  const included = source.migrations.filter(item => !excluded.has(item.path));
+  if (included.length !== source.migrations.length - PREVIEW_MIGRATION_PATHS.length) fail("staging_exclusion_count_mismatch");
+  const configSource = path.join(source.root, "supabase", "config.toml");
+  const configStat = fs.lstatSync(configSource);
+  if (configStat.isSymbolicLink() || !configStat.isFile()) fail("supabase_config_invalid");
+  const configBytes = fs.readFileSync(configSource);
+  fs.mkdirSync(destination);
+  fs.mkdirSync(path.join(destination, "supabase"));
+  fs.mkdirSync(path.join(destination, "supabase", "migrations"));
+  fs.writeFileSync(path.join(destination, "supabase", "config.toml"), configBytes, { flag: "wx" });
+  for (const item of included) {
+    const target = path.join(destination, item.path);
+    fs.writeFileSync(target, fs.readFileSync(path.join(source.root, item.path)), { flag: "wx" });
+    const copied = fs.readFileSync(target);
+    if (copied.length !== item.bytes || sha256(copied) !== item.sha256) fail("staged_migration_source_mismatch");
+  }
+  const stagedFiles = fs.readdirSync(path.join(destination, "supabase", "migrations")).sort();
+  if (!same(stagedFiles, included.map(item => item.filename).sort())) fail("staged_migration_inventory_mismatch");
+  const copiedConfig = fs.readFileSync(path.join(destination, "supabase", "config.toml"));
+  if (!copiedConfig.equals(configBytes)) fail("staged_config_mismatch");
+  return {
+    stagedRoot: destination,
+    migrationCount: included.length,
+    inventorySha256: sha256(JSON.stringify(included.map(({ path, version, name, bytes, sha256: digest }) => ({ path, version, name, bytes, sha256: digest })))),
+    configSha256: sha256(copiedConfig),
+    exclusions: source.migrations.filter(item => excluded.has(item.path)).map(({ path, version, name, bytes, sha256: digest }) => ({ path, version, name, bytes, sha256: digest }))
+  };
+}
+
+export function fullLedgerQuery() {
+  return "SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version;\n";
+}
+
+export function verifyFullMigrationLedger(rows, sourceRoot, phase) {
+  if (!Array.isArray(rows) || !["qualification-pending", "enrichment-pending", "complete"].includes(phase)) fail("invalid_full_ledger_input");
+  const { migrations } = sourceMigrationInventory(sourceRoot, { requirePreviewSources: false });
+  const localByVersion = new Map(migrations.filter(item => !PREVIEW_MIGRATION_PATHS.includes(item.path)).map(item => [item.version, item]));
+  const remote = new Map();
+  for (const row of rows) {
+    if (!isRecord(row) || !same(Object.keys(row).sort(), ["name", "version"]) || typeof row.version !== "string" || typeof row.name !== "string" || remote.has(row.version)) fail("invalid_full_ledger_rows");
+    remote.set(row.version, row.name);
+  }
+  if (!same([...remote.keys()], [...remote.keys()].sort())) fail("full_ledger_rows_not_ordered");
+  for (const [version, name] of remote) {
+    const local = localByVersion.get(version);
+    if (!local || local.name !== name) fail("remote_migration_source_missing_or_mismatched");
+  }
+  const pending = [...localByVersion.values()].filter(item => !remote.has(item.version)).map(item => item.path).sort();
+  const expected = phase === "qualification-pending"
+    ? [...QUALIFICATION_HISTORY.map(item => item.path), ...MIGRATION_PATHS].sort()
+    : phase === "enrichment-pending" ? [...MIGRATION_PATHS].sort() : [];
+  if (!same(pending, expected)) fail("unexpected_full_history_delta");
+  return { phase, remoteVersionCount: remote.size, stagedMigrationCount: localByVersion.size, pendingPaths: pending, completeSourceCoverage: true };
+}
+
+export function verifyQualificationHistorySources(sourceRoot) {
+  const root = fs.realpathSync(sourceRoot);
+  return QUALIFICATION_HISTORY.map(expected => {
+    const fullPath = path.join(root, expected.path);
+    const stat = fs.lstatSync(fullPath);
+    if (stat.isSymbolicLink() || !stat.isFile()) fail("qualification_source_file_invalid");
+    const checkoutBytes = fs.readFileSync(fullPath);
+    const bytes = Buffer.from(checkoutBytes.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
+    if (sha256(bytes) !== expected.sha256) fail("qualification_source_hash_mismatch");
+    return { path: expected.path, version: expected.version, name: expected.name, bytes: bytes.length, sha256: expected.sha256 };
+  });
+}
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonicalJson(value[key])]));
+}
+
+function readCatalogContract(file) {
+  const raw = JSON.parse(fs.readFileSync(file, "utf8"));
+  let value = raw;
+  if (Array.isArray(value)) {
+    if (value.length !== 1) fail("catalog_query_result_shape_invalid");
+    value = value[0];
+  }
+  if (isRecord(value) && value.data !== undefined) {
+    if (!Array.isArray(value.data) || value.data.length !== 1) fail("catalog_query_result_shape_invalid");
+    value = value.data[0];
+  }
+  if (isRecord(value) && value.rows !== undefined) {
+    if (!Array.isArray(value.rows) || value.rows.length !== 1) fail("catalog_query_result_shape_invalid");
+    value = value.rows[0];
+  }
+  const contract = isRecord(value) && value.catalog_contract !== undefined ? value.catalog_contract : value;
+  const parsed = typeof contract === "string" ? JSON.parse(contract) : contract;
+  if (!isRecord(parsed) || !Array.isArray(parsed.tables) || parsed.tables.length !== 14) fail("catalog_contract_incomplete");
+  const tableNames = parsed.tables.map(table => table?.name);
+  const expectedNames = [
+    "prospect_advertising_observations", "prospect_decision_maker_contacts", "prospect_diagnostic_ready_profiles",
+    "prospect_diagnostic_reservations", "prospect_export_runs", "prospect_firm_affiliations",
+    "prospect_firm_fit_observations", "prospect_lso_licensees", "prospect_opportunity_observations",
+    "prospect_qualification_decisions", "prospect_research_attempts", "prospect_service_observations",
+    "prospect_source_captures", "prospect_source_record_map"
+  ];
+  if (!same(tableNames, expectedNames)) fail("catalog_contract_table_inventory_mismatch");
+  for (const table of parsed.tables) {
+    if (!isRecord(table) || table.present !== true || !Array.isArray(table.columns) || !Array.isArray(table.constraints) || !Array.isArray(table.indexes) ||
+        !Array.isArray(table.policies) || !isRecord(table.anon) || !isRecord(table.authenticated) || !Array.isArray(table.triggers) ||
+        typeof table.owner !== "string" || typeof table.rlsEnabled !== "boolean" || typeof table.forceRls !== "boolean") fail("catalog_contract_facet_missing");
+    for (const column of table.columns) {
+      if (!isRecord(column) || !isRecord(column.anonPrivileges) || !isRecord(column.authenticatedPrivileges)) fail("catalog_contract_column_privileges_missing");
+    }
+    for (const constraint of table.constraints) if (!isRecord(constraint) || typeof constraint.name !== "string" || typeof constraint.definition !== "string") fail("catalog_contract_constraint_incomplete");
+    for (const index of table.indexes) if (!isRecord(index) || typeof index.name !== "string" || typeof index.definition !== "string") fail("catalog_contract_index_incomplete");
+  }
+  return canonicalJson(parsed);
+}
+
+export function compareQualificationCatalogs(scratchFile, productionFile, sourceRoot) {
+  const scratch = readCatalogContract(scratchFile);
+  const production = readCatalogContract(productionFile);
+  if (!same(scratch, production)) fail("production_qualification_catalog_does_not_match_source");
+  return {
+    schemaVersion: "qualification-catalog-contract/v1",
+    tableCount: production.tables.length,
+    qualificationMigrationSources: verifyQualificationHistorySources(sourceRoot),
+    productionCatalogSha256: sha256(JSON.stringify(production)),
+    scratchAndProductionCatalogsMatch: true
+  };
+}
+
+export function verifyQualificationRepairAuthorization({ confirmation, reviewedCatalogSha256, currentCatalogSha256 }) {
+  if (confirmation !== QUALIFICATION_HISTORY_CONFIRMATION) fail("exact_qualification_history_confirmation_required");
+  if (!/^[a-f0-9]{64}$/.test(reviewedCatalogSha256 ?? "") || reviewedCatalogSha256 !== currentCatalogSha256) fail("reviewed_catalog_evidence_missing_or_changed");
+  return { operation: "qualification-repair", catalogEvidenceSha256: currentCatalogSha256 };
+}
+
+export function verifyLedgerDelta(beforeRows, afterRows, expectedVersions) {
+  if (!Array.isArray(expectedVersions) || !same([...expectedVersions].sort(), QUALIFICATION_HISTORY.map(item => item.version).sort())) fail("qualification_history_delta_scope_invalid");
+  const toMap = rows => {
+    if (!Array.isArray(rows)) fail("invalid_full_ledger_rows");
+    const map = new Map();
+    for (const row of rows) {
+      if (!isRecord(row) || !same(Object.keys(row).sort(), ["name", "version"]) || typeof row.version !== "string" || typeof row.name !== "string" || map.has(row.version)) fail("invalid_full_ledger_rows");
+      map.set(row.version, row.name);
+    }
+    return map;
+  };
+  const before = toMap(beforeRows), after = toMap(afterRows);
+  for (const [version, name] of before) if (after.get(version) !== name) fail("full_ledger_changed_outside_allowlist");
+  const added = [...after.keys()].filter(version => !before.has(version)).sort();
+  if (!same(added, [...expectedVersions].sort())) fail("full_ledger_delta_mismatch");
+  return { addedVersions: added, beforeCount: before.size, afterCount: after.size, exactDelta: true };
+}
+
 export function verifyDirectDatabaseUrl(value, environment = {}, projectEnvFiles = []) {
   if (Object.keys(environment).some(key => (/^(?:PG|SUPABASE_|DOTENV_)/i.test(key) || ["DOCKER_HOST", "NODE_TLS_REJECT_UNAUTHORIZED"].includes(key.toUpperCase())) && environment[key] !== undefined)) fail("ambient_database_configuration_prohibited");
   if (!Array.isArray(projectEnvFiles) || projectEnvFiles.length) fail("project_database_env_files_prohibited");
@@ -77,7 +280,7 @@ export function verifyDirectDatabaseUrl(value, environment = {}, projectEnvFiles
 
 export function verifyExecutionGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, databaseUrl, environment, projectEnvFiles }) {
   if (event !== "workflow_dispatch" || ref !== "refs/heads/main" || repository !== "adrianosortudo-source/caseload-select") fail("manual_main_repository_required");
-  if (!["dry-run", "apply"].includes(operation)) fail("invalid_operation");
+  if (!["dry-run", "apply", "qualification-preflight", "qualification-repair"].includes(operation)) fail("invalid_operation");
   if (!/^[a-f0-9]{40}$/.test(reviewedSourceSha ?? "")) fail("reviewed_source_sha_required");
   if (!/^[a-f0-9]{40}$/.test(configuredReviewedSha ?? "") || configuredReviewedSha !== reviewedSourceSha) fail("protected_environment_reviewed_sha_missing_or_mismatch");
   if (checkoutSha !== reviewedSourceSha || githubSha !== reviewedSourceSha) fail("reviewed_source_sha_changed");
@@ -87,6 +290,7 @@ export function verifyExecutionGate({ event, ref, repository, operation, reviewe
 
 export function verifyConfirmation(operation, confirmation) {
   if (operation === "apply" && confirmation !== CONFIRMATION) fail("exact_apply_confirmation_required");
+  if (operation === "qualification-repair" && confirmation !== QUALIFICATION_HISTORY_CONFIRMATION) fail("exact_qualification_history_confirmation_required");
 }
 
 export function verifyMigrationPlan(plan, manifest, phase) {
@@ -161,6 +365,36 @@ export function findProjectEnvFiles(exists = fs.existsSync) {
 
 function main(args) {
   const [command, ...rest] = args;
+  if (command === "stage" && rest.length === 2) {
+    console.log(JSON.stringify(stageProductionWorkdir(rest[0], rest[1])));
+    return;
+  }
+  if (command === "full-query" && rest.length === 0) {
+    process.stdout.write(fullLedgerQuery());
+    return;
+  }
+  if (command === "full-ledger" && rest.length === 3) {
+    const payload = JSON.parse(fs.readFileSync(rest[0], "utf8"));
+    const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : payload?.rows;
+    console.log(JSON.stringify(verifyFullMigrationLedger(rows, rest[1], rest[2])));
+    return;
+  }
+  if (command === "ledger-delta" && rest.length === 4) {
+    const beforePayload = JSON.parse(fs.readFileSync(rest[0], "utf8"));
+    const afterPayload = JSON.parse(fs.readFileSync(rest[1], "utf8"));
+    const beforeRows = Array.isArray(beforePayload) ? beforePayload : Array.isArray(beforePayload?.data) ? beforePayload.data : beforePayload?.rows;
+    const afterRows = Array.isArray(afterPayload) ? afterPayload : Array.isArray(afterPayload?.data) ? afterPayload.data : afterPayload?.rows;
+    console.log(JSON.stringify(verifyLedgerDelta(beforeRows, afterRows, rest.slice(2))));
+    return;
+  }
+  if (command === "catalog-compare" && rest.length === 2) {
+    console.log(JSON.stringify(compareQualificationCatalogs(rest[0], rest[1], process.cwd())));
+    return;
+  }
+  if (command === "repair-authorization" && rest.length === 1) {
+    console.log(JSON.stringify(verifyQualificationRepairAuthorization({ confirmation: process.env.CONFIRMATION, reviewedCatalogSha256: process.env.REVIEWED_CATALOG_SHA256, currentCatalogSha256: rest[0] })));
+    return;
+  }
   const sources = Object.fromEntries(MIGRATION_PATHS.map(migrationPath => [migrationPath, fs.readFileSync(migrationPath)]));
   if (command === "generate" && rest.length === 0) {
     // Local release preparation only; generation grants no execution authority.
@@ -188,7 +422,7 @@ function main(args) {
     console.log(JSON.stringify(verifyMigrationPlan(JSON.parse(fs.readFileSync(rest[1], "utf8")), manifest, rest[0])));
   } else if (command === "ledger" && rest.length === 1) {
     console.log(JSON.stringify(verifyMigrationLedger(JSON.parse(fs.readFileSync(rest[0], "utf8")), manifest, sources)));
-  } else fail("usage_source_connection_query_generate_plan_phase_file_or_ledger_file");
+  } else fail("usage_source_connection_query_generate_plan_phase_file_or_ledger_file_stage_full_query_full_ledger_catalog_compare_ledger_delta_or_repair_authorization");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
