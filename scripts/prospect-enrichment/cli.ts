@@ -22,7 +22,7 @@ const HELP = `Prospect enrichment local tools (dry-run by default)
   inventory --profile whole-firm --file IMMUTABLE_COORDINATOR_EXPORT
   inventory --profile whole-firm --coordinator-state PATH
   compile --manifest FILE --run-dir DIR [--actions FILE] [--exclusions PRIVATE_FILE]
-  comparison-request --manifest FILE --packages FILE --output FILE
+  comparison-request --manifest FILE --packages FILE --output FILE [--gzip]
   validate --file FILE
   reconcile --packages FILE --snapshot FILE --output FILE
   reconcile --export-comparison --file FILE --output FILE
@@ -43,7 +43,7 @@ function args(argv: string[]) {
   const [command = "help", ...rest] = argv, options: Record<string, string | boolean> = {};
   for (let i = 0; i < rest.length; i++) {
     const flag = rest[i];
-    if (flag === "--execute" || flag === "--export-comparison" || flag === "--manifest-only") { const name = flag.slice(2); if (name in options) throw Error("duplicate_cli_argument"); options[name] = true; continue; }
+    if (flag === "--execute" || flag === "--export-comparison" || flag === "--manifest-only" || flag === "--gzip") { const name = flag.slice(2); if (name in options) throw Error("duplicate_cli_argument"); options[name] = true; continue; }
     if (!flag.startsWith("--") || !valueFlags.has(flag.slice(2)) || !rest[i + 1] || rest[i + 1].startsWith("--")) throw Error("invalid_cli_arguments");
     const name = flag.slice(2); if (name in options) throw Error("duplicate_cli_argument"); options[name] = rest[++i];
   }
@@ -151,8 +151,8 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     return coverage;
   }
   if (command === "comparison-request") {
-    if (Object.keys(options).some(key=>!["manifest","packages","output","profile"].includes(key))) throw Error("comparison_request_cli_scope_invalid");
-    return writeComparisonRequest({manifestPath:required(options,"manifest"),packagesPath:required(options,"packages"),outputPath:privateOutput(required(options,"output")),profile,privateRoot:config.outputRoot});
+    if (Object.keys(options).some(key=>!["manifest","packages","output","profile","gzip"].includes(key))) throw Error("comparison_request_cli_scope_invalid");
+    return writeComparisonRequest({manifestPath:required(options,"manifest"),packagesPath:required(options,"packages"),outputPath:privateOutput(required(options,"output")),profile,privateRoot:config.outputRoot,gzip:options.gzip===true});
   }
   if (command === "validate") {
     const value = await json<unknown>(required(options, "file"));

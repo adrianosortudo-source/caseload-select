@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { gunzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { compileCandidate } from "../compiler";
 import { buildExpectedRunManifest } from "../run-manifest";
@@ -77,6 +78,15 @@ test("atomic request writer creates a new private file without replacing existin
   await assert.rejects(writeComparisonRequest({manifestPath,packagesPath,outputPath,privateRoot:w.privateRoot}),/EEXIST/);
   assert.equal(await fs.readFile(outputPath,"utf8"),bytes);
   assert.deepEqual(await fs.readdir(path.dirname(outputPath)),["synthetic.json"]);
+});
+test("gzip request writer preserves the canonical body and reports the transport hash",async t=>{
+  const w=await workspace(t),{manifest,values}=fixture(),manifestPath=path.join(w.directory,"manifest.json"),packagesPath=path.join(w.directory,"packages.json"),outputPath=path.join(w.privateRoot,"requests","synthetic.json.gz");
+  await fs.writeFile(manifestPath,JSON.stringify(manifest));await fs.writeFile(packagesPath,JSON.stringify(values));
+  const result=await writeComparisonRequest({manifestPath,packagesPath,outputPath,privateRoot:w.privateRoot,gzip:true});
+  const bytes=await fs.readFile(outputPath),decoded=gunzipSync(bytes);
+  assert.equal(result.contentEncoding,"gzip");assert.equal(result.networkRequests,0);assert.equal(result.decodedBytes,decoded.byteLength);assert.equal(result.artifactBytes,bytes.byteLength);assert.equal(result.artifactSha256,sha256(bytes));
+  assert.equal(decoded.toString("utf8"),serializeComparisonRequest(manifest,values).body);
+  await assert.rejects(writeComparisonRequest({manifestPath,packagesPath,outputPath,privateRoot:w.privateRoot,gzip:true}),/EEXIST/);
 });
 test("invalid requests and outputs fail before a deliverable or network action",async t=>{
   const w=await workspace(t),{manifest}=fixture(),manifestPath=path.join(w.directory,"manifest.json"),packagesPath=path.join(w.directory,"packages.json"),outputPath=path.join(w.privateRoot,"bad.json");

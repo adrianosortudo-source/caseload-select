@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { gzipSync } from "node:zlib";
 import { NextRequest } from "next/server";
 import { buildProspectEnrichmentClientItems } from "@/lib/prospect-enrichment-contract";
 import { createProspectEnrichmentFixtures, prospectEnrichmentFixtureUuid } from "@/lib/__fixtures__/prospect-enrichment-v1";
@@ -77,6 +78,16 @@ describe("protected comparison export route", () => {
   });
   it("rejects a package whose source name differs from the frozen run before database access", async () => {
     const response = await POST(request(comparisonRequest("different-inventory")));
+    expect(response.status).toBe(422);
+    expect(state.from).not.toHaveBeenCalled();
+  });
+
+  it("decodes bounded gzip before applying the same strict schema validation", async () => {
+    const body = gzipSync(Buffer.from(JSON.stringify(comparisonRequest("different-inventory"))));
+    const compressedRequest = new NextRequest("http://127.0.0.1:3100/api/admin/prospect-enrichment/comparison-export", {
+      method: "POST", headers: { "content-type": "application/json", "content-encoding": "gzip", origin: "http://127.0.0.1:3100" }, body,
+    });
+    const response = await POST(compressedRequest);
     expect(response.status).toBe(422);
     expect(state.from).not.toHaveBeenCalled();
   });
