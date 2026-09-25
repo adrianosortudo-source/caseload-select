@@ -56,7 +56,6 @@ jobs:
       REVIEWED_CATALOG_SHA256: ${{ inputs.reviewed_catalog_sha256 }}
       CONFIRMATION: ${{ inputs.confirmation }}
       CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_ENRICHMENT_MIGRATION_REVIEWED_SHA }}
-      POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
     steps:
       - name: Check out current main
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -117,6 +116,7 @@ jobs:
         if: inputs.operation == 'qualification-preflight' || inputs.operation == 'qualification-repair'
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
         shell: bash
         run: |
           set -euo pipefail
