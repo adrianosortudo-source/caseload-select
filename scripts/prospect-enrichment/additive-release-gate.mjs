@@ -14,6 +14,8 @@ import {
 export { PROJECT_REF };
 
 export const RELEASE_PATH = "scripts/prospect-enrichment/additive-release-review.json";
+export const CANDIDATE_APPLY_CONFIRMATION = "APPLY-PROSPECT-CANDIDATE-PROFILES-V1";
+export const CANDIDATE_PREREQUISITE_PREFIX_LENGTH = 8;
 export const APPLIED_OPERATOR_RPC = Object.freeze({
   path: "supabase/migrations/20260924180541_restore_operator_membership_rpc.sql",
   filename: "20260924180541_restore_operator_membership_rpc.sql",
@@ -114,6 +116,18 @@ export function verifySourceGate({ event, ref, repository, operation, reviewedSo
   return { reviewedSourceSha, operation, projectRef: PROJECT_REF, connection };
 }
 
+export function verifyApplicationGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, reviewedReceiptSha256, configuredReceiptSha256, actualReceiptSha256, confirmation, databaseUrl, environment, projectEnvFiles }) {
+  if (event !== "workflow_dispatch" || ref !== "refs/heads/main" || repository !== "adrianosortudo-source/caseload-select") fail("manual_main_repository_required");
+  if (!["dry-run", "apply"].includes(operation)) fail("invalid_operation");
+  if (!/^[a-f0-9]{40}$/.test(reviewedSourceSha ?? "") || !/^[a-f0-9]{40}$/.test(configuredReviewedSha ?? "") || configuredReviewedSha !== reviewedSourceSha) fail("protected_environment_reviewed_sha_missing_or_mismatch");
+  if (checkoutSha !== reviewedSourceSha || githubSha !== reviewedSourceSha) fail("reviewed_source_sha_changed");
+  if (!/^[a-f0-9]{64}$/.test(reviewedReceiptSha256 ?? "") || !/^[a-f0-9]{64}$/.test(configuredReceiptSha256 ?? "") ||
+      reviewedReceiptSha256 !== configuredReceiptSha256 || reviewedReceiptSha256 !== actualReceiptSha256) fail("protected_environment_reviewed_receipt_sha256_missing_or_mismatch");
+  if (operation === "apply" && confirmation !== CANDIDATE_APPLY_CONFIRMATION) fail("exact_candidate_apply_confirmation_required");
+  const connection = verifyDirectDatabaseUrl(databaseUrl, environment, projectEnvFiles);
+  return { reviewedSourceSha, reviewedReceiptSha256, operation, projectRef: PROJECT_REF, connection };
+}
+
 export function ledgerQuery(receipt) {
   verifyReleaseReceipt(receipt, loadSources());
   const versions = ALL_IDENTITIES.map((m) => "'" + m.version + "'").join(", ");
@@ -158,6 +172,21 @@ export function verifyLedgerState(rows, receipt, sources) {
     appliedPrerequisite: { ...BASELINE_IDENTITY, ...baselineProof },
     appliedMigrations: releaseProofs,
   };
+}
+
+export function verifyCandidatePrerequisitePrefix(ledgerProof) {
+  if (!isRecord(ledgerProof) || ledgerProof.projectRef !== PROJECT_REF || ledgerProof.appliedPrefixLength !== CANDIDATE_PREREQUISITE_PREFIX_LENGTH ||
+      !same(ledgerProof.pending, RELEASE_IDENTITIES.slice(CANDIDATE_PREREQUISITE_PREFIX_LENGTH).map(migration => migration.filename))) fail("candidate_profile_requires_exact_eight_migration_prefix");
+  return {
+    requiredAppliedPrefixLength: CANDIDATE_PREREQUISITE_PREFIX_LENGTH,
+    pending: ledgerProof.pending,
+    candidateMigrations: RELEASE_IDENTITIES.slice(CANDIDATE_PREREQUISITE_PREFIX_LENGTH).map(migration => migration.filename),
+  };
+}
+
+export function verifyCandidateCompletePrefix(ledgerProof) {
+  if (!isRecord(ledgerProof) || ledgerProof.projectRef !== PROJECT_REF || ledgerProof.appliedPrefixLength !== RELEASE_IDENTITIES.length || !same(ledgerProof.pending, [])) fail("candidate_profile_release_ledger_incomplete");
+  return { appliedPrefixLength: ledgerProof.appliedPrefixLength, pending: [], candidateMigrations: RELEASE_IDENTITIES.slice(CANDIDATE_PREREQUISITE_PREFIX_LENGTH).map(migration => migration.filename) };
 }
 
 export function verifyMigrationPlan(plan, ledgerProof, phase) {
@@ -221,6 +250,19 @@ function main(args) {
       projectEnvFiles: findProjectEnvFiles(),
     });
     console.log(JSON.stringify({ ...result, receiptSha256: sourceSha256(fs.readFileSync(RELEASE_PATH)), migrations: receipt.migrations.map(m => ({ path: m.path, version: m.version, bytes: m.bytes, sha256: m.sha256 })) }));
+  } else if (command === "application-source" && rest.length === 0) {
+    const actualReceiptSha256 = sourceSha256(fs.readFileSync(RELEASE_PATH));
+    const gate = verifyApplicationGate({
+      event: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF,
+      repository: process.env.GITHUB_REPOSITORY, operation: process.env.OPERATION,
+      reviewedSourceSha: process.env.REVIEWED_SOURCE_SHA, configuredReviewedSha: process.env.CONFIGURED_REVIEWED_SHA,
+      checkoutSha: process.env.CHECKOUT_SHA, githubSha: process.env.GITHUB_SHA,
+      reviewedReceiptSha256: process.env.REVIEWED_RECEIPT_SHA256,
+      configuredReceiptSha256: process.env.CONFIGURED_RECEIPT_SHA256, actualReceiptSha256,
+      confirmation: process.env.CONFIRMATION,
+      databaseUrl: process.env.MIGRATION_DATABASE_URL, environment: process.env, projectEnvFiles: findProjectEnvFiles(),
+    });
+    console.log(JSON.stringify({ ...gate, receiptSha256: actualReceiptSha256, migrations: receipt.migrations.map(m => ({ path: m.path, version: m.version, bytes: m.bytes, sha256: m.sha256 })) }));
   } else if (command === "connection" && rest.length === 0) {
     console.log(JSON.stringify(verifyDirectDatabaseUrl(process.env.MIGRATION_DATABASE_URL, process.env, findProjectEnvFiles())));
   } else if (command === "ledger-query" && rest.length === 0) {
@@ -229,11 +271,15 @@ function main(args) {
     process.stdout.write(catalogQuery());
   } else if (command === "ledger" && rest.length === 1) {
     console.log(JSON.stringify(verifyLedgerState(safeJson(rest[0]), receipt, sources)));
+  } else if (command === "candidate-prefix" && rest.length === 1) {
+    console.log(JSON.stringify(verifyCandidatePrerequisitePrefix(safeJson(rest[0]))));
+  } else if (command === "candidate-complete" && rest.length === 1) {
+    console.log(JSON.stringify(verifyCandidateCompletePrefix(safeJson(rest[0]))));
   } else if (command === "catalog" && rest.length === 1) {
     console.log(JSON.stringify(verifyOperatorRpcCatalog(safeJson(rest[0]), receipt)));
   } else if (command === "plan" && rest.length === 3) {
     console.log(JSON.stringify(verifyMigrationPlan(safeJson(rest[1]), safeJson(rest[2]), rest[0])));
-  } else fail("usage_source_connection_ledger_query_catalog_query_ledger_catalog_or_plan");
+  } else fail("usage_source_application_source_connection_ledger_query_catalog_query_ledger_catalog_candidate_prefix_candidate_complete_or_plan");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
