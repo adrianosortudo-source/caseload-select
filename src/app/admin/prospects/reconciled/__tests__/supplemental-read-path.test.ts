@@ -214,22 +214,22 @@ describe("all returned research states and structured intake through actual GET"
   });
 
   it("links the exact Zarei source key to its database profile while leaving portable identity unresolved and readback failed", async () => {
-    const zareiKey = "q50-whole-firm-zarei-qualified-2026-09-25-v1";
+    const zareiKey = "q50-zarei-law-professional-corporation";
     const zareiFirmId = "a9989dca-8626-4a6e-93ca-797a1cb7eed2";
     const criteria = { sourceKey: zareiKey, originalStatus: "not_selected", adminProspectsReadback: { state: "admin-prospects-readback-failed" } };
-    h.state.research = [research(zareiKey), { ...research("same-name-different-source"), firm_name: "Synthetic " + zareiKey }];
+    h.state.research = [{ ...research(zareiKey), firm_name: "Zarei Law Professional Corporation", website_url: "https://www.zareilaw.com/" }, { ...research("same-name-different-source"), firm_name: "Zarei Law Professional Corporation" }];
     h.state.supplemental = [{ ...supplemental(zareiKey, criteria), database_firm_id: zareiFirmId }];
-    h.state.identities = [{ source_record_key: zareiKey, stable_firm_id: "FIRM-00000000000000000000000000", canonical_domain: "zarei-synthetic.example", source_url: "https://zarei-synthetic.example/identity", observed_on: "2026-09-25", confidence: "high" }];
     const response = await GET();
     expect(response.status).toBe(200);
     const body = await response.json() as { records: ReconciledGtaProspect[] };
     const record = body.records.find(item => item.id === zareiKey)!;
     const other = body.records.find(item => item.id === "same-name-different-source")!;
-    expect(record).toMatchObject({ databaseFirmId: zareiFirmId, firmId: null, supplementalEvidence: { qualification: { criteria } } });
+    expect(record).toMatchObject({ id: zareiKey, firmName: "Zarei Law Professional Corporation", databaseFirmId: zareiFirmId, firmId: null, canonicalDomain: null, supplementalEvidence: { qualification: { criteria } } });
     expect(record.supplementalEvidence?.identity).toBeNull();
     expect(other.databaseFirmId).toBeUndefined();
     const html = renderToStaticMarkup(createElement<{ initialData?: RecordsResponse }>(ReconciledProspects, { initialData: { records: [record, other], source: "ledger" } }));
     expect(html).toContain(`href="/admin/prospects/firms/${zareiFirmId}"`);
+    expect(html).toContain("admin-prospects-readback-failed");
     // The full criteria are asserted on the route object above; the browser
     // acceptance opens the native disclosure before checking this nested raw state.
     expect(html).not.toContain("synced");
