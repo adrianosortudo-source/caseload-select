@@ -528,26 +528,27 @@ BEGIN
  ), text_terms AS MATERIALIZED (
    SELECT DISTINCT btrim(term) term,plainto_tsquery('simple'::regconfig,btrim(term)) query
    FROM regexp_split_to_table(coalesce(p_filters->>'text',''),'\s+') term
-   WHERE numnode(plainto_tsquery('simple'::regconfig,btrim(term)))>0
+   WHERE p_filters ? 'text' AND btrim(p_filters->>'text')<>'' AND numnode(plainto_tsquery('simple'::regconfig,btrim(term)))>0
  ), text_hits AS MATERIALIZED (
    -- Search the GIN index once for the whole inventory instead of once per candidate.
    SELECT f.candidate_id,t.term FROM text_terms t JOIN public.prospect_research_candidate_search_chunks f
-     ON f.search_document @@ t.query WHERE f.coverage_revision<=cutoff
+     ON f.search_document @@ t.query WHERE p_filters ? 'text' AND btrim(p_filters->>'text')<>'' AND f.coverage_revision<=cutoff
    UNION
    SELECT h.candidate_id,t.term FROM text_terms t JOIN public.prospect_research_candidate_history h
      ON strpos(lower(h.original_json::text),lower(t.term))>0
      JOIN public.prospect_research_candidate_projection_issues i ON i.revision_id=h.id
-     WHERE h.coverage_revision<=cutoff
+     WHERE p_filters ? 'text' AND btrim(p_filters->>'text')<>'' AND h.coverage_revision<=cutoff
    UNION
    SELECT named.id,t.term FROM text_terms t JOIN public.prospect_research_candidates named
      ON to_tsvector('simple'::regconfig,named.identity_key||' '||named.identity_namespace) @@ t.query
+     WHERE p_filters ? 'text' AND btrim(p_filters->>'text')<>''
    UNION
    SELECT h.candidate_id,t.term FROM text_terms t JOIN public.prospect_research_candidate_history h
      ON to_tsvector('simple'::regconfig,concat_ws(' ',h.source_table,h.source_root,h.relative_path,h.source_pointer)) @@ t.query
-     WHERE h.coverage_revision<=cutoff
+     WHERE p_filters ? 'text' AND btrim(p_filters->>'text')<>'' AND h.coverage_revision<=cutoff
  ), text_matches AS MATERIALIZED (
    SELECT CASE WHEN i.firm_count=1 THEN i.firm_id ELSE h.candidate_id::text END group_id
-   FROM text_hits h JOIN identities i ON i.candidate_id=h.candidate_id
+   FROM text_hits h LEFT JOIN identities i ON i.candidate_id=h.candidate_id
    GROUP BY CASE WHEN i.firm_count=1 THEN i.firm_id ELSE h.candidate_id::text END
    HAVING count(DISTINCT h.term)=(SELECT count(*) FROM text_terms)
  ), filtered AS MATERIALIZED (
