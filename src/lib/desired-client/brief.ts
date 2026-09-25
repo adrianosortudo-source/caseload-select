@@ -27,7 +27,7 @@ export function buildDraftPreview(answers: DesiredClientAnswers): DraftPreview {
   const role = !answers.situation.role || answers.situation.role === "unknown" ? "Client role still to specify"
     : answers.situation.role === "other" ? answers.situation.role_other.trim() || "Client role still to specify"
     : area ? getRoleLabel(area, answers.situation.role) : "Client role still to specify";
-  const goals = answers.client.goals.length === 1 && answers.client.goals[0] === "unknown" ? "Client goal still to establish" : answers.client.goals.length ? answers.client.goals.map((goal) => GOAL_LABELS[goal]).join(", ") : "Client goal still to establish";
+  const goals = answers.client.goals.length === 1 && answers.client.goals[0] === "unknown" ? "Client goal still to establish" : [...answers.client.goals.map((goal) => GOAL_LABELS[goal]), ...(answers.write_ins?.goals?.trim() ? [answers.write_ins.goals.trim()] : [])].join(", ") || "Client goal still to establish";
   const notes: string[] = [];
   if (answers.focus.route === "new") notes.push("This is a direction you are building toward.");
   if (answers.focus.route === "exploring" || answers.focus.certainty === "provisional") notes.push("This is a direction to test.");
@@ -104,10 +104,11 @@ export function buildStructuredBrief(answers: DesiredClientAnswers): DesiredClie
   const role = roleValue(answers);
   const route = answers.focus.route;
   const timing = answers.situation.timing ?? "unknown";
+  const own = answers.write_ins ?? {};
   const unknownFocus = answers.focus.work === "other" && !answers.focus.work_other.trim();
   const unknownRole = answers.situation.role === "unknown" || !answers.situation.role
     || (answers.situation.role === "other" && !answers.situation.role_other.trim());
-  let definitionText = `The firm wants to explore ${work} for ${role}. Clients usually seek help ${TIMING_PHRASES[timing]}.`;
+  let definitionText = "The firm wants to explore " + work + " for " + role + ". " + (own.timing?.trim() ? "Client timing supplied: " + own.timing.trim() + "." : "Clients usually seek help " + TIMING_PHRASES[timing] + ".");
   if (route === "established") definitionText += " This is work the firm already handles.";
   if (route === "new") definitionText += " This is a direction the firm is building toward.";
   if (route === "exploring") definitionText += " This is a direction the firm is considering.";
@@ -115,7 +116,7 @@ export function buildStructuredBrief(answers: DesiredClientAnswers): DesiredClie
   const definitionSources: AnswerReferencePath[] = [];
   definitionSources.push(answers.focus.work === "other" && answers.focus.work_other.trim() ? "focus.work_other" : "focus.work");
   definitionSources.push(answers.situation.role === "other" && answers.situation.role_other.trim() ? "situation.role_other" : "situation.role");
-  definitionSources.push("situation.timing", "focus.route");
+  definitionSources.push(own.timing?.trim() ? "write_ins.timing" : "situation.timing", "focus.route");
   if (answers.focus.certainty === "provisional") definitionSources.push("focus.certainty");
   if (answers.focus.service_area.trim()) definitionSources.push("focus.service_area");
   let definitionKind: DesiredClientStatement["kind"] = unknownFocus || unknownRole ? "unknown" : route === "established" ? "preference" : "hypothesis";
@@ -130,34 +131,39 @@ export function buildStructuredBrief(answers: DesiredClientAnswers): DesiredClie
     goal,
     answers.client.goals.includes("unknown") ? "unknown" : "preference", ["client.goals"],
   ));
-  if (answers.client.concerns.length) {
-    const concerns = answers.client.concerns.map((id) => CONCERN_LABELS[id]).join(", ");
+  if (own.goals?.trim()) clientGoals.push(statement(own.goals.trim(), "preference", ["write_ins.goals"]));
+  if (answers.client.concerns.length || own.concerns?.trim()) {
+    const concerns = [...answers.client.concerns.map((id) => CONCERN_LABELS[id]), ...(own.concerns?.trim() ? [own.concerns.trim()] : [])].join(", ");
     const expected = route === "new" || route === "exploring";
     clientGoals.push(statement(`Concerns to understand: ${concerns}.${expected ? " These concerns are assumptions to check." : ""}`,
-      answers.client.concerns.includes("unheard") ? "unknown" : expected ? "hypothesis" : "experience", ["client.concerns"]));
+      answers.client.concerns.includes("unheard") ? "unknown" : expected ? "hypothesis" : own.concerns?.trim() ? "preference" : "experience", [...(answers.client.concerns.length ? ["client.concerns" as const] : []), ...(own.concerns?.trim() ? ["write_ins.concerns" as const] : [])]));
   }
 
   const firmReasons = answers.value.reasons.length === 1 && answers.value.reasons[0] === "undecided"
     ? [statement("The reasons for pursuing this work are still to be established.", "unknown", ["value.reasons"])]
     : answers.value.reasons.map((id) => statement(getReasonLabel(id, route), route === "established" ? "experience" : "preference", ["value.reasons"]));
+  if (own.reasons?.trim()) firmReasons.push(statement(own.reasons.trim(), "preference", ["write_ins.reasons"]));
 
   const deliveryConditions: DesiredClientStatement[] = [];
   const conditions = answers.delivery.conditions;
   const conditionText = conditions.length
     ? conditions.includes("unknown") ? "The team is still establishing a delivery process."
       : `The team identified these conditions: ${conditions.map((id) => CONDITION_LABELS[id]).join(", ")}.`
-    : "No specific delivery conditions have been supplied.";
-  const conditionSources: AnswerReferencePath[] = ["delivery.conditions"];
-  const conditionKind: DesiredClientStatement["kind"] = conditions.includes("unknown") || !conditions.length ? "unknown" : route === "established" ? "experience" : "preference";
+    : own.conditions?.trim() ? "The team named another delivery condition." : "No specific delivery conditions have been supplied.";
+  const conditionSources: AnswerReferencePath[] = conditions.length || !own.conditions?.trim() ? ["delivery.conditions"] : [];
+  if (own.conditions?.trim()) conditionSources.push("write_ins.conditions");
+  if (own.limit?.trim()) conditionSources.push("write_ins.limit");
+  const conditionKind: DesiredClientStatement["kind"] = conditions.includes("unknown") || (!conditions.length && !own.conditions?.trim()) ? "unknown" : own.conditions?.trim() ? "preference" : route === "established" ? "experience" : "preference";
+  const additionalConditions = (own.conditions?.trim() ? " Additional condition: " + own.conditions.trim() + "." : "") + (own.limit?.trim() ? " Additional limit: " + own.limit.trim() + "." : "");
   if (answers.delivery.limit && answers.delivery.limit !== "none") {
     conditionSources.push("delivery.limit");
-    deliveryConditions.push(statement(`${conditionText} Important limit: ${LIMIT_LABELS[answers.delivery.limit]}.`, conditionKind, conditionSources));
-  } else deliveryConditions.push(statement(conditionText, conditionKind, conditionSources));
+    deliveryConditions.push(statement(conditionText + " Important limit: " + LIMIT_LABELS[answers.delivery.limit] + "." + additionalConditions, conditionKind, conditionSources));
+  } else deliveryConditions.push(statement(conditionText + additionalConditions, conditionKind, conditionSources));
 
   const capacity = answers.delivery.capacity;
   const refined = hasRefinedComparisonAnswers(answers);
-  let capacityText = capacity ? `Capacity: ${CAPACITY_LABELS[capacity]}.` : "Capacity still needs to be established.";
-  const capacitySources: AnswerReferencePath[] = ["delivery.capacity"];
+  let capacityText = own.capacity?.trim() ? "Capacity as described: " + own.capacity.trim() + "." : capacity ? "Capacity: " + CAPACITY_LABELS[capacity] + "." : "Capacity still needs to be established.";
+  const capacitySources: AnswerReferencePath[] = own.capacity?.trim() ? ["write_ins.capacity"] : ["delivery.capacity"];
   if (capacity === "change" && answers.clarifications.CURRENT_CAPACITY_CONFLICT === "build_first") capacityText += " Build capacity before increasing demand.";
   if (refined && answers.focus.comparison) {
     capacityText += " Your answers were refined after the comparison.";
@@ -165,9 +171,9 @@ export function buildStructuredBrief(answers: DesiredClientAnswers): DesiredClie
     if (answers.value.fee_effort !== answers.focus.comparison[selected].fee_effort) capacitySources.push("value.fee_effort", `focus.comparison.${selected}.fee_effort`);
     if (answers.delivery.capacity !== answers.focus.comparison[selected].capacity) capacitySources.push(`focus.comparison.${selected}.capacity`);
   }
-  deliveryConditions.push(statement(capacityText, capacity === "unknown" || !capacity ? "unknown" : route === "established" ? "experience" : "preference", capacitySources));
-  const feeText = answers.value.fee_effort ? getFeeEffortLabel(answers.value.fee_effort, route) : "Not established";
-  deliveryConditions.push(statement(`${route === "established" ? "Fee" : "Expected fee"} compared with effort: ${feeText}.`, answers.value.fee_effort === "unknown" || !answers.value.fee_effort ? "unknown" : route === "established" ? "experience" : "hypothesis", ["value.fee_effort"]));
+  deliveryConditions.push(statement(capacityText, capacity === "unknown" || (!capacity && !own.capacity?.trim()) ? "unknown" : own.capacity?.trim() ? "preference" : route === "established" ? "experience" : "preference", capacitySources));
+  const feeText = own.fee_effort?.trim() || (answers.value.fee_effort ? getFeeEffortLabel(answers.value.fee_effort, route) : "Not established");
+  deliveryConditions.push(statement((route === "established" ? "Fee" : "Expected fee") + " compared with effort: " + feeText + ".", answers.value.fee_effort === "unknown" || (!answers.value.fee_effort && !own.fee_effort?.trim()) ? "unknown" : own.fee_effort?.trim() ? "preference" : route === "established" ? "experience" : "hypothesis", [own.fee_effort?.trim() ? "write_ins.fee_effort" : "value.fee_effort"]));
 
   const commercial: string[] = [];
   const commercialSources: AnswerReferencePath[] = [];
@@ -184,14 +190,14 @@ export function buildStructuredBrief(answers: DesiredClientAnswers): DesiredClie
     const label = route === "established" ? "Commercial ranges supplied" : "Planned commercial ranges";
     deliveryConditions.push(statement(`${label}: ${commercial.join("; ")}.`, route === "established" ? "experience" : "preference", commercialSources));
   }
-  const evidenceText = answers.direction.evidence.includes("preference")
+  const evidenceText = answers.direction.evidence.length === 0 && own.evidence?.trim() ? "Supporting basis supplied: " + own.evidence.trim() + "." : answers.direction.evidence.includes("preference")
     ? "This definition is based mainly on your preferences at this stage."
-    : `You identified: ${answers.direction.evidence.map((id) => EVIDENCE_LABELS[id]).join(", ")}.`;
-  const evidenceKind: DesiredClientStatement["kind"] = answers.direction.evidence.includes("preference")
+    : "You identified: " + answers.direction.evidence.map((id) => EVIDENCE_LABELS[id]).join(", ") + (own.evidence?.trim() ? "; " + own.evidence.trim() : "") + ".";
+  const evidenceKind: DesiredClientStatement["kind"] = own.evidence?.trim() ? "preference" : answers.direction.evidence.includes("preference")
     ? "preference" : route === "established" ? "experience" : "hypothesis";
   const evidence = [
-    statement(evidenceText, evidenceKind, ["direction.evidence"]),
-    statement(`Direction sought: ${answers.direction.aim ? AIM_LABELS[answers.direction.aim] : AIM_LABELS.unknown}.`, answers.direction.aim === "unknown" || !answers.direction.aim ? "unknown" : "preference", ["direction.aim"]),
+    statement(evidenceText, evidenceKind, [...(answers.direction.evidence.length ? ["direction.evidence" as const] : []), ...(own.evidence?.trim() ? ["write_ins.evidence" as const] : [])]),
+    statement("Direction sought: " + (own.aim?.trim() ?? (answers.direction.aim ? AIM_LABELS[answers.direction.aim] : AIM_LABELS.unknown)) + ".", !own.aim?.trim() && (answers.direction.aim === "unknown" || !answers.direction.aim) ? "unknown" : "preference", [own.aim?.trim() ? "write_ins.aim" : "direction.aim"]),
   ];
   const openQuestions = buildOpenQuestions(answers);
   const feeInterpretation = answers.clarifications.FEE_EFFORT_CONFLICT;

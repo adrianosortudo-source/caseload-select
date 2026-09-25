@@ -1,4 +1,4 @@
-import { CONTACT_ROLE_IDS, AREA_CATALOG, isKnownArea, isKnownWork } from "./catalog";
+import { CONTACT_ROLE_IDS, AREA_CATALOG, WRITE_IN_KEYS, isKnownArea, isKnownWork } from "./catalog";
 import type {
   AnalysisRequestEnvelope,
   AreaId,
@@ -84,10 +84,16 @@ function validClarificationAnswer(code: ClarificationCode, answer: unknown): ans
 }
 
 function validateAnswers(value: unknown, answerRevision: number, requireComplete: boolean): value is DesiredClientAnswers {
-  if (!hasExactKeys(value, ANSWER_KEYS)) return false;
+  if (!hasExactKeys(value, ANSWER_KEYS) && !hasExactKeys(value, [...ANSWER_KEYS, "write_ins"])) return false;
   const answers = value;
   if (answers.schema_version !== "dcm-v2.1" || answers.revision !== answerRevision ||
       !Number.isSafeInteger(answers.revision) || answers.revision < 0) return false;
+  const writeIns = answers.write_ins;
+  if (writeIns !== undefined) {
+    if (!isRecord(writeIns)) return false;
+    if (Object.keys(writeIns).some((key) => !WRITE_IN_KEYS.includes(key as typeof WRITE_IN_KEYS[number]) || !isOptionalText(writeIns[key]))) return false;
+  }
+  const own = (key: typeof WRITE_IN_KEYS[number]) => isRecord(writeIns) && typeof writeIns[key] === "string" && (writeIns[key] as string).trim().length > 0;
 
   if (!hasExactKeys(answers.focus, ["area", "work", "work_other", "service_area", "certainty", "route", "comparison"])) return false;
   const focus = answers.focus;
@@ -129,7 +135,7 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
 
   if (!hasExactKeys(answers.value, ["reasons", "fee_effort", "collected_fee", "team_hours", "payment"])) return false;
   const valueGroup = answers.value;
-  if (!isUniqueChoiceArray(valueGroup.reasons, ENUMS.reasons, 3) || (requireComplete && valueGroup.reasons.length === 0) ||
+  if (!isUniqueChoiceArray(valueGroup.reasons, ENUMS.reasons, 3) || (requireComplete && valueGroup.reasons.length === 0 && !own("reasons")) ||
       !exclusive(valueGroup.reasons, "undecided") || !isEnum(valueGroup.fee_effort, ENUMS.feeEffort, true) ||
       !isEnum(valueGroup.collected_fee, ENUMS.collectedFee, true) || !isEnum(valueGroup.team_hours, ENUMS.teamHours, true) ||
       !isEnum(valueGroup.payment, ENUMS.payment, true)) return false;
@@ -163,9 +169,9 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
 
   if (!requireComplete) return true;
   // Review cannot be prepared until every required stage choice is present.
-  return !!focus.area && focus.work !== null && focus.route !== null && situation.timing !== null &&
-    situation.role !== null && answers.client.goals.length > 0 && valueGroup.fee_effort !== null &&
-    delivery.capacity !== null && direction.aim !== null && direction.evidence.length > 0;
+  return !!focus.area && focus.work !== null && focus.route !== null && (situation.timing !== null || own("timing")) &&
+    situation.role !== null && (answers.client.goals.length > 0 || own("goals")) && (valueGroup.fee_effort !== null || own("fee_effort")) &&
+    (delivery.capacity !== null || own("capacity")) && (direction.aim !== null || own("aim")) && (direction.evidence.length > 0 || own("evidence"));
 }
 
 /** Validates an incomplete saved draft without rejecting a normal mid-edit state. */

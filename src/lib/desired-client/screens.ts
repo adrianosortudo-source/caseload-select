@@ -22,14 +22,14 @@ export function getMissingRequiredFields(answers: DesiredClientAnswers): string[
   if (!answers.focus.area) missing.push("focus.area");
   if (!answers.focus.work) missing.push("focus.work");
   if (!answers.focus.route) missing.push("focus.route");
-  if (!answers.situation.timing) missing.push("situation.timing");
+  if (!answers.situation.timing && !answers.write_ins?.timing?.trim()) missing.push("situation.timing");
   if (!answers.situation.role) missing.push("situation.role");
-  if (answers.client.goals.length === 0) missing.push("client.goals");
-  if (answers.value.reasons.length === 0) missing.push("value.reasons");
-  if (!answers.value.fee_effort) missing.push("value.fee_effort");
-  if (!answers.delivery.capacity) missing.push("delivery.capacity");
-  if (!answers.direction.aim) missing.push("direction.aim");
-  if (answers.direction.evidence.length === 0) missing.push("direction.evidence");
+  if (answers.client.goals.length === 0 && !answers.write_ins?.goals?.trim()) missing.push("client.goals");
+  if (answers.value.reasons.length === 0 && !answers.write_ins?.reasons?.trim()) missing.push("value.reasons");
+  if (!answers.value.fee_effort && !answers.write_ins?.fee_effort?.trim()) missing.push("value.fee_effort");
+  if (!answers.delivery.capacity && !answers.write_ins?.capacity?.trim()) missing.push("delivery.capacity");
+  if (!answers.direction.aim && !answers.write_ins?.aim?.trim()) missing.push("direction.aim");
+  if (answers.direction.evidence.length === 0 && !answers.write_ins?.evidence?.trim()) missing.push("direction.evidence");
   return missing;
 }
 export function getMissingFieldsForStage(stage: StageId, answers: DesiredClientAnswers): string[] {

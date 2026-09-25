@@ -1,4 +1,4 @@
-import { resolveAnswerReference } from "./catalog";
+import { resolveAnswerReference, WRITE_IN_KEYS } from "./catalog";
 import type {
   AnalysisResult,
   AnswerReferencePath,
@@ -12,6 +12,7 @@ const SOURCE_PATHS = new Set<string>([
   "situation.timing", "situation.role", "situation.role_other", "situation.contact",
   "client.goals", "client.concerns", "value.reasons", "value.fee_effort", "value.collected_fee", "value.team_hours", "value.payment",
   "delivery.conditions", "delivery.capacity", "delivery.limit", "direction.aim", "direction.evidence", "direction.less", "direction.less_note",
+  ...WRITE_IN_KEYS.map((key) => "write_ins." + key),
   "clarifications.FOCUS_UNCLEAR", "clarifications.CLIENT_GOAL_UNCLEAR", "clarifications.CURRENT_CAPACITY_CONFLICT",
   "clarifications.FEE_EFFORT_CONFLICT", "clarifications.EXPERIENCE_DIRECTION_CONFLICT",
   ...(["a", "b"] as const).flatMap((side) => ["work", "fee_effort", "team_fit", "capacity", "evidence"].map((field) => `focus.comparison.${side}.${field}`)),
@@ -44,6 +45,7 @@ function numericTokens(text: string): string[] {
 }
 
 function isNonExperienceSource(path: AnswerReferencePath, answers: DesiredClientAnswers): boolean {
+  if (path.startsWith("write_ins.")) return true;
   if (["focus.area", "focus.work", "focus.work_other", "focus.service_area", "focus.certainty", "direction.aim", "direction.less", "direction.less_note"].includes(path)) return true;
   if (path === "direction.evidence") return answers.direction.evidence.length === 1 && answers.direction.evidence[0] === "preference";
   if (path === "client.concerns") return answers.client.concerns.length === 1 && answers.client.concerns[0] === "unheard";

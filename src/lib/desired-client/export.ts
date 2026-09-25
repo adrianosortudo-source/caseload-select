@@ -1,5 +1,6 @@
 import { BRIEF_SECTION_HEADINGS, getDismissedClarificationText } from "./brief";
 import { BRIEF_COPY, REVIEW_COPY } from "./copy";
+import { getWriteInAnswers } from "./write_ins";
 import { getSourceDetails, STATEMENT_KIND_LABELS } from "./sources";
 import type { DesiredClientAnswers, DesiredClientBrief, DesiredClientStatement, SavedBrief } from "./types";
 
@@ -136,6 +137,8 @@ export function formatBriefText(
     } else parts.push(...section.statements.map(plainStatement));
     parts.push("");
   }
+  const ownAnswers = getWriteInAnswers(answers);
+  if (ownAnswers.length) parts.push("Your own answers", ...ownAnswers.map(({label,text}) => "- " + label + ": " + text), "");
   parts.push(...plainSourceAppendix(sections, answers));
   parts.push(`Created ${localDateStamp(new Date(saved.generatedAt))}.`, REVIEW_COPY.draftFooter);
   return parts.join("\n").trim();
@@ -168,6 +171,8 @@ export function formatBriefMarkdown(
     } else parts.push(...section.statements.map(markdownStatement));
     parts.push("");
   }
+  const ownAnswers = getWriteInAnswers(answers);
+  if (ownAnswers.length) parts.push("## Your own answers", "", ...ownAnswers.map(({label,text}) => "- " + escapeMarkdownLiteral(label) + ": " + escapeMarkdownLiteral(text)), "");
   parts.push(...markdownSourceAppendix(sections, answers));
   parts.push(`Created ${localDateStamp(new Date(saved.generatedAt))}.`, escapeMarkdownLiteral(REVIEW_COPY.draftFooter));
   return `${parts.join("\n").trim()}\n`;

@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import { AREA_ORDER, getAreaLabel, getWorkOptions, getRoleOptions, getRoleLabel, CONTACT_ROLE_IDS, GOAL_LABELS, CONCERN_LABELS, REASON_LABELS, getReasonLabel, getFeeEffortLabel, COLLECTED_FEE_LABELS, TEAM_HOURS_LABELS, PAYMENT_LABELS, CONDITION_LABELS, CAPACITY_LABELS, LIMIT_LABELS, AIM_LABELS, EVIDENCE_LABELS, LESS_LABELS, TIMING_LABELS, CONTACT_LABELS, ROUTE_LABELS } from "@/lib/desired-client/catalog";
 import { STAGE_DEFINITIONS } from "@/lib/desired-client/screens";
 import { COMMON_COPY, PRIVACY_FIELD_COPY } from "@/lib/desired-client/copy";
-import type { AreaId, DesiredClientAnswers } from "@/lib/desired-client/types";
+import type { AreaId, DesiredClientAnswers, WriteInKey } from "@/lib/desired-client/types";
 import type { StageId } from "@/lib/desired-client/screens";
 import { ChoiceGroup } from "./ChoiceGroup";
 import { ConfirmationDialog } from "./ConfirmationDialog";
@@ -14,8 +14,53 @@ export function QuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,erro
  const roles=area?getRoleOptions(area):[]; const contactVisible=!!answers.situation.role&&CONTACT_ROLE_IDS.has(answers.situation.role as never);
  const title=STAGE_DEFINITIONS[stage-1].heading;
  const textField=(label:string,value:string,change:(v:string)=>void,help?:string)=><label className="dc-text-field"><span data-ui-copy="supporting">{label}</span><input aria-label={label} value={value} maxLength={180} onChange={e=>change(e.currentTarget.value)}/><span data-ui-copy="body">{PRIVACY_FIELD_COPY}</span>{help&&<span data-ui-copy="body">{help}</span>}</label>;
- const radio=(id:string,legend:string,options:{id:string;label:string}[],value:string|null,change:(v:string)=>void,help?:string,required=true)=><ChoiceGroup idPrefix={id} name={id} legend={legend} options={options} type="radio" value={value} required={required} hideLegend={legend===title} help={help} error={error&&required&&!value?COMMON_COPY.requiredSingle:undefined} onChange={v=>change(v as string)}/>;
- const multi=(id:string,legend:string,options:{id:string;label:string}[],value:string[],change:(v:string[])=>void,maximum:number,exclusiveOptions:string[]=[],exclusiveGroups:string[][]=[],help?:string,required=true)=><ChoiceGroup idPrefix={id} name={id} legend={legend} options={options} type="checkbox" value={value} maximum={maximum} exclusiveOptions={exclusiveOptions} exclusiveGroups={exclusiveGroups} hideLegend={legend===title} help={help ?? (id==="dc-goals"?"Choose one or two.":id==="dc-concerns"?"Optional. Choose up to two.":id==="dc-conditions"?"Optional. Choose up to three.":undefined)} error={error&&required&&!value.length?COMMON_COPY.requiredMulti:undefined} onChange={v=>change(v as string[])}/>;
+ const WRITE_IN_GROUPS: Partial<Record<string, WriteInKey>> = {
+   "dc-timing":"timing", "dc-contact":"contact", "dc-goals":"goals", "dc-concerns":"concerns",
+   "dc-reasons":"reasons", "dc-fee-effort":"fee_effort", "dc-conditions":"conditions", "dc-capacity":"capacity", "dc-limit":"limit",
+   "dc-aim":"aim", "dc-evidence":"evidence",
+ };
+ const ownAnswer=(id:string)=>{const key=WRITE_IN_GROUPS[id];return key?answers.write_ins?.[key]?.trim()??"":"";};
+ const ownField=(id:string,question:string)=>{
+   const key=WRITE_IN_GROUPS[id]; if(!key)return null;
+   return <label className="dc-text-field" data-ui-component-content="write-in-field">
+     <span data-ui-copy="supporting">Other: write your own answer</span>
+     <input aria-label={"Other answer to: "+question} value={answers.write_ins?.[key]??""} maxLength={180}
+       onChange={event=>{const text=event.currentTarget.value;onEdit(a=>{
+         const next={...a,write_ins:{...a.write_ins,[key]:text}};
+         if(text.trim()){
+           if(key==="timing")next.situation={...next.situation,timing:null};
+           if(key==="contact")next.situation={...next.situation,contact:null};
+           if(key==="goals"&&next.client.goals.includes("unknown"))next.client={...next.client,goals:[]};
+           if(key==="concerns"&&next.client.concerns.includes("unheard"))next.client={...next.client,concerns:[]};
+           if(key==="reasons"&&next.value.reasons.includes("undecided"))next.value={...next.value,reasons:[]};
+           if(key==="fee_effort")next.value={...next.value,fee_effort:null};
+           if(key==="capacity")next.delivery={...next.delivery,capacity:null};
+           if(key==="conditions"&&next.delivery.conditions.includes("unknown"))next.delivery={...next.delivery,conditions:[]};
+           if(key==="limit")next.delivery={...next.delivery,limit:null};
+           if(key==="aim")next.direction={...next.direction,aim:null};
+           if(key==="evidence"&&next.direction.evidence.includes("preference"))next.direction={...next.direction,evidence:[]};
+         }
+         return next;
+       });}}/>
+     <span data-ui-copy="body">Keep it general. Do not include names or confidential details.</span>
+   </label>;
+ };
+ const radio=(id:string,legend:string,options:{id:string;label:string}[],value:string|null,change:(v:string)=>void,help?:string,required=true)=><>
+   <ChoiceGroup idPrefix={id} name={id} legend={legend} options={options} type="radio" value={value}
+     required={required&&!Boolean(ownAnswer(id))} hideLegend={legend===title} help={help}
+     error={error&&required&&!value&&!ownAnswer(id)?COMMON_COPY.requiredSingle:undefined}
+     onChange={v=>{change(v as string);const key=WRITE_IN_GROUPS[id];if(key&&ownAnswer(id))onEdit(a=>({...a,write_ins:{...a.write_ins,[key]:""}}));}}/>
+   {ownField(id,legend)}
+ </>;
+ const multi=(id:string,legend:string,options:{id:string;label:string}[],value:string[],change:(v:string[])=>void,maximum:number,exclusiveOptions:string[]=[],exclusiveGroups:string[][]=[],help?:string,required=true)=><>
+   <ChoiceGroup idPrefix={id} name={id} legend={legend} options={options} type="checkbox" value={value}
+     maximum={maximum} exclusiveOptions={exclusiveOptions} exclusiveGroups={exclusiveGroups}
+     required={required&&!Boolean(ownAnswer(id))} hideLegend={legend===title}
+     help={help ?? (id==="dc-goals"?"Choose one or two.":id==="dc-concerns"?"Optional. Choose up to two.":id==="dc-conditions"?"Optional. Choose up to three.":undefined)}
+     error={error&&required&&!value.length&&!ownAnswer(id)?COMMON_COPY.requiredMulti:undefined}
+     onChange={v=>{change(v as string[]);const key=WRITE_IN_GROUPS[id];if(key&&ownAnswer(id)&&(v as string[]).some(choice=>exclusiveOptions.includes(choice)))onEdit(a=>({...a,write_ins:{...a.write_ins,[key]:""}}));}}/>
+   {ownField(id,legend)}
+ </>;
  return <section className="dc-stage" data-ui-component-content={`desired-client-stage-${stage}`}>
   <h1 tabIndex={-1} data-ui-copy="heading">{title}</h1>
   <div className="dc-stage__layout"><div className="dc-stage__questions">

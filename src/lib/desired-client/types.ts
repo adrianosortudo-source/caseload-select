@@ -49,6 +49,7 @@ export type PaymentId = "predictable" | "varies" | "uncertain" | "unknown";
 export type CapacityId = "room" | "limited" | "change" | "unknown";
 export type AimId = "more_current" | "narrower" | "new_area" | "new_model" | "unknown";
 export type LessId = "within" | "outside" | "model" | "none";
+export type WriteInKey = "timing" | "contact" | "goals" | "concerns" | "reasons" | "fee_effort" | "conditions" | "capacity" | "limit" | "aim" | "evidence";
 export type ClarificationCode = "FOCUS_UNCLEAR" | "CLIENT_GOAL_UNCLEAR" | "CURRENT_CAPACITY_CONFLICT" | "FEE_EFFORT_CONFLICT" | "EXPERIENCE_DIRECTION_CONFLICT";
 export type ClarificationAnswer =
   | "choose_specific" | "keep_broad" | Exclude<GoalId, "unknown">
@@ -84,6 +85,8 @@ export interface PendingWorkComparison {
 export interface DesiredClientAnswers {
   schema_version: "dcm-v2.1";
   revision: number;
+  /** Optional for drafts saved before write-in answers were introduced. */
+  write_ins?: Partial<Record<WriteInKey, string>>;
   focus: {
     area: AreaId | null;
     work: WorkId | "other" | null;
@@ -113,6 +116,7 @@ export interface DesiredClientAnswers {
 }
 
 export type AnswerReferencePath =
+  | `write_ins.${WriteInKey}`
   | "focus.area" | "focus.work" | "focus.work_other" | "focus.service_area" | "focus.certainty" | "focus.route"
   | "situation.timing" | "situation.role" | "situation.role_other" | "situation.contact"
   | "client.goals" | "client.concerns" | "value.reasons" | "value.fee_effort" | "value.collected_fee"

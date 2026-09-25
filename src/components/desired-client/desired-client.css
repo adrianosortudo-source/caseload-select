@@ -138,3 +138,5 @@
 }
 @media(max-width:380px){.dc-question__help{text-wrap:wrap}}
 @media(max-width:380px){.dc-stage[data-ui-component-content="desired-client-stage-4"] .dc-question__help{font-size:1.0625rem}}
+
+.dc-fact-row dd[data-ui-copy-exception],.dc-statement>p[data-ui-copy-exception]{overflow-wrap:anywhere;text-wrap:wrap}

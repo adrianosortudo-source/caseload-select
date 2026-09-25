@@ -1,7 +1,7 @@
 import type {
   AimId, AreaId, AnswerReferencePath, CapacityId, CollectedFeeId, ComparisonCandidate,
   ConcernId, ConditionId, ContactId, DesiredClientAnswers, EvidenceId, FeeEffortId,
-  GoalId, LessId, LimitId, PaymentId, ReasonId, RoleId, TeamHoursId, TimingId, WorkId,
+  GoalId, LessId, LimitId, PaymentId, ReasonId, RoleId, TeamHoursId, TimingId, WorkId, WriteInKey,
 } from "./types";
 
 export interface AreaPack {
@@ -158,6 +158,14 @@ export const LESS_LABELS: Record<LessId, string> = {
   within: "Other work within this practice area", outside: "Work outside this practice area",
   model: "Work that needs a delivery model we do not offer", none: "Nothing identified yet",
 };
+export const WRITE_IN_QUESTIONS: Record<WriteInKey, string> = {
+  timing: "When does this client usually seek help?", contact: "Who makes the first contact?",
+  goals: "What does the client most want to achieve?", concerns: "What might concern this client?",
+  reasons: "What makes this work worth pursuing?", fee_effort: "How does the fee compare with the work involved?", conditions: "What helps your team deliver this work well?",
+  limit: "What makes this work difficult to support?", capacity: "Could the firm take on more of this work now?", aim: "What should this work help the firm become known for?",
+  evidence: "What supports this direction?",
+};
+export const WRITE_IN_KEYS = Object.keys(WRITE_IN_QUESTIONS) as WriteInKey[];
 export const ROUTE_LABELS = {
   established: "We already do it and want more", new: "We are building toward it", exploring: "We are deciding whether to pursue it",
 } as const;
@@ -206,6 +214,7 @@ function getPathValue(answers: DesiredClientAnswers, path: AnswerReferencePath):
   const group = root[top] as Record<string, unknown> | undefined;
   if (!group) return undefined;
   if (top === "clarifications") return group[second];
+  if (top === "write_ins") return group[second];
   return group[second];
 }
 

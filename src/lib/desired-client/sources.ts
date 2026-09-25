@@ -1,4 +1,4 @@
-import { getAnswerLabel, getWorkLabel, resolveAnswerReference } from "./catalog";
+import { getAnswerLabel, getWorkLabel, resolveAnswerReference, WRITE_IN_QUESTIONS } from "./catalog";
 import { CLARIFICATION_BANK } from "./clarifications";
 import type { AnswerReferencePath, DesiredClientAnswers, StatementKind } from "./types";
 
@@ -11,6 +11,7 @@ export const STATEMENT_KIND_LABELS: Record<StatementKind, string> = {
 };
 
 function questionLabel(path: AnswerReferencePath, answers: DesiredClientAnswers): string {
+  if (path.startsWith("write_ins.")) return `Other answer to: ${WRITE_IN_QUESTIONS[path.slice("write_ins.".length) as keyof typeof WRITE_IN_QUESTIONS]}`;
   if (path.startsWith("clarifications.")) {
     const code = path.slice("clarifications.".length) as keyof typeof CLARIFICATION_BANK;
     return CLARIFICATION_BANK[code].question;
