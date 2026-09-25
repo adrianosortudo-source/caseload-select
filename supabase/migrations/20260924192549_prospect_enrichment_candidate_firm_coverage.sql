@@ -522,7 +522,8 @@ BEGIN
    -- Counts and filters need only identity metadata. Build retained summaries for the returned page.
    SELECT c.id,jsonb_build_object('verifiedFirmId',CASE WHEN links.firm_count=1 THEN links.firm_id ELSE NULL END,
       'identityState',CASE WHEN links.firm_count=1 THEN 'resolved' WHEN links.firm_count>1 THEN 'conflict' ELSE 'unresolved' END) data,
-      coalesce(m.ids,ARRAY[c.id]) group_ids
+      coalesce(m.ids,ARRAY[c.id]) group_ids,
+      CASE WHEN links.firm_count=1 THEN 'firm:'||links.firm_id ELSE 'candidate:'||c.id::text END group_key
    FROM public.prospect_research_candidates c LEFT JOIN memberships m ON m.candidate_id=c.id
    LEFT JOIN identities links ON links.candidate_id=c.id WHERE c.created_revision<=cutoff
  ), text_terms AS MATERIALIZED (
@@ -547,25 +548,49 @@ BEGIN
      ON to_tsvector('simple'::regconfig,concat_ws(' ',h.source_table,h.source_root,h.relative_path,h.source_pointer)) @@ t.query
      WHERE p_filters ? 'text' AND btrim(p_filters->>'text')<>'' AND h.coverage_revision<=cutoff
  ), text_matches AS MATERIALIZED (
-   SELECT CASE WHEN i.firm_count=1 THEN i.firm_id ELSE h.candidate_id::text END group_id
+   SELECT CASE WHEN i.firm_count=1 THEN 'firm:'||i.firm_id ELSE 'candidate:'||h.candidate_id::text END group_id
    FROM text_hits h LEFT JOIN identities i ON i.candidate_id=h.candidate_id
-   GROUP BY CASE WHEN i.firm_count=1 THEN i.firm_id ELSE h.candidate_id::text END
+   GROUP BY CASE WHEN i.firm_count=1 THEN 'firm:'||i.firm_id ELSE 'candidate:'||h.candidate_id::text END
    HAVING count(DISTINCT h.term)=(SELECT count(*) FROM text_terms)
+ ), typed_field_matches AS MATERIALIZED (
+   -- Narrow by the exact-value index, then retain raw equality and the requested history cutoff.
+   SELECT CASE WHEN identity_match.firm_count=1 THEN 'firm:'||identity_match.firm_id
+               ELSE 'candidate:'||f.candidate_id::text END group_id
+   FROM public.prospect_research_candidate_fields f
+   LEFT JOIN identities identity_match ON identity_match.candidate_id=f.candidate_id
+   WHERE p_filters ? 'fieldPointer' AND f.coverage_revision<=cutoff
+     AND md5(f.pointer)=md5(p_filters->>'fieldPointer') AND f.pointer=p_filters->>'fieldPointer'
+     AND (NOT p_filters ? 'fieldValue' OR
+       (md5(f.value_json::text)=md5((p_filters->'fieldValue')::text) AND f.value_json=p_filters->'fieldValue'))
+   GROUP BY CASE WHEN identity_match.firm_count=1 THEN 'firm:'||identity_match.firm_id
+                 ELSE 'candidate:'||f.candidate_id::text END
  ), non_text_filtered AS MATERIALIZED (
    -- Keep ordinary and blank-text reads on the original predicate path.
-   SELECT i.id FROM inventory i WHERE p_filters='{}'::jsonb OR (
-     (NOT p_filters ? 'text' OR btrim(p_filters->>'text')='')
-     AND prospect_candidate_private.matches_group(i.id,i.data,p_filters,cutoff,i.group_ids)
+   SELECT i.id FROM inventory i WHERE NOT (p_filters ? 'fieldPointer') AND (
+     p_filters='{}'::jsonb OR (
+       (NOT p_filters ? 'text' OR btrim(p_filters->>'text')='')
+       AND prospect_candidate_private.matches_group(i.id,i.data,p_filters,cutoff,i.group_ids)
+     )
    )
  ), text_filtered AS MATERIALIZED (
    SELECT i.id FROM inventory i WHERE p_filters ? 'text' AND btrim(p_filters->>'text')<>''
+     AND NOT (p_filters ? 'fieldPointer')
      AND prospect_candidate_private.matches_group(i.id,i.data,p_filters-'text',cutoff,i.group_ids)
      AND (NOT EXISTS(SELECT 1 FROM text_terms)
-       OR EXISTS(SELECT 1 FROM text_matches tm WHERE tm.group_id=coalesce(i.data->>'verifiedFirmId',i.id::text)))
+       OR EXISTS(SELECT 1 FROM text_matches tm WHERE tm.group_id=i.group_key))
+ ), typed_field_filtered AS MATERIALIZED (
+   -- Match typed values once across the indexed field relation, then include every candidate in each firm group.
+   SELECT i.id FROM inventory i WHERE p_filters ? 'fieldPointer'
+     AND prospect_candidate_private.matches_group(i.id,i.data,p_filters-'fieldPointer'-'fieldValue'-'text',cutoff,i.group_ids)
+     AND EXISTS(SELECT 1 FROM typed_field_matches tf WHERE tf.group_id=i.group_key)
+     AND (NOT p_filters ? 'text' OR btrim(p_filters->>'text')='' OR NOT EXISTS(SELECT 1 FROM text_terms)
+       OR EXISTS(SELECT 1 FROM text_matches tm WHERE tm.group_id=i.group_key))
  ), filtered AS MATERIALIZED (
    SELECT id FROM non_text_filtered
    UNION ALL
    SELECT id FROM text_filtered
+   UNION ALL
+   SELECT id FROM typed_field_filtered
  ), page_ids AS MATERIALIZED (
    SELECT id FROM filtered WHERE p_after_id IS NULL OR id>p_after_id ORDER BY id LIMIT p_limit
  ), summaries AS MATERIALIZED (
