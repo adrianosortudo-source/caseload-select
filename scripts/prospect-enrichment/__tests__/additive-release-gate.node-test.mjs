@@ -258,6 +258,6 @@ test("separate additive writer is protected, receipt-bound, and limits writes to
   assert.match(serialized, /additive-release-gate\.mjs application-source/);
   assert.doesNotMatch(serialized, /--password|SUPABASE_ACCESS_TOKEN/);
   const legacy = fs.readFileSync(path.join(root, ".github/workflows/prospect-enrichment-migration-gate.yml"), "utf8");
-  assert.match(legacy, /Require the exact six pending migrations/);
+  assert.match(legacy, /Require exactly six enrichment migrations pending/);
   assert.equal(ORIGINAL_SIX_PATHS.length, 6);
 });

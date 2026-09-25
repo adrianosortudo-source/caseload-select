@@ -185,6 +185,12 @@ test("workflow is manual, main-only, protected and all external actions are pinn
   assert.match(job.if, /refs\/heads\/main/);
   assert.equal(job.environment.name, "Production prospect migrations");
   assert.equal(job.env.PROJECT_REF, PROJECT_REF);
+  assert.equal(workflow.on.workflow_dispatch.inputs.operation.type, "choice");
+  assert.equal(job.env.POSTGRES_CONTAINER_ID, undefined);
+  assert.doesNotMatch(JSON.stringify(job.env), /\$\{\{\s*job\./);
+  const qualificationCatalog = job.steps.find((s) => /Build and compare exact qualification catalog contract/.test(s.name));
+  assert.equal(qualificationCatalog.env.POSTGRES_CONTAINER_ID, "${{ job.services.postgres.id }}");
+  assert.match(qualificationCatalog.run, /docker exec -i "\$POSTGRES_CONTAINER_ID"/);
   assert.match(job.env.CONFIGURED_REVIEWED_SHA, /vars\.PROSPECT_ENRICHMENT_MIGRATION_REVIEWED_SHA/);
   const firstRemote = job.steps.findIndex((s) => /supabase db push --db-url/.test(s.run ?? ""));
   const sourceGate = job.steps.findIndex((s) => /migration-gate\.mjs source/.test(s.run ?? ""));
