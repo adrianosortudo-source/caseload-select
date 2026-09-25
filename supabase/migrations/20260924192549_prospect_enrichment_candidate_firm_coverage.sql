@@ -517,7 +517,9 @@ BEGIN
    SELECT candidate_id,count(DISTINCT verified_firm_id) firm_count,min(verified_firm_id::text) firm_id
    FROM prospect_candidate_private.identity_links_at(cutoff) GROUP BY candidate_id
  ), memberships AS MATERIALIZED (
-   SELECT candidate_id,array_agg(candidate_id) OVER(PARTITION BY firm_id) ids FROM identities WHERE firm_count=1
+   -- Typed/text set filters use group_key directly and do not need per-candidate member arrays.
+   SELECT candidate_id,array_agg(candidate_id) OVER(PARTITION BY firm_id) ids FROM identities
+   WHERE firm_count=1 AND (p_filters-'fieldPointer'-'fieldValue'-'text')<>'{}'::jsonb
  ), inventory AS MATERIALIZED (
    -- Counts and filters need only identity metadata. Build retained summaries for the returned page.
    SELECT c.id,jsonb_build_object('verifiedFirmId',CASE WHEN links.firm_count=1 THEN links.firm_id ELSE NULL END,
