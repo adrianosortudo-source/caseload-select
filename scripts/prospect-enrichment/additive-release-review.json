@@ -1,0 +1,119 @@
+{
+  "schemaVersion": "prospect-candidate-additive-release-review/v1",
+  "projectRef": "ssxryjxifwiivghglqer",
+  "cliVersion": "2.117.0",
+  "reviewOnly": true,
+  "productionApplicationApproved": false,
+  "migrationOrder": "ascending-version; interrupted runs may apply only an exact ordered prefix",
+  "appliedPrerequisite": {
+    "path": "supabase/migrations/20260924180541_restore_operator_membership_rpc.sql",
+    "filename": "20260924180541_restore_operator_membership_rpc.sql",
+    "version": "20260924180541",
+    "name": "restore_operator_membership_rpc",
+    "bytes": 1378,
+    "sha256": "fcc1e4d52597cf7eb166bb25fe548a30c0c3f30a834c6614bb9166ab9777a61b",
+    "expectedCatalog": {
+      "schemaName": "public",
+      "functionName": "revalidate_operator_membership_v1",
+      "identityArguments": "uuid, uuid, boolean",
+      "languageName": "plpgsql",
+      "securityDefiner": true,
+      "searchPathSetting": "search_path=\"\"",
+      "definitionMd5": "625afed49f4c9cde1084c1acd175ef47",
+      "anonExecute": false,
+      "authenticatedExecute": false,
+      "publicExecute": false,
+      "nonOwnerExecuteGrantees": [
+        "service_role"
+      ]
+    }
+  },
+  "migrations": [
+    {
+      "path": "supabase/migrations/20260921120000_prospect_qualification_evidence.sql",
+      "filename": "20260921120000_prospect_qualification_evidence.sql",
+      "version": "20260921120000",
+      "name": "prospect_qualification_evidence",
+      "bytes": 8730,
+      "sha256": "d6e788fc7349b1a660371aba66fd8e39e1e2d2a1353888558981c7c68617bcb7"
+    },
+    {
+      "path": "supabase/migrations/20260921121500_prospect_qualification_profile_details.sql",
+      "filename": "20260921121500_prospect_qualification_profile_details.sql",
+      "version": "20260921121500",
+      "name": "prospect_qualification_profile_details",
+      "bytes": 4313,
+      "sha256": "9d3847ef461d5cb2288ebfc58669f46de6543ea1d6ff4e7bd02521ae9e4e4471"
+    },
+    {
+      "path": "supabase/migrations/20260923161812_prospect_enrichment_v1.sql",
+      "filename": "20260923161812_prospect_enrichment_v1.sql",
+      "version": "20260923161812",
+      "name": "prospect_enrichment_v1",
+      "bytes": 207080,
+      "sha256": "c941c4f0aed60d056b4693ffa534c3dea5b77a9b6810fc494266658bf482a24e"
+    },
+    {
+      "path": "supabase/migrations/20260923174500_prospect_enrichment_identity_read_rpc.sql",
+      "filename": "20260923174500_prospect_enrichment_identity_read_rpc.sql",
+      "version": "20260923174500",
+      "name": "prospect_enrichment_identity_read_rpc",
+      "bytes": 4925,
+      "sha256": "2a714dd99eb19eb574f11189132ad29f024180d0d24d2d121cfcfdafbec8d720"
+    },
+    {
+      "path": "supabase/migrations/20260923182000_prospect_enrichment_operator_read_rpc.sql",
+      "filename": "20260923182000_prospect_enrichment_operator_read_rpc.sql",
+      "version": "20260923182000",
+      "name": "prospect_enrichment_operator_read_rpc",
+      "bytes": 6096,
+      "sha256": "6338ab517f7df6bc6d4be4360a356b7dd6f607dd5f88060a8c3d1b7c14f836f4"
+    },
+    {
+      "path": "supabase/migrations/20260923221500_prospect_enrichment_gta_target_read_rpc.sql",
+      "filename": "20260923221500_prospect_enrichment_gta_target_read_rpc.sql",
+      "version": "20260923221500",
+      "name": "prospect_enrichment_gta_target_read_rpc",
+      "bytes": 1972,
+      "sha256": "7fc9a83bac5378a8d25c6952398e05dcd92dd757116775913bca1df12467b4d1"
+    },
+    {
+      "path": "supabase/migrations/20260924071322_prospect_enrichment_manifest_hold_evidence.sql",
+      "filename": "20260924071322_prospect_enrichment_manifest_hold_evidence.sql",
+      "version": "20260924071322",
+      "name": "prospect_enrichment_manifest_hold_evidence",
+      "bytes": 34604,
+      "sha256": "13645a5b639990ea6e8c404d638311810e510bbabaf8e61e6d81ce18bb246154"
+    },
+    {
+      "path": "supabase/migrations/20260924093317_fix_gta_prospect_operator_projection_gaps.sql",
+      "filename": "20260924093317_fix_gta_prospect_operator_projection_gaps.sql",
+      "version": "20260924093317",
+      "name": "fix_gta_prospect_operator_projection_gaps",
+      "bytes": 11009,
+      "sha256": "93c9438772ed125c1be482688c6142ac5069f84c268a55feaad3de5cf76bc2d3"
+    },
+    {
+      "path": "supabase/migrations/20260924172758_prospect_enrichment_candidate_profiles.sql",
+      "filename": "20260924172758_prospect_enrichment_candidate_profiles.sql",
+      "version": "20260924172758",
+      "name": "prospect_enrichment_candidate_profiles",
+      "bytes": 65246,
+      "sha256": "3940af22ed58ac13e7de09e6a29c099116f4586cbabe1f0d935f3887d5f9295c"
+    },
+    {
+      "path": "supabase/migrations/20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
+      "filename": "20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
+      "version": "20260924192549",
+      "name": "prospect_enrichment_candidate_firm_coverage",
+      "bytes": 60571,
+      "sha256": "0d9ac16e6badfa37cfed6600f6e8d78e1b54d748a4f084563176fb339bd2f0c1"
+    }
+  ],
+  "exclusions": [
+    "No seeds or roles",
+    "No migration outside the ten exact ordered entries above",
+    "The already-applied operator membership RPC is verified as a prerequisite and is never reapplied",
+    "No data intake, import, identity linking, qualification change, or research-process cutover"
+  ]
+}
