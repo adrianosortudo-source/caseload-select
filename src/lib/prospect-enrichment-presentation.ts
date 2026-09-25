@@ -18,7 +18,29 @@ export function researchEvidenceFields(item: ProspectEnrichmentEvidence): readon
     else if (item.table === "gta_prospect_offices") values = [["Office city", row.city], ["Province", row.province], ["Address", row.address_raw], ["Suite", row.suite_raw]];
     else if (item.table === "prospect_service_observations") values = [["Service", row.service_name], ["Matter fit", row.matter_fit]];
     else if (item.table === "prospect_firm_fit_observations") values = [["Practice areas", row.target_practice_areas], ["Office", selected(data, "office", row.office_geography)], ["Lawyer count", row.lawyer_count], ["Count qualifier", data.countQualifier], ["Independence", row.independence_status], ["Fit decision", row.fit_status]];
-    else if (item.table === "prospect_qualification_decisions" || item.table === "gta_prospect_qualification_assessments") values = [["Original decision", row.selection_disposition ?? row.qualification_state], ["Display category", item.qualificationCategory], ["Cohort", row.cohort_id ?? row.qualification_cohort], ["Rule version", row.rule_version ?? outer.ruleVersion], ["Independent gates", { fit: selected(outer, "fitDecision", row.fit_decision), commercialRelevance: selected(outer, "commercialRelevance", row.commercial_relevance), decisionMakerAccess: selected(outer, "decisionMakerAccess", row.decision_maker_access), opportunity: selected(outer, "opportunityDecision", row.opportunity_decision) }], ["Missing gates", selected(outer, "missingGates", record(row.criteria).missingGates)], ["Reasons", row.rationale ?? row.note], ["Research failures", outer.researchFailures], ["Assessment date", item.dateLabel]];
+    else if (item.table === "prospect_qualification_decisions" || item.table === "gta_prospect_qualification_assessments") {
+      values = [["Original decision", row.selection_disposition ?? row.qualification_state], ["Display category", item.qualificationCategory], ["Cohort", row.cohort_id ?? row.qualification_cohort], ["Rule version", row.rule_version ?? outer.ruleVersion], ["Independent gates", { fit: selected(outer, "fitDecision", row.fit_decision), commercialRelevance: selected(outer, "commercialRelevance", row.commercial_relevance), decisionMakerAccess: selected(outer, "decisionMakerAccess", row.decision_maker_access), opportunity: selected(outer, "opportunityDecision", row.opportunity_decision) }], ["Missing gates", selected(outer, "missingGates", record(row.criteria).missingGates)], ["Reasons", row.rationale ?? row.note], ["Research failures", outer.researchFailures], ["Assessment date", item.dateLabel]];
+      if (item.table === "gta_prospect_qualification_assessments") {
+        const criteria = record(row.criteria);
+        // Historical assessments use root criteria; newer research may wrap the same facts in record.
+        const assessment = Object.hasOwn(criteria, "record") ? record(criteria.record) : criteria;
+        const fit = record(assessment.firmFit);
+        const countEvidence = record(assessment.lawyerCountEvidence ?? fit.lawyerCountEvidence ?? assessment.lawyerCount);
+        const owner = record(assessment.decisionMaker ?? fit.decisionMaker);
+        const email = record(assessment.email ?? assessment.directPublishedEmail ?? fit.directPublishedEmail);
+        const advertising = record(assessment.advertising);
+        const authority = record(owner.authorityEvidence ?? owner.roleEvidence);
+        const count = typeof assessment.lawyerCount === "number" ? assessment.lawyerCount : countEvidence.count ?? fit.lawyerCount;
+        const services = assessment.services ?? fit.services;
+        if (count !== undefined || Object.keys(countEvidence).length) values.push(["Observed lawyer count", count], ["Roster source", countEvidence.sourceUrl], ["Roster observed", countEvidence.observedAt]);
+        if (services !== undefined) values.push(["Practice niche evidence", services]);
+        if (Object.keys(owner).length) values.push(["Named owner or decision maker", owner.name], ["Leadership role", owner.role], ["Role source", authority.sourceUrl], ["Role observed", authority.observedAt]);
+        if (Object.keys(email).length) values.push(["Attributed direct email", email.address], ["Email attribution", email.attributedTo], ["Email source", email.sourceUrl], ["Email observed", email.observedAt]);
+        const adStatus = advertising.status ?? assessment.advertisingPixelStatus;
+        const adObservations = advertising.observations ?? assessment.advertisingObservations;
+        if (adStatus !== undefined || adObservations !== undefined || assessment.advertisingStatus !== undefined) values.push(["Advertising signal status", adStatus], ["Advertising signals and sources", adObservations], ["Recent ad status", advertising.recentAdStatus ?? assessment.advertisingStatus]);
+      }
+    }
     else if (item.table === "prospect_research_attempts") values = [["Research provider", row.provider], ["Query or URL", row.query_or_url], ["Retrieval outcome", row.outcome], ["Coverage", row.coverage], ["Failure reason", row.failure_reason]];
     return values.map(([label, value]) => ({ label, value }));
   }).filter((group) => group.length > 0);

@@ -5,16 +5,16 @@ import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
 import ReconciledProspects, { type RecordsResponse } from "../../ReconciledProspects";
 
 const h = vi.hoisted(() => {
-  const state = { authorized: true, research: [] as unknown[], supplemental: [] as unknown[] };
+  const state = { authorized: true, research: [] as unknown[], supplemental: [] as unknown[], identities: [] as unknown[] };
   return {
     state,
     rpc: vi.fn(async (name: string) => {
       if (name === "list_gta_prospect_research_with_contacts_for_operator") return { data: state.research, error: null };
-      if (name === "list_gta_prospect_supplemental_evidence_for_operator_v2") return { data: state.supplemental, error: null };
+      if (name === "list_gta_prospect_supplemental_evidence_for_operator_v3") return { data: state.supplemental, error: null };
+      if (name === "list_gta_prospect_stable_identities_for_operator") return { data: state.identities, error: null };
       if ([
         "list_gta_prospect_owner_contacts_for_operator",
         "list_gta_prospect_downtown_geography_for_operator",
-        "list_gta_prospect_stable_identities_for_operator",
       ].includes(name)) return { data: [], error: null };
       throw new Error("Unexpected RPC in synthetic route test: " + name);
     }),
@@ -51,7 +51,7 @@ function research(id: string) {
 
 function supplemental(id: string, criteria: unknown) {
   return {
-    source_record_key: id, firm_id: null, canonical_domain: null,
+    source_record_key: id, database_firm_id: "84000000-0000-4000-8000-000000000001", firm_id: null, canonical_domain: null,
     identity_match_state: null, identity_observed_on: null, identity_confidence: null, identity_source: null,
     website_intake_channels: ["phone", "contact_form"], website_opportunity_state: "not_established",
     website_observed_on: "2026-09-24", qualification_state: "needs_evidence",
@@ -64,6 +64,7 @@ beforeEach(() => {
   h.state.authorized = true;
   h.state.research = [];
   h.state.supplemental = [];
+  h.state.identities = [];
   h.rpc.mockClear();
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Network is prohibited in this synthetic route test"); }));
 });
@@ -98,8 +99,8 @@ describe("reconciled GET with actual rich supplemental reader", () => {
     expect(body.source).toBe("ledger");
     expect(body.sourceCounts).toEqual({ ledger: 5, fixture: 0 });
     expect(body.records).toHaveLength(5);
-    expect(h.rpc).toHaveBeenCalledWith("list_gta_prospect_supplemental_evidence_for_operator_v2");
-    expect(h.rpc.mock.calls.filter(([name]) => name === "list_gta_prospect_supplemental_evidence_for_operator_v2")).toHaveLength(1);
+    expect(h.rpc).toHaveBeenCalledWith("list_gta_prospect_supplemental_evidence_for_operator_v3");
+    expect(h.rpc.mock.calls.filter(([name]) => name === "list_gta_prospect_supplemental_evidence_for_operator_v3")).toHaveLength(1);
 
     for (const item of cases) {
       const record = body.records.find(candidate => candidate.id === item.id)!;
@@ -109,6 +110,7 @@ describe("reconciled GET with actual rich supplemental reader", () => {
         qualification: { state: "needs_evidence", cohort: "synthetic-route-only", assessedOn: "2026-09-24", criteria: rich(item.value) },
       });
       expect(record.firmId).toBeNull();
+      expect(record.databaseFirmId).toBe("84000000-0000-4000-8000-000000000001");
       const html = renderToStaticMarkup(createElement<{ initialData?: RecordsResponse }>(ReconciledProspects, {
         initialData: { records: [record], source: "ledger" },
       }));
@@ -168,7 +170,7 @@ describe("reconciled GET with actual rich supplemental reader", () => {
     expect(response.status).toBe(500);
     await expect(response.json()).resolves.toEqual({ error: "GTA prospect research records could not be loaded." });
     expect(errorLog).toHaveBeenCalled();
-    expect(h.rpc).toHaveBeenCalledWith("list_gta_prospect_supplemental_evidence_for_operator_v2");
+    expect(h.rpc).toHaveBeenCalledWith("list_gta_prospect_supplemental_evidence_for_operator_v3");
     expect(fetch).not.toHaveBeenCalled();
   });
 });
@@ -209,5 +211,28 @@ describe("all returned research states and structured intake through actual GET"
     const html = renderToStaticMarkup(createElement<{ initialData?: RecordsResponse }>(ReconciledProspects, { initialData: { records: body.records, source: "ledger" } }));
     expect(html).toContain("Intake evidence held for review");
     expect(html).not.toContain('href="javascript:');
+  });
+
+  it("links the exact Zarei source key to its database profile while leaving portable identity unresolved and readback failed", async () => {
+    const zareiKey = "q50-zarei-law-professional-corporation";
+    const zareiFirmId = "a9989dca-8626-4a6e-93ca-797a1cb7eed2";
+    const criteria = { sourceKey: zareiKey, originalStatus: "not_selected", adminProspectsReadback: { state: "admin-prospects-readback-failed" } };
+    h.state.research = [{ ...research(zareiKey), firm_name: "Zarei Law Professional Corporation", website_url: "https://www.zareilaw.com/" }, { ...research("same-name-different-source"), firm_name: "Zarei Law Professional Corporation" }];
+    h.state.supplemental = [{ ...supplemental(zareiKey, criteria), database_firm_id: zareiFirmId }];
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const body = await response.json() as { records: ReconciledGtaProspect[] };
+    const record = body.records.find(item => item.id === zareiKey)!;
+    const other = body.records.find(item => item.id === "same-name-different-source")!;
+    expect(record).toMatchObject({ id: zareiKey, firmName: "Zarei Law Professional Corporation", databaseFirmId: zareiFirmId, firmId: null, canonicalDomain: null, supplementalEvidence: { qualification: { criteria } } });
+    expect(record.supplementalEvidence?.identity).toBeNull();
+    expect(other.databaseFirmId).toBeUndefined();
+    const html = renderToStaticMarkup(createElement<{ initialData?: RecordsResponse }>(ReconciledProspects, { initialData: { records: [record, other], source: "ledger" } }));
+    expect(html).toContain(`href="/admin/prospects/firms/${zareiFirmId}"`);
+    expect(html).toContain("admin-prospects-readback-failed");
+    // The full criteria are asserted on the route object above; the browser
+    // acceptance opens the native disclosure before checking this nested raw state.
+    expect(html).not.toContain("synced");
+    expect(fetch).not.toHaveBeenCalled();
   });
 });

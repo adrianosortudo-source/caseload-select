@@ -1,0 +1,23 @@
+{
+  "schemaVersion": "prospect-candidate-firm-coverage-review/v1",
+  "reviewOnly": true,
+  "productionApplicationApproved": false,
+  "sourceBaseSha": "93209fc3de5c7dcba4775eb9f42fab1e72eddead",
+  "projectRef": "ssxryjxifwiivghglqer",
+  "migration": {
+    "path": "supabase/migrations/20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
+    "version": "20260924192549",
+    "name": "prospect_enrichment_candidate_firm_coverage",
+    "bytes": 60562,
+    "sha256": "6bc4becba02ad67c73016417087426caedfd098005d3ed38ab4e209024b0b629"
+  },
+  "prerequisiteCandidateReceipt": "docs/runbooks/prospect-candidate-migration-review.json",
+  "prerequisiteCandidateReceiptSha256": "14e989af41a50ceda91aeccf72cb289893f084121fdbf97068e56d968fcca5bd",
+  "prerequisiteCatalogReview": "pending_separate_release_review",
+  "prerequisiteMigration": {
+    "path": "supabase/migrations/20260924172758_prospect_enrichment_candidate_profiles.sql",
+    "bytes": 64387,
+    "sha256": "7ef9a868772bc74d20ffe531596da90731ae7217b86302c586c6d3219740d480"
+  },
+  "execution": "No existing workflow consumes this review receipt. The original six-migration production allowlist is unchanged and rejects this additive SQL. A separate reviewed release must reconcile the two qualification prerequisites, six enrichment migrations, the operator RPC restoration ledger/catalog, and the first candidate migration before exact-head approval of this migration. No production application, real-data import, merge or cutover is authorized."
+}

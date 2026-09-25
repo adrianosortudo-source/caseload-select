@@ -20,6 +20,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const isOperatorConsole = path.startsWith("/admin");
   const isOperatorAuth = path.startsWith("/operator");
   const isProspectQualificationPreview = path.startsWith("/dev/prospect-qualified-preview");
+  const isProspectCandidatePreview = path === "/dev/prospect-candidate-preview";
   const isPrivacy = path === "/privacy";
   const isDataDeletion = path === "/data-deletion";
   const isTerms = path === "/terms";
@@ -51,6 +52,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     isOperatorConsole ||
     isOperatorAuth ||
     isProspectQualificationPreview ||
+    isProspectCandidatePreview ||
     isPrivacy ||
     isDataDeletion ||
     isTerms ||

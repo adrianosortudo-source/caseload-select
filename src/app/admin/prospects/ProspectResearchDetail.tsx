@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { researchEvidenceFields, researchFirmHeading, appendResearchHistoryPage } from "@/lib/prospect-enrichment-presentation";
-import { useCallback, useEffect, useState } from "react";
+import { Suspense, useCallback, useEffect, useState } from "react";
+import CandidateResearchList from "./CandidateResearchList";
 import type { ProspectEnrichmentEvidence, ProspectEnrichmentFirmDetail } from "@/lib/prospect-enrichment-reader";
 import { ResearchError, ResearchJson, ResearchSource, ResearchOriginal, ResearchPanel, readResearchResponse, researchButton, researchLabel } from "./ResearchEvidence";
 
@@ -24,7 +25,7 @@ function ObservationSummary({ item }: { item: ProspectEnrichmentEvidence }) {
   return null;
 }
 
-function EvidenceCard({ item }: { item: ProspectEnrichmentEvidence }) {
+export function EvidenceCard({ item }: { item: ProspectEnrichmentEvidence }) {
   const payload = item.table === "prospect_enrichment_packages" && item.data.payload && typeof item.data.payload === "object" && !Array.isArray(item.data.payload) ? item.data.payload : null;
   const original = payload?.originalResearch && typeof payload.originalResearch === "object" && !Array.isArray(payload.originalResearch) ? payload.originalResearch : null;
   return <article className="min-w-0 rounded-md border border-border-brand p-3" data-ui-component-content="research-evidence-card">
@@ -72,8 +73,9 @@ export default function ProspectResearchDetail({ firmId, initialData }: { firmId
     <Link href="/admin/prospects" className="text-sm text-navy underline underline-offset-2">Back to prospect list</Link>
     {error && <ResearchError message={error} retry={() => void load()} />}
     {!detail && !error && <p role="status" className="text-sm text-black/60">Loading research profile…</p>}
-    {detail && <><header data-ui-component-content="research-detail-heading"><h1 className="w-full text-pretty text-xl font-bold text-navy lg:text-2xl" data-ui-copy="heading">{detail.firm.displayName}</h1><p className="mt-2 w-full text-pretty text-sm text-black/60" data-ui-copy="supporting">Firm research profile</p>{detail.firm.websiteUrl && <a className="mt-3 block break-all text-sm text-navy underline" href={detail.firm.websiteUrl} target="_blank" rel="noopener noreferrer">{detail.firm.websiteUrl}</a>}{heading && <div className="mt-3 space-y-2 text-sm"><p className="w-full" data-ui-copy="supporting">Domain: {heading.domains.join(", ") || (heading.identityState === "error" ? "Could not verify" : "Not recorded")}</p><p className="w-full" data-ui-copy="supporting">{heading.complete ? "Latest evidence: " : "Latest evidence loaded: "}{heading.latestObservation.replace(/^Observed /, "")}</p><p className="w-full" data-ui-copy="supporting">{heading.freshness}. {!heading.complete ? "Evidence may be incomplete." : ""}</p></div>}<details className="mt-3"><summary className="cursor-pointer text-sm text-black/60">Firm identity details</summary><dl className="mt-2 space-y-2 break-all font-mono text-xs"><div><dt>Database UUID</dt><dd>{detail.firm.id}</dd></div><div><dt>Stable firm ID</dt><dd>{heading?.stableIds.join(", ") || (heading?.identityState === "error" ? "Could not verify" : "Not recorded")}</dd></div><div><dt>Source key</dt><dd>{detail.firm.sourceRecordKey}</dd></div><div><dt>Revision</dt><dd>{detail.firm.revision}</dd></div></dl></details></header>
+    {detail && <><header data-ui-component-content="research-detail-heading"><h1 className="w-full text-pretty text-sm font-bold text-navy min-[360px]:text-base sm:text-xl lg:text-2xl" data-ui-copy="heading">{detail.firm.displayName}</h1><p className="mt-2 w-full text-pretty text-sm text-black/60" data-ui-copy="supporting">Firm research profile</p>{detail.firm.websiteUrl && <a className="mt-3 block break-all text-sm text-navy underline" href={detail.firm.websiteUrl} target="_blank" rel="noopener noreferrer">{detail.firm.websiteUrl}</a>}{heading && <div className="mt-3 space-y-2 text-sm"><p className="w-full" data-ui-copy="supporting">Domain: {heading.domains.join(", ") || (heading.identityState === "error" ? "Could not verify" : "Not recorded")}</p><p className="w-full text-pretty" data-ui-copy="supporting">{heading.complete ? "Latest evidence: " : "Latest evidence loaded: "}{heading.latestObservation.replace(/^Observed /, "")}</p><p className="w-full" data-ui-copy="supporting">{heading.freshness}. {!heading.complete ? "Evidence may be incomplete." : ""}</p></div>}<details className="mt-3"><summary className="cursor-pointer text-sm text-black/60">Firm identity details</summary><dl className="mt-2 space-y-2 break-all font-mono text-xs"><div><dt>Database UUID</dt><dd>{detail.firm.id}</dd></div><div><dt>Stable firm ID</dt><dd>{heading?.stableIds.join(", ") || (heading?.identityState === "error" ? "Could not verify" : "Not recorded")}</dd></div><div><dt>Source key</dt><dd>{detail.firm.sourceRecordKey}</dd></div><div><dt>Revision</dt><dd>{detail.firm.revision}</dd></div></dl></details></header>
       {!detail.revisionStable && <ResearchError message="The firm record changed while this profile loaded. Reload before verifying evidence." retry={() => void load()} />}
+      <Suspense fallback={<p role="status">Loading linked candidate research…</p>}><CandidateResearchList firmId={detail.firm.id} embeddedProfiles /></Suspense>
       {detail.sections.map((section) => <ResearchPanel key={section.key} title={section.title} name={`research-section-${section.key}`}>
         {section.state === "error" && <ResearchError message="This section could not be fully loaded. Other available evidence remains visible." errorId={section.errorId} retry={() => void load()} />}
         {section.state === "empty" && <p className="text-sm text-black/50">No evidence was found in this section.</p>}

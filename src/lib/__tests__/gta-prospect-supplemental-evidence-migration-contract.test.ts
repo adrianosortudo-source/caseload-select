@@ -6,6 +6,7 @@ import { DOWNTOWN_PLAN_41_BOUNDARY_ID } from "../gta-prospect-evidence-import";
 
 const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260912131132_gta_prospect_supplemental_evidence_import.sql"), "utf8");
 const projectionFix = readFileSync(resolve(process.cwd(), "supabase/migrations/20260924093317_fix_gta_prospect_operator_projection_gaps.sql"), "utf8");
+const profileLinkMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260925200000_gta_prospect_operator_database_firm_profile_link.sql"), "utf8");
 
 describe("GTA supplemental prospect evidence migration", () => {
   it("keeps evidence private, append-only, and outside the core prospect import batch", () => {
@@ -42,5 +43,18 @@ describe("GTA supplemental prospect evidence migration", () => {
     expect(projectionFix).toContain("WHEN registry.id IS NOT NULL THEN 'stable_identity_registry'");
     expect(projectionFix).toContain("REVOKE ALL ON FUNCTION public.list_gta_prospect_supplemental_evidence_for_operator_v2() FROM PUBLIC, anon, authenticated, service_role");
     expect(projectionFix).toContain("GRANT EXECUTE ON FUNCTION public.list_gta_prospect_supplemental_evidence_for_operator_v2() TO service_role");
+  });
+
+  it("adds a backward-compatible v3 profile link sourced only from an applied internal firm row", () => {
+    expect(profileLinkMigration).toContain("list_gta_prospect_supplemental_evidence_for_operator_v3");
+    expect(profileLinkMigration).toContain("database_firm_id uuid");
+    expect(profileLinkMigration).toContain("firm.id AS database_firm_id");
+    expect(profileLinkMigration).toContain("FROM applied_firms AS firm");
+    expect(profileLinkMigration).toContain("identity_observation.stable_firm_id AS firm_id");
+    expect(profileLinkMigration).not.toContain("THEN registry.stable_firm_id");
+    expect(profileLinkMigration).toContain("AND batch.state = 'applied'");
+    expect(profileLinkMigration).toContain("GRANT EXECUTE ON FUNCTION public.list_gta_prospect_supplemental_evidence_for_operator_v3() TO service_role");
+    expect(profileLinkMigration).not.toMatch(/UPDATE\s+public\./i);
+    expect(profileLinkMigration).not.toMatch(/INSERT\s+INTO\s+public\./i);
   });
 });

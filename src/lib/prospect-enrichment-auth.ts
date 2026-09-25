@@ -1,6 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { gunzipSync } from "node:zlib";
 import { NextResponse, type NextRequest } from "next/server";
 import { validateSameOrigin } from "@/lib/client-import-server";
 import { getOperatorSession, type PortalSession } from "@/lib/portal-auth";
@@ -46,10 +47,21 @@ export type BoundedJsonResult =
   | Readonly<{ ok: true; text: string; value: unknown }>
   | Readonly<{ ok: false; status: 400 | 413; error: string }>;
 
+export type BoundedJsonOptions = Readonly<{
+  gzip?: Readonly<{ maxCompressedBytes: number; maxDecompressedBytes: number }>;
+}>;
+
 /** Read at most the declared body limit before parsing JSON. */
-export async function readBoundedJson(request: Request, limitBytes: number): Promise<BoundedJsonResult> {
+export async function readBoundedJson(request: Request, limitBytes: number, options: BoundedJsonOptions = {}): Promise<BoundedJsonResult> {
+  const contentEncoding = request.headers.get("content-encoding")?.trim().toLowerCase() ?? "identity";
+  const compressed = contentEncoding === "gzip";
+  if (contentEncoding !== "identity" && !(compressed && options.gzip)) {
+    return { ok: false, status: 400, error: "The request content encoding is unsupported." };
+  }
+  const wireLimit = compressed ? options.gzip!.maxCompressedBytes : limitBytes;
+  const decodedLimit = compressed ? options.gzip!.maxDecompressedBytes : limitBytes;
   const declaredLength = request.headers.get("content-length");
-  if (declaredLength && /^\d+$/.test(declaredLength) && Number(declaredLength) > limitBytes) {
+  if (declaredLength && /^\d+$/.test(declaredLength) && Number(declaredLength) > wireLimit) {
     return { ok: false, status: 413, error: "Request body exceeds the allowed size." };
   }
 
@@ -63,7 +75,7 @@ export async function readBoundedJson(request: Request, limitBytes: number): Pro
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > limitBytes) {
+      if (size > wireLimit) {
         await reader.cancel().catch(() => undefined);
         return { ok: false, status: 413, error: "Request body exceeds the allowed size." };
       }
@@ -73,11 +85,33 @@ export async function readBoundedJson(request: Request, limitBytes: number): Pro
     return { ok: false, status: 400, error: "Request body could not be read." };
   }
 
-  const bytes = new Uint8Array(size);
+  const wireBytes = new Uint8Array(size);
   let offset = 0;
   for (const chunk of chunks) {
-    bytes.set(chunk, offset);
+    wireBytes.set(chunk, offset);
     offset += chunk.byteLength;
+  }
+
+  let bytes: Uint8Array;
+  try {
+    if (compressed) {
+      const decoded = gunzipSync(Buffer.from(wireBytes), { maxOutputLength: decodedLimit, info: true }) as unknown as {
+        buffer: Uint8Array;
+        engine: { bytesWritten: number };
+      };
+      if (decoded.engine.bytesWritten !== wireBytes.byteLength) {
+        return { ok: false, status: 400, error: "Compressed request body could not be decoded." };
+      }
+      bytes = new Uint8Array(decoded.buffer);
+    } else {
+      bytes = wireBytes;
+    }
+    if (bytes.byteLength > decodedLimit) return { ok: false, status: 413, error: "Request body exceeds the allowed size." };
+  } catch (error) {
+    if (error instanceof Error && (error as NodeJS.ErrnoException).code === "ERR_BUFFER_TOO_LARGE") {
+      return { ok: false, status: 413, error: "Request body exceeds the allowed size." };
+    }
+    return { ok: false, status: 400, error: "Compressed request body could not be decoded." };
   }
 
   let text: string;
