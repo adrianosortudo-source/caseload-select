@@ -122,8 +122,10 @@ function attachStableIdentities(
   return records.map((record) => {
     const identity = bySourceRecordKey.get(record.id);
     const confirmedObservation = record.supplementalEvidence?.identity;
-    if (identity && confirmedObservation?.matchState === "confirmed"
-      && record.firmId === identity.firmId && record.canonicalDomain === identity.canonicalDomain) {
+    const identityMayBeUsed = record.supplementalEvidence === null
+      || (confirmedObservation?.matchState === "confirmed"
+        && record.firmId === identity?.firmId && record.canonicalDomain === identity?.canonicalDomain);
+    if (identity && identityMayBeUsed) {
       return {
         ...record,
         firmId: identity.firmId,
