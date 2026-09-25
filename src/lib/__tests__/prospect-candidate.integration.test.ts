@@ -343,6 +343,61 @@ suite("all-candidate immutable PostgreSQL projection", () => {
     } finally { await db.query("ROLLBACK"); db.release(); }
   }, 90_000);
 
+  it("shows the Zarei qualification assessment only under its exact governed firm while preserving the failed Admin read-back state", async () => {
+    const db = await pool!.connect(); await db.query("BEGIN");
+    try {
+      // This matches the production acceptance identity. The assessment FK is
+      // the authority for the firm link; its name and source key are not used
+      // to infer or repair identity.
+      const firmId = "a9989dca-8626-4a6e-93ca-797a1cb7eed2";
+      const sourceKey = "q50-whole-firm-zarei-qualified-2026-09-25-v1";
+      const token = "zarei-profile" + randomUUID().replaceAll("-", "");
+      const other = await governedLegacyFirm(db, token + "-other");
+      await db.query("INSERT INTO public.gta_prospect_firms(id,source_record_key,display_name,normalized_display_name,reconciliation_status) VALUES($1,$2,'Zarei Law Professional Corporation','zarei law professional corporation','provisional_new')",
+        [firmId, token]);
+      const coreBatchId = (await db.query<{ id: string }>(
+        "INSERT INTO public.gta_prospect_import_batches(source_name,source_sha256,source_record_count,state,applied_at) VALUES($1,$2,1,'applied',now()) RETURNING id",
+        [token, "c".repeat(64)])).rows[0].id;
+      await db.query("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) VALUES($1,$2,$3,'accepted','created',$4,$5::jsonb)",
+        [coreBatchId, token, "d".repeat(64), firmId, JSON.stringify({ sourceRecordKey: token, firmName: "Zarei Law Professional Corporation" })]);
+      const supplementalBatchId = (await db.query<{ id: string }>(
+        "INSERT INTO public.gta_prospect_supplemental_evidence_import_batches(package_id,package_sha256,source_record_count,state,applied_at) VALUES($1,$2,1,'applied',now()) RETURNING id",
+        [token, "e".repeat(64)])).rows[0].id;
+      const failedReadback = { state: "admin-prospects-readback-failed" };
+      const assessmentId = (await db.query<{ id: string }>(
+        "INSERT INTO public.gta_prospect_qualification_assessments(firm_id,evidence_import_batch_id,assessment_id,qualification_state,qualification_cohort,assessed_on,criteria,evidence_urls,raw_assessment) VALUES($1,$2,$3,'qualified','q50_whole_firm_2026_09_25_v1','2026-09-25',$4::jsonb,'[]'::jsonb,$5::jsonb) RETURNING id",
+        [firmId, supplementalBatchId, sourceKey, JSON.stringify({ lawyerCount: true, downtownGeometry: true, sharedIdentity: true, ownerContact: true, advertisingActivity: true, gbpEvidence: true, websiteIntake: true }), JSON.stringify({ sourceRecordKey: sourceKey, adminProspectsReadback: failedReadback })])).rows[0].id;
+
+      const exactFirm = await list(db, { firmId, fieldPointer: "/assessment_id", fieldValue: sourceKey });
+      expect(exactFirm.items).toHaveLength(1);
+      const candidate = exactFirm.items[0];
+      expect(candidate).toMatchObject({
+        identityNamespace: "legacy:gta_prospect_qualification_assessments",
+        identityKey: assessmentId,
+        verifiedFirmId: firmId,
+        identityState: "resolved",
+        qualificationStates: ["qualified"],
+      });
+      expect((await list(db, { firmId: other.firmId, fieldPointer: "/assessment_id", fieldValue: sourceKey })).items).toEqual([]);
+      const global = await list(db, { fieldPointer: "/assessment_id", fieldValue: sourceKey });
+      expect(global.items.map(item => item.id)).toEqual([candidate.id]);
+      expect(global.items[0].verifiedFirmId).toBe(firmId);
+
+      const retained = (await history(db, candidate.id)).items.find(item => item.itemKind === "research_revision")!;
+      expect(retained.originalJson).toMatchObject({
+        id: assessmentId,
+        assessment_id: sourceKey,
+        firm_id: firmId,
+        evidence_import_batch_id: supplementalBatchId,
+        raw_assessment: { sourceRecordKey: sourceKey, adminProspectsReadback: failedReadback },
+      });
+      // Firm-profile visibility proves a candidate projection only. It does
+      // not issue the independent protected intake receipt or mark read-back synced.
+      expect(retained.originalJson).toMatchObject({ raw_assessment: { adminProspectsReadback: { state: "admin-prospects-readback-failed" } } });
+      expect(candidate.processingDispositions).not.toContain("synced");
+    } finally { await db.query("ROLLBACK"); db.release(); }
+  }, 90_000);
+
   it("retains provisional, rejected, null-ID and claimed-ID legacy candidates without inventing firm linkage", async () => {
     const db = await pool!.connect(); await db.query("BEGIN");
     try {
