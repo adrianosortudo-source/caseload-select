@@ -136,3 +136,4 @@
  .dc-option{padding:.75rem}
  .dc-option:has(.dc-option__input:checked){padding:calc(.75rem - 1px)}
 }
+@media(max-width:380px){.dc-question__help{text-wrap:wrap}}
