@@ -170,7 +170,7 @@ test("new workflow is protected and read-only; legacy six-migration writer is un
   for (const step of remote.filter(s => /supabase db push/.test(s.run))) assert.match(step.run, /--dry-run/);
   assert.doesNotMatch(JSON.stringify(workflow), /--yes|\bapply\b|--password|SUPABASE_ACCESS_TOKEN/);
   const oldWorkflow = fs.readFileSync(path.join(root, ".github/workflows/prospect-enrichment-migration-gate.yml"), "utf8");
-  assert.match(oldWorkflow, /Require the exact six pending migrations/);
+  assert.match(oldWorkflow, /The exact six-migration plan matches/);
   assert.match(oldWorkflow, /migration-gate\.mjs/);
   assert.equal(ORIGINAL_SIX_PATHS.length, 6);
 });
