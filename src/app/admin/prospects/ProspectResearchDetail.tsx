@@ -25,7 +25,7 @@ function ObservationSummary({ item }: { item: ProspectEnrichmentEvidence }) {
   return null;
 }
 
-function EvidenceCard({ item }: { item: ProspectEnrichmentEvidence }) {
+export function EvidenceCard({ item }: { item: ProspectEnrichmentEvidence }) {
   const payload = item.table === "prospect_enrichment_packages" && item.data.payload && typeof item.data.payload === "object" && !Array.isArray(item.data.payload) ? item.data.payload : null;
   const original = payload?.originalResearch && typeof payload.originalResearch === "object" && !Array.isArray(payload.originalResearch) ? payload.originalResearch : null;
   return <article className="min-w-0 rounded-md border border-border-brand p-3" data-ui-component-content="research-evidence-card">
