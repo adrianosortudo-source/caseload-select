@@ -1,6 +1,10 @@
 export const WELCOME_COPY = {
-  heading: "Find the clients and matters you want more of",
-  description: "Choose the work, situations and working conditions that suit your firm. Turn those choices into a clear definition you can review and use in your marketing.",
+  heading: "Define the clients and matters you want more of",
+  description: "This guided tool helps you describe one kind of legal work your firm wants to attract, the clients who seek it, and the conditions that make it a good fit. It turns your answers into a working Desired Client Brief for your marketing.",
+  time: "Allow about 10 minutes. You can pause and return to this browser draft.",
+  process: "Work through six short sections. Choose the answers that fit, or write your own. You can review and change everything before creating the brief.",
+  preparation: "Have one type of work in mind. It helps to know when clients seek help, what they hope to achieve, why the work suits your firm, and whether your team can take on more. Estimates and unknowns are fine.",
+  outcome: "Your brief summarizes the client and matter pattern, reasons to pursue it, delivery limits, open questions, and a marketing starting point. You can copy, download, or print it.",
   supporting: "One type of work at a time. No account or email required.",
   privacy: "Describe patterns of work, not individual clients. Do not enter names, identifying details or confidential information.",
   aiDisclosure: "With AI assistance, your answers, including any optional commercial ranges, are sent to Google Gemini when you ask it to prepare your brief. Without AI, a structured brief is created in this browser.",
@@ -43,7 +47,7 @@ export const COMMON_COPY = {
 } as const;
 export const REVIEW_COPY = {
   heading: "Does this describe the work you want more of?",
-  note: "This is a working definition for your marketing. Review the wording and keep the assumptions visible.",
+  note: "Check your answers together before creating the brief. You can change any section so the final wording reflects the work you actually want to pursue.",
   prepareAI: "Prepare my brief with AI",
   createStructured: "Create my brief",
   useAI: "Use AI assistance",

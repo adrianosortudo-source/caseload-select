@@ -26,7 +26,7 @@ function questionLabel(path: AnswerReferencePath, answers: DesiredClientAnswers)
   }
   const route = answers.focus.route;
   const labels: Partial<Record<AnswerReferencePath, string>> = {
-    "focus.area": "Which area of work would you like to explore?",
+    "focus.area": "What legal work do you want more of?",
     "focus.work": "Which type of work should we focus on?",
     "focus.work_other": "Describe the work in a few words",
     "focus.service_area": "Where can your firm offer this work?",

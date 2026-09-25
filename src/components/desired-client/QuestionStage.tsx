@@ -62,10 +62,13 @@ export function QuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,erro
    {ownField(id,legend)}
  </>;
  return <section className="dc-stage" data-ui-component-content={`desired-client-stage-${stage}`}>
-  <h1 tabIndex={-1} data-ui-copy="heading">{title}</h1>
+  <div className="dc-stage__intro" data-ui-component-content={"desired-client-stage-intro-"+stage}>
+    <h1 tabIndex={-1} data-ui-copy="heading">{title}</h1>
+    <p data-ui-copy="body">{STAGE_DEFINITIONS[stage-1].explanation}</p>
+  </div>
   <div className="dc-stage__layout"><div className="dc-stage__questions">
   {stage===1&&<>
-   {radio("dc-area","Which area of work would you like to explore?",AREA_ORDER.map(id=>({id,label:getAreaLabel(id)})),area,(v)=>{const next=v as AreaId;if(area&&area!==next)setPendingArea(next);else onEdit(a=>({...a,focus:{...a.focus,area:next}}));},"Choose one area first. You can create another profile afterwards.")}
+   {radio("dc-area","What legal work do you want more of?",AREA_ORDER.map(id=>({id,label:getAreaLabel(id)})),area,(v)=>{const next=v as AreaId;if(area&&area!==next)setPendingArea(next);else onEdit(a=>({...a,focus:{...a.focus,area:next}}));},"Choose one area first. You can create another profile afterwards.")}
    {area&&<>{radio("dc-work","Which type of work should we focus on?",getWorkOptions(area),answers.focus.work,(v)=>onEdit(a=>({...a,focus:{...a.focus,work:v as typeof a.focus.work}})))}{answers.focus.work==="other"&&textField("Describe the work in a few words",answers.focus.work_other,v=>onEdit(a=>({...a,focus:{...a.focus,work_other:v}})))}<button type="button" className="dc-button dc-button--secondary" onClick={onCompare}>Help me compare two</button>{answers.focus.work&&radio("dc-route","Where does this work sit today?",entries(ROUTE_LABELS),route,v=>onEdit(a=>({...a,focus:{...a.focus,route:v as typeof a.focus.route,certainty:a.focus.certainty??"chosen"}})))}{answers.focus.work&&route&&textField("Where can your firm offer this work?",answers.focus.service_area,v=>onEdit(a=>({...a,focus:{...a.focus,service_area:v}})),"Name the city, province or region you are set up to serve. Leave blank if this needs review.")}</>}
   </>}
   {stage===2&&<>{radio("dc-timing","When does this client usually seek help?",entries(TIMING_LABELS),answers.situation.timing,v=>onEdit(a=>({...a,situation:{...a.situation,timing:v as typeof a.situation.timing}})))}{area&&radio("dc-role","Who usually needs the help?",roles,answers.situation.role,v=>onEdit(a=>({...a,situation:{...a.situation,role:v as typeof a.situation.role,role_other:v==="other"?a.situation.role_other:"",contact:CONTACT_ROLE_IDS.has(v as never)?a.situation.contact:null}})))}{answers.situation.role==="other"&&textField("Describe the role in a few words",answers.situation.role_other,v=>onEdit(a=>({...a,situation:{...a.situation,role_other:v}})))}{contactVisible&&<details className="dc-optional"><summary>Who makes the first contact?</summary>{radio("dc-contact","Who makes the first contact?",entries(CONTACT_LABELS),answers.situation.contact,v=>onEdit(a=>({...a,situation:{...a.situation,contact:v as typeof a.situation.contact}})),undefined,false)}</details>}</>}

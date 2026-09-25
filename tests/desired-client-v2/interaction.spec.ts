@@ -38,7 +38,7 @@ test('keyboard controls report a missing required answer and keep visible focus'
   const begin = page.getByRole('button', { name: 'Begin without AI', exact: true });
   await begin.focus();
   await page.keyboard.press('Enter');
-  const heading = page.getByRole('heading', { name: 'Which area of work would you like to explore?', exact: true });
+  const heading = page.getByRole('heading', { name: 'What legal work do you want more of?', exact: true });
   await expect(heading).toBeFocused();
   await page.getByRole('button', { name: 'Continue', exact: true }).focus();
   await page.keyboard.press('Enter');

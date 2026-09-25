@@ -1,14 +1,14 @@
 import type { DesiredClientAnswers } from "./types";
 export type StageId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-export interface StageDefinition { id: StageId; label: string; heading: string; previewAfter?: boolean; }
+export interface StageDefinition { id: StageId; label: string; heading: string; explanation: string; previewAfter?: boolean; }
 export const STAGE_DEFINITIONS: readonly StageDefinition[] = [
-  { id: 1, label: "1 Focus", heading: "Which area of work would you like to explore?" },
-  { id: 2, label: "2 Situation", heading: "When does this client usually seek help?" },
-  { id: 3, label: "3 Client goal", heading: "What does the client most want to achieve?", previewAfter: true },
-  { id: 4, label: "4 Value", heading: "What makes this work worth pursuing?" },
-  { id: 5, label: "5 Delivery", heading: "What helps your team deliver this work well?" },
-  { id: 6, label: "6 Direction", heading: "What should this work help the firm become known for?" },
-  { id: 7, label: "7 Review", heading: "Does this describe the work you want more of?" },
+  { id: 1, label: "1 Focus", heading: "What legal work do you want more of?", explanation: "Choose one type of work and say whether your firm already handles it or wants to build toward it. This gives the brief a specific focus and keeps a future ambition separate from current experience." },
+  { id: 2, label: "2 Situation", heading: "When does this client usually seek help?", explanation: "Identify who needs this work and what usually prompts them to contact a lawyer. This helps your marketing speak to a real situation, while keeping the client separate from the person who first gets in touch." },
+  { id: 3, label: "3 Client goal", heading: "What does the client most want to achieve?", explanation: "Consider the progress the client wants and any concerns they bring. Their goal gives your message a useful angle beyond the name of a legal service.", previewAfter: true },
+  { id: 4, label: "4 Value", heading: "What makes this work worth pursuing?", explanation: "Think about why this work suits the firm and how the fee compares with the time and effort involved. A larger fee alone does not tell you whether a matter supports the practice you want to build." },
+  { id: 5, label: "5 Delivery", heading: "What helps your team deliver this work well?", explanation: "Consider the skills, support, and capacity needed to serve these clients well. This keeps the profile grounded in work your team can handle now, or shows what needs to change first." },
+  { id: 6, label: "6 Direction", heading: "What should this work help the firm become known for?", explanation: "Name the reputation you want this work to build and what supports that direction. This connects the profile to future marketing and makes assumptions easier to check." },
+  { id: 7, label: "7 Review", heading: "Does this describe the work you want more of?", explanation: "Check your answers together before creating the brief. You can change any section so the final wording reflects the work you actually want to pursue." },
 ];
 export const COMPARISON_STEPS = [
   { id: 1, heading: "Which two types of work are you considering?" },

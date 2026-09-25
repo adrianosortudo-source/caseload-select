@@ -19,6 +19,12 @@ export function WelcomeScreen({ onChooseMode }: WelcomeScreenProps) {
       <p className="dc-welcome__description" data-ui-copy="body">
         {WELCOME_COPY.description}
       </p>
+      <div className="dc-welcome__guide" data-ui-component-content="desired-client-welcome-guide">
+        <p data-ui-copy="body"><strong>Time:</strong> {WELCOME_COPY.time}</p>
+        <p data-ui-copy="body"><strong>How it works:</strong> {WELCOME_COPY.process}</p>
+        <p data-ui-copy="body"><strong>What to have in mind:</strong> {WELCOME_COPY.preparation}</p>
+        <p data-ui-copy="body"><strong>What you will get:</strong> {WELCOME_COPY.outcome}</p>
+      </div>
       <p className="dc-welcome__supporting" data-ui-copy="supporting">
         {WELCOME_COPY.supporting}
       </p>
