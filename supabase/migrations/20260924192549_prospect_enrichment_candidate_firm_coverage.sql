@@ -551,12 +551,21 @@ BEGIN
    FROM text_hits h LEFT JOIN identities i ON i.candidate_id=h.candidate_id
    GROUP BY CASE WHEN i.firm_count=1 THEN i.firm_id ELSE h.candidate_id::text END
    HAVING count(DISTINCT h.term)=(SELECT count(*) FROM text_terms)
- ), filtered AS MATERIALIZED (
+ ), non_text_filtered AS MATERIALIZED (
+   -- Keep ordinary and blank-text reads on the original predicate path.
    SELECT i.id FROM inventory i WHERE p_filters='{}'::jsonb OR (
-     prospect_candidate_private.matches_group(i.id,i.data,p_filters-'text',cutoff,i.group_ids)
-     AND (NOT p_filters ? 'text' OR btrim(p_filters->>'text')='' OR NOT EXISTS(SELECT 1 FROM text_terms)
-       OR EXISTS(SELECT 1 FROM text_matches tm WHERE tm.group_id=coalesce(i.data->>'verifiedFirmId',i.id::text)))
+     (NOT p_filters ? 'text' OR btrim(p_filters->>'text')='')
+     AND prospect_candidate_private.matches_group(i.id,i.data,p_filters,cutoff,i.group_ids)
    )
+ ), text_filtered AS MATERIALIZED (
+   SELECT i.id FROM inventory i WHERE p_filters ? 'text' AND btrim(p_filters->>'text')<>''
+     AND prospect_candidate_private.matches_group(i.id,i.data,p_filters-'text',cutoff,i.group_ids)
+     AND (NOT EXISTS(SELECT 1 FROM text_terms)
+       OR EXISTS(SELECT 1 FROM text_matches tm WHERE tm.group_id=coalesce(i.data->>'verifiedFirmId',i.id::text)))
+ ), filtered AS MATERIALIZED (
+   SELECT id FROM non_text_filtered
+   UNION ALL
+   SELECT id FROM text_filtered
  ), page_ids AS MATERIALIZED (
    SELECT id FROM filtered WHERE p_after_id IS NULL OR id>p_after_id ORDER BY id LIMIT p_limit
  ), summaries AS MATERIALIZED (
