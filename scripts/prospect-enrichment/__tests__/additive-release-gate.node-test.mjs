@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,7 +23,13 @@ import {
 import { MIGRATION_PATHS as ORIGINAL_SIX_PATHS } from "../migration-gate.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-const readSources = () => Object.fromEntries([...MIGRATION_PATHS, APPLIED_OPERATOR_RPC.path].map(file => [file, fs.readFileSync(path.join(root, file))]));
+const readSources = () => Object.fromEntries([...MIGRATION_PATHS, APPLIED_OPERATOR_RPC.path].map(file => {
+  const working = fs.readFileSync(path.join(root, file));
+  const committed = execFileSync("git", ["show", "HEAD:" + file], { cwd: root, maxBuffer: 4 * 1024 * 1024 });
+  const canonicalWorking = Buffer.from(working.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
+  assert.ok(canonicalWorking.equals(committed), file + " differs from its committed source beyond checkout line endings");
+  return [file, committed];
+}));
 const realSources = readSources();
 const receipt = JSON.parse(fs.readFileSync(path.join(root, RELEASE_PATH), "utf8"));
 const fakeSources = Object.fromEntries([...MIGRATION_PATHS, APPLIED_OPERATOR_RPC.path].map(file => [file, Buffer.from("SELECT 1;\n")]));

@@ -1,5 +1,6 @@
 import fs from "node:fs";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
   CLI_VERSION,
@@ -178,8 +179,21 @@ export function catalogQuery() {
   return `SELECT n.nspname AS "schemaName", p.proname AS "functionName", oidvectortypes(p.proargtypes) AS "identityArguments", l.lanname AS "languageName", p.prosecdef AS "securityDefiner", (SELECT setting FROM unnest(p.proconfig) AS setting WHERE setting LIKE 'search_path=%') AS "searchPathSetting", md5(pg_get_functiondef(p.oid)) AS "definitionMd5", has_function_privilege('anon', p.oid, 'EXECUTE') AS "anonExecute", has_function_privilege('authenticated', p.oid, 'EXECUTE') AS "authenticatedExecute", EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS acl WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE') AS "publicExecute", coalesce((SELECT json_agg(r.rolname ORDER BY r.rolname) FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS acl JOIN pg_roles r ON r.oid = acl.grantee WHERE acl.grantee <> p.proowner AND acl.grantee <> 0 AND acl.privilege_type = 'EXECUTE'), '[]'::json) AS "nonOwnerExecuteGrantees" FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace JOIN pg_language l ON l.oid = p.prolang WHERE n.nspname = 'public' AND p.proname = 'revalidate_operator_membership_v1' AND oidvectortypes(p.proargtypes) = 'uuid, uuid, boolean';\n`;
 }
 
+const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+
 function loadSources() {
-  return Object.fromEntries([...MIGRATION_PATHS, APPLIED_OPERATOR_RPC.path].map(p => [p, fs.readFileSync(p)]));
+  return Object.fromEntries([...MIGRATION_PATHS, APPLIED_OPERATOR_RPC.path].map(migrationPath => {
+    const working = fs.readFileSync(path.join(REPOSITORY_ROOT, migrationPath));
+    let committed;
+    try {
+      committed = execFileSync("git", ["show", "HEAD:" + migrationPath], { cwd: REPOSITORY_ROOT, maxBuffer: 4 * 1024 * 1024 });
+    } catch {
+      fail("migration_git_blob_unavailable");
+    }
+    const canonicalWorking = Buffer.from(working.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
+    if (!canonicalWorking.equals(committed)) fail("working_migration_source_differs_from_git_blob");
+    return [migrationPath, committed];
+  }));
 }
 
 function safeJson(file) {
