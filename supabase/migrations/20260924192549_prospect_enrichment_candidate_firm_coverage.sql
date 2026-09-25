@@ -554,16 +554,24 @@ BEGIN
    FROM text_hits h LEFT JOIN identities i ON i.candidate_id=h.candidate_id
    GROUP BY CASE WHEN i.firm_count=1 THEN 'firm:'||i.firm_id ELSE 'candidate:'||h.candidate_id::text END
    HAVING count(DISTINCT h.term)=(SELECT count(*) FROM text_terms)
+ ), typed_field_candidates AS MATERIALIZED (
+   -- Keep the optional value filter out of an OR so a cached generic plan can
+   -- use both leading keys of prospect_candidate_field_exact.
+   SELECT DISTINCT f.candidate_id
+   FROM public.prospect_research_candidate_fields f
+   WHERE p_filters ? 'fieldPointer' AND p_filters ? 'fieldValue' AND f.coverage_revision<=cutoff
+     AND md5(f.pointer)=md5(p_filters->>'fieldPointer') AND f.pointer=p_filters->>'fieldPointer'
+     AND md5(f.value_json::text)=md5((p_filters->'fieldValue')::text) AND f.value_json=p_filters->'fieldValue'
+   UNION
+   SELECT DISTINCT f.candidate_id
+   FROM public.prospect_research_candidate_fields f
+   WHERE p_filters ? 'fieldPointer' AND NOT p_filters ? 'fieldValue' AND f.coverage_revision<=cutoff
+     AND md5(f.pointer)=md5(p_filters->>'fieldPointer') AND f.pointer=p_filters->>'fieldPointer'
  ), typed_field_matches AS MATERIALIZED (
-   -- Narrow by the exact-value index, then retain raw equality and the requested history cutoff.
    SELECT CASE WHEN identity_match.firm_count=1 THEN 'firm:'||identity_match.firm_id
                ELSE 'candidate:'||f.candidate_id::text END group_id
-   FROM public.prospect_research_candidate_fields f
+   FROM typed_field_candidates f
    LEFT JOIN identities identity_match ON identity_match.candidate_id=f.candidate_id
-   WHERE p_filters ? 'fieldPointer' AND f.coverage_revision<=cutoff
-     AND md5(f.pointer)=md5(p_filters->>'fieldPointer') AND f.pointer=p_filters->>'fieldPointer'
-     AND (NOT p_filters ? 'fieldValue' OR
-       (md5(f.value_json::text)=md5((p_filters->'fieldValue')::text) AND f.value_json=p_filters->'fieldValue'))
    GROUP BY CASE WHEN identity_match.firm_count=1 THEN 'firm:'||identity_match.firm_id
                  ELSE 'candidate:'||f.candidate_id::text END
  ), non_text_filtered AS MATERIALIZED (
