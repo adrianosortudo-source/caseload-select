@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import {
   CLI_VERSION, CONFIRMATION, MIGRATION_PATHS, PROJECT_REF, RELEASE_PATH,
+  PREVIEW_MIGRATION_PATHS, QUALIFICATION_HISTORY, QUALIFICATION_HISTORY_CONFIRMATION,
+  compareQualificationCatalogs, stageProductionWorkdir, verifyFullMigrationLedger, verifyQualificationRepairAuthorization,
   createReleaseManifest, findProjectEnvFiles, ledgerQuery, sha256, verifyConfirmation, verifyDirectDatabaseUrl, verifyExecutionGate,
   verifyLedgerStatements, verifyMigrationLedger, verifyMigrationPlan, verifyReleaseManifest,
 } from "../migration-gate.mjs";
@@ -194,11 +196,23 @@ test("workflow is manual, main-only, protected and all external actions are pinn
   assert.ok(apply.run.indexOf("apply_started=true") < apply.run.indexOf("--yes"));
   assert.match(apply.run, /migration-gate\.mjs source/);
   assert.ok(apply.run.indexOf("plan pre") < apply.run.indexOf("--yes"));
-  const readback = job.steps.find((s) => /migration-gate\.mjs ledger/.test(s.run ?? ""));
+  const readback = job.steps.find((s) => s.if === "always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'");
   assert.equal(readback.if, "always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'");
   assert.match(readback.run, /--db-url "\$MIGRATION_DATABASE_URL"/);
-  assert.match(readback.run, /--output json --agent no/);
+  assert.match(readback.run, /--output-format json --agent no/);
   assert.match(readback.run, /plan post/);
+  const qualificationRepair = job.steps.find((s) => s.id === "qualification_repair");
+  assert.equal(qualificationRepair.if, "inputs.operation == 'qualification-repair'");
+  assert.match(qualificationRepair.run, /migration-gate\.mjs source/);
+  assert.match(qualificationRepair.run, /full-ledger.*qualification-pending/);
+  assert.match(qualificationRepair.run, /catalog-compare/);
+  assert.match(qualificationRepair.run, /repair-authorization/);
+  assert.match(qualificationRepair.run, /supabase migration repair --db-url .*--status applied 20260921120000 20260921121500/);
+  assert.doesNotMatch(qualificationRepair.run, /supabase db push/);
+  const qualificationRepairReadback = job.steps.find((s) => s.if === "always() && inputs.operation == 'qualification-repair' && steps.qualification_repair.outputs.repair_started == 'true'");
+  assert.ok(qualificationRepairReadback);
+  assert.match(qualificationRepairReadback.run, /full-ledger.*enrichment-pending/);
+  assert.match(qualificationRepairReadback.run, /ledger-delta .*20260921120000 20260921121500/);
   for (const step of job.steps.filter((s) => /supabase db (push|query) .*--db-url/.test(s.run ?? ""))) {
     assert.doesNotMatch(step.run, /--linked|--project-ref|--password|SUPABASE_ACCESS_TOKEN/);
     assert.match(step.run, /migration-gate\.mjs connection/);
@@ -242,6 +256,95 @@ for (const key of ["PGHOST", "PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGPASS
 }
 test("project env files fail closed without reading their values", () => {
   assert.throws(() => verifyDirectDatabaseUrl(databaseUrl, {}, ["supabase/.env"]), /project_database_env_files_prohibited/);
+});
+
+test("production staging excludes exactly the two preview migrations and preserves every included byte", t => {
+  const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "migration-stage-test-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const sourceRoot = path.join(base, "source"), migrationsDir = path.join(sourceRoot, "supabase", "migrations");
+  const destinationRoot = path.join(base, "staged");
+  fs.mkdirSync(migrationsDir, { recursive: true });
+  fs.writeFileSync(path.join(sourceRoot, "supabase", "config.toml"), "project_id = 'fixture'\n");
+  const fixturePaths = [...MIGRATION_PATHS, ...QUALIFICATION_HISTORY.map(entry => entry.path), ...PREVIEW_MIGRATION_PATHS,
+    "supabase/migrations/20260413_legacy_numeric.sql", "supabase/migrations/manual_notes.sql"];
+  for (const [index, relative] of fixturePaths.entries()) {
+    fs.writeFileSync(path.join(sourceRoot, relative), Buffer.from(`-- fixture ${index}\nSELECT ${index};\n`));
+  }
+  const result = stageProductionWorkdir(sourceRoot, destinationRoot);
+  assert.equal(result.exclusions.length, PREVIEW_MIGRATION_PATHS.length);
+  assert.deepEqual(result.exclusions.map(item => item.path).sort(), [...PREVIEW_MIGRATION_PATHS].sort());
+  assert.equal(result.migrationCount, fixturePaths.length - PREVIEW_MIGRATION_PATHS.length - 1);
+  const stagedNames = fs.readdirSync(path.join(destinationRoot, "supabase", "migrations")).sort();
+  assert.deepEqual(stagedNames, fixturePaths.filter(p => /^supabase\/migrations\/\d+_.+\.sql$/.test(p) && !PREVIEW_MIGRATION_PATHS.includes(p)).map(p => path.basename(p)).sort());
+  for (const relative of fixturePaths.filter(p => /^supabase\/migrations\/\d+_.+\.sql$/.test(p) && !PREVIEW_MIGRATION_PATHS.includes(p))) {
+    assert.deepEqual(fs.readFileSync(path.join(destinationRoot, relative)), fs.readFileSync(path.join(sourceRoot, relative)), relative);
+  }
+  assert.throws(() => stageProductionWorkdir(sourceRoot, destinationRoot), /staging_destination_must_be_fresh_absolute_path/);
+});
+
+test("full production ledger admits only the exact source-backed phase and rejects unknown or mismatched versions", t => {
+  const makeRows = paths => paths.map(relative => {
+    const filename = path.basename(relative), match = /^(\d+)_(.+)\.sql$/.exec(filename);
+    return { version: match[1], name: match[2] };
+  }).sort((a, b) => a.version.localeCompare(b.version));
+  const localPaths = [...MIGRATION_PATHS, ...QUALIFICATION_HISTORY.map(entry => entry.path), "supabase/migrations/20260413_legacy_numeric.sql"];
+  const full = makeRows(localPaths);
+  const preQualification = full.filter(row => !QUALIFICATION_HISTORY.some(item => item.version === row.version) && !MIGRATION_PATHS.some(item => item.includes(row.version)));
+  const afterRepair = full.filter(row => !MIGRATION_PATHS.some(item => item.includes(row.version)));
+  const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "migration-ledger-test-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const migrationDir = path.join(base, "supabase", "migrations"); fs.mkdirSync(migrationDir, { recursive: true });
+  for (const relative of localPaths) fs.writeFileSync(path.join(base, relative), "SELECT 1;\n");
+  for (const relative of PREVIEW_MIGRATION_PATHS) fs.writeFileSync(path.join(base, relative), "SELECT 1;\n");
+  assert.equal(verifyFullMigrationLedger(preQualification, base, "qualification-pending").pendingPaths.length, QUALIFICATION_HISTORY.length + MIGRATION_PATHS.length);
+  assert.equal(verifyFullMigrationLedger(afterRepair, base, "enrichment-pending").pendingPaths.length, MIGRATION_PATHS.length);
+  assert.equal(verifyFullMigrationLedger(full, base, "complete").pendingPaths.length, 0);
+  assert.throws(() => verifyFullMigrationLedger([...preQualification, { version: "20260414", name: "unknown_remote" }].sort((a, b) => a.version.localeCompare(b.version)), base, "qualification-pending"), /remote_migration_source_missing_or_mismatched/);
+  const mismatched = preQualification.map(row => row.version === "20260413" ? { ...row, name: "other_migration" } : row);
+  assert.throws(() => verifyFullMigrationLedger(mismatched, base, "qualification-pending"), /remote_migration_source_missing_or_mismatched/);
+  assert.throws(() => verifyFullMigrationLedger(preQualification, base, "complete"), /unexpected_full_history_delta/);
+});
+
+test("qualification catalog comparison rejects missing tables, changed indexes, constraints, and column privileges", t => {
+  const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "qualification-catalog-test-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const catalog = { schemaVersion: "qualification-catalog-contract/v1", tables: [
+    "prospect_advertising_observations", "prospect_decision_maker_contacts", "prospect_diagnostic_ready_profiles",
+    "prospect_diagnostic_reservations", "prospect_export_runs", "prospect_firm_affiliations",
+    "prospect_firm_fit_observations", "prospect_lso_licensees", "prospect_opportunity_observations",
+    "prospect_qualification_decisions", "prospect_research_attempts", "prospect_service_observations",
+    "prospect_source_captures", "prospect_source_record_map"
+  ].map(name => ({ name, present: true, columns: [{ name: "id", type: "uuid", nullable: false, default: null, anonPrivileges: { select: false }, authenticatedPrivileges: { select: false }, serviceRolePrivileges: { select: true } }], constraints: [{ name: name + "_pkey", definition: "PRIMARY KEY (id)" }], indexes: [{ name: name + "_pkey", definition: "CREATE UNIQUE INDEX ON id" }], policies: [], triggers: [], anon: {}, authenticated: {}, serviceRole: {}, owner: "postgres", rlsEnabled: true, forceRls: false })) };
+  const scratch = path.join(base, "scratch.json"), production = path.join(base, "production.json");
+  const writeScratch = value => fs.writeFileSync(scratch, JSON.stringify([{ catalog_contract: value }]));
+  const writeProduction = value => fs.writeFileSync(production, JSON.stringify({ rows: [{ catalog_contract: value }] }));
+  const expected = structuredClone(catalog); writeScratch(expected); writeProduction(expected);
+  // Catalog comparison also validates pinned SQL bytes, so the fixture source root uses the real checked-out files.
+  const sourceRoot = root;
+  assert.equal(compareQualificationCatalogs(scratch, production, sourceRoot).tableCount, 14);
+  for (const mutate of [
+    value => { value.tables.pop(); },
+    value => { value.tables[0].present = false; },
+    value => { value.tables[0].indexes[0].name = "renamed_index"; },
+    value => { value.tables[0].indexes[0].definition += " WHERE id IS NOT NULL"; },
+    value => { value.tables[0].constraints[0].name = "renamed_constraint"; },
+    value => { value.tables[0].constraints[0].definition = "CHECK (id IS NOT NULL)"; },
+    value => { value.tables[0].columns[0].anonPrivileges.select = true; },
+    value => { value.tables[0].serviceRole.tablePrivileges = { select: false }; },
+  ]) {
+    const changed = structuredClone(expected); mutate(changed); writeProduction(changed);
+    assert.throws(() => compareQualificationCatalogs(scratch, production, sourceRoot), /catalog_contract_incomplete|catalog_contract_facet_missing|production_qualification_catalog_does_not_match_source/);
+  }
+});
+
+test("qualification repair authorization binds exact confirmation token and reviewed catalog hash", () => {
+  const digest = "a".repeat(64);
+  assert.deepEqual(verifyQualificationRepairAuthorization({ confirmation: QUALIFICATION_HISTORY_CONFIRMATION, reviewedCatalogSha256: digest, currentCatalogSha256: digest }), { operation: "qualification-repair", catalogEvidenceSha256: digest });
+  for (const values of [
+    { confirmation: "wrong", reviewedCatalogSha256: digest, currentCatalogSha256: digest },
+    { confirmation: QUALIFICATION_HISTORY_CONFIRMATION, reviewedCatalogSha256: "b".repeat(64), currentCatalogSha256: digest },
+    { confirmation: QUALIFICATION_HISTORY_CONFIRMATION, reviewedCatalogSha256: "invalid", currentCatalogSha256: digest },
+  ]) assert.throws(() => verifyQualificationRepairAuthorization(values));
 });
 
 test("dotenv detection covers both directories and all pinned default filenames without reading values", () => {
