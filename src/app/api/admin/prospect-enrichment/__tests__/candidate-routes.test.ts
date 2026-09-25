@@ -37,6 +37,14 @@ describe("protected candidate list/profile/history actual GET paths", () => {
     expect(state.rpc.mock.lastCall?.[1].p_filters).toEqual({ fieldPointer: "/unknownFact", fieldValue: false });
   });
   it.each(["?unknown=x", "?limit=101", "?cursor=/", "?fieldValue=false", "?observedFrom=2026-99-99", "?text=x&text=y"])("rejects invalid query %s", async query => { expect((await list(req(query))).status).toBe(422); expect(state.rpc).not.toHaveBeenCalled(); });
+  it("passes exact source identity filters through the protected GET and rejects partial pairs", async () => {
+    const namespace = "legacy:gta_prospect_qualification_assessments", key = "stable-row-42";
+    expect((await list(req("?identityNamespace=" + encodeURIComponent(namespace) + "&identityKey=" + encodeURIComponent(key)))).status).toBe(200);
+    expect(state.rpc.mock.lastCall?.[1].p_filters).toEqual({ identityNamespace: namespace, identityKey: key });
+    const calls = state.rpc.mock.calls.length;
+    expect((await list(req("?identityNamespace=" + encodeURIComponent(namespace)))).status).toBe(422);
+    expect(state.rpc).toHaveBeenCalledTimes(calls);
+  });
   it("reports reader errors without exposing SQL or returning empty success", async () => {
     state.rpc.mockResolvedValueOnce({ data: null, error: { message: "private SQL and raw data" } }); const response = await list(req()); expect(response.status).toBe(503); expect(await response.text()).not.toContain("private SQL");
   });

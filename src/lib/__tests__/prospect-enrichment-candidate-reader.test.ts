@@ -29,6 +29,12 @@ describe("all-candidate retained research contract", () => {
   it.each(["observedFrom=2026-02-30", "observedFrom=2026-99-99", "retrievedFrom=2026-09-24&retrievedTo=2026-09-01", "observedUnknown=true&observedFrom=2026-09-01", "identityState=claimed", "fieldValue=false", "fieldPointer=/bad~2path", "fieldPointer=/a&fieldValue=%7B%22x%22%3A1%7D", "sourceUrl=javascript:alert(1)", "sourceUrl=https://user:password@example.test", "text=a&text=b"])("rejects invalid filters %s", query => {
     expect(() => parseCandidateFilters(new URLSearchParams(query))).toThrow(CandidateContractError);
   });
+  it("requires an exact source namespace and key as a pair", () => {
+    const namespace = "legacy:gta_prospect_qualification_assessments", key = "stable-row-42";
+    expect(parseCandidateFilters(new URLSearchParams({ identityNamespace: namespace, identityKey: key }))).toEqual({ identityNamespace: namespace, identityKey: key });
+    expect(() => parseCandidateFilters(new URLSearchParams({ identityNamespace: namespace }))).toThrow(CandidateContractError);
+    expect(() => parseCandidateFilters(new URLSearchParams({ identityKey: key }))).toThrow(CandidateContractError);
+  });
   it("rejects inconsistent resolution and false completeness", () => {
     expect(() => parseCandidateSummary({ ...candidateSummaries[0], identityState: "resolved" })).toThrow();
     expect(() => parseCandidateMetadata({ coverageRevision: 1, readWarnings: ["missing"], complete: true })).toThrow();

@@ -421,8 +421,11 @@ ALTER FUNCTION prospect_candidate_private.check_filters(jsonb) RENAME TO check_f
 CREATE FUNCTION prospect_candidate_private.check_filters(p_filters jsonb)
 RETURNS void LANGUAGE plpgsql IMMUTABLE SET search_path = '' AS $$
 BEGIN
- PERFORM prospect_candidate_private.check_filters_candidate_v1(p_filters-'firmId');
+ PERFORM prospect_candidate_private.check_filters_candidate_v1(p_filters-ARRAY['firmId','identityNamespace','identityKey']::text[]);
  IF p_filters ? 'firmId' AND (jsonb_typeof(p_filters->'firmId')<>'string' OR p_filters->>'firmId' !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$') THEN RAISE EXCEPTION 'invalid firm ID filter'; END IF;
+ IF (p_filters ? 'identityNamespace')<>(p_filters ? 'identityKey') THEN RAISE EXCEPTION 'exact candidate identity requires namespace and key'; END IF;
+ IF p_filters ? 'identityNamespace' AND (jsonb_typeof(p_filters->'identityNamespace')<>'string' OR char_length(p_filters->>'identityNamespace') NOT BETWEEN 1 AND 4000) THEN RAISE EXCEPTION 'invalid candidate identity namespace'; END IF;
+ IF p_filters ? 'identityKey' AND (jsonb_typeof(p_filters->'identityKey')<>'string' OR char_length(p_filters->>'identityKey') NOT BETWEEN 1 AND 4000) THEN RAISE EXCEPTION 'invalid candidate identity key'; END IF;
 END $$;
 
 CREATE FUNCTION prospect_candidate_private.group_candidates(p_id uuid,p_cutoff bigint)
@@ -440,6 +443,8 @@ RETURNS boolean LANGUAGE sql STABLE SET search_path = '' AS $$
  WITH members AS MATERIALIZED (SELECT p_members ids)
  SELECT
  (NOT p_filters ? 'firmId' OR (p_summary->>'identityState'='resolved' AND (p_summary->>'verifiedFirmId')::uuid=(p_filters->>'firmId')::uuid))
+ AND (NOT p_filters ? 'identityNamespace' OR p_summary->>'identityNamespace'=p_filters->>'identityNamespace')
+ AND (NOT p_filters ? 'identityKey' OR p_summary->>'identityKey'=p_filters->>'identityKey')
  AND (NOT p_filters ? 'identityState' OR p_summary->>'identityState'=p_filters->>'identityState')
  AND NOT EXISTS (
    SELECT 1 FROM (VALUES ('originalStatus'),('selectionDisposition'),('processingDisposition'),('qualificationState')) x(filter_key)
@@ -523,6 +528,7 @@ BEGIN
  ), inventory AS MATERIALIZED (
    -- Counts and filters need only identity metadata. Build retained summaries for the returned page.
    SELECT c.id,jsonb_build_object('verifiedFirmId',CASE WHEN links.firm_count=1 THEN links.firm_id ELSE NULL END,
+      'identityNamespace',c.identity_namespace,'identityKey',c.identity_key,
       'identityState',CASE WHEN links.firm_count=1 THEN 'resolved' WHEN links.firm_count>1 THEN 'conflict' ELSE 'unresolved' END) data,
       coalesce(m.ids,ARRAY[c.id]) group_ids,
       CASE WHEN links.firm_count=1 THEN 'firm:'||links.firm_id ELSE 'candidate:'||c.id::text END group_key

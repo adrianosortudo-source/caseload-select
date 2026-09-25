@@ -4,19 +4,21 @@ name: Reviewed prospect enrichment migration
   workflow_dispatch:
     inputs:
       operation:
-        description: Validate all six exact migrations, or apply after the separate production approval.
+        description: Validate, preflight, reconcile metadata, or apply the six enrichment migrations.
         required: true
         default: dry-run
         type: choice
-        options:
-          - dry-run
-          - apply
+        options: [dry-run, apply, qualification-preflight, qualification-repair]
       reviewed_source_sha:
         description: Exact reviewed 40-character current main commit SHA.
         required: true
         type: string
+      reviewed_catalog_sha256:
+        description: Required for qualification-repair; SHA-256 from the separately reviewed preflight artifact.
+        required: false
+        type: string
       confirmation:
-        description: "Required only for apply: APPLY-PROSPECT-ENRICHMENT-V1"
+        description: "Required for apply: APPLY-PROSPECT-ENRICHMENT-V1; for history repair: RECONCILE-QUALIFICATION-HISTORY-V1"
         required: false
         type: string
 
@@ -32,15 +34,29 @@ jobs:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
     name: Reviewed prospect enrichment schema gate
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     environment:
       name: Production prospect migrations
+    services:
+      postgres:
+        image: postgres:17.6-alpine3.21
+        env:
+          POSTGRES_PASSWORD: scratch-only-not-production
+          POSTGRES_DB: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
     env:
       PROJECT_REF: ssxryjxifwiivghglqer
       OPERATION: ${{ inputs.operation }}
       REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+      REVIEWED_CATALOG_SHA256: ${{ inputs.reviewed_catalog_sha256 }}
       CONFIRMATION: ${{ inputs.confirmation }}
       CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_ENRICHMENT_MIGRATION_REVIEWED_SHA }}
+      POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
     steps:
       - name: Check out current main
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -57,42 +73,121 @@ jobs:
           node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
           export CHECKOUT_SHA="$(git rev-parse HEAD)"
           node scripts/prospect-enrichment/migration-gate.mjs source > "$RUNNER_TEMP/source-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs query > "$RUNNER_TEMP/enrichment-ledger-readback.sql"
           git fetch --no-tags origin main
           test "$CHECKOUT_SHA" = "$(git rev-parse origin/main)"
-          node scripts/prospect-enrichment/migration-gate.mjs query > "$RUNNER_TEMP/enrichment-ledger-readback.sql"
 
       - name: Install pinned Supabase CLI
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
         with:
           version: 2.117.0
 
-      - name: Discover pinned command interfaces and verify version
+      - name: Verify pinned CLI interfaces
         shell: bash
         run: |
           set -euo pipefail
           test "$(supabase --version)" = "2.117.0"
           supabase db push --help > "$RUNNER_TEMP/db-push-help.txt"
           supabase db query --help > "$RUNNER_TEMP/db-query-help.txt"
+          supabase migration repair --help > "$RUNNER_TEMP/migration-repair-help.txt"
           grep -q -- '--db-url' "$RUNNER_TEMP/db-push-help.txt"
+          grep -q -- '--include-all' "$RUNNER_TEMP/db-push-help.txt"
           grep -q -- '--db-url' "$RUNNER_TEMP/db-query-help.txt"
+          grep -q -- '--db-url' "$RUNNER_TEMP/migration-repair-help.txt"
+          grep -q -- '--status' "$RUNNER_TEMP/migration-repair-help.txt"
 
-      - name: Require the exact six pending migrations and no seeds or roles
+      - name: Stage complete production migration history and read its ledger
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
           node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
-          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
-            --output-format json > "$RUNNER_TEMP/plan.json"
+          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/production-migrations" > "$RUNNER_TEMP/staged-inventory.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/full-ledger-readback.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/full-ledger-before.json"
+          if [[ "$OPERATION" == "qualification-preflight" || "$OPERATION" == "qualification-repair" ]]; then
+            phase="qualification-pending"
+          else
+            phase="enrichment-pending"
+          fi
+          node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger-before.json" "$RUNNER_TEMP/production-migrations" "$phase" > "$RUNNER_TEMP/full-ledger-before-check.json"
+
+      - name: Build and compare exact qualification catalog contract
+        if: inputs.operation == 'qualification-preflight' || inputs.operation == 'qualification-repair'
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
+          docker exec -i "$POSTGRES_CONTAINER_ID" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -X -f - < scripts/prospect-enrichment/qualification-catalog-fixture.sql
+          for migration in \
+            supabase/migrations/20260921120000_prospect_qualification_evidence.sql \
+            supabase/migrations/20260921121500_prospect_qualification_profile_details.sql; do
+            docker exec -i "$POSTGRES_CONTAINER_ID" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -X -f - < "$migration"
+          done
+          docker exec -i "$POSTGRES_CONTAINER_ID" psql -U postgres -d postgres -v ON_ERROR_STOP=1 -X -A -t -f - < scripts/prospect-enrichment/qualification-catalog-contract.sql > "$RUNNER_TEMP/qualification-catalog-scratch.json"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$GITHUB_WORKSPACE/scripts/prospect-enrichment/qualification-catalog-contract.sql" --output-format json --agent no > "$RUNNER_TEMP/qualification-catalog-production.json"
+          node scripts/prospect-enrichment/migration-gate.mjs catalog-compare "$RUNNER_TEMP/qualification-catalog-scratch.json" "$RUNNER_TEMP/qualification-catalog-production.json" > "$RUNNER_TEMP/qualification-catalog-check.json"
+
+      - name: Stop after read-only qualification preflight
+        if: inputs.operation == 'qualification-preflight'
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Catalog evidence is ready for review. No production migration history or schema was changed."
+
+      - name: Reconfirm catalog evidence and repair only qualification migration history
+        id: qualification_repair
+        if: inputs.operation == 'qualification-repair'
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CHECKOUT_SHA="$(git rev-parse HEAD)"
+          node scripts/prospect-enrichment/migration-gate.mjs source > "$RUNNER_TEMP/repair-source-check.json"
+          git fetch --no-tags origin main
+          test "$CHECKOUT_SHA" = "$(git rev-parse origin/main)"
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/full-ledger-immediate-before-repair.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger-immediate-before-repair.json" "$RUNNER_TEMP/production-migrations" qualification-pending > "$RUNNER_TEMP/full-ledger-immediate-before-repair-check.json"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$GITHUB_WORKSPACE/scripts/prospect-enrichment/qualification-catalog-contract.sql" --output-format json --agent no > "$RUNNER_TEMP/qualification-catalog-immediate.json"
+          node scripts/prospect-enrichment/migration-gate.mjs catalog-compare "$RUNNER_TEMP/qualification-catalog-scratch.json" "$RUNNER_TEMP/qualification-catalog-immediate.json" > "$RUNNER_TEMP/qualification-catalog-immediate-check.json"
+          current_catalog_sha="$(jq -r '.productionCatalogSha256' "$RUNNER_TEMP/qualification-catalog-immediate-check.json")"
+          node scripts/prospect-enrichment/migration-gate.mjs repair-authorization "$current_catalog_sha"
+          echo "repair_started=true" >> "$GITHUB_OUTPUT"
+          supabase migration repair --db-url "$MIGRATION_DATABASE_URL" --status applied 20260921120000 20260921121500
+
+      - name: Verify qualification history repair ledger delta
+        if: always() && inputs.operation == 'qualification-repair' && steps.qualification_repair.outputs.repair_started == 'true'
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/full-ledger-after.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger-after.json" "$RUNNER_TEMP/production-migrations" enrichment-pending > "$RUNNER_TEMP/full-ledger-after-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs ledger-delta "$RUNNER_TEMP/full-ledger-immediate-before-repair.json" "$RUNNER_TEMP/full-ledger-after.json" 20260921120000 20260921121500 > "$RUNNER_TEMP/qualification-repair-delta-check.json"
+      - name: Require exactly six enrichment migrations pending
+        if: inputs.operation == 'dry-run' || inputs.operation == 'apply'
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
+          (cd "$RUNNER_TEMP/production-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/plan.json"
           node scripts/prospect-enrichment/migration-gate.mjs plan pre "$RUNNER_TEMP/plan.json" > "$RUNNER_TEMP/plan-check.json"
 
-      - name: Stop after the default dry run
+      - name: Stop after the default six-migration dry run
         if: inputs.operation == 'dry-run'
         shell: bash
         run: |
           set -euo pipefail
-          echo "The reviewed prospect enrichment plan matches. No migration was applied."
+          echo "The exact six-migration plan matches. No migration was applied."
 
       - name: Recheck and apply the separately approved six migrations
         id: apply_migration
@@ -107,15 +202,15 @@ jobs:
           node scripts/prospect-enrichment/migration-gate.mjs source > "$RUNNER_TEMP/apply-source-check.json"
           git fetch --no-tags origin main
           test "$CHECKOUT_SHA" = "$(git rev-parse origin/main)"
-          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
-            --output-format json > "$RUNNER_TEMP/immediate-plan.json"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/full-ledger-immediate.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger-immediate.json" "$RUNNER_TEMP/production-migrations" enrichment-pending > "$RUNNER_TEMP/full-ledger-immediate-check.json"
+          (cd "$RUNNER_TEMP/production-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/immediate-plan.json"
           node scripts/prospect-enrichment/migration-gate.mjs plan pre "$RUNNER_TEMP/immediate-plan.json" > "$RUNNER_TEMP/immediate-plan-check.json"
           echo "apply_started=true" >> "$GITHUB_OUTPUT"
-          supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault \
-            --output-format json > "$RUNNER_TEMP/apply.json"
+          (cd "$RUNNER_TEMP/production-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/apply.json"
           node scripts/prospect-enrichment/migration-gate.mjs plan apply "$RUNNER_TEMP/apply.json" > "$RUNNER_TEMP/apply-check.json"
 
-      - name: Verify all six versions, complete SQL content and empty pending plan
+      - name: Verify six enrichment migrations, exact full ledger and empty pending plan
         if: always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'
         env:
           MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
@@ -123,14 +218,14 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
-          supabase db query --db-url "$MIGRATION_DATABASE_URL" \
-            --file "$RUNNER_TEMP/enrichment-ledger-readback.sql" --output json --agent no > "$RUNNER_TEMP/ledger.json"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/enrichment-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/ledger.json"
           node scripts/prospect-enrichment/migration-gate.mjs ledger "$RUNNER_TEMP/ledger.json" > "$RUNNER_TEMP/ledger-check.json"
-          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
-            --output-format json > "$RUNNER_TEMP/post-apply-plan.json"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/full-ledger-after.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger-after.json" "$RUNNER_TEMP/production-migrations" complete > "$RUNNER_TEMP/full-ledger-after-check.json"
+          (cd "$RUNNER_TEMP/production-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/post-apply-plan.json"
           node scripts/prospect-enrichment/migration-gate.mjs plan post "$RUNNER_TEMP/post-apply-plan.json" > "$RUNNER_TEMP/post-apply-check.json"
 
-      - name: Upload bounded migration verification evidence
+      - name: Upload migration release evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -138,10 +233,29 @@ jobs:
           path: |
             scripts/prospect-enrichment/migration-release.json
             ${{ runner.temp }}/source-check.json
+            ${{ runner.temp }}/staged-inventory.json
+            ${{ runner.temp }}/full-ledger-before-check.json
             ${{ runner.temp }}/plan-check.json
             ${{ runner.temp }}/apply-source-check.json
             ${{ runner.temp }}/immediate-plan-check.json
             ${{ runner.temp }}/apply-check.json
             ${{ runner.temp }}/ledger-check.json
+            ${{ runner.temp }}/full-ledger-after-check.json
             ${{ runner.temp }}/post-apply-check.json
+          if-no-files-found: warn
+
+      - name: Upload reviewed qualification catalog evidence
+        if: always() && (inputs.operation == 'qualification-preflight' || inputs.operation == 'qualification-repair')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: qualification-catalog-preflight-evidence
+          path: |
+            ${{ runner.temp }}/qualification-catalog-scratch.json
+            ${{ runner.temp }}/qualification-catalog-production.json
+            ${{ runner.temp }}/qualification-catalog-check.json
+            ${{ runner.temp }}/full-ledger-before-check.json
+            ${{ runner.temp }}/full-ledger-immediate-before-repair-check.json
+            ${{ runner.temp }}/qualification-catalog-immediate-check.json
+            ${{ runner.temp }}/full-ledger-after-check.json
+            ${{ runner.temp }}/qualification-repair-delta-check.json
           if-no-files-found: error
