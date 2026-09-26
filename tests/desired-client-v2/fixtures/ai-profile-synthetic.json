@@ -1,0 +1,201 @@
+{
+  "synthetic": true,
+  "answers": {
+    "schema_version": "dcm-v2.1",
+    "revision": 1,
+    "focus": {
+      "area": "business",
+      "work": "business_agreements",
+      "work_other": "",
+      "service_area": "Ontario",
+      "certainty": "chosen",
+      "route": "established",
+      "comparison": null
+    },
+    "situation": {
+      "timing": "planning",
+      "role": "business_organization",
+      "role_other": "",
+      "contact": "manager"
+    },
+    "client": {
+      "goals": [
+        "complete",
+        "protect"
+      ],
+      "concerns": [
+        "cost",
+        "next"
+      ]
+    },
+    "value": {
+      "reasons": [
+        "client_benefit",
+        "fees",
+        "skills"
+      ],
+      "fee_effort": "worthwhile",
+      "collected_fee": "15to50",
+      "team_hours": "41to100",
+      "payment": "varies"
+    },
+    "delivery": {
+      "conditions": [
+        "scope",
+        "information"
+      ],
+      "capacity": "room",
+      "limit": null
+    },
+    "direction": {
+      "aim": "more_current",
+      "evidence": [
+        "repeated",
+        "records"
+      ],
+      "less": null,
+      "less_note": ""
+    },
+    "clarifications": {
+      "FOCUS_UNCLEAR": null,
+      "CURRENT_CAPACITY_CONFLICT": null,
+      "FEE_EFFORT_CONFLICT": null,
+      "EXPERIENCE_DIRECTION_CONFLICT": null,
+      "CLIENT_GOAL_UNCLEAR": null
+    }
+  },
+  "brief": {
+    "definition": {
+      "text": "This profile describes a preference to attract more commercial agreement drafting and review work for businesses or organizations in Ontario. Clients typically seek assistance before a planned decision or change, aiming to complete a transaction or process and protect important interests. This work is desirable because it allows the firm to make a useful difference, aligns with existing skills, and generally offers a worthwhile fee compared to the effort.",
+      "kind": "preference",
+      "source_answer_ids": [
+        "focus.area",
+        "focus.work",
+        "focus.service_area",
+        "situation.timing",
+        "situation.role",
+        "client.goals",
+        "value.reasons",
+        "value.fee_effort"
+      ]
+    },
+    "client_goals": [
+      {
+        "text": "Clients want to successfully finalize a planned transaction or process, indicating a need for legal support to navigate the steps and achieve a desired outcome.",
+        "kind": "preference",
+        "source_answer_ids": [
+          "client.goals"
+        ]
+      },
+      {
+        "text": "Clients aim to safeguard critical aspects, which suggests a need for robust agreements that mitigate risks and secure their position.",
+        "kind": "preference",
+        "source_answer_ids": [
+          "client.goals"
+        ]
+      }
+    ],
+    "firm_reasons": [
+      {
+        "text": "The firm prefers this work because it provides an opportunity to deliver meaningful value and make a positive impact for clients.",
+        "kind": "preference",
+        "source_answer_ids": [
+          "value.reasons"
+        ]
+      },
+      {
+        "text": "This work is commercially attractive as the fees typically support the effort required, contributing to the firm's sustainability.",
+        "kind": "preference",
+        "source_answer_ids": [
+          "value.reasons",
+          "value.fee_effort"
+        ]
+      },
+      {
+        "text": "The firm is well-suited to this work, as it leverages existing capabilities and expertise.",
+        "kind": "preference",
+        "source_answer_ids": [
+          "value.reasons"
+        ]
+      }
+    ],
+    "delivery_conditions": [
+      {
+        "text": "The firm's ability to deliver this work effectively is enhanced when there is a clear and agreed-upon scope for the engagement.",
+        "kind": "experience",
+        "source_answer_ids": [
+          "delivery.conditions"
+        ]
+      },
+      {
+        "text": "Efficient delivery relies on clients providing necessary information in a timely manner.",
+        "kind": "experience",
+        "source_answer_ids": [
+          "delivery.conditions"
+        ]
+      },
+      {
+        "text": "Typical collected fees for this work range from C$15,000 to under C$50,000, with team time usually between more than 40 and up to 100 hours.",
+        "kind": "experience",
+        "source_answer_ids": [
+          "value.collected_fee",
+          "value.team_hours"
+        ]
+      },
+      {
+        "text": "The firm currently has capacity to take on more of this work with the existing team.",
+        "kind": "experience",
+        "source_answer_ids": [
+          "delivery.capacity"
+        ]
+      }
+    ],
+    "evidence": [
+      {
+        "text": "The firm has handled several matters of this type, indicating established experience.",
+        "kind": "experience",
+        "source_answer_ids": [
+          "direction.evidence"
+        ]
+      },
+      {
+        "text": "Fee and time records support the firm's experience and understanding of the economics for this work.",
+        "kind": "experience",
+        "source_answer_ids": [
+          "direction.evidence"
+        ]
+      }
+    ],
+    "open_questions": [],
+    "marketing": {
+      "topic": {
+        "text": "Drafting Commercial Agreements: Protecting Your Business Interests in Ontario",
+        "kind": "preference",
+        "source_answer_ids": [
+          "focus.work",
+          "client.goals",
+          "focus.service_area"
+        ]
+      },
+      "inquiry_question": {
+        "text": "How can well-drafted commercial agreements help your business complete planned transactions and protect its vital interests?",
+        "kind": "preference",
+        "source_answer_ids": [
+          "client.goals",
+          "focus.work"
+        ]
+      },
+      "validation_step": {
+        "text": "Review recent commercial agreement matters to confirm the consistency of client goals, fee ranges, and team hours with this profile.",
+        "kind": "suggestion",
+        "source_answer_ids": [
+          "direction.evidence",
+          "client.goals",
+          "value.collected_fee",
+          "value.team_hours"
+        ]
+      }
+    },
+    "work_to_promote_less": []
+  }
+}

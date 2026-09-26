@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDesiredClientUserPrompt, DESIRED_CLIENT_RESPONSE_SCHEMA } from "../prompt";
+import { buildDesiredClientSystemPrompt, buildDesiredClientUserPrompt, DESIRED_CLIENT_RESPONSE_SCHEMA } from "../prompt";
 import { emptyAnswers } from "../brief";
 import type { AnalysisRequestEnvelope } from "../types";
 
@@ -17,10 +17,17 @@ function request(): AnalysisRequestEnvelope {
 }
 
 describe("Desired Client model prompt", () => {
+  it("asks for a synthesized client profile rather than an answer transcript", () => {
+    const prompt = buildDesiredClientSystemPrompt();
+    expect(prompt).toContain("cohesive paragraph");
+    expect(prompt).toContain("Synthesize relationships between answers");
+    expect(prompt).toContain("material economic or capacity qualification");
+    expect(prompt).toContain("Never convert");
+  });
   it("keeps provider schema compact while matching the validator cardinalities", () => {
     const props = DESIRED_CLIENT_RESPONSE_SCHEMA.properties.brief.properties;
     const sourceIds = props.definition.properties.source_answer_ids;
-    expect(sourceIds).toMatchObject({ minItems: 1, maxItems: 6, items: { type: "string" } });
+    expect(sourceIds).toMatchObject({ minItems: 1, maxItems: 8, items: { type: "string" } });
     expect(props.client_goals).toMatchObject({ minItems: 1, maxItems: 3 });
     expect(props.firm_reasons).toMatchObject({ minItems: 1, maxItems: 3 });
     expect(props.delivery_conditions).toMatchObject({ minItems: 1, maxItems: 4 });

@@ -146,7 +146,7 @@ export const PAYMENT_LABELS: Record<PaymentId, string> = {
   predictable: "Usually predictable", varies: "Depends on the matter", uncertain: "Often uncertain", unknown: "Not established",
 };
 export const CAPACITY_LABELS: Record<CapacityId, string> = {
-  room: "Yes, with the current team", limited: "A limited amount", change: "Only after we change capacity or support",
+  room: "Yes, with the current team", limited: "A limited amount", change: "Only after building capacity",
   unknown: "We need to establish that",
 };
 export const AIM_LABELS: Record<AimId, string> = {

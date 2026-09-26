@@ -10,7 +10,7 @@ export const WELCOME_COPY = {
   aiDisclosure: "With AI assistance, your answers, including any optional commercial ranges, are sent to Google Gemini when you ask it to prepare your brief. Without AI, a structured brief is created in this browser.",
   draftNotice: "Your draft is saved in this browser for seven days after your last change. You can clear it at any time.",
   aiButton: "Begin with AI assistance",
-  structuredButton: "Begin without AI",
+  structuredButton: "Begin with a basic summary",
 } as const;
 export const STORAGE_COPY = {
   unavailable: "This browser could not save your progress. You can still finish and download your brief.",
@@ -49,7 +49,7 @@ export const REVIEW_COPY = {
   heading: "Does this describe the work you want more of?",
   note: "Check your answers together before creating the brief. You can change any section so the final wording reflects the work you actually want to pursue.",
   prepareAI: "Prepare my brief with AI",
-  createStructured: "Create my brief",
+  createStructured: "Create a basic summary",
   useAI: "Use AI assistance",
   agreePrepare: "Agree and prepare with AI",
   createWithoutAI: "Create without AI",
@@ -58,6 +58,8 @@ export const REVIEW_COPY = {
 } as const;
 export const BRIEF_COPY = {
   title: "Your Desired Client Brief",
+  profileTitle: "Your Desired Client Profile",
+  summaryTitle: "Your Answer Summary",
   reviewed: "I have reviewed this wording",
   reviewedStatus: "Wording reviewed by you",
   unreviewedExport: "Working draft, not yet reviewed",
@@ -73,7 +75,7 @@ export const BRIEF_COPY = {
   clear: "Clear this draft",
   why: "Why this is here",
   preparedAI: "Prepared with AI assistance from your answers.",
-  preparedStructured: "Structured summary of your answers.",
+  preparedStructured: "Basic summary of your answers. AI interpretation has not been applied.",
   unresolved: "Still to check",
 } as const;
 export const STAGE_SUMMARY_LABELS = [

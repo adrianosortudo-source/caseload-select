@@ -69,7 +69,7 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, maxTextLe
   if (text.length < 1 || text.length > maxTextLength || BANNED_TEXT.some((pattern) => pattern.test(text))) return false;
   if (PROFIT_CLAIM.test(text) && numericTokens(text).length > 0) return false;
   if (typeof value.kind !== "string" || !STATEMENT_KINDS.includes(value.kind as DesiredClientStatement["kind"])) return false;
-  if (!Array.isArray(value.source_answer_ids) || value.source_answer_ids.length < 1 || value.source_answer_ids.length > 6 ||
+  if (!Array.isArray(value.source_answer_ids) || value.source_answer_ids.length < 1 || value.source_answer_ids.length > 8 ||
       value.source_answer_ids.some((path) => typeof path !== "string" || !SOURCE_PATHS.has(path)) ||
       new Set(value.source_answer_ids).size !== value.source_answer_ids.length) return false;
   const sourcePaths = value.source_answer_ids as AnswerReferencePath[];

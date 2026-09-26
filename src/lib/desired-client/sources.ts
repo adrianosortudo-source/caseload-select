@@ -45,7 +45,7 @@ function questionLabel(path: AnswerReferencePath, answers: DesiredClientAnswers)
     "value.payment": "How predictable is payment?",
     "delivery.conditions": "What helps your team deliver this work well?",
     "delivery.capacity": "Could the firm take on more of this work now?",
-    "delivery.limit": "Which condition most often makes this work difficult to support?",
+    "delivery.limit": "What makes this work hard?",
     "direction.aim": "What should this work help the firm become known for?",
     "direction.evidence": "What supports this direction?",
     "direction.less": "Work to promote less",

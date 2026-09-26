@@ -36,7 +36,7 @@ export function getServiceAreaNote(brief: DesiredClientBrief, answers: DesiredCl
   const area = answers.focus.service_area.trim();
   if (!area) return "Service area not supplied.";
   const suppliedPhrase = `Service area supplied: ${area}.`;
-  return brief.definition.text.includes(suppliedPhrase) ? null : suppliedPhrase;
+  return brief.definition.text.toLowerCase().includes(area.toLowerCase()) ? null : suppliedPhrase;
 }
 
 export function getFirstContactNote(answers: DesiredClientAnswers): string | null {
@@ -117,7 +117,7 @@ export function formatBriefText(
   presentationNotes: readonly string[] = [],
 ): string {
   void now;
-  const parts = [BRIEF_COPY.title, saved.wordingReviewed ? BRIEF_COPY.reviewedExport : BRIEF_COPY.unreviewedExport,
+  const parts = [saved.mode === "ai" ? BRIEF_COPY.profileTitle : BRIEF_COPY.summaryTitle, saved.wordingReviewed ? BRIEF_COPY.reviewedExport : BRIEF_COPY.unreviewedExport,
     saved.mode === "ai" ? BRIEF_COPY.preparedAI : BRIEF_COPY.preparedStructured, ""];
   const sections = briefSections(saved.brief);
   for (const section of sections) {
@@ -151,7 +151,7 @@ export function formatBriefMarkdown(
   presentationNotes: readonly string[] = [],
 ): string {
   void now;
-  const parts = [`# ${BRIEF_COPY.title}`, "", `_${saved.wordingReviewed ? BRIEF_COPY.reviewedExport : BRIEF_COPY.unreviewedExport}_`,
+  const parts = [`# ${saved.mode === "ai" ? BRIEF_COPY.profileTitle : BRIEF_COPY.summaryTitle}`, "", `_${saved.wordingReviewed ? BRIEF_COPY.reviewedExport : BRIEF_COPY.unreviewedExport}_`,
     saved.mode === "ai" ? BRIEF_COPY.preparedAI : BRIEF_COPY.preparedStructured, ""];
   const sections = briefSections(saved.brief);
   for (const section of sections) {

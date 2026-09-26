@@ -155,10 +155,12 @@ export function buildStructuredBrief(answers: DesiredClientAnswers): DesiredClie
   if (own.limit?.trim()) conditionSources.push("write_ins.limit");
   const conditionKind: DesiredClientStatement["kind"] = conditions.includes("unknown") || (!conditions.length && !own.conditions?.trim()) ? "unknown" : own.conditions?.trim() ? "preference" : route === "established" ? "experience" : "preference";
   const additionalConditions = (own.conditions?.trim() ? " Additional condition: " + own.conditions.trim() + "." : "") + (own.limit?.trim() ? " Additional limit: " + own.limit.trim() + "." : "");
-  if (answers.delivery.limit && answers.delivery.limit !== "none") {
-    conditionSources.push("delivery.limit");
-    deliveryConditions.push(statement(conditionText + " Important limit: " + LIMIT_LABELS[answers.delivery.limit] + "." + additionalConditions, conditionKind, conditionSources));
-  } else deliveryConditions.push(statement(conditionText + additionalConditions, conditionKind, conditionSources));
+  if (conditions.length || own.conditions?.trim() || own.limit?.trim() || (answers.delivery.limit && answers.delivery.limit !== "none")) {
+    if (answers.delivery.limit && answers.delivery.limit !== "none") {
+      conditionSources.push("delivery.limit");
+      deliveryConditions.push(statement(conditionText + " Important limit: " + LIMIT_LABELS[answers.delivery.limit] + "." + additionalConditions, conditionKind, conditionSources));
+    } else deliveryConditions.push(statement(conditionText + additionalConditions, conditionKind, conditionSources));
+  }
 
   const capacity = answers.delivery.capacity;
   const refined = hasRefinedComparisonAnswers(answers);
@@ -219,7 +221,7 @@ export function buildStructuredBrief(answers: DesiredClientAnswers): DesiredClie
     inquiry_question: statement("What are you hoping to achieve, and what stage has the matter reached?", "suggestion",
       presentSources(answers, ["client.goals", "situation.timing", "focus.work"]).slice(0, 3)),
     validation_step: statement(route === "established"
-      ? "Review five recent examples of this work. Compare the time involved, collected fees, client feedback and delivery demands with this profile."
+      ? "Validate this profile against recent work."
       : "Ask two people with relevant client or practice experience to review this direction. Check the expected client need, delivery requirements and commercial assumptions.",
       "suggestion", presentSources(answers, ["focus.route", "direction.evidence", "value.fee_effort", "delivery.conditions", "delivery.capacity"]).slice(0, 5)),
   };
