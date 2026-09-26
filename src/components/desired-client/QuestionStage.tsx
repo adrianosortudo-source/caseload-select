@@ -1,0 +1,83 @@
+"use client";
+import { useState, type ReactNode } from "react";
+import { AREA_ORDER, getAreaLabel, getWorkOptions, getRoleOptions, CONTACT_ROLE_IDS, GOAL_LABELS, CONCERN_LABELS, REASON_LABELS, getReasonLabel, getFeeEffortLabel, COLLECTED_FEE_LABELS, TEAM_HOURS_LABELS, PAYMENT_LABELS, CONDITION_LABELS, CAPACITY_LABELS, LIMIT_LABELS, AIM_LABELS, EVIDENCE_LABELS, LESS_LABELS, TIMING_LABELS, CONTACT_LABELS, ROUTE_LABELS } from "@/lib/desired-client/catalog";
+import { STAGE_DEFINITIONS } from "@/lib/desired-client/screens";
+import { COMMON_COPY, PRIVACY_FIELD_COPY } from "@/lib/desired-client/copy";
+import type { AreaId, DesiredClientAnswers, WriteInKey } from "@/lib/desired-client/types";
+import type { StageId } from "@/lib/desired-client/screens";
+import { ChoiceGroup } from "./ChoiceGroup";
+import { ConfirmationDialog } from "./ConfirmationDialog";
+type Change=(edit:(a:DesiredClientAnswers)=>DesiredClientAnswers)=>void;
+const entries=(record:Record<string,string>)=>Object.entries(record).map(([id,label])=>({id,label}));
+export function QuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,error,preview}:{stage:StageId;answers:DesiredClientAnswers;onEdit:Change;onBack:()=>void;onNext:()=>void;onCompare:()=>void;error:boolean;preview?:ReactNode}){
+ const [pendingArea,setPendingArea]=useState<AreaId|null>(null); const route=answers.focus.route; const area=answers.focus.area;
+ const roles=area?getRoleOptions(area):[]; const contactVisible=!!answers.situation.role&&CONTACT_ROLE_IDS.has(answers.situation.role as never);
+ const title=STAGE_DEFINITIONS[stage-1].heading;
+ const textField=(label:string,value:string,change:(v:string)=>void,help?:string)=><label className="dc-text-field"><span data-ui-copy="supporting">{label}</span><input aria-label={label} value={value} maxLength={180} onChange={e=>change(e.currentTarget.value)}/><span data-ui-copy="body">{PRIVACY_FIELD_COPY}</span>{help&&<span data-ui-copy="body">{help}</span>}</label>;
+ const WRITE_IN_GROUPS: Partial<Record<string, WriteInKey>> = {
+   "dc-timing":"timing", "dc-contact":"contact", "dc-goals":"goals", "dc-concerns":"concerns",
+   "dc-reasons":"reasons", "dc-fee-effort":"fee_effort", "dc-conditions":"conditions", "dc-capacity":"capacity", "dc-limit":"limit",
+   "dc-aim":"aim", "dc-evidence":"evidence",
+ };
+ const ownAnswer=(id:string)=>{const key=WRITE_IN_GROUPS[id];return key?answers.write_ins?.[key]?.trim()??"":"";};
+ const ownField=(id:string,question:string)=>{
+   const key=WRITE_IN_GROUPS[id]; if(!key)return null;
+   return <label className="dc-text-field" data-ui-component-content="write-in-field">
+     <span data-ui-copy="supporting">Other: write your own answer</span>
+     <input aria-label={"Other answer to: "+question} value={answers.write_ins?.[key]??""} maxLength={180}
+       onChange={event=>{const text=event.currentTarget.value;onEdit(a=>{
+         const next={...a,write_ins:{...a.write_ins,[key]:text}};
+         if(text.trim()){
+           if(key==="timing")next.situation={...next.situation,timing:null};
+           if(key==="contact")next.situation={...next.situation,contact:null};
+           if(key==="goals"&&next.client.goals.includes("unknown"))next.client={...next.client,goals:[]};
+           if(key==="concerns"&&next.client.concerns.includes("unheard"))next.client={...next.client,concerns:[]};
+           if(key==="reasons"&&next.value.reasons.includes("undecided"))next.value={...next.value,reasons:[]};
+           if(key==="fee_effort")next.value={...next.value,fee_effort:null};
+           if(key==="capacity")next.delivery={...next.delivery,capacity:null};
+           if(key==="conditions"&&next.delivery.conditions.includes("unknown"))next.delivery={...next.delivery,conditions:[]};
+           if(key==="limit")next.delivery={...next.delivery,limit:null};
+           if(key==="aim")next.direction={...next.direction,aim:null};
+           if(key==="evidence"&&next.direction.evidence.includes("preference"))next.direction={...next.direction,evidence:[]};
+         }
+         return next;
+       });}}/>
+     <span data-ui-copy="body">Keep it general. Do not include names or confidential details.</span>
+   </label>;
+ };
+ const radio=(id:string,legend:string,options:{id:string;label:string}[],value:string|null,change:(v:string)=>void,help?:string,required=true)=><>
+   <ChoiceGroup idPrefix={id} name={id} legend={legend} options={options} type="radio" value={value}
+     required={required&&!Boolean(ownAnswer(id))} hideLegend={legend===title} help={help}
+     error={error&&required&&!value&&!ownAnswer(id)?COMMON_COPY.requiredSingle:undefined}
+     onChange={v=>{change(v as string);const key=WRITE_IN_GROUPS[id];if(key&&ownAnswer(id))onEdit(a=>({...a,write_ins:{...a.write_ins,[key]:""}}));}}/>
+   {ownField(id,legend)}
+ </>;
+ const multi=(id:string,legend:string,options:{id:string;label:string}[],value:string[],change:(v:string[])=>void,maximum:number,exclusiveOptions:string[]=[],exclusiveGroups:string[][]=[],help?:string,required=true)=><>
+   <ChoiceGroup idPrefix={id} name={id} legend={legend} options={options} type="checkbox" value={value}
+     maximum={maximum} exclusiveOptions={exclusiveOptions} exclusiveGroups={exclusiveGroups}
+     required={required&&!Boolean(ownAnswer(id))} hideLegend={legend===title}
+     help={help ?? (id==="dc-goals"?"Choose one or two.":id==="dc-concerns"?"Optional. Choose up to two.":id==="dc-conditions"?"Optional. Choose up to three.":undefined)}
+     error={error&&required&&!value.length&&!ownAnswer(id)?COMMON_COPY.requiredMulti:undefined}
+     onChange={v=>{change(v as string[]);const key=WRITE_IN_GROUPS[id];if(key&&ownAnswer(id)&&(v as string[]).some(choice=>exclusiveOptions.includes(choice)))onEdit(a=>({...a,write_ins:{...a.write_ins,[key]:""}}));}}/>
+   {ownField(id,legend)}
+ </>;
+ return <section className="dc-stage" data-ui-component-content={`desired-client-stage-${stage}`}>
+  <div className="dc-stage__intro" data-ui-component-content={"desired-client-stage-intro-"+stage}>
+    <h1 tabIndex={-1} data-ui-copy="heading">{title}</h1>
+    <p data-ui-copy="body">{STAGE_DEFINITIONS[stage-1].explanation}</p>
+  </div>
+  <div className="dc-stage__layout"><div className="dc-stage__questions">
+  {stage===1&&<>
+   {radio("dc-area","What legal work do you want more of?",AREA_ORDER.map(id=>({id,label:getAreaLabel(id)})),area,(v)=>{const next=v as AreaId;if(area&&area!==next)setPendingArea(next);else onEdit(a=>({...a,focus:{...a.focus,area:next}}));},"Choose one area first. You can create another profile afterwards.")}
+   {area&&<>{radio("dc-work","Which type of work should we focus on?",getWorkOptions(area),answers.focus.work,(v)=>onEdit(a=>({...a,focus:{...a.focus,work:v as typeof a.focus.work}})))}{answers.focus.work==="other"&&textField("Describe the work in a few words",answers.focus.work_other,v=>onEdit(a=>({...a,focus:{...a.focus,work_other:v}})))}<button type="button" className="dc-button dc-button--secondary" onClick={onCompare}>Help me compare two</button>{answers.focus.work&&radio("dc-route","Where does this work sit today?",entries(ROUTE_LABELS),route,v=>onEdit(a=>({...a,focus:{...a.focus,route:v as typeof a.focus.route,certainty:a.focus.certainty??"chosen"}})))}{answers.focus.work&&route&&textField("Where can your firm offer this work?",answers.focus.service_area,v=>onEdit(a=>({...a,focus:{...a.focus,service_area:v}})),"Name the city, province or region you are set up to serve. Leave blank if this needs review.")}</>}
+  </>}
+  {stage===2&&<>{radio("dc-timing","When does this client usually seek help?",entries(TIMING_LABELS),answers.situation.timing,v=>onEdit(a=>({...a,situation:{...a.situation,timing:v as typeof a.situation.timing}})))}{area&&radio("dc-role","Who usually needs the help?",roles,answers.situation.role,v=>onEdit(a=>({...a,situation:{...a.situation,role:v as typeof a.situation.role,role_other:v==="other"?a.situation.role_other:"",contact:CONTACT_ROLE_IDS.has(v as never)?a.situation.contact:null}})))}{answers.situation.role==="other"&&textField("Describe the role in a few words",answers.situation.role_other,v=>onEdit(a=>({...a,situation:{...a.situation,role_other:v}})))}{contactVisible&&<section className="dc-optional"><h2>First contact (optional)</h2>{radio("dc-contact","Who makes the first contact?",entries(CONTACT_LABELS),answers.situation.contact,v=>onEdit(a=>({...a,situation:{...a.situation,contact:v as typeof a.situation.contact}})),undefined,false)}</section>}</>}
+  {stage===3&&<>{multi("dc-goals","What does the client most want to achieve?",entries(GOAL_LABELS),answers.client.goals,v=>onEdit(a=>({...a,client:{...a.client,goals:v as DesiredClientAnswers["client"]["goals"]}})),2,["unknown"])}<section className="dc-optional"><h2>Client concerns (optional)</h2>{multi("dc-concerns",route==="established"?"What concern have you heard from these clients?":"What might concern these clients?",entries(CONCERN_LABELS),answers.client.concerns,v=>onEdit(a=>({...a,client:{...a.client,concerns:v as DesiredClientAnswers["client"]["concerns"]}})),2,["unheard"],[],undefined,false)}{route!=="established"&&<p data-ui-copy="body">We will treat this as something to check.</p>}</section></>}  {stage===4&&<>{multi("dc-reasons","What makes this work worth pursuing?",entries(REASON_LABELS).map(o=>({...o,label:getReasonLabel(o.id as keyof typeof REASON_LABELS,route)})),answers.value.reasons,v=>onEdit(a=>({...a,value:{...a.value,reasons:v as DesiredClientAnswers["value"]["reasons"]}})),3,["undecided"],[],route==="established"?"Think of work you would gladly handle again. Choose up to three reasons. You don't need to describe an individual matter.":"Choose up to three reasons this direction appeals to you. We'll distinguish expectations from experience.")}{radio("dc-fee-effort",route==="established"?"How does the fee compare with the work involved?":"How do you expect the fee to compare with the work involved?",entries({worthwhile:getFeeEffortLabel("worthwhile",route),scoped:getFeeEffortLabel("scoped",route),difficult:getFeeEffortLabel("difficult",route),unknown:getFeeEffortLabel("unknown",route)}),answers.value.fee_effort,v=>onEdit(a=>({...a,value:{...a.value,fee_effort:v as typeof a.value.fee_effort}})))}<section className="dc-optional"><h2>Commercial detail (optional)</h2>{radio("dc-collected-fee",route==="established"?"Typical collected fee, excluding disbursements":"Fee range you are considering, excluding disbursements",entries(COLLECTED_FEE_LABELS),answers.value.collected_fee,v=>onEdit(a=>({...a,value:{...a.value,collected_fee:v as typeof a.value.collected_fee}})),undefined,false)}{radio("dc-team-hours","Typical total team time",entries(TEAM_HOURS_LABELS),answers.value.team_hours,v=>onEdit(a=>({...a,value:{...a.value,team_hours:v as typeof a.value.team_hours}})),undefined,false)}{radio("dc-payment","How predictable is payment?",entries(PAYMENT_LABELS),answers.value.payment,v=>onEdit(a=>({...a,value:{...a.value,payment:v as typeof a.value.payment}})),undefined,false)}</section></>}
+  {stage===5&&<>{multi("dc-conditions","What helps your team deliver this work well?",entries(CONDITION_LABELS),answers.delivery.conditions,v=>onEdit(a=>({...a,delivery:{...a.delivery,conditions:v as DesiredClientAnswers["delivery"]["conditions"]}})),3,["unknown"],[],undefined,false)}{radio("dc-capacity","Could the firm take on more of this work now?",entries(CAPACITY_LABELS),answers.delivery.capacity,v=>onEdit(a=>({...a,delivery:{...a.delivery,capacity:v as typeof a.delivery.capacity}})))}<section className="dc-optional"><h2>Important limit (optional)</h2>{radio("dc-limit","What makes this work hard?",entries(LIMIT_LABELS),answers.delivery.limit,v=>onEdit(a=>({...a,delivery:{...a.delivery,limit:v as typeof a.delivery.limit}})),undefined,false)}</section></>}
+  {stage===6&&<>{radio("dc-aim","What should this work help the firm become known for?",entries(AIM_LABELS),answers.direction.aim,v=>onEdit(a=>({...a,direction:{...a.direction,aim:v as typeof a.direction.aim}})))}{multi("dc-evidence","What supports this direction?",entries(EVIDENCE_LABELS),answers.direction.evidence,v=>onEdit(a=>({...a,direction:{...a.direction,evidence:v as DesiredClientAnswers["direction"]["evidence"]}})),6,["preference"],[["repeated","few"]])}<section className="dc-optional"><h2>Work to promote less (optional)</h2>{radio("dc-less","Which work should the firm promote less?",entries(LESS_LABELS),answers.direction.less,v=>onEdit(a=>({...a,direction:{...a.direction,less:v as typeof a.direction.less,less_note:v==="none"?"":a.direction.less_note}})),undefined,false)}{answers.direction.less&&answers.direction.less!=="none"&&textField("Name the work in a few words",answers.direction.less_note,v=>onEdit(a=>({...a,direction:{...a.direction,less_note:v}})))}</section></>}
+  </div>{preview&&<div className="dc-stage__preview">{preview}</div>}</div>
+  <div className="dc-actions"><button type="button" className="dc-button dc-button--secondary" onClick={onBack}>Back</button><button type="button" className="dc-button dc-button--primary" onClick={onNext}>Continue</button></div>
+  <ConfirmationDialog open={pendingArea!==null} onClose={()=>setPendingArea(null)} labelledBy="dc-area-confirm"><h2 id="dc-area-confirm" data-ui-copy="heading">Changing the practice area clears the selected work, client role and comparison. Continue?</h2><button className="dc-button dc-button--primary" onClick={()=>{const next=pendingArea;if(!next)return;setPendingArea(null);onEdit(a=>({...a,focus:{...a.focus,area:next}}));}}>Continue</button><button className="dc-button dc-button--secondary" onClick={()=>setPendingArea(null)}>Keep draft</button></ConfirmationDialog>
+
+ </section>;
+}

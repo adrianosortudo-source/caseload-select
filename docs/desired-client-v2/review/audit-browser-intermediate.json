@@ -1,0 +1,634 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config=test-results/audit-playwright.config.ts",
+      "journey.spec.ts",
+      "audit-content.spec.ts",
+      "--grep",
+      "rendered guided flow|rich review"
+    ],
+    "configFile": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-playwright.config.ts",
+    "rootDir": "D:/00_Work/01_CaseLoad_Select/05_Product/caseload-select-app-worktrees/desired-client-v2/tests/desired-client-v2",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "D:/00_Work/01_CaseLoad_Select/05_Product/caseload-select-app-worktrees/desired-client-v2/test-results/audit-browser",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "D:/00_Work/01_CaseLoad_Select/05_Product/caseload-select-app-worktrees/desired-client-v2/tests/desired-client-v2",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "audit-content.spec.ts",
+      "file": "audit-content.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "rich review and brief content at 1440px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12082,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:03:46.677Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cbf5f99219e9a0002da4-e52bd5de2cac236ecae2",
+          "file": "audit-content.spec.ts",
+          "line": 33,
+          "column": 7
+        },
+        {
+          "title": "rich review and brief content at 1024px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11933,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:04:00.490Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cbf5f99219e9a0002da4-e809f5e918273e850ac9",
+          "file": "audit-content.spec.ts",
+          "line": 33,
+          "column": 7
+        },
+        {
+          "title": "rich review and brief content at 768px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10855,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:04:12.530Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cbf5f99219e9a0002da4-224ba8a0c2b88b11ebf0",
+          "file": "audit-content.spec.ts",
+          "line": 33,
+          "column": 7
+        },
+        {
+          "title": "rich review and brief content at 640px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11283,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:04:23.419Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cbf5f99219e9a0002da4-3522cbfda2c28141c058",
+          "file": "audit-content.spec.ts",
+          "line": 33,
+          "column": 7
+        },
+        {
+          "title": "rich review and brief content at 375px",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 16088,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: The client wants to protect something important.\",\u001b[39m\n\u001b[31m+ ]\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: The client wants to protect something important.\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n    at layout (D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts:92:43)\n    at D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\audit-content.spec.ts:57:5",
+                    "location": {
+                      "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                      "column": 43,
+                      "line": 92
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mhelpers.ts:92\n\n  90 | }\n  91 | export async function layout(page: Page | Frame) {\n> 92 |   expect.soft(await layoutFailures(page)).toEqual([]);\n     |                                           ^\n  93 | }\n  94 | export async function establishedToReview(page: Page, screenshotPrefix?: string) {\n  95 |   await choose(page, 'Business & commercial');"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                        "column": 43,
+                        "line": 92
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: The client wants to protect something important.\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n   at helpers.ts:92\n\n  90 | }\n  91 | export async function layout(page: Page | Frame) {\n> 92 |   expect.soft(await layoutFailures(page)).toEqual([]);\n     |                                           ^\n  93 | }\n  94 | export async function establishedToReview(page: Page, screenshotPrefix?: string) {\n  95 |   await choose(page, 'Business & commercial');\n    at layout (D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts:92:43)\n    at D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\audit-content.spec.ts:57:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:04:34.752Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\audit-content-rich-review-and-brief-content-at-375px\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\audit-content-rich-review-and-brief-content-at-375px\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\audit-content-rich-review-and-brief-content-at-375px\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                    "column": 43,
+                    "line": 92
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "cbf5f99219e9a0002da4-d419222492cf4abf5578",
+          "file": "audit-content.spec.ts",
+          "line": 33,
+          "column": 7
+        },
+        {
+          "title": "rich review and brief content at 320px",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 13030,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Complete a planned transaction or process, Protect something important\",\u001b[39m\n\u001b[31m+ ]\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Complete a planned transaction or process, Protect something important\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n    at layout (D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts:92:43)\n    at D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\audit-content.spec.ts:50:5",
+                    "location": {
+                      "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                      "column": 43,
+                      "line": 92
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mhelpers.ts:92\n\n  90 | }\n  91 | export async function layout(page: Page | Frame) {\n> 92 |   expect.soft(await layoutFailures(page)).toEqual([]);\n     |                                           ^\n  93 | }\n  94 | export async function establishedToReview(page: Page, screenshotPrefix?: string) {\n  95 |   await choose(page, 'Business & commercial');"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                        "column": 43,
+                        "line": 92
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Complete a planned transaction or process, Protect something important\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n   at helpers.ts:92\n\n  90 | }\n  91 | export async function layout(page: Page | Frame) {\n> 92 |   expect.soft(await layoutFailures(page)).toEqual([]);\n     |                                           ^\n  93 | }\n  94 | export async function establishedToReview(page: Page, screenshotPrefix?: string) {\n  95 |   await choose(page, 'Business & commercial');\n    at layout (D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts:92:43)\n    at D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\audit-content.spec.ts:50:5"
+                    },
+                    {
+                      "location": {
+                        "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                        "column": 43,
+                        "line": 92
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: The client wants to protect something important.\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n   at helpers.ts:92\n\n  90 | }\n  91 | export async function layout(page: Page | Frame) {\n> 92 |   expect.soft(await layoutFailures(page)).toEqual([]);\n     |                                           ^\n  93 | }\n  94 | export async function establishedToReview(page: Page, screenshotPrefix?: string) {\n  95 |   await choose(page, 'Business & commercial');\n    at layout (D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts:92:43)\n    at D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\audit-content.spec.ts:57:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:05:32.113Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\audit-content-rich-review-and-brief-content-at-320px\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\audit-content-rich-review-and-brief-content-at-320px\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\audit-content-rich-review-and-brief-content-at-320px\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                    "column": 43,
+                    "line": 92
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "cbf5f99219e9a0002da4-b72b74b234d55208d654",
+          "file": "audit-content.spec.ts",
+          "line": 33,
+          "column": 7
+        }
+      ]
+    },
+    {
+      "title": "journey.spec.ts",
+      "file": "journey.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "rendered guided flow at 1440px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 18413,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:06:00.270Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-69cee9d43c5df278ddda",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        },
+        {
+          "title": "rendered guided flow at 1024px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 21426,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:06:20.308Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-dd37ab0d165bbd3eb6c4",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        },
+        {
+          "title": "rendered guided flow at 768px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 22030,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:06:41.766Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-8efa4951fa467b610037",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        },
+        {
+          "title": "rendered guided flow at 640px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 27871,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:07:03.833Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-ddba06a9e05c8c547f2d",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        },
+        {
+          "title": "rendered guided flow at 375px",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 12705,
+                  "error": {
+                    "message": "Error: UNKNOWN: unknown error, open 'D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\docs\\desired-client-v2\\review\\375-focus.png'",
+                    "stack": "Error: UNKNOWN: unknown error, open 'D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\docs\\desired-client-v2\\review\\375-focus.png'\n    at capture (D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts:21:3)\n    at D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\journey.spec.ts:93:5",
+                    "location": {
+                      "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                      "column": 3,
+                      "line": 21
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mhelpers.ts:21\n\n  19 |   await settled(page);\n  20 |   await fs.mkdir(EVIDENCE, { recursive: true });\n> 21 |   await page.screenshot({ path: path.join(EVIDENCE, name + '.png'), fullPage: true });\n     |   ^\n  22 | }\n  23 | export async function layoutFailures(page: Page | Frame) {\n  24 |   await settled(page);"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                        "column": 3,
+                        "line": 21
+                      },
+                      "message": "Error: UNKNOWN: unknown error, open 'D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\docs\\desired-client-v2\\review\\375-focus.png'\n\n   at helpers.ts:21\n\n  19 |   await settled(page);\n  20 |   await fs.mkdir(EVIDENCE, { recursive: true });\n> 21 |   await page.screenshot({ path: path.join(EVIDENCE, name + '.png'), fullPage: true });\n     |   ^\n  22 | }\n  23 | export async function layoutFailures(page: Page | Frame) {\n  24 |   await settled(page);\n    at capture (D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts:21:3)\n    at D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\journey.spec.ts:93:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:07:31.741Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\journey-rendered-guided-flow-at-375px\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\journey-rendered-guided-flow-at-375px\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\journey-rendered-guided-flow-at-375px\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                    "column": 3,
+                    "line": 21
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-e396212d71238f407ef0",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        },
+        {
+          "title": "rendered guided flow at 320px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 3,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 17468,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T21:08:22.164Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-d400555296fc0143847e",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-25T21:03:43.452Z",
+    "duration": 302596.64400000003,
+    "expected": 9,
+    "skipped": 0,
+    "unexpected": 3,
+    "flaky": 0
+  }
+}

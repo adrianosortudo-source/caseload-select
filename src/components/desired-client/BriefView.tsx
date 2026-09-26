@@ -1,0 +1,56 @@
+"use client";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { BRIEF_COPY, COMMON_COPY, STORAGE_COPY, REVIEW_COPY, WELCOME_COPY } from "@/lib/desired-client/copy";
+import { getDismissedClarificationText } from "@/lib/desired-client/brief";
+import { formatBriefText, createMarkdownDownload, briefSections, getServiceAreaNote, getFirstContactNote } from "@/lib/desired-client/export";
+import { getWriteInAnswers } from "@/lib/desired-client/write_ins";
+import { getSourceDetails, STATEMENT_KIND_LABELS } from "@/lib/desired-client/sources";
+import { ConfirmationDialog } from "./ConfirmationDialog";
+import type { ClarificationCode, DesiredClientAnswers, SavedBrief } from "@/lib/desired-client/types";
+const FEE_FACT_PREFIX = "Fee compared with effort: ";
+export function BriefView({ saved,answers,dismissedCode,error,requestCount,retryAllowed,reviewed,onReview,onEdit,onRetry,onUseAi,onAnother,onClear,storageWarning }: { saved:SavedBrief;answers:DesiredClientAnswers;dismissedCode:ClarificationCode|null;error:""|"unavailable"|"invalid"|"changed";requestCount:number;retryAllowed:boolean;reviewed:boolean;onReview:(v:boolean)=>void;onEdit:()=>void;onRetry:()=>void;onUseAi:()=>void;onAnother:()=>void;onClear:()=>void;storageWarning:boolean }) {
+  const [copied,setCopied]=useState(false),[copyFailed,setCopyFailed]=useState(false),[confirm,setConfirm]=useState<"another"|"clear"|null>(null),[showAiConsent,setShowAiConsent]=useState(false);
+  const fallback=useRef<HTMLTextAreaElement>(null);
+  const notes=useMemo(()=>dismissedCode?[getDismissedClarificationText(dismissedCode)]:[],[dismissedCode]);
+  const exportText=formatBriefText(saved,answers,new Date(saved.generatedAt),notes);
+  const aiSections: ReturnType<typeof briefSections> = [
+    { heading: "Why this work fits", statements: [
+      ...saved.brief.firm_reasons.slice(0, 1),
+      ...saved.brief.delivery_conditions.filter(item => item.source_answer_ids.some(path => path === "delivery.capacity" || path === "value.fee_effort" || path === "write_ins.capacity" || path === "write_ins.fee_effort")).slice(0, 2),
+    ] },
+    { heading: "What to validate", statements: [...saved.brief.evidence.slice(0, 1), ...saved.brief.open_questions] },
+    { heading: "Where marketing can start", statements: [saved.brief.marketing.topic, saved.brief.marketing.validation_step] },
+    ...(saved.brief.work_to_promote_less.length ? [{ heading: "Work to promote less", statements: saved.brief.work_to_promote_less }] : []),
+  ];
+  const displaySections = saved.mode === "ai" ? aiSections : briefSections(saved.brief).slice(1);
+  useEffect(()=>{if(copyFailed&&fallback.current){fallback.current.focus();fallback.current.select();}},[copyFailed]);
+  async function copy(){setCopied(false);setCopyFailed(false);try{await navigator.clipboard.writeText(exportText);setCopied(true);}catch{setCopyFailed(true);}}
+  function download(){const file=createMarkdownDownload(saved,answers,new Date(),notes);const blob=new Blob([file.content],{type:file.mimeType});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=file.filename;a.click();URL.revokeObjectURL(url);}
+  return <article className="dc-brief" data-ui-component-content="desired-client-brief">
+    <header className="dc-brief__header"><h1 data-ui-copy="heading">{saved.mode==="ai"?BRIEF_COPY.profileTitle:BRIEF_COPY.summaryTitle}</h1><p data-ui-copy="supporting">{saved.wordingReviewed?BRIEF_COPY.reviewedExport:BRIEF_COPY.unreviewedExport}</p><p data-ui-copy="supporting">{saved.mode==="ai"?BRIEF_COPY.preparedAI:BRIEF_COPY.preparedStructured}</p></header>
+    {storageWarning&&<p className="dc-alert" data-ui-copy="supporting">This browser could not save your progress. You can still finish and download your brief.</p>}
+    {error==="unavailable"&&<div className="dc-alert" data-ui-component-content="desired-client-ai-status"><p data-ui-copy="supporting">AI assistance is unavailable. Your structured brief is ready.</p>{retryAllowed&&requestCount<3&&<button className="dc-button dc-button--secondary" onClick={onRetry}>Try AI again</button>}</div>}
+    {error==="invalid"&&<p className="dc-alert" data-ui-copy="supporting">AI assistance could not prepare a valid brief. Your structured brief is ready.</p>}
+    {error==="changed"&&<p className="dc-alert" data-ui-copy="supporting">{COMMON_COPY.briefChanged}</p>}
+    <section className="dc-profile" data-ui-component-content="desired-client-profile">
+      <h2 data-ui-copy="heading">{saved.mode==="ai"?"The client and matter to pursue":"The pattern you selected"}</h2>
+      <p className="dc-profile__definition" data-ui-copy="body" data-ui-copy-exception={saved.brief.definition.source_answer_ids.some(path=>path.startsWith("write_ins.")) ? "Verbatim user answer with variable line breaks" : undefined}>{saved.brief.definition.text}</p>
+      <p className="dc-profile__status" data-ui-copy="supporting">{saved.mode==="ai"?"AI-generated profile.":"This summarizes your selections. It has not interpreted them with AI."}</p>
+    </section>
+    {getServiceAreaNote(saved.brief,answers)&&<p className="dc-factual-note" data-ui-component-content="brief-service-area-note" data-ui-copy="supporting">{getServiceAreaNote(saved.brief,answers)}</p>}
+    {getFirstContactNote(answers)&&<p className="dc-factual-note" data-ui-component-content="brief-first-contact-note" data-ui-copy="supporting">{getFirstContactNote(answers)}</p>}
+    {saved.mode==="structured"&&<div className="dc-profile__next" data-ui-component-content="desired-client-profile-next">
+      <p data-ui-copy="body">For a synthesized desired-client profile, ask AI to interpret how the client situation, firm fit, economics and delivery capacity work together.</p>
+      <button type="button" className="dc-button dc-button--primary" onClick={()=>setShowAiConsent(value=>!value)}>Create an AI profile</button>
+      {showAiConsent&&<div className="dc-consent" data-ui-component-content="desired-client-ai-consent"><p data-ui-copy="body">{WELCOME_COPY.aiDisclosure}</p><button type="button" className="dc-button dc-button--secondary" onClick={onUseAi}>Agree and create AI profile</button></div>}
+    </div>}
+    {displaySections.map(section=><section className="dc-brief__section" key={section.heading} data-ui-component-content={`brief-section-${section.heading}`}><h2 data-ui-copy="heading">{section.heading}</h2>{section.heading==="Still to check"&&!section.statements.length&&!notes.length&&<p data-ui-copy="body">No unresolved core question was identified from these answers. This profile still needs to be tested against actual work and client feedback.</p>}{section.statements.map((statement,index)=><div className="dc-statement" key={`${section.heading}-${index}`} data-ui-component-content="brief-statement">{statement.text.startsWith(FEE_FACT_PREFIX)?<dl className="dc-fact-row" data-ui-component-content="brief-fee-fact"><dt data-ui-copy="supporting">Fee compared with effort</dt><dd data-ui-copy="body">{statement.text.slice(FEE_FACT_PREFIX.length)}</dd></dl>:<p data-ui-copy="body" data-ui-copy-exception={saved.mode==="ai" ? "AI-generated wording with variable line breaks" : statement.source_answer_ids.some(path=>path.startsWith("write_ins.")) ? "Verbatim user answer with variable line breaks" : undefined}>{statement.text}</p>}{saved.mode!=="ai"&&<><span className="dc-kind" data-ui-copy="supporting">{STATEMENT_KIND_LABELS[statement.kind]}</span><details><summary data-ui-copy="supporting">{BRIEF_COPY.why}</summary><ul data-ui-component-content="brief-source-list">{statement.source_answer_ids.map(path=>{const source=getSourceDetails(path,answers);return <li key={path} data-ui-copy="supporting"><span>{source.question}</span>{source.answer!==null&&<span>: {source.answer}</span>}</li>;})}</ul></details></>}</div>)}{section.heading==="Still to check"&&notes.filter(note=>!saved.brief.open_questions.some(item=>item.text.trim().replace(/\s+/g," ").toLowerCase()===note.trim().replace(/\s+/g," ").toLowerCase())).map(note=><p className="dc-presentation-note" data-ui-copy="body" key={note}>Still open: {note}</p>)}</section>)}
+    {saved.mode==="ai"&&<p className="dc-profile__export-note" data-ui-copy="supporting">Copy or download the full brief for the supporting detail and source answers.</p>}
+    {getWriteInAnswers(answers).length>0&&<section className="dc-brief__section" data-ui-component-content="brief-write-ins"><h2 data-ui-copy="heading">Your own answers</h2>{getWriteInAnswers(answers).map(({key,label,text})=><dl className="dc-fact-row" data-ui-component-content="brief-write-in" key={key}><dt data-ui-copy="supporting">{label}</dt><dd data-ui-copy="body" data-ui-copy-exception="Verbatim user answer with variable line breaks">{text}</dd></dl>)}</section>}
+    <p className="dc-created" data-ui-copy="supporting">Created {new Date(saved.generatedAt).toLocaleDateString()}</p><p className="dc-footnote" data-ui-copy="body">{REVIEW_COPY.draftFooter}</p>
+    <label className="dc-reviewed"><input type="checkbox" checked={reviewed} onChange={e=>onReview(e.currentTarget.checked)}/><span data-ui-copy="supporting">{BRIEF_COPY.reviewed}</span></label>
+    {copied&&<p role="status" data-ui-copy="supporting">{BRIEF_COPY.copied}</p>}{copyFailed&&<><p role="status" data-ui-copy="supporting">{BRIEF_COPY.copyFailure}</p><textarea ref={fallback} aria-label={BRIEF_COPY.selectAndCopy} readOnly value={exportText}/></>}
+    <div className="dc-actions dc-brief__actions"><button className="dc-button dc-button--secondary" onClick={onEdit}>{BRIEF_COPY.editAnswers}</button><button className="dc-button dc-button--secondary" onClick={copy}>{BRIEF_COPY.copy}</button><button className="dc-button dc-button--secondary" onClick={download}>{BRIEF_COPY.download}</button><button className="dc-button dc-button--secondary" onClick={()=>window.print()}>{BRIEF_COPY.print}</button><button className="dc-button dc-button--secondary" onClick={()=>setConfirm("another")}>{BRIEF_COPY.another}</button><button className="dc-button dc-button--secondary" onClick={()=>setConfirm("clear")}>{BRIEF_COPY.clear}</button></div>
+    {confirm&&<ConfirmationDialog open={true} onClose={()=>setConfirm(null)} labelledBy="dc-confirm-title"><h2 id="dc-confirm-title" data-ui-copy="heading">{confirm==="another"?"Replace the draft saved in this browser?":"Clear the draft and brief saved in this browser?"}</h2>{confirm==="another"&&<p data-ui-copy="body">{STORAGE_COPY.downloadBeforeReplace}</p>}<button className="dc-button dc-button--primary" onClick={()=>{if(confirm==="another"){onAnother();setConfirm(null);}else{onClear();setConfirm(null);}}}>{confirm==="another"?"Replace draft":"Clear draft"}</button><button className="dc-button dc-button--secondary" onClick={()=>setConfirm(null)}>Keep draft</button></ConfirmationDialog>}
+  </article>;
+}

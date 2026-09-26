@@ -1,0 +1,60 @@
+{
+  "release": {
+    "production_config_changed": false,
+    "merged": false
+  },
+  "date": "2026-09-25",
+  "typecheck": {
+    "passed": false,
+    "baseline_and_head_blob": "abfd182394505b964fa5154dbb7261b5e44f55a7",
+    "inherited_source": "src/app/api/cron/notification-batch/route.ts",
+    "errors": 1,
+    "desired_client_errors_reported": 0
+  },
+  "lint": {
+    "warnings": 5,
+    "errors": 0
+  },
+  "unit": {
+    "passed": 96,
+    "files": 10,
+    "final_goal_rerun_passed": 27,
+    "final_goal_rerun_files": 3
+  },
+  "prior_head": "1785eb1240215301c070dea0ac217f9b9579d2d3",
+  "real_gemini": {
+    "passed": 5,
+    "full_live_browser_redis_path_tested": false,
+    "duration_ms": [
+      6228,
+      6900,
+      5882,
+      5867,
+      5475
+    ],
+    "kind": "actual adapter and strict validator; fictional data"
+  },
+  "preview": {
+    "live_ai_enabled": false,
+    "url": "http://localhost:3300/tools/desired-client-matter.html",
+    "fictional_draft_cleared": true
+  },
+  "browser": {
+    "distinct_scenarios_with_passing_coverage": 34,
+    "one_final_full_suite_run": false,
+    "initial_passed": 26,
+    "intermediate_total": 12,
+    "final_total": 8,
+    "intermediate_passed": 9,
+    "widths": [
+      1440,
+      1024,
+      768,
+      640,
+      375,
+      320
+    ],
+    "initial_total": 28,
+    "final_passed": 8
+  }
+}

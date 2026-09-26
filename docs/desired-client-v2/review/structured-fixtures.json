@@ -1,0 +1,1391 @@
+[
+  {
+    "id": "P01",
+    "answers": {
+      "schema_version": "dcm-v2.1",
+      "revision": 1,
+      "focus": {
+        "area": "business",
+        "work": "business_agreements",
+        "work_other": "",
+        "service_area": "Ontario",
+        "certainty": "chosen",
+        "route": "established",
+        "comparison": null
+      },
+      "situation": {
+        "timing": "planning",
+        "role": "business_organization",
+        "role_other": "",
+        "contact": null
+      },
+      "client": {
+        "goals": [
+          "complete"
+        ],
+        "concerns": [
+          "cost",
+          "next"
+        ]
+      },
+      "value": {
+        "reasons": [
+          "client_benefit",
+          "fees",
+          "skills"
+        ],
+        "fee_effort": "worthwhile",
+        "collected_fee": null,
+        "team_hours": null,
+        "payment": null
+      },
+      "delivery": {
+        "conditions": [
+          "scope",
+          "information"
+        ],
+        "capacity": "room",
+        "limit": null
+      },
+      "direction": {
+        "aim": "more_current",
+        "evidence": [
+          "repeated",
+          "records"
+        ],
+        "less": null,
+        "less_note": ""
+      },
+      "clarifications": {
+        "FOCUS_UNCLEAR": null,
+        "CURRENT_CAPACITY_CONFLICT": null,
+        "FEE_EFFORT_CONFLICT": null,
+        "EXPERIENCE_DIRECTION_CONFLICT": null,
+        "CLIENT_GOAL_UNCLEAR": null
+      }
+    },
+    "brief": {
+      "definition": {
+        "text": "The firm wants to explore Commercial agreement drafting and review for Business or organization. Clients usually seek help before a planned decision or change. This is work the firm already handles. Service area supplied: Ontario.",
+        "kind": "preference",
+        "source_answer_ids": [
+          "focus.work",
+          "situation.role",
+          "situation.timing",
+          "focus.route",
+          "focus.service_area"
+        ]
+      },
+      "client_goals": [
+        {
+          "text": "Complete a planned transaction or process",
+          "kind": "preference",
+          "source_answer_ids": [
+            "client.goals"
+          ]
+        },
+        {
+          "text": "Concerns to understand: I'm worried about the cost, I don't know what happens next.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "client.concerns"
+          ]
+        }
+      ],
+      "firm_reasons": [
+        {
+          "text": "It lets us make a useful difference for the client",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        },
+        {
+          "text": "The fee usually supports the effort",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        },
+        {
+          "text": "It uses work we do well",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        }
+      ],
+      "delivery_conditions": [
+        {
+          "text": "The team identified these conditions: A clearly agreed scope, Access to the information we need.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "delivery.conditions"
+          ]
+        },
+        {
+          "text": "Capacity: Yes, with the current team.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "delivery.capacity"
+          ]
+        },
+        {
+          "text": "Fee compared with effort: Usually worthwhile.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.fee_effort"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "text": "You identified: Several matters we have handled, Fee and time records.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "direction.evidence"
+          ]
+        },
+        {
+          "text": "Direction sought: More of the work we already handle well.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "direction.aim"
+          ]
+        }
+      ],
+      "open_questions": [],
+      "marketing": {
+        "topic": {
+          "text": "A plain-language explanation of Commercial agreement drafting and review: when a client might seek help and what they can prepare.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.work",
+            "focus.area",
+            "focus.route"
+          ]
+        },
+        "inquiry_question": {
+          "text": "What are you hoping to achieve, and what stage has the matter reached?",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "client.goals",
+            "situation.timing",
+            "focus.work"
+          ]
+        },
+        "validation_step": {
+          "text": "Review five recent examples of this work. Compare the time involved, collected fees, client feedback and delivery demands with this profile.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.route",
+            "direction.evidence",
+            "value.fee_effort",
+            "delivery.conditions",
+            "delivery.capacity"
+          ]
+        }
+      },
+      "work_to_promote_less": []
+    }
+  },
+  {
+    "id": "P02",
+    "answers": {
+      "schema_version": "dcm-v2.1",
+      "revision": 1,
+      "focus": {
+        "area": "business",
+        "work": "business_acquisitions",
+        "work_other": "",
+        "service_area": "Ontario",
+        "certainty": "chosen",
+        "route": "new",
+        "comparison": null
+      },
+      "situation": {
+        "timing": "planning",
+        "role": "business_organization",
+        "role_other": "",
+        "contact": null
+      },
+      "client": {
+        "goals": [
+          "complete"
+        ],
+        "concerns": [
+          "time"
+        ]
+      },
+      "value": {
+        "reasons": [
+          "client_benefit",
+          "direction"
+        ],
+        "fee_effort": "unknown",
+        "collected_fee": null,
+        "team_hours": null,
+        "payment": null
+      },
+      "delivery": {
+        "conditions": [
+          "scope",
+          "information"
+        ],
+        "capacity": "change",
+        "limit": null
+      },
+      "direction": {
+        "aim": "new_area",
+        "evidence": [
+          "preference"
+        ],
+        "less": null,
+        "less_note": ""
+      },
+      "clarifications": {
+        "FOCUS_UNCLEAR": null,
+        "CURRENT_CAPACITY_CONFLICT": null,
+        "FEE_EFFORT_CONFLICT": null,
+        "EXPERIENCE_DIRECTION_CONFLICT": null,
+        "CLIENT_GOAL_UNCLEAR": null
+      }
+    },
+    "brief": {
+      "definition": {
+        "text": "The firm wants to explore Buying or selling a business for Business or organization. Clients usually seek help before a planned decision or change. This is a direction the firm is building toward. Service area supplied: Ontario.",
+        "kind": "hypothesis",
+        "source_answer_ids": [
+          "focus.work",
+          "situation.role",
+          "situation.timing",
+          "focus.route",
+          "focus.service_area"
+        ]
+      },
+      "client_goals": [
+        {
+          "text": "Complete a planned transaction or process",
+          "kind": "preference",
+          "source_answer_ids": [
+            "client.goals"
+          ]
+        },
+        {
+          "text": "Concerns to understand: I need to know how long this could take. These concerns are assumptions to check.",
+          "kind": "hypothesis",
+          "source_answer_ids": [
+            "client.concerns"
+          ]
+        }
+      ],
+      "firm_reasons": [
+        {
+          "text": "It lets us make a useful difference for the client",
+          "kind": "preference",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        },
+        {
+          "text": "It supports the practice we want to build",
+          "kind": "preference",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        }
+      ],
+      "delivery_conditions": [
+        {
+          "text": "The team identified these conditions: A clearly agreed scope, Access to the information we need.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "delivery.conditions"
+          ]
+        },
+        {
+          "text": "Capacity: Only after we change capacity or support.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "delivery.capacity"
+          ]
+        },
+        {
+          "text": "Expected fee compared with effort: We haven't established this yet.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "value.fee_effort"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "text": "This definition is based mainly on your preferences at this stage.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "direction.evidence"
+          ]
+        },
+        {
+          "text": "Direction sought: A new area we are developing.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "direction.aim"
+          ]
+        }
+      ],
+      "open_questions": [
+        {
+          "text": "Establish the capacity or support needed before increasing demand.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "delivery.capacity",
+            "focus.route",
+            "direction.aim"
+          ]
+        },
+        {
+          "text": "Test this preference against relevant client and delivery evidence.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "direction.evidence"
+          ]
+        },
+        {
+          "text": "Establish whether the economics support this work.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "value.fee_effort"
+          ]
+        }
+      ],
+      "marketing": {
+        "topic": {
+          "text": "A plain-language explanation of Buying or selling a business: when a client might seek help and what they can prepare.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.work",
+            "focus.area",
+            "focus.route"
+          ]
+        },
+        "inquiry_question": {
+          "text": "What are you hoping to achieve, and what stage has the matter reached?",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "client.goals",
+            "situation.timing",
+            "focus.work"
+          ]
+        },
+        "validation_step": {
+          "text": "Ask two people with relevant client or practice experience to review this direction. Check the expected client need, delivery requirements and commercial assumptions.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.route",
+            "direction.evidence",
+            "delivery.conditions",
+            "delivery.capacity"
+          ]
+        }
+      },
+      "work_to_promote_less": []
+    }
+  },
+  {
+    "id": "P03",
+    "answers": {
+      "schema_version": "dcm-v2.1",
+      "revision": 1,
+      "focus": {
+        "area": "business",
+        "work": "business_agreements",
+        "work_other": "",
+        "service_area": "Ontario",
+        "certainty": "chosen",
+        "route": "established",
+        "comparison": null
+      },
+      "situation": {
+        "timing": "planning",
+        "role": "business_organization",
+        "role_other": "",
+        "contact": null
+      },
+      "client": {
+        "goals": [
+          "complete"
+        ],
+        "concerns": [
+          "cost",
+          "next"
+        ]
+      },
+      "value": {
+        "reasons": [
+          "client_benefit",
+          "fees",
+          "skills"
+        ],
+        "fee_effort": "difficult",
+        "collected_fee": null,
+        "team_hours": null,
+        "payment": null
+      },
+      "delivery": {
+        "conditions": [
+          "scope",
+          "information"
+        ],
+        "capacity": "room",
+        "limit": null
+      },
+      "direction": {
+        "aim": "more_current",
+        "evidence": [
+          "repeated",
+          "records"
+        ],
+        "less": null,
+        "less_note": ""
+      },
+      "clarifications": {
+        "FOCUS_UNCLEAR": null,
+        "CURRENT_CAPACITY_CONFLICT": null,
+        "FEE_EFFORT_CONFLICT": null,
+        "EXPERIENCE_DIRECTION_CONFLICT": null,
+        "CLIENT_GOAL_UNCLEAR": null
+      }
+    },
+    "brief": {
+      "definition": {
+        "text": "The firm wants to explore Commercial agreement drafting and review for Business or organization. Clients usually seek help before a planned decision or change. This is work the firm already handles. Service area supplied: Ontario.",
+        "kind": "preference",
+        "source_answer_ids": [
+          "focus.work",
+          "situation.role",
+          "situation.timing",
+          "focus.route",
+          "focus.service_area"
+        ]
+      },
+      "client_goals": [
+        {
+          "text": "Complete a planned transaction or process",
+          "kind": "preference",
+          "source_answer_ids": [
+            "client.goals"
+          ]
+        },
+        {
+          "text": "Concerns to understand: I'm worried about the cost, I don't know what happens next.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "client.concerns"
+          ]
+        }
+      ],
+      "firm_reasons": [
+        {
+          "text": "It lets us make a useful difference for the client",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        },
+        {
+          "text": "The fee usually supports the effort",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        },
+        {
+          "text": "It uses work we do well",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        }
+      ],
+      "delivery_conditions": [
+        {
+          "text": "The team identified these conditions: A clearly agreed scope, Access to the information we need.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "delivery.conditions"
+          ]
+        },
+        {
+          "text": "Capacity: Yes, with the current team.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "delivery.capacity"
+          ]
+        },
+        {
+          "text": "Fee compared with effort: Often more effort than the fee supports.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.fee_effort"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "text": "You identified: Several matters we have handled, Fee and time records.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "direction.evidence"
+          ]
+        },
+        {
+          "text": "Direction sought: More of the work we already handle well.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "direction.aim"
+          ]
+        }
+      ],
+      "open_questions": [
+        {
+          "text": "Check whether the fee can support the effort required.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "value.fee_effort",
+            "value.reasons"
+          ]
+        }
+      ],
+      "marketing": {
+        "topic": {
+          "text": "A plain-language explanation of Commercial agreement drafting and review: when a client might seek help and what they can prepare.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.work",
+            "focus.area",
+            "focus.route"
+          ]
+        },
+        "inquiry_question": {
+          "text": "What are you hoping to achieve, and what stage has the matter reached?",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "client.goals",
+            "situation.timing",
+            "focus.work"
+          ]
+        },
+        "validation_step": {
+          "text": "Review five recent examples of this work. Compare the time involved, collected fees, client feedback and delivery demands with this profile.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.route",
+            "direction.evidence",
+            "value.fee_effort",
+            "delivery.conditions",
+            "delivery.capacity"
+          ]
+        }
+      },
+      "work_to_promote_less": []
+    }
+  },
+  {
+    "id": "P04",
+    "answers": {
+      "schema_version": "dcm-v2.1",
+      "revision": 1,
+      "focus": {
+        "area": "other",
+        "work": "other",
+        "work_other": "",
+        "service_area": "",
+        "certainty": "chosen",
+        "route": "exploring",
+        "comparison": null
+      },
+      "situation": {
+        "timing": "planning",
+        "role": "unknown",
+        "role_other": "",
+        "contact": null
+      },
+      "client": {
+        "goals": [
+          "unknown"
+        ],
+        "concerns": []
+      },
+      "value": {
+        "reasons": [
+          "undecided"
+        ],
+        "fee_effort": "unknown",
+        "collected_fee": null,
+        "team_hours": null,
+        "payment": null
+      },
+      "delivery": {
+        "conditions": [],
+        "capacity": "unknown",
+        "limit": null
+      },
+      "direction": {
+        "aim": "unknown",
+        "evidence": [
+          "preference"
+        ],
+        "less": null,
+        "less_note": ""
+      },
+      "clarifications": {
+        "FOCUS_UNCLEAR": null,
+        "CURRENT_CAPACITY_CONFLICT": null,
+        "FEE_EFFORT_CONFLICT": null,
+        "EXPERIENCE_DIRECTION_CONFLICT": null,
+        "CLIENT_GOAL_UNCLEAR": null
+      }
+    },
+    "brief": {
+      "definition": {
+        "text": "The firm wants to explore a type of work still to be specified for a client role still to be established. Clients usually seek help before a planned decision or change. This is a direction the firm is considering.",
+        "kind": "unknown",
+        "source_answer_ids": [
+          "focus.work",
+          "situation.role",
+          "situation.timing",
+          "focus.route"
+        ]
+      },
+      "client_goals": [
+        {
+          "text": "The client's main goal is still to be established.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "client.goals"
+          ]
+        }
+      ],
+      "firm_reasons": [
+        {
+          "text": "The reasons for pursuing this work are still to be established.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        }
+      ],
+      "delivery_conditions": [
+        {
+          "text": "No specific delivery conditions have been supplied.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "delivery.conditions"
+          ]
+        },
+        {
+          "text": "Capacity: We need to establish that.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "delivery.capacity"
+          ]
+        },
+        {
+          "text": "Expected fee compared with effort: We haven't established this yet.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "value.fee_effort"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "text": "This definition is based mainly on your preferences at this stage.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "direction.evidence"
+          ]
+        },
+        {
+          "text": "Direction sought: We're still choosing a direction.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "direction.aim"
+          ]
+        }
+      ],
+      "open_questions": [
+        {
+          "text": "Specify the type of work this profile should focus on.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "focus.work",
+            "focus.work_other"
+          ]
+        },
+        {
+          "text": "Establish the client's main desired result.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "client.goals"
+          ]
+        },
+        {
+          "text": "Establish how much of this work the firm can support.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "delivery.capacity"
+          ]
+        }
+      ],
+      "marketing": {
+        "topic": {
+          "text": "A plain-language explanation of type of work still to be specified: when a client might seek help and what they can prepare.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.work",
+            "focus.area",
+            "focus.route"
+          ]
+        },
+        "inquiry_question": {
+          "text": "What are you hoping to achieve, and what stage has the matter reached?",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "situation.timing",
+            "focus.work"
+          ]
+        },
+        "validation_step": {
+          "text": "Ask two people with relevant client or practice experience to review this direction. Check the expected client need, delivery requirements and commercial assumptions.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.route",
+            "direction.evidence"
+          ]
+        }
+      },
+      "work_to_promote_less": []
+    }
+  },
+  {
+    "id": "P05",
+    "answers": {
+      "schema_version": "dcm-v2.1",
+      "revision": 1,
+      "focus": {
+        "area": "business",
+        "work": "business_agreements",
+        "work_other": "",
+        "service_area": "Ontario",
+        "certainty": "chosen",
+        "route": "established",
+        "comparison": null
+      },
+      "situation": {
+        "timing": "planning",
+        "role": "business_organization",
+        "role_other": "",
+        "contact": null
+      },
+      "client": {
+        "goals": [
+          "complete"
+        ],
+        "concerns": [
+          "cost",
+          "next"
+        ]
+      },
+      "value": {
+        "reasons": [
+          "client_benefit",
+          "fees",
+          "skills"
+        ],
+        "fee_effort": "worthwhile",
+        "collected_fee": null,
+        "team_hours": null,
+        "payment": null
+      },
+      "delivery": {
+        "conditions": [
+          "communication",
+          "scope"
+        ],
+        "capacity": "room",
+        "limit": "communication"
+      },
+      "direction": {
+        "aim": "more_current",
+        "evidence": [
+          "repeated",
+          "records"
+        ],
+        "less": null,
+        "less_note": ""
+      },
+      "clarifications": {
+        "FOCUS_UNCLEAR": null,
+        "CURRENT_CAPACITY_CONFLICT": null,
+        "FEE_EFFORT_CONFLICT": null,
+        "EXPERIENCE_DIRECTION_CONFLICT": null,
+        "CLIENT_GOAL_UNCLEAR": null
+      }
+    },
+    "brief": {
+      "definition": {
+        "text": "The firm wants to explore Commercial agreement drafting and review for Business or organization. Clients usually seek help before a planned decision or change. This is work the firm already handles. Service area supplied: Ontario.",
+        "kind": "preference",
+        "source_answer_ids": [
+          "focus.work",
+          "situation.role",
+          "situation.timing",
+          "focus.route",
+          "focus.service_area"
+        ]
+      },
+      "client_goals": [
+        {
+          "text": "Complete a planned transaction or process",
+          "kind": "preference",
+          "source_answer_ids": [
+            "client.goals"
+          ]
+        },
+        {
+          "text": "Concerns to understand: I'm worried about the cost, I don't know what happens next.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "client.concerns"
+          ]
+        }
+      ],
+      "firm_reasons": [
+        {
+          "text": "It lets us make a useful difference for the client",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        },
+        {
+          "text": "The fee usually supports the effort",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        },
+        {
+          "text": "It uses work we do well",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        }
+      ],
+      "delivery_conditions": [
+        {
+          "text": "The team identified these conditions: A workable communication schedule, A clearly agreed scope. Important limit: The communication demands exceed our service model.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "delivery.conditions",
+            "delivery.limit"
+          ]
+        },
+        {
+          "text": "Capacity: Yes, with the current team.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "delivery.capacity"
+          ]
+        },
+        {
+          "text": "Fee compared with effort: Usually worthwhile.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.fee_effort"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "text": "You identified: Several matters we have handled, Fee and time records.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "direction.evidence"
+          ]
+        },
+        {
+          "text": "Direction sought: More of the work we already handle well.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "direction.aim"
+          ]
+        }
+      ],
+      "open_questions": [],
+      "marketing": {
+        "topic": {
+          "text": "A plain-language explanation of Commercial agreement drafting and review: when a client might seek help and what they can prepare.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.work",
+            "focus.area",
+            "focus.route"
+          ]
+        },
+        "inquiry_question": {
+          "text": "What are you hoping to achieve, and what stage has the matter reached?",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "client.goals",
+            "situation.timing",
+            "focus.work"
+          ]
+        },
+        "validation_step": {
+          "text": "Review five recent examples of this work. Compare the time involved, collected fees, client feedback and delivery demands with this profile.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.route",
+            "direction.evidence",
+            "value.fee_effort",
+            "delivery.conditions",
+            "delivery.capacity"
+          ]
+        }
+      },
+      "work_to_promote_less": []
+    }
+  },
+  {
+    "id": "P08",
+    "answers": {
+      "schema_version": "dcm-v2.1",
+      "revision": 1,
+      "focus": {
+        "area": "business",
+        "work": "business_acquisitions",
+        "work_other": "",
+        "service_area": "Ontario",
+        "certainty": "provisional",
+        "route": "new",
+        "comparison": {
+          "a": {
+            "work": "business_agreements",
+            "fee_effort": "worthwhile",
+            "team_fit": "proven",
+            "capacity": "room",
+            "evidence": "repeated"
+          },
+          "b": {
+            "work": "business_acquisitions",
+            "fee_effort": "unknown",
+            "team_fit": "stretch",
+            "capacity": "change",
+            "evidence": "none"
+          },
+          "selected": "b"
+        }
+      },
+      "situation": {
+        "timing": "planning",
+        "role": "business_organization",
+        "role_other": "",
+        "contact": null
+      },
+      "client": {
+        "goals": [
+          "complete"
+        ],
+        "concerns": [
+          "cost",
+          "next"
+        ]
+      },
+      "value": {
+        "reasons": [
+          "client_benefit",
+          "fees",
+          "skills"
+        ],
+        "fee_effort": "unknown",
+        "collected_fee": null,
+        "team_hours": null,
+        "payment": null
+      },
+      "delivery": {
+        "conditions": [
+          "scope",
+          "information"
+        ],
+        "capacity": "change",
+        "limit": null
+      },
+      "direction": {
+        "aim": "new_area",
+        "evidence": [
+          "preference"
+        ],
+        "less": null,
+        "less_note": ""
+      },
+      "clarifications": {
+        "FOCUS_UNCLEAR": null,
+        "CURRENT_CAPACITY_CONFLICT": null,
+        "FEE_EFFORT_CONFLICT": null,
+        "EXPERIENCE_DIRECTION_CONFLICT": null,
+        "CLIENT_GOAL_UNCLEAR": null
+      }
+    },
+    "brief": {
+      "definition": {
+        "text": "The firm wants to explore Buying or selling a business for Business or organization. Clients usually seek help before a planned decision or change. This is a direction the firm is building toward. The choice remains provisional. Service area supplied: Ontario.",
+        "kind": "hypothesis",
+        "source_answer_ids": [
+          "focus.work",
+          "situation.role",
+          "situation.timing",
+          "focus.route",
+          "focus.certainty",
+          "focus.service_area"
+        ]
+      },
+      "client_goals": [
+        {
+          "text": "Complete a planned transaction or process",
+          "kind": "preference",
+          "source_answer_ids": [
+            "client.goals"
+          ]
+        },
+        {
+          "text": "Concerns to understand: I'm worried about the cost, I don't know what happens next. These concerns are assumptions to check.",
+          "kind": "hypothesis",
+          "source_answer_ids": [
+            "client.concerns"
+          ]
+        }
+      ],
+      "firm_reasons": [
+        {
+          "text": "It lets us make a useful difference for the client",
+          "kind": "preference",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        },
+        {
+          "text": "We expect the fee to support the effort",
+          "kind": "preference",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        },
+        {
+          "text": "It uses work we do well",
+          "kind": "preference",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        }
+      ],
+      "delivery_conditions": [
+        {
+          "text": "The team identified these conditions: A clearly agreed scope, Access to the information we need.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "delivery.conditions"
+          ]
+        },
+        {
+          "text": "Capacity: Only after we change capacity or support.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "delivery.capacity"
+          ]
+        },
+        {
+          "text": "Expected fee compared with effort: We haven't established this yet.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "value.fee_effort"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "text": "This definition is based mainly on your preferences at this stage.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "direction.evidence"
+          ]
+        },
+        {
+          "text": "Direction sought: A new area we are developing.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "direction.aim"
+          ]
+        }
+      ],
+      "open_questions": [
+        {
+          "text": "Establish the capacity or support needed before increasing demand.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "delivery.capacity",
+            "focus.route",
+            "direction.aim"
+          ]
+        },
+        {
+          "text": "Test this preference against relevant client and delivery evidence.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "direction.evidence"
+          ]
+        },
+        {
+          "text": "Establish whether the economics support this work.",
+          "kind": "unknown",
+          "source_answer_ids": [
+            "value.fee_effort"
+          ]
+        }
+      ],
+      "marketing": {
+        "topic": {
+          "text": "A plain-language explanation of Buying or selling a business: when a client might seek help and what they can prepare.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.work",
+            "focus.area",
+            "focus.route"
+          ]
+        },
+        "inquiry_question": {
+          "text": "What are you hoping to achieve, and what stage has the matter reached?",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "client.goals",
+            "situation.timing",
+            "focus.work"
+          ]
+        },
+        "validation_step": {
+          "text": "Ask two people with relevant client or practice experience to review this direction. Check the expected client need, delivery requirements and commercial assumptions.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.route",
+            "direction.evidence",
+            "delivery.conditions",
+            "delivery.capacity"
+          ]
+        }
+      },
+      "work_to_promote_less": []
+    }
+  },
+  {
+    "id": "P09",
+    "answers": {
+      "schema_version": "dcm-v2.1",
+      "revision": 1,
+      "focus": {
+        "area": "business",
+        "work": "business_agreements",
+        "work_other": "",
+        "service_area": "Ontario",
+        "certainty": "chosen",
+        "route": "established",
+        "comparison": null
+      },
+      "situation": {
+        "timing": "planning",
+        "role": "business_organization",
+        "role_other": "",
+        "contact": null
+      },
+      "client": {
+        "goals": [
+          "complete"
+        ],
+        "concerns": [
+          "cost",
+          "next"
+        ]
+      },
+      "value": {
+        "reasons": [
+          "client_benefit",
+          "fees",
+          "skills"
+        ],
+        "fee_effort": "worthwhile",
+        "collected_fee": "15to50",
+        "team_hours": "41to100",
+        "payment": "varies"
+      },
+      "delivery": {
+        "conditions": [
+          "scope",
+          "information"
+        ],
+        "capacity": "room",
+        "limit": null
+      },
+      "direction": {
+        "aim": "more_current",
+        "evidence": [
+          "repeated",
+          "records"
+        ],
+        "less": null,
+        "less_note": ""
+      },
+      "clarifications": {
+        "FOCUS_UNCLEAR": null,
+        "CURRENT_CAPACITY_CONFLICT": null,
+        "FEE_EFFORT_CONFLICT": null,
+        "EXPERIENCE_DIRECTION_CONFLICT": null,
+        "CLIENT_GOAL_UNCLEAR": null
+      }
+    },
+    "brief": {
+      "definition": {
+        "text": "The firm wants to explore Commercial agreement drafting and review for Business or organization. Clients usually seek help before a planned decision or change. This is work the firm already handles. Service area supplied: Ontario.",
+        "kind": "preference",
+        "source_answer_ids": [
+          "focus.work",
+          "situation.role",
+          "situation.timing",
+          "focus.route",
+          "focus.service_area"
+        ]
+      },
+      "client_goals": [
+        {
+          "text": "Complete a planned transaction or process",
+          "kind": "preference",
+          "source_answer_ids": [
+            "client.goals"
+          ]
+        },
+        {
+          "text": "Concerns to understand: I'm worried about the cost, I don't know what happens next.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "client.concerns"
+          ]
+        }
+      ],
+      "firm_reasons": [
+        {
+          "text": "It lets us make a useful difference for the client",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        },
+        {
+          "text": "The fee usually supports the effort",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        },
+        {
+          "text": "It uses work we do well",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.reasons"
+          ]
+        }
+      ],
+      "delivery_conditions": [
+        {
+          "text": "The team identified these conditions: A clearly agreed scope, Access to the information we need.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "delivery.conditions"
+          ]
+        },
+        {
+          "text": "Capacity: Yes, with the current team.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "delivery.capacity"
+          ]
+        },
+        {
+          "text": "Fee compared with effort: Usually worthwhile.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.fee_effort"
+          ]
+        },
+        {
+          "text": "Commercial ranges supplied: Fee: C$15,000 to under C$50,000; Total team time: More than 40, up to 100 hours; Payment: Depends on the matter.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "value.collected_fee",
+            "value.team_hours",
+            "value.payment"
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "text": "You identified: Several matters we have handled, Fee and time records.",
+          "kind": "experience",
+          "source_answer_ids": [
+            "direction.evidence"
+          ]
+        },
+        {
+          "text": "Direction sought: More of the work we already handle well.",
+          "kind": "preference",
+          "source_answer_ids": [
+            "direction.aim"
+          ]
+        }
+      ],
+      "open_questions": [],
+      "marketing": {
+        "topic": {
+          "text": "A plain-language explanation of Commercial agreement drafting and review: when a client might seek help and what they can prepare.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.work",
+            "focus.area",
+            "focus.route"
+          ]
+        },
+        "inquiry_question": {
+          "text": "What are you hoping to achieve, and what stage has the matter reached?",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "client.goals",
+            "situation.timing",
+            "focus.work"
+          ]
+        },
+        "validation_step": {
+          "text": "Review five recent examples of this work. Compare the time involved, collected fees, client feedback and delivery demands with this profile.",
+          "kind": "suggestion",
+          "source_answer_ids": [
+            "focus.route",
+            "direction.evidence",
+            "value.fee_effort",
+            "delivery.conditions",
+            "delivery.capacity"
+          ]
+        }
+      },
+      "work_to_promote_less": []
+    }
+  }
+]

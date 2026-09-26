@@ -172,7 +172,10 @@ export type RateLimitBucket =
   | "clientImportVerify"
   | "clientImportRows"
   | "whyYourFirmReport"
-  | "whyYourFirmAssist";
+  | "whyYourFirmAssist"
+  | "desiredClientAnalyze"
+  | "desiredClientDaily"
+  | "desiredClientGlobal";
 
 interface BucketConfig {
   limit: number;
@@ -203,6 +206,9 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   clientImportRows: { limit: 60, windowSeconds: 60 },      // authenticated 25-row chunks
   whyYourFirmReport: { limit: 10, windowSeconds: 3600 },   // dormant while no_gate ships
   whyYourFirmAssist: { limit: 20, windowSeconds: 60 },     // always fail-closed; each call incurs model cost
+  desiredClientAnalyze: { limit: 20, windowSeconds: 600 },
+  desiredClientDaily: { limit: 100, windowSeconds: 86400 },
+  desiredClientGlobal: { limit: 2000, windowSeconds: 86400 },
 };
 
 /**
@@ -214,13 +220,23 @@ let _redis: Redis | null = null;
 let _redisLoadAttempted = false;
 let _logged = false;
 
-function getRedis(): Redis | null {
+function isDesiredClientBucket(bucket: RateLimitBucket): boolean {
+  return (
+    bucket === "desiredClientAnalyze" ||
+    bucket === "desiredClientDaily" ||
+    bucket === "desiredClientGlobal"
+  );
+}
+
+function getRedis(bucket: RateLimitBucket): Redis | null {
   if (_redisLoadAttempted) return _redis;
   _redisLoadAttempted = true;
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
   if (!url || !token) {
-    if (!_logged) {
+    if (isDesiredClientBucket(bucket)) {
+      console.warn("[rate-limit] desired_client_limiter outcome=missing_configuration");
+    } else if (!_logged) {
       console.warn(
         "[rate-limit] UPSTASH_REDIS_REST_URL / TOKEN not set; rate limiting is FAIL-OPEN. Set both env vars in Vercel to engage limits.",
       );
@@ -232,8 +248,11 @@ function getRedis(): Redis | null {
     _redis = new Redis({ url, token });
     return _redis;
   } catch (err) {
-    // Construction failure (malformed URL etc.) — fail open, log once.
-    if (!_logged) {
+    // Construction failure (malformed URL etc.); new Desired Client buckets
+    // must never log credentials, request identities or raw exception text.
+    if (isDesiredClientBucket(bucket)) {
+      console.warn("[rate-limit] desired_client_limiter outcome=initialization_failed");
+    } else if (!_logged) {
       console.warn(
         "[rate-limit] Redis client construction failed; rate limiting is FAIL-OPEN.",
         err instanceof Error ? err.message : String(err),
@@ -249,17 +268,25 @@ const _limiters = new Map<RateLimitBucket, Ratelimit>();
 function getLimiter(bucket: RateLimitBucket): Ratelimit | null {
   const cached = _limiters.get(bucket);
   if (cached) return cached;
-  const redis = getRedis();
+  const redis = getRedis(bucket);
   if (!redis) return null;
   const config = BUCKET_CONFIG[bucket];
-  const limiter = new Ratelimit({
-    redis,
-    limiter: Ratelimit.slidingWindow(config.limit, `${config.windowSeconds} s`),
-    prefix: `rl:${bucket}`,
-    analytics: false,
-  });
-  _limiters.set(bucket, limiter);
-  return limiter;
+  try {
+    const limiter = new Ratelimit({
+      redis,
+      limiter: Ratelimit.slidingWindow(config.limit, `${config.windowSeconds} s`),
+      prefix: `rl:${bucket}`,
+      analytics: false,
+    });
+    _limiters.set(bucket, limiter);
+    return limiter;
+  } catch (err) {
+    if (isDesiredClientBucket(bucket)) {
+      console.warn("[rate-limit] desired_client_limiter outcome=initialization_failed");
+      return null;
+    }
+    throw err;
+  }
 }
 
 /**
@@ -336,6 +363,9 @@ const FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucke
  */
 const ALWAYS_FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLimitBucket>([
   "whyYourFirmAssist",
+  "desiredClientAnalyze",
+  "desiredClientDaily",
+  "desiredClientGlobal",
 ]);
 
 function failClosedMode(): boolean {
@@ -356,6 +386,9 @@ export async function checkRateLimit(
   const limiter = getLimiter(bucket);
   const config = BUCKET_CONFIG[bucket];
   if (!limiter) {
+    if (isDesiredClientBucket(bucket)) {
+      console.warn("[rate-limit] desired_client_limiter outcome=unavailable");
+    }
     if (shouldFailClosed(bucket)) {
       // Defensive deny: limiter unconfigured but operator has opted into
       // fail-closed mode on a sensitive bucket.
@@ -376,10 +409,14 @@ export async function checkRateLimit(
     // Redis hiccup. Sensitive always-fail-closed buckets deny; legacy
     // buckets retain their rollout-flag behavior. Never include request
     // content in this operational log.
-    console.warn(
-      `[rate-limit] bucket=${bucket} identity=${identity} backing-store error:`,
-      err instanceof Error ? err.message : String(err),
-    );
+    if (isDesiredClientBucket(bucket)) {
+      console.warn("[rate-limit] desired_client_limiter outcome=limiter_error");
+    } else {
+      console.warn(
+        `[rate-limit] bucket=${bucket} identity=${identity} backing-store error:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
     if (shouldFailClosed(bucket)) {
       return { ok: false, active: false, remaining: 0, reset: 0, limit: config.limit };
     }
