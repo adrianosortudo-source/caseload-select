@@ -1,7 +1,7 @@
 {
   "synthetic": true,
   "answers": {
-    "schema_version": "dcm-v2.1",
+    "schema_version": "dcm-v2.2",
     "revision": 1,
     "focus": {
       "area": "business",
@@ -16,7 +16,8 @@
       "timing": "planning",
       "role": "business_organization",
       "role_other": "",
-      "contact": "manager"
+      "contact": "manager",
+      "trigger": "business.transaction"
     },
     "client": {
       "goals": [
@@ -26,6 +27,9 @@
       "concerns": [
         "cost",
         "next"
+      ],
+      "decision_needs": [
+        "unknown"
       ]
     },
     "value": {
@@ -45,7 +49,10 @@
         "information"
       ],
       "capacity": "room",
-      "limit": null
+      "limit": null,
+      "fit_signals": [
+        "unknown"
+      ]
     },
     "direction": {
       "aim": "more_current",

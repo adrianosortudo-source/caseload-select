@@ -96,6 +96,7 @@ export async function establishedToReview(page: Page, screenshotPrefix?: string)
   await choose(page, 'Commercial agreement drafting and review');
   await choose(page, 'We already do it and want more');
   await next(page);
+  await choose(page, 'A business purchase, sale or ownership change is planned');
   await choose(page, 'Before a planned decision or change');
   await choose(page, 'Business or organization');
   await next(page);
@@ -113,10 +114,11 @@ export async function establishedToReview(page: Page, screenshotPrefix?: string)
   await choose(page, 'A clearly agreed scope');
   await choose(page, 'Access to the information we need');
   await choose(page, 'Yes, with the current team');
+  await choose(page, 'They are open to agreeing the scope and next step');
   await next(page);
   await choose(page, 'More of the work we already handle well');
   await choose(page, 'Several matters we have handled');
   await choose(page, 'Fee and time records');
   await next(page);
-  await expect(page.getByRole('heading', { name: 'Does this describe the work you want more of?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Check the direction before we build your profile' })).toBeVisible();
 }

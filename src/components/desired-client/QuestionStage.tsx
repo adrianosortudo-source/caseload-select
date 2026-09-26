@@ -1,6 +1,6 @@
 "use client";
 import { useState, type ReactNode } from "react";
-import { AREA_ORDER, getAreaLabel, getWorkOptions, getRoleOptions, CONTACT_ROLE_IDS, GOAL_LABELS, CONCERN_LABELS, REASON_LABELS, getReasonLabel, getFeeEffortLabel, COLLECTED_FEE_LABELS, TEAM_HOURS_LABELS, PAYMENT_LABELS, CONDITION_LABELS, CAPACITY_LABELS, LIMIT_LABELS, AIM_LABELS, EVIDENCE_LABELS, LESS_LABELS, TIMING_LABELS, CONTACT_LABELS, ROUTE_LABELS } from "@/lib/desired-client/catalog";
+import { AREA_ORDER, getAreaLabel, getWorkOptions, getRoleOptions, CONTACT_ROLE_IDS, GOAL_LABELS, CONCERN_LABELS, REASON_LABELS, getReasonLabel, getFeeEffortLabel, COLLECTED_FEE_LABELS, TEAM_HOURS_LABELS, PAYMENT_LABELS, CONDITION_LABELS, CAPACITY_LABELS, LIMIT_LABELS, AIM_LABELS, EVIDENCE_LABELS, LESS_LABELS, TIMING_LABELS, CONTACT_LABELS, ROUTE_LABELS, TRIGGER_OPTIONS, TRIGGER_EXAMPLES, DECISION_NEED_OPTIONS, FIT_SIGNAL_OPTIONS } from "@/lib/desired-client/catalog";
 import { STAGE_DEFINITIONS } from "@/lib/desired-client/screens";
 import { COMMON_COPY, PRIVACY_FIELD_COPY } from "@/lib/desired-client/copy";
 import type { AreaId, DesiredClientAnswers, WriteInKey } from "@/lib/desired-client/types";
@@ -9,15 +9,15 @@ import { ChoiceGroup } from "./ChoiceGroup";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 type Change=(edit:(a:DesiredClientAnswers)=>DesiredClientAnswers)=>void;
 const entries=(record:Record<string,string>)=>Object.entries(record).map(([id,label])=>({id,label}));
-export function QuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,error,preview}:{stage:StageId;answers:DesiredClientAnswers;onEdit:Change;onBack:()=>void;onNext:()=>void;onCompare:()=>void;error:boolean;preview?:ReactNode}){
+export function QuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,error,notice,preview}:{stage:StageId;answers:DesiredClientAnswers;onEdit:Change;onBack:()=>void;onNext:()=>void;onCompare:()=>void;error:boolean;notice?:string;preview?:ReactNode}){
  const [pendingArea,setPendingArea]=useState<AreaId|null>(null); const route=answers.focus.route; const area=answers.focus.area;
  const roles=area?getRoleOptions(area):[]; const contactVisible=!!answers.situation.role&&CONTACT_ROLE_IDS.has(answers.situation.role as never);
  const title=STAGE_DEFINITIONS[stage-1].heading;
- const textField=(label:string,value:string,change:(v:string)=>void,help?:string)=><label className="dc-text-field"><span data-ui-copy="supporting">{label}</span><input aria-label={label} value={value} maxLength={180} onChange={e=>change(e.currentTarget.value)}/><span data-ui-copy="body">{PRIVACY_FIELD_COPY}</span>{help&&<span data-ui-copy="body">{help}</span>}</label>;
+ const textField=(label:string,value:string,change:(v:string)=>void,help?:string)=><label className="dc-text-field" data-ui-component-content="desired-client-text-answer"><span data-ui-copy="supporting">{label}</span><input aria-label={label} value={value} maxLength={180} onChange={e=>change(e.currentTarget.value)}/><span className="dc-text-field__count" data-ui-copy="supporting">{value.length} of 180 characters</span><span data-ui-copy="body">{PRIVACY_FIELD_COPY}</span>{help&&<span data-ui-copy="body">{help}</span>}</label>;
  const WRITE_IN_GROUPS: Partial<Record<string, WriteInKey>> = {
-   "dc-timing":"timing", "dc-contact":"contact", "dc-goals":"goals", "dc-concerns":"concerns",
+   "dc-trigger":"trigger", "dc-timing":"timing", "dc-contact":"contact", "dc-goals":"goals", "dc-concerns":"concerns", "dc-decision-needs":"decision_needs",
    "dc-reasons":"reasons", "dc-fee-effort":"fee_effort", "dc-conditions":"conditions", "dc-capacity":"capacity", "dc-limit":"limit",
-   "dc-aim":"aim", "dc-evidence":"evidence",
+   "dc-aim":"aim", "dc-evidence":"evidence", "dc-fit-signals":"fit_signals",
  };
  const ownAnswer=(id:string)=>{const key=WRITE_IN_GROUPS[id];return key?answers.write_ins?.[key]?.trim()??"":"";};
  const ownField=(id:string,question:string)=>{
@@ -29,13 +29,16 @@ export function QuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,erro
          const next={...a,write_ins:{...a.write_ins,[key]:text}};
          if(text.trim()){
            if(key==="timing")next.situation={...next.situation,timing:null};
+           if(key==="trigger")next.situation={...next.situation,trigger:null};
            if(key==="contact")next.situation={...next.situation,contact:null};
            if(key==="goals"&&next.client.goals.includes("unknown"))next.client={...next.client,goals:[]};
+           if(key==="decision_needs"&&next.client.decision_needs.includes("unknown"))next.client={...next.client,decision_needs:[]};
            if(key==="concerns"&&next.client.concerns.includes("unheard"))next.client={...next.client,concerns:[]};
            if(key==="reasons"&&next.value.reasons.includes("undecided"))next.value={...next.value,reasons:[]};
            if(key==="fee_effort")next.value={...next.value,fee_effort:null};
            if(key==="capacity")next.delivery={...next.delivery,capacity:null};
            if(key==="conditions"&&next.delivery.conditions.includes("unknown"))next.delivery={...next.delivery,conditions:[]};
+           if(key==="fit_signals"&&next.delivery.fit_signals.includes("unknown"))next.delivery={...next.delivery,fit_signals:[]};
            if(key==="limit")next.delivery={...next.delivery,limit:null};
            if(key==="aim")next.direction={...next.direction,aim:null};
            if(key==="evidence"&&next.direction.evidence.includes("preference"))next.direction={...next.direction,evidence:[]};
@@ -54,7 +57,7 @@ export function QuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,erro
  </>;
  const multi=(id:string,legend:string,options:{id:string;label:string}[],value:string[],change:(v:string[])=>void,maximum:number,exclusiveOptions:string[]=[],exclusiveGroups:string[][]=[],help?:string,required=true)=><>
    <ChoiceGroup idPrefix={id} name={id} legend={legend} options={options} type="checkbox" value={value}
-     maximum={maximum} exclusiveOptions={exclusiveOptions} exclusiveGroups={exclusiveGroups}
+     maximum={maximum} additionalSelectionCount={ownAnswer(id)?1:0} exclusiveOptions={exclusiveOptions} exclusiveGroups={exclusiveGroups}
      required={required&&!Boolean(ownAnswer(id))} hideLegend={legend===title}
      help={help ?? (id==="dc-goals"?"Choose one or two.":id==="dc-concerns"?"Optional. Choose up to two.":id==="dc-conditions"?"Optional. Choose up to three.":undefined)}
      error={error&&required&&!value.length&&!ownAnswer(id)?COMMON_COPY.requiredMulti:undefined}

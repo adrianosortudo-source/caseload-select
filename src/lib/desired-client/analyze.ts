@@ -52,5 +52,5 @@ export async function runDesiredClientAnalysis(
 
 export function eligibleDesiredClientClarifications(request: AnalysisRequestEnvelope): ClarificationCode[] {
   if (request.analysisIndex === 2) return [];
-  return getEligibleClarificationCodes(request.answers, request.clarifications.map(({ code }) => code));
+  return getEligibleClarificationCodes(request.answers, request.clarifications.map(({ code }) => code)).slice(0, 1);
 }

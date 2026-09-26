@@ -21,12 +21,12 @@ import { POST } from "../route";
 
 const ROUTE = "https://app.caseloadselect.ca/api/tools/desired-client-matter/analyze";
 const B0: DesiredClientAnswers = {
-  schema_version: "dcm-v2.1", revision: 1,
+  schema_version: "dcm-v2.2", revision: 1,
   focus: { area: "business", work: "business_agreements", work_other: "", service_area: "Ontario", certainty: "chosen", route: "established", comparison: null },
-  situation: { timing: "planning", role: "business_organization", role_other: "", contact: null },
-  client: { goals: ["complete"], concerns: ["cost", "next"] },
+  situation: { trigger: "business.transaction", timing: "planning", role: "business_organization", role_other: "", contact: null },
+  client: { goals: ["complete"], concerns: ["cost", "next"], decision_needs: ["options"] },
   value: { reasons: ["client_benefit", "fees", "skills"], fee_effort: "worthwhile", collected_fee: null, team_hours: null, payment: null },
-  delivery: { conditions: ["scope", "information"], capacity: "room", limit: null },
+  delivery: { conditions: ["scope", "information"], capacity: "room", limit: null, fit_signals: ["scope"] },
   direction: { aim: "more_current", evidence: ["repeated", "records"], less: "within", less_note: "routine low-fee work" },
   clarifications: { FOCUS_UNCLEAR: null, CLIENT_GOAL_UNCLEAR: null, CURRENT_CAPACITY_CONFLICT: null, FEE_EFFORT_CONFLICT: null, EXPERIENCE_DIRECTION_CONFLICT: null },
 };
@@ -42,19 +42,15 @@ const ENVELOPE: AnalysisRequestEnvelope = {
 };
 const MODEL_RESULT = {
   clarification_code: null,
-  brief: {
-    definition: { text: "Commercial agreement work for organizations in Ontario.", kind: "preference", source_answer_ids: ["focus.area", "focus.work", "focus.service_area"] },
-    client_goals: [{ text: "Clients want to complete a planned process.", kind: "preference", source_answer_ids: ["client.goals"] }],
-    firm_reasons: [{ text: "The firm values client benefit.", kind: "preference", source_answer_ids: ["value.reasons"] }],
-    delivery_conditions: [{ text: "Clear scope helps the team deliver.", kind: "preference", source_answer_ids: ["delivery.conditions"] }],
-    evidence: [{ text: "The firm reports repeated work.", kind: "experience", source_answer_ids: ["direction.evidence"] }],
-    open_questions: [],
+  brief: { report_version: "dcm-blueprint-v1",
+    portrait: { text: "The firm wants more established agreement work for organizations planning a transaction. They seek advice to understand their options, and the work uses the firm's relevant skills.", kind: "preference", source_answer_ids: ["focus.work", "situation.role", "situation.trigger", "client.goals", "value.reasons"] },
+    client_need: { text: "The client wants to complete a planned process and may need clarity on cost and next steps.", kind: "experience", source_answer_ids: ["client.goals", "client.concerns"] },
+    firm_value: { text: "The firm values client benefit and skills. The fee is usually worthwhile, and the current team has room.", kind: "experience", source_answer_ids: ["value.reasons", "value.fee_effort", "delivery.capacity"] },
     marketing: {
-      topic: { text: "Explain a planned agreement review.", kind: "suggestion", source_answer_ids: ["focus.work"] },
-      inquiry_question: { text: "What decision is planned?", kind: "suggestion", source_answer_ids: ["situation.timing"] },
-      validation_step: { text: "Review relevant matter records.", kind: "suggestion", source_answer_ids: ["direction.evidence"] },
-    },
-    work_to_promote_less: [],
+      message: { text: "Understand the steps before moving ahead.", kind: "suggestion", source_answer_ids: ["client.goals"] },
+      content: { text: "What to clarify before a planned agreement.", kind: "suggestion", source_answer_ids: ["focus.work"] },
+      next_step: { text: "Request an initial conversation.", kind: "suggestion", source_answer_ids: ["client.goals"] },
+    }, open_questions: [],
   },
 };
 const ORIGINAL_ENV = new Map<string, string | undefined>();
@@ -160,7 +156,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(modelOptions).toMatchObject({ model: "gemini-2.5-flash", generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 512 } } });
     expect(requestOptions).toEqual({ timeout: 12_000 });
     const prompt = mocks.generateContent.mock.calls[0][0] as string;
-    expect(prompt).toContain("routine low-fee work");
+    expect(prompt).toContain("Desired Client Blueprint");
     expect(prompt).toContain('"eligible_codes":[]');
     expect(prompt).not.toContain("203.0.113.42");
     expect(prompt).not.toContain("app.caseloadselect.ca");

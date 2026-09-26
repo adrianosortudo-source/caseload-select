@@ -2,7 +2,7 @@
   {
     "id": "P01",
     "answers": {
-      "schema_version": "dcm-v2.1",
+      "schema_version": "dcm-v2.2",
       "revision": 1,
       "focus": {
         "area": "business",
@@ -17,7 +17,8 @@
         "timing": "planning",
         "role": "business_organization",
         "role_other": "",
-        "contact": null
+        "contact": null,
+        "trigger": "business.transaction"
       },
       "client": {
         "goals": [
@@ -26,6 +27,9 @@
         "concerns": [
           "cost",
           "next"
+        ],
+        "decision_needs": [
+          "unknown"
         ]
       },
       "value": {
@@ -45,7 +49,10 @@
           "information"
         ],
         "capacity": "room",
-        "limit": null
+        "limit": null,
+        "fit_signals": [
+          "unknown"
+        ]
       },
       "direction": {
         "aim": "more_current",
@@ -192,7 +199,7 @@
   {
     "id": "P02",
     "answers": {
-      "schema_version": "dcm-v2.1",
+      "schema_version": "dcm-v2.2",
       "revision": 1,
       "focus": {
         "area": "business",
@@ -207,7 +214,8 @@
         "timing": "planning",
         "role": "business_organization",
         "role_other": "",
-        "contact": null
+        "contact": null,
+        "trigger": "business.transaction"
       },
       "client": {
         "goals": [
@@ -215,6 +223,9 @@
         ],
         "concerns": [
           "time"
+        ],
+        "decision_needs": [
+          "unknown"
         ]
       },
       "value": {
@@ -233,7 +244,10 @@
           "information"
         ],
         "capacity": "change",
-        "limit": null
+        "limit": null,
+        "fit_signals": [
+          "unknown"
+        ]
       },
       "direction": {
         "aim": "new_area",
@@ -395,7 +409,7 @@
   {
     "id": "P03",
     "answers": {
-      "schema_version": "dcm-v2.1",
+      "schema_version": "dcm-v2.2",
       "revision": 1,
       "focus": {
         "area": "business",
@@ -410,7 +424,8 @@
         "timing": "planning",
         "role": "business_organization",
         "role_other": "",
-        "contact": null
+        "contact": null,
+        "trigger": "business.transaction"
       },
       "client": {
         "goals": [
@@ -419,6 +434,9 @@
         "concerns": [
           "cost",
           "next"
+        ],
+        "decision_needs": [
+          "unknown"
         ]
       },
       "value": {
@@ -438,7 +456,10 @@
           "information"
         ],
         "capacity": "room",
-        "limit": null
+        "limit": null,
+        "fit_signals": [
+          "unknown"
+        ]
       },
       "direction": {
         "aim": "more_current",
@@ -594,7 +615,7 @@
   {
     "id": "P04",
     "answers": {
-      "schema_version": "dcm-v2.1",
+      "schema_version": "dcm-v2.2",
       "revision": 1,
       "focus": {
         "area": "other",
@@ -609,13 +630,17 @@
         "timing": "planning",
         "role": "unknown",
         "role_other": "",
-        "contact": null
+        "contact": null,
+        "trigger": "other.planned"
       },
       "client": {
         "goals": [
           "unknown"
         ],
-        "concerns": []
+        "concerns": [],
+        "decision_needs": [
+          "unknown"
+        ]
       },
       "value": {
         "reasons": [
@@ -629,7 +654,10 @@
       "delivery": {
         "conditions": [],
         "capacity": "unknown",
-        "limit": null
+        "limit": null,
+        "fit_signals": [
+          "unknown"
+        ]
       },
       "direction": {
         "aim": "unknown",
@@ -772,7 +800,7 @@
   {
     "id": "P05",
     "answers": {
-      "schema_version": "dcm-v2.1",
+      "schema_version": "dcm-v2.2",
       "revision": 1,
       "focus": {
         "area": "business",
@@ -787,7 +815,8 @@
         "timing": "planning",
         "role": "business_organization",
         "role_other": "",
-        "contact": null
+        "contact": null,
+        "trigger": "business.transaction"
       },
       "client": {
         "goals": [
@@ -796,6 +825,9 @@
         "concerns": [
           "cost",
           "next"
+        ],
+        "decision_needs": [
+          "unknown"
         ]
       },
       "value": {
@@ -815,7 +847,10 @@
           "scope"
         ],
         "capacity": "room",
-        "limit": "communication"
+        "limit": "communication",
+        "fit_signals": [
+          "unknown"
+        ]
       },
       "direction": {
         "aim": "more_current",
@@ -963,7 +998,7 @@
   {
     "id": "P08",
     "answers": {
-      "schema_version": "dcm-v2.1",
+      "schema_version": "dcm-v2.2",
       "revision": 1,
       "focus": {
         "area": "business",
@@ -994,7 +1029,8 @@
         "timing": "planning",
         "role": "business_organization",
         "role_other": "",
-        "contact": null
+        "contact": null,
+        "trigger": "business.transaction"
       },
       "client": {
         "goals": [
@@ -1003,6 +1039,9 @@
         "concerns": [
           "cost",
           "next"
+        ],
+        "decision_needs": [
+          "unknown"
         ]
       },
       "value": {
@@ -1022,7 +1061,10 @@
           "information"
         ],
         "capacity": "change",
-        "limit": null
+        "limit": null,
+        "fit_signals": [
+          "unknown"
+        ]
       },
       "direction": {
         "aim": "new_area",
@@ -1192,7 +1234,7 @@
   {
     "id": "P09",
     "answers": {
-      "schema_version": "dcm-v2.1",
+      "schema_version": "dcm-v2.2",
       "revision": 1,
       "focus": {
         "area": "business",
@@ -1207,7 +1249,8 @@
         "timing": "planning",
         "role": "business_organization",
         "role_other": "",
-        "contact": null
+        "contact": null,
+        "trigger": "business.transaction"
       },
       "client": {
         "goals": [
@@ -1216,6 +1259,9 @@
         "concerns": [
           "cost",
           "next"
+        ],
+        "decision_needs": [
+          "unknown"
         ]
       },
       "value": {
@@ -1235,7 +1281,10 @@
           "information"
         ],
         "capacity": "room",
-        "limit": null
+        "limit": null,
+        "fit_signals": [
+          "unknown"
+        ]
       },
       "direction": {
         "aim": "more_current",

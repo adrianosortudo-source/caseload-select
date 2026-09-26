@@ -1,7 +1,7 @@
 import type {
   AimId, AreaId, AnswerReferencePath, CapacityId, CollectedFeeId, ComparisonCandidate,
   ConcernId, ConditionId, ContactId, DesiredClientAnswers, EvidenceId, FeeEffortId,
-  GoalId, LessId, LimitId, PaymentId, ReasonId, RoleId, TeamHoursId, TimingId, WorkId, WriteInKey,
+  DecisionNeedId, FitSignalId, GoalId, LessId, LimitId, PaymentId, ReasonId, RoleId, TeamHoursId, TimingId, TriggerId, WorkId, WriteInKey,
 } from "./types";
 
 export interface AreaPack {
@@ -69,6 +69,59 @@ export const AREA_CATALOG: Record<AreaId, AreaPack> = {
     other_dispute: "A dispute or contested process", other_ongoing: "An ongoing advisory relationship",
   }, roles: { other_individual: "Individual", other_organization: "Business or organization" } },
 };
+
+export const TRIGGER_LABELS: Record<AreaId, Record<string, string>> = {
+  business: { agreement: "An agreement needs to be made or reviewed", transaction: "A business purchase, sale or ownership change is planned", dispute: "A disagreement affects the business", ongoing: "The business needs ongoing legal support" },
+  employment: { exit: "Employment has ended or an exit offer has arrived", change: "An employment or workforce change is planned", complaint: "A workplace complaint or disagreement has arisen", terms: "An employment agreement or policy needs attention" },
+  family: { separation: "A relationship is ending or has ended", parenting: "Parenting arrangements need to be made or changed", support_property: "Support or property arrangements need attention", planning: "A couple wants an agreement for a future change" },
+  property: { purchase: "A property purchase is planned", sale: "A property sale is planned", finance: "A mortgage or refinancing arrangement needs attention", issue: "A property document or issue needs legal attention" },
+  estates: { planning: "Someone wants to prepare or update an estate plan", death: "Someone has died and the estate needs attention", dispute: "A disagreement about an estate has arisen", decisions: "Help is needed with authority to make decisions" },
+  litigation: { dispute: "A disagreement has become difficult to resolve", claim: "A claim or demand has been received or is being considered", proceeding: "An existing proceeding needs legal attention", payment: "A payment or performance problem needs attention" },
+  injury: { incident: "An injury or accident has occurred", benefits: "An insurance or disability benefits issue has arisen", offer: "A decision or settlement offer needs review", ongoing: "An existing injury matter needs further help" },
+  immigration: { move: "A move, visit, study or work opportunity is planned", status: "An immigration status or permission needs attention", hiring: "An employer plans to hire or support a worker", decision: "An immigration decision or process needs review" },
+  criminal: { investigation: "An investigation or police contact has occurred", charge: "A charge or court document has been received", release: "A detention or release issue needs attention", decision: "A court decision or existing matter needs review" },
+  regulatory: { application: "A licence or registration application is planned", investigation: "A complaint or investigation has arisen", hearing: "A hearing or regulatory decision needs attention", compliance: "An organization needs help with compliance" },
+  ip: { protect: "A name, creation or invention needs protection", commercial: "Rights will be licensed, transferred or used commercially", dispute: "A concern about ownership or use of rights has arisen", management: "Existing rights or registrations need attention" },
+  nonprofit: { formation: "A nonprofit or charity is being formed", governance: "A board or governance matter needs attention", agreement: "An agreement or partnership is planned", ongoing: "The organization needs ongoing legal support" },
+  other: { planned: "A planned decision or change needs legal support", problem: "A problem or disagreement has arisen", document: "A document or decision needs a response", ongoing: "Ongoing legal guidance is needed" },
+};
+
+export const TRIGGER_OPTIONS: Record<AreaId, Array<{ id: TriggerId; label: string }>> = Object.fromEntries(
+  AREA_ORDER.map((area) => [area, Object.entries(TRIGGER_LABELS[area]).map(([suffix, label]) => ({ id: `${area}.${suffix}` as TriggerId, label }))]),
+) as Record<AreaId, Array<{ id: TriggerId; label: string }>>;
+
+export const TRIGGER_EXAMPLES: Record<AreaId, string> = {
+  business: "A business owner considering an acquisition wants help before agreeing to the transaction.",
+  employment: "An employee receives an exit offer and wants advice before responding.",
+  family: "A separating parent wants help reaching workable arrangements for the children.",
+  property: "A buyer has a planned purchase and needs help completing the legal work.",
+  estates: "An estate representative needs help understanding what to do after a death.",
+  litigation: "A business receives a demand about a contract and wants to understand its options.",
+  injury: "A person receives a benefits decision and wants to understand the available next steps.",
+  immigration: "An employer wants guidance on a planned hire involving immigration requirements.",
+  criminal: "A person receives a court document and wants to understand the next step.",
+  regulatory: "A professional receives notice of a regulatory investigation and seeks advice.",
+  ip: "A business preparing to use a new brand wants help understanding protection options.",
+  nonprofit: "A board wants help clarifying responsibilities before changing its governance arrangements.",
+  other: "A client faces a specific decision and wants help understanding what to do next.",
+};
+export const DECISION_NEED_LABELS: Record<DecisionNeedId, string> = {
+  scope_cost: "A clear explanation of the service and its cost", options: "An understandable explanation of their options",
+  relevant_experience: "Confidence in the firm's relevant experience", process: "Knowing what happens next and what they need to do",
+  response: "Knowing when someone can respond", heard: "Feeling that the lawyer understands their situation", unknown: "Not sure yet",
+};
+export const FIT_SIGNAL_LABELS: Record<FitSignalId, string> = {
+  service: "They are seeking the kind of work we have chosen", stage: "The matter is at a stage our service can address",
+  information: "They can share the information needed for a useful first conversation", decision: "The people needed for decisions can take part",
+  scope: "They are open to agreeing the scope and next step", fees: "They are willing to discuss the proposed service and its fees",
+  timing: "Their requested timing can be considered against our availability", unknown: "Not sure yet",
+};
+export const DECISION_NEED_OPTIONS = Object.entries(DECISION_NEED_LABELS).map(([id, label]) => ({ id: id as DecisionNeedId, label }));
+export const FIT_SIGNAL_OPTIONS = Object.entries(FIT_SIGNAL_LABELS).map(([id, label]) => ({ id: id as FitSignalId, label }));
+
+export function isKnownTrigger(area: AreaId, value: unknown): value is TriggerId {
+  return typeof value === "string" && TRIGGER_OPTIONS[area].some((option) => option.id === value);
+}
 
 export function getWorkOptions(area: AreaId) {
   return [...Object.entries(AREA_CATALOG[area].works).map(([id, label]) => ({ id: id as WorkId, label })), { id: "other" as const, label: "Another type of work" }];
@@ -163,7 +216,9 @@ export const WRITE_IN_QUESTIONS: Record<WriteInKey, string> = {
   goals: "What does the client most want to achieve?", concerns: "What might concern this client?",
   reasons: "What makes this work worth pursuing?", fee_effort: "How does the fee compare with the work involved?", conditions: "What helps your team deliver this work well?",
   limit: "What makes this work difficult to support?", capacity: "Could the firm take on more of this work now?", aim: "What should this work help the firm become known for?",
-  evidence: "What supports this direction?",
+  evidence: "What supports this direction?", trigger: "What usually happens that makes this client seek help?",
+  decision_needs: "What would help this client feel ready to take the next step?",
+  fit_signals: "Which early signs would make this inquiry worth a closer look?",
 };
 export const WRITE_IN_KEYS = Object.keys(WRITE_IN_QUESTIONS) as WriteInKey[];
 export const ROUTE_LABELS = {
@@ -232,6 +287,13 @@ function labelReference(path: AnswerReferencePath, value: unknown, answers: Desi
   if (path === "value.payment") return PAYMENT_LABELS[value as PaymentId];
   if (path === "client.goals") return GOAL_LABELS[value as GoalId];
   if (path === "client.concerns") return CONCERN_LABELS[value as ConcernId];
+  if (path === "client.decision_needs") return DECISION_NEED_LABELS[value as DecisionNeedId];
+  if (path === "delivery.fit_signals") return FIT_SIGNAL_LABELS[value as FitSignalId];
+  if (path === "situation.trigger" && isKnownArea(answers.focus.area)) {
+    if (value === "unknown") return "Not sure yet";
+    const suffix = String(value).slice(answers.focus.area.length + 1);
+    return TRIGGER_LABELS[answers.focus.area][suffix] ?? value;
+  }
   if (path === "situation.timing") return TIMING_LABELS[value as TimingId];
   if (path === "situation.contact") return CONTACT_LABELS[value as ContactId];
   if (path === "delivery.conditions") return CONDITION_LABELS[value as ConditionId];

@@ -2,7 +2,7 @@ import { GOAL_LABELS } from "./catalog";
 import type { ClarificationCode, DesiredClientAnswers } from "./types";
 
 export const CLARIFICATION_ORDER: readonly ClarificationCode[] = [
-  "FOCUS_UNCLEAR", "CLIENT_GOAL_UNCLEAR", "CURRENT_CAPACITY_CONFLICT", "FEE_EFFORT_CONFLICT", "EXPERIENCE_DIRECTION_CONFLICT",
+  "CURRENT_CAPACITY_CONFLICT", "FEE_EFFORT_CONFLICT", "EXPERIENCE_DIRECTION_CONFLICT", "FOCUS_UNCLEAR", "CLIENT_GOAL_UNCLEAR",
 ];
 export type ClarificationOption = { id: string; label: string };
 export interface ClarificationDefinition {

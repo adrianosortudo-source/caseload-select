@@ -1,15 +1,15 @@
 import { CAPACITY_LABELS, COLLECTED_FEE_LABELS, CONDITION_LABELS, CONCERN_LABELS, EVIDENCE_LABELS, GOAL_LABELS, AIM_LABELS, LESS_LABELS, LIMIT_LABELS, PAYMENT_LABELS, TEAM_HOURS_LABELS, TIMING_PHRASES, getFeeEffortLabel, getReasonLabel, getRoleLabel, getWorkLabel, resolveAnswerReference } from "./catalog";
 
-import type { AnswerReferencePath, DesiredClientAnswers, DesiredClientBrief, DesiredClientStatement } from "./types";
+import type { AnswerReferencePath, DesiredClientAnswers, DesiredClientStatement, LegacyDesiredClientBrief } from "./types";
 
 export function emptyAnswers(): DesiredClientAnswers {
   return {
-    schema_version: "dcm-v2.1", revision: 0,
+    schema_version: "dcm-v2.2", revision: 0,
     focus: { area: null, work: null, work_other: "", service_area: "", certainty: null, route: null, comparison: null },
-    situation: { timing: null, role: null, role_other: "", contact: null },
-    client: { goals: [], concerns: [] },
+    situation: { trigger: null, timing: null, role: null, role_other: "", contact: null },
+    client: { goals: [], concerns: [], decision_needs: [] },
     value: { reasons: [], fee_effort: null, collected_fee: null, team_hours: null, payment: null },
-    delivery: { conditions: [], capacity: null, limit: null },
+    delivery: { conditions: [], capacity: null, limit: null, fit_signals: [] },
     direction: { aim: null, evidence: [], less: null, less_note: "" },
     clarifications: {
       FOCUS_UNCLEAR: null, CLIENT_GOAL_UNCLEAR: null, CURRENT_CAPACITY_CONFLICT: null,
@@ -99,7 +99,7 @@ export function hasRefinedComparisonAnswers(answers: DesiredClientAnswers): bool
   return (answers.value.fee_effort !== null && answers.value.fee_effort !== candidate.fee_effort)
     || (answers.delivery.capacity !== null && answers.delivery.capacity !== candidate.capacity);
 }
-export function buildStructuredBrief(answers: DesiredClientAnswers): DesiredClientBrief {
+export function buildLegacyStructuredBrief(answers: DesiredClientAnswers): LegacyDesiredClientBrief {
   const work = workValue(answers);
   const role = roleValue(answers);
   const route = answers.focus.route;
@@ -238,6 +238,8 @@ export function buildStructuredBrief(answers: DesiredClientAnswers): DesiredClie
   return { definition, client_goals: clientGoals, firm_reasons: firmReasons, delivery_conditions: deliveryConditions,
     evidence, open_questions: openQuestions, marketing, work_to_promote_less: workToPromoteLess };
 }
+
+export { buildStructuredBlueprint as buildStructuredBrief } from "./structured-blueprint";
 export const BRIEF_SECTION_HEADINGS = [
   "Work to pursue", "What the client wants to achieve", "Why this work appeals to your firm",
   "Conditions for delivering it well", "What supports this definition", "Still to check", "Use it in your marketing",

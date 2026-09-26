@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { STAGE_SUMMARY_LABELS, REVIEW_COPY, COMMON_COPY, WELCOME_COPY } from "@/lib/desired-client/copy";
 import { GOAL_LABELS } from "@/lib/desired-client/catalog";
+import { DECISION_NEED_LABELS, FIT_SIGNAL_LABELS } from "@/lib/desired-client/catalog";
 import { getSourceDetails } from "@/lib/desired-client/sources";
 import type { AnswerReferencePath, DesiredClientAnswers } from "@/lib/desired-client/types";
 export function ReviewStep({ answers, mode, onCreate, onUseAi, onCreateStructured, onEdit, briefNeedsUpdate, loading }: { answers: DesiredClientAnswers; mode: "ai" | "structured"; onCreate: () => void; onUseAi: () => void; onCreateStructured:()=>void; onEdit: (stage: 1|2|3|4|5|6) => void; briefNeedsUpdate:boolean; loading:boolean }) {
@@ -18,14 +19,14 @@ export function ReviewStep({ answers, mode, onCreate, onUseAi, onCreateStructure
       answers.focus.service_area.trim() ? item("Service area", answers.focus.service_area.trim()) : null,
       answers.focus.certainty === "provisional" ? item("Status", "Provisional") : null,
     ]), 1],
-    [STAGE_SUMMARY_LABELS[0], values([item("Role", answer(rolePath)), item("Timing", answer("situation.timing")), item("Other timing", answers.write_ins?.timing?.trim() ?? null), item("First contact", answer("situation.contact")), item("Other first contact", answers.write_ins?.contact?.trim() ?? null)]), 2],
-    [STAGE_SUMMARY_LABELS[1], values([itemValues("Goals", answers.client.goals.map((goal) => GOAL_LABELS[goal])), item("Other goal", answers.write_ins?.goals?.trim() ?? null), item("Concerns", answer("client.concerns")), item("Other concern", answers.write_ins?.concerns?.trim() ?? null)]), 3],
+    [STAGE_SUMMARY_LABELS[0], values([item("Situation prompting help", answers.write_ins?.trigger?.trim() ?? answer("situation.trigger")), item("Role", answer(rolePath)), item("Timing", answer("situation.timing")), item("Other timing", answers.write_ins?.timing?.trim() ?? null), item("First contact", answer("situation.contact")), item("Other first contact", answers.write_ins?.contact?.trim() ?? null)]), 2],
+    [STAGE_SUMMARY_LABELS[1], values([itemValues("Goals", answers.client.goals.map((goal) => GOAL_LABELS[goal])), item("Other goal", answers.write_ins?.goals?.trim() ?? null), item("Concerns", answer("client.concerns")), item("Other concern", answers.write_ins?.concerns?.trim() ?? null), itemValues("Decision needs", answers.client.decision_needs.filter(x=>x!=="unknown").map(x=>DECISION_NEED_LABELS[x])), item("Other decision need",answers.write_ins?.decision_needs?.trim()??null)]), 3],
     [STAGE_SUMMARY_LABELS[2], values([
       item("Reasons", answer("value.reasons")), item("Other reason", answers.write_ins?.reasons?.trim() ?? null), item("Fee compared with effort", answer("value.fee_effort")), item("Other fee assessment", answers.write_ins?.fee_effort?.trim() ?? null),
       item("Fee range", answer("value.collected_fee")), item("Team time", answer("value.team_hours")), item("Payment", answer("value.payment")),
     ]), 4],
     [STAGE_SUMMARY_LABELS[3], values([
-      item("Delivery conditions", answer("delivery.conditions")), item("Other delivery condition", answers.write_ins?.conditions?.trim() ?? null), item("Capacity", answer("delivery.capacity")), item("Other capacity answer", answers.write_ins?.capacity?.trim() ?? null), item("Limit", answer("delivery.limit")), item("Other limit", answers.write_ins?.limit?.trim() ?? null),
+      item("Delivery conditions", answer("delivery.conditions")), item("Other delivery condition", answers.write_ins?.conditions?.trim() ?? null), item("Capacity", answer("delivery.capacity")), item("Other capacity answer", answers.write_ins?.capacity?.trim() ?? null), item("Limit", answer("delivery.limit")), item("Other limit", answers.write_ins?.limit?.trim() ?? null), itemValues("Early fit signals",answers.delivery.fit_signals.filter(x=>x!=="unknown").map(x=>FIT_SIGNAL_LABELS[x])),item("Other fit signal",answers.write_ins?.fit_signals?.trim()??null),
     ]), 5],
     [STAGE_SUMMARY_LABELS[4], values([
       item("Aim", answer("direction.aim")), item("Other aim", answers.write_ins?.aim?.trim() ?? null), item("Evidence", answer("direction.evidence")), item("Other evidence", answers.write_ins?.evidence?.trim() ?? null),

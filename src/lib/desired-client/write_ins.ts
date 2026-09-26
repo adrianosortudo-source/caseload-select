@@ -6,6 +6,7 @@ const LABELS: Record<WriteInKey, string> = {
   concerns: "Client concern", reasons: "Reason to pursue the work", fee_effort: "Fee compared with effort",
   conditions: "Delivery condition", capacity: "Current capacity", limit: "Important limit",
   aim: "Direction", evidence: "Supporting evidence",
+  trigger: "Situation prompting help", decision_needs: "What would help the client decide", fit_signals: "Early fit signals",
 };
 
 /** Supplied wording stays visible even when a short brief paraphrases it. */

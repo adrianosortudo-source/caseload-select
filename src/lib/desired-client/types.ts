@@ -2,6 +2,8 @@ export type AreaId =
   | "business" | "employment" | "family" | "property" | "estates"
   | "litigation" | "injury" | "immigration" | "criminal" | "regulatory"
   | "ip" | "nonprofit" | "other";
+export type TriggerSuffix = "agreement" | "transaction" | "dispute" | "ongoing" | "exit" | "change" | "complaint" | "terms" | "separation" | "parenting" | "support_property" | "planning" | "purchase" | "sale" | "finance" | "issue" | "death" | "decisions" | "claim" | "proceeding" | "payment" | "incident" | "benefits" | "offer" | "move" | "status" | "hiring" | "decision" | "investigation" | "charge" | "release" | "application" | "hearing" | "compliance" | "protect" | "commercial" | "management" | "formation" | "governance" | "planned" | "problem" | "document";
+export type TriggerId = `${AreaId}.${TriggerSuffix}`;
 
 export type WorkId =
   | "business_agreements" | "business_acquisitions" | "business_owner_disputes" | "business_ongoing"
@@ -34,6 +36,8 @@ export type RoleId =
   | "other_individual" | "other_organization";
 
 export type GoalId = "understand" | "complete" | "resolve" | "protect" | "prepare" | "respond" | "unknown";
+export type DecisionNeedId = "scope_cost" | "options" | "relevant_experience" | "process" | "response" | "heard" | "unknown";
+export type FitSignalId = "service" | "stage" | "information" | "decision" | "scope" | "fees" | "timing" | "unknown";
 export type ConcernId = "next" | "cost" | "consequences" | "time" | "worse" | "unheard";
 export type ReasonId = "client_benefit" | "fees" | "skills" | "enjoyment" | "repeatable" | "further" | "direction" | "undecided";
 export type ConditionId = "time" | "scope" | "information" | "decision" | "communication" | "support" | "unknown";
@@ -49,7 +53,7 @@ export type PaymentId = "predictable" | "varies" | "uncertain" | "unknown";
 export type CapacityId = "room" | "limited" | "change" | "unknown";
 export type AimId = "more_current" | "narrower" | "new_area" | "new_model" | "unknown";
 export type LessId = "within" | "outside" | "model" | "none";
-export type WriteInKey = "timing" | "contact" | "goals" | "concerns" | "reasons" | "fee_effort" | "conditions" | "capacity" | "limit" | "aim" | "evidence";
+export type WriteInKey = "timing" | "contact" | "goals" | "concerns" | "reasons" | "fee_effort" | "conditions" | "capacity" | "limit" | "aim" | "evidence" | "trigger" | "decision_needs" | "fit_signals";
 export type ClarificationCode = "FOCUS_UNCLEAR" | "CLIENT_GOAL_UNCLEAR" | "CURRENT_CAPACITY_CONFLICT" | "FEE_EFFORT_CONFLICT" | "EXPERIENCE_DIRECTION_CONFLICT";
 export type ClarificationAnswer =
   | "choose_specific" | "keep_broad" | Exclude<GoalId, "unknown">
@@ -83,7 +87,7 @@ export interface PendingWorkComparison {
   selected: "a" | "b";
 }
 export interface DesiredClientAnswers {
-  schema_version: "dcm-v2.1";
+  schema_version: "dcm-v2.2";
   revision: number;
   /** Optional for drafts saved before write-in answers were introduced. */
   write_ins?: Partial<Record<WriteInKey, string>>;
@@ -97,12 +101,13 @@ export interface DesiredClientAnswers {
     comparison: WorkComparison | null;
   };
   situation: {
+    trigger: TriggerId | "unknown" | null;
     timing: TimingId | null;
     role: RoleId | "other" | "unknown" | null;
     role_other: string;
     contact: ContactId | null;
   };
-  client: { goals: GoalId[]; concerns: ConcernId[] };
+  client: { goals: GoalId[]; concerns: ConcernId[]; decision_needs: DecisionNeedId[] };
   value: {
     reasons: ReasonId[];
     fee_effort: FeeEffortId | null;
@@ -110,7 +115,7 @@ export interface DesiredClientAnswers {
     team_hours: TeamHoursId | null;
     payment: PaymentId | null;
   };
-  delivery: { conditions: ConditionId[]; capacity: CapacityId | null; limit: LimitId | null };
+  delivery: { conditions: ConditionId[]; capacity: CapacityId | null; limit: LimitId | null; fit_signals: FitSignalId[] };
   direction: { aim: AimId | null; evidence: EvidenceId[]; less: LessId | null; less_note: string };
   clarifications: Record<ClarificationCode, ClarificationAnswer | null>;
 }
@@ -118,9 +123,9 @@ export interface DesiredClientAnswers {
 export type AnswerReferencePath =
   | `write_ins.${WriteInKey}`
   | "focus.area" | "focus.work" | "focus.work_other" | "focus.service_area" | "focus.certainty" | "focus.route"
-  | "situation.timing" | "situation.role" | "situation.role_other" | "situation.contact"
-  | "client.goals" | "client.concerns" | "value.reasons" | "value.fee_effort" | "value.collected_fee"
-  | "value.team_hours" | "value.payment" | "delivery.conditions" | "delivery.capacity" | "delivery.limit"
+  | "situation.trigger" | "situation.timing" | "situation.role" | "situation.role_other" | "situation.contact"
+  | "client.goals" | "client.concerns" | "client.decision_needs" | "value.reasons" | "value.fee_effort" | "value.collected_fee"
+  | "value.team_hours" | "value.payment" | "delivery.conditions" | "delivery.capacity" | "delivery.limit" | "delivery.fit_signals"
   | "direction.aim" | "direction.evidence" | "direction.less" | "direction.less_note"
   | `clarifications.${ClarificationCode}`
   | `focus.comparison.${"a" | "b"}.${"work" | "fee_effort" | "team_fit" | "capacity" | "evidence"}`;
@@ -132,17 +137,26 @@ export interface DesiredClientStatement {
   source_answer_ids: AnswerReferencePath[];
 }
 export interface DesiredClientBrief {
+  report_version: "dcm-blueprint-v1";
+  portrait: DesiredClientStatement;
+  client_need: DesiredClientStatement;
+  firm_value: DesiredClientStatement;
+  open_questions: DesiredClientStatement[];
+  marketing: {
+    message: DesiredClientStatement;
+    content: DesiredClientStatement;
+    next_step: DesiredClientStatement;
+  };
+}
+/** Used only by the explicitly validated v2.1 local migration path. */
+export interface LegacyDesiredClientBrief {
   definition: DesiredClientStatement;
   client_goals: DesiredClientStatement[];
   firm_reasons: DesiredClientStatement[];
   delivery_conditions: DesiredClientStatement[];
   evidence: DesiredClientStatement[];
   open_questions: DesiredClientStatement[];
-  marketing: {
-    topic: DesiredClientStatement;
-    inquiry_question: DesiredClientStatement;
-    validation_step: DesiredClientStatement;
-  };
+  marketing: { topic: DesiredClientStatement; inquiry_question: DesiredClientStatement; validation_step: DesiredClientStatement };
   work_to_promote_less: DesiredClientStatement[];
 }
 export interface AnalysisResult {
@@ -187,4 +201,30 @@ export interface SavedDraft {
   lastEditedAt: string;
   expiresAt: string;
   savedBrief?: SavedBrief;
+}
+
+export interface ScreenProposalQuestion {
+  id: string;
+  question: string;
+  desired_condition: string | null;
+  target_status: "firm_preference" | "needs_definition";
+  source_answer_ids: AnswerReferencePath[];
+  use: "scope_review" | "service_review" | "time_review" | "next_step";
+  missing_action: "clarify";
+}
+export interface ScreenProposalRow {
+  id: "matter_fit" | "value_delivery" | "timing" | "readiness";
+  label: string;
+  questions: ScreenProposalQuestion[];
+  ask_summary: string;
+  use_summary: string;
+}
+export interface ProposedScreenProfile {
+  schema_version: "dcm-screen-proposal-v1";
+  answer_revision: number;
+  generated_at: string;
+  status: "proposal";
+  activation: "not_activated";
+  wording_reviewed: boolean;
+  rows: [ScreenProposalRow, ScreenProposalRow, ScreenProposalRow, ScreenProposalRow];
 }

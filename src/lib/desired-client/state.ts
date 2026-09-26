@@ -8,7 +8,7 @@ export interface ToolState {
   visitedStages: StageId[]; stagesToRevisit: StageId[]; comparisonStep: 1|2|3; comparisonDraft: PendingWorkComparison|null;
   savedBrief: SavedBrief|null; briefNeedsUpdate:boolean; reviewed: boolean; aiConsent: boolean; reviewRunId: string|null; requestCount: number;
   askedClarifications: ClarificationCode[]; activeClarification: ClarificationCode|null; dismissedCode: ClarificationCode|null;
-  loading: boolean; retryAllowed:boolean; error: ""|"unavailable"|"invalid"|"changed"; storageMessage: ""|"unavailable"|"expired"|"invalid"; copyFailed: boolean;
+  loading: boolean; retryAllowed:boolean; error: ""|"unavailable"|"invalid"|"changed"|"focusChanged"; storageMessage: ""|"unavailable"|"expired"|"invalid"; copyFailed: boolean;
 }
 const emptyMap = () => ({ FOCUS_UNCLEAR:null, CLIENT_GOAL_UNCLEAR:null, CURRENT_CAPACITY_CONFLICT:null, FEE_EFFORT_CONFLICT:null, EXPERIENCE_DIRECTION_CONFLICT:null });
 export function initialToolState(): ToolState { return { view:"welcome", mode:null, answers:emptyAnswers(), stage:1, visitedStages:[], stagesToRevisit:[], comparisonStep:1, comparisonDraft:null, savedBrief:null, briefNeedsUpdate:false, reviewed:false, aiConsent:false, reviewRunId:null, requestCount:0, askedClarifications:[], activeClarification:null, dismissedCode:null, loading:false, retryAllowed:false, error:"", storageMessage:"", copyFailed:false }; }
@@ -34,9 +34,19 @@ export function editAnswers(s:ToolState, edit:(answers:DesiredClientAnswers)=>De
   const areaChanged=answers.focus.area!==before.focus.area, workChanged=answers.focus.work!==before.focus.work||answers.focus.work_other!==before.focus.work_other;
   if(areaChanged){ answers.focus.work=null; answers.focus.work_other=""; answers.focus.certainty=null; answers.situation.role=null; answers.situation.role_other=""; answers.situation.contact=null; answers.focus.comparison=null; }
   else if(workChanged){ answers.focus.comparison=null; if(answers.focus.work!=="other") answers.focus.work_other=""; if(answers.focus.work!==null) answers.focus.certainty="chosen"; }
+  if (areaChanged || workChanged) {
+    answers.situation.trigger = null;
+    answers.client.decision_needs = [];
+    answers.delivery.fit_signals = [];
+    const writeIns = answers.write_ins ?? {};
+    delete writeIns.trigger;
+    delete writeIns.decision_needs;
+    delete writeIns.fit_signals;
+    answers.write_ins = writeIns;
+  }
   if(answers.situation.role!=="other") answers.situation.role_other="";
   answers.revision=before.revision+1; answers.clarifications=emptyMap();
-  return { ...s,answers,savedBrief:null,briefNeedsUpdate:!!s.savedBrief||s.briefNeedsUpdate,reviewed:false,reviewRunId:null,requestCount:0,askedClarifications:[],activeClarification:null,dismissedCode:null,loading:false,error:"",stagesToRevisit:areaChanged||workChanged?[2,3,4,5,6]:s.stagesToRevisit,view:"questions",stage:areaChanged||workChanged?1:s.stage };
+  return { ...s,answers,savedBrief:null,briefNeedsUpdate:!!s.savedBrief||s.briefNeedsUpdate,reviewed:false,reviewRunId:null,requestCount:0,askedClarifications:[],activeClarification:null,dismissedCode:null,loading:false,error:areaChanged||workChanged?"focusChanged":"",stagesToRevisit:areaChanged||workChanged?[2,3,4,5,6]:s.stagesToRevisit,view:"questions",stage:areaChanged||workChanged?1:s.stage };
 }
 export function updateComparisonDraft(s:ToolState, draft:PendingWorkComparison|null, step?:1|2|3):ToolState { return { ...s,comparisonDraft:draft,comparisonStep:step??s.comparisonStep,view:"comparison",error:"" }; }
 export function commitComparison(s:ToolState, certainty:"chosen"|"provisional"):ToolState {
@@ -44,11 +54,22 @@ export function commitComparison(s:ToolState, certainty:"chosen"|"provisional"):
   const a=draft.a,b=draft.b;
   if([a.fee_effort,a.capacity,a.team_fit,a.evidence,b.fee_effort,b.capacity,b.team_fit,b.evidence].some(v=>!v)) return s;
   const complete=draft as WorkComparison; const before=s.answers, answers=structuredClone(before), selected=complete[complete.selected];
+  const workChanged = answers.focus.work !== selected.work;
   answers.focus.work=selected.work; answers.focus.work_other=""; answers.focus.comparison=complete; answers.focus.certainty=certainty;
+  if (workChanged) {
+    answers.situation.trigger = null;
+    answers.client.decision_needs = [];
+    answers.delivery.fit_signals = [];
+    const writeIns = answers.write_ins ?? {};
+    delete writeIns.trigger;
+    delete writeIns.decision_needs;
+    delete writeIns.fit_signals;
+    answers.write_ins = writeIns;
+  }
   if(answers.value.fee_effort===null) answers.value.fee_effort=selected.fee_effort;
   if(answers.delivery.capacity===null) answers.delivery.capacity=selected.capacity;
   answers.revision=before.revision+1; answers.clarifications=emptyMap();
-  return { ...s,answers,view:"questions",stage:1,visitedStages:[1],stagesToRevisit:[2,3,4,5,6],comparisonDraft:null,savedBrief:null,briefNeedsUpdate:!!s.savedBrief||s.briefNeedsUpdate,reviewed:false,reviewRunId:null,requestCount:0,askedClarifications:[],activeClarification:null,dismissedCode:null,loading:false,error:"changed" };
+  return { ...s,answers,view:"questions",stage:1,visitedStages:[1],stagesToRevisit:[2,3,4,5,6],comparisonDraft:null,savedBrief:null,briefNeedsUpdate:!!s.savedBrief||s.briefNeedsUpdate,reviewed:false,reviewRunId:null,requestCount:0,askedClarifications:[],activeClarification:null,dismissedCode:null,loading:false,error:workChanged?"focusChanged":"changed" };
 }
 export function beginReview(s:ToolState):ToolState { return canEnterStage(s,7)?{ ...s,view:"review",stage:7,savedBrief:null,reviewed:false,error:"",reviewRunId:null,requestCount:0,askedClarifications:[],activeClarification:null,dismissedCode:null }:s; }
 export function createStructuredBrief(s:ToolState, now=new Date()):ToolState { if(!canEnterStage(s,7)) return s; return { ...s,view:"brief",stage:7,savedBrief:{brief:buildStructuredBrief(s.answers),sourceBriefRevision:s.answers.revision,generatedAt:now.toISOString(),wordingReviewed:false,mode:"structured"},briefNeedsUpdate:false,reviewed:false,error:"",activeClarification:null,reviewRunId:null,requestCount:0,askedClarifications:[],loading:false,retryAllowed:false }; }

@@ -1,4 +1,4 @@
-import { CONTACT_ROLE_IDS, AREA_CATALOG, WRITE_IN_KEYS, isKnownArea, isKnownWork } from "./catalog";
+import { CONTACT_ROLE_IDS, AREA_CATALOG, WRITE_IN_KEYS, isKnownArea, isKnownTrigger, isKnownWork } from "./catalog";
 import type {
   AnalysisRequestEnvelope,
   AreaId,
@@ -24,6 +24,9 @@ const ENUMS = {
   contact: ["owner", "manager", "adviser", "other", "unknown"],
   goals: GOALS,
   concerns: ["next", "cost", "consequences", "time", "worse", "unheard"],
+  triggers: ["unknown"],
+  decisionNeeds: ["scope_cost", "options", "relevant_experience", "process", "response", "heard", "unknown"],
+  fitSignals: ["service", "stage", "information", "decision", "scope", "fees", "timing", "unknown"],
   reasons: ["client_benefit", "fees", "skills", "enjoyment", "repeatable", "further", "direction", "undecided"],
   feeEffort: ["worthwhile", "scoped", "difficult", "unknown"],
   collectedFee: ["under2", "2to5", "5to15", "15to50", "50plus", "unknown", "private"],
@@ -86,7 +89,7 @@ function validClarificationAnswer(code: ClarificationCode, answer: unknown): ans
 function validateAnswers(value: unknown, answerRevision: number, requireComplete: boolean): value is DesiredClientAnswers {
   if (!hasExactKeys(value, ANSWER_KEYS) && !hasExactKeys(value, [...ANSWER_KEYS, "write_ins"])) return false;
   const answers = value;
-  if (answers.schema_version !== "dcm-v2.1" || answers.revision !== answerRevision ||
+  if (answers.schema_version !== "dcm-v2.2" || answers.revision !== answerRevision ||
       !Number.isSafeInteger(answers.revision) || answers.revision < 0) return false;
   const writeIns = answers.write_ins;
   if (writeIns !== undefined) {
@@ -118,10 +121,12 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
     if (focus.work !== selected.work || (focus.certainty !== "chosen" && focus.certainty !== "provisional")) return false;
   }
 
-  if (!hasExactKeys(answers.situation, ["timing", "role", "role_other", "contact"])) return false;
+  if (!hasExactKeys(answers.situation, ["trigger", "timing", "role", "role_other", "contact"])) return false;
   const situation = answers.situation;
-  if (!isEnum(situation.timing, ENUMS.timing, true) || !isOptionalText(situation.role_other) ||
-      !isEnum(situation.contact, ENUMS.contact, true)) return false;
+  if (!(situation.trigger === null || situation.trigger === "unknown" || (!!focus.area && isKnownTrigger(focus.area, situation.trigger))) ||
+      !isEnum(situation.timing, ENUMS.timing, true) || !isOptionalText(situation.role_other) ||
+      !isEnum(situation.contact, ENUMS.contact, true) ||
+      (situation.trigger !== null && situation.trigger !== "unknown" && own("trigger")) || (situation.trigger === "unknown" && own("trigger"))) return false;
   if (situation.role !== null && !focus.area) return false;
   if (situation.role !== null && situation.role !== "other" && situation.role !== "unknown" &&
       (!focus.area || typeof situation.role !== "string" || !Object.hasOwn(AREA_CATALOG[focus.area].roles, situation.role))) return false;
@@ -129,9 +134,12 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
   if (situation.role !== "other" && situation.role_other.trim() !== "") return false;
   if (!CONTACT_ROLE_SET.has(String(situation.role)) && situation.contact !== null) return false;
 
-  if (!hasExactKeys(answers.client, ["goals", "concerns"]) ||
+  if (!hasExactKeys(answers.client, ["goals", "concerns", "decision_needs"]) ||
       !isUniqueChoiceArray(answers.client.goals, ENUMS.goals, 2) || !exclusive(answers.client.goals, "unknown") ||
-      !isUniqueChoiceArray(answers.client.concerns, ENUMS.concerns, 2) || !exclusive(answers.client.concerns, "unheard")) return false;
+      !isUniqueChoiceArray(answers.client.concerns, ENUMS.concerns, 2) || !exclusive(answers.client.concerns, "unheard") ||
+      !isUniqueChoiceArray(answers.client.decision_needs, ENUMS.decisionNeeds, 2) || !exclusive(answers.client.decision_needs, "unknown") ||
+      answers.client.decision_needs.length + Number(own("decision_needs")) > 2 ||
+      (answers.client.decision_needs.includes("unknown") && own("decision_needs"))) return false;
 
   if (!hasExactKeys(answers.value, ["reasons", "fee_effort", "collected_fee", "team_hours", "payment"])) return false;
   const valueGroup = answers.value;
@@ -140,10 +148,13 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
       !isEnum(valueGroup.collected_fee, ENUMS.collectedFee, true) || !isEnum(valueGroup.team_hours, ENUMS.teamHours, true) ||
       !isEnum(valueGroup.payment, ENUMS.payment, true)) return false;
 
-  if (!hasExactKeys(answers.delivery, ["conditions", "capacity", "limit"])) return false;
+  if (!hasExactKeys(answers.delivery, ["conditions", "capacity", "limit", "fit_signals"])) return false;
   const delivery = answers.delivery;
   if (!isUniqueChoiceArray(delivery.conditions, ENUMS.conditions, 3) || !exclusive(delivery.conditions, "unknown") ||
-      !isEnum(delivery.capacity, ENUMS.capacity, true) || !isEnum(delivery.limit, ENUMS.limit, true)) return false;
+      !isEnum(delivery.capacity, ENUMS.capacity, true) || !isEnum(delivery.limit, ENUMS.limit, true) ||
+      !isUniqueChoiceArray(delivery.fit_signals, ENUMS.fitSignals, 3) || !exclusive(delivery.fit_signals, "unknown") ||
+      delivery.fit_signals.length + Number(own("fit_signals")) > 3 ||
+      (delivery.fit_signals.includes("unknown") && own("fit_signals"))) return false;
 
   if (!hasExactKeys(answers.direction, ["aim", "evidence", "less", "less_note"])) return false;
   const direction = answers.direction;
@@ -169,9 +180,11 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
 
   if (!requireComplete) return true;
   // Review cannot be prepared until every required stage choice is present.
-  return !!focus.area && focus.work !== null && focus.route !== null && (situation.timing !== null || own("timing")) &&
+  return !!focus.area && focus.work !== null && focus.route !== null &&
+    (situation.trigger !== null || own("trigger")) && (situation.timing !== null || own("timing")) &&
     situation.role !== null && (answers.client.goals.length > 0 || own("goals")) && (valueGroup.fee_effort !== null || own("fee_effort")) &&
-    (delivery.capacity !== null || own("capacity")) && (direction.aim !== null || own("aim")) && (direction.evidence.length > 0 || own("evidence"));
+    (delivery.capacity !== null || own("capacity")) && (delivery.fit_signals.length > 0 || own("fit_signals")) &&
+    (direction.aim !== null || own("aim")) && (direction.evidence.length > 0 || own("evidence"));
 }
 
 /** Validates an incomplete saved draft without rejecting a normal mid-edit state. */

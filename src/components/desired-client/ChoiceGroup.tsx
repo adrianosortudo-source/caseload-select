@@ -19,6 +19,7 @@ export interface ChoiceGroupProps {
   required?: boolean;
   error?: string;
   maximum?: number;
+  additionalSelectionCount?: number;
   exclusiveOptions?: string[];
   exclusiveGroups?: string[][];
   onChange: (value: string | string[]) => void;
@@ -37,6 +38,7 @@ export function ChoiceGroup({
   required = false,
   error,
   maximum,
+  additionalSelectionCount = 0,
   exclusiveOptions = [],
   exclusiveGroups = [],
   onChange,
@@ -47,7 +49,7 @@ export function ChoiceGroup({
   const selectedValues = Array.isArray(value) ? value : value === null ? [] : [value];
   const selectionKey = selectedValues.join("\u001f");
   const localLimitError = maximum !== undefined && limitExceededFor === selectionKey
-    ? COMMON_COPY.maxSelection(maximum)
+    ? additionalSelectionCount ? "You can choose " + maximum + " answers in total." : COMMON_COPY.maxSelection(maximum)
     : undefined;
   const visibleError = error || localLimitError;
   const describedBy = [help ? `${idPrefix}-help` : null, visibleError ? `${idPrefix}-error` : null]
@@ -80,7 +82,7 @@ export function ChoiceGroup({
         });
     if (!isExclusive) nextValues.push(optionId);
 
-    if (maximum !== undefined && nextValues.length > maximum) {
+    if (maximum !== undefined && nextValues.length + additionalSelectionCount > maximum) {
       setLimitExceededFor(selectionKey);
       onLimitReached?.();
       return;

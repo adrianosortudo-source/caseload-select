@@ -14,6 +14,8 @@ const p09 = fixtures.find((fixture) => fixture.id === 'P09')!;
 async function resumeRichReview(page: Page) {
   const answers = structuredClone(p09.answers);
   answers.situation.contact = 'manager';
+  answers.delivery.fit_signals = ['scope', 'information', 'fees', 'decision'];
+  answers.client.decision_needs = ['scope_cost', 'options'];
   answers.client.goals = ['complete', 'protect'];
   answers.delivery.limit = 'scope';
   answers.direction.less = 'within';
@@ -26,7 +28,7 @@ async function resumeRichReview(page: Page) {
   await page.route(API, (route) => route.abort());
   await page.goto(ROUTE);
   await page.getByRole('button', { name: 'Resume without AI', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Does this describe the work you want more of?' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Check the direction before we build your profile' })).toBeVisible();
 }
 
 for (const width of WIDTHS) {
@@ -52,10 +54,12 @@ for (const width of WIDTHS) {
     await layout(page);
     await capture(page, `audit-rich-${width}-review`);
 
-    await page.getByRole('button', { name: 'Create my brief', exact: true }).click();
-    await expect(page.getByText('First contact: Manager or executive. This may be someone other than the client.', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Create my basic blueprint', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Desired Client Blueprint', exact: true })).toBeVisible();
+    await expect(page.getByText('Business or organization', { exact: true }).first()).toBeVisible();
     await expect(page.getByText('Complete a planned transaction or process', { exact: true })).toBeVisible();
     await expect(page.getByText('Protect something important', { exact: true })).toBeVisible();
+    await expect(page.locator('.dc-screen-table__row')).toHaveCount(4);
     await layout(page);
     await capture(page, `audit-rich-${width}-brief`);
   });
