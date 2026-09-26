@@ -12,6 +12,7 @@ export default defineConfig({
       "src/app/api/internal/prospect-enrichment/**/*.test.ts",
       "src/app/api/admin/prospect-enrichment/**/*.test.ts",
       "src/app/admin/prospects/__tests__/new-firm-evidence-review.test.ts",
+      "src/app/admin/prospects/__tests__/sobirovs-assessment-profile.test.tsx",
       "src/app/admin/prospects/reconciled/__tests__/route.test.ts",
       "scripts/prospect-enrichment/__tests__/client-lineage.test.ts",
     ],
