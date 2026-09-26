@@ -8,6 +8,8 @@ import yaml from "js-yaml";
 import {
   APPLIED_OPERATOR_RPC,
   CATALOG_EXPECTED,
+  CANDIDATE_APPLY_CONFIRMATION,
+  CANDIDATE_PREREQUISITE_PREFIX_LENGTH,
   MIGRATION_PATHS,
   PROJECT_REF,
   RELEASE_PATH,
@@ -15,6 +17,9 @@ import {
   createReleaseReceipt,
   ledgerQuery,
   verifyLedgerState,
+  verifyApplicationGate,
+  verifyCandidateCompletePrefix,
+  verifyCandidatePrerequisitePrefix,
   verifyMigrationPlan,
   verifyOperatorRpcCatalog,
   verifyReleaseReceipt,
@@ -32,6 +37,7 @@ const readSources = () => Object.fromEntries([...MIGRATION_PATHS, APPLIED_OPERAT
 }));
 const realSources = readSources();
 const receipt = JSON.parse(fs.readFileSync(path.join(root, RELEASE_PATH), "utf8"));
+const receiptSha256 = execFileSync("node", ["-e", "const c=require('node:crypto'),f=require('node:fs');process.stdout.write(c.createHash('sha256').update(f.readFileSync(process.argv[1])).digest('hex'))", path.join(root, RELEASE_PATH)], { encoding: "utf8" });
 const fakeSources = Object.fromEntries([...MIGRATION_PATHS, APPLIED_OPERATOR_RPC.path].map(file => [file, Buffer.from("SELECT 1;\n")]));
 const fakeReceipt = createReleaseReceipt(fakeSources);
 const fakeStatements = ["SELECT 1"];
@@ -97,8 +103,30 @@ test("ledger accepts only a verified applied RPC plus an exact ordered migration
   }
 });
 
+test("candidate apply requires the exact eight prerequisites and derives the three-migration candidate suffix", () => {
+  assert.equal(CANDIDATE_PREREQUISITE_PREFIX_LENGTH, 8);
+  const ready = verifyLedgerState(rowsForPrefix(8), fakeReceipt, fakeSources);
+  assert.deepEqual(verifyCandidatePrerequisitePrefix(ready), {
+    requiredAppliedPrefixLength: 8,
+    pending: fakeReceipt.migrations.slice(8).map(migration => migration.filename),
+    candidateMigrations: fakeReceipt.migrations.slice(8).map(migration => migration.filename),
+  });
+  const exactSuffixPlan = { dryRun: true, upToDate: false, migrations: ready.pending, seeds: [], roles: [] };
+  assert.deepEqual(verifyMigrationPlan(exactSuffixPlan, ready, "pre").migrations, fakeReceipt.migrations.slice(8).map(migration => migration.filename));
+  assert.throws(() => verifyMigrationPlan({ ...exactSuffixPlan, migrations: [...exactSuffixPlan.migrations, "20990101000000_unreviewed.sql"] }, ready, "pre"), /unexpected_pending/);
+  for (const count of [0, 7, 9, 10, 11]) {
+    const proof = verifyLedgerState(rowsForPrefix(count), fakeReceipt, fakeSources);
+    assert.throws(() => verifyCandidatePrerequisitePrefix(proof), /requires_exact_eight/);
+  }
+  const complete = verifyLedgerState(rowsForPrefix(11), fakeReceipt, fakeSources);
+  assert.deepEqual(verifyCandidateCompletePrefix(complete), {
+    appliedPrefixLength: 11, pending: [], candidateMigrations: fakeReceipt.migrations.slice(8).map(migration => migration.filename),
+  });
+  assert.throws(() => verifyCandidateCompletePrefix(ready), /ledger_incomplete/);
+});
+
 for (const [label, rows] of [
-  ["missing applied RPC", rowsForPrefix(10).filter(row => row.version !== APPLIED_OPERATOR_RPC.version)],
+  ["missing applied RPC", rowsForPrefix(11).filter(row => row.version !== APPLIED_OPERATOR_RPC.version)],
   ["missing prefix entry", rowsForPrefix(4).filter(row => row.version !== "20260923161812")],
   ["non-prefix release row", rowsForPrefix(0).concat({ version: "20260925200000", name: "gta_prospect_operator_database_firm_profile_link", statements: fakeStatements })],
   ["wrong RPC name", rowsForPrefix(0).map(row => row.version === APPLIED_OPERATOR_RPC.version ? { ...row, name: "wrong" } : row)],
@@ -150,6 +178,32 @@ test("source authorization accepts only reviewed manual main dispatch with direc
   ]) await t.test("source gate rejects " + label, () => assert.throws(() => verifySourceGate({ ...gate, ...change })));
 });
 
+test("application authorization binds current main SHA, exact receipt hash, TLS target, and typed apply confirmation", () => {
+  const applicationGate = {
+    ...gate,
+    operation: "apply",
+    reviewedReceiptSha256: receiptSha256,
+    configuredReceiptSha256: receiptSha256,
+    actualReceiptSha256: receiptSha256,
+    confirmation: CANDIDATE_APPLY_CONFIRMATION,
+  };
+  assert.equal(verifyApplicationGate(applicationGate).operation, "apply");
+  assert.equal(verifyApplicationGate({ ...applicationGate, operation: "dry-run", confirmation: "" }).operation, "dry-run");
+  for (const [label, change] of [
+    ["wrong receipt input", { reviewedReceiptSha256: "0".repeat(64) }],
+    ["wrong protected receipt setting", { configuredReceiptSha256: "0".repeat(64) }],
+    ["changed receipt bytes", { actualReceiptSha256: "0".repeat(64) }],
+    ["malformed receipt digest", { reviewedReceiptSha256: "not-a-sha256" }],
+    ["wrong confirmation", { confirmation: "APPLY-PROSPECT-ENRICHMENT-V1" }],
+    ["wrong branch", { ref: "refs/heads/codex/test" }],
+    ["changed reviewed source", { githubSha: "b".repeat(40) }],
+    ["wrong database host", { databaseUrl: applicationGate.databaseUrl.replace("db." + PROJECT_REF, "db.other-project") }],
+    ["ambient database override", { environment: { SUPABASE_DB_URL: "unexpected" } }],
+    ["project env file", { projectEnvFiles: ["supabase/.env"] }],
+  ]) assert.throws(() => verifyApplicationGate({ ...applicationGate, ...change }), undefined, label);
+  assert.throws(() => verifyApplicationGate({ ...applicationGate, operation: "apply", confirmation: undefined }), /exact_candidate_apply_confirmation_required/);
+});
+
 test("new workflow is protected and read-only; legacy six-migration writer is unchanged", () => {
   const workflow = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/prospect-candidate-additive-preflight.yml"), "utf8"));
   assert.deepEqual(Object.keys(workflow.on), ["workflow_dispatch"]);
@@ -172,5 +226,38 @@ test("new workflow is protected and read-only; legacy six-migration writer is un
   const oldWorkflow = fs.readFileSync(path.join(root, ".github/workflows/prospect-enrichment-migration-gate.yml"), "utf8");
   assert.match(oldWorkflow, /The exact six-migration plan matches/);
   assert.match(oldWorkflow, /migration-gate\.mjs/);
+  assert.equal(ORIGINAL_SIX_PATHS.length, 6);
+});
+
+test("separate additive writer is protected, receipt-bound, and limits writes to the candidate suffix", () => {
+  const workflow = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/prospect-candidate-additive-release.yml"), "utf8"));
+  assert.deepEqual(Object.keys(workflow.on), ["workflow_dispatch"]);
+  const job = workflow.jobs.release;
+  assert.match(job.if, /refs\/heads\/main/);
+  assert.match(job.if, /github.repository == 'adrianosortudo-source\/caseload-select'/);
+  assert.equal(job.environment.name, "Production prospect migrations");
+  assert.match(job.env.CONFIGURED_REVIEWED_SHA, /vars\.PROSPECT_CANDIDATE_RELEASE_REVIEWED_SHA/);
+  assert.match(job.env.CONFIGURED_RECEIPT_SHA256, /vars\.PROSPECT_CANDIDATE_RELEASE_REVIEWED_RECEIPT_SHA256/);
+  assert.equal(workflow.permissions.contents, "read");
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs.operation.options, ["dry-run", "apply"]);
+  for (const step of job.steps.filter(s => s.uses)) assert.match(step.uses, /@[a-f0-9]{40}$/);
+  const writeSteps = job.steps.filter(s => /supabase db push[^\n]*--yes/.test(s.run ?? ""));
+  assert.equal(writeSteps.length, 1);
+  assert.equal(writeSteps[0].id, "apply_migration");
+  assert.match(writeSteps[0].if, /inputs\.operation == 'apply'/);
+  assert.match(writeSteps[0].run, /candidate-prefix/);
+  assert.match(writeSteps[0].run, /immediate-rpc-catalog-check/);
+  assert.match(writeSteps[0].run, /immediate-plan-check/);
+  assert.match(writeSteps[0].run, /apply_started=true/);
+  assert.match(job.steps.find(s => /Verify exact candidate-profile/.test(s.name)).if, /always\(\)/);
+  assert.match(job.steps.find(s => /Verify exact candidate-profile/.test(s.name)).if, /apply_started == 'true'/);
+  const dryRun = job.steps.find(s => /Require exact candidate suffix/.test(s.name));
+  assert.match(dryRun.run, /--dry-run/);
+  const serialized = JSON.stringify(workflow);
+  assert.match(serialized, /APPLY-PROSPECT-CANDIDATE-PROFILES-V1/);
+  assert.match(serialized, /additive-release-gate\.mjs application-source/);
+  assert.doesNotMatch(serialized, /--password|SUPABASE_ACCESS_TOKEN/);
+  const legacy = fs.readFileSync(path.join(root, ".github/workflows/prospect-enrichment-migration-gate.yml"), "utf8");
+  assert.match(legacy, /Require exactly six enrichment migrations pending/);
   assert.equal(ORIGINAL_SIX_PATHS.length, 6);
 });
