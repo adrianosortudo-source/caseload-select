@@ -3,6 +3,7 @@ import test from "node:test";
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import yaml from "js-yaml";
 import {
@@ -25,7 +26,7 @@ import {
   verifyReleaseReceipt,
   verifySourceGate,
 } from "../additive-release-gate.mjs";
-import { MIGRATION_PATHS as ORIGINAL_SIX_PATHS } from "../migration-gate.mjs";
+import { MIGRATION_PATHS as ORIGINAL_SIX_PATHS, PREVIEW_MIGRATION_PATHS, HISTORICAL_LEDGER_NAME_ALIASES, stageProductionWorkdir, verifyProductionWorkdir, verifyFullMigrationLedger } from "../migration-gate.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const readSources = () => Object.fromEntries([...MIGRATION_PATHS, APPLIED_OPERATOR_RPC.path].map(file => {
@@ -265,4 +266,159 @@ test("separate additive writer is protected, receipt-bound, and limits writes to
   const legacy = fs.readFileSync(path.join(root, ".github/workflows/prospect-enrichment-migration-gate.yml"), "utf8");
   assert.match(legacy, /Require exactly six enrichment migrations pending/);
   assert.equal(ORIGINAL_SIX_PATHS.length, 6);
+});
+
+test("candidate CLI inventory excludes preview SQL and reconciles the complete production ledger", t => {
+  // Exercise the actual stager and ledger guard with local files and synthetic
+  // ledger rows. No CLI, network, credentials, or production database is used.
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "candidate-writer-regression-"));
+  t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
+  const staged = path.join(scratch, "candidate-migrations");
+  const proof = stageProductionWorkdir(root, staged);
+  assert.deepEqual(proof.exclusions.map(item => item.path).sort(), [...PREVIEW_MIGRATION_PATHS].sort());
+  const filenames = fs.readdirSync(path.join(staged, "supabase/migrations")).sort();
+  for (const excluded of PREVIEW_MIGRATION_PATHS) {
+    assert.ok(fs.existsSync(path.join(root, excluded)), "preview fixture must exist in repository");
+    assert.ok(!filenames.includes(path.basename(excluded)), "preview SQL must never reach the CLI inventory");
+  }
+  for (const filename of filenames) {
+    assert.deepEqual(fs.readFileSync(path.join(staged, "supabase/migrations", filename)),
+      fs.readFileSync(path.join(root, "supabase/migrations", filename)), "stage preserves exact bytes");
+  }
+  assert.deepEqual(fs.readFileSync(path.join(staged, "supabase/config.toml")), fs.readFileSync(path.join(root, "supabase/config.toml")));
+  const rows = filenames.map(filename => {
+    const [, version, name] = /^(\d+)_(.+)\.sql$/.exec(filename);
+    return { version, name: HISTORICAL_LEDGER_NAME_ALIASES[version]?.name ?? name };
+  });
+  const pending = MIGRATION_PATHS.slice(CANDIDATE_PREREQUISITE_PREFIX_LENGTH);
+  const pendingVersions = new Set(pending.map(file => path.basename(file).split("_")[0]));
+  const before = rows.filter(row => !pendingVersions.has(row.version));
+  assert.equal(verifyFullMigrationLedger(before, staged, "candidate-pending", pending).pendingPaths.length, 3);
+  assert.equal(verifyFullMigrationLedger(rows, staged, "candidate-pending", []).pendingPaths.length, 0);
+  assert.throws(() => verifyFullMigrationLedger([...before, { version: "20990101000000", name: "unreviewed" }], staged, "candidate-pending", pending), /remote_migration_source_missing_or_mismatched/);
+  assert.throws(() => verifyFullMigrationLedger(before.slice(1), staged, "candidate-pending", pending), /unexpected_full_history_delta/);
+  // A preview ledger entry is also rejected, rather than silently tolerated.
+  const preview = path.basename(PREVIEW_MIGRATION_PATHS[0]);
+  const [, version, name] = /^(\d+)_(.+)\.sql$/.exec(preview);
+  assert.throws(() => verifyFullMigrationLedger([...before, { version, name }].sort((a,b) => a.version.localeCompare(b.version)), staged, "candidate-pending", pending), /remote_migration_source_missing_or_mismatched/);
+});
+
+test("candidate writer uses a fresh byte-checked stage for each CLI migration phase", () => {
+  const job = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/prospect-candidate-additive-release.yml"), "utf8")).jobs.release;
+  const runs = job.steps.map(step => (step.run ?? "").replace(/\\\r?\n\s*/g, " "));
+  const staged = new Set();
+  let plans = 0, applies = 0;
+  for (const [index, run] of runs.entries()) {
+    for (const line of run.split(/\r?\n/)) {
+      const stage = /migration-gate\.mjs stage "\$GITHUB_WORKSPACE" "\$RUNNER_TEMP\/(candidate-migrations(?:-immediate|-post)?)"/.exec(line);
+      if (stage) { assert.ok(!staged.has(stage[1]), "stage destination must be fresh"); staged.add(stage[1]); }
+      if (!/supabase db push/.test(line) || /--help/.test(line)) continue;
+      const push = /\(cd "\$RUNNER_TEMP\/(candidate-migrations(?:-immediate|-post)?)" && supabase db push /.exec(line);
+      assert.ok(push, "CLI must discover migrations inside verified stage");
+      assert.ok(staged.has(push[1]), "staging precedes every migration CLI call");
+      const expected = job.steps[index].id === "apply_migration" ? "candidate-migrations-immediate" : /candidate-complete/.test(run) ? "candidate-migrations-post" : "candidate-migrations";
+      assert.equal(push[1], expected, "CLI must use the fresh stage for its phase");
+      const fullCheck = run.split(/\r?\n/).find(command => /additive-release-gate\.mjs full-ledger/.test(command));
+      assert.ok(fullCheck?.includes(`"$RUNNER_TEMP/${expected}"`), "ledger guard must validate the same stage used by CLI");
+      assert.doesNotMatch(line, /\$GITHUB_WORKSPACE/);
+      assert.match(line, /--db-url "\$MIGRATION_DATABASE_URL"/);
+      if (/--yes\b/.test(line)) applies++; else { assert.match(line, /--dry-run\b/); plans++; }
+    }
+  }
+  assert.equal(applies, 1);
+  assert.deepEqual([...staged].sort(), ["candidate-migrations", "candidate-migrations-immediate", "candidate-migrations-post"]);
+  assert.equal(plans, 3, "initial, immediate-before-apply and post-apply plans must all use the stage");
+});
+
+test("staged production proof rejects changed bytes, config, inventory, environment and evidence", () => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), "candidate-stage-proof-"));
+  try {
+    const staged = path.join(scratch, "candidate-migrations");
+    const proof = stageProductionWorkdir(root, staged);
+    const verify = (evidence = proof) => verifyProductionWorkdir(root, staged, evidence);
+    assert.equal(verify().verified, true);
+    for (const relative of [MIGRATION_PATHS[8], "supabase/config.toml"]) {
+      const target = path.join(staged, relative);
+      const original = fs.readFileSync(target);
+      fs.appendFileSync(target, "\n-- synthetic mutation\n");
+      assert.throws(() => verify(), /staged_migration_source_mismatch|staged_config_mismatch/, relative);
+      fs.writeFileSync(target, original);
+      assert.equal(verify().verified, true, "restoring exact bytes restores verification");
+    }
+    const preview = path.join(staged, PREVIEW_MIGRATION_PATHS[0]);
+    fs.copyFileSync(path.join(root, PREVIEW_MIGRATION_PATHS[0]), preview);
+    assert.throws(() => verify(), /staged_migration_source_mismatch/);
+    fs.unlinkSync(preview);
+    for (const relative of [".env", "supabase/.env.local"]) {
+      const target = path.join(staged, relative);
+      fs.writeFileSync(target, "SYNTHETIC_TEST_ONLY=1\n");
+      assert.throws(() => verify(), /project_database_env_files_prohibited/);
+      fs.unlinkSync(target);
+    }
+    for (const change of [
+      { stagedRoot: scratch }, { migrationCount: proof.migrationCount + 1 },
+      { inventorySha256: "0".repeat(64) }, { configSha256: "0".repeat(64) },
+      { exclusions: [] },
+    ]) assert.throws(() => verify({ ...proof, ...change }), /staged_/);
+    assert.equal(verify().verified, true);
+  } finally {
+    fs.rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+test("candidate writer preserves temporary credentials and loads static credentials only once", () => {
+  const job = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/prospect-candidate-additive-release.yml"), "utf8")).jobs.release;
+  assert.equal(job.env.MIGRATION_DATABASE_URL, undefined, "job must not shadow the minted GITHUB_ENV value");
+  const loaders = job.steps.filter(step => step.env?.STATIC_MIGRATION_DATABASE_URL !== undefined);
+  assert.equal(loaders.length, 1);
+  assert.match(loaders[0].if, /!inputs\.use_temporary_database_credential/);
+  assert.match(loaders[0].env.STATIC_MIGRATION_DATABASE_URL, /secrets\.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL/);
+  assert.match(loaders[0].run, /MIGRATION_DATABASE_URL=%s/);
+  assert.match(loaders[0].run, />> "\$GITHUB_ENV"/);
+  for (const step of job.steps) assert.equal(step.env?.MIGRATION_DATABASE_URL, undefined, "step env must not replace credential propagated by GITHUB_ENV");
+  const mint = job.steps.find(step => /temporary-credential\.mjs/.test(step.run ?? ""));
+  assert.equal(mint.if, "inputs.use_temporary_database_credential");
+  const firstConnection = job.steps.findIndex(step => /additive-release-gate\.mjs connection|additive-release-gate\.mjs application-source >/.test(step.run ?? ""));
+  assert.ok(firstConnection > job.steps.indexOf(loaders[0]));
+  assert.ok(firstConnection > job.steps.indexOf(mint));
+});
+
+test("candidate writer rechecks full ledger before apply and verifies even an uncertain apply", () => {
+  const job = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/prospect-candidate-additive-release.yml"), "utf8")).jobs.release;
+  const apply = job.steps.find(step => step.id === "apply_migration");
+  const commands = apply.run.replace(/\\\r?\n\s*/g, " ").split(/\r?\n/);
+  const fullRead = commands.findIndex(line => /supabase db query/.test(line) && /full-ledger/.test(line));
+  const fullCheck = commands.findIndex(line => /additive-release-gate\.mjs full-ledger/.test(line));
+  const immediatePlan = commands.findIndex(line => /supabase db push/.test(line) && /--dry-run/.test(line));
+  const planCheck = commands.findIndex(line => /additive-release-gate\.mjs plan pre/.test(line));
+  const started = commands.findIndex(line => /apply_started=true/.test(line));
+  const write = commands.findIndex(line => /supabase db push/.test(line) && /--yes/.test(line));
+  assert.ok(fullRead >= 0 && fullCheck > fullRead && immediatePlan > fullCheck && planCheck > immediatePlan && started > planCheck && write > started,
+    "fresh full-ledger and pending-plan validation must succeed before marking and attempting apply");
+  assert.match(commands[fullCheck], /"\$RUNNER_TEMP\/candidate-migrations-immediate"/);
+  assert.match(apply.run, /set -euo pipefail/);
+  const post = job.steps.find(step => /candidate-complete/.test(step.run ?? ""));
+  assert.equal(post.if, "always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'",
+    "verification must run when apply exits nonzero after an uncertain database outcome");
+  assert.match(post.run, /additive-release-gate\.mjs full-ledger/);
+  assert.match(post.run, /"\$RUNNER_TEMP\/candidate-migrations-post"/);
+  assert.match(post.run, /additive-release-gate\.mjs plan post/);
+  const postCommands = post.run.split(/\r?\n/);
+  const recovery = postCommands.findIndex(line => /additive-release-gate\.mjs plan pre/.test(line));
+  const complete = postCommands.findIndex(line => /additive-release-gate\.mjs candidate-complete/.test(line));
+  const finalPlan = postCommands.findIndex(line => /additive-release-gate\.mjs plan post/.test(line));
+  assert.ok(recovery >= 0 && complete > recovery && finalPlan > complete,
+    "partial-prefix recovery plan evidence must be saved before completeness can fail");
+  assert.match(postCommands[recovery], /post-recovery-plan-check\.json/);
+  const upload = job.steps.find(step => step.uses?.startsWith("actions/upload-artifact"));
+  assert.equal(upload.if, "always()");
+  assert.match(upload.with.path, /post-recovery-plan-check\.json/);
+  // A partially applied prefix has valid, useful recovery evidence even though
+  // the completeness assertion must fail. This is why shell ordering matters.
+  for (const prefix of [8, 9, 10]) {
+    const partial = verifyLedgerState(rowsForPrefix(prefix), fakeReceipt, fakeSources);
+    const pendingPlan = { dryRun: true, upToDate: false, migrations: partial.pending, seeds: [], roles: [] };
+    assert.deepEqual(verifyMigrationPlan(pendingPlan, partial, "pre").migrations, partial.pending);
+    assert.throws(() => verifyCandidateCompletePrefix(partial), /ledger_incomplete/);
+  }
 });

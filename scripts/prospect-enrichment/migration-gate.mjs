@@ -128,6 +128,28 @@ export function stageProductionWorkdir(sourceRoot, destinationRoot) {
   return stageMigrationWorkdir(sourceRoot, destinationRoot, []);
 }
 
+/** Recheck the exact staged bytes after CLI planning and before the write. */
+export function verifyProductionWorkdir(sourceRoot, stagedRoot, proof) {
+  if (!isRecord(proof) || !path.isAbsolute(stagedRoot) || fs.lstatSync(stagedRoot).isSymbolicLink()) fail("staged_proof_invalid");
+  const source = sourceMigrationInventory(sourceRoot);
+  const staged = sourceMigrationInventory(stagedRoot, { requirePreviewSources: false });
+  const excluded = new Set(PREVIEW_MIGRATION_PATHS);
+  const included = source.migrations.filter(item => !excluded.has(item.path));
+  if (staged.root !== proof.stagedRoot || !same(staged.migrations, included) || staged.migrations.length !== proof.migrationCount) fail("staged_migration_source_mismatch");
+  const inventorySha256 = sha256(JSON.stringify(included.map(({ path, version, name, bytes, sha256: digest }) => ({ path, version, name, bytes, sha256: digest }))));
+  const exclusions = source.migrations.filter(item => excluded.has(item.path)).map(({ path, version, name, bytes, sha256: digest }) => ({ path, version, name, bytes, sha256: digest }));
+  if (inventorySha256 !== proof.inventorySha256 || !same(exclusions, proof.exclusions)) fail("staged_inventory_proof_changed");
+  const configs = [source.root, staged.root].map(root => {
+    const file = path.join(root, "supabase", "config.toml");
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink()) fail("supabase_config_invalid");
+    return fs.readFileSync(file);
+  });
+  if (!configs[0].equals(configs[1]) || sha256(configs[1]) !== proof.configSha256) fail("staged_config_mismatch");
+  if (findProjectEnvFiles(file => fs.existsSync(path.join(staged.root, file))).length) fail("project_database_env_files_prohibited");
+  return { stagedRoot: staged.root, migrationCount: included.length, inventorySha256, configSha256: proof.configSha256, verified: true };
+}
+
 function stageMigrationWorkdir(sourceRoot, destinationRoot, deferredPaths) {
   const source = sourceMigrationInventory(sourceRoot);
   const requestedDestination = path.resolve(destinationRoot);
@@ -455,6 +477,10 @@ async function main(args) {
   }
   if (command === "stage" && rest.length === 2) {
     console.log(JSON.stringify(stageProductionWorkdir(rest[0], rest[1])));
+    return;
+  }
+  if (command === "verify-stage" && rest.length === 3) {
+    console.log(JSON.stringify(verifyProductionWorkdir(rest[0], rest[1], JSON.parse(fs.readFileSync(rest[2], "utf8")))));
     return;
   }
   if (command === "full-query" && rest.length === 0) {

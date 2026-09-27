@@ -64,8 +64,6 @@ jobs:
           version: 2.117.0
 
       - name: Validate exact reviewed source, receipt, configuration and database endpoint
-        env:
-          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -80,6 +78,17 @@ jobs:
           grep -q -- '--include-all' "$RUNNER_TEMP/db-push-help.txt"
           grep -q -- '--db-url' "$RUNNER_TEMP/db-query-help.txt"
 
+      - name: Load protected static database connection
+        if: ${{ !inputs.use_temporary_database_credential }}
+        env:
+          STATIC_MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$STATIC_MIGRATION_DATABASE_URL"
+          [[ "$STATIC_MIGRATION_DATABASE_URL" != *$'\n'* && "$STATIC_MIGRATION_DATABASE_URL" != *$'\r'* ]]
+          printf 'MIGRATION_DATABASE_URL=%s\n' "$STATIC_MIGRATION_DATABASE_URL" >> "$GITHUB_ENV"
+
       - name: Request explicitly approved temporary write-capable authentication
         if: inputs.use_temporary_database_credential
         env:
@@ -91,8 +100,6 @@ jobs:
           node scripts/prospect-enrichment/temporary-credential.mjs
 
       - name: Validate authorized database connection before database operations
-        env:
-          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -100,8 +107,6 @@ jobs:
           node scripts/prospect-enrichment/additive-release-gate.mjs application-source > "$RUNNER_TEMP/source-check.json"
 
       - name: Read exact additive ledger and operator-RPC catalog prerequisite
-        env:
-          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -111,18 +116,22 @@ jobs:
           node scripts/prospect-enrichment/additive-release-gate.mjs ledger "$RUNNER_TEMP/ledger.json" > "$RUNNER_TEMP/ledger-check.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs candidate-prefix "$RUNNER_TEMP/ledger-check.json" > "$RUNNER_TEMP/prefix-check.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs catalog-query > "$RUNNER_TEMP/rpc-catalog.sql"
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/rpc-catalog.sql" --output json --agent no > "$RUNNER_TEMP/rpc-catalog.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs catalog "$RUNNER_TEMP/rpc-catalog.json" > "$RUNNER_TEMP/rpc-catalog-check.json"
 
       - name: Require exact candidate suffix dry-run and no seeds or roles
-        env:
-          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/candidate-migrations" > "$RUNNER_TEMP/staged-inventory.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/full-ledger-readback.sql"
           node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
-          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
-            --output-format json > "$RUNNER_TEMP/plan.json"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/full-ledger.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger.json" "$RUNNER_TEMP/candidate-migrations" "$RUNNER_TEMP/ledger-check.json" > "$RUNNER_TEMP/full-ledger-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
+          (cd "$RUNNER_TEMP/candidate-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
+            --output-format json) > "$RUNNER_TEMP/plan.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs plan pre "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/ledger-check.json" > "$RUNNER_TEMP/plan-check.json"
 
       - name: Stop after read-only exact-suffix dry run
@@ -133,8 +142,6 @@ jobs:
       - name: Repeat source, ledger, catalog, and pending-plan checks immediately before apply
         id: apply_migration
         if: inputs.operation == 'apply'
-        env:
-          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -143,28 +150,44 @@ jobs:
           node scripts/prospect-enrichment/additive-release-gate.mjs application-source > "$RUNNER_TEMP/immediate-source-check.json"
           git fetch --no-tags origin main
           test "$CHECKOUT_SHA" = "$(git rev-parse origin/main)"
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/ledger-readback.sql" --output json --agent no > "$RUNNER_TEMP/immediate-ledger.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs ledger "$RUNNER_TEMP/immediate-ledger.json" > "$RUNNER_TEMP/immediate-ledger-check.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs candidate-prefix "$RUNNER_TEMP/immediate-ledger-check.json" > "$RUNNER_TEMP/immediate-prefix-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/rpc-catalog.sql" --output json --agent no > "$RUNNER_TEMP/immediate-rpc-catalog.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs catalog "$RUNNER_TEMP/immediate-rpc-catalog.json" > "$RUNNER_TEMP/immediate-rpc-catalog-check.json"
-          (cd "$GITHUB_WORKSPACE" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/immediate-plan.json"
+          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/candidate-migrations-immediate" > "$RUNNER_TEMP/immediate-staged-inventory.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/immediate-full-ledger.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs full-ledger "$RUNNER_TEMP/immediate-full-ledger.json" "$RUNNER_TEMP/candidate-migrations-immediate" "$RUNNER_TEMP/immediate-ledger-check.json" > "$RUNNER_TEMP/immediate-full-ledger-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
+          (cd "$RUNNER_TEMP/candidate-migrations-immediate" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/immediate-plan.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs plan pre "$RUNNER_TEMP/immediate-plan.json" "$RUNNER_TEMP/immediate-ledger-check.json" > "$RUNNER_TEMP/immediate-plan-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs verify-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/candidate-migrations-immediate" "$RUNNER_TEMP/immediate-staged-inventory.json" > "$RUNNER_TEMP/immediate-stage-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
           echo "apply_started=true" >> "$GITHUB_OUTPUT"
-          (cd "$GITHUB_WORKSPACE" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/apply.json"
+          (cd "$RUNNER_TEMP/candidate-migrations-immediate" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/apply.json"
 
       - name: Verify exact candidate-profile ledger source statements and empty pending plan
         if: always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'
-        env:
-          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
           node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/ledger-readback.sql" --output json --agent no > "$RUNNER_TEMP/post-ledger.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs ledger "$RUNNER_TEMP/post-ledger.json" > "$RUNNER_TEMP/post-ledger-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/candidate-migrations-post" > "$RUNNER_TEMP/post-staged-inventory.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/post-full-ledger.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs full-ledger "$RUNNER_TEMP/post-full-ledger.json" "$RUNNER_TEMP/candidate-migrations-post" "$RUNNER_TEMP/post-ledger-check.json" > "$RUNNER_TEMP/post-full-ledger-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
+          (cd "$RUNNER_TEMP/candidate-migrations-post" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/post-plan.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs plan pre "$RUNNER_TEMP/post-plan.json" "$RUNNER_TEMP/post-ledger-check.json" > "$RUNNER_TEMP/post-recovery-plan-check.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs candidate-complete "$RUNNER_TEMP/post-ledger-check.json" > "$RUNNER_TEMP/post-prefix-check.json"
-          (cd "$GITHUB_WORKSPACE" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/post-plan.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/rpc-catalog.sql" --output json --agent no > "$RUNNER_TEMP/post-rpc-catalog.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs catalog "$RUNNER_TEMP/post-rpc-catalog.json" > "$RUNNER_TEMP/post-rpc-catalog-check.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs plan post "$RUNNER_TEMP/post-plan.json" "$RUNNER_TEMP/post-ledger-check.json" > "$RUNNER_TEMP/post-plan-check.json"
 
       - name: Upload redacted candidate additive release evidence
@@ -174,17 +197,27 @@ jobs:
           name: prospect-candidate-additive-release-evidence
           path: |
             scripts/prospect-enrichment/additive-release-review.json
+            ${{ runner.temp }}/source-authorization-check.json
             ${{ runner.temp }}/source-check.json
             ${{ runner.temp }}/ledger-check.json
             ${{ runner.temp }}/prefix-check.json
             ${{ runner.temp }}/rpc-catalog-check.json
+            ${{ runner.temp }}/staged-inventory.json
+            ${{ runner.temp }}/full-ledger-check.json
             ${{ runner.temp }}/plan-check.json
             ${{ runner.temp }}/immediate-source-check.json
             ${{ runner.temp }}/immediate-ledger-check.json
             ${{ runner.temp }}/immediate-prefix-check.json
             ${{ runner.temp }}/immediate-rpc-catalog-check.json
+            ${{ runner.temp }}/immediate-staged-inventory.json
+            ${{ runner.temp }}/immediate-stage-check.json
+            ${{ runner.temp }}/immediate-full-ledger-check.json
             ${{ runner.temp }}/immediate-plan-check.json
             ${{ runner.temp }}/post-ledger-check.json
             ${{ runner.temp }}/post-prefix-check.json
+            ${{ runner.temp }}/post-rpc-catalog-check.json
+            ${{ runner.temp }}/post-staged-inventory.json
+            ${{ runner.temp }}/post-full-ledger-check.json
+            ${{ runner.temp }}/post-recovery-plan-check.json
             ${{ runner.temp }}/post-plan-check.json
           if-no-files-found: ignore
