@@ -18,9 +18,31 @@ export const PREVIEW_MIGRATION_PATHS = Object.freeze([
   "supabase/migrations/20260915183000_preview_qa_session_registry.sql",
   "supabase/migrations/20260916030440_preview_qa_registry_privilege_hardening.sql"
 ]);
+// Exact historical version/name aliases. This proves ledger lineage, not SQL
+// byte equivalence for older migrations whose statements may be unavailable.
+export const HISTORICAL_LEDGER_NAME_ALIASES = Object.freeze({
+  "20260605175457": { filename: "20260605175457_security_lockdown_anon_authenticated.sql", name: "20260605_security_lockdown_anon_authenticated" },
+  "20260706200052": { filename: "20260706200052_operator_preview_log.sql", name: "20260707b_operator_preview_log" },
+  "20260714141535": { filename: "20260714141535_publication_metadata.sql", name: "20260714101200_publication_metadata" },
+  "20260714141612": { filename: "20260714141612_publication_artifacts.sql", name: "20260714101300_publication_artifacts" },
+  "20260714141709": { filename: "20260714141709_publication_artifacts_fk_indexes.sql", name: "20260714101400_publication_artifacts_fk_indexes" },
+  "20260714180754": { filename: "20260714180754_publication_artifacts_uniqueness.sql", name: "20260714150000_publication_artifacts_uniqueness" },
+  "20260723024820": { filename: "20260723024820_firm_onboarding_client_list.sql", name: "20260722000000_firm_onboarding_client_list" },
+  "20260907145628": { filename: "20260907145628_gta_prospect_research_persistence.sql", name: "20260907145628_gta_prospect_research_persistence" },
+  "20260907181342": { filename: "20260907181342_gta_prospect_research_operator_read_projection.sql", name: "20260907181342_gta_prospect_research_operator_read_projection" },
+  "20260907210156": { filename: "20260907210156_gta_prospect_research_canonical_iso_date_fix.sql", name: "20260907210156_gta_prospect_research_canonical_iso_date_fix" },
+  "20260911215333": { filename: "20260911215333_prospect_archive_sync_apply.sql", name: "20260910161644_prospect_archive_sync_apply" },
+});
 export const QUALIFICATION_HISTORY = Object.freeze([
   { path: "supabase/migrations/20260921120000_prospect_qualification_evidence.sql", version: "20260921120000", name: "prospect_qualification_evidence", sha256: "c9fff7b8f0950be5ac9557e9ba7d40f6291829548f6ab9a7b6c313cd90b717f7" },
   { path: "supabase/migrations/20260921121500_prospect_qualification_profile_details.sql", version: "20260921121500", name: "prospect_qualification_profile_details", sha256: "ef14f2942a4db3da22080f8c6e09a0df47638af518d59e8a743183e92fef858a" }
+]);
+export const CANDIDATE_RELEASE_PATHS = Object.freeze([
+  ...QUALIFICATION_HISTORY.map(item => item.path),
+  ...MIGRATION_PATHS,
+  "supabase/migrations/20260924172758_prospect_enrichment_candidate_profiles.sql",
+  "supabase/migrations/20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
+  "supabase/migrations/20260925200000_gta_prospect_operator_database_firm_profile_link.sql",
 ]);
 export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
@@ -175,8 +197,13 @@ export function fullLedgerQuery() {
   return "SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version;\n";
 }
 
-export function verifyFullMigrationLedger(rows, sourceRoot, phase) {
-  if (!Array.isArray(rows) || !["qualification-pending", "enrichment-pending", "complete"].includes(phase)) fail("invalid_full_ledger_input");
+export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePendingPaths) {
+  if (!Array.isArray(rows) || !["qualification-pending", "enrichment-pending", "complete", "candidate-pending"].includes(phase)) fail("invalid_full_ledger_input");
+  if (phase === "candidate-pending") {
+    if (!Array.isArray(candidatePendingPaths)) fail("invalid_candidate_pending_suffix");
+    const prefixLength = CANDIDATE_RELEASE_PATHS.length - candidatePendingPaths.length;
+    if (prefixLength < 0 || !same(candidatePendingPaths, CANDIDATE_RELEASE_PATHS.slice(prefixLength))) fail("invalid_candidate_pending_suffix");
+  } else if (candidatePendingPaths !== undefined) fail("invalid_full_ledger_input");
   const { migrations } = sourceMigrationInventory(sourceRoot, { requirePreviewSources: false });
   const localByVersion = new Map(migrations.filter(item => !PREVIEW_MIGRATION_PATHS.includes(item.path)).map(item => [item.version, item]));
   const remote = new Map();
@@ -187,12 +214,15 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase) {
   if (!same([...remote.keys()], [...remote.keys()].sort())) fail("full_ledger_rows_not_ordered");
   for (const [version, name] of remote) {
     const local = localByVersion.get(version);
-    if (!local || local.name !== name) fail("remote_migration_source_missing_or_mismatched");
+    const alias = HISTORICAL_LEDGER_NAME_ALIASES[version];
+    const expectedName = alias && local?.filename === alias.filename ? alias.name : local?.name;
+    if (!local || name !== expectedName) fail("remote_migration_source_missing_or_mismatched");
   }
   const pending = [...localByVersion.values()].filter(item => !remote.has(item.version)).map(item => item.path).sort();
   const expected = phase === "qualification-pending"
     ? [...QUALIFICATION_HISTORY.map(item => item.path), ...MIGRATION_PATHS].sort()
-    : phase === "enrichment-pending" ? [...MIGRATION_PATHS].sort() : [];
+    : phase === "enrichment-pending" ? [...MIGRATION_PATHS].sort()
+      : phase === "candidate-pending" ? [...candidatePendingPaths].sort() : [];
   if (!same(pending, expected)) fail("unexpected_full_history_delta");
   return { phase, remoteVersionCount: remote.size, stagedMigrationCount: localByVersion.size, pendingPaths: pending, completeSourceCoverage: true };
 }

@@ -3,12 +3,14 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
+  CANDIDATE_RELEASE_PATHS,
   CLI_VERSION,
   PROJECT_REF,
   findProjectEnvFiles,
   sha256 as sourceSha256,
   verifyDirectDatabaseUrl,
   verifyDatabaseEnvironment,
+  verifyFullMigrationLedger,
   verifyLedgerStatements,
 } from "./migration-gate.mjs";
 
@@ -103,6 +105,7 @@ export function createReleaseReceipt(sources) {
 }
 
 export function verifyReleaseReceipt(receipt, sources) {
+  if (!same(MIGRATION_PATHS, CANDIDATE_RELEASE_PATHS)) fail("candidate_history_inventory_mismatch");
   const expected = createReleaseReceipt(sources);
   if (!same(receipt, expected)) fail("release_receipt_source_mismatch");
   return expected;
@@ -280,6 +283,15 @@ function main(args) {
     process.stdout.write(catalogQuery());
   } else if (command === "ledger" && rest.length === 1) {
     console.log(JSON.stringify(verifyLedgerState(safeJson(rest[0]), receipt, sources)));
+  } else if (command === "full-ledger" && rest.length === 3) {
+    const proof = safeJson(rest[2]);
+    if (!isRecord(proof) || proof.projectRef !== PROJECT_REF || !Number.isInteger(proof.appliedPrefixLength) ||
+        proof.appliedPrefixLength < 0 || proof.appliedPrefixLength > receipt.migrations.length ||
+        !same(proof.pending, receipt.migrations.slice(proof.appliedPrefixLength).map(item => item.filename))) fail("candidate_ledger_proof_invalid");
+    const payload = safeJson(rest[0]);
+    const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : payload?.rows;
+    console.log(JSON.stringify(verifyFullMigrationLedger(rows, rest[1], "candidate-pending",
+      receipt.migrations.slice(proof.appliedPrefixLength).map(item => item.path))));
   } else if (command === "candidate-prefix" && rest.length === 1) {
     console.log(JSON.stringify(verifyCandidatePrerequisitePrefix(safeJson(rest[0]))));
   } else if (command === "candidate-complete" && rest.length === 1) {
@@ -288,7 +300,7 @@ function main(args) {
     console.log(JSON.stringify(verifyOperatorRpcCatalog(safeJson(rest[0]), receipt)));
   } else if (command === "plan" && rest.length === 3) {
     console.log(JSON.stringify(verifyMigrationPlan(safeJson(rest[1]), safeJson(rest[2]), rest[0])));
-  } else fail("usage_source_application_source_connection_ledger_query_catalog_query_ledger_catalog_candidate_prefix_candidate_complete_or_plan");
+  } else fail("usage_source_application_source_connection_ledger_query_catalog_query_ledger_full_ledger_catalog_candidate_prefix_candidate_complete_or_plan");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
