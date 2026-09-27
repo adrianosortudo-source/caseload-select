@@ -1,0 +1,1571 @@
+{
+  "createdAt": "2026-09-25T20:52:31.953Z",
+  "syntheticOnly": true,
+  "routeRateLimitNotExercised": true,
+  "results": [
+    {
+      "id": "commercial_ranges",
+      "elapsedMs": 6228,
+      "mode": "live",
+      "answers": {
+        "schema_version": "dcm-v2.1",
+        "revision": 1,
+        "focus": {
+          "area": "business",
+          "work": "business_agreements",
+          "work_other": "",
+          "service_area": "Ontario",
+          "certainty": "chosen",
+          "route": "established",
+          "comparison": null
+        },
+        "situation": {
+          "timing": "planning",
+          "role": "business_organization",
+          "role_other": "",
+          "contact": "manager"
+        },
+        "client": {
+          "goals": [
+            "complete",
+            "protect"
+          ],
+          "concerns": [
+            "cost",
+            "next"
+          ]
+        },
+        "value": {
+          "reasons": [
+            "client_benefit",
+            "fees",
+            "skills"
+          ],
+          "fee_effort": "worthwhile",
+          "collected_fee": "15to50",
+          "team_hours": "41to100",
+          "payment": "varies"
+        },
+        "delivery": {
+          "conditions": [
+            "scope",
+            "information"
+          ],
+          "capacity": "room",
+          "limit": null
+        },
+        "direction": {
+          "aim": "more_current",
+          "evidence": [
+            "repeated",
+            "records"
+          ],
+          "less": null,
+          "less_note": ""
+        },
+        "clarifications": {
+          "FOCUS_UNCLEAR": null,
+          "CURRENT_CAPACITY_CONFLICT": null,
+          "FEE_EFFORT_CONFLICT": null,
+          "EXPERIENCE_DIRECTION_CONFLICT": null,
+          "CLIENT_GOAL_UNCLEAR": null
+        }
+      },
+      "finishReason": "STOP",
+      "usage": {
+        "promptTokenCount": 3462,
+        "candidatesTokenCount": 680,
+        "totalTokenCount": 4644,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 3462
+          }
+        ],
+        "thoughtsTokenCount": 502,
+        "serviceTier": "standard"
+      },
+      "rawResult": {
+        "clarification_code": null,
+        "brief": {
+          "definition": {
+            "text": "The firm prefers to market established commercial agreement drafting and review work for businesses or organizations in Ontario. These clients typically seek help before a planned decision or change.",
+            "kind": "preference",
+            "source_answer_ids": [
+              "focus.work",
+              "situation.role",
+              "focus.service_area",
+              "situation.timing",
+              "focus.route",
+              "focus.certainty"
+            ]
+          },
+          "client_goals": [
+            {
+              "text": "Clients want to complete a planned transaction or process.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            },
+            {
+              "text": "Clients aim to protect something important.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            }
+          ],
+          "firm_reasons": [
+            {
+              "text": "This work allows the firm to make a useful difference for the client.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            },
+            {
+              "text": "The firm finds the fee usually supports the effort involved.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            },
+            {
+              "text": "This work uses capabilities the firm does well.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            }
+          ],
+          "delivery_conditions": [
+            {
+              "text": "The firm can take on more of this work with the current team.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "delivery.capacity"
+              ]
+            },
+            {
+              "text": "The fee is usually worthwhile, typically C$15,000 to under C$50,000 for More than 40, up to 100 hours of team time.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.fee_effort",
+                "value.collected_fee",
+                "value.team_hours"
+              ]
+            },
+            {
+              "text": "Delivery is aided by a clearly agreed scope and access to necessary information.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "delivery.conditions"
+              ]
+            }
+          ],
+          "evidence": [
+            {
+              "text": "This direction is supported by several matters the firm has handled.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            },
+            {
+              "text": "Fee and time records provide evidence for this work.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            }
+          ],
+          "open_questions": [],
+          "marketing": {
+            "topic": {
+              "text": "Protecting Your Business: Key Considerations for Commercial Agreements in Ontario",
+              "kind": "preference",
+              "source_answer_ids": [
+                "focus.work",
+                "client.goals",
+                "focus.service_area"
+              ]
+            },
+            "inquiry_question": {
+              "text": "What important aspects of your business are you looking to protect through a new commercial agreement?",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.goals",
+                "focus.work"
+              ]
+            },
+            "validation_step": {
+              "text": "Review recent commercial agreement matters to confirm client goals related to protection and transaction completion, and assess if current marketing materials address these concerns.",
+              "kind": "suggestion",
+              "source_answer_ids": [
+                "client.goals",
+                "direction.evidence"
+              ]
+            }
+          },
+          "work_to_promote_less": []
+        }
+      },
+      "result": {
+        "clarification_code": null,
+        "brief": {
+          "definition": {
+            "text": "The firm prefers to market established commercial agreement drafting and review work for businesses or organizations in Ontario. These clients typically seek help before a planned decision or change.",
+            "kind": "preference",
+            "source_answer_ids": [
+              "focus.work",
+              "situation.role",
+              "focus.service_area",
+              "situation.timing",
+              "focus.route",
+              "focus.certainty"
+            ]
+          },
+          "client_goals": [
+            {
+              "text": "Clients want to complete a planned transaction or process.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            },
+            {
+              "text": "Clients aim to protect something important.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            }
+          ],
+          "firm_reasons": [
+            {
+              "text": "This work allows the firm to make a useful difference for the client.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            },
+            {
+              "text": "The firm finds the fee usually supports the effort involved.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            },
+            {
+              "text": "This work uses capabilities the firm does well.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            }
+          ],
+          "delivery_conditions": [
+            {
+              "text": "The firm can take on more of this work with the current team.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "delivery.capacity"
+              ]
+            },
+            {
+              "text": "The fee is usually worthwhile, typically C$15,000 to under C$50,000 for More than 40, up to 100 hours of team time.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.fee_effort",
+                "value.collected_fee",
+                "value.team_hours"
+              ]
+            },
+            {
+              "text": "Delivery is aided by a clearly agreed scope and access to necessary information.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "delivery.conditions"
+              ]
+            }
+          ],
+          "evidence": [
+            {
+              "text": "This direction is supported by several matters the firm has handled.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            },
+            {
+              "text": "Fee and time records provide evidence for this work.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            }
+          ],
+          "open_questions": [],
+          "marketing": {
+            "topic": {
+              "text": "Protecting Your Business: Key Considerations for Commercial Agreements in Ontario",
+              "kind": "preference",
+              "source_answer_ids": [
+                "focus.work",
+                "client.goals",
+                "focus.service_area"
+              ]
+            },
+            "inquiry_question": {
+              "text": "What important aspects of your business are you looking to protect through a new commercial agreement?",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.goals",
+                "focus.work"
+              ]
+            },
+            "validation_step": {
+              "text": "Review recent commercial agreement matters to confirm client goals related to protection and transaction completion, and assess if current marketing materials address these concerns.",
+              "kind": "suggestion",
+              "source_answer_ids": [
+                "client.goals",
+                "direction.evidence"
+              ]
+            }
+          },
+          "work_to_promote_less": []
+        }
+      }
+    },
+    {
+      "id": "future_family",
+      "elapsedMs": 6900,
+      "mode": "live",
+      "answers": {
+        "schema_version": "dcm-v2.1",
+        "revision": 1,
+        "focus": {
+          "area": "family",
+          "work": "family_separation",
+          "work_other": "",
+          "service_area": "Ontario",
+          "certainty": "chosen",
+          "route": "new",
+          "comparison": null
+        },
+        "situation": {
+          "timing": "planning",
+          "role": "family_advice_seeker",
+          "role_other": "",
+          "contact": null
+        },
+        "client": {
+          "goals": [
+            "resolve",
+            "protect"
+          ],
+          "concerns": [
+            "time"
+          ]
+        },
+        "value": {
+          "reasons": [
+            "client_benefit",
+            "direction"
+          ],
+          "fee_effort": "unknown",
+          "collected_fee": null,
+          "team_hours": null,
+          "payment": null
+        },
+        "delivery": {
+          "conditions": [
+            "scope",
+            "information"
+          ],
+          "capacity": "change",
+          "limit": null
+        },
+        "direction": {
+          "aim": "new_area",
+          "evidence": [
+            "preference"
+          ],
+          "less": null,
+          "less_note": ""
+        },
+        "clarifications": {
+          "FOCUS_UNCLEAR": null,
+          "CURRENT_CAPACITY_CONFLICT": null,
+          "FEE_EFFORT_CONFLICT": null,
+          "EXPERIENCE_DIRECTION_CONFLICT": null,
+          "CLIENT_GOAL_UNCLEAR": null
+        }
+      },
+      "finishReason": "STOP",
+      "usage": {
+        "promptTokenCount": 3403,
+        "candidatesTokenCount": 878,
+        "totalTokenCount": 4789,
+        "cachedContentTokenCount": 2329,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 3403
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2329
+          }
+        ],
+        "thoughtsTokenCount": 508,
+        "serviceTier": "standard"
+      },
+      "rawResult": {
+        "clarification_code": null,
+        "brief": {
+          "definition": {
+            "text": "This profile describes a new direction for the firm, focusing on family law separation agreements in Ontario. The target client is a person seeking advice before a planned decision or change.",
+            "kind": "hypothesis",
+            "source_answer_ids": [
+              "focus.area",
+              "focus.work",
+              "focus.service_area",
+              "focus.route",
+              "situation.role",
+              "situation.timing"
+            ]
+          },
+          "client_goals": [
+            {
+              "text": "Clients are expected to want to resolve disagreements and protect important interests.",
+              "kind": "hypothesis",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            },
+            {
+              "text": "A key client concern is understanding how long the process might take.",
+              "kind": "hypothesis",
+              "source_answer_ids": [
+                "client.concerns"
+              ]
+            }
+          ],
+          "firm_reasons": [
+            {
+              "text": "The firm prefers this work because it allows making a useful difference for clients and supports the desired practice direction.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            }
+          ],
+          "delivery_conditions": [
+            {
+              "text": "Effective delivery relies on a clearly agreed scope and access to necessary information. The firm needs to change its capacity or support to take on more of this work.",
+              "kind": "hypothesis",
+              "source_answer_ids": [
+                "delivery.conditions",
+                "delivery.capacity"
+              ]
+            },
+            {
+              "text": "The expected fee compared with the effort involved has not yet been established.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "value.fee_effort"
+              ]
+            }
+          ],
+          "evidence": [
+            {
+              "text": "This direction is primarily supported by the firm's preference at this stage, as it is a new area being developed.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "direction.evidence",
+                "direction.aim"
+              ]
+            }
+          ],
+          "open_questions": [
+            {
+              "text": "The firm needs to establish the expected fee compared with the effort involved for this new work.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "value.fee_effort"
+              ]
+            }
+          ],
+          "marketing": {
+            "topic": {
+              "text": "Navigating Separation Agreements: Understanding the Timeline for Resolution",
+              "kind": "hypothesis",
+              "source_answer_ids": [
+                "focus.work",
+                "client.concerns"
+              ]
+            },
+            "inquiry_question": {
+              "text": "What progress do you want to make in your separation, and how important is understanding the timeline for you?",
+              "kind": "hypothesis",
+              "source_answer_ids": [
+                "client.goals",
+                "client.concerns"
+              ]
+            },
+            "validation_step": {
+              "text": "Interview potential clients to understand their specific concerns about timelines and desired outcomes in separation agreements. Analyze internal resources to estimate the effort required and define a fee structure for this service.",
+              "kind": "suggestion",
+              "source_answer_ids": [
+                "client.concerns",
+                "value.fee_effort",
+                "delivery.capacity"
+              ]
+            }
+          },
+          "work_to_promote_less": []
+        }
+      },
+      "result": {
+        "clarification_code": null,
+        "brief": {
+          "definition": {
+            "text": "This profile describes a new direction for the firm, focusing on family law separation agreements in Ontario. The target client is a person seeking advice before a planned decision or change.",
+            "kind": "hypothesis",
+            "source_answer_ids": [
+              "focus.area",
+              "focus.work",
+              "focus.service_area",
+              "focus.route",
+              "situation.role",
+              "situation.timing"
+            ]
+          },
+          "client_goals": [
+            {
+              "text": "Clients are expected to want to resolve disagreements and protect important interests.",
+              "kind": "hypothesis",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            },
+            {
+              "text": "A key client concern is understanding how long the process might take.",
+              "kind": "hypothesis",
+              "source_answer_ids": [
+                "client.concerns"
+              ]
+            }
+          ],
+          "firm_reasons": [
+            {
+              "text": "The firm prefers this work because it allows making a useful difference for clients and supports the desired practice direction.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            }
+          ],
+          "delivery_conditions": [
+            {
+              "text": "Effective delivery relies on a clearly agreed scope and access to necessary information. The firm needs to change its capacity or support to take on more of this work.",
+              "kind": "hypothesis",
+              "source_answer_ids": [
+                "delivery.conditions",
+                "delivery.capacity"
+              ]
+            },
+            {
+              "text": "The expected fee compared with the effort involved has not yet been established.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "value.fee_effort"
+              ]
+            }
+          ],
+          "evidence": [
+            {
+              "text": "This direction is primarily supported by the firm's preference at this stage, as it is a new area being developed.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "direction.evidence",
+                "direction.aim"
+              ]
+            }
+          ],
+          "open_questions": [
+            {
+              "text": "The firm needs to establish the expected fee compared with the effort involved for this new work.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "value.fee_effort"
+              ]
+            }
+          ],
+          "marketing": {
+            "topic": {
+              "text": "Navigating Separation Agreements: Understanding the Timeline for Resolution",
+              "kind": "hypothesis",
+              "source_answer_ids": [
+                "focus.work",
+                "client.concerns"
+              ]
+            },
+            "inquiry_question": {
+              "text": "What progress do you want to make in your separation, and how important is understanding the timeline for you?",
+              "kind": "hypothesis",
+              "source_answer_ids": [
+                "client.goals",
+                "client.concerns"
+              ]
+            },
+            "validation_step": {
+              "text": "Interview potential clients to understand their specific concerns about timelines and desired outcomes in separation agreements. Analyze internal resources to estimate the effort required and define a fee structure for this service.",
+              "kind": "suggestion",
+              "source_answer_ids": [
+                "client.concerns",
+                "value.fee_effort",
+                "delivery.capacity"
+              ]
+            }
+          },
+          "work_to_promote_less": []
+        }
+      }
+    },
+    {
+      "id": "unknowns",
+      "elapsedMs": 5882,
+      "mode": "live",
+      "answers": {
+        "schema_version": "dcm-v2.1",
+        "revision": 1,
+        "focus": {
+          "area": "other",
+          "work": "other",
+          "work_other": "",
+          "service_area": "",
+          "certainty": "chosen",
+          "route": "exploring",
+          "comparison": null
+        },
+        "situation": {
+          "timing": "planning",
+          "role": "unknown",
+          "role_other": "",
+          "contact": null
+        },
+        "client": {
+          "goals": [
+            "unknown"
+          ],
+          "concerns": []
+        },
+        "value": {
+          "reasons": [
+            "undecided"
+          ],
+          "fee_effort": "unknown",
+          "collected_fee": null,
+          "team_hours": null,
+          "payment": null
+        },
+        "delivery": {
+          "conditions": [],
+          "capacity": "unknown",
+          "limit": null
+        },
+        "direction": {
+          "aim": "unknown",
+          "evidence": [
+            "preference"
+          ],
+          "less": null,
+          "less_note": ""
+        },
+        "clarifications": {
+          "FOCUS_UNCLEAR": null,
+          "CURRENT_CAPACITY_CONFLICT": null,
+          "FEE_EFFORT_CONFLICT": null,
+          "EXPERIENCE_DIRECTION_CONFLICT": null,
+          "CLIENT_GOAL_UNCLEAR": null
+        }
+      },
+      "finishReason": "STOP",
+      "usage": {
+        "promptTokenCount": 3369,
+        "candidatesTokenCount": 658,
+        "totalTokenCount": 4499,
+        "cachedContentTokenCount": 2316,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 3369
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2316
+          }
+        ],
+        "thoughtsTokenCount": 472,
+        "serviceTier": "standard"
+      },
+      "rawResult": {
+        "clarification_code": "FOCUS_UNCLEAR",
+        "brief": {
+          "definition": {
+            "text": "This profile explores marketing an unspecified type of work within another practice area, as the firm is deciding whether to pursue it.",
+            "kind": "unknown",
+            "source_answer_ids": [
+              "focus.area",
+              "focus.work",
+              "focus.work_other",
+              "focus.route"
+            ]
+          },
+          "client_goals": [
+            {
+              "text": "The client's desired outcomes for this work are not yet known.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            }
+          ],
+          "firm_reasons": [
+            {
+              "text": "The firm is still deciding its reasons for pursuing this work.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            }
+          ],
+          "delivery_conditions": [
+            {
+              "text": "The firm needs to establish its current capacity to take on more of this work.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "delivery.capacity"
+              ]
+            },
+            {
+              "text": "The expected fee compared with the effort involved has not yet been established.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "value.fee_effort"
+              ]
+            },
+            {
+              "text": "The conditions that help the team deliver this work well are not yet known.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "delivery.conditions"
+              ]
+            }
+          ],
+          "evidence": [
+            {
+              "text": "The direction to pursue this work is primarily based on the firm's preference at this stage.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            }
+          ],
+          "open_questions": [
+            {
+              "text": "The specific type of work to be promoted is currently unknown.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "focus.work_other"
+              ]
+            },
+            {
+              "text": "The firm needs to determine the client's role and desired goals for this work.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "situation.role",
+                "client.goals"
+              ]
+            },
+            {
+              "text": "The firm needs to establish its capacity and the fee-to-effort ratio for this work.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "delivery.capacity",
+                "value.fee_effort"
+              ]
+            }
+          ],
+          "marketing": {
+            "topic": {
+              "text": "Exploring the potential for new work in an unspecified practice area.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "focus.area",
+                "focus.work_other",
+                "focus.route"
+              ]
+            },
+            "inquiry_question": {
+              "text": "What specific challenges are you planning for that require a new type of legal support?",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "focus.work_other",
+                "situation.timing",
+                "client.goals"
+              ]
+            },
+            "validation_step": {
+              "text": "Conduct internal discussions to define the specific type of work and client goals, and assess the firm's capacity and fee expectations for this new area.",
+              "kind": "suggestion",
+              "source_answer_ids": [
+                "focus.work_other",
+                "client.goals",
+                "delivery.capacity",
+                "value.fee_effort"
+              ]
+            }
+          },
+          "work_to_promote_less": []
+        }
+      },
+      "result": {
+        "clarification_code": "FOCUS_UNCLEAR",
+        "brief": {
+          "definition": {
+            "text": "This profile explores marketing an unspecified type of work within another practice area, as the firm is deciding whether to pursue it.",
+            "kind": "unknown",
+            "source_answer_ids": [
+              "focus.area",
+              "focus.work",
+              "focus.work_other",
+              "focus.route"
+            ]
+          },
+          "client_goals": [
+            {
+              "text": "The client's desired outcomes for this work are not yet known.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            }
+          ],
+          "firm_reasons": [
+            {
+              "text": "The firm is still deciding its reasons for pursuing this work.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            }
+          ],
+          "delivery_conditions": [
+            {
+              "text": "The firm needs to establish its current capacity to take on more of this work.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "delivery.capacity"
+              ]
+            },
+            {
+              "text": "The expected fee compared with the effort involved has not yet been established.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "value.fee_effort"
+              ]
+            },
+            {
+              "text": "The conditions that help the team deliver this work well are not yet known.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "delivery.conditions"
+              ]
+            }
+          ],
+          "evidence": [
+            {
+              "text": "The direction to pursue this work is primarily based on the firm's preference at this stage.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            }
+          ],
+          "open_questions": [
+            {
+              "text": "The specific type of work to be promoted is currently unknown.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "focus.work_other"
+              ]
+            },
+            {
+              "text": "The firm needs to determine the client's role and desired goals for this work.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "situation.role",
+                "client.goals"
+              ]
+            },
+            {
+              "text": "The firm needs to establish its capacity and the fee-to-effort ratio for this work.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "delivery.capacity",
+                "value.fee_effort"
+              ]
+            }
+          ],
+          "marketing": {
+            "topic": {
+              "text": "Exploring the potential for new work in an unspecified practice area.",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "focus.area",
+                "focus.work_other",
+                "focus.route"
+              ]
+            },
+            "inquiry_question": {
+              "text": "What specific challenges are you planning for that require a new type of legal support?",
+              "kind": "unknown",
+              "source_answer_ids": [
+                "focus.work_other",
+                "situation.timing",
+                "client.goals"
+              ]
+            },
+            "validation_step": {
+              "text": "Conduct internal discussions to define the specific type of work and client goals, and assess the firm's capacity and fee expectations for this new area.",
+              "kind": "suggestion",
+              "source_answer_ids": [
+                "focus.work_other",
+                "client.goals",
+                "delivery.capacity",
+                "value.fee_effort"
+              ]
+            }
+          },
+          "work_to_promote_less": []
+        }
+      }
+    },
+    {
+      "id": "employment_exit",
+      "elapsedMs": 5867,
+      "mode": "live",
+      "answers": {
+        "schema_version": "dcm-v2.1",
+        "revision": 1,
+        "focus": {
+          "area": "employment",
+          "work": "employment_employee_exit",
+          "work_other": "",
+          "service_area": "Ontario",
+          "certainty": "chosen",
+          "route": "established",
+          "comparison": null
+        },
+        "situation": {
+          "timing": "emerging",
+          "role": "employment_employee",
+          "role_other": "",
+          "contact": null
+        },
+        "client": {
+          "goals": [
+            "understand",
+            "respond"
+          ],
+          "concerns": [
+            "cost",
+            "consequences"
+          ]
+        },
+        "value": {
+          "reasons": [
+            "client_benefit",
+            "fees",
+            "skills"
+          ],
+          "fee_effort": "worthwhile",
+          "collected_fee": null,
+          "team_hours": null,
+          "payment": null
+        },
+        "delivery": {
+          "conditions": [
+            "scope",
+            "information"
+          ],
+          "capacity": "room",
+          "limit": null
+        },
+        "direction": {
+          "aim": "more_current",
+          "evidence": [
+            "repeated",
+            "records"
+          ],
+          "less": null,
+          "less_note": ""
+        },
+        "clarifications": {
+          "FOCUS_UNCLEAR": null,
+          "CURRENT_CAPACITY_CONFLICT": null,
+          "FEE_EFFORT_CONFLICT": null,
+          "EXPERIENCE_DIRECTION_CONFLICT": null,
+          "CLIENT_GOAL_UNCLEAR": null
+        }
+      },
+      "finishReason": "STOP",
+      "usage": {
+        "promptTokenCount": 3421,
+        "candidatesTokenCount": 572,
+        "totalTokenCount": 4502,
+        "cachedContentTokenCount": 2336,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 3421
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2336
+          }
+        ],
+        "thoughtsTokenCount": 509,
+        "serviceTier": "standard"
+      },
+      "rawResult": {
+        "clarification_code": null,
+        "brief": {
+          "definition": {
+            "text": "The firm prefers to attract more employee clients seeking advice after their employment ends in Ontario, particularly when a problem first appears.",
+            "kind": "preference",
+            "source_answer_ids": [
+              "focus.work",
+              "focus.service_area",
+              "focus.route",
+              "situation.role",
+              "situation.timing"
+            ]
+          },
+          "client_goals": [
+            {
+              "text": "Clients typically want to understand their options and decide what to do, and to meet an obligation or respond to a process. They are often concerned about costs and potential consequences.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "client.goals",
+                "client.concerns",
+                "situation.timing"
+              ]
+            }
+          ],
+          "firm_reasons": [
+            {
+              "text": "This work is worth pursuing because it allows the firm to make a useful difference for the client, the fee usually supports the effort, and it uses work the firm does well.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.reasons",
+                "value.fee_effort",
+                "direction.aim"
+              ]
+            }
+          ],
+          "delivery_conditions": [
+            {
+              "text": "The firm can deliver this work well with a clearly agreed scope and access to necessary information. The fee is usually worthwhile compared to the effort, and the current team has room to take on more of this work.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "delivery.conditions",
+                "value.fee_effort",
+                "delivery.capacity"
+              ]
+            }
+          ],
+          "evidence": [
+            {
+              "text": "This direction is supported by several matters the firm has handled and by existing fee and time records.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            }
+          ],
+          "open_questions": [],
+          "marketing": {
+            "topic": {
+              "text": "Understanding Your Options After Employment Ends in Ontario: A Guide for Employees",
+              "kind": "preference",
+              "source_answer_ids": [
+                "focus.work",
+                "focus.service_area",
+                "situation.role",
+                "client.goals",
+                "client.concerns"
+              ]
+            },
+            "inquiry_question": {
+              "text": "What are your main concerns about the consequences of your employment ending, and what progress do you hope to make by understanding your options?",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.concerns",
+                "client.goals"
+              ]
+            },
+            "validation_step": {
+              "text": "Review recent client feedback and matter outcomes to confirm that clients consistently achieve their goals of understanding options and responding to processes, and that cost and consequences are primary concerns.",
+              "kind": "suggestion",
+              "source_answer_ids": [
+                "client.goals",
+                "client.concerns",
+                "direction.evidence"
+              ]
+            }
+          },
+          "work_to_promote_less": []
+        }
+      },
+      "result": {
+        "clarification_code": null,
+        "brief": {
+          "definition": {
+            "text": "The firm prefers to attract more employee clients seeking advice after their employment ends in Ontario, particularly when a problem first appears.",
+            "kind": "preference",
+            "source_answer_ids": [
+              "focus.work",
+              "focus.service_area",
+              "focus.route",
+              "situation.role",
+              "situation.timing"
+            ]
+          },
+          "client_goals": [
+            {
+              "text": "Clients typically want to understand their options and decide what to do, and to meet an obligation or respond to a process. They are often concerned about costs and potential consequences.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "client.goals",
+                "client.concerns",
+                "situation.timing"
+              ]
+            }
+          ],
+          "firm_reasons": [
+            {
+              "text": "This work is worth pursuing because it allows the firm to make a useful difference for the client, the fee usually supports the effort, and it uses work the firm does well.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.reasons",
+                "value.fee_effort",
+                "direction.aim"
+              ]
+            }
+          ],
+          "delivery_conditions": [
+            {
+              "text": "The firm can deliver this work well with a clearly agreed scope and access to necessary information. The fee is usually worthwhile compared to the effort, and the current team has room to take on more of this work.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "delivery.conditions",
+                "value.fee_effort",
+                "delivery.capacity"
+              ]
+            }
+          ],
+          "evidence": [
+            {
+              "text": "This direction is supported by several matters the firm has handled and by existing fee and time records.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            }
+          ],
+          "open_questions": [],
+          "marketing": {
+            "topic": {
+              "text": "Understanding Your Options After Employment Ends in Ontario: A Guide for Employees",
+              "kind": "preference",
+              "source_answer_ids": [
+                "focus.work",
+                "focus.service_area",
+                "situation.role",
+                "client.goals",
+                "client.concerns"
+              ]
+            },
+            "inquiry_question": {
+              "text": "What are your main concerns about the consequences of your employment ending, and what progress do you hope to make by understanding your options?",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.concerns",
+                "client.goals"
+              ]
+            },
+            "validation_step": {
+              "text": "Review recent client feedback and matter outcomes to confirm that clients consistently achieve their goals of understanding options and responding to processes, and that cost and consequences are primary concerns.",
+              "kind": "suggestion",
+              "source_answer_ids": [
+                "client.goals",
+                "client.concerns",
+                "direction.evidence"
+              ]
+            }
+          },
+          "work_to_promote_less": []
+        }
+      }
+    },
+    {
+      "id": "employer_immigration",
+      "elapsedMs": 5475,
+      "mode": "live",
+      "answers": {
+        "schema_version": "dcm-v2.1",
+        "revision": 1,
+        "focus": {
+          "area": "immigration",
+          "work": "immigration_employer",
+          "work_other": "",
+          "service_area": "Ontario",
+          "certainty": "chosen",
+          "route": "established",
+          "comparison": null
+        },
+        "situation": {
+          "timing": "planning",
+          "role": "immigration_employer",
+          "role_other": "",
+          "contact": "manager"
+        },
+        "client": {
+          "goals": [
+            "complete",
+            "respond"
+          ],
+          "concerns": [
+            "cost",
+            "next"
+          ]
+        },
+        "value": {
+          "reasons": [
+            "client_benefit",
+            "fees",
+            "skills"
+          ],
+          "fee_effort": "worthwhile",
+          "collected_fee": null,
+          "team_hours": null,
+          "payment": null
+        },
+        "delivery": {
+          "conditions": [
+            "scope",
+            "information"
+          ],
+          "capacity": "limited",
+          "limit": null
+        },
+        "direction": {
+          "aim": "more_current",
+          "evidence": [
+            "repeated",
+            "records"
+          ],
+          "less": null,
+          "less_note": ""
+        },
+        "clarifications": {
+          "FOCUS_UNCLEAR": null,
+          "CURRENT_CAPACITY_CONFLICT": null,
+          "FEE_EFFORT_CONFLICT": null,
+          "EXPERIENCE_DIRECTION_CONFLICT": null,
+          "CLIENT_GOAL_UNCLEAR": null
+        }
+      },
+      "finishReason": "STOP",
+      "usage": {
+        "promptTokenCount": 3414,
+        "candidatesTokenCount": 642,
+        "totalTokenCount": 4529,
+        "cachedContentTokenCount": 2333,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 3414
+          }
+        ],
+        "cacheTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 2333
+          }
+        ],
+        "thoughtsTokenCount": 473,
+        "serviceTier": "standard"
+      },
+      "rawResult": {
+        "clarification_code": null,
+        "brief": {
+          "definition": {
+            "text": "The firm prefers to attract more established employer immigration support work in Ontario, where it already has experience.",
+            "kind": "preference",
+            "source_answer_ids": [
+              "focus.work",
+              "focus.service_area",
+              "focus.route"
+            ]
+          },
+          "client_goals": [
+            {
+              "text": "Clients want to complete a planned transaction or process.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            },
+            {
+              "text": "Clients want to meet an obligation or respond to a process.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            }
+          ],
+          "firm_reasons": [
+            {
+              "text": "This work lets the firm make a useful difference for the client.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            },
+            {
+              "text": "The fee usually supports the effort involved in this work.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            },
+            {
+              "text": "This work uses capabilities the firm already does well.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            }
+          ],
+          "delivery_conditions": [
+            {
+              "text": "The firm can deliver this work well when there is a clearly agreed scope and access to needed information.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "delivery.conditions"
+              ]
+            },
+            {
+              "text": "The fee for this work is usually worthwhile compared to the effort.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.fee_effort"
+              ]
+            },
+            {
+              "text": "The firm has limited current capacity to take on more of this work.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "delivery.capacity"
+              ]
+            }
+          ],
+          "evidence": [
+            {
+              "text": "This direction is supported by several matters the firm has handled.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            },
+            {
+              "text": "Fee and time records support this direction.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            }
+          ],
+          "open_questions": [],
+          "marketing": {
+            "topic": {
+              "text": "Employer Immigration Support: Managing Costs and Next Steps for Planned Processes in Ontario",
+              "kind": "preference",
+              "source_answer_ids": [
+                "focus.work",
+                "focus.service_area",
+                "client.concerns",
+                "client.goals"
+              ]
+            },
+            "inquiry_question": {
+              "text": "How can your business plan for the costs and next steps of an upcoming immigration process in Ontario?",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.concerns",
+                "client.goals",
+                "focus.service_area"
+              ]
+            },
+            "validation_step": {
+              "text": "Review recent employer immigration matters to confirm the typical scope, information availability, and fee-to-effort ratio for this work.",
+              "kind": "suggestion",
+              "source_answer_ids": [
+                "delivery.conditions",
+                "value.fee_effort",
+                "direction.evidence"
+              ]
+            }
+          },
+          "work_to_promote_less": []
+        }
+      },
+      "result": {
+        "clarification_code": null,
+        "brief": {
+          "definition": {
+            "text": "The firm prefers to attract more established employer immigration support work in Ontario, where it already has experience.",
+            "kind": "preference",
+            "source_answer_ids": [
+              "focus.work",
+              "focus.service_area",
+              "focus.route"
+            ]
+          },
+          "client_goals": [
+            {
+              "text": "Clients want to complete a planned transaction or process.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            },
+            {
+              "text": "Clients want to meet an obligation or respond to a process.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.goals"
+              ]
+            }
+          ],
+          "firm_reasons": [
+            {
+              "text": "This work lets the firm make a useful difference for the client.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            },
+            {
+              "text": "The fee usually supports the effort involved in this work.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            },
+            {
+              "text": "This work uses capabilities the firm already does well.",
+              "kind": "preference",
+              "source_answer_ids": [
+                "value.reasons"
+              ]
+            }
+          ],
+          "delivery_conditions": [
+            {
+              "text": "The firm can deliver this work well when there is a clearly agreed scope and access to needed information.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "delivery.conditions"
+              ]
+            },
+            {
+              "text": "The fee for this work is usually worthwhile compared to the effort.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "value.fee_effort"
+              ]
+            },
+            {
+              "text": "The firm has limited current capacity to take on more of this work.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "delivery.capacity"
+              ]
+            }
+          ],
+          "evidence": [
+            {
+              "text": "This direction is supported by several matters the firm has handled.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            },
+            {
+              "text": "Fee and time records support this direction.",
+              "kind": "experience",
+              "source_answer_ids": [
+                "direction.evidence"
+              ]
+            }
+          ],
+          "open_questions": [],
+          "marketing": {
+            "topic": {
+              "text": "Employer Immigration Support: Managing Costs and Next Steps for Planned Processes in Ontario",
+              "kind": "preference",
+              "source_answer_ids": [
+                "focus.work",
+                "focus.service_area",
+                "client.concerns",
+                "client.goals"
+              ]
+            },
+            "inquiry_question": {
+              "text": "How can your business plan for the costs and next steps of an upcoming immigration process in Ontario?",
+              "kind": "preference",
+              "source_answer_ids": [
+                "client.concerns",
+                "client.goals",
+                "focus.service_area"
+              ]
+            },
+            "validation_step": {
+              "text": "Review recent employer immigration matters to confirm the typical scope, information availability, and fee-to-effort ratio for this work.",
+              "kind": "suggestion",
+              "source_answer_ids": [
+                "delivery.conditions",
+                "value.fee_effort",
+                "direction.evidence"
+              ]
+            }
+          },
+          "work_to_promote_less": []
+        }
+      }
+    }
+  ]
+}
