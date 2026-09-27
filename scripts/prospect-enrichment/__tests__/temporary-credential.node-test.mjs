@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
-import { acquireTemporaryCredential, validateTemporaryCredential, LOGIN_ENDPOINT } from "../temporary-credential.mjs";
+import { acquireTemporaryCredential, validateTemporaryCredential, redactedFailureCode, LOGIN_ENDPOINT } from "../temporary-credential.mjs";
 import { verifyDirectDatabaseUrl, verifyExecutionGate, PROJECT_REF, TEMPORARY_DATABASE_HOST } from "../migration-gate.mjs";
 import { verifyApplicationGate, verifySourceGate } from "../additive-release-gate.mjs";
 const require = createRequire(import.meta.url);
@@ -64,20 +64,33 @@ test("no acquisition on default mode, invalid gate, or failed source authorizati
 });
 
 test("API errors and malformed responses never expose credential text or persist", async () => {
-  for (const fetchImpl of [
-    async () => { throw Error("synthetic-secret"); },
-    async () => ({ status: 403, json: async () => { throw Error("body_must_not_be_read"); } }),
-    async () => ({ status: 201, json: async () => { throw Error("synthetic-secret"); } }),
-    async () => ({ status: 201, json: async () => ({ ...payload, role: "postgres" }) }),
-    async () => ({ status: 201, json: async () => ({ ...payload, password: "synthetic\nsecret" }) }),
+  for (const [fetchImpl, expectedCode] of [
+    [async () => { throw Error("synthetic-secret"); }, "temporary_credential_transport_failed"],
+    [async () => { throw Object.assign(Error("synthetic-secret"), { name: "TimeoutError" }); }, "temporary_credential_timeout"],
+    [async () => ({ status: 401, json: async () => { throw Error("body_must_not_be_read"); } }), "temporary_credential_http_401"],
+    [async () => ({ status: 403, json: async () => { throw Error("body_must_not_be_read"); } }), "temporary_credential_http_403"],
+    [async () => ({ status: 429, json: async () => { throw Error("body_must_not_be_read"); } }), "temporary_credential_http_429"],
+    [async () => ({ status: 500, json: async () => { throw Error("body_must_not_be_read"); } }), "temporary_credential_http_500"],
+    [async () => ({ status: 201, json: async () => { throw Error("synthetic-secret"); } }), "temporary_credential_response_unreadable"],
+    [async () => ({ status: 201, json: async () => ({ ...payload, role: "postgres" }) }), "temporary_credential_response_invalid"],
+    [async () => ({ status: 201, json: async () => ({ ...payload, password: "synthetic\nsecret" }) }), "temporary_credential_response_invalid"],
   ]) {
     let persisted = false;
     await assert.rejects(acquireTemporaryCredential({ environment, authorize: () => {}, fetchImpl, mask: () => {}, persist: () => { persisted = true; } }), error => {
-      assert.match(error.message, /^temporary_credential_[a-z_]+$/);
-      assert.doesNotMatch(error.message, /synthetic|postgresql/); return true;
+      assert.equal(redactedFailureCode(error), expectedCode);
+      assert.doesNotMatch(redactedFailureCode(error), /synthetic|postgresql|password/); return true;
     });
     assert.equal(persisted, false);
   }
+});
+
+test("redacted diagnostics never print untrusted exception text", () => {
+  assert.equal(redactedFailureCode(Error("Bearer synthetic-token")), "temporary_credential_unexpected_failure");
+  assert.equal(redactedFailureCode(Error("postgresql://synthetic")), "temporary_credential_unexpected_failure");
+  assert.equal(redactedFailureCode(Error("temporary_credential_http_200")), "temporary_credential_unexpected_failure");
+  assert.equal(redactedFailureCode(Error("temporary_credential_http_403 extra")), "temporary_credential_unexpected_failure");
+  assert.equal(redactedFailureCode(Error("migration_access_token_missing_or_invalid")), "migration_access_token_missing_or_invalid");
+  assert.equal(redactedFailureCode(Error("temporary_credential_source_authorization_failed")), "temporary_credential_source_authorization_failed");
 });
 
 test("role, TTL and TLS validation fails closed", () => {
