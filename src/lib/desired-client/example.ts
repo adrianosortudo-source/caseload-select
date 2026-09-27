@@ -27,7 +27,7 @@ const statement = (text: string, kind: DesiredClientStatement["kind"], ...source
 
 export const fictionalExampleBrief: DesiredClientBrief = {
   report_version: "dcm-blueprint-v1",
-  portrait: statement("An Ontario business owner planning a purchase or sale seeks advice before committing. They want to understand their options and complete the transaction.", "preference", "situation.role", "focus.work", "focus.service_area", "situation.timing", "client.goals", "focus.route"),
+  portrait: statement("Ontario business owners seek advice before a planned purchase or sale. They want to understand their options and complete the transaction.", "preference", "situation.role", "focus.work", "focus.service_area", "situation.timing", "client.goals", "focus.route"),
   client_need: statement("The firm has heard concerns about cost and what happens next. These clients want to understand their options and complete a planned transaction. Their decision needs still require confirmation.", "hypothesis", "client.concerns", "client.goals", "client.decision_needs"),
   firm_value: statement("This work uses the firm's skills and helps clients. The firm reports that fees of C$15,000 to under C$50,000 for more than 40, up to 100 team hours are usually worthwhile. It has capacity when scope is clear and necessary information is available.", "preference", "value.reasons", "value.collected_fee", "value.team_hours", "value.fee_effort", "delivery.capacity", "delivery.conditions"),
   marketing: {

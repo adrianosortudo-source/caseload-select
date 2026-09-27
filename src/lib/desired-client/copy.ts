@@ -1,13 +1,13 @@
 export const WELCOME_COPY = {
   eyebrow: "A guided tool for law firms",
   heading: "Know which clients and matters to attract next.",
-  description: "A full calendar does not always build the practice you want. Some matters make good use of your expertise and support the team. Others pull your time in a different direction. This exercise helps you name the difference.",
+  description: "A full calendar does not always build the practice you want. Some matters suit your expertise and team. Others pull you away from your goals. This exercise helps you choose which work to attract.",
   promise: "Turn your choices into a one-page Desired Client Blueprint: a portrait of the client and matter you want, why that work fits your firm, a direction for your marketing, and proposed questions to help recognize relevant inquiries.",
   time: "Plan for about 10 minutes for a first draft. More detail or a comparison of two types of work will take longer.",
   processHeading: "From a preference to a profile you can use",
   process: [
-    "Choose one type of work you want more of and the situation that brings that client to you.",
-    "Check client needs, fees and your ability to deliver.",
+    "Choose the work you want more of and what brings that client to you.",
+    "Check client needs, fees and capacity.",
     "Create your Blueprint.",
   ],
   preparation: "Think of a few matters you would welcome again and why. You do not need records. If you know your usual fees, time commitment or capacity, you can add that detail.",
