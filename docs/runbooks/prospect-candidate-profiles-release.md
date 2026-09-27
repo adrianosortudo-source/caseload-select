@@ -1,5 +1,14 @@
 # Candidate profiles: implementation and release boundary
 
+The candidate preflight and candidate release workflows support the same optional
+temporary authentication as the enrichment workflow. It defaults off and needs
+explicit approval for the exact run because it creates a short-lived,
+write-capable Supabase CLI login. See
+[temporary authentication and operator sequence](prospect-enrichment-production-migration.md#optional-temporary-authentication-when-no-saved-database-password-is-available).
+The full source/receipt authorization runs before authentication creation; the
+existing ledger, catalog, exact candidate suffix and separately approved apply
+gates remain mandatory. No migration or import is authorized by login success.
+
 This follow-on is based on merged PR #313, main commit 2b6952a3639e15835e62a34a48363e464224cade. It adds candidate profiles for the governed enrichment inventory and the explicitly allowlisted legacy research sources, including manifest-only holds and missing research keys. The governed-source matrix and its completeness warnings define coverage; a table or field outside that matrix is not silently claimed as indexed. Archive files that have not passed the protected inventory/intake remain outside database coverage. A database count never proves archive-wide synchronization.
 
 ## Stored identities and evidence

@@ -293,7 +293,7 @@ export function verifyLedgerDelta(beforeRows, afterRows, expectedVersions) {
   return { addedVersions: added, beforeCount: before.size, afterCount: after.size, exactDelta: true };
 }
 
-export function verifyDirectDatabaseUrl(value, environment = {}, projectEnvFiles = []) {
+export function verifyDatabaseEnvironment(environment = {}, projectEnvFiles = []) {
   if (Object.keys(environment).some(key => {
     const setting = environment[key];
     if (setting === undefined) return false;
@@ -301,26 +301,44 @@ export function verifyDirectDatabaseUrl(value, environment = {}, projectEnvFiles
     return /^(?:PG|SUPABASE_|DOTENV_)/i.test(key) || ["DOCKER_HOST", "NODE_TLS_REJECT_UNAUTHORIZED"].includes(key.toUpperCase());
   })) fail("ambient_database_configuration_prohibited");
   if (!Array.isArray(projectEnvFiles) || projectEnvFiles.length) fail("project_database_env_files_prohibited");
+  if (![undefined, "false", "true"].includes(environment.USE_TEMPORARY_DATABASE_CREDENTIAL)) fail("temporary_credential_mode_invalid");
+}
+
+export const TEMPORARY_DATABASE_HOST = "aws-1-ca-central-1.pooler.supabase.com";
+
+export function verifyDirectDatabaseUrl(value, environment = {}, projectEnvFiles = []) {
+  verifyDatabaseEnvironment(environment, projectEnvFiles);
   if (typeof value !== "string" || !value || value.trim() !== value || hasAsciiControl(value, 32)) fail("protected_environment_database_url_missing_or_invalid");
   let url;
   try { url = new URL(value); } catch { fail("protected_environment_database_url_missing_or_invalid"); }
   let username, password;
   try { username = decodeURIComponent(url.username); password = decodeURIComponent(url.password); }
   catch { fail("database_url_credentials_invalid"); }
-  if (url.protocol !== "postgresql:" || url.hostname !== "db." + PROJECT_REF + ".supabase.co" ||
-      url.port !== "5432" || url.pathname !== "/postgres" || url.hash || username !== "postgres" ||
+  const temporary = environment.USE_TEMPORARY_DATABASE_CREDENTIAL === "true";
+  if (temporary) {
+    const issuedAt = Number(environment.TEMPORARY_DATABASE_ISSUED_AT);
+    const expiresAt = Number(environment.TEMPORARY_DATABASE_EXPIRES_AT);
+    if (!/^cli_login_[a-z0-9_]{1,53}$/.test(environment.TEMPORARY_DATABASE_ROLE ?? "") || username !== environment.TEMPORARY_DATABASE_ROLE + "." + PROJECT_REF ||
+        !Number.isSafeInteger(issuedAt) || !Number.isSafeInteger(expiresAt) || issuedAt > Date.now() ||
+        expiresAt - issuedAt < 60000 || expiresAt - issuedAt > 86400000 || expiresAt - Date.now() < 30000) fail("temporary_credential_identity_or_expiry_invalid");
+  } else if (username !== "postgres" || ["TEMPORARY_DATABASE_ROLE", "TEMPORARY_DATABASE_ISSUED_AT", "TEMPORARY_DATABASE_EXPIRES_AT"].some(key => environment[key] !== undefined)) {
+    fail("database_url_target_or_options_prohibited");
+  }
+  if (url.protocol !== "postgresql:" || url.hostname !== (temporary ? TEMPORARY_DATABASE_HOST : "db." + PROJECT_REF + ".supabase.co") ||
+      url.port !== "5432" || url.pathname !== "/postgres" || url.hash ||
       !password || hasAsciiControl(password, 31) ||
       !same([...url.searchParams], [["sslmode", "verify-full"]])) fail("database_url_target_or_options_prohibited");
-  return { host: url.hostname, port: 5432, database: "postgres", user: "postgres", sslmode: "verify-full", connectionMode: "explicit-db-url" };
+  return { host: url.hostname, port: 5432, database: "postgres", user: username, sslmode: "verify-full", connectionMode: "explicit-db-url", ...(temporary ? { credentialMode: "temporary-write-capable" } : {}) };
 }
 
-export function verifyExecutionGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, databaseUrl, environment, projectEnvFiles }) {
+export function verifyExecutionGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, databaseUrl, environment, projectEnvFiles, authorizationOnly = false }) {
   if (event !== "workflow_dispatch" || ref !== "refs/heads/main" || repository !== "adrianosortudo-source/caseload-select") fail("manual_main_repository_required");
   if (!["dry-run", "apply", "qualification-preflight", "qualification-repair"].includes(operation)) fail("invalid_operation");
   if (!/^[a-f0-9]{40}$/.test(reviewedSourceSha ?? "")) fail("reviewed_source_sha_required");
   if (!/^[a-f0-9]{40}$/.test(configuredReviewedSha ?? "") || configuredReviewedSha !== reviewedSourceSha) fail("protected_environment_reviewed_sha_missing_or_mismatch");
   if (checkoutSha !== reviewedSourceSha || githubSha !== reviewedSourceSha) fail("reviewed_source_sha_changed");
-  const connection = verifyDirectDatabaseUrl(databaseUrl, environment, projectEnvFiles);
+  verifyDatabaseEnvironment(environment, projectEnvFiles);
+  const connection = authorizationOnly ? { pending: true } : verifyDirectDatabaseUrl(databaseUrl, environment, projectEnvFiles);
   return { reviewedSourceSha, operation, projectRef: PROJECT_REF, connection };
 }
 
@@ -444,13 +462,14 @@ async function main(args) {
   }
   const manifest = JSON.parse(fs.readFileSync(RELEASE_PATH, "utf8"));
   verifyReleaseManifest(manifest, sources);
-  if (command === "source" && rest.length === 0) {
+  if (["source", "source-authorization"].includes(command) && rest.length === 0) {
     const gate = verifyExecutionGate({
       event: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF,
       repository: process.env.GITHUB_REPOSITORY, operation: process.env.OPERATION,
       reviewedSourceSha: process.env.REVIEWED_SOURCE_SHA, configuredReviewedSha: process.env.CONFIGURED_REVIEWED_SHA,
       checkoutSha: process.env.CHECKOUT_SHA, githubSha: process.env.GITHUB_SHA,
       databaseUrl: process.env.MIGRATION_DATABASE_URL, environment: process.env, projectEnvFiles: findProjectEnvFiles(),
+      authorizationOnly: command === "source-authorization",
     });
     verifyConfirmation(gate.operation, process.env.CONFIRMATION);
     console.log(JSON.stringify({ ...gate, releaseManifestSha256: sha256(fs.readFileSync(RELEASE_PATH)), migrations: manifest.migrations }));
