@@ -23,9 +23,9 @@ test('one welcome action opens the guided discovery journey', async ({ page }) =
   let calls = 0;
   await page.route(API, route => { calls++; return route.abort(); });
   await page.goto(ROUTE);
-  await expect(page.getByRole('button', { name: 'Define my desired client', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Build my client profile', exact: true }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /Begin with|basic blueprint|without AI/i })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Define my desired client', exact: true }).click();
+  await page.getByRole('button', { name: 'Build my client profile', exact: true }).first().click();
   await expect(page.getByRole('heading', { name: 'What legal work do you want more of?' })).toBeVisible();
   await establishedToReview(page);
   expect(calls).toBe(0);
@@ -78,7 +78,7 @@ for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(ROUTE);
     await layout(page);
-    await page.getByRole('button', { name: 'Define my desired client', exact: true }).click();
+    await page.getByRole('button', { name: 'Build my client profile', exact: true }).first().click();
     await layout(page);
   });
 }
