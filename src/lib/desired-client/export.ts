@@ -1,5 +1,6 @@
 import { buildBlueprintViewModel } from "./blueprint";
-import type { DesiredClientAnswers, SavedBrief } from "./types";
+import { getSourceDetails } from "./sources";
+import type { AnswerReferencePath, DesiredClientAnswers, SavedBrief } from "./types";
 
 const stamp=(d:Date)=>d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");
 function view(saved:SavedBrief,a:DesiredClientAnswers){return buildBlueprintViewModel(saved.brief,a,{mode:saved.mode,generatedAt:saved.generatedAt,wordingReviewed:saved.wordingReviewed,openClarificationCode:saved.openClarificationCode});}
@@ -17,3 +18,8 @@ export function formatBriefMarkdown(saved:SavedBrief,a:DesiredClientAnswers):str
 }
 export function createMarkdownDownload(saved:SavedBrief,a:DesiredClientAnswers,now=new Date()){return {filename:"desired-client-blueprint-supporting-detail-"+stamp(now)+".md",content:formatBriefMarkdown(saved,a),mimeType:"text/markdown;charset=utf-8"};}
 export function createProfileDownload(saved:SavedBrief,a:DesiredClientAnswers,now=new Date()){return {filename:"desired-client-blueprint-"+stamp(now)+".txt",content:profile(saved,a),mimeType:"text/plain;charset=utf-8"};}
+export function createAnswersDownload(answers:DesiredClientAnswers,now=new Date()){
+ const paths:AnswerReferencePath[]=["focus.area","focus.work","focus.work_other","focus.service_area","focus.route","situation.trigger","write_ins.trigger","situation.timing","write_ins.timing","situation.role","situation.role_other","situation.contact","write_ins.contact","client.goals","write_ins.goals","client.concerns","write_ins.concerns","client.decision_needs","write_ins.decision_needs","value.reasons","write_ins.reasons","value.fee_effort","write_ins.fee_effort","value.collected_fee","value.team_hours","value.payment","delivery.conditions","write_ins.conditions","delivery.capacity","write_ins.capacity","delivery.limit","write_ins.limit","delivery.fit_signals","write_ins.fit_signals","direction.aim","write_ins.aim","direction.evidence","write_ins.evidence","direction.less","direction.less_note"];
+ const rows=paths.flatMap(path=>{const source=getSourceDetails(path,answers);return source.answer===null?[]:["- **"+source.question+"**: "+source.answer];});
+ return {filename:"desired-client-discovery-answers-"+stamp(now)+".md",mimeType:"text/markdown;charset=utf-8",content:["# Desired Client Discovery Answers","","_Answer record only. A Desired Client Blueprint has not been generated._","","Exported: "+stamp(now),"",...rows,"","This document records your answers. A Desired Client Blueprint has not been generated.",""].join("\n")};
+}

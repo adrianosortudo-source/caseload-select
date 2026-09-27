@@ -2,11 +2,10 @@
 import { useMemo, useRef, useState } from "react";
 import { buildBlueprintViewModel } from "@/lib/desired-client/blueprint";
 import { createMarkdownDownload, createProfileDownload } from "@/lib/desired-client/export";
-import { getSourceDetails } from "@/lib/desired-client/sources";
 import type { ClarificationCode, DesiredClientAnswers, SavedBrief } from "@/lib/desired-client/types";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 
-export function BriefView({saved,answers,dismissedCode,error,requestCount,retryAllowed,reviewed,onReview,onEdit,onRetry,onUseAi,onAnother,onClear,storageWarning}:{saved:SavedBrief;answers:DesiredClientAnswers;dismissedCode:ClarificationCode|null;error:""|"unavailable"|"invalid"|"changed"|"focusChanged";requestCount:number;retryAllowed:boolean;reviewed:boolean;onReview:(v:boolean)=>void;onEdit:(stage:1|2|3|4|5|6)=>void;onRetry:()=>void;onUseAi:()=>void;onAnother:()=>void;onClear:()=>void;storageWarning:boolean}){
+export function BriefView({saved,answers,dismissedCode,reviewed,onReview,onEdit,onAnother,onClear,storageWarning}:{saved:SavedBrief;answers:DesiredClientAnswers;dismissedCode:ClarificationCode|null;reviewed:boolean;onReview:(v:boolean)=>void;onEdit:(stage:1|2|3|4|5|6)=>void;onAnother:()=>void;onClear:()=>void;storageWarning:boolean}){
  const [copied,setCopied]=useState(false),[copyFailed,setCopyFailed]=useState(false),[pdfFailed,setPdfFailed]=useState(false),[confirm,setConfirm]=useState<"another"|"clear"|null>(null),[busy,setBusy]=useState(false); const fallback=useRef<HTMLTextAreaElement>(null);
  const model=useMemo(()=>buildBlueprintViewModel(saved.brief,answers,{mode:saved.mode,generatedAt:saved.generatedAt,wordingReviewed:reviewed,openClarificationCode:dismissedCode??saved.openClarificationCode}),[saved,answers,reviewed,dismissedCode]);
  const text=createProfileDownload(saved,answers).content, markdown=createMarkdownDownload(saved,answers);
@@ -15,11 +14,8 @@ export function BriefView({saved,answers,dismissedCode,error,requestCount,retryA
  async function downloadPdf(){setPdfFailed(false);setBusy(true);try{const {downloadBlueprintPdf}=await import("@/lib/desired-client/pdf-export");await downloadBlueprintPdf(model,saved,answers);}catch{setPdfFailed(true);}finally{setBusy(false);}}
  const b=saved.brief;
  return <article className="dc-brief" data-ui-component-content="desired-client-brief">
-  <header className="dc-brief__header"><h1 data-ui-copy="heading">Desired Client Blueprint</h1><p data-ui-copy="supporting">{model.status}{model.provisional?" · Provisional direction":""} · {saved.mode==="ai"?"AI-assisted working draft":"Basic blueprint based on your selections"} · {model.date}</p></header>
+  <header className="dc-brief__header"><h1 data-ui-copy="heading">Desired Client Blueprint</h1><p data-ui-copy="supporting">{model.status}{model.provisional?" · Provisional direction":""} · AI-assisted working draft · {model.date}</p></header>
   {storageWarning&&<p className="dc-alert" data-ui-copy="supporting">This browser could not save your progress. You can still finish and download your blueprint.</p>}
-  {error==="unavailable"&&<div className="dc-alert" data-ui-component-content="desired-client-ai-status"><p data-ui-copy="supporting">AI assistance is unavailable. Your basic blueprint is ready.</p>{retryAllowed&&requestCount<3&&<button className="dc-button dc-button--secondary" onClick={onRetry}>Try AI again</button>}</div>}
-  {error==="invalid"&&<p className="dc-alert" data-ui-copy="supporting">AI assistance could not prepare a valid profile. Your basic blueprint is ready.</p>}
-  {error==="changed"&&<p className="dc-alert" data-ui-copy="supporting">Your answers changed. Prepare the blueprint again to include them.</p>}
   <section className="dc-profile" data-ui-component-content="desired-client-profile"><h2 data-ui-copy="heading">Desired client portrait</h2><p className="dc-profile__definition" data-ui-copy="body">{b.portrait.text}</p><div className="dc-blueprint-context">{[["CLIENT CONTEXT",model.context.client],["STARTING POINT",model.context.startingPoint],["WORK TO ATTRACT",model.context.work]].map(([label,value])=><section key={label}><h3 data-ui-copy="supporting">{label}</h3><p data-ui-copy="body">{value}</p></section>)}</div></section>
   <div className="dc-blueprint-columns"><section className="dc-brief__section"><h2 data-ui-copy="heading">Client need</h2><p data-ui-copy="body">{b.client_need.text}</p></section><section className="dc-brief__section"><h2 data-ui-copy="heading">Firm value</h2><p data-ui-copy="body">{b.firm_value.text}</p></section></div>
   <section className="dc-brief__section"><h2 data-ui-copy="heading">Marketing direction</h2><dl className="dc-fact-row"><dt data-ui-copy="supporting">Message</dt><dd data-ui-copy="body">{b.marketing.message.text}</dd></dl><dl className="dc-fact-row"><dt data-ui-copy="supporting">Content idea</dt><dd data-ui-copy="body">{b.marketing.content.text}</dd></dl><dl className="dc-fact-row"><dt data-ui-copy="supporting">Next step</dt><dd data-ui-copy="body">{b.marketing.next_step.text}</dd></dl></section>

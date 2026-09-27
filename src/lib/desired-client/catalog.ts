@@ -111,8 +111,8 @@ export const DECISION_NEED_LABELS: Record<DecisionNeedId, string> = {
   response: "Knowing when someone can respond", heard: "Feeling that the lawyer understands their situation", unknown: "Not sure yet",
 };
 export const FIT_SIGNAL_LABELS: Record<FitSignalId, string> = {
-  service: "They are seeking the kind of work we have chosen", stage: "The matter is at a stage our service can address",
-  information: "They can share the information needed for a useful first conversation", decision: "The people needed for decisions can take part",
+  service: "They are seeking the kind of work we have chosen", stage: "The matter is at a stage we can help",
+  information: "They can share what we need for an initial conversation", decision: "The people needed for decisions can take part",
   scope: "They are open to agreeing the scope and next step", fees: "They are willing to discuss the proposed service and its fees",
   timing: "Their requested timing can be considered against our availability", unknown: "Not sure yet",
 };

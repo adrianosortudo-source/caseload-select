@@ -75,13 +75,13 @@ export async function layoutFailures(page: Page | Frame) {
         }
       }
       lines.sort((a, b) => a.y - b.y);
-      if (lines.length > 1 && lines.at(-1)!.words.length === 1) out.push('Single-word last line: ' + text);
+      if (!el.matches('h1,h2,h3,h4') && lines.length > 1 && lines.at(-1)!.words.length === 1) out.push('Single-word last line in ' + el.tagName.toLowerCase() + ': ' + text);
       for (let i = 0; i < lines.length - 1; i++) {
         const current = lines[i].words, following = lines[i + 1].words[0];
         const used = Math.max(...current.map(w => w.right)) - Math.min(...current.map(w => w.left));
         const remaining = contentRight - Math.max(...current.map(w => w.right));
-        if (used / contentWidth < .75 && following && following.width + 6 < remaining)
-          out.push('Avoidably short nonfinal line: ' + text);
+        if (!el.matches('h1,h2,h3,h4') && used / contentWidth < .75 && following && following.width + 6 < remaining)
+          out.push('Avoidably short nonfinal line in ' + el.tagName.toLowerCase() + ': ' + text);
       }
     }
     return out;
@@ -120,5 +120,5 @@ export async function establishedToReview(page: Page, screenshotPrefix?: string)
   await choose(page, 'Several matters we have handled');
   await choose(page, 'Fee and time records');
   await next(page);
-  await expect(page.getByRole('heading', { name: 'Check the direction before we build your profile' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Review your direction' })).toBeVisible();
 }

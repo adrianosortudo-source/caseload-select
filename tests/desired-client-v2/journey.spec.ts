@@ -1,104 +1,84 @@
-import { expect, test } from '@playwright/test';
-import { choose, next, capture, layout, establishedToReview } from './helpers';
-import fs from 'node:fs/promises';
+import { expect, test, type Page } from '@playwright/test';
+import { completeAnswers, validBlueprint } from '../../src/lib/desired-client/__tests__/blueprint-helpers';
+import { establishedToReview, layout } from './helpers';
 
 const ROUTE = '/tools/desired-client-matter';
 const API = '**/api/tools/desired-client-matter/analyze';
+const KEY = 'cls-desired-client-v2';
 const WIDTHS = [1440, 1024, 768, 640, 375, 320] as const;
+const fixture = { answers: completeAnswers(), result: validBlueprint() };
 
-test('complete, export and resume a basic blueprint without an AI request', async ({ page }) => {
+async function seedReview(page: Page) {
+  await page.addInitScript(({ key, answers }) => {
+    const now = Date.now();
+    localStorage.setItem(key, JSON.stringify({ schemaVersion: 2, answers, currentStage: 7,
+      lastEditedAt: new Date(now).toISOString(), expiresAt: new Date(now + 7 * 86400000).toISOString() }));
+  }, { key: KEY, answers: fixture.answers });
+  await page.goto(ROUTE);
+  await page.getByRole('button', { name: 'Continue my saved draft', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Review your direction' })).toBeVisible();
+}
+
+test('one welcome action opens the guided discovery journey', async ({ page }) => {
   let calls = 0;
   await page.route(API, route => { calls++; return route.abort(); });
   await page.goto(ROUTE);
-  await page.getByRole('button', { name: 'Begin with a basic blueprint', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Define my desired client', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Begin with|basic blueprint|without AI/i })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Define my desired client', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'What legal work do you want more of?' })).toBeVisible();
   await establishedToReview(page);
   expect(calls).toBe(0);
-  await page.getByRole('button', { name: 'Create my basic blueprint', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Desired Client Blueprint', exact: true })).toBeVisible();
-  for (const name of ['Desired client portrait', 'Client need', 'Firm value', 'Marketing direction', 'Proposed Screen questions', 'Still to confirm', 'Answers and sources'])
-    await expect(page.getByRole('heading', { name, exact: true }).or(page.getByText(name, { exact: true }))).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Desired client portrait', exact: true }).locator('..')).toContainText('business purchase');
-  await expect(page.locator('.dc-screen-table__row')).toHaveCount(4);
-  await expect(page.getByText('not activate scoring', { exact: false })).toBeVisible();
-  await expect(page.getByLabel('I have reviewed this wording and the proposed inquiry checks.', { exact: true })).not.toBeChecked();
-  const downloadPromise = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download supporting detail', exact: true }).click();
-  const download = await downloadPromise;
-  expect(download.suggestedFilename()).toMatch(/\.md$/);
-  const savedPath = await download.path();
-  const markdown = await fs.readFile(savedPath!, 'utf8');
-  expect(markdown).toContain('Working draft, not yet reviewed');
-  expect(markdown).toContain('Commercial agreement drafting and review');
-  expect(markdown).toContain('Matter fit');
-  expect(markdown).toContain('not activated');
-  const beforeResume = await page.evaluate(() => JSON.parse(localStorage.getItem('cls-desired-client-v2')!));
-  await page.reload();
-  await page.getByRole('button', { name: 'Resume without AI', exact: true }).click();
-  const afterResume = await page.evaluate(() => JSON.parse(localStorage.getItem('cls-desired-client-v2')!));
-  expect(afterResume.expiresAt).toBe(beforeResume.expiresAt);
-  expect(afterResume.lastEditedAt).toBe(beforeResume.lastEditedAt);
-  expect(calls).toBe(0);
 });
 
-test('unknown route can finish and labels unknowns for follow-up', async ({ page }) => {
-  await page.goto(ROUTE);
-  await page.getByRole('button', { name: 'Begin with a basic blueprint', exact: true }).click();
-  await choose(page, 'Another practice area');
-  await choose(page, 'Another type of work');
-  await choose(page, 'We are deciding whether to pursue it');
-  await page.getByRole('textbox', { name: 'Other type of legal work' }).fill('A distinct service');
-  await next(page);
-  await choose(page, 'Not sure yet');
-  await choose(page, 'Before a planned decision or change');
-  await choose(page, 'Business or organization');
-  await next(page);
-  await choose(page, 'Not sure yet');
-  await next(page);
-  await choose(page, "We're still deciding");
-  await choose(page, "We haven't established this yet");
-  await next(page);
-  await choose(page, 'We need to establish that');
-  await next(page);
-  await choose(page, "We're still choosing a direction");
-  await choose(page, 'Mainly our preference at this stage');
-  await next(page);
-  await page.getByRole('button', { name: 'Create my basic blueprint', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Desired Client Blueprint', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Still to confirm' })).toBeVisible();
-});
-
-test('AI outage leaves a usable basic blueprint', async ({ page }) => {
+test('Review consent creates an AI Desired Client Blueprint', async ({ page }) => {
   let calls = 0;
-  await page.route(API, route => {
+  await page.route(API, async route => {
     calls++;
-    return route.fulfill({ status: 503, contentType: 'application/json',
-      body: JSON.stringify({ ok: false, error: { code: 'AI_UNAVAILABLE', message: 'AI assistance is unavailable.' } }) });
+    const request = route.request().postDataJSON();
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      ok: true, requestId: request.requestId, answerRevision: request.answerRevision,
+      reviewRunId: request.reviewRunId, result: fixture.result,
+    }) });
   });
-  await page.goto(ROUTE);
-  await page.getByRole('button', { name: 'Begin with AI assistance', exact: true }).click();
-  await establishedToReview(page);
-  expect(calls).toBe(0);
-  await page.getByRole('button', { name: 'Build my Desired Client Blueprint', exact: true }).click();
-  await expect(page.getByText('AI assistance is unavailable. Your basic blueprint is ready.', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Download one-page PDF', exact: true })).toBeEnabled();
-  await expect(page.getByRole('heading', { name: 'Marketing direction', exact: true })).toBeVisible();
+  await seedReview(page);
+  await page.getByRole('button', { name: 'Create my profile', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Desired Client Blueprint', exact: true })).toBeVisible();
+  await expect(page.getByText(fixture.result.brief.portrait.text, { exact: true })).toBeVisible();
   expect(calls).toBe(1);
 });
 
+test('AI failure keeps answers on Review, allows bounded retry, and downloads answers without implying a profile', async ({ page }) => {
+  let calls = 0;
+  await page.route(API, route => {
+    calls++;
+    return route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ ok: false, error: { code: 'AI_UNAVAILABLE' } }) });
+  });
+  await seedReview(page);
+  await page.getByRole('button', { name: 'Create my profile', exact: true }).click();
+  await expect(page.getByText(/We couldn't create your profile just now/)).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Review your direction' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Client and situation', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Try again', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0);
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download my answers', exact: true }).click();
+  const download = await downloadPromise;
+  const savedPath = await download.path();
+  const markdown = await import('node:fs/promises').then(fs => fs.readFile(savedPath!, 'utf8'));
+  expect(download.suggestedFilename()).toMatch(/discovery-answers.*\.md$/);
+  expect(markdown).toContain('Answer record only. A Desired Client Blueprint has not been generated.');
+  expect(calls).toBe(3);
+});
+
 for (const width of WIDTHS) {
-  test('rendered guided flow at ' + width + 'px', async ({ page }) => {
+  test(`single-path welcome and guided review render at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto(ROUTE);
     await layout(page);
-    await capture(page, width + '-welcome');
-    await page.getByRole('button', { name: 'Begin with a basic blueprint', exact: true }).click();
+    await page.getByRole('button', { name: 'Define my desired client', exact: true }).click();
     await layout(page);
-    await capture(page, width + '-focus');
-    await establishedToReview(page, String(width));
-    await layout(page);
-    await capture(page, width + '-review');
-    await page.getByRole('button', { name: 'Create my basic blueprint', exact: true }).click();
-    await layout(page);
-    await capture(page, width + '-result');
   });
 }

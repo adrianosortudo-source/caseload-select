@@ -119,11 +119,11 @@ export function GuidedQuestionStage({
           {stage === 1 && <>
             {radio("dc-area", null, "What legal work do you want more of?", AREA_ORDER.map((id) => ({ id, label: getAreaLabel(id) })), area,
               (current, selected) => ({ ...current, focus: { ...current.focus, area: selected as AreaId } }),
-              "Choose one area first. You can create another profile for a different part of the practice.")}
+              "Choose one area first. You can define another profile for other work.")}
             {area && <>
               {radio("dc-work", null, "Which type of work should we focus on?", getWorkOptions(area), answers.focus.work,
                 (current, selected) => ({ ...current, focus: { ...current.focus, work: selected as typeof current.focus.work, work_other: selected === "other" ? current.focus.work_other : "" } }),
-                "Start with one service or type of matter. You can create another profile for a different part of the practice.")}
+                "Start with one service or type of matter. You can define another profile for other work.")}
               {answers.focus.work === "other" && textField("Describe the work in a few words", answers.focus.work_other,
                 (current, text) => ({ ...current, focus: { ...current.focus, work_other: text } }), "Use a general description. Leave out client names and confidential matter details.")}
               <button type="button" className="dc-button dc-button--secondary" onClick={onCompare}>Help me compare two</button>

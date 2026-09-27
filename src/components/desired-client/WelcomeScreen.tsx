@@ -3,10 +3,10 @@
 import { WELCOME_COPY } from "@/lib/desired-client/copy";
 
 export interface WelcomeScreenProps {
-  onChooseMode: (mode: "ai" | "structured") => void;
+  onStart: () => void;
 }
 
-export function WelcomeScreen({ onChooseMode }: WelcomeScreenProps) {
+export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
   return (
     <section
       className="dc-welcome"
@@ -19,6 +19,7 @@ export function WelcomeScreen({ onChooseMode }: WelcomeScreenProps) {
       <p className="dc-welcome__description" data-ui-copy="body">
         {WELCOME_COPY.description}
       </p>
+      <p className="dc-welcome__supporting" data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure}</p>
       <div className="dc-welcome__guide" data-ui-component-content="desired-client-welcome-guide">
         <p data-ui-copy="body"><strong>Time:</strong> {WELCOME_COPY.time}</p>
         <p data-ui-copy="body"><strong>How it works:</strong> {WELCOME_COPY.process}</p>
@@ -31,25 +32,14 @@ export function WelcomeScreen({ onChooseMode }: WelcomeScreenProps) {
       <p className="dc-welcome__privacy" data-ui-copy="supporting">
         {WELCOME_COPY.privacy}
       </p>
-      <p className="dc-welcome__ai-disclosure" data-ui-copy="supporting">
-        {WELCOME_COPY.aiDisclosure}
-      </p>
       <div className="dc-welcome__actions" data-ui-component-content="desired-client-mode-actions">
         <button
           type="button"
           className="dc-button dc-button--primary"
           data-ui-copy="supporting"
-          onClick={() => onChooseMode("ai")}
+          onClick={onStart}
         >
-          {WELCOME_COPY.aiButton}
-        </button>
-        <button
-          type="button"
-          className="dc-button dc-button--secondary"
-          data-ui-copy="supporting"
-          onClick={() => onChooseMode("structured")}
-        >
-          {WELCOME_COPY.structuredButton}
+          {WELCOME_COPY.startButton}
         </button>
       </div>
       <p className="dc-welcome__draft-notice" data-ui-copy="supporting">

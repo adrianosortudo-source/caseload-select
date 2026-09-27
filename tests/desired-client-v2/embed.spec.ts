@@ -4,7 +4,7 @@ import { capture, layout } from './helpers';
 test('iframe uses verified messages, grows and shrinks, and preserves the public wrapper', async ({ page }) => {
   await page.goto('http://localhost:3300/tools/desired-client-matter.html');
   const frame = page.frameLocator('iframe[data-desired-client-frame]');
-  await expect(frame.getByRole('button', { name: 'Begin without AI', exact: true })).toBeVisible();
+  await expect(frame.getByRole('button', { name: 'Define my desired client', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Open the tool in its own window', exact: true })).toHaveAttribute('href', 'http://localhost:3301/tools/desired-client-matter');
   const child = page.frames().find(f => f.url().includes('localhost:3301'));
   expect(child).toBeTruthy();
@@ -17,7 +17,7 @@ test('iframe uses verified messages, grows and shrinks, and preserves the public
     window.dispatchEvent(new MessageEvent('message', { origin: 'http://localhost:3301', source: window, data: { type: 'desired-client:height', version: 1, height: 15000 } }));
   });
   expect(await dimensions()).toEqual(before);
-  await frame.getByRole('button', { name: 'Begin without AI', exact: true }).click();
+  await frame.getByRole('button', { name: 'Define my desired client', exact: true }).click();
   await frame.getByLabel('Business & commercial', { exact: true }).check();
   await frame.getByLabel('Commercial agreement drafting and review', { exact: true }).check();
   await frame.getByLabel('We already do it and want more', { exact: true }).check();
@@ -39,7 +39,7 @@ for (const width of [1440, 1024, 768, 640, 375, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto('http://localhost:3300/tools/desired-client-matter.html');
     const frame = page.frameLocator('iframe[data-desired-client-frame]');
-    await expect(frame.getByRole('button', { name: 'Begin without AI', exact: true })).toBeVisible();
+    await expect(frame.getByRole('button', { name: 'Define my desired client', exact: true })).toBeVisible();
     await layout(page);
     const child = page.frames().find(f => f.url().includes('localhost:3301'))!;
     await layout(child);

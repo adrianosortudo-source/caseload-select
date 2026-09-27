@@ -1,4 +1,4 @@
-import { buildStructuredBrief, emptyAnswers } from "./brief";
+import { emptyAnswers } from "./brief";
 import { getEligibleClarificationCodes, clarificationOption } from "./clarifications";
 import { getMissingFieldsForStage, type StageId } from "./screens";
 import type { AnalysisResult, ClarificationCode, DesiredClientAnswers, SavedBrief, PendingWorkComparison, WorkComparison } from "./types";
@@ -9,12 +9,15 @@ export interface ToolState {
   savedBrief: SavedBrief|null; briefNeedsUpdate:boolean; reviewed: boolean; aiConsent: boolean; reviewRunId: string|null; requestCount: number;
   askedClarifications: ClarificationCode[]; activeClarification: ClarificationCode|null; dismissedCode: ClarificationCode|null;
   loading: boolean; retryAllowed:boolean; error: ""|"unavailable"|"invalid"|"changed"|"focusChanged"; storageMessage: ""|"unavailable"|"expired"|"invalid"; copyFailed: boolean;
+  legacyBriefReplaced:boolean;
 }
 const emptyMap = () => ({ FOCUS_UNCLEAR:null, CLIENT_GOAL_UNCLEAR:null, CURRENT_CAPACITY_CONFLICT:null, FEE_EFFORT_CONFLICT:null, EXPERIENCE_DIRECTION_CONFLICT:null });
-export function initialToolState(): ToolState { return { view:"welcome", mode:null, answers:emptyAnswers(), stage:1, visitedStages:[], stagesToRevisit:[], comparisonStep:1, comparisonDraft:null, savedBrief:null, briefNeedsUpdate:false, reviewed:false, aiConsent:false, reviewRunId:null, requestCount:0, askedClarifications:[], activeClarification:null, dismissedCode:null, loading:false, retryAllowed:false, error:"", storageMessage:"", copyFailed:false }; }
-export function enterTool(state:ToolState, mode:"ai"|"structured", restored?:{answers:DesiredClientAnswers;stage:StageId;savedBrief?:SavedBrief}):ToolState {
-  return { ...initialToolState(), view:restored?.savedBrief?"brief":restored?.stage===7?"review":"questions", mode, answers:restored?.answers??emptyAnswers(), stage:restored?.stage??1,
-    visitedStages:restored?[1,2,3,4,5,6,7].filter(n=>n<restored.stage) as StageId[]:[], savedBrief:restored?.savedBrief??null, reviewed:restored?.savedBrief?.wordingReviewed??false, dismissedCode:restored?.savedBrief?.openClarificationCode??null };
+export function initialToolState(): ToolState { return { view:"welcome", mode:null, answers:emptyAnswers(), stage:1, visitedStages:[], stagesToRevisit:[], comparisonStep:1, comparisonDraft:null, savedBrief:null, briefNeedsUpdate:false, reviewed:false, aiConsent:false, reviewRunId:null, requestCount:0, askedClarifications:[], activeClarification:null, dismissedCode:null, loading:false, retryAllowed:false, error:"", storageMessage:"", copyFailed:false,legacyBriefReplaced:false }; }
+export function enterTool(restored?:{answers:DesiredClientAnswers;stage:StageId;savedBrief?:SavedBrief}):ToolState {
+  const savedBrief=restored?.savedBrief?.mode==="ai"?restored.savedBrief:null;
+  const stage=restored?.stage??1;
+  return { ...initialToolState(), view:savedBrief?"brief":stage===7?"review":"questions", mode:"ai", answers:restored?.answers??emptyAnswers(), stage,
+    visitedStages:restored?[1,2,3,4,5,6,7].filter(n=>n<stage) as StageId[]:[], savedBrief, reviewed:savedBrief?.wordingReviewed??false, dismissedCode:savedBrief?.openClarificationCode??null,legacyBriefReplaced:restored?.savedBrief?.mode==="structured" };
 }
 export function canEnterStage(s:ToolState, stage:StageId):boolean {
   if(stage===7) return [1,2,3,4,5,6].every(n=>getMissingFieldsForStage(n as StageId,s.answers).length===0) && s.stagesToRevisit.length===0;
@@ -72,7 +75,6 @@ export function commitComparison(s:ToolState, certainty:"chosen"|"provisional"):
   return { ...s,answers,view:"questions",stage:1,visitedStages:[1],stagesToRevisit:[2,3,4,5,6],comparisonDraft:null,savedBrief:null,briefNeedsUpdate:!!s.savedBrief||s.briefNeedsUpdate,reviewed:false,reviewRunId:null,requestCount:0,askedClarifications:[],activeClarification:null,dismissedCode:null,loading:false,error:workChanged?"focusChanged":"changed" };
 }
 export function beginReview(s:ToolState):ToolState { return canEnterStage(s,7)?{ ...s,view:"review",stage:7,savedBrief:null,reviewed:false,error:"",reviewRunId:null,requestCount:0,askedClarifications:[],activeClarification:null,dismissedCode:null }:s; }
-export function createStructuredBrief(s:ToolState, now=new Date()):ToolState { if(!canEnterStage(s,7)) return s; return { ...s,view:"brief",stage:7,savedBrief:{brief:buildStructuredBrief(s.answers),sourceBriefRevision:s.answers.revision,generatedAt:now.toISOString(),wordingReviewed:false,mode:"structured"},briefNeedsUpdate:false,reviewed:false,error:"",activeClarification:null,reviewRunId:null,requestCount:0,askedClarifications:[],loading:false,retryAllowed:false }; }
 export function beginAiRun(s:ToolState, createId:()=>string):ToolState {
   if(!canEnterStage(s,7)) return s;
   const answers=structuredClone(s.answers), cleared=Object.values(answers.clarifications).some(v=>v!==null);
@@ -80,12 +82,11 @@ export function beginAiRun(s:ToolState, createId:()=>string):ToolState {
   return { ...s,answers,aiConsent:true,reviewRunId:createId(),requestCount:1,askedClarifications:[],activeClarification:null,dismissedCode:null,savedBrief:null,briefNeedsUpdate:false,reviewed:false,loading:true,retryAllowed:false,error:"" };
 }
 export function recordAiAttempt(s:ToolState):ToolState { if(!s.reviewRunId||s.loading||!s.retryAllowed||s.requestCount>=3) return s; return { ...s,view:"review",stage:7,requestCount:s.requestCount+1,loading:true,retryAllowed:false,error:"" }; }
-function fallbackBrief(s:ToolState, error:"unavailable"|"invalid",retryAllowed=false):ToolState { return { ...s,view:"brief",savedBrief:{brief:buildStructuredBrief(s.answers),sourceBriefRevision:s.answers.revision,generatedAt:new Date().toISOString(),wordingReviewed:false,mode:"structured"},briefNeedsUpdate:false,reviewed:false,activeClarification:null,loading:false,retryAllowed,error }; }
-export function failAnalysis(s:ToolState, error:"unavailable"|"invalid",retryAllowed=false):ToolState { return fallbackBrief(s,error,retryAllowed); }
+export function failAnalysis(s:ToolState, error:"unavailable"|"invalid",retryAllowed=false):ToolState { return { ...s,view:"review",mode:"ai",savedBrief:null,briefNeedsUpdate:false,reviewed:false,activeClarification:null,loading:false,retryAllowed,error }; }
 export function applyAnalysis(s:ToolState, result:AnalysisResult):ToolState {
-  if(result.clarification_code && (s.requestCount>=3 || !getEligibleClarificationCodes(s.answers,s.askedClarifications).includes(result.clarification_code))) return fallbackBrief(s,"invalid");
+  if(result.clarification_code && (s.requestCount>=3 || !getEligibleClarificationCodes(s.answers,s.askedClarifications).includes(result.clarification_code))) return failAnalysis(s,"invalid");
   const savedBrief:SavedBrief={brief:result.brief,sourceBriefRevision:s.answers.revision,generatedAt:new Date().toISOString(),wordingReviewed:false,mode:"ai",...(result.clarification_code?{openClarificationCode:result.clarification_code}:{})};
-  return { ...s,view:result.clarification_code?"clarification":"brief",savedBrief,briefNeedsUpdate:false,reviewed:false,activeClarification:result.clarification_code,loading:false,error:"" };
+  return { ...s,view:result.clarification_code?"clarification":"brief",savedBrief,briefNeedsUpdate:false,reviewed:false,activeClarification:result.clarification_code,loading:false,error:"",legacyBriefReplaced:false };
 }
 export function answerClarification(s:ToolState, choice:string):ToolState {
   const code=s.activeClarification; if(!code||!clarificationOption(code,choice)) return { ...s,error:"invalid" };

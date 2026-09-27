@@ -10,7 +10,7 @@ for (const width of [1440, 1024, 768, 640, 375, 320]) {
     await expect(page.getByText("about 10 minutes", { exact: false })).toBeVisible();
     await layout(page);
     if (width === 1440 || width === 320) await capture(page, "orientation-" + width + "-welcome");
-    await page.getByRole("button", { name: "Begin with a basic blueprint" }).click();
+    await page.getByRole("button", { name: "Define my desired client" }).click();
     await expect(page.getByText(STAGE_DEFINITIONS[0].explanation)).toBeVisible();
     await layout(page);
     if (width === 1440 || width === 320) await capture(page, "orientation-" + width + "-focus");
@@ -20,7 +20,7 @@ for (const width of [1440, 1024, 768, 640, 375, 320]) {
 test("every section explains its purpose during the guided journey", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1000 });
   await page.goto("/tools/desired-client-matter");
-  await page.getByRole("button", { name: "Begin with a basic blueprint" }).click();
+  await page.getByRole("button", { name: "Define my desired client" }).click();
   await choose(page, "Business & commercial");
   await choose(page, "Commercial agreement drafting and review");
   await choose(page, "We already do it and want more");
@@ -50,7 +50,7 @@ test("every section explains its purpose during the guided journey", async ({ pa
   await choose(page, "Several matters we have handled");
   await choose(page, "Fee and time records");
   await next(page);
-  await expect(page.getByText(STAGE_DEFINITIONS[6].explanation)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Review your direction" })).toBeVisible();
   await layout(page);
   await capture(page, "orientation-768-review");
 });
