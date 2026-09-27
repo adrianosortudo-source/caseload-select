@@ -8,7 +8,7 @@ export const STAGE_DEFINITIONS: readonly StageDefinition[] = [
   { id: 4, label: "4 Value", heading: "Why does your firm want more of this work?", explanation: "A desirable matter should benefit the client and support the practice you want to build. Consider the effort, your team's strengths, and the work you would prefer to handle again." },
   { id: 5, label: "5 Delivery", heading: "When is this work a good fit to deliver?", explanation: "Identify what helps your team serve the client well and what to establish early in an inquiry. The profile will turn these answers into practical questions for review." },
   { id: 6, label: "6 Direction", heading: "What direction should this profile support?", explanation: "Connect the profile to the practice you want to build and identify what supports your choices. This keeps established experience, future preferences, and open assumptions clear." },
-  { id: 7, label: "7 Review", heading: "Review your direction", explanation: "Your answers shape a practical client profile. Any details the firm is unsure about will stay visible." },
+  { id: 7, label: "7 Review", heading: "Review your direction", explanation: "Your answers shape the client profile. We will mark what is still uncertain." },
 ];
 export const COMPARISON_STEPS = [
   { id: 1, heading: "Which two types of work are you considering?" },

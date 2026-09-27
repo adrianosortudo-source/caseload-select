@@ -49,7 +49,7 @@ export const COMMON_COPY = {
 } as const;
 export const REVIEW_COPY = {
   heading: "Review your direction",
-  note: "Your answers shape a practical client profile. Any details the firm is unsure about will stay visible.",
+  note: "Your answers shape the client profile. We will mark what is still uncertain.",
   prepareAI: "Create my profile",
   creatingAI: "Creating your Desired Client Blueprint…",
   tryAgain: "Try again",
