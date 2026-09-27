@@ -222,6 +222,11 @@ test("new workflow is protected and read-only; legacy six-migration writer is un
     assert.match(step.run, /additive-release-gate\.mjs connection/);
   }
   for (const step of remote.filter(s => /supabase db push/.test(s.run))) assert.match(step.run, /--dry-run/);
+  const planStep = job.steps.find(s => /Require exactly the reviewed pending migration suffix/.test(s.name));
+  assert.match(planStep.run, /migration-gate\.mjs stage .*candidate-migrations/);
+  assert.match(planStep.run, /additive-release-gate\.mjs full-ledger/);
+  assert.match(planStep.run, /cd "\$RUNNER_TEMP\/candidate-migrations"/);
+  assert.doesNotMatch(planStep.run, /cd "\$GITHUB_WORKSPACE"/);
   assert.doesNotMatch(JSON.stringify(workflow), /--yes|\bapply\b|--password|SUPABASE_ACCESS_TOKEN/);
   const oldWorkflow = fs.readFileSync(path.join(root, ".github/workflows/prospect-enrichment-migration-gate.yml"), "utf8");
   assert.match(oldWorkflow, /The exact six-migration plan matches/);
