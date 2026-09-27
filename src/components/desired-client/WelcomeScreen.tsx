@@ -1,0 +1,50 @@
+"use client";
+
+import { WELCOME_COPY } from "@/lib/desired-client/copy";
+
+export interface WelcomeScreenProps {
+  onStart: () => void;
+}
+
+export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
+  return (
+    <section
+      className="dc-welcome"
+      data-ui-component-content="desired-client-welcome"
+      aria-labelledby="dc-welcome-heading"
+    >
+      <h1 id="dc-welcome-heading" className="dc-welcome__heading" data-ui-copy="heading">
+        {WELCOME_COPY.heading}
+      </h1>
+      <p className="dc-welcome__description" data-ui-copy="body">
+        {WELCOME_COPY.description}
+      </p>
+      <p className="dc-welcome__supporting" data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure}</p>
+      <div className="dc-welcome__guide" data-ui-component-content="desired-client-welcome-guide">
+        <p data-ui-copy="body"><strong>Time:</strong> {WELCOME_COPY.time}</p>
+        <p data-ui-copy="body"><strong>How it works:</strong> {WELCOME_COPY.process}</p>
+        <p data-ui-copy="body"><strong>What to have in mind:</strong> {WELCOME_COPY.preparation}</p>
+        <p data-ui-copy="body"><strong>What you will get:</strong> {WELCOME_COPY.outcome}</p>
+      </div>
+      <p className="dc-welcome__supporting" data-ui-copy="supporting">
+        {WELCOME_COPY.supporting}
+      </p>
+      <p className="dc-welcome__privacy" data-ui-copy="supporting">
+        {WELCOME_COPY.privacy}
+      </p>
+      <div className="dc-welcome__actions" data-ui-component-content="desired-client-mode-actions">
+        <button
+          type="button"
+          className="dc-button dc-button--primary"
+          data-ui-copy="supporting"
+          onClick={onStart}
+        >
+          {WELCOME_COPY.startButton}
+        </button>
+      </div>
+      <p className="dc-welcome__draft-notice" data-ui-copy="supporting">
+        {WELCOME_COPY.draftNotice}
+      </p>
+    </section>
+  );
+}

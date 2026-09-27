@@ -1,0 +1,1142 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config=test-results/audit-playwright.config.ts"
+    ],
+    "configFile": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-playwright.config.ts",
+    "rootDir": "D:/00_Work/01_CaseLoad_Select/05_Product/caseload-select-app-worktrees/desired-client-v2/tests/desired-client-v2",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "D:/00_Work/01_CaseLoad_Select/05_Product/caseload-select-app-worktrees/desired-client-v2/test-results/audit-browser",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "D:/00_Work/01_CaseLoad_Select/05_Product/caseload-select-app-worktrees/desired-client-v2/tests/desired-client-v2",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.spec.ts"
+        ],
+        "timeout": 90000
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "line",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser-results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.62.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "embed.spec.ts",
+      "file": "embed.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "iframe uses verified messages, grows and shrinks, and preserves the public wrapper",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 15763,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:47:50.180Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cad57773c1da6907f591-bea5e4a0fc51243bf1b9",
+          "file": "embed.spec.ts",
+          "line": 4,
+          "column": 5
+        },
+        {
+          "title": "embedded welcome reflows at 1440px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 13375,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:48:08.119Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cad57773c1da6907f591-22ea4991c12269f8b083",
+          "file": "embed.spec.ts",
+          "line": 38,
+          "column": 7
+        },
+        {
+          "title": "embedded welcome reflows at 1024px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8066,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:48:21.542Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cad57773c1da6907f591-277fd1d5694fbc715a50",
+          "file": "embed.spec.ts",
+          "line": 38,
+          "column": 7
+        },
+        {
+          "title": "embedded welcome reflows at 768px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11930,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:48:29.650Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cad57773c1da6907f591-3b3cffe18e657aa2ed12",
+          "file": "embed.spec.ts",
+          "line": 38,
+          "column": 7
+        },
+        {
+          "title": "embedded welcome reflows at 640px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12145,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:48:41.617Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cad57773c1da6907f591-d2943f32dfa7d807397e",
+          "file": "embed.spec.ts",
+          "line": 38,
+          "column": 7
+        },
+        {
+          "title": "embedded welcome reflows at 375px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9990,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:48:53.803Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cad57773c1da6907f591-2be36e69050c48867e77",
+          "file": "embed.spec.ts",
+          "line": 38,
+          "column": 7
+        },
+        {
+          "title": "embedded welcome reflows at 320px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11785,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:49:03.893Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "cad57773c1da6907f591-226f1acb7c809c2adefa",
+          "file": "embed.spec.ts",
+          "line": 38,
+          "column": 7
+        }
+      ]
+    },
+    {
+      "title": "interaction.spec.ts",
+      "file": "interaction.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "comparison keeps the lawyer’s provisional choice and only fills unanswered ratings",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11734,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:49:15.808Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "658d4d77d9fd28df6a81-8c1d30beff791d79fe69",
+          "file": "interaction.spec.ts",
+          "line": 4,
+          "column": 5
+        },
+        {
+          "title": "keyboard controls report a missing required answer and keep visible focus",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8496,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:49:27.599Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "658d4d77d9fd28df6a81-91e0348484c7e3f40cc2",
+          "file": "interaction.spec.ts",
+          "line": 35,
+          "column": 5
+        }
+      ]
+    },
+    {
+      "title": "journey.spec.ts",
+      "file": "journey.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "complete, download and resume without any AI request",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 21260,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:49:36.167Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-45808bc6fc780b156a25",
+          "file": "journey.spec.ts",
+          "line": 11,
+          "column": 5
+        },
+        {
+          "title": "unknown route can finish without typing",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8419,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:49:57.478Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-cc297b8c63b456dc8ddf",
+          "file": "journey.spec.ts",
+          "line": 41,
+          "column": 5
+        },
+        {
+          "title": "AI outage leaves a complete exportable structured brief",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12280,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:50:05.934Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-190039c91a904d4cca98",
+          "file": "journey.spec.ts",
+          "line": 67,
+          "column": 5
+        },
+        {
+          "title": "rendered guided flow at 1440px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 11074,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:50:18.253Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-69cee9d43c5df278ddda",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        },
+        {
+          "title": "rendered guided flow at 1024px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 13668,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:50:29.357Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-dd37ab0d165bbd3eb6c4",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        },
+        {
+          "title": "rendered guided flow at 768px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 10910,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:50:43.072Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-8efa4951fa467b610037",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        },
+        {
+          "title": "rendered guided flow at 640px",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14037,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:50:54.020Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-ddba06a9e05c8c547f2d",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        },
+        {
+          "title": "rendered guided flow at 375px",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 32111,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Fee compared with effort: Usually worthwhile\",\u001b[39m\n\u001b[31m+ ]\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Fee compared with effort: Usually worthwhile\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n    at layout (D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts:92:43)\n    at D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\journey.spec.ts:95:5",
+                    "location": {
+                      "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                      "column": 43,
+                      "line": 92
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mhelpers.ts:92\n\n  90 | }\n  91 | export async function layout(page: Page | Frame) {\n> 92 |   expect.soft(await layoutFailures(page)).toEqual([]);\n     |                                           ^\n  93 | }\n  94 | export async function establishedToReview(page: Page, screenshotPrefix?: string) {\n  95 |   await choose(page, 'Business & commercial');"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                        "column": 43,
+                        "line": 92
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 3\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Fee compared with effort: Usually worthwhile\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n   at helpers.ts:92\n\n  90 | }\n  91 | export async function layout(page: Page | Frame) {\n> 92 |   expect.soft(await layoutFailures(page)).toEqual([]);\n     |                                           ^\n  93 | }\n  94 | export async function establishedToReview(page: Page, screenshotPrefix?: string) {\n  95 |   await choose(page, 'Business & commercial');\n    at layout (D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts:92:43)\n    at D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\journey.spec.ts:95:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:51:08.094Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\journey-rendered-guided-flow-at-375px\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\journey-rendered-guided-flow-at-375px\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\journey-rendered-guided-flow-at-375px\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                    "column": 43,
+                    "line": 92
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-e396212d71238f407ef0",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        },
+        {
+          "title": "rendered guided flow at 320px",
+          "ok": false,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 1,
+                  "parallelIndex": 0,
+                  "status": "failed",
+                  "duration": 28739,
+                  "error": {
+                    "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 4\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Concerns: I'm worried about the cost, I don't know what happens next\",\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Fee compared with effort: Usually worthwhile\",\u001b[39m\n\u001b[31m+ ]\u001b[39m",
+                    "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 4\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Concerns: I'm worried about the cost, I don't know what happens next\",\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Fee compared with effort: Usually worthwhile\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n    at layout (D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts:92:43)\n    at D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\journey.spec.ts:95:5",
+                    "location": {
+                      "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                      "column": 43,
+                      "line": 92
+                    },
+                    "snippet": "\u001b[90m   at \u001b[39mhelpers.ts:92\n\n  90 | }\n  91 | export async function layout(page: Page | Frame) {\n> 92 |   expect.soft(await layoutFailures(page)).toEqual([]);\n     |                                           ^\n  93 | }\n  94 | export async function establishedToReview(page: Page, screenshotPrefix?: string) {\n  95 |   await choose(page, 'Business & commercial');"
+                  },
+                  "errors": [
+                    {
+                      "location": {
+                        "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                        "column": 43,
+                        "line": 92
+                      },
+                      "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoEqual\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // deep equality\u001b[22m\n\n\u001b[32m- Expected  - 1\u001b[39m\n\u001b[31m+ Received  + 4\u001b[39m\n\n\u001b[32m- Array []\u001b[39m\n\u001b[31m+ Array [\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Concerns: I'm worried about the cost, I don't know what happens next\",\u001b[39m\n\u001b[31m+   \"Avoidably short nonfinal line: Fee compared with effort: Usually worthwhile\",\u001b[39m\n\u001b[31m+ ]\u001b[39m\n\n   at helpers.ts:92\n\n  90 | }\n  91 | export async function layout(page: Page | Frame) {\n> 92 |   expect.soft(await layoutFailures(page)).toEqual([]);\n     |                                           ^\n  93 | }\n  94 | export async function establishedToReview(page: Page, screenshotPrefix?: string) {\n  95 |   await choose(page, 'Business & commercial');\n    at layout (D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts:92:43)\n    at D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\journey.spec.ts:95:5"
+                    }
+                  ],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:51:56.887Z",
+                  "annotations": [],
+                  "attachments": [
+                    {
+                      "name": "screenshot",
+                      "contentType": "image/png",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\journey-rendered-guided-flow-at-320px\\test-failed-1.png"
+                    },
+                    {
+                      "name": "error-context",
+                      "contentType": "text/markdown",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\journey-rendered-guided-flow-at-320px\\error-context.md"
+                    },
+                    {
+                      "name": "trace",
+                      "contentType": "application/zip",
+                      "path": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\test-results\\audit-browser\\journey-rendered-guided-flow-at-320px\\trace.zip"
+                    }
+                  ],
+                  "errorLocation": {
+                    "file": "D:\\00_Work\\01_CaseLoad_Select\\05_Product\\caseload-select-app-worktrees\\desired-client-v2\\tests\\desired-client-v2\\helpers.ts",
+                    "column": 43,
+                    "line": 92
+                  }
+                }
+              ],
+              "status": "unexpected"
+            }
+          ],
+          "id": "bf222bad70f76648f722-d400555296fc0143847e",
+          "file": "journey.spec.ts",
+          "line": 86,
+          "column": 7
+        }
+      ]
+    },
+    {
+      "title": "lifecycle.spec.ts",
+      "file": "lifecycle.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "a successful third attempt remains an AI brief, with no fourth request",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 27283,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:52:35.263Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f1785dee40219527314-97e22884a73c0232308b",
+          "file": "lifecycle.spec.ts",
+          "line": 50,
+          "column": 5
+        },
+        {
+          "title": "leaving a clarification open preserves answers and makes no extra request",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 16492,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:53:04.770Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f1785dee40219527314-f0cd65f9ce1eddd65599",
+          "file": "lifecycle.spec.ts",
+          "line": 76,
+          "column": 5
+        },
+        {
+          "title": "clarification answer shows review progress while the follow-up response is held",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 20600,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:53:21.370Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f1785dee40219527314-3da99aff6b8f280c469c",
+          "file": "lifecycle.spec.ts",
+          "line": 99,
+          "column": 5
+        },
+        {
+          "title": "clipboard denial exposes the complete selectable brief",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8618,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:53:42.013Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f1785dee40219527314-1dc6bcb09b8c4c738352",
+          "file": "lifecycle.spec.ts",
+          "line": 133,
+          "column": 5
+        },
+        {
+          "title": "clear removes this draft while preserving other tools",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 8594,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:53:50.679Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f1785dee40219527314-29ca80db3c6551b248f0",
+          "file": "lifecycle.spec.ts",
+          "line": 144,
+          "column": 5
+        },
+        {
+          "title": "expired draft is removed with the specified notice",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 7401,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:53:59.315Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f1785dee40219527314-1bd618f4a8a76a38ecd5",
+          "file": "lifecycle.spec.ts",
+          "line": 153,
+          "column": 5
+        },
+        {
+          "title": "printing uses the full brief with the export review status",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 9340,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:54:06.746Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f1785dee40219527314-44c80d39a8599fbbe42f",
+          "file": "lifecycle.spec.ts",
+          "line": 163,
+          "column": 5
+        },
+        {
+          "title": "switching to the structured brief discards a pending AI response",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12364,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:54:16.138Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f1785dee40219527314-f7011bf72bd120c7d3e7",
+          "file": "lifecycle.spec.ts",
+          "line": 178,
+          "column": 5
+        },
+        {
+          "title": "network failure promptly leaves an exportable structured brief",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 12076,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:54:28.561Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f1785dee40219527314-5780a3f0d6837b1fa571",
+          "file": "lifecycle.spec.ts",
+          "line": 205,
+          "column": 5
+        },
+        {
+          "title": "the actual local analyze route fails closed with AI disabled",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 2,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 24738,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-09-25T20:54:40.706Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f1785dee40219527314-2ac8aa1f69fb0780bc4b",
+          "file": "lifecycle.spec.ts",
+          "line": 215,
+          "column": 5
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-09-25T20:47:43.508Z",
+    "duration": 456905.169,
+    "expected": 26,
+    "skipped": 0,
+    "unexpected": 2,
+    "flaky": 0
+  }
+}
