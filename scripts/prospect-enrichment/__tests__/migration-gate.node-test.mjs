@@ -260,6 +260,13 @@ for (const [label, value] of [
 for (const key of ["PGHOST", "PGHOSTADDR", "PGSERVICE", "PGSERVICEFILE", "PGPASSWORD", "PGOPTIONS", "PGSSLMODE", "SUPABASE_ACCESS_TOKEN", "SUPABASE_ENV", "SUPABASE_DB_PASSWORD", "DOTENV_PRIVATE_KEY", "DOCKER_HOST", "NODE_TLS_REJECT_UNAUTHORIZED"]) {
   test("direct connection rejects ambient override " + key, () => assert.throws(() => verifyDirectDatabaseUrl(databaseUrl, { [key]: "synthetic-only" }), /ambient_database_configuration_prohibited/));
 }
+test("direct connection permits only the pinned Supabase CLI image registry setting", () => {
+  const result = verifyDirectDatabaseUrl(databaseUrl, { SUPABASE_INTERNAL_IMAGE_REGISTRY: "ghcr.io" });
+  assert.equal(result.host, "db." + PROJECT_REF + ".supabase.co");
+});
+test("direct connection rejects an unexpected Supabase CLI image registry setting", () => {
+  assert.throws(() => verifyDirectDatabaseUrl(databaseUrl, { SUPABASE_INTERNAL_IMAGE_REGISTRY: "registry.example.invalid" }), /ambient_database_configuration_prohibited/);
+});
 test("project env files fail closed without reading their values", () => {
   assert.throws(() => verifyDirectDatabaseUrl(databaseUrl, {}, ["supabase/.env"]), /project_database_env_files_prohibited/);
 });
