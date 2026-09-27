@@ -20,7 +20,7 @@ The existing six-migration workflow and its allowlist remain unchanged. The addi
 
 ## Separate candidate-profile release gate
 
-**Writer repair status:** the staging and credential-propagation repair is implemented on `codex/prospect-candidate-writer-staging-fix`; it is not yet merged. Do not dispatch the candidate writer until that PR is merged and the protected read-only candidate preflight succeeds against the resulting `main` SHA. The preflight must prove the exact eleven-file release plan before any writer dry-run is considered. A production apply still requires its own reviewed dry-run artifact and protected environment approval.
+**Writer repair status:** PR #324 merged at `0caf0bce5d0bba3e9b841ee05a4a91951fa87604`; required CI, the real-Postgres contract, browser acceptance and Vercel checks passed. Do not dispatch the candidate writer until a protected read-only candidate preflight succeeds against the current `main` SHA. The preflight must prove the exact eleven-file release plan before any writer dry-run is considered. A production apply still requires its own reviewed dry-run artifact and protected environment approval. The production migration credential remains explicitly deferred, so the preflight and dependent production database workflows remain on hold.
 
 The separate writer is `.github/workflows/prospect-candidate-additive-release.yml`. It is manually dispatchable only from this repository's `main`, uses the existing protected `Production prospect migrations` environment, and pins all third-party actions. The owner must configure both environment variables before dispatch:
 
