@@ -8,7 +8,7 @@ import yaml from "js-yaml";
 import {
   CLI_VERSION, CONFIRMATION, MIGRATION_PATHS, PROJECT_REF, RELEASE_PATH,
   PREVIEW_MIGRATION_PATHS, QUALIFICATION_HISTORY, QUALIFICATION_HISTORY_CONFIRMATION,
-  compareQualificationCatalogs, stageProductionWorkdir, verifyFullMigrationLedger, verifyQualificationRepairAuthorization,
+  compareQualificationCatalogs, stageProductionWorkdir, stagePrerequisiteWorkdir, verifyFullMigrationLedger, verifyQualificationRepairAuthorization,
   createReleaseManifest, findProjectEnvFiles, ledgerQuery, sha256, verifyConfirmation, verifyDirectDatabaseUrl, verifyExecutionGate,
   verifyLedgerStatements, verifyMigrationLedger, verifyMigrationPlan, verifyReleaseManifest,
 } from "../migration-gate.mjs";
@@ -367,4 +367,61 @@ test("dotenv detection covers both directories and all pinned default filenames 
   assert.deepEqual(checked.sort(), [...names.map(name => "supabase/" + name), ...names].sort());
   assert.equal(present.length, 8);
   assert.throws(() => verifyDirectDatabaseUrl(databaseUrl, {}, present), /project_database_env_files_prohibited/);
+});
+
+
+test("current eleven-migration tree stages only prerequisites, preserving separate candidate authority", async t => {
+  const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "prerequisite-stage-test-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const source = path.join(base, "source");
+  fs.mkdirSync(path.join(source, "supabase"), { recursive: true });
+  fs.cpSync("supabase/migrations", path.join(source, "supabase/migrations"), { recursive: true });
+  fs.copyFileSync("supabase/config.toml", path.join(source, "supabase/config.toml"));
+  fs.mkdirSync(path.join(source, "scripts/prospect-enrichment"), { recursive: true });
+  const receiptPath = "scripts/prospect-enrichment/additive-release-review.json";
+  fs.copyFileSync(receiptPath, path.join(source, receiptPath));
+  const receipt = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
+  const git = args => execFileSync("git", args, { cwd: source, stdio: "pipe" });
+  git(["init"]);
+  git(["config", "core.autocrlf", "false"]);
+  const bound = [...receipt.migrations, receipt.appliedPrerequisite].map(item => item.path);
+  for (const relative of bound) fs.writeFileSync(path.join(source, relative), fs.readFileSync(path.join(source, relative), "utf8").replace(/\r\n/g, "\n"));
+  git(["add", "--", ...bound]);
+  git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "Synthetic source fixture"]);
+  const staged = path.join(base, "staged");
+  const proof = await stagePrerequisiteWorkdir(source, staged);
+  assert.equal(proof.prerequisiteOnly, true);
+  assert.deepEqual(proof.deferredCandidateMigrations, receipt.migrations.slice(8));
+  const names = fs.readdirSync(path.join(staged, "supabase/migrations"));
+  for (const migration of receipt.migrations.slice(8)) assert.equal(names.includes(migration.filename), false);
+  for (const migration of receipt.migrations.slice(0, 8)) assert.equal(names.includes(migration.filename), true);
+  const rows = names.filter(name => /^\d+_.+\.sql$/.test(name)).map(name => {
+    const [, version, migrationName] = /^(\d+)_(.+)\.sql$/.exec(name);
+    return { version, name: migrationName };
+  }).sort((a, b) => a.version.localeCompare(b.version));
+  const pending = new Set(receipt.migrations.slice(0, 8).map(item => item.version));
+  const before = rows.filter(row => !pending.has(row.version));
+  assert.equal(verifyFullMigrationLedger(before, staged, "qualification-pending").pendingPaths.length, 8);
+  const afterRepair = rows.filter(row => !receipt.migrations.slice(2, 8).some(item => item.version === row.version));
+  assert.equal(verifyFullMigrationLedger(afterRepair, staged, "enrichment-pending").pendingPaths.length, 6);
+  assert.equal(verifyFullMigrationLedger(rows, staged, "complete").pendingPaths.length, 0);
+  const candidate = receipt.migrations[8];
+  assert.throws(() => verifyFullMigrationLedger([...rows, { version: candidate.version, name: candidate.name }].sort((a,b) => a.version.localeCompare(b.version)), staged, "complete"), /remote_migration_source_missing_or_mismatched/);
+  fs.writeFileSync(path.join(staged, "supabase/migrations/20990101000000_unknown.sql"), "SELECT 1;\n");
+  assert.throws(() => verifyFullMigrationLedger(rows, staged, "complete"), /unexpected_full_history_delta/);
+  fs.appendFileSync(path.join(source, candidate.path), "\n-- unreviewed source change\n");
+  await assert.rejects(stagePrerequisiteWorkdir(source, path.join(base, "changed")), /working_migration_source_differs_from_git_blob/);
+  git(["add", "--", candidate.path]);
+  git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "Unreviewed changed source fixture"]);
+  await assert.rejects(stagePrerequisiteWorkdir(source, path.join(base, "changed")), /release_receipt_source_mismatch/);
+  assert.equal(fs.existsSync(path.join(base, "changed")), false);
+});
+
+
+test("protected workflow invokes receipt-verified staging before ledger and migration plan checks", () => {
+  const workflow = fs.readFileSync(".github/workflows/prospect-enrichment-migration-gate.yml", "utf8");
+  assert.match(workflow, /migration-gate\.mjs stage-prerequisites/);
+  assert.doesNotMatch(workflow, /migration-gate\.mjs stage "/);
+  assert.ok(workflow.indexOf("stage-prerequisites") < workflow.indexOf("migration-gate.mjs full-ledger"));
+  assert.match(workflow, /migration-gate\.mjs plan pre/);
 });

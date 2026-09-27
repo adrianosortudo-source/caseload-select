@@ -3,6 +3,11 @@ name: Reviewed prospect enrichment migration
 'on':
   workflow_dispatch:
     inputs:
+      use_temporary_database_credential:
+        description: Request a short-lived write-capable Supabase login; database operations remain separately gated.
+        required: false
+        default: false
+        type: boolean
       operation:
         description: Validate, preflight, reconcile metadata, or apply the six enrichment migrations.
         required: true
@@ -51,6 +56,7 @@ jobs:
           --health-retries 12
     env:
       PROJECT_REF: ssxryjxifwiivghglqer
+      USE_TEMPORARY_DATABASE_CREDENTIAL: ${{ inputs.use_temporary_database_credential }}
       OPERATION: ${{ inputs.operation }}
       REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
       REVIEWED_CATALOG_SHA256: ${{ inputs.reviewed_catalog_sha256 }}
@@ -65,16 +71,34 @@ jobs:
 
       - name: Validate exact reviewed source and protected configuration
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
           export CHECKOUT_SHA="$(git rev-parse HEAD)"
-          node scripts/prospect-enrichment/migration-gate.mjs source > "$RUNNER_TEMP/source-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs source-authorization > "$RUNNER_TEMP/source-authorization-check.json"
           node scripts/prospect-enrichment/migration-gate.mjs query > "$RUNNER_TEMP/enrichment-ledger-readback.sql"
           git fetch --no-tags origin main
           test "$CHECKOUT_SHA" = "$(git rev-parse origin/main)"
+
+      - name: Request explicitly approved temporary write-capable authentication
+        if: inputs.use_temporary_database_credential
+        env:
+          CREDENTIAL_GATE: enrichment
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/temporary-credential.mjs
+
+      - name: Validate authorized database connection before database operations
+        env:
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CHECKOUT_SHA="$(git rev-parse HEAD)"
+          node scripts/prospect-enrichment/migration-gate.mjs source > "$RUNNER_TEMP/source-check.json"
 
       - name: Install pinned Supabase CLI
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
@@ -97,12 +121,12 @@ jobs:
 
       - name: Stage complete production migration history and read its ledger
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
           node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
-          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/production-migrations" > "$RUNNER_TEMP/staged-inventory.json"
+          node scripts/prospect-enrichment/migration-gate.mjs stage-prerequisites "$GITHUB_WORKSPACE" "$RUNNER_TEMP/production-migrations" > "$RUNNER_TEMP/staged-inventory.json"
           node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/full-ledger-readback.sql"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/full-ledger-before.json"
           if [[ "$OPERATION" == "qualification-preflight" || "$OPERATION" == "qualification-repair" ]]; then
@@ -115,7 +139,7 @@ jobs:
       - name: Build and compare exact qualification catalog contract
         if: inputs.operation == 'qualification-preflight' || inputs.operation == 'qualification-repair'
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
           POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
         shell: bash
         run: |
@@ -142,7 +166,7 @@ jobs:
         id: qualification_repair
         if: inputs.operation == 'qualification-repair'
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -163,7 +187,7 @@ jobs:
       - name: Verify qualification history repair ledger delta
         if: always() && inputs.operation == 'qualification-repair' && steps.qualification_repair.outputs.repair_started == 'true'
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -174,7 +198,7 @@ jobs:
       - name: Require exactly six enrichment migrations pending
         if: inputs.operation == 'dry-run' || inputs.operation == 'apply'
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -193,7 +217,7 @@ jobs:
         id: apply_migration
         if: inputs.operation == 'apply'
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -213,7 +237,7 @@ jobs:
       - name: Verify six enrichment migrations, exact full ledger and empty pending plan
         if: always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail

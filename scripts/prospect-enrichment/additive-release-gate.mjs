@@ -8,6 +8,7 @@ import {
   findProjectEnvFiles,
   sha256 as sourceSha256,
   verifyDirectDatabaseUrl,
+  verifyDatabaseEnvironment,
   verifyLedgerStatements,
 } from "./migration-gate.mjs";
 
@@ -107,16 +108,17 @@ export function verifyReleaseReceipt(receipt, sources) {
   return expected;
 }
 
-export function verifySourceGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, databaseUrl, environment, projectEnvFiles }) {
+export function verifySourceGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, databaseUrl, environment, projectEnvFiles, authorizationOnly = false }) {
   if (event !== "workflow_dispatch" || ref !== "refs/heads/main" || repository !== "adrianosortudo-source/caseload-select") fail("manual_main_repository_required");
   if (operation !== "dry-run") fail("read_only_dry_run_required");
   if (!/^[a-f0-9]{40}$/.test(reviewedSourceSha ?? "") || configuredReviewedSha !== reviewedSourceSha) fail("protected_environment_reviewed_sha_missing_or_mismatch");
   if (checkoutSha !== reviewedSourceSha || githubSha !== reviewedSourceSha) fail("reviewed_source_sha_changed");
-  const connection = verifyDirectDatabaseUrl(databaseUrl, environment, projectEnvFiles);
+  verifyDatabaseEnvironment(environment, projectEnvFiles);
+  const connection = authorizationOnly ? { pending: true } : verifyDirectDatabaseUrl(databaseUrl, environment, projectEnvFiles);
   return { reviewedSourceSha, operation, projectRef: PROJECT_REF, connection };
 }
 
-export function verifyApplicationGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, reviewedReceiptSha256, configuredReceiptSha256, actualReceiptSha256, confirmation, databaseUrl, environment, projectEnvFiles }) {
+export function verifyApplicationGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, reviewedReceiptSha256, configuredReceiptSha256, actualReceiptSha256, confirmation, databaseUrl, environment, projectEnvFiles, authorizationOnly = false }) {
   if (event !== "workflow_dispatch" || ref !== "refs/heads/main" || repository !== "adrianosortudo-source/caseload-select") fail("manual_main_repository_required");
   if (!["dry-run", "apply"].includes(operation)) fail("invalid_operation");
   if (!/^[a-f0-9]{40}$/.test(reviewedSourceSha ?? "") || !/^[a-f0-9]{40}$/.test(configuredReviewedSha ?? "") || configuredReviewedSha !== reviewedSourceSha) fail("protected_environment_reviewed_sha_missing_or_mismatch");
@@ -124,7 +126,8 @@ export function verifyApplicationGate({ event, ref, repository, operation, revie
   if (!/^[a-f0-9]{64}$/.test(reviewedReceiptSha256 ?? "") || !/^[a-f0-9]{64}$/.test(configuredReceiptSha256 ?? "") ||
       reviewedReceiptSha256 !== configuredReceiptSha256 || reviewedReceiptSha256 !== actualReceiptSha256) fail("protected_environment_reviewed_receipt_sha256_missing_or_mismatch");
   if (operation === "apply" && confirmation !== CANDIDATE_APPLY_CONFIRMATION) fail("exact_candidate_apply_confirmation_required");
-  const connection = verifyDirectDatabaseUrl(databaseUrl, environment, projectEnvFiles);
+  verifyDatabaseEnvironment(environment, projectEnvFiles);
+  const connection = authorizationOnly ? { pending: true } : verifyDirectDatabaseUrl(databaseUrl, environment, projectEnvFiles);
   return { reviewedSourceSha, reviewedReceiptSha256, operation, projectRef: PROJECT_REF, connection };
 }
 
@@ -235,7 +238,11 @@ function main(args) {
   const sources = loadSources();
   const receipt = safeJson(RELEASE_PATH);
   verifyReleaseReceipt(receipt, sources);
-  if (command === "source" && rest.length === 0) {
+  if (command === "receipt" && rest.length === 0) {
+    console.log(JSON.stringify({ receiptSha256: sourceSha256(fs.readFileSync(RELEASE_PATH)), verified: true }));
+    return;
+  }
+  if (["source", "source-authorization"].includes(command) && rest.length === 0) {
     const result = verifySourceGate({
       event: process.env.GITHUB_EVENT_NAME,
       ref: process.env.GITHUB_REF,
@@ -248,9 +255,10 @@ function main(args) {
       databaseUrl: process.env.MIGRATION_DATABASE_URL,
       environment: process.env,
       projectEnvFiles: findProjectEnvFiles(),
+      authorizationOnly: command === "source-authorization",
     });
     console.log(JSON.stringify({ ...result, receiptSha256: sourceSha256(fs.readFileSync(RELEASE_PATH)), migrations: receipt.migrations.map(m => ({ path: m.path, version: m.version, bytes: m.bytes, sha256: m.sha256 })) }));
-  } else if (command === "application-source" && rest.length === 0) {
+  } else if (["application-source", "application-source-authorization"].includes(command) && rest.length === 0) {
     const actualReceiptSha256 = sourceSha256(fs.readFileSync(RELEASE_PATH));
     const gate = verifyApplicationGate({
       event: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF,
@@ -261,6 +269,7 @@ function main(args) {
       configuredReceiptSha256: process.env.CONFIGURED_RECEIPT_SHA256, actualReceiptSha256,
       confirmation: process.env.CONFIRMATION,
       databaseUrl: process.env.MIGRATION_DATABASE_URL, environment: process.env, projectEnvFiles: findProjectEnvFiles(),
+      authorizationOnly: command === "application-source-authorization",
     });
     console.log(JSON.stringify({ ...gate, receiptSha256: actualReceiptSha256, migrations: receipt.migrations.map(m => ({ path: m.path, version: m.version, bytes: m.bytes, sha256: m.sha256 })) }));
   } else if (command === "connection" && rest.length === 0) {
