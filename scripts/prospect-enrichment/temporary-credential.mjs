@@ -7,6 +7,24 @@ import { PROJECT_REF, TEMPORARY_DATABASE_HOST, verifyDirectDatabaseUrl } from ".
 
 export const LOGIN_ENDPOINT = `https://api.supabase.com/v1/projects/${PROJECT_REF}/cli/login-role`;
 const fail = (code) => { throw new Error(code); };
+const safeFailureCodes = new Set([
+  "temporary_credential_opt_in_required",
+  "temporary_credential_gate_invalid",
+  "temporary_credential_source_authorization_failed",
+  "migration_access_token_missing_or_invalid",
+  "temporary_credential_transport_failed",
+  "temporary_credential_timeout",
+  "temporary_credential_http_unexpected",
+  "temporary_credential_response_unreadable",
+  "temporary_credential_response_invalid",
+  "temporary_credential_expired_or_too_short",
+  "temporary_credential_connection_rejected",
+]);
+export function redactedFailureCode(error) {
+  const code = error instanceof Error ? error.message : "";
+  if (safeFailureCodes.has(code) || /^temporary_credential_http_(?:4\d\d|5\d\d)$/.test(code)) return code;
+  return "temporary_credential_unexpected_failure";
+}
 const GATES = Object.freeze({
   enrichment: ["migration-gate.mjs", "source-authorization"],
   "candidate-preflight": ["additive-release-gate.mjs", "source-authorization"],
@@ -29,26 +47,36 @@ export function validateTemporaryCredential(payload, issuedAt, now = Date.now())
 export async function acquireTemporaryCredential({ environment, authorize, fetchImpl = fetch, now = Date.now, mask, persist }) {
   if (environment.USE_TEMPORARY_DATABASE_CREDENTIAL !== "true") fail("temporary_credential_opt_in_required");
   if (!GATES[environment.CREDENTIAL_GATE]) fail("temporary_credential_gate_invalid");
-  await authorize();
+  try { await authorize(); }
+  catch { fail("temporary_credential_source_authorization_failed"); }
   const token = environment.MIGRATION_ACCESS_TOKEN;
   if (typeof token !== "string" || !token || /[\x00-\x20\x7f]/.test(token)) fail("migration_access_token_missing_or_invalid");
   const issuedAt = now();
-  let payload;
+  let response;
   try {
-    const response = await fetchImpl(LOGIN_ENDPOINT, {
+    response = await fetchImpl(LOGIN_ENDPOINT, {
       method: "POST", redirect: "error", signal: AbortSignal.timeout(30000),
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ read_only: false }),
     });
-    if (response.status !== 201) fail("temporary_credential_request_failed");
-    payload = await response.json();
-  } catch { fail("temporary_credential_request_failed"); }
+  } catch (error) {
+    fail(error instanceof Error && error.name === "TimeoutError" ? "temporary_credential_timeout" : "temporary_credential_transport_failed");
+  }
+  if (response.status !== 201) {
+    fail(Number.isInteger(response.status) && response.status >= 400 && response.status <= 599
+      ? `temporary_credential_http_${response.status}` : "temporary_credential_http_unexpected");
+  }
+  let payload;
+  try { payload = await response.json(); }
+  catch { fail("temporary_credential_response_unreadable"); }
   const credential = validateTemporaryCredential(payload, issuedAt, now());
   for (const value of [payload.password, encodeURIComponent(payload.password), credential.url]) mask(value);
-  verifyDirectDatabaseUrl(credential.url, {
-    ...environment, TEMPORARY_DATABASE_ROLE: credential.role,
-    TEMPORARY_DATABASE_ISSUED_AT: String(issuedAt), TEMPORARY_DATABASE_EXPIRES_AT: String(credential.expiresAt),
-  }, []);
+  try {
+    verifyDirectDatabaseUrl(credential.url, {
+      ...environment, TEMPORARY_DATABASE_ROLE: credential.role,
+      TEMPORARY_DATABASE_ISSUED_AT: String(issuedAt), TEMPORARY_DATABASE_EXPIRES_AT: String(credential.expiresAt),
+    }, []);
+  } catch { fail("temporary_credential_connection_rejected"); }
   persist(credential);
   return { projectRef: PROJECT_REF, credentialMode: "temporary-write-capable", issuedAt, expiresAt: credential.expiresAt };
 }
@@ -84,5 +112,5 @@ async function main() {
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try { await main(); }
-  catch { process.stderr.write("temporary_credential_acquisition_failed\n"); process.exitCode = 1; }
+  catch (error) { process.stderr.write(`${redactedFailureCode(error)}\n`); process.exitCode = 1; }
 }
