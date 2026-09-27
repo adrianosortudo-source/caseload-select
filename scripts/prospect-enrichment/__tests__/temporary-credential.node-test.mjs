@@ -138,3 +138,20 @@ test("all workflows authorize before optional authentication and retain connecti
   assert.match(helper, /additive-release-gate\.mjs"\), "receipt"/);
   assert.doesNotMatch(helper, /method: "DELETE"|read_only: true|SUPABASE_ACCESS_TOKEN/);
 });
+
+test("preflight workflows preserve the selected connection without logging it", () => {
+  for (const name of ["prospect-enrichment-migration-gate", "prospect-candidate-additive-preflight"]) {
+    const workflow = yaml.load(fs.readFileSync(path.join(root, `.github/workflows/${name}.yml`), "utf8"));
+    const steps = Object.values(workflow.jobs)[0].steps;
+    const authorization = steps.findIndex(step => /source-authorization-check/.test(step.run ?? ""));
+    const staticConnection = steps.findIndex(step => step.name === "Load protected static database connection");
+    const temporaryConnection = steps.findIndex(step => /temporary-credential\.mjs/.test(step.run ?? ""));
+    assert.ok(authorization >= 0 && staticConnection > authorization && temporaryConnection > staticConnection);
+    assert.equal(steps[staticConnection].if, "${{ !inputs.use_temporary_database_credential }}");
+    assert.equal(steps[staticConnection].env.STATIC_MIGRATION_DATABASE_URL,
+      "${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}");
+    assert.match(steps[staticConnection].run, /printf 'MIGRATION_DATABASE_URL=%s\\n'.*>> "\$GITHUB_ENV"/);
+    assert.doesNotMatch(steps[staticConnection].run, /echo .*STATIC_MIGRATION_DATABASE_URL/);
+    for (const step of steps) assert.equal(step.env?.MIGRATION_DATABASE_URL, undefined);
+  }
+});
