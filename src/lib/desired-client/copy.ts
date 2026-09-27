@@ -7,7 +7,7 @@ export const WELCOME_COPY = {
   processHeading: "From a preference to a profile you can use",
   process: [
     "Choose the work you want more of and what brings that client to you.",
-    "Check client needs, fees and capacity.",
+    "Check fit and value.",
     "Create your Blueprint.",
   ],
   preparation: "Think of a few matters you would welcome again and why. You do not need records. If you know your usual fees, time commitment or capacity, you can add that detail.",
