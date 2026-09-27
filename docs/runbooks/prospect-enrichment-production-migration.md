@@ -156,3 +156,12 @@ https://github.com/supabase/cli/blob/v2.117.0/apps/cli/src/command-internal/lega
 ## All-candidate profile scope
 
 The current read-shape/profile search correction does not complete manifest-only candidate enrichment. Follow [the exact all-candidate implementation and acceptance sequence](./prospect-enrichment-all-candidate-profiles.md). Its new candidate projection requires a separately reviewed additive migration and release manifest; it is not part of this six-file allowlist or an authorization to import research.
+
+
+## Prerequisite staging with the candidate migrations present
+
+The workflow now uses `migration-gate.mjs stage-prerequisites`. Before creating the production CLI staging directory, it verifies every migration in the complete eleven-entry `additive-release-review.json` against source, including the already-applied operator RPC. It requires the exact first-eight prefix to equal the two qualification migrations followed by the existing six enrichment migrations. Only the exact last-three candidate/profile-link suffix is deferred from this staging directory, alongside the two existing preview-only exclusions. The evidence artifact records each excluded file and the additive receipt hash.
+
+The original six-migration apply allowlist and confirmation remain unchanged. Qualification preflight and metadata-only repair still have their separate catalog and authorization gates. The complete production ledger must match the staged source inventory, so unknown pending files, missing historical source, or prematurely applied candidate entries fail closed. After the six migrations are verified, the separate candidate workflow must verify the full receipt and exact eight-applied/three-pending state before any candidate apply. A successful prerequisite-stage final plan is empty only within that staged prerequisite inventory; it does not mean the three candidate migrations are applied.
+
+This code change grants no production migration, metadata repair, research import, or cutover approval. Every protected dispatch retains its existing explicit approval requirements.

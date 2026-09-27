@@ -102,7 +102,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/prospect-enrichment/migration-gate.mjs connection > /dev/null
-          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/production-migrations" > "$RUNNER_TEMP/staged-inventory.json"
+          node scripts/prospect-enrichment/migration-gate.mjs stage-prerequisites "$GITHUB_WORKSPACE" "$RUNNER_TEMP/production-migrations" > "$RUNNER_TEMP/staged-inventory.json"
           node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/full-ledger-readback.sql"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/full-ledger-before.json"
           if [[ "$OPERATION" == "qualification-preflight" || "$OPERATION" == "qualification-repair" ]]; then
