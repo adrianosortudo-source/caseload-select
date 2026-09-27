@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { gzipSync } from "node:zlib";
 import { buildProspectEnrichmentClientItems, parseProspectEnrichmentEnvelope, type ProspectEnrichmentEnvelope } from "../../src/lib/prospect-enrichment-contract";
 import { validateLegacyAssessmentProjectionClaims, type LegacyAssessmentProjectionClaim } from "./legacy-projections";
 import { assertEnvelopeProfile, profileConfig, wholeFirmRunId, type EnrichmentProfile } from "./profiles";
@@ -33,7 +34,7 @@ function validManifest(value:unknown,profile:EnrichmentProfile): asserts value i
   if(packages.size!==value.expectedPackageCount)fail("comparison_request_package_coverage_mismatch");
 }
 /** Serializes the protected Admin read request only; it grants no authentication or submission authority. */
-export function serializeComparisonRequest(manifest:unknown,packages:unknown,profile:EnrichmentProfile="legacy-backfill") {
+export function serializeComparisonRequest(manifest:unknown,packages:unknown,profile:EnrichmentProfile="legacy-backfill",maxBodyBytes=16*1024*1024) {
   validManifest(manifest,profile);
   if(!Array.isArray(packages)||packages.length>1000||packages.length!==manifest.expectedPackageCount)fail("comparison_request_package_coverage_mismatch");
   const seen=new Set<string>(),values:ComparisonRequestPackage[]=[];
@@ -49,15 +50,17 @@ export function serializeComparisonRequest(manifest:unknown,packages:unknown,pro
   }
   const request:ComparisonRequest=JSON.parse(canonicalJson({schemaVersion:"prospect-enrichment-comparison-request/v1",manifest,packages:values}));
   const body=canonicalJson(request)+"\n";
-  if(Buffer.byteLength(body)>16*1024*1024)fail("comparison_request_too_large");
+  if(Buffer.byteLength(body)>maxBodyBytes)fail("comparison_request_too_large");
   return{request,body,bodySha256:sha256(body)};
 }
 /** New private file via fully written same-volume temporary inode and atomic non-replacing link. */
-export async function writeComparisonRequest(options:{manifestPath:string;packagesPath:string;outputPath:string;profile?:EnrichmentProfile;privateRoot:string}) {
+export async function writeComparisonRequest(options:{manifestPath:string;packagesPath:string;outputPath:string;profile?:EnrichmentProfile;privateRoot:string;gzip?:boolean}) {
   const profile=options.profile??"legacy-backfill",root=path.resolve(options.privateRoot),output=path.resolve(options.outputPath);
   if(!within(root,output)||output===root)fail("comparison_request_output_outside_private_root");
   const [manifestBytes,packageBytes]=await Promise.all([fs.readFile(options.manifestPath),fs.readFile(options.packagesPath)]);
-  const serialized=serializeComparisonRequest(JSON.parse(manifestBytes.toString("utf8").replace(/^\uFEFF/,"")),JSON.parse(packageBytes.toString("utf8").replace(/^\uFEFF/,"")),profile);
+  const serialized=serializeComparisonRequest(JSON.parse(manifestBytes.toString("utf8").replace(/^\uFEFF/,"")),JSON.parse(packageBytes.toString("utf8").replace(/^\uFEFF/,"")),profile,options.gzip?32*1024*1024:16*1024*1024);
+  const artifactBytes=options.gzip?gzipSync(Buffer.from(serialized.body,"utf8")):Buffer.from(serialized.body,"utf8");
+  const artifactSha256=sha256(artifactBytes);
   const rootReal=await fs.realpath(root);
   if(rootReal.toLowerCase()!==root.toLowerCase())fail("comparison_request_private_root_redirected");
   const parent=path.dirname(output);
@@ -73,7 +76,7 @@ export async function writeComparisonRequest(options:{manifestPath:string;packag
   const temporary=await fs.mkdtemp(path.join(parentReal,".comparison-request-")),pending=path.join(temporary,"request.json");
   try{
     const handle=await fs.open(pending,"wx");
-    try{await handle.writeFile(serialized.body);await handle.sync();}finally{await handle.close();}
+    try{await handle.writeFile(artifactBytes);await handle.sync();}finally{await handle.close();}
     const [manifestNow,packagesNow]=await Promise.all([fs.readFile(options.manifestPath),fs.readFile(options.packagesPath)]);
     if(!manifestNow.equals(manifestBytes)||!packagesNow.equals(packageBytes))fail("comparison_request_inputs_changed");
     await fs.link(pending,path.join(parentReal,path.basename(output)));
@@ -81,5 +84,5 @@ export async function writeComparisonRequest(options:{manifestPath:string;packag
     await fs.unlink(pending).catch(e=>{if((e as NodeJS.ErrnoException).code!=="ENOENT")throw e;});
     await fs.rmdir(temporary);
   }
-  return{outputPath:output,schemaVersion:serialized.request.schemaVersion,bodySha256:serialized.bodySha256,manifestSha256:serialized.request.manifest.manifestSha256,packages:serialized.request.packages.length,networkRequests:0};
+  return{outputPath:output,schemaVersion:serialized.request.schemaVersion,bodySha256:serialized.bodySha256,artifactSha256,contentEncoding:options.gzip?"gzip":"identity",decodedBytes:Buffer.byteLength(serialized.body),artifactBytes:artifactBytes.byteLength,manifestSha256:serialized.request.manifest.manifestSha256,packages:serialized.request.packages.length,networkRequests:0};
 }

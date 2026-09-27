@@ -1,4 +1,6 @@
 import "server-only";
+import { CandidateReadError } from "@/lib/prospect-enrichment-candidate-reader";
+import { CandidateContractError } from "@/lib/prospect-enrichment-candidate-contract";
 import type { NextRequest } from "next/server";
 import { prospectEnrichmentJson, requireProspectEnrichmentOperator, unexpectedEnrichmentError } from "@/lib/prospect-enrichment-auth";
 import { ProspectEnrichmentReadError } from "@/lib/prospect-enrichment-reader";
@@ -64,6 +66,8 @@ export async function readRoute(request: NextRequest, operation: string, work: (
     return prospectEnrichmentJson(await work());
   } catch (cause) {
     if (cause instanceof ReadApiError) return prospectEnrichmentJson({ error: cause.message, ...(process.env.PROSPECT_ENRICHMENT_TEST_DIAGNOSTICS === "1" && cause.diagnostic ? { diagnostic: cause.diagnostic } : {}) }, cause.status);
+    if (cause instanceof CandidateReadError) return prospectEnrichmentJson({ error: cause.message }, cause.status);
+    if (cause instanceof CandidateContractError) return prospectEnrichmentJson({ error: "Candidate research returned an incomplete projection. Coverage remains unverified." }, 503);
     if (cause instanceof ProspectEnrichmentReadError) return prospectEnrichmentJson({ error: cause.message, errorId: cause.errorId }, cause.status);
     return prospectEnrichmentJson(unexpectedEnrichmentError(operation), 503);
   }

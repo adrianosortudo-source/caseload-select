@@ -1,0 +1,96 @@
+name: Read-only prospect candidate additive release preflight
+
+'on':
+  workflow_dispatch:
+    inputs:
+      reviewed_source_sha:
+        description: Exact reviewed 40-character current main commit SHA.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prospect-candidate-additive-preflight
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
+    name: Read-only additive migration preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: Production prospect migrations
+    env:
+      PROJECT_REF: ssxryjxifwiivghglqer
+      OPERATION: dry-run
+      REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+      CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_SHA }}
+    steps:
+      - name: Check out current main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.117.0
+
+      - name: Validate exact source, review-only receipt, and explicit TLS connection
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CHECKOUT_SHA="$(git rev-parse HEAD)"
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
+          node scripts/prospect-enrichment/additive-release-gate.mjs source > "$RUNNER_TEMP/source-check.json"
+          git fetch --no-tags origin main
+          test "$CHECKOUT_SHA" = "$(git rev-parse origin/main)"
+          test "$(supabase --version)" = "2.117.0"
+          supabase db push --help > "$RUNNER_TEMP/db-push-help.txt"
+          supabase db query --help > "$RUNNER_TEMP/db-query-help.txt"
+          grep -q -- '--db-url' "$RUNNER_TEMP/db-push-help.txt"
+          grep -q -- '--db-url' "$RUNNER_TEMP/db-query-help.txt"
+
+      - name: Read and verify exact applied ledger and operator RPC catalog invariant
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
+          node scripts/prospect-enrichment/additive-release-gate.mjs ledger-query > "$RUNNER_TEMP/ledger-readback.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/ledger-readback.sql" --output json --agent no > "$RUNNER_TEMP/ledger.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs ledger "$RUNNER_TEMP/ledger.json" > "$RUNNER_TEMP/ledger-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs catalog-query > "$RUNNER_TEMP/rpc-catalog.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/rpc-catalog.sql" --output json --agent no > "$RUNNER_TEMP/rpc-catalog.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs catalog "$RUNNER_TEMP/rpc-catalog.json" > "$RUNNER_TEMP/rpc-catalog-check.json"
+
+      - name: Require exactly the reviewed pending migration suffix and no seeds or roles
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
+          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
+            --output-format json > "$RUNNER_TEMP/plan.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs plan pre "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/ledger-check.json" > "$RUNNER_TEMP/plan-check.json"
+
+      - name: Upload redacted read-only verification evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prospect-candidate-additive-preflight-evidence
+          path: |
+            scripts/prospect-enrichment/additive-release-review.json
+            ${{ runner.temp }}/source-check.json
+            ${{ runner.temp }}/ledger-check.json
+            ${{ runner.temp }}/rpc-catalog-check.json
+            ${{ runner.temp }}/plan-check.json
+          if-no-files-found: ignore

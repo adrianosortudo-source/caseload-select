@@ -5,14 +5,15 @@ import { RECONCILED_GTA_PROSPECTS } from "@/app/admin/prospects/reconciled-prosp
 import { mergeQualifiedProspects } from "@/lib/qualified-gta-prospects";
 import QualifiedProspectAuditPage from "@/app/admin/prospects/audits/[firmId]/page";
 
-import { SYNTHETIC_SUPPLEMENTAL_GBP_PROSPECTS } from "./synthetic-supplemental";
+import { SYNTHETIC_SUPPLEMENTAL_GBP_PROSPECTS, SYNTHETIC_SAME_NAME_UNLINKED, SYNTHETIC_ZAREI_PROFILE_LINK } from "./synthetic-supplemental";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProspectQualifiedPreviewPage({ searchParams }: { searchParams: Promise<{ audit?: string; supplementalGbp?: string }> }) {
+export default async function ProspectQualifiedPreviewPage({ searchParams }: { searchParams: Promise<{ audit?: string; supplementalGbp?: string; zareiProfile?: string }> }) {
   if (process.env.PROSPECT_QUALIFICATION_PREVIEW !== "1") return notFound();
-  const { audit, supplementalGbp } = await searchParams;
+  const { audit, supplementalGbp, zareiProfile } = await searchParams;
   if (supplementalGbp === "1") return <main className="min-h-screen bg-parchment p-4 sm:p-6"><ReconciledProspects initialData={{ records: SYNTHETIC_SUPPLEMENTAL_GBP_PROSPECTS, source: "fixture" }} /></main>;
+  if (zareiProfile === "1") return <main className="min-h-screen bg-parchment p-4 sm:p-6"><ReconciledProspects initialData={{ records: [SYNTHETIC_ZAREI_PROFILE_LINK, SYNTHETIC_SAME_NAME_UNLINKED], source: "fixture" }} /></main>;
   if (audit) {
     return <main className="min-h-screen bg-parchment p-4 sm:p-6">{await QualifiedProspectAuditPage({ params: Promise.resolve({ firmId: audit }) })}</main>;
   }

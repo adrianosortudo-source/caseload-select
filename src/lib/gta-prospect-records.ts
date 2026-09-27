@@ -61,6 +61,8 @@ export interface ReconciledGtaProspect {
   recordOrigin?: ProspectRecordOrigin;
   /** Stable shared firm identity when this record has been linked to the governed registry. */
   firmId?: string | null;
+  /** Exact internal prospect_firms UUID from the applied supplemental projection; distinct from stable firmId. */
+  databaseFirmId?: string | null;
   /** Normalized host used for deterministic cross-source reconciliation. */
   canonicalDomain?: string | null;
   /** Source-backed allocation metadata for the shared firm identity. */

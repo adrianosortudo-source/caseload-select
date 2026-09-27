@@ -29,6 +29,7 @@ export function ResearchError({ message, errorId, retry }: { message: string; er
 export function ResearchJson({ value, depth = 0 }: { value: unknown; depth?: number }) {
   if (value === undefined) return <span className="text-black/50">Not supplied</span>;
   if (value === null) return <span className="text-black/50">Not recorded (null)</span>;
+  if (value === "") return <span className="text-black/50">Empty text {'""'}</span>;
   if (typeof value === "boolean") return <span>{value ? "True" : "False"}</span>;
   if (typeof value === "string" && researchUrl(value)) return <a className="break-all underline underline-offset-2" href={value} target="_blank" rel="noopener noreferrer">{value}</a>;
   if (typeof value !== "object") return <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{String(value)}</span>;

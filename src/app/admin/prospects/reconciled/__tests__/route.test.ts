@@ -10,6 +10,7 @@ const h = vi.hoisted(() => {
     ownerContacts: [] as unknown[],
     ownerFailure: null as Error | null,
     stableIdentities: [] as unknown[],
+    supplemental: [] as unknown[],
     geographyFailure: null as Error | null,
   };
   return {
@@ -46,7 +47,7 @@ vi.mock("@/lib/gta-prospect-downtown-geography-reader", () => ({
 }));
 vi.mock("@/lib/gta-prospect-supplemental-evidence-reader", () => ({
   GtaProspectSupplementalEvidenceLedgerUnavailableError: class extends Error {},
-  listGtaProspectSupplementalEvidenceForOperator: () => Promise.resolve([]),
+  listGtaProspectSupplementalEvidenceForOperator: () => Promise.resolve(h.state.supplemental),
 }));
 vi.mock("@/lib/gta-prospect-stable-identity-reader", () => ({
   GtaProspectStableIdentityRegistryUnavailableError: class extends Error {},
@@ -62,6 +63,7 @@ beforeEach(() => {
   h.state.ownerContacts = [];
   h.state.ownerFailure = null;
   h.state.stableIdentities = [];
+  h.state.supplemental = [];
   h.state.geographyFailure = null;
   h.read.mockClear();
   h.ownerRead.mockClear();
@@ -248,6 +250,41 @@ describe("reviewed GTA prospects route", () => {
         confidence: "high",
       },
     });
+  });
+
+  it("does not promote registry-only identity when an applied supplemental row has no confirmed observation", async () => {
+    h.state.session = { role: "operator" };
+    const sourceRecordKey = "q50-whole-firm-zarei-qualified-2026-09-25-v1";
+    const databaseFirmId = "a9989dca-8626-4a6e-93ca-797a1cb7eed2";
+    h.state.records = [{
+      ...RECONCILED_GTA_PROSPECTS[0],
+      id: sourceRecordKey,
+      firmName: "Zarei Law Professional Corporation",
+      firmId: null,
+      canonicalDomain: null,
+    }];
+    h.state.stableIdentities = [{
+      sourceRecordKey,
+      firmId: "FIRM-B86000000000000000000000000",
+      canonicalDomain: "zarei.example",
+      sourceUrl: "https://zarei.example/identity",
+      observedOn: "2026-09-25",
+      confidence: "high",
+    }];
+    h.state.supplemental = [{
+      sourceRecordKey,
+      databaseFirmId,
+      firmId: null,
+      canonicalDomain: null,
+      identity: null,
+      websiteIntake: null,
+      qualification: null,
+    }];
+
+    const response = await GET();
+    const body = await response.json();
+    const record = body.records.find((candidate: { id: string }) => candidate.id === sourceRecordKey);
+    expect(record).toMatchObject({ databaseFirmId, firmId: null, canonicalDomain: null, firmIdentity: null, supplementalEvidence: { identity: null } });
   });
 
   it("returns a visible server error for a real ledger failure rather than concealing it as fallback", async () => {

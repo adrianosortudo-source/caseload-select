@@ -20,6 +20,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 const REQUEST_SCHEMA = "prospect-enrichment-comparison-request/v1";
 const MAX_REQUEST_BYTES = 16 * 1024 * 1024;
+const MAX_GZIP_REQUEST_BYTES = 4 * 1024 * 1024;
+const MAX_GZIP_DECOMPRESSED_BYTES = 32 * 1024 * 1024;
 const HASH = /^[a-f0-9]{64}$/;
 type Db = ReadDatabase;
 type RequestPackage = { envelope: ProspectEnrichmentEnvelope; payloadSha256: string; legacyAssessmentProjectionClaims: LegacyAssessmentProjectionClaim[] };
@@ -206,7 +208,9 @@ export async function POST(request: NextRequest) {
   const auth = await requireProspectEnrichmentOperator(request, true);
   if (!auth.ok) return auth.response;
   if (auth.operator.session.role !== "operator") return prospectEnrichmentJson({ error: "An operator session is required." }, 403);
-  const body = await readBoundedJson(request, MAX_REQUEST_BYTES);
+  const body = await readBoundedJson(request, MAX_REQUEST_BYTES, {
+    gzip: { maxCompressedBytes: MAX_GZIP_REQUEST_BYTES, maxDecompressedBytes: MAX_GZIP_DECOMPRESSED_BYTES },
+  });
   if (!body.ok) return prospectEnrichmentJson({ error: body.error }, body.status);
   try {
     const parsed = parseRequest(body.value);

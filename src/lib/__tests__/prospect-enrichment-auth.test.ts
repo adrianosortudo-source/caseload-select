@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { gzipSync } from "node:zlib";
 import { NextRequest } from "next/server";
 
 const authState = vi.hoisted(() => ({
@@ -58,6 +59,36 @@ describe("bounded JSON request bodies", () => {
     const body = '{"name":"café"}';
     const result = await readBoundedJson(new Request("https://admin.example.test", { method: "POST", body }), 100);
     expect(result).toEqual({ ok: true, text: body, value: { name: "café" } });
+  });
+
+  it("accepts opted-in gzip while bounding both compressed and decoded bytes", async () => {
+    const original = Buffer.from('{"name":"café"}');
+    const compressed = gzipSync(original);
+    const options = { gzip: { maxCompressedBytes: compressed.byteLength, maxDecompressedBytes: original.byteLength } };
+    const request = new Request("https://admin.example.test", { method: "POST", headers: { "content-encoding": "gzip" }, body: compressed });
+    await expect(readBoundedJson(request, 100, options)).resolves.toMatchObject({ ok: true, text: original.toString("utf8"), value: { name: "café" } });
+    const disabled = new Request("https://admin.example.test", { method: "POST", headers: { "content-encoding": "gzip" }, body: compressed });
+    await expect(readBoundedJson(disabled, 100)).resolves.toMatchObject({ ok: false, status: 400 });
+    const compressedTooLarge = new Request("https://admin.example.test", { method: "POST", headers: { "content-encoding": "gzip" }, body: compressed });
+    await expect(readBoundedJson(compressedTooLarge, 100, { gzip: { ...options.gzip, maxCompressedBytes: compressed.byteLength - 1 } })).resolves.toMatchObject({ ok: false, status: 413 });
+    const decodedTooLarge = new Request("https://admin.example.test", { method: "POST", headers: { "content-encoding": "gzip" }, body: compressed });
+    await expect(readBoundedJson(decodedTooLarge, 100, { gzip: { ...options.gzip, maxDecompressedBytes: original.byteLength - 1 } })).resolves.toMatchObject({ ok: false, status: 413 });
+    const malformed = new Request("https://admin.example.test", { method: "POST", headers: { "content-encoding": "gzip" }, body: Buffer.from("not-gzip") });
+    await expect(readBoundedJson(malformed, 100, options)).resolves.toMatchObject({ ok: false, status: 400 });
+    const trailing = new Request("https://admin.example.test", { method: "POST", headers: { "content-encoding": "gzip" }, body: Buffer.concat([compressed, Buffer.from("trailing")]) });
+    await expect(readBoundedJson(trailing, 100, { gzip: { maxCompressedBytes: 100, maxDecompressedBytes: 100 } })).resolves.toMatchObject({ ok: false, status: 400 });
+  });
+
+  it("accepts a gzip body above the ordinary JSON cap only within its separate decoded ceiling", async () => {
+    const original = Buffer.from(JSON.stringify({ payload: "x".repeat(17 * 1024 * 1024) }));
+    const compressed = gzipSync(original);
+    expect(compressed.byteLength).toBeLessThan(4 * 1024 * 1024);
+    const request = new Request("https://admin.example.test", { method: "POST", headers: { "content-encoding": "gzip" }, body: compressed });
+    const result = await readBoundedJson(request, 16 * 1024 * 1024, { gzip: { maxCompressedBytes: 4 * 1024 * 1024, maxDecompressedBytes: 32 * 1024 * 1024 } });
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(Buffer.byteLength(result.text)).toBe(original.byteLength);
+    const plainRequest = new Request("https://admin.example.test", { method: "POST", body: original });
+    await expect(readBoundedJson(plainRequest, 16 * 1024 * 1024, { gzip: { maxCompressedBytes: 4 * 1024 * 1024, maxDecompressedBytes: 32 * 1024 * 1024 } })).resolves.toMatchObject({ ok: false, status: 413 });
   });
 
   it("rejects a declared body over the byte limit before reading it", async () => {

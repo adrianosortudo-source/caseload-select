@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
 import { ResearchJson } from "./ResearchEvidence";
 
@@ -17,13 +16,13 @@ export function ReconciledIntakeEvidence({ record }: { record: ReconciledGtaPros
 
 /** Available for every returned source record, including records without a firm UUID. */
 export default function ReconciledResearchProfile({ record }: { record: ReconciledGtaProspect }) {
-  const [expanded, setExpanded] = useState(false);
-  return <details onToggle={event => setExpanded(event.currentTarget.open)} className="mt-3 min-w-0" data-testid="retained-research-profile">
+  return <details className="mt-3 min-w-0" data-testid="retained-research-profile">
     <summary className="cursor-pointer text-xs font-semibold text-navy">Research profile</summary>
-    {expanded && <div className="mt-3 space-y-3" data-ui-component-content="research-retained-profile">
+    {record.databaseFirmId && <a className="inline-block text-xs font-semibold text-navy underline" href={`/admin/prospects/firms/${encodeURIComponent(record.databaseFirmId)}`}>Open this firm’s research profile</a>}
+    <div className="mt-3 space-y-3" data-ui-component-content="research-retained-profile">
       <p className="w-full text-pretty text-xs text-black/60" data-ui-copy="supporting">Retained research for this source record. Selection does not remove its evidence.</p>
       {record.supplementalEvidence?.websiteIntake?.readWarning && <p role="status" className="text-xs font-semibold text-amber-900">Intake evidence held for review. Original values remain below.</p>}
       <ResearchJson value={record} />
-    </div>}
+    </div>
   </details>;
 }

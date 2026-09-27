@@ -7,6 +7,7 @@ import {
 
 const row = {
   source_record_key: "gta-prospect-002-b002-11",
+  database_firm_id: "84000000-0000-4000-8000-000000000001",
   firm_id: "FIRM-1C2XS2MW3NTR644JE1T3XVHFX2",
   canonical_domain: "example.test",
   identity_match_state: "confirmed",
@@ -87,6 +88,7 @@ describe("GTA prospect supplemental evidence reader", () => {
     const result = await listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [row], error: null }) });
     expect(result).toEqual([{
       sourceRecordKey: "gta-prospect-002-b002-11",
+      databaseFirmId: "84000000-0000-4000-8000-000000000001",
       firmId: "FIRM-1C2XS2MW3NTR644JE1T3XVHFX2",
       canonicalDomain: "example.test",
       identity: { matchState: "confirmed", observedOn: "2026-09-12", confidence: "high", source: "supplemental_observation" },
@@ -104,6 +106,16 @@ describe("GTA prospect supplemental evidence reader", () => {
     const invalid = { ...row, firm_id: null };
     await expect(listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [invalid], error: null }) }))
       .rejects.toThrow("confirmed identity has no stable firm_id");
+  });
+
+  it("keeps the applied database firm UUID separate from the portable stable firm ID", async () => {
+    const result = await listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, firm_id: null, identity_match_state: null, identity_observed_on: null, identity_confidence: null, identity_source: null }], error: null }) });
+    expect(result[0]).toMatchObject({ databaseFirmId: "84000000-0000-4000-8000-000000000001", firmId: null, identity: null });
+  });
+
+  it.each(["not-a-uuid", null])("rejects a missing or invalid applied database firm UUID: %j", async database_firm_id => {
+    await expect(listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, database_firm_id }], error: null }) }))
+      .rejects.toThrow("database_firm_id is invalid");
   });
 
   it.each([12, 13])("enforces the exact criteria depth boundary for objects: %i", async (depth) => {
