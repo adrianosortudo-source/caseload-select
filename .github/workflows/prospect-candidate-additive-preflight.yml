@@ -102,8 +102,12 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
-          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
-            --output-format json > "$RUNNER_TEMP/plan.json"
+          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/candidate-migrations" > "$RUNNER_TEMP/staged-inventory.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/full-ledger-readback.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/full-ledger.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger.json" "$RUNNER_TEMP/candidate-migrations" "$RUNNER_TEMP/ledger-check.json" > "$RUNNER_TEMP/full-ledger-check.json"
+          (cd "$RUNNER_TEMP/candidate-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
+            --output-format json) > "$RUNNER_TEMP/plan.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs plan pre "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/ledger-check.json" > "$RUNNER_TEMP/plan-check.json"
 
       - name: Upload redacted read-only verification evidence
@@ -115,6 +119,8 @@ jobs:
             scripts/prospect-enrichment/additive-release-review.json
             ${{ runner.temp }}/source-check.json
             ${{ runner.temp }}/ledger-check.json
+            ${{ runner.temp }}/staged-inventory.json
+            ${{ runner.temp }}/full-ledger-check.json
             ${{ runner.temp }}/rpc-catalog-check.json
             ${{ runner.temp }}/plan-check.json
           if-no-files-found: ignore
