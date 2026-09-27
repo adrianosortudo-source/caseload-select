@@ -263,7 +263,12 @@ export function verifyLedgerDelta(beforeRows, afterRows, expectedVersions) {
 }
 
 export function verifyDirectDatabaseUrl(value, environment = {}, projectEnvFiles = []) {
-  if (Object.keys(environment).some(key => (/^(?:PG|SUPABASE_|DOTENV_)/i.test(key) || ["DOCKER_HOST", "NODE_TLS_REJECT_UNAUTHORIZED"].includes(key.toUpperCase())) && environment[key] !== undefined)) fail("ambient_database_configuration_prohibited");
+  if (Object.keys(environment).some(key => {
+    const setting = environment[key];
+    if (setting === undefined) return false;
+    if (key.toUpperCase() === "SUPABASE_INTERNAL_IMAGE_REGISTRY" && setting === "ghcr.io") return false;
+    return /^(?:PG|SUPABASE_|DOTENV_)/i.test(key) || ["DOCKER_HOST", "NODE_TLS_REJECT_UNAUTHORIZED"].includes(key.toUpperCase());
+  })) fail("ambient_database_configuration_prohibited");
   if (!Array.isArray(projectEnvFiles) || projectEnvFiles.length) fail("project_database_env_files_prohibited");
   if (typeof value !== "string" || !value || value.trim() !== value || hasAsciiControl(value, 32)) fail("protected_environment_database_url_missing_or_invalid");
   let url;
