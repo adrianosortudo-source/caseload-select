@@ -223,7 +223,7 @@ test("workflow is manual, main-only, protected and all external actions are pinn
   for (const step of job.steps.filter((s) => /supabase db (push|query) .*--db-url/.test(s.run ?? ""))) {
     assert.doesNotMatch(step.run, /--linked|--project-ref|--password|SUPABASE_ACCESS_TOKEN/);
     assert.match(step.run, /migration-gate\.mjs connection/);
-    assert.match(step.env.MIGRATION_DATABASE_URL, /secrets\.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL/);
+    assert.equal(step.env?.MIGRATION_DATABASE_URL, undefined);
     assert.ok(step.run.indexOf("migration-gate.mjs connection") < step.run.indexOf("supabase db"));
   }
   for (const step of job.steps.filter((s) => s.uses)) assert.match(step.uses, /@[a-f0-9]{40}$/);

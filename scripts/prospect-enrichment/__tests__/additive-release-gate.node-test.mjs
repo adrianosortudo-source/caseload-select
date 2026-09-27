@@ -218,7 +218,7 @@ test("new workflow is protected and read-only; legacy six-migration writer is un
   assert.ok(remote.length >= 2, "ledger/catalog reads and the dry-run migration plan are present");
   for (const step of remote) {
     assert.match(step.run, /--db-url/);
-    assert.match(step.env.MIGRATION_DATABASE_URL, /secrets\.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL/);
+    assert.equal(step.env?.MIGRATION_DATABASE_URL, undefined);
     assert.match(step.run, /additive-release-gate\.mjs connection/);
   }
   for (const step of remote.filter(s => /supabase db push/.test(s.run))) assert.match(step.run, /--dry-run/);
