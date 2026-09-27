@@ -3,6 +3,11 @@ name: Read-only prospect candidate additive release preflight
 'on':
   workflow_dispatch:
     inputs:
+      use_temporary_database_credential:
+        description: Request a short-lived write-capable Supabase login; database operations remain separately gated.
+        required: false
+        default: false
+        type: boolean
       reviewed_source_sha:
         description: Exact reviewed 40-character current main commit SHA.
         required: true
@@ -25,6 +30,7 @@ jobs:
       name: Production prospect migrations
     env:
       PROJECT_REF: ssxryjxifwiivghglqer
+      USE_TEMPORARY_DATABASE_CREDENTIAL: ${{ inputs.use_temporary_database_credential }}
       OPERATION: dry-run
       REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
       CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_SHA }}
@@ -41,14 +47,11 @@ jobs:
           version: 2.117.0
 
       - name: Validate exact source, review-only receipt, and explicit TLS connection
-        env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
           export CHECKOUT_SHA="$(git rev-parse HEAD)"
-          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
-          node scripts/prospect-enrichment/additive-release-gate.mjs source > "$RUNNER_TEMP/source-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs source-authorization > "$RUNNER_TEMP/source-authorization-check.json"
           git fetch --no-tags origin main
           test "$CHECKOUT_SHA" = "$(git rev-parse origin/main)"
           test "$(supabase --version)" = "2.117.0"
@@ -57,9 +60,35 @@ jobs:
           grep -q -- '--db-url' "$RUNNER_TEMP/db-push-help.txt"
           grep -q -- '--db-url' "$RUNNER_TEMP/db-query-help.txt"
 
-      - name: Read and verify exact applied ledger and operator RPC catalog invariant
+      - name: Load protected static database connection
+        if: ${{ !inputs.use_temporary_database_credential }}
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          STATIC_MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$STATIC_MIGRATION_DATABASE_URL"
+          [[ "$STATIC_MIGRATION_DATABASE_URL" != *$'\n'* && "$STATIC_MIGRATION_DATABASE_URL" != *$'\r'* ]]
+          printf 'MIGRATION_DATABASE_URL=%s\n' "$STATIC_MIGRATION_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Request explicitly approved temporary write-capable authentication
+        if: inputs.use_temporary_database_credential
+        env:
+          CREDENTIAL_GATE: candidate-preflight
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/temporary-credential.mjs
+
+      - name: Validate authorized database connection before database operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CHECKOUT_SHA="$(git rev-parse HEAD)"
+          node scripts/prospect-enrichment/additive-release-gate.mjs source > "$RUNNER_TEMP/source-check.json"
+
+      - name: Read and verify exact applied ledger and operator RPC catalog invariant
         shell: bash
         run: |
           set -euo pipefail
@@ -72,14 +101,16 @@ jobs:
           node scripts/prospect-enrichment/additive-release-gate.mjs catalog "$RUNNER_TEMP/rpc-catalog.json" > "$RUNNER_TEMP/rpc-catalog-check.json"
 
       - name: Require exactly the reviewed pending migration suffix and no seeds or roles
-        env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
           node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
-          supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
-            --output-format json > "$RUNNER_TEMP/plan.json"
+          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/candidate-migrations" > "$RUNNER_TEMP/staged-inventory.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/full-ledger-readback.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/full-ledger.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger.json" "$RUNNER_TEMP/candidate-migrations" "$RUNNER_TEMP/ledger-check.json" > "$RUNNER_TEMP/full-ledger-check.json"
+          (cd "$RUNNER_TEMP/candidate-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault \
+            --output-format json) > "$RUNNER_TEMP/plan.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs plan pre "$RUNNER_TEMP/plan.json" "$RUNNER_TEMP/ledger-check.json" > "$RUNNER_TEMP/plan-check.json"
 
       - name: Upload redacted read-only verification evidence
@@ -91,6 +122,8 @@ jobs:
             scripts/prospect-enrichment/additive-release-review.json
             ${{ runner.temp }}/source-check.json
             ${{ runner.temp }}/ledger-check.json
+            ${{ runner.temp }}/staged-inventory.json
+            ${{ runner.temp }}/full-ledger-check.json
             ${{ runner.temp }}/rpc-catalog-check.json
             ${{ runner.temp }}/plan-check.json
           if-no-files-found: ignore

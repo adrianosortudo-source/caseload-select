@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
@@ -17,9 +18,31 @@ export const PREVIEW_MIGRATION_PATHS = Object.freeze([
   "supabase/migrations/20260915183000_preview_qa_session_registry.sql",
   "supabase/migrations/20260916030440_preview_qa_registry_privilege_hardening.sql"
 ]);
+// Exact historical version/name aliases. This proves ledger lineage, not SQL
+// byte equivalence for older migrations whose statements may be unavailable.
+export const HISTORICAL_LEDGER_NAME_ALIASES = Object.freeze({
+  "20260605175457": { filename: "20260605175457_security_lockdown_anon_authenticated.sql", name: "20260605_security_lockdown_anon_authenticated" },
+  "20260706200052": { filename: "20260706200052_operator_preview_log.sql", name: "20260707b_operator_preview_log" },
+  "20260714141535": { filename: "20260714141535_publication_metadata.sql", name: "20260714101200_publication_metadata" },
+  "20260714141612": { filename: "20260714141612_publication_artifacts.sql", name: "20260714101300_publication_artifacts" },
+  "20260714141709": { filename: "20260714141709_publication_artifacts_fk_indexes.sql", name: "20260714101400_publication_artifacts_fk_indexes" },
+  "20260714180754": { filename: "20260714180754_publication_artifacts_uniqueness.sql", name: "20260714150000_publication_artifacts_uniqueness" },
+  "20260723024820": { filename: "20260723024820_firm_onboarding_client_list.sql", name: "20260722000000_firm_onboarding_client_list" },
+  "20260907145628": { filename: "20260907145628_gta_prospect_research_persistence.sql", name: "20260907145628_gta_prospect_research_persistence" },
+  "20260907181342": { filename: "20260907181342_gta_prospect_research_operator_read_projection.sql", name: "20260907181342_gta_prospect_research_operator_read_projection" },
+  "20260907210156": { filename: "20260907210156_gta_prospect_research_canonical_iso_date_fix.sql", name: "20260907210156_gta_prospect_research_canonical_iso_date_fix" },
+  "20260911215333": { filename: "20260911215333_prospect_archive_sync_apply.sql", name: "20260910161644_prospect_archive_sync_apply" },
+});
 export const QUALIFICATION_HISTORY = Object.freeze([
   { path: "supabase/migrations/20260921120000_prospect_qualification_evidence.sql", version: "20260921120000", name: "prospect_qualification_evidence", sha256: "c9fff7b8f0950be5ac9557e9ba7d40f6291829548f6ab9a7b6c313cd90b717f7" },
   { path: "supabase/migrations/20260921121500_prospect_qualification_profile_details.sql", version: "20260921121500", name: "prospect_qualification_profile_details", sha256: "ef14f2942a4db3da22080f8c6e09a0df47638af518d59e8a743183e92fef858a" }
+]);
+export const CANDIDATE_RELEASE_PATHS = Object.freeze([
+  ...QUALIFICATION_HISTORY.map(item => item.path),
+  ...MIGRATION_PATHS,
+  "supabase/migrations/20260924172758_prospect_enrichment_candidate_profiles.sql",
+  "supabase/migrations/20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
+  "supabase/migrations/20260925200000_gta_prospect_operator_database_firm_profile_link.sql",
 ]);
 export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
@@ -102,6 +125,10 @@ function sourceMigrationInventory(sourceRoot, { requirePreviewSources = true } =
 
 /** Copy a complete, byte-verified production CLI history into a fresh staging directory. */
 export function stageProductionWorkdir(sourceRoot, destinationRoot) {
+  return stageMigrationWorkdir(sourceRoot, destinationRoot, []);
+}
+
+function stageMigrationWorkdir(sourceRoot, destinationRoot, deferredPaths) {
   const source = sourceMigrationInventory(sourceRoot);
   const requestedDestination = path.resolve(destinationRoot);
   let destinationExists = false;
@@ -110,9 +137,9 @@ export function stageProductionWorkdir(sourceRoot, destinationRoot) {
   const parent = fs.realpathSync(path.dirname(requestedDestination));
   const destination = path.join(parent, path.basename(requestedDestination));
   if (!isWithin(parent, destination) || isWithin(source.root, destination) || isWithin(destination, source.root)) fail("staging_path_containment_failed");
-  const excluded = new Set(PREVIEW_MIGRATION_PATHS);
+  const excluded = new Set([...PREVIEW_MIGRATION_PATHS, ...deferredPaths]);
   const included = source.migrations.filter(item => !excluded.has(item.path));
-  if (included.length !== source.migrations.length - PREVIEW_MIGRATION_PATHS.length) fail("staging_exclusion_count_mismatch");
+  if (included.length !== source.migrations.length - excluded.size) fail("staging_exclusion_count_mismatch");
   const configSource = path.join(source.root, "supabase", "config.toml");
   const configStat = fs.lstatSync(configSource);
   if (configStat.isSymbolicLink() || !configStat.isFile()) fail("supabase_config_invalid");
@@ -140,12 +167,43 @@ export function stageProductionWorkdir(sourceRoot, destinationRoot) {
   };
 }
 
+/** Validate the full additive receipt before deferring its exact candidate suffix.
+ * The staged writer still admits only the original six enrichment migrations.
+ */
+export async function stagePrerequisiteWorkdir(sourceRoot, destinationRoot) {
+  const additive = await import("./additive-release-gate.mjs");
+  const root = fs.realpathSync(sourceRoot);
+  const receiptBytes = fs.readFileSync(path.join(root, additive.RELEASE_PATH));
+  const receipt = JSON.parse(receiptBytes);
+  const sources = Object.fromEntries([...additive.MIGRATION_PATHS, additive.APPLIED_OPERATOR_RPC.path].map(relative => {
+    const file = path.join(root, relative);
+    if (fs.lstatSync(file).isSymbolicLink()) fail("migration_source_file_invalid");
+    const working = Buffer.from(fs.readFileSync(file, "utf8").replace(/\r\n/g, "\n"), "utf8");
+    let committed;
+    try { committed = execFileSync("git", ["show", "HEAD:" + relative], { cwd: root, maxBuffer: 4 * 1024 * 1024, stdio: ["ignore", "pipe", "ignore"] }); }
+    catch { fail("migration_git_blob_unavailable"); }
+    if (!working.equals(committed)) fail("working_migration_source_differs_from_git_blob");
+    return [relative, committed];
+  }));
+  additive.verifyReleaseReceipt(receipt, sources);
+  const prefix = receipt.migrations.slice(0, additive.CANDIDATE_PREREQUISITE_PREFIX_LENGTH).map(item => item.path);
+  if (!same(prefix, [...QUALIFICATION_HISTORY.map(item => item.path), ...MIGRATION_PATHS])) fail("prerequisite_receipt_prefix_mismatch");
+  const deferred = receipt.migrations.slice(additive.CANDIDATE_PREREQUISITE_PREFIX_LENGTH);
+  const staged = stageMigrationWorkdir(root, destinationRoot, deferred.map(item => item.path));
+  return { ...staged, additiveReceiptSha256: sha256(receiptBytes), deferredCandidateMigrations: deferred, prerequisiteOnly: true };
+}
+
 export function fullLedgerQuery() {
   return "SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version;\n";
 }
 
-export function verifyFullMigrationLedger(rows, sourceRoot, phase) {
-  if (!Array.isArray(rows) || !["qualification-pending", "enrichment-pending", "complete"].includes(phase)) fail("invalid_full_ledger_input");
+export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePendingPaths) {
+  if (!Array.isArray(rows) || !["qualification-pending", "enrichment-pending", "complete", "candidate-pending"].includes(phase)) fail("invalid_full_ledger_input");
+  if (phase === "candidate-pending") {
+    if (!Array.isArray(candidatePendingPaths)) fail("invalid_candidate_pending_suffix");
+    const prefixLength = CANDIDATE_RELEASE_PATHS.length - candidatePendingPaths.length;
+    if (prefixLength < 0 || !same(candidatePendingPaths, CANDIDATE_RELEASE_PATHS.slice(prefixLength))) fail("invalid_candidate_pending_suffix");
+  } else if (candidatePendingPaths !== undefined) fail("invalid_full_ledger_input");
   const { migrations } = sourceMigrationInventory(sourceRoot, { requirePreviewSources: false });
   const localByVersion = new Map(migrations.filter(item => !PREVIEW_MIGRATION_PATHS.includes(item.path)).map(item => [item.version, item]));
   const remote = new Map();
@@ -156,12 +214,15 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase) {
   if (!same([...remote.keys()], [...remote.keys()].sort())) fail("full_ledger_rows_not_ordered");
   for (const [version, name] of remote) {
     const local = localByVersion.get(version);
-    if (!local || local.name !== name) fail("remote_migration_source_missing_or_mismatched");
+    const alias = HISTORICAL_LEDGER_NAME_ALIASES[version];
+    const expectedName = alias && local?.filename === alias.filename ? alias.name : local?.name;
+    if (!local || name !== expectedName) fail("remote_migration_source_missing_or_mismatched");
   }
   const pending = [...localByVersion.values()].filter(item => !remote.has(item.version)).map(item => item.path).sort();
   const expected = phase === "qualification-pending"
     ? [...QUALIFICATION_HISTORY.map(item => item.path), ...MIGRATION_PATHS].sort()
-    : phase === "enrichment-pending" ? [...MIGRATION_PATHS].sort() : [];
+    : phase === "enrichment-pending" ? [...MIGRATION_PATHS].sort()
+      : phase === "candidate-pending" ? [...candidatePendingPaths].sort() : [];
   if (!same(pending, expected)) fail("unexpected_full_history_delta");
   return { phase, remoteVersionCount: remote.size, stagedMigrationCount: localByVersion.size, pendingPaths: pending, completeSourceCoverage: true };
 }
@@ -262,7 +323,7 @@ export function verifyLedgerDelta(beforeRows, afterRows, expectedVersions) {
   return { addedVersions: added, beforeCount: before.size, afterCount: after.size, exactDelta: true };
 }
 
-export function verifyDirectDatabaseUrl(value, environment = {}, projectEnvFiles = []) {
+export function verifyDatabaseEnvironment(environment = {}, projectEnvFiles = []) {
   if (Object.keys(environment).some(key => {
     const setting = environment[key];
     if (setting === undefined) return false;
@@ -270,26 +331,44 @@ export function verifyDirectDatabaseUrl(value, environment = {}, projectEnvFiles
     return /^(?:PG|SUPABASE_|DOTENV_)/i.test(key) || ["DOCKER_HOST", "NODE_TLS_REJECT_UNAUTHORIZED"].includes(key.toUpperCase());
   })) fail("ambient_database_configuration_prohibited");
   if (!Array.isArray(projectEnvFiles) || projectEnvFiles.length) fail("project_database_env_files_prohibited");
+  if (![undefined, "false", "true"].includes(environment.USE_TEMPORARY_DATABASE_CREDENTIAL)) fail("temporary_credential_mode_invalid");
+}
+
+export const TEMPORARY_DATABASE_HOST = "aws-1-ca-central-1.pooler.supabase.com";
+
+export function verifyDirectDatabaseUrl(value, environment = {}, projectEnvFiles = []) {
+  verifyDatabaseEnvironment(environment, projectEnvFiles);
   if (typeof value !== "string" || !value || value.trim() !== value || hasAsciiControl(value, 32)) fail("protected_environment_database_url_missing_or_invalid");
   let url;
   try { url = new URL(value); } catch { fail("protected_environment_database_url_missing_or_invalid"); }
   let username, password;
   try { username = decodeURIComponent(url.username); password = decodeURIComponent(url.password); }
   catch { fail("database_url_credentials_invalid"); }
-  if (url.protocol !== "postgresql:" || url.hostname !== "db." + PROJECT_REF + ".supabase.co" ||
-      url.port !== "5432" || url.pathname !== "/postgres" || url.hash || username !== "postgres" ||
+  const temporary = environment.USE_TEMPORARY_DATABASE_CREDENTIAL === "true";
+  if (temporary) {
+    const issuedAt = Number(environment.TEMPORARY_DATABASE_ISSUED_AT);
+    const expiresAt = Number(environment.TEMPORARY_DATABASE_EXPIRES_AT);
+    if (!/^cli_login_[a-z0-9_]{1,53}$/.test(environment.TEMPORARY_DATABASE_ROLE ?? "") || username !== environment.TEMPORARY_DATABASE_ROLE + "." + PROJECT_REF ||
+        !Number.isSafeInteger(issuedAt) || !Number.isSafeInteger(expiresAt) || issuedAt > Date.now() ||
+        expiresAt - issuedAt < 60000 || expiresAt - issuedAt > 86400000 || expiresAt - Date.now() < 30000) fail("temporary_credential_identity_or_expiry_invalid");
+  } else if (username !== "postgres" || ["TEMPORARY_DATABASE_ROLE", "TEMPORARY_DATABASE_ISSUED_AT", "TEMPORARY_DATABASE_EXPIRES_AT"].some(key => environment[key] !== undefined)) {
+    fail("database_url_target_or_options_prohibited");
+  }
+  if (url.protocol !== "postgresql:" || url.hostname !== (temporary ? TEMPORARY_DATABASE_HOST : "db." + PROJECT_REF + ".supabase.co") ||
+      url.port !== "5432" || url.pathname !== "/postgres" || url.hash ||
       !password || hasAsciiControl(password, 31) ||
       !same([...url.searchParams], [["sslmode", "verify-full"]])) fail("database_url_target_or_options_prohibited");
-  return { host: url.hostname, port: 5432, database: "postgres", user: "postgres", sslmode: "verify-full", connectionMode: "explicit-db-url" };
+  return { host: url.hostname, port: 5432, database: "postgres", user: username, sslmode: "verify-full", connectionMode: "explicit-db-url", ...(temporary ? { credentialMode: "temporary-write-capable" } : {}) };
 }
 
-export function verifyExecutionGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, databaseUrl, environment, projectEnvFiles }) {
+export function verifyExecutionGate({ event, ref, repository, operation, reviewedSourceSha, configuredReviewedSha, checkoutSha, githubSha, databaseUrl, environment, projectEnvFiles, authorizationOnly = false }) {
   if (event !== "workflow_dispatch" || ref !== "refs/heads/main" || repository !== "adrianosortudo-source/caseload-select") fail("manual_main_repository_required");
   if (!["dry-run", "apply", "qualification-preflight", "qualification-repair"].includes(operation)) fail("invalid_operation");
   if (!/^[a-f0-9]{40}$/.test(reviewedSourceSha ?? "")) fail("reviewed_source_sha_required");
   if (!/^[a-f0-9]{40}$/.test(configuredReviewedSha ?? "") || configuredReviewedSha !== reviewedSourceSha) fail("protected_environment_reviewed_sha_missing_or_mismatch");
   if (checkoutSha !== reviewedSourceSha || githubSha !== reviewedSourceSha) fail("reviewed_source_sha_changed");
-  const connection = verifyDirectDatabaseUrl(databaseUrl, environment, projectEnvFiles);
+  verifyDatabaseEnvironment(environment, projectEnvFiles);
+  const connection = authorizationOnly ? { pending: true } : verifyDirectDatabaseUrl(databaseUrl, environment, projectEnvFiles);
   return { reviewedSourceSha, operation, projectRef: PROJECT_REF, connection };
 }
 
@@ -368,8 +447,12 @@ export function findProjectEnvFiles(exists = fs.existsSync) {
     .map(name => path.join(dir, name))).filter(file => exists(file));
 }
 
-function main(args) {
+async function main(args) {
   const [command, ...rest] = args;
+  if (command === "stage-prerequisites" && rest.length === 2) {
+    console.log(JSON.stringify(await stagePrerequisiteWorkdir(rest[0], rest[1])));
+    return;
+  }
   if (command === "stage" && rest.length === 2) {
     console.log(JSON.stringify(stageProductionWorkdir(rest[0], rest[1])));
     return;
@@ -409,13 +492,14 @@ function main(args) {
   }
   const manifest = JSON.parse(fs.readFileSync(RELEASE_PATH, "utf8"));
   verifyReleaseManifest(manifest, sources);
-  if (command === "source" && rest.length === 0) {
+  if (["source", "source-authorization"].includes(command) && rest.length === 0) {
     const gate = verifyExecutionGate({
       event: process.env.GITHUB_EVENT_NAME, ref: process.env.GITHUB_REF,
       repository: process.env.GITHUB_REPOSITORY, operation: process.env.OPERATION,
       reviewedSourceSha: process.env.REVIEWED_SOURCE_SHA, configuredReviewedSha: process.env.CONFIGURED_REVIEWED_SHA,
       checkoutSha: process.env.CHECKOUT_SHA, githubSha: process.env.GITHUB_SHA,
       databaseUrl: process.env.MIGRATION_DATABASE_URL, environment: process.env, projectEnvFiles: findProjectEnvFiles(),
+      authorizationOnly: command === "source-authorization",
     });
     verifyConfirmation(gate.operation, process.env.CONFIRMATION);
     console.log(JSON.stringify({ ...gate, releaseManifestSha256: sha256(fs.readFileSync(RELEASE_PATH)), migrations: manifest.migrations }));
@@ -431,7 +515,7 @@ function main(args) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { main(process.argv.slice(2)); }
+  try { await main(process.argv.slice(2)); }
   catch (error) {
     // Never print raw query output, environment values or command failure payloads.
     const message = error instanceof Error ? error.message : "migration_gate_failed";

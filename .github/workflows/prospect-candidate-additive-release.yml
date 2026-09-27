@@ -3,6 +3,11 @@ name: Reviewed prospect candidate additive release
 'on':
   workflow_dispatch:
     inputs:
+      use_temporary_database_credential:
+        description: Request a short-lived write-capable Supabase login; database operations remain separately gated.
+        required: false
+        default: false
+        type: boolean
       operation:
         description: Read-only exact-suffix dry run or separately approved candidate-profile apply.
         required: true
@@ -39,6 +44,7 @@ jobs:
       name: Production prospect migrations
     env:
       PROJECT_REF: ssxryjxifwiivghglqer
+      USE_TEMPORARY_DATABASE_CREDENTIAL: ${{ inputs.use_temporary_database_credential }}
       OPERATION: ${{ inputs.operation }}
       REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
       REVIEWED_RECEIPT_SHA256: ${{ inputs.reviewed_receipt_sha256 }}
@@ -59,13 +65,12 @@ jobs:
 
       - name: Validate exact reviewed source, receipt, configuration and database endpoint
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
           export CHECKOUT_SHA="$(git rev-parse HEAD)"
-          node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
-          node scripts/prospect-enrichment/additive-release-gate.mjs application-source > "$RUNNER_TEMP/source-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs application-source-authorization > "$RUNNER_TEMP/source-authorization-check.json"
           git fetch --no-tags origin main
           test "$CHECKOUT_SHA" = "$(git rev-parse origin/main)"
           test "$(supabase --version)" = "2.117.0"
@@ -75,9 +80,28 @@ jobs:
           grep -q -- '--include-all' "$RUNNER_TEMP/db-push-help.txt"
           grep -q -- '--db-url' "$RUNNER_TEMP/db-query-help.txt"
 
+      - name: Request explicitly approved temporary write-capable authentication
+        if: inputs.use_temporary_database_credential
+        env:
+          CREDENTIAL_GATE: candidate-release
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/temporary-credential.mjs
+
+      - name: Validate authorized database connection before database operations
+        env:
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CHECKOUT_SHA="$(git rev-parse HEAD)"
+          node scripts/prospect-enrichment/additive-release-gate.mjs application-source > "$RUNNER_TEMP/source-check.json"
+
       - name: Read exact additive ledger and operator-RPC catalog prerequisite
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -92,7 +116,7 @@ jobs:
 
       - name: Require exact candidate suffix dry-run and no seeds or roles
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -110,7 +134,7 @@ jobs:
         id: apply_migration
         if: inputs.operation == 'apply'
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
@@ -132,7 +156,7 @@ jobs:
       - name: Verify exact candidate-profile ledger source statements and empty pending plan
         if: always() && inputs.operation == 'apply' && steps.apply_migration.outputs.apply_started == 'true'
         env:
-          MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+          MIGRATION_DATABASE_URL: ${{ inputs.use_temporary_database_credential && env.MIGRATION_DATABASE_URL || secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
         run: |
           set -euo pipefail
