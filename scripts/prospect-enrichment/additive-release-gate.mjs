@@ -55,6 +55,11 @@ export const CATALOG_EXPECTED = Object.freeze({
 const fail = (code) => { throw new Error(code); };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+function exactRecordValues(actual, expected) {
+  return isRecord(actual) && isRecord(expected) &&
+    same(Object.keys(actual).sort(), Object.keys(expected).sort()) &&
+    Object.keys(expected).every(key => same(actual[key], expected[key]));
+}
 const migrationIdentity = (migrationPath) => {
   const filename = path.posix.basename(migrationPath);
   const match = /^(\d{14})_(.+)\.sql$/.exec(filename);
@@ -271,8 +276,8 @@ export function verifyOperatorRpcCatalog(rows, receipt, ledgerRows, sources) {
   const appliedPrerequisite = ledgerProof.appliedPrerequisite;
   if (appliedPrerequisite.sourceSha256 !== receipt.appliedPrerequisite?.sha256) fail("operator_rpc_catalog_ledger_binding_invalid");
   const actual = rows[0];
-  if (!same(Object.keys(actual).sort(), Object.keys(CATALOG_EXPECTED).sort()) || !same(actual, CATALOG_EXPECTED) ||
-      !same(receipt.appliedPrerequisite.expectedCatalog, CATALOG_EXPECTED)) fail("operator_rpc_catalog_mismatch");
+  if (!exactRecordValues(actual, CATALOG_EXPECTED) ||
+      !exactRecordValues(receipt.appliedPrerequisite.expectedCatalog, CATALOG_EXPECTED)) fail("operator_rpc_catalog_mismatch");
   return {
     prerequisite: "verified_applied_operator_rpc",
     ledgerStatementVerification: appliedPrerequisite.statementVerification,
@@ -281,13 +286,15 @@ export function verifyOperatorRpcCatalog(rows, receipt, ledgerRows, sources) {
 }
 
 /** Return fixed-schema, non-sensitive comparison statuses for a catalog mismatch. */
-export function operatorRpcCatalogDiagnostic(rows) {
+export function operatorRpcCatalogDiagnostic(rows, reviewedCatalog) {
   if (!Array.isArray(rows) || rows.length !== 1 || !isRecord(rows[0])) {
     return {
       schemaVersion: "operator-rpc-catalog-diagnostic/v1",
       outcome: "unavailable",
       rowCount: Array.isArray(rows) ? rows.length : null,
       keyShape: "unavailable",
+      keyOrder: "unavailable",
+      receiptComparison: "unavailable",
       mismatchedProperties: [],
       properties: null,
     };
@@ -311,11 +318,16 @@ export function operatorRpcCatalogDiagnostic(rows) {
   };
   const mismatchedProperties = Object.entries(properties).filter(([, result]) => result === "mismatch").map(([key]) => key);
   const keyShape = same(actualKeys, expectedKeys) ? "exact" : "mismatch";
+  const keyOrder = same(Object.keys(actual), Object.keys(CATALOG_EXPECTED)) ? "same" : "different";
+  const receiptComparison = !isRecord(reviewedCatalog) ? "unavailable" :
+    exactRecordValues(reviewedCatalog, CATALOG_EXPECTED) ? "match" : "mismatch";
   return {
     schemaVersion: "operator-rpc-catalog-diagnostic/v1",
-    outcome: mismatchedProperties.length === 0 && keyShape === "exact" ? "verified" : "mismatch",
+    outcome: mismatchedProperties.length === 0 && keyShape === "exact" && receiptComparison === "match" ? "verified" : "mismatch",
     rowCount: 1,
     keyShape,
+    keyOrder,
+    receiptComparison,
     mismatchedProperties,
     properties,
   };
@@ -416,7 +428,7 @@ function main(args) {
       console.log(JSON.stringify(verifyOperatorRpcCatalog(rows, receipt, ledgerRows, sources)));
     } catch (error) {
       if (error instanceof Error && error.message === "operator_rpc_catalog_mismatch") {
-        console.log(JSON.stringify(operatorRpcCatalogDiagnostic(rows)));
+        console.log(JSON.stringify(operatorRpcCatalogDiagnostic(rows, receipt.appliedPrerequisite?.expectedCatalog)));
       }
       throw error;
     }
