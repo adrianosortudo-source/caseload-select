@@ -88,8 +88,8 @@ export function createRecoveryEvidence(binding, receiptsDir, current, now = Date
   if (!exact(binding, ["runId", "runAttempt", "sourceSha", "projectRef", "receiptSha256", "priorArtifactId", "priorArtifactSha256"]) ||
       !/^[1-9][0-9]*$/.test(binding.runId) || binding.runAttempt !== "1" || !/^[a-f0-9]{40}$/.test(binding.sourceSha) ||
       binding.projectRef !== PROJECT_REF || !/^[a-f0-9]{64}$/.test(binding.receiptSha256) || binding.priorArtifactId !== FAILED_RECEIPTS_ARTIFACT_ID || binding.priorArtifactSha256 !== FAILED_RECEIPTS_ARTIFACT_SHA256) fail("candidate_recovery_binding_invalid");
-  if (!exact(current, ["appliedPrefixLength", "pending", "planUpToDate", "fullLedgerMatchesSource", "operatorRpcVerified"]) ||
-      current.appliedPrefixLength !== 9 || !same(current.pending, REMAINING) || current.planUpToDate !== false || current.fullLedgerMatchesSource !== true || current.operatorRpcVerified !== true) fail("candidate_recovery_live_state_invalid");
+  if (!exact(current, ["appliedPrefixLength", "pending", "planUpToDate", "fullLedgerMatchesSource", "operatorRpcVerified", "sessionStatementTimeoutVerified"]) ||
+      current.appliedPrefixLength !== 9 || !same(current.pending, REMAINING) || current.planUpToDate !== false || current.fullLedgerMatchesSource !== true || current.operatorRpcVerified !== true || current.sessionStatementTimeoutVerified !== true) fail("candidate_recovery_live_state_invalid");
   const files = filesAt(receiptsDir);
   return { schemaVersion: "prospect-candidate-suffix-recovery/v1", binding, createdAt: new Date(now).toISOString(), expiresAt: new Date(now + 86400000).toISOString(),
     priorFiles: Object.fromEntries(RECOVERY_FILES.map(name => [name, sha256(files[name])])), current };
@@ -101,8 +101,8 @@ export function verifyRecoveryEvidence(evidence, binding, receiptsDir, now = Dat
   if (!Number.isFinite(created) || !Number.isFinite(expires) || created > now || expires <= now || expires - created !== 86400000) fail("candidate_recovery_evidence_expired");
   const files = filesAt(receiptsDir), hashes = Object.fromEntries(RECOVERY_FILES.map(name => [name, sha256(files[name])]));
   if (!same(hashes, evidence.priorFiles)) fail("candidate_recovery_prior_evidence_changed");
-  if (!exact(evidence.current, ["appliedPrefixLength", "pending", "planUpToDate", "fullLedgerMatchesSource", "operatorRpcVerified"]) ||
-      evidence.current.appliedPrefixLength !== 9 || !same(evidence.current.pending, REMAINING) || evidence.current.planUpToDate !== false || evidence.current.fullLedgerMatchesSource !== true || evidence.current.operatorRpcVerified !== true) fail("candidate_recovery_live_evidence_invalid");
+  if (!exact(evidence.current, ["appliedPrefixLength", "pending", "planUpToDate", "fullLedgerMatchesSource", "operatorRpcVerified", "sessionStatementTimeoutVerified"]) ||
+      evidence.current.appliedPrefixLength !== 9 || !same(evidence.current.pending, REMAINING) || evidence.current.planUpToDate !== false || evidence.current.fullLedgerMatchesSource !== true || evidence.current.operatorRpcVerified !== true || evidence.current.sessionStatementTimeoutVerified !== true) fail("candidate_recovery_live_evidence_invalid");
   return true;
 }
 
@@ -190,6 +190,22 @@ export function verifyRecoveryTimeoutBudget(remainingMs, processTimeoutMs, readb
     fail("candidate_recovery_credential_budget_insufficient");
   return true;
 }
+export function verifyRecoverySessionTimeout(payload) {
+  let result = payload;
+  if (typeof result === "string") {
+    try { result = JSON.parse(result); } catch { fail("candidate_recovery_session_timeout_unverified"); }
+  }
+  const rows = Array.isArray(result) ? result : result?.data ?? result?.rows;
+  if (!Array.isArray(rows) || rows.length !== 1 || rows[0]?.session_timeout_matches !== true) fail("candidate_recovery_session_timeout_unverified");
+  return true;
+}
+function verifySessionTimeout(raw, label) {
+  const sql = path.join(raw, label + "session-timeout.sql"), output = path.join(raw, label + "session-timeout.json");
+  fs.writeFileSync(sql, "SELECT current_setting('statement_timeout')::interval = interval '240 seconds' AS session_timeout_matches;\n");
+  query(sql, output);
+  verifyRecoverySessionTimeout(read(output));
+  return output;
+}
 function applyCoverage(recoveryDir, priorDir) {
   const binding = checkSource(), manifest = read(path.join(recoveryDir, "recovery-evidence.json"));
   verifyFailureArtifactMetadata(read(path.join(priorDir, "artifact-metadata.json"))); verifyFailureReceipts(priorDir);
@@ -204,6 +220,7 @@ function applyCoverage(recoveryDir, priorDir) {
   run(process.execPath, [path.join(ROOT, "scripts/prospect-enrichment/migration-gate.mjs"), "candidate-recovery-verify-stage", ROOT, staged.dir, staged.proof, "coverage"]);
   freshCredential(360000);
   verifyRecoveryTimeoutBudget(Number(process.env.TEMPORARY_DATABASE_EXPIRES_AT) - Date.now(), 300000, 60000);
+  verifySessionTimeout(raw, "coverage-");
   state.coverage = "started_unverified"; save(stateFile, state);
   try {
     run("supabase", ["db", "push", "--yes", "--include-all", "--skip-vault", "--output-format", "json", "--db-url", process.env.MIGRATION_DATABASE_URL], { cwd: staged.dir, timeout: 300000 });
@@ -233,6 +250,7 @@ function applyProfileLink(recoveryDir, priorDir) {
   exactDryRun(raw, "link-before-", staged.dir, [PROFILE_LINK]);
   run(process.execPath, [path.join(ROOT, "scripts/prospect-enrichment/migration-gate.mjs"), "candidate-recovery-verify-stage", ROOT, staged.dir, staged.proof, "profile-link"]);
   freshCredential(185000); verifyRecoveryTimeoutBudget(Number(process.env.TEMPORARY_DATABASE_EXPIRES_AT) - Date.now(), 120000, 60000);
+  verifySessionTimeout(raw, "link-");
   state.profileLink = "started_unverified"; save(stateFile, state);
   try {
     run("supabase", ["db", "push", "--yes", "--include-all", "--skip-vault", "--output-format", "json", "--db-url", process.env.MIGRATION_DATABASE_URL], { cwd: staged.dir, timeout: 120000 });
@@ -253,9 +271,10 @@ function currentReadOnly(dir, label) {
   const staged = stage("profile-link", label);
   const snapshotFiles = snapshot(dir, label);
   const plan = exactDryRun(dir, label, staged.dir, REMAINING);
+  verifySessionTimeout(dir, label);
   const ledger = read(snapshotFiles.ledgerCheck), full = read(snapshotFiles.fullCheck), catalog = read(snapshotFiles.catalogCheck);
   return { appliedPrefixLength: ledger.appliedPrefixLength, pending: [...REMAINING], planUpToDate: plan.upToDate,
-    fullLedgerMatchesSource: full.completeSourceCoverage === true && same(full.pendingPaths, REMAINING), operatorRpcVerified: catalog.prerequisite === "verified_applied_operator_rpc" };
+    fullLedgerMatchesSource: full.completeSourceCoverage === true && same(full.pendingPaths, REMAINING), operatorRpcVerified: catalog.prerequisite === "verified_applied_operator_rpc", sessionStatementTimeoutVerified: true };
 }
 function reconcile(recoveryDir) {
   verifyPreflight(recoveryDir);
@@ -271,9 +290,10 @@ function preflight(evidenceDir, priorDir) {
   verifyFailureReceipts(priorDir); freshCredential(30000);
   const raw = rootTemp("preflight"), staged = stage("profile-link", "preflight"), snapshotFiles = snapshot(raw, "preflight-");
   const plan = exactDryRun(raw, "preflight-", staged.dir, REMAINING);
+  verifySessionTimeout(raw, "preflight-");
   const ledger = read(snapshotFiles.ledgerCheck), full = read(snapshotFiles.fullCheck), catalog = read(snapshotFiles.catalogCheck);
   const current = { appliedPrefixLength: ledger.appliedPrefixLength, pending: [...REMAINING], planUpToDate: plan.upToDate,
-    fullLedgerMatchesSource: full.completeSourceCoverage === true && same(full.pendingPaths, REMAINING), operatorRpcVerified: catalog.prerequisite === "verified_applied_operator_rpc" };
+    fullLedgerMatchesSource: full.completeSourceCoverage === true && same(full.pendingPaths, REMAINING), operatorRpcVerified: catalog.prerequisite === "verified_applied_operator_rpc", sessionStatementTimeoutVerified: true };
   const manifest = createRecoveryEvidence(binding, priorDir, current); fs.mkdirSync(evidenceDir, { recursive: true });
   save(path.join(evidenceDir, "recovery-evidence.json"), manifest);
   const archivedPrior = path.join(evidenceDir, "prior"); fs.mkdirSync(archivedPrior, { recursive: true });

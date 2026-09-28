@@ -11,7 +11,7 @@ import { CANDIDATE_RELEASE_PATHS, PROJECT_REF, stageCandidateRecoveryWorkdir, ve
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const oldBinding = { runId: recovery.FAILED_RUN_ID, runAttempt: "1", sourceSha: recovery.FAILED_SOURCE_SHA, projectRef: PROJECT_REF, receiptSha256: recovery.FAILED_RECEIPT_SHA256 };
 const binding = { runId: "99999999999", runAttempt: "1", sourceSha: "a".repeat(40), projectRef: PROJECT_REF, receiptSha256: "b".repeat(64), priorArtifactId: recovery.FAILED_RECEIPTS_ARTIFACT_ID, priorArtifactSha256: recovery.FAILED_RECEIPTS_ARTIFACT_SHA256 };
-const current = { appliedPrefixLength: 9, pending: [...recovery.REMAINING], planUpToDate: false, fullLedgerMatchesSource: true, operatorRpcVerified: true };
+const current = { appliedPrefixLength: 9, pending: [...recovery.REMAINING], planUpToDate: false, fullLedgerMatchesSource: true, operatorRpcVerified: true, sessionStatementTimeoutVerified: true };
 
 function makePrior(t) {
   const tempRoot = path.resolve(root, "..", "..", "07_Prospects", ".candidate-recovery-tests"); fs.mkdirSync(tempRoot, { recursive: true });
@@ -81,6 +81,17 @@ test("database write timeouts leave an explicit read-back and cleanup reserve in
   assert.throws(() => recovery.verifyRecoveryTimeoutBudget(Number.NaN, 210000, 60000), /candidate_recovery_credential_budget_insufficient/);
 });
 
+test("recovery requires the live PostgreSQL session to confirm its 240-second statement timeout", t => {
+  assert.equal(recovery.verifyRecoverySessionTimeout([{ session_timeout_matches: true }]), true);
+  assert.equal(recovery.verifyRecoverySessionTimeout(JSON.stringify([{ session_timeout_matches: true }])), true);
+  for (const value of [[], [{ session_timeout_matches: false }], [{ session_timeout_matches: true }, { session_timeout_matches: true }], { error: "query failed" }, "not json"]) {
+    assert.throws(() => recovery.verifyRecoverySessionTimeout(value), /candidate_recovery_session_timeout_unverified/);
+  }
+  const dir = makePrior(t);
+  const invalid = { ...current, sessionStatementTimeoutVerified: false };
+  assert.throws(() => recovery.createRecoveryEvidence(binding, dir, invalid, 1800000000000), /candidate_recovery_live_state_invalid/);
+});
+
 test("migration staging excludes only the final link during coverage, then restores it", t => {
   const tempRoot = path.resolve(root, "..", "..", "07_Prospects", ".candidate-recovery-tests"); fs.mkdirSync(tempRoot, { recursive: true });
   const base = fs.mkdtempSync(path.join(tempRoot, "candidate-stage-"));
@@ -114,9 +125,10 @@ test("recovery workflow requires two sequential environment reviews and blocks t
   const final = steps.indexOf("Apply final profile link only after coverage receipt is verified");
   assert.ok(coverage >= 0 && final > coverage);
   const reviewSummary = workflow.jobs.reconcile.steps.find(step => step.name === "Present exact partial ledger and remaining suffix for second protected review").run;
-  assert.match(reviewSummary, /per-session PostgreSQL statement timeout of 240 seconds/);
+  assert.match(reviewSummary, /live PostgreSQL session reports exactly 240 seconds/);
   assert.match(reviewSummary, /300-second CLI hard timeout/);
   assert.match(reviewSummary, /360 seconds credential life including a 60-second read-back reserve/);
+  assert.match(reviewSummary, /live PostgreSQL session reports exactly 240 seconds/);
   assert.equal(workflow.jobs.apply.steps[final].if, undefined, "GitHub default success gating keeps later phases stopped on an unverified result");
   assert.ok(workflow.jobs.apply.steps.slice(coverage + 1, final).some(step => step.name === "Acquire a new credential only after verified coverage"));
 });
