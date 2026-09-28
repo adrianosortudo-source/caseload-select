@@ -18,6 +18,7 @@ import {
   createReleaseReceipt,
   ledgerQuery,
   summarizeLedgerPayload,
+  operatorRpcCatalogDiagnostic,
   verifyLedgerState,
   verifyApplicationGate,
   verifyCandidateCompletePrefix,
@@ -238,6 +239,29 @@ test("operator RPC catalog accepts only the reviewed security, definition, and e
   assert.throws(() => verifyOperatorRpcCatalog([CATALOG_EXPECTED, CATALOG_EXPECTED], fakeReceipt, ledgerRows, fakeSources), /catalog_ambiguous/);
 });
 
+test("operator RPC catalog diagnostic reports only fixed comparison statuses", () => {
+  const matching = operatorRpcCatalogDiagnostic([CATALOG_EXPECTED]);
+  assert.equal(matching.outcome, "verified");
+  assert.equal(matching.keyShape, "exact");
+  assert.deepEqual(matching.mismatchedProperties, []);
+  const mismatch = operatorRpcCatalogDiagnostic([{
+    ...CATALOG_EXPECTED,
+    searchPathSetting: "postgres://private-dsn",
+    definitionMd5: "SECRET_TOKEN_VALUE",
+    injectedField: "SELECT private_data",
+  }]);
+  assert.equal(mismatch.outcome, "mismatch");
+  assert.equal(mismatch.keyShape, "mismatch");
+  assert.deepEqual(mismatch.mismatchedProperties, ["searchPathSetting", "definitionMd5"]);
+  assert.ok(Object.values(mismatch.properties).every(value => ["match", "mismatch"].includes(value)));
+  const serialized = JSON.stringify(mismatch);
+  for (const secret of ["private-dsn", "SECRET_TOKEN_VALUE", "SELECT private_data"]) assert.equal(serialized.includes(secret), false);
+  for (const rows of [[], [CATALOG_EXPECTED, CATALOG_EXPECTED], null]) {
+    const unavailable = operatorRpcCatalogDiagnostic(rows);
+    assert.equal(unavailable.outcome, "unavailable");
+    assert.equal(unavailable.properties, null);
+  }
+});
 test("source authorization accepts only reviewed manual main dispatch with direct TLS database URL", async (t) => {
   assert.equal(verifySourceGate(gate).operation, "dry-run");
   for (const [label, change] of [
