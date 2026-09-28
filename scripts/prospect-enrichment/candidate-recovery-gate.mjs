@@ -179,15 +179,6 @@ function stage(step, name = step) {
   run(process.execPath, [path.join(ROOT, "scripts/prospect-enrichment/migration-gate.mjs"), "candidate-recovery-verify-stage", ROOT, dir, proofFile, step]);
   return { dir, proof: proofFile };
 }
-function checkRoleTimeout(expected) {
-  const sql = path.join(rootTemp("sql"), "role-timeout-check.sql"); fs.mkdirSync(path.dirname(sql), { recursive: true });
-  const predicate = expected ? "EXISTS (SELECT 1 FROM pg_roles r, LATERAL unnest(coalesce(r.rolconfig, ARRAY[]::text[])) c WHERE r.rolname = session_user AND split_part(c,'=',1) = 'statement_timeout' AND split_part(c,'=',2)::interval = interval '180 seconds')" :
-    "NOT EXISTS (SELECT 1 FROM pg_roles r, LATERAL unnest(coalesce(r.rolconfig, ARRAY[]::text[])) c WHERE r.rolname = session_user AND c LIKE 'statement_timeout=%')";
-  fs.writeFileSync(sql, `SELECT (${predicate}) AND ${expected ? "current_setting('statement_timeout')::interval = interval '180 seconds'" : "true"} AS setting_matches;\n`);
-  const output = path.join(rootTemp("sql"), "role-timeout-check.json"); query(sql, output);
-  const payload = read(output), rows = Array.isArray(payload) ? payload : payload.data ?? payload.rows;
-  if (!Array.isArray(rows) || rows.length !== 1 || rows[0].setting_matches !== true) fail("candidate_recovery_role_timeout_setting_invalid");
-}
 function freshCredential(minimumRemaining) {
   const issued = Number(process.env.TEMPORARY_DATABASE_ISSUED_AT), expires = Number(process.env.TEMPORARY_DATABASE_EXPIRES_AT);
   if (!Number.isSafeInteger(issued) || !Number.isSafeInteger(expires) || issued > Date.now() || expires - Date.now() < minimumRemaining) fail("candidate_recovery_credential_expired");
@@ -211,15 +202,10 @@ function applyCoverage(recoveryDir, priorDir) {
   if (before.ledgerCheck && !same(read(before.ledgerCheck).pending, REMAINING.map(p => path.posix.basename(p)))) fail("candidate_recovery_coverage_prefix_changed");
   const dry = exactDryRun(raw, "coverage-before-", staged.dir, [COVERAGE]);
   run(process.execPath, [path.join(ROOT, "scripts/prospect-enrichment/migration-gate.mjs"), "candidate-recovery-verify-stage", ROOT, staged.dir, staged.proof, "coverage"]);
-  freshCredential(240000);
-  const alter = path.join(raw, "set-timeout.sql"); fs.writeFileSync(alter, "ALTER ROLE SESSION_USER SET statement_timeout = '180s';\n");
+  freshCredential(270000);
+  verifyRecoveryTimeoutBudget(Number(process.env.TEMPORARY_DATABASE_EXPIRES_AT) - Date.now(), 210000, 60000);
   state.coverage = "started_unverified"; save(stateFile, state);
-  let error;
   try {
-    checkRoleTimeout(false);
-    query(alter, path.join(raw, "set-timeout.json")); checkRoleTimeout(true);
-    freshCredential(275000);
-    verifyRecoveryTimeoutBudget(Number(process.env.TEMPORARY_DATABASE_EXPIRES_AT) - Date.now(), 210000, 60000);
     run("supabase", ["db", "push", "--yes", "--include-all", "--skip-vault", "--output-format", "json", "--db-url", process.env.MIGRATION_DATABASE_URL], { cwd: staged.dir, timeout: 210000 });
     const after = snapshot(raw, "coverage-after-", [PROFILE_LINK], 10);
     if (!same(read(after.ledgerCheck).pending, [path.posix.basename(PROFILE_LINK)]) || !same(read(after.fullCheck).pendingPaths, [PROFILE_LINK])) fail("candidate_recovery_coverage_readback_invalid");
@@ -230,15 +216,11 @@ function applyCoverage(recoveryDir, priorDir) {
     query(check, path.join(raw, "coverage-catalog-check.json"));
     const catalog = read(path.join(raw, "coverage-catalog-check.json")), rows = Array.isArray(catalog) ? catalog : catalog.data ?? catalog.rows;
     if (!Array.isArray(rows) || rows.length !== 1 || rows[0].list_candidates_present !== true || rows[0].legacy_projection_trigger_present !== true) fail("candidate_recovery_coverage_catalog_invalid");
-  } catch (caught) { error = caught; }
-  finally {
-    try {
-      freshCredential(30000); const reset = path.join(raw, "reset-timeout.sql"); fs.writeFileSync(reset, "ALTER ROLE SESSION_USER RESET statement_timeout;\n");
-      query(reset, path.join(raw, "reset-timeout.json")); checkRoleTimeout(false); save(path.join(raw, "timeout-cleanup.json"), { roleSettingResetVerified: true });
-    } catch { save(path.join(raw, "timeout-cleanup.json"), { roleSettingResetVerified: false, temporaryRoleExpires: true }); error ??= Error("candidate_recovery_timeout_cleanup_unverified"); }
+  } catch (error) {
+    save(path.join(raw, "recovery-marker.json"), { phase: "candidate-coverage", state: "started_unverified", replayAllowed: false, readOnlyReconciliationRequired: true });
+    throw error;
   }
-  if (error) { save(path.join(raw, "recovery-marker.json"), { phase: "candidate-coverage", state: "started_unverified", replayAllowed: false, readOnlyReconciliationRequired: true }); throw error; }
-  state.coverage = "verified"; save(stateFile, state); save(path.join(raw, "coverage-receipt.json"), { binding, migration: COVERAGE, state: "verified", dryRun: dry, databaseStatementTimeoutMs: 180000, processTimeoutMs: 210000, readbackAndCleanupReserveMs: 60000, roleSettingResetVerified: true });
+  state.coverage = "verified"; save(stateFile, state); save(path.join(raw, "coverage-receipt.json"), { binding, migration: COVERAGE, state: "verified", dryRun: dry, processTimeoutMs: 210000, readbackReserveMs: 60000 });
 }
 
 function applyProfileLink(recoveryDir, priorDir) {
