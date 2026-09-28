@@ -228,6 +228,8 @@ test("operator RPC catalog accepts only the reviewed security, definition, and e
   assert.equal(catalogProof.prerequisite, "verified_applied_operator_rpc");
   assert.equal(catalogProof.ledgerStatementVerification, "ledger_statements_match_reviewed_source");
   assert.deepEqual(catalogProof.catalog, CATALOG_EXPECTED);
+  const reorderedCatalog = Object.fromEntries(Object.entries(CATALOG_EXPECTED).reverse());
+  assert.equal(verifyOperatorRpcCatalog([reorderedCatalog], fakeReceipt, ledgerRows, fakeSources).prerequisite, "verified_applied_operator_rpc");
   for (const changed of [
     { ...CATALOG_EXPECTED, definitionMd5: "0".repeat(32) },
     { ...CATALOG_EXPECTED, securityDefiner: false },
@@ -240,10 +242,20 @@ test("operator RPC catalog accepts only the reviewed security, definition, and e
 });
 
 test("operator RPC catalog diagnostic reports only fixed comparison statuses", () => {
-  const matching = operatorRpcCatalogDiagnostic([CATALOG_EXPECTED]);
+  const matching = operatorRpcCatalogDiagnostic([CATALOG_EXPECTED], CATALOG_EXPECTED);
   assert.equal(matching.outcome, "verified");
   assert.equal(matching.keyShape, "exact");
+  assert.equal(matching.keyOrder, "same");
+  assert.equal(matching.receiptComparison, "match");
   assert.deepEqual(matching.mismatchedProperties, []);
+  const reordered = operatorRpcCatalogDiagnostic([Object.fromEntries(Object.entries(CATALOG_EXPECTED).reverse())], CATALOG_EXPECTED);
+  assert.equal(reordered.outcome, "verified");
+  assert.equal(reordered.keyShape, "exact");
+  assert.equal(reordered.keyOrder, "different");
+  assert.equal(reordered.receiptComparison, "match");
+  const receiptMismatch = operatorRpcCatalogDiagnostic([CATALOG_EXPECTED], { ...CATALOG_EXPECTED, securityDefiner: false });
+  assert.equal(receiptMismatch.outcome, "mismatch");
+  assert.equal(receiptMismatch.receiptComparison, "mismatch");
   const mismatch = operatorRpcCatalogDiagnostic([{
     ...CATALOG_EXPECTED,
     searchPathSetting: "postgres://private-dsn",
@@ -260,6 +272,7 @@ test("operator RPC catalog diagnostic reports only fixed comparison statuses", (
     const unavailable = operatorRpcCatalogDiagnostic(rows);
     assert.equal(unavailable.outcome, "unavailable");
     assert.equal(unavailable.properties, null);
+    assert.equal(unavailable.receiptComparison, "unavailable");
   }
 });
 test("source authorization accepts only reviewed manual main dispatch with direct TLS database URL", async (t) => {
