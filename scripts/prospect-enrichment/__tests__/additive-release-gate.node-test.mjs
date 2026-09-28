@@ -152,6 +152,11 @@ test("missing statements are allowed only for the applied RPC when its exact liv
     assert.equal(blankProof.appliedPrerequisite.statementVerification, "operator_rpc_catalog_contract_required");
     assert.equal(verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, blankRows, fakeSources).ledgerStatementVerification, "operator_rpc_catalog_contract_required");
   }
+  const outerWhitespaceRows = rowsForPrefix(1).map(row => ({ ...row, statements: row.statements.map(statement => ` \n${statement}\t `) }));
+  const outerWhitespaceProof = verifyLedgerState(outerWhitespaceRows, fakeReceipt, fakeSources);
+  assert.equal(outerWhitespaceProof.appliedPrerequisite.statementContentMatchesReviewedSource, true);
+  assert.equal(outerWhitespaceProof.appliedPrerequisite.statementVerification, "ledger_statements_match_reviewed_source");
+  assert.equal(outerWhitespaceProof.appliedMigrations.length, 1);
   const releaseRows = rowsForPrefix(1).map(row => row.version === MIGRATION_PATHS[0].match(/(\d{14})_/)[1] ? { ...row, statements: null } : row);
   assert.throws(() => verifyLedgerState(releaseRows, fakeReceipt, fakeSources), /ledger_statements_missing/);
   for (const blankStatements of [[""], ["   ", "\n\t"]]) {
