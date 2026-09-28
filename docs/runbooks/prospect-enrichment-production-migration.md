@@ -1,5 +1,7 @@
 # Prospect enrichment production migration
 
+For the authorized completion task's initial eleven-pending state, use [the consolidated one-run release](./prospect-enrichment-complete-release.md). Its second protected job reviews the first job's exact evidence and then executes the existing qualification repair, six-file and candidate guards serially. The separate dispatch instructions below remain the recovery/reference path; they are not the default for that consolidated release.
+
 This workflow first reconciles verified production migration history, then
 prepares and, after its own production approval, applies only the six ordered
 migrations in scripts/prospect-enrichment/migration-release.json to project

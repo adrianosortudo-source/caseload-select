@@ -1,0 +1,219 @@
+name: Complete reviewed prospect enrichment release
+
+'on':
+  workflow_dispatch:
+    inputs:
+      reviewed_source_sha:
+        description: Exact reviewed current main SHA
+        required: true
+        type: string
+      reviewed_receipt_sha256:
+        description: Exact committed additive receipt SHA-256
+        required: true
+        type: string
+      use_temporary_database_credential:
+        description: Authorize one bounded temporary credential per protected preflight or release phase
+        required: true
+        default: false
+        type: boolean
+      repair_confirmation:
+        description: Enter RECONCILE-QUALIFICATION-HISTORY-V1
+        required: true
+        type: string
+      enrichment_confirmation:
+        description: Enter APPLY-PROSPECT-ENRICHMENT-V1
+        required: true
+        type: string
+      candidate_confirmation:
+        description: Enter APPLY-PROSPECT-CANDIDATE-PROFILES-V1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: gta-prospect-migrations-production
+  cancel-in-progress: false
+env:
+  PROJECT_REF: ssxryjxifwiivghglqer
+  USE_TEMPORARY_DATABASE_CREDENTIAL: ${{ inputs.use_temporary_database_credential }}
+  REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+  REVIEWED_RECEIPT_SHA256: ${{ inputs.reviewed_receipt_sha256 }}
+  REPAIR_CONFIRMATION: ${{ inputs.repair_confirmation }}
+  ENRICHMENT_CONFIRMATION: ${{ inputs.enrichment_confirmation }}
+  CANDIDATE_CONFIRMATION: ${{ inputs.candidate_confirmation }}
+
+jobs:
+  preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: Production prospect migrations
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      manifest_sha256: ${{ steps.preflight.outputs.manifest_sha256 }}
+    env:
+      CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_SHA }}
+      CONFIGURED_RECEIPT_SHA256: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_RECEIPT_SHA256 }}
+      COMPLETE_RELEASE_DIR: ${{ runner.temp }}/complete-release
+    services:
+      postgres:
+        image: postgres:17.6-alpine3.21
+        env:
+          POSTGRES_PASSWORD: scratch-only-not-production
+          POSTGRES_DB: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Verify exact source and all release confirmations before authentication
+        run: node scripts/prospect-enrichment/complete-release-gate.mjs source-authorization
+      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520
+        with:
+          version: 2.117.0
+      - name: Verify pinned CLI interfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(supabase --version)" = "2.117.0"
+          supabase db push --help | grep -q -- '--include-all'
+          supabase db query --help | grep -q -- '--db-url'
+          supabase migration repair --help | grep -q -- '--status'
+      - name: Acquire one approved preflight credential
+        env:
+          COMPLETE_PHASE: preflight
+          CREDENTIAL_GATE: complete-release
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned TLS trust
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Read-only full ledger, catalog and exact eleven-file preflight
+        id: preflight
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: node scripts/prospect-enrichment/complete-release-gate.mjs preflight "$RUNNER_TEMP/preflight-evidence"
+      - name: Upload immutable reviewed preflight evidence
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prospect-complete-release-preflight
+          path: ${{ runner.temp }}/preflight-evidence
+          if-no-files-found: error
+      - name: Present evidence for the separate production review
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+          MANIFEST_DIGEST: ${{ steps.preflight.outputs.manifest_sha256 }}
+        shell: bash
+        run: |
+          printf 'Review artifact %s (SHA-256 %s), manifest %s, run %s attempt %s, source %s, receipt %s.\n\nApprove the next protected job only after reviewing this evidence for the exact two-version history repair, six enrichment migrations and three candidate migrations.\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST_DIGEST" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain failed preflight checks
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prospect-complete-release-preflight-failure
+          path: ${{ runner.temp }}/preflight-evidence
+          if-no-files-found: warn
+
+  release:
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: Production prospect migrations
+    env:
+      CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_SHA }}
+      CONFIGURED_RECEIPT_SHA256: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_RECEIPT_SHA256 }}
+      COMPLETE_RELEASE_DIR: ${{ runner.temp }}/complete-release
+      EXPECTED_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact_id }}
+      EXPECTED_ARTIFACT_DIGEST: ${{ needs.preflight.outputs.artifact_digest }}
+      EXPECTED_MANIFEST_SHA256: ${{ needs.preflight.outputs.manifest_sha256 }}
+    services:
+      postgres:
+        image: postgres:17.6-alpine3.21
+        env:
+          POSTGRES_PASSWORD: scratch-only-not-production
+          POSTGRES_DB: postgres
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Validate same-run artifact identity and digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$EXPECTED_ARTIFACT_ID" > "$RUNNER_TEMP/artifact-metadata.json"
+          node scripts/prospect-enrichment/complete-release-gate.mjs verify-artifact "$RUNNER_TEMP/artifact-metadata.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.preflight.outputs.artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/reviewed-preflight
+      - name: Verify every evidence member and initialize one-use phase state
+        run: node scripts/prospect-enrichment/complete-release-gate.mjs prepare-release "$RUNNER_TEMP/reviewed-preflight"
+      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520
+        with:
+          version: 2.117.0
+      - name: Verify pinned release CLI interfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(supabase --version)" = "2.117.0"
+          supabase db push --help | grep -q -- '--include-all'
+          supabase db query --help | grep -q -- '--db-url'
+          supabase migration repair --help | grep -q -- '--status'
+      - name: Acquire one qualification-phase credential after evidence review
+        env:
+          COMPLETE_PHASE: qualification
+          CREDENTIAL_GATE: complete-release
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure qualification TLS trust
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Repair exact qualification history and verify delta
+        env:
+          POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
+        run: node scripts/prospect-enrichment/complete-release-gate.mjs qualification "$RUNNER_TEMP/release-evidence" "$RUNNER_TEMP/reviewed-preflight"
+      - name: Acquire one enrichment-phase credential after verified repair
+        env:
+          COMPLETE_PHASE: enrichment
+          CREDENTIAL_GATE: complete-release
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure enrichment TLS trust
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Apply and verify exact six enrichment migrations
+        run: node scripts/prospect-enrichment/complete-release-gate.mjs enrichment "$RUNNER_TEMP/release-evidence" "$RUNNER_TEMP/reviewed-preflight"
+      - name: Acquire one candidate-phase credential after verified enrichment
+        env:
+          COMPLETE_PHASE: candidate
+          CREDENTIAL_GATE: complete-release
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure candidate TLS trust
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Apply and verify exact three candidate migrations
+        run: node scripts/prospect-enrichment/complete-release-gate.mjs candidate "$RUNNER_TEMP/release-evidence" "$RUNNER_TEMP/reviewed-preflight"
+      - name: Preserve phase receipts and failure recovery evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prospect-complete-release-receipts
+          path: |
+            ${{ runner.temp }}/release-evidence
+            ${{ runner.temp }}/complete-release/phase-state.json
+          if-no-files-found: warn

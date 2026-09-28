@@ -134,7 +134,12 @@ export function verifyProductionWorkdir(sourceRoot, stagedRoot, proof) {
   if (!isRecord(proof) || !path.isAbsolute(stagedRoot) || fs.lstatSync(stagedRoot).isSymbolicLink()) fail("staged_proof_invalid");
   const source = sourceMigrationInventory(sourceRoot);
   const staged = sourceMigrationInventory(stagedRoot, { requirePreviewSources: false });
-  const excluded = new Set(PREVIEW_MIGRATION_PATHS);
+  if (proof.prerequisiteOnly !== undefined && proof.prerequisiteOnly !== true) fail("staged_proof_invalid");
+  const deferred = proof.prerequisiteOnly === true ? CANDIDATE_RELEASE_PATHS.slice(8) : [];
+  if (deferred.length && (proof.additiveReceiptSha256 !== sha256(fs.readFileSync(path.join(source.root, "scripts/prospect-enrichment/additive-release-review.json"))) ||
+      !same(proof.deferredCandidateMigrations?.map(item => item.path), deferred))) fail("prerequisite_receipt_prefix_mismatch");
+  if (deferred.length && !same(proof.deferredCandidateMigrations, JSON.parse(fs.readFileSync(path.join(source.root, "scripts/prospect-enrichment/additive-release-review.json"), "utf8")).migrations.slice(8))) fail("prerequisite_receipt_prefix_mismatch");
+  const excluded = new Set([...PREVIEW_MIGRATION_PATHS, ...deferred]);
   const included = source.migrations.filter(item => !excluded.has(item.path));
   if (staged.root !== proof.stagedRoot || !same(staged.migrations, included) || staged.migrations.length !== proof.migrationCount) fail("staged_migration_source_mismatch");
   const inventorySha256 = sha256(JSON.stringify(included.map(({ path, version, name, bytes, sha256: digest }) => ({ path, version, name, bytes, sha256: digest }))));
