@@ -1,0 +1,203 @@
+name: Recover reviewed prospect candidate suffix
+
+'on':
+  workflow_dispatch:
+    inputs:
+      reviewed_source_sha:
+        description: Exact current main SHA reviewed for recovery
+        required: true
+        type: string
+      reviewed_receipt_sha256:
+        description: SHA-256 of scripts/prospect-enrichment/additive-release-review.json
+        required: true
+        type: string
+      use_temporary_database_credential:
+        description: Authorize bounded temporary credentials after protected reviews
+        required: true
+        default: false
+        type: boolean
+      recovery_confirmation:
+        description: Enter RESUME-CANDIDATE-SUFFIX-36460908921-V1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: gta-prospect-migrations-production
+  cancel-in-progress: false
+env:
+  PROJECT_REF: ssxryjxifwiivghglqer
+  USE_TEMPORARY_DATABASE_CREDENTIAL: ${{ inputs.use_temporary_database_credential }}
+  REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+  REVIEWED_RECEIPT_SHA256: ${{ inputs.reviewed_receipt_sha256 }}
+  RECOVERY_CONFIRMATION: ${{ inputs.recovery_confirmation }}
+
+jobs:
+  reconcile:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: Production prospect migrations
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      manifest_sha256: ${{ steps.reconcile.outputs.manifest_sha256 }}
+    env:
+      CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_SHA }}
+      CONFIGURED_RECEIPT_SHA256: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_RECEIPT_SHA256 }}
+    steps:
+      - name: Create runner-local evidence directories
+        run: mkdir -p "$RUNNER_TEMP/failed-release" "$RUNNER_TEMP/recovery-preflight"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Verify exact current source and recovery instruction
+        run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs source-authorization
+      - name: Verify metadata for the fixed failed-run receipt artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/10987967959" > "$RUNNER_TEMP/failed-release/artifact-metadata.json"
+          node scripts/prospect-enrichment/candidate-recovery-gate.mjs verify-prior-artifact "$RUNNER_TEMP/failed-release/artifact-metadata.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: prospect-complete-release-receipts
+          run-id: 36460908921
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          path: ${{ runner.temp }}/failed-release
+          merge-multiple: true
+      - name: Verify failed-run phase receipts and exact partial state
+        run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs verify-prior-receipts "$RUNNER_TEMP/failed-release"
+      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520
+        with:
+          version: 2.117.0
+      - name: Verify pinned CLI interfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(supabase --version)" = "2.117.0"
+          supabase db push --help | grep -q -- '--include-all'
+          supabase db query --help | grep -q -- '--db-url'
+      - name: Acquire bounded preflight credential after first protected review
+        env:
+          COMPLETE_PHASE: preflight
+          CREDENTIAL_GATE: candidate-recovery
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned TLS trust
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Reconcile exact current state and produce evidence for second review
+        id: reconcile
+        run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs preflight "$RUNNER_TEMP/recovery-preflight" "$RUNNER_TEMP/failed-release"
+      - name: Upload immutable recovery review evidence
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prospect-candidate-suffix-recovery-preflight
+          path: ${{ runner.temp }}/recovery-preflight
+          if-no-files-found: error
+      - name: Present exact partial ledger and remaining suffix for second protected review
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+          MANIFEST_SHA256: ${{ steps.reconcile.outputs.manifest_sha256 }}
+        shell: bash
+        run: |
+          printf 'Review recovery artifact %s (SHA-256 %s), manifest %s, run %s attempt %s, source %s, receipt %s.\n\nThis recovery is bound to failed run 36460908921 and its verified prefix of nine migrations. Only candidate coverage and the final profile-link migration remain. The writer step refuses to apply the final migration unless coverage verifies first.\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST_SHA256" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain failed preflight evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prospect-candidate-suffix-recovery-preflight-failure
+          path: ${{ runner.temp }}/recovery-preflight
+          if-no-files-found: warn
+
+  apply:
+    needs: reconcile
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: Production prospect migrations
+    env:
+      CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_SHA }}
+      CONFIGURED_RECEIPT_SHA256: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_RECEIPT_SHA256 }}
+      EXPECTED_ARTIFACT_ID: ${{ needs.reconcile.outputs.artifact_id }}
+      EXPECTED_ARTIFACT_DIGEST: ${{ needs.reconcile.outputs.artifact_digest }}
+      EXPECTED_MANIFEST_SHA256: ${{ needs.reconcile.outputs.manifest_sha256 }}
+    steps:
+      - name: Create runner-local evidence directories
+        run: mkdir -p "$RUNNER_TEMP/recovery-preflight"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Verify same-run evidence artifact metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$EXPECTED_ARTIFACT_ID" > "$RUNNER_TEMP/recovery-artifact-metadata.json"
+          node scripts/prospect-enrichment/candidate-recovery-gate.mjs verify-recovery-artifact "$RUNNER_TEMP/recovery-artifact-metadata.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.reconcile.outputs.artifact_id }}
+          path: ${{ runner.temp }}/recovery-preflight
+          merge-multiple: true
+      - name: Verify complete preflight evidence before the second reviewer authorizes this job
+        run: |
+          test "$(sha256sum "$RUNNER_TEMP/recovery-preflight/recovery-evidence.json" | cut -d ' ' -f1)" = "$EXPECTED_MANIFEST_SHA256"
+          node scripts/prospect-enrichment/candidate-recovery-gate.mjs verify-preflight-self-contained "$RUNNER_TEMP/recovery-preflight"
+      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520
+        with:
+          version: 2.117.0
+      - name: Verify pinned CLI interfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(supabase --version)" = "2.117.0"
+          supabase db push --help | grep -q -- '--include-all'
+          supabase db query --help | grep -q -- '--db-url'
+      - name: Acquire fresh credential to recheck reviewed state
+        env:
+          COMPLETE_PHASE: reconcile
+          CREDENTIAL_GATE: candidate-recovery
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned TLS trust
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Reconcile live state again after second review
+        run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs reconcile "$RUNNER_TEMP/recovery-preflight"
+      - name: Acquire a fresh bounded credential for candidate coverage only
+        env:
+          COMPLETE_PHASE: coverage
+          CREDENTIAL_GATE: candidate-recovery
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned TLS trust for coverage migration
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Apply coverage migration, verify ledger and catalog, and reset the scoped timeout
+        run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs apply-coverage "$RUNNER_TEMP/recovery-preflight" "$RUNNER_TEMP/recovery-preflight/prior"
+      - name: Acquire a new credential only after verified coverage
+        env:
+          COMPLETE_PHASE: profile-link
+          CREDENTIAL_GATE: candidate-recovery
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned TLS trust for final profile-link migration
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Apply final profile link only after coverage receipt is verified
+        run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs apply-profile-link "$RUNNER_TEMP/recovery-preflight" "$RUNNER_TEMP/recovery-preflight/prior"
+      - name: Preserve all recovery receipts and failure evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prospect-candidate-suffix-recovery-receipts
+          path: ${{ runner.temp }}/candidate-recovery
+          if-no-files-found: warn

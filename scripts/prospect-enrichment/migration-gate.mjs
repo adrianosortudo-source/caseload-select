@@ -129,6 +129,28 @@ export function stageProductionWorkdir(sourceRoot, destinationRoot) {
   return stageMigrationWorkdir(sourceRoot, destinationRoot, []);
 }
 
+/** Stage the exact failed candidate suffix one migration at a time for reviewed recovery. */
+export function stageCandidateRecoveryWorkdir(sourceRoot, destinationRoot, step) {
+  const finalPath = "supabase/migrations/20260925200000_gta_prospect_operator_database_firm_profile_link.sql";
+  if (!["coverage", "profile-link"].includes(step)) fail("candidate_recovery_stage_invalid");
+  const deferred = step === "coverage" ? [finalPath] : [];
+  return { ...stageMigrationWorkdir(sourceRoot, destinationRoot, deferred), recoveryStep: step, deferred };
+}
+
+export function verifyCandidateRecoveryWorkdir(sourceRoot, stagedRoot, proof, step) {
+  const finalPath = "supabase/migrations/20260925200000_gta_prospect_operator_database_firm_profile_link.sql";
+  if (!["coverage", "profile-link"].includes(step) || !isRecord(proof) || proof.recoveryStep !== step ||
+      !same(proof.deferred, step === "coverage" ? [finalPath] : [])) fail("candidate_recovery_stage_invalid");
+  const source = sourceMigrationInventory(sourceRoot), staged = sourceMigrationInventory(stagedRoot, { requirePreviewSources: false });
+  const excluded = new Set([...PREVIEW_MIGRATION_PATHS, ...proof.deferred]);
+  const expected = source.migrations.filter(item => !excluded.has(item.path));
+  if (staged.root !== proof.stagedRoot || !same(staged.migrations, expected) || staged.migrations.length !== proof.migrationCount) fail("candidate_recovery_stage_mismatch");
+  const config = fs.readFileSync(path.join(source.root, "supabase", "config.toml"));
+  if (!config.equals(fs.readFileSync(path.join(staged.root, "supabase", "config.toml"))) || sha256(config) !== proof.configSha256) fail("candidate_recovery_stage_mismatch");
+  if (findProjectEnvFiles(file => fs.existsSync(path.join(staged.root, file))).length) fail("project_database_env_files_prohibited");
+  return { recoveryStep: step, migrationCount: staged.migrations.length, configSha256: proof.configSha256, verified: true };
+}
+
 /** Recheck the exact staged bytes after CLI planning and before the write. */
 export function verifyProductionWorkdir(sourceRoot, stagedRoot, proof) {
   if (!isRecord(proof) || !path.isAbsolute(stagedRoot) || fs.lstatSync(stagedRoot).isSymbolicLink()) fail("staged_proof_invalid");
@@ -489,6 +511,14 @@ async function main(args) {
     console.log(JSON.stringify(stageProductionWorkdir(rest[0], rest[1])));
     return;
   }
+  if (command === "candidate-recovery-stage" && rest.length === 3) {
+    console.log(JSON.stringify(stageCandidateRecoveryWorkdir(rest[0], rest[1], rest[2])));
+    return;
+  }
+  if (command === "candidate-recovery-verify-stage" && rest.length === 4) {
+    console.log(JSON.stringify(verifyCandidateRecoveryWorkdir(rest[0], rest[1], JSON.parse(fs.readFileSync(rest[2], "utf8")), rest[3])));
+    return;
+  }
   if (command === "verify-stage" && rest.length === 3) {
     console.log(JSON.stringify(verifyProductionWorkdir(rest[0], rest[1], JSON.parse(fs.readFileSync(rest[2], "utf8")))));
     return;
@@ -497,10 +527,10 @@ async function main(args) {
     process.stdout.write(fullLedgerQuery());
     return;
   }
-  if (command === "full-ledger" && rest.length === 3) {
+  if (command === "full-ledger" && (rest.length === 3 || rest.length === 4)) {
     const payload = JSON.parse(fs.readFileSync(rest[0], "utf8"));
     const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : payload?.rows;
-    console.log(JSON.stringify(verifyFullMigrationLedger(rows, rest[1], rest[2])));
+    console.log(JSON.stringify(verifyFullMigrationLedger(rows, rest[1], rest[2], rest.length === 4 ? JSON.parse(rest[3]) : undefined)));
     return;
   }
   if (command === "ledger-delta" && rest.length === 4) {
