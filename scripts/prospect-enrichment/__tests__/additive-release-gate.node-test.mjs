@@ -134,8 +134,19 @@ test("missing statements are allowed only for the applied RPC when its exact liv
   const emptyRows = rowsForPrefix(0).map(row => row.version === APPLIED_OPERATOR_RPC.version ? { ...row, statements: [] } : row);
   assert.equal(verifyLedgerState(emptyRows, fakeReceipt, fakeSources).appliedPrerequisite.statementCount, 0);
   assert.equal(verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, emptyRows, fakeSources).ledgerStatementVerification, "operator_rpc_catalog_contract_required");
+  for (const blankStatements of [[""], ["   ", "\n\t"]]) {
+    const blankRows = rowsForPrefix(0).map(row => row.version === APPLIED_OPERATOR_RPC.version ? { ...row, statements: blankStatements } : row);
+    const blankProof = verifyLedgerState(blankRows, fakeReceipt, fakeSources);
+    assert.equal(blankProof.appliedPrerequisite.statementCount, null);
+    assert.equal(blankProof.appliedPrerequisite.statementVerification, "operator_rpc_catalog_contract_required");
+    assert.equal(verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, blankRows, fakeSources).ledgerStatementVerification, "operator_rpc_catalog_contract_required");
+  }
   const releaseRows = rowsForPrefix(1).map(row => row.version === MIGRATION_PATHS[0].match(/(\d{14})_/)[1] ? { ...row, statements: null } : row);
   assert.throws(() => verifyLedgerState(releaseRows, fakeReceipt, fakeSources), /ledger_statements_missing/);
+  for (const blankStatements of [[""], ["   ", "\n\t"]]) {
+    const blankReleaseRows = rowsForPrefix(1).map(row => row.version === MIGRATION_PATHS[0].match(/(\d{14})_/)[1] ? { ...row, statements: blankStatements } : row);
+    assert.throws(() => verifyLedgerState(blankReleaseRows, fakeReceipt, fakeSources), /ledger_statements_missing/);
+  }
   assert.throws(() => verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, {
     ...proof,
     appliedPrerequisite: { ...proof.appliedPrerequisite, statementContentMatchesReviewedSource: false },
