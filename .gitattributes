@@ -27,3 +27,6 @@
 # any test or invoked in CI, but pinned proactively so it can never regress
 # into the same class of bug as *.mjs above if that changes.
 /supabase/run-migrations.js text eol=lf
+
+# Public migration CA is byte-pinned; preserve its downloaded PEM bytes.
+/scripts/prospect-enrichment/certificates/prod-ca-2021.crt -text

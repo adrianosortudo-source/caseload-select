@@ -18,6 +18,10 @@ The workflow `.github/workflows/prospect-candidate-additive-preflight.yml` is ma
 
 The existing six-migration workflow and its allowlist remain unchanged. The additive receipt does not silently expand that gate.
 
+### Verified database TLS trust
+
+The protected preflight, enrichment gate and candidate writer configure the reviewed public Supabase root CA after loading either static or temporary authentication. They add only `sslrootcert` pointing to the absolute checked-out certificate path and retain `sslmode=verify-full`. The connection gate checks the exact CA path and pinned bytes before database operations; arbitrary CA paths, duplicate options and ambient trust overrides fail closed. The absolute path survives CLI execution from staged migration directories. `database-tls-check.json` records only certificate and target metadata, never the connection URL or password. Certificate provenance and renewal instructions are in `scripts/prospect-enrichment/certificates/README.md`. A certificate failure must be repaired by reviewing the CA trust, never by disabling certificate or hostname validation.
+
 ## Separate candidate-profile release gate
 
 **Writer repair status:** PR #324 merged at `0caf0bce5d0bba3e9b841ee05a4a91951fa87604`; required CI, the real-Postgres contract, browser acceptance and Vercel checks passed. Do not dispatch the candidate writer until a protected read-only candidate preflight succeeds against the current `main` SHA. The preflight must prove the exact eleven-file release plan before any writer dry-run is considered. A production apply still requires its own reviewed dry-run artifact and protected environment approval. The production migration credential remains explicitly deferred, so the preflight and dependent production database workflows remain on hold.

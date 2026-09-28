@@ -4,7 +4,7 @@
 
 Never run `vercel --prod`, `vercel deploy --prod`, `vercel promote`, `vercel alias set`, `vercel rollback`, or `vercel redeploy --target production` in this repository, from any tool, agent, or working tree state. Production deploys happen exactly one way: open a PR against `main`, wait for all required CI checks, merge; GitHub auto-deploys merged `main` to Vercel.
 
-An agent may merge a PR only after all required checks pass and Adriano gives explicit approval to merge that specific PR, except under the standing prospect authorization below. Without either form of approval, leave the PR open and ask. Merge authorization concerns the GitHub merge only; it does not permit direct production deployment or bypass any required check.
+For work within a task Adriano has authorized, agents may commit, push, open PRs, and merge without separate approval for each PR. Before merging, verify the final diff is within the authorized scope, all required checks pass on the exact final head, the branch is current with main, and all required reviews and review threads are resolved. A task-scoped merge is a routine execution step: proceed and continue verification without asking again. This authority does not permit direct production deployment, bypassing required checks or provider-enforced reviews, or unrelated work.
 
 ### Standing prospect completion authorization (updated 2026-09-27)
 
@@ -19,7 +19,7 @@ Commit coherent changes and push immediately to origin on a `codex/` branch. Reu
 
 Operational authority comes from Adriano's task authorization, not from merging code. Within that authority, use the existing protected workflows and review/import sequence for the reviewed non-destructive release and research enrichment. Generate exact scope/hash/receipt records from real reviewed inputs; do not fabricate approval evidence. Preserve all provider-enforced environment/reviewer requirements. A mandatory independent human review or automatic approval rejection is an external gate, not something to bypass.
 
-The earlier explicit token-replacement deferral remains in force until Adriano lifts it. Do not replace or retry that credential while deferred. Continue independent work and record its exact hold. No authority is granted to erase evidence, guess identity links, clear substantive qualification/policy holds, reset a shared database password, disable required checks, or send outreach. Broader unrelated changes retain the original specific-approval rule.
+The earlier explicit token-replacement deferral remains in force until Adriano lifts it. Do not replace or retry that credential while deferred. Continue independent work and record its exact hold. No authority is granted to erase evidence, guess identity links, clear substantive qualification/policy holds, reset a shared database password, disable required checks, or send outreach. Work outside the authorized task requires scope authorization; this is not a per-PR approval requirement.
 
 Two dirty-tree direct deploys reached production on 2026-07-22 and clobbered other sessions' shipped work. A webhook alarm now emails the operator on every production deployment that is dirty, untraceable, or CI-failed, so violations are visible within about a minute.
 

@@ -81,6 +81,12 @@ jobs:
           set -euo pipefail
           node scripts/prospect-enrichment/temporary-credential.mjs
 
+      - name: Configure pinned Supabase database CA
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/configure-migration-tls.mjs
+
       - name: Validate authorized database connection before database operations
         shell: bash
         run: |
@@ -121,6 +127,7 @@ jobs:
           path: |
             scripts/prospect-enrichment/additive-release-review.json
             ${{ runner.temp }}/source-check.json
+            ${{ runner.temp }}/database-tls-check.json
             ${{ runner.temp }}/ledger-check.json
             ${{ runner.temp }}/staged-inventory.json
             ${{ runner.temp }}/full-ledger-check.json
