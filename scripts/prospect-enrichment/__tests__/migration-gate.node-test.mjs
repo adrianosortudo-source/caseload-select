@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -433,6 +433,19 @@ test("current eleven-migration tree stages only prerequisites, preserving separa
   git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "Synthetic source fixture"]);
   const staged = path.join(base, "staged");
   const proof = await stagePrerequisiteWorkdir(source, staged);
+  // The workflow executes a fresh CLI process; an imported-function test alone
+  // misses the circular dynamic import deadlock during entry-module evaluation.
+  const cliStage = destination => spawnSync(process.execPath, [
+    path.join(root, "scripts/prospect-enrichment/migration-gate.mjs"),
+    "stage-prerequisites", source, destination,
+  ], { cwd: root, encoding: "utf8", timeout: 30000 });
+  const cliStaged = path.join(base, "cli-staged");
+  const cli = cliStage(cliStaged);
+  assert.ifError(cli.error);
+  assert.equal(cli.status, 0, cli.stderr);
+  const cliProof = JSON.parse(cli.stdout);
+  assert.deepEqual(cliProof, { ...proof, stagedRoot: fs.realpathSync(cliStaged) });
+  assert.deepEqual(fs.readdirSync(path.join(cliStaged, "supabase/migrations")), fs.readdirSync(path.join(staged, "supabase/migrations")));
   assert.equal(proof.prerequisiteOnly, true);
   assert.deepEqual(proof.deferredCandidateMigrations, receipt.migrations.slice(8));
   const names = fs.readdirSync(path.join(staged, "supabase/migrations"));
@@ -454,6 +467,12 @@ test("current eleven-migration tree stages only prerequisites, preserving separa
   fs.writeFileSync(path.join(staged, "supabase/migrations/20990101000000_unknown.sql"), "SELECT 1;\n");
   assert.throws(() => verifyFullMigrationLedger(rows, staged, "complete"), /unexpected_full_history_delta/);
   fs.appendFileSync(path.join(source, candidate.path), "\n-- unreviewed source change\n");
+  const rejectedCli = cliStage(path.join(base, "cli-rejected"));
+  assert.ifError(rejectedCli.error);
+  assert.equal(rejectedCli.status, 1);
+  assert.equal(rejectedCli.stdout, "");
+  assert.equal(rejectedCli.stderr.trim(), "working_migration_source_differs_from_git_blob");
+  assert.equal(fs.existsSync(path.join(base, "cli-rejected")), false);
   await assert.rejects(stagePrerequisiteWorkdir(source, path.join(base, "changed")), /working_migration_source_differs_from_git_blob/);
   git(["add", "--", candidate.path]);
   git(["-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-m", "Unreviewed changed source fixture"]);

@@ -546,11 +546,12 @@ async function main(args) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  try { await main(process.argv.slice(2)); }
-  catch (error) {
+  // Finish module evaluation before staging dynamically imports the additive
+  // gate, which imports this module's shared validators in turn.
+  main(process.argv.slice(2)).catch(error => {
     // Never print raw query output, environment values or command failure payloads.
     const message = error instanceof Error ? error.message : "migration_gate_failed";
     process.stderr.write(/^[a-z0-9_]+$/.test(message) ? message + "\n" : "migration_gate_failed\n");
     process.exitCode = 1;
-  }
+  });
 }
