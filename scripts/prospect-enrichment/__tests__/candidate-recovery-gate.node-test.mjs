@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import yaml from "js-yaml";
+import { createRequire } from "node:module";
+const yaml = createRequire(import.meta.url)("js-yaml");
 import * as recovery from "../candidate-recovery-gate.mjs";
 import { CANDIDATE_RELEASE_PATHS, PROJECT_REF, stageCandidateRecoveryWorkdir, verifyCandidateRecoveryWorkdir } from "../migration-gate.mjs";
 
