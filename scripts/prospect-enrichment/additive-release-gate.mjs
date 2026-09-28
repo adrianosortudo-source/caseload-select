@@ -171,6 +171,10 @@ export function summarizeLedgerPayload(payload) {
         statementField: !statementsPresent ? "missing" : statements === null ? "null" : Array.isArray(statements) ? "array" : typeof statements,
         statementCount: Array.isArray(statements) ? statements.length : null,
         nonStringStatementCount: Array.isArray(statements) ? statements.filter((statement) => typeof statement !== "string").length : null,
+        statementArrayBlankOnly: Array.isArray(statements) && statements.length > 0 &&
+          statements.every((statement) => typeof statement === "string" && statement.trim() === ""),
+        statementEntryHasOuterWhitespace: Array.isArray(statements) &&
+          statements.some((statement) => typeof statement === "string" && statement.trim() !== statement),
       };
     }),
   };
@@ -195,16 +199,19 @@ export function verifyLedgerState(rows, receipt, sources) {
   const baselineSource = sources[APPLIED_OPERATOR_RPC.path];
   if (baselineRow.name !== BASELINE_IDENTITY.name) fail("applied_operator_rpc_ledger_name_mismatch");
   let baselineProof;
-  if (Array.isArray(baselineRow.statements) && baselineRow.statements.length > 0) {
+  const baselineStatementsUnavailable = baselineRow.statements === null || baselineRow.statements === undefined ||
+    (Array.isArray(baselineRow.statements) && (baselineRow.statements.length === 0 ||
+      baselineRow.statements.every(statement => typeof statement === "string" && statement.trim() === "")));
+  if (Array.isArray(baselineRow.statements) && baselineRow.statements.length > 0 && !baselineStatementsUnavailable) {
     baselineProof = {
       ...verifyLedgerStatements(baselineSource, baselineRow.statements),
       statementVerification: "ledger_statements_match_reviewed_source",
     };
-  } else if (baselineRow.statements === null || baselineRow.statements === undefined || Array.isArray(baselineRow.statements)) {
+  } else if (baselineStatementsUnavailable) {
     // This exception is limited to the already-applied operator RPC prerequisite.
     // Its missing history text requires the next protected step's exact catalog contract.
     baselineProof = {
-      statementCount: Array.isArray(baselineRow.statements) ? 0 : null,
+      statementCount: Array.isArray(baselineRow.statements) && baselineRow.statements.length === 0 ? 0 : null,
       sourceSha256: sourceSha256(baselineSource),
       ledgerStatementsSha256: null,
       statementContentMatchesReviewedSource: null,

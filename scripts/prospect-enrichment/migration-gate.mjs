@@ -421,14 +421,15 @@ export function verifyMigrationPlan(plan, manifest, phase) {
  */
 export function verifyLedgerStatements(source, statements) {
   if (!Array.isArray(statements) || statements.length === 0 ||
-      statements.some((s) => typeof s !== "string" || !s || s.trim() !== s)) fail("ledger_statements_missing");
+      statements.some((s) => typeof s !== "string" || s.trim() === "")) fail("ledger_statements_missing");
   const sql = source.toString("utf8");
   let offset = 0;
   const skipSeparators = () => {
     while (offset < sql.length && /[\s;]/u.test(sql[offset])) offset++;
   };
   skipSeparators();
-  for (const [index, statement] of statements.entries()) {
+  for (const [index, rawStatement] of statements.entries()) {
+    const statement = rawStatement.trim();
     if (!sql.startsWith(statement, offset)) fail("ledger_statement_content_mismatch");
     offset += statement.length;
     if (offset < sql.length && !/[\s;]/u.test(sql[offset])) fail("ledger_statement_boundary_mismatch");

@@ -106,11 +106,22 @@ test("ledger summary reports only row identity and statement-array shape", () =>
   assert.equal(summary.rowCount, 3);
   assert.equal(summary.rows[0].statementField, "null");
   assert.equal(summary.rows[0].statementCount, null);
+  assert.equal(summary.rows[0].statementArrayBlankOnly, false);
   assert.equal(summary.rows[1].statementCount, 1);
+  assert.equal(summary.rows[1].statementArrayBlankOnly, false);
+  assert.equal(summary.rows[1].statementEntryHasOuterWhitespace, false);
   assert.equal(summary.rows[2].identityRecognized, false);
   assert.equal(summary.rows[2].version, null);
   assert.equal(summary.rows[2].name, null);
   assert.doesNotMatch(JSON.stringify(summary), /private SQL|attacker SQL|secret/);
+  const blankSummary = summarizeLedgerPayload([{ version: "20260924180541", name: "restore_operator_membership_rpc", statements: [" "] }]);
+  assert.equal(blankSummary.rows[0].statementArrayBlankOnly, true);
+  assert.equal(blankSummary.rows[0].statementEntryHasOuterWhitespace, true);
+  assert.doesNotMatch(JSON.stringify(blankSummary), /statement contents|private SQL/);
+  const paddedSummary = summarizeLedgerPayload([{ version: "20260924180541", name: "restore_operator_membership_rpc", statements: [" private SQL "] }]);
+  assert.equal(paddedSummary.rows[0].statementArrayBlankOnly, false);
+  assert.equal(paddedSummary.rows[0].statementEntryHasOuterWhitespace, true);
+  assert.doesNotMatch(JSON.stringify(paddedSummary), /private SQL/);
 });
 
 test("ledger accepts only a verified applied RPC plus an exact ordered migration prefix", () => {
@@ -134,8 +145,24 @@ test("missing statements are allowed only for the applied RPC when its exact liv
   const emptyRows = rowsForPrefix(0).map(row => row.version === APPLIED_OPERATOR_RPC.version ? { ...row, statements: [] } : row);
   assert.equal(verifyLedgerState(emptyRows, fakeReceipt, fakeSources).appliedPrerequisite.statementCount, 0);
   assert.equal(verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, emptyRows, fakeSources).ledgerStatementVerification, "operator_rpc_catalog_contract_required");
+  for (const blankStatements of [[""], ["   ", "\n\t"]]) {
+    const blankRows = rowsForPrefix(0).map(row => row.version === APPLIED_OPERATOR_RPC.version ? { ...row, statements: blankStatements } : row);
+    const blankProof = verifyLedgerState(blankRows, fakeReceipt, fakeSources);
+    assert.equal(blankProof.appliedPrerequisite.statementCount, null);
+    assert.equal(blankProof.appliedPrerequisite.statementVerification, "operator_rpc_catalog_contract_required");
+    assert.equal(verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, blankRows, fakeSources).ledgerStatementVerification, "operator_rpc_catalog_contract_required");
+  }
+  const outerWhitespaceRows = rowsForPrefix(1).map(row => ({ ...row, statements: row.statements.map(statement => ` \n${statement}\t `) }));
+  const outerWhitespaceProof = verifyLedgerState(outerWhitespaceRows, fakeReceipt, fakeSources);
+  assert.equal(outerWhitespaceProof.appliedPrerequisite.statementContentMatchesReviewedSource, true);
+  assert.equal(outerWhitespaceProof.appliedPrerequisite.statementVerification, "ledger_statements_match_reviewed_source");
+  assert.equal(outerWhitespaceProof.appliedMigrations.length, 1);
   const releaseRows = rowsForPrefix(1).map(row => row.version === MIGRATION_PATHS[0].match(/(\d{14})_/)[1] ? { ...row, statements: null } : row);
   assert.throws(() => verifyLedgerState(releaseRows, fakeReceipt, fakeSources), /ledger_statements_missing/);
+  for (const blankStatements of [[""], ["   ", "\n\t"]]) {
+    const blankReleaseRows = rowsForPrefix(1).map(row => row.version === MIGRATION_PATHS[0].match(/(\d{14})_/)[1] ? { ...row, statements: blankStatements } : row);
+    assert.throws(() => verifyLedgerState(blankReleaseRows, fakeReceipt, fakeSources), /ledger_statements_missing/);
+  }
   assert.throws(() => verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, {
     ...proof,
     appliedPrerequisite: { ...proof.appliedPrerequisite, statementContentMatchesReviewedSource: false },
