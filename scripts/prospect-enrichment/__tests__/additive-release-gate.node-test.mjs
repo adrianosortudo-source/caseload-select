@@ -17,6 +17,7 @@ import {
   catalogQuery,
   createReleaseReceipt,
   ledgerQuery,
+  summarizeLedgerPayload,
   verifyLedgerState,
   verifyApplicationGate,
   verifyCandidateCompletePrefix,
@@ -95,6 +96,23 @@ test("ledger query is fixed to the eleven release migrations plus the applied RP
   assert.match(query, /ORDER BY version;\n$/);
 });
 
+test("ledger summary reports only row identity and statement-array shape", () => {
+  const summary = summarizeLedgerPayload({ data: [
+    { version: APPLIED_OPERATOR_RPC.version, name: APPLIED_OPERATOR_RPC.name, statements: null },
+    { version: "20260921120000", name: "prospect_qualification_evidence", statements: ["SELECT 'private SQL';"] },
+    { version: "attacker SQL SELECT secret", name: "private SQL", statements: [] },
+  ] });
+  assert.equal(summary.resultShape, "data_array");
+  assert.equal(summary.rowCount, 3);
+  assert.equal(summary.rows[0].statementField, "null");
+  assert.equal(summary.rows[0].statementCount, null);
+  assert.equal(summary.rows[1].statementCount, 1);
+  assert.equal(summary.rows[2].identityRecognized, false);
+  assert.equal(summary.rows[2].version, null);
+  assert.equal(summary.rows[2].name, null);
+  assert.doesNotMatch(JSON.stringify(summary), /private SQL|attacker SQL|secret/);
+});
+
 test("ledger accepts only a verified applied RPC plus an exact ordered migration prefix", () => {
   for (const count of [0, 1, 5, 9, 10, 11]) {
     const proof = verifyLedgerState(rowsForPrefix(count), fakeReceipt, fakeSources);
@@ -102,6 +120,26 @@ test("ledger accepts only a verified applied RPC plus an exact ordered migration
     assert.equal(proof.pending.length, 11 - count);
     assert.equal(proof.appliedPrerequisite.version, APPLIED_OPERATOR_RPC.version);
   }
+});
+
+test("missing statements are allowed only for the applied RPC when its exact live catalog contract passes", () => {
+  const rows = rowsForPrefix(0).map(row => row.version === APPLIED_OPERATOR_RPC.version ? { ...row, statements: null } : row);
+  const proof = verifyLedgerState(rows, fakeReceipt, fakeSources);
+  assert.equal(proof.appliedPrerequisite.statementContentMatchesReviewedSource, null);
+  assert.equal(proof.appliedPrerequisite.statementVerification, "operator_rpc_catalog_contract_required");
+  assert.equal(
+    verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, rows, fakeSources).ledgerStatementVerification,
+    "operator_rpc_catalog_contract_required",
+  );
+  const emptyRows = rowsForPrefix(0).map(row => row.version === APPLIED_OPERATOR_RPC.version ? { ...row, statements: [] } : row);
+  assert.equal(verifyLedgerState(emptyRows, fakeReceipt, fakeSources).appliedPrerequisite.statementCount, 0);
+  assert.equal(verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, emptyRows, fakeSources).ledgerStatementVerification, "operator_rpc_catalog_contract_required");
+  const releaseRows = rowsForPrefix(1).map(row => row.version === MIGRATION_PATHS[0].match(/(\d{14})_/)[1] ? { ...row, statements: null } : row);
+  assert.throws(() => verifyLedgerState(releaseRows, fakeReceipt, fakeSources), /ledger_statements_missing/);
+  assert.throws(() => verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, {
+    ...proof,
+    appliedPrerequisite: { ...proof.appliedPrerequisite, statementContentMatchesReviewedSource: false },
+  }, fakeSources), /operator_rpc_catalog_ledger_binding_invalid/);
 });
 
 test("candidate apply requires the exact eight prerequisites and derives the three-migration candidate suffix", () => {
@@ -156,16 +194,21 @@ test("operator RPC catalog accepts only the reviewed security, definition, and e
   assert.match(catalogQuery(), /has_function_privilege\('anon'/);
   assert.match(catalogQuery(), /has_function_privilege\('authenticated'/);
   assert.match(catalogQuery(), /aclexplode/);
-  assert.deepEqual(verifyOperatorRpcCatalog([CATALOG_EXPECTED], receipt), { prerequisite: "verified_applied_operator_rpc", catalog: CATALOG_EXPECTED });
+  const ledgerRows = rowsForPrefix(0);
+  const ledgerProof = verifyLedgerState(ledgerRows, fakeReceipt, fakeSources);
+  const catalogProof = verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, ledgerRows, fakeSources);
+  assert.equal(catalogProof.prerequisite, "verified_applied_operator_rpc");
+  assert.equal(catalogProof.ledgerStatementVerification, "ledger_statements_match_reviewed_source");
+  assert.deepEqual(catalogProof.catalog, CATALOG_EXPECTED);
   for (const changed of [
     { ...CATALOG_EXPECTED, definitionMd5: "0".repeat(32) },
     { ...CATALOG_EXPECTED, securityDefiner: false },
     { ...CATALOG_EXPECTED, searchPathSetting: "search_path=public" },
     { ...CATALOG_EXPECTED, anonExecute: true },
     { ...CATALOG_EXPECTED, nonOwnerExecuteGrantees: ["authenticated", "service_role"] },
-  ]) assert.throws(() => verifyOperatorRpcCatalog([changed], receipt), /catalog_mismatch/);
-  assert.throws(() => verifyOperatorRpcCatalog([], receipt), /catalog_ambiguous/);
-  assert.throws(() => verifyOperatorRpcCatalog([CATALOG_EXPECTED, CATALOG_EXPECTED], receipt), /catalog_ambiguous/);
+  ]) assert.throws(() => verifyOperatorRpcCatalog([changed], fakeReceipt, ledgerRows, fakeSources), /catalog_mismatch/);
+  assert.throws(() => verifyOperatorRpcCatalog([], fakeReceipt, ledgerRows, fakeSources), /catalog_ambiguous/);
+  assert.throws(() => verifyOperatorRpcCatalog([CATALOG_EXPECTED, CATALOG_EXPECTED], fakeReceipt, ledgerRows, fakeSources), /catalog_ambiguous/);
 });
 
 test("source authorization accepts only reviewed manual main dispatch with direct TLS database URL", async (t) => {
@@ -223,6 +266,12 @@ test("new workflow is protected and read-only; legacy six-migration writer is un
     assert.match(step.run, /additive-release-gate\.mjs connection/);
   }
   for (const step of remote.filter(s => /supabase db push/.test(s.run))) assert.match(step.run, /--dry-run/);
+  const ledgerStep = job.steps.find(s => /Read applied ledger/.test(s.name));
+  assert.ok(ledgerStep.run.indexOf("ledger-summary") < ledgerStep.run.indexOf("additive-release-gate.mjs ledger "));
+  assert.match(ledgerStep.run, /catalog-bound .*rpc-catalog\.json.*ledger\.json/);
+  const evidenceUpload = job.steps.find(s => s.uses?.startsWith("actions/upload-artifact"));
+  assert.equal(evidenceUpload.if, "always()");
+  assert.match(evidenceUpload.with.path, /ledger-summary\.json/);
   const planStep = job.steps.find(s => /Require exactly the reviewed pending migration suffix/.test(s.name));
   assert.match(planStep.run, /migration-gate\.mjs stage .*candidate-migrations/);
   assert.match(planStep.run, /additive-release-gate\.mjs full-ledger/);

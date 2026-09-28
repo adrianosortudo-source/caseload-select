@@ -140,6 +140,42 @@ export function ledgerQuery(receipt) {
   return "SELECT version, name, statements FROM supabase_migrations.schema_migrations WHERE version IN (" + versions + ") ORDER BY version;\n";
 }
 
+/** Summarize recognized migration identity and statement-array shape; never echo database text. */
+export function summarizeLedgerPayload(payload) {
+  let rows = null;
+  let resultShape = typeof payload;
+  if (Array.isArray(payload)) {
+    rows = payload;
+    resultShape = "array";
+  } else if (isRecord(payload) && Array.isArray(payload.data)) {
+    rows = payload.data;
+    resultShape = "data_array";
+  } else if (isRecord(payload) && Array.isArray(payload.rows)) {
+    rows = payload.rows;
+    resultShape = "rows_array";
+  }
+  const recognized = new Map(ALL_IDENTITIES.map(identity => [identity.version + ":" + identity.name, identity]));
+  return {
+    resultShape,
+    rowCount: rows?.length ?? null,
+    rows: (rows ?? []).map((row) => {
+      const statementsPresent = isRecord(row) && Object.hasOwn(row, "statements");
+      const statements = statementsPresent ? row.statements : undefined;
+      const identity = isRecord(row) && typeof row.version === "string" && typeof row.name === "string"
+        ? recognized.get(row.version + ":" + row.name)
+        : undefined;
+      return {
+        version: identity?.version ?? null,
+        name: identity?.name ?? null,
+        identityRecognized: Boolean(identity),
+        statementField: !statementsPresent ? "missing" : statements === null ? "null" : Array.isArray(statements) ? "array" : typeof statements,
+        statementCount: Array.isArray(statements) ? statements.length : null,
+        nonStringStatementCount: Array.isArray(statements) ? statements.filter((statement) => typeof statement !== "string").length : null,
+      };
+    }),
+  };
+}
+
 export function verifyLedgerState(rows, receipt, sources) {
   verifyReleaseReceipt(receipt, sources);
   if (!Array.isArray(rows) || rows.some(row => !isRecord(row))) fail("ledger_rows_invalid");
@@ -158,7 +194,25 @@ export function verifyLedgerState(rows, receipt, sources) {
   if (!baselineRow) fail("applied_operator_rpc_ledger_missing");
   const baselineSource = sources[APPLIED_OPERATOR_RPC.path];
   if (baselineRow.name !== BASELINE_IDENTITY.name) fail("applied_operator_rpc_ledger_name_mismatch");
-  const baselineProof = verifyLedgerStatements(baselineSource, baselineRow.statements);
+  let baselineProof;
+  if (Array.isArray(baselineRow.statements) && baselineRow.statements.length > 0) {
+    baselineProof = {
+      ...verifyLedgerStatements(baselineSource, baselineRow.statements),
+      statementVerification: "ledger_statements_match_reviewed_source",
+    };
+  } else if (baselineRow.statements === null || baselineRow.statements === undefined || Array.isArray(baselineRow.statements)) {
+    // This exception is limited to the already-applied operator RPC prerequisite.
+    // Its missing history text requires the next protected step's exact catalog contract.
+    baselineProof = {
+      statementCount: Array.isArray(baselineRow.statements) ? 0 : null,
+      sourceSha256: sourceSha256(baselineSource),
+      ledgerStatementsSha256: null,
+      statementContentMatchesReviewedSource: null,
+      statementVerification: "operator_rpc_catalog_contract_required",
+    };
+  } else {
+    baselineProof = verifyLedgerStatements(baselineSource, baselineRow.statements);
+  }
   const appliedPrefixLength = RELEASE_IDENTITIES.findIndex(identity => !releaseRows.has(identity.version));
   const prefixLength = appliedPrefixLength === -1 ? RELEASE_IDENTITIES.length : appliedPrefixLength;
   const expectedApplied = RELEASE_IDENTITIES.slice(0, prefixLength);
@@ -203,12 +257,20 @@ export function verifyMigrationPlan(plan, ledgerProof, phase) {
   return { phase, migrations: pending, dryRun: plan.dryRun, upToDate: plan.upToDate };
 }
 
-export function verifyOperatorRpcCatalog(rows, receipt) {
+export function verifyOperatorRpcCatalog(rows, receipt, ledgerRows, sources) {
   if (!Array.isArray(rows) || rows.length !== 1 || !isRecord(rows[0]) || !isRecord(receipt)) fail("operator_rpc_catalog_ambiguous");
+  if (!Array.isArray(ledgerRows) || !isRecord(sources)) fail("operator_rpc_catalog_ledger_binding_invalid");
+  const ledgerProof = verifyLedgerState(ledgerRows, receipt, sources);
+  const appliedPrerequisite = ledgerProof.appliedPrerequisite;
+  if (appliedPrerequisite.sourceSha256 !== receipt.appliedPrerequisite?.sha256) fail("operator_rpc_catalog_ledger_binding_invalid");
   const actual = rows[0];
   if (!same(Object.keys(actual).sort(), Object.keys(CATALOG_EXPECTED).sort()) || !same(actual, CATALOG_EXPECTED) ||
       !same(receipt.appliedPrerequisite.expectedCatalog, CATALOG_EXPECTED)) fail("operator_rpc_catalog_mismatch");
-  return { prerequisite: "verified_applied_operator_rpc", catalog: CATALOG_EXPECTED };
+  return {
+    prerequisite: "verified_applied_operator_rpc",
+    ledgerStatementVerification: appliedPrerequisite.statementVerification,
+    catalog: CATALOG_EXPECTED,
+  };
 }
 
 export function catalogQuery() {
@@ -279,6 +341,8 @@ function main(args) {
     console.log(JSON.stringify(verifyDirectDatabaseUrl(process.env.MIGRATION_DATABASE_URL, process.env, findProjectEnvFiles())));
   } else if (command === "ledger-query" && rest.length === 0) {
     process.stdout.write(ledgerQuery(receipt));
+  } else if (command === "ledger-summary" && rest.length === 1) {
+    console.log(JSON.stringify(summarizeLedgerPayload(safeJson(rest[0]))));
   } else if (command === "catalog-query" && rest.length === 0) {
     process.stdout.write(catalogQuery());
   } else if (command === "ledger" && rest.length === 1) {
@@ -297,10 +361,14 @@ function main(args) {
   } else if (command === "candidate-complete" && rest.length === 1) {
     console.log(JSON.stringify(verifyCandidateCompletePrefix(safeJson(rest[0]))));
   } else if (command === "catalog" && rest.length === 1) {
-    console.log(JSON.stringify(verifyOperatorRpcCatalog(safeJson(rest[0]), receipt)));
+    console.log(JSON.stringify(verifyOperatorRpcCatalog(safeJson(rest[0]), receipt, null, sources)));
+  } else if (command === "catalog-bound" && rest.length === 2) {
+    const payload = safeJson(rest[1]);
+    const ledgerRows = Array.isArray(payload) ? payload : isRecord(payload) && Array.isArray(payload.data) ? payload.data : isRecord(payload) && Array.isArray(payload.rows) ? payload.rows : null;
+    console.log(JSON.stringify(verifyOperatorRpcCatalog(safeJson(rest[0]), receipt, ledgerRows, sources)));
   } else if (command === "plan" && rest.length === 3) {
     console.log(JSON.stringify(verifyMigrationPlan(safeJson(rest[1]), safeJson(rest[2]), rest[0])));
-  } else fail("usage_source_application_source_connection_ledger_query_catalog_query_ledger_full_ledger_catalog_candidate_prefix_candidate_complete_or_plan");
+  } else fail("usage_source_application_source_connection_ledger_query_ledger_summary_catalog_query_ledger_full_ledger_catalog_catalog_bound_candidate_prefix_candidate_complete_or_plan");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

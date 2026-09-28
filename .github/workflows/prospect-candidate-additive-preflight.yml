@@ -94,17 +94,18 @@ jobs:
           export CHECKOUT_SHA="$(git rev-parse HEAD)"
           node scripts/prospect-enrichment/additive-release-gate.mjs source > "$RUNNER_TEMP/source-check.json"
 
-      - name: Read and verify exact applied ledger and operator RPC catalog invariant
+      - name: Read applied ledger and verify operator RPC catalog invariant
         shell: bash
         run: |
           set -euo pipefail
           node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
           node scripts/prospect-enrichment/additive-release-gate.mjs ledger-query > "$RUNNER_TEMP/ledger-readback.sql"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/ledger-readback.sql" --output json --agent no > "$RUNNER_TEMP/ledger.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs ledger-summary "$RUNNER_TEMP/ledger.json" > "$RUNNER_TEMP/ledger-summary.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs ledger "$RUNNER_TEMP/ledger.json" > "$RUNNER_TEMP/ledger-check.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs catalog-query > "$RUNNER_TEMP/rpc-catalog.sql"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/rpc-catalog.sql" --output json --agent no > "$RUNNER_TEMP/rpc-catalog.json"
-          node scripts/prospect-enrichment/additive-release-gate.mjs catalog "$RUNNER_TEMP/rpc-catalog.json" > "$RUNNER_TEMP/rpc-catalog-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs catalog-bound "$RUNNER_TEMP/rpc-catalog.json" "$RUNNER_TEMP/ledger.json" > "$RUNNER_TEMP/rpc-catalog-check.json"
 
       - name: Require exactly the reviewed pending migration suffix and no seeds or roles
         shell: bash
@@ -128,6 +129,7 @@ jobs:
             scripts/prospect-enrichment/additive-release-review.json
             ${{ runner.temp }}/source-check.json
             ${{ runner.temp }}/database-tls-check.json
+            ${{ runner.temp }}/ledger-summary.json
             ${{ runner.temp }}/ledger-check.json
             ${{ runner.temp }}/staged-inventory.json
             ${{ runner.temp }}/full-ledger-check.json
