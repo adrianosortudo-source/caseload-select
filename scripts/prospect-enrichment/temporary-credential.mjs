@@ -27,6 +27,7 @@ export function redactedFailureCode(error) {
 }
 const GATES = Object.freeze({
   "complete-release": ["complete-release-gate.mjs", "credential-authorization"],
+  "candidate-recovery": ["candidate-recovery-gate.mjs", "credential-authorization"],
   enrichment: ["migration-gate.mjs", "source-authorization"],
   "candidate-preflight": ["additive-release-gate.mjs", "source-authorization"],
   "candidate-release": ["additive-release-gate.mjs", "application-source-authorization"],
