@@ -8,7 +8,7 @@ import { ProspectEnrichmentReadError } from "@/lib/prospect-enrichment-reader";
 export const READ_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export type ReadDiagnostic = Readonly<{ databaseErrorCode: string | null; dataShape: string; callSite: string[] }>;
 export class ReadApiError extends Error {
-  constructor(message: string, readonly status: 404 | 422 | 503 = 503, readonly diagnostic?: ReadDiagnostic) { super(message); this.name = "ReadApiError"; }
+  constructor(message: string, readonly status: 404 | 409 | 422 | 503 = 503, readonly diagnostic?: ReadDiagnostic) { super(message); this.name = "ReadApiError"; }
 }
 export function readId(value: unknown): string { if (typeof value !== "string" || !READ_UUID.test(value)) throw new ReadApiError("A valid database UUID is required.", 422); return value.toLowerCase(); }
 export function isRecord(value: unknown): value is Record<string, unknown> { return value !== null && typeof value === "object" && !Array.isArray(value); }

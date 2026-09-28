@@ -14,6 +14,7 @@ import { checkApproval, enqueue, submitOne, type ApprovalManifest } from "../out
 import { checkManifestApproval, prepareManifestRequests, submitManifestChunks, validateManifestChunks } from "../manifest-delivery";
 import { buildHeldCandidateEvidence, chunkExpectedRunManifest } from "../run-manifest";
 import { serializeSyntheticComparisonExport as serializeComparisonExport } from "../fixtures/comparison-signing";
+import { serializeComparisonRequest } from "../comparison-request";
 
 async function workspace(t: { after: (fn: () => Promise<void>) => void }) {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), ".tmp");
@@ -114,17 +115,73 @@ test("whole-firm registration, package retries and comparison gates use the appr
   assert.equal(protocolHash(JSON.parse(sentPackages[0].body)), p.payloadSha256);
 });
 
+test("register-manifest dry-run binds the final whole-firm request and reports no package delivery", async t => {
+  const dir = await workspace(t), { source, compiled, chunks, approval } = wholeFirmFixture();
+  const now = new Date().toISOString();
+  const packageValues = compiled.packages.map(pkg => ({ envelope: pkg.envelope, payloadSha256: pkg.payloadSha256, legacyAssessmentProjectionClaims: pkg.legacyAssessmentProjectionClaims ?? [] }));
+  const request = serializeComparisonRequest(compiled.expected, packageValues, "whole-firm");
+  const snapshot = serializeComparisonExport({ schemaVersion: "prospect-enrichment-comparison/v1", projectId: "ssxryjxifwiivghglqer",
+    capturedAt: now, provenance: { reader: "admin-prospect-enrichment-bootstrap/v1", sourceArtifactSha256: protocolHash(request.request), operatorAuthenticated: true },
+    identities: [], packages: [], events: [] }, now).snapshot;
+  const files = {
+    source: path.join(dir, "source.json"), chunks: path.join(dir, "chunks.jsonl"), held: path.join(dir, "held.jsonl"),
+    packages: path.join(dir, "packages.json"), comparison: path.join(dir, "bootstrap.json"), approval: path.join(dir, "approval.json"),
+  };
+  const approvalBytes = Buffer.from(JSON.stringify(approval));
+  await fs.writeFile(files.source, JSON.stringify(source));
+  await fs.writeFile(files.chunks, chunks.map(chunk => JSON.stringify(chunk)).join("\n") + "\n");
+  await fs.writeFile(files.held, buildHeldCandidateEvidence(compiled.expected, compiled.candidates).map(row => JSON.stringify(row)).join("\n") + "\n");
+  await fs.writeFile(files.packages, JSON.stringify(packageValues));
+  await fs.writeFile(files.comparison, JSON.stringify(snapshot));
+  await fs.writeFile(files.approval, approvalBytes);
+  const args = ["register-manifest", "--profile", "whole-firm", "--manifest", files.source, "--manifest-chunks", files.chunks,
+    "--held-evidence", files.held, "--packages", files.packages, "--snapshot", files.comparison, "--approval", files.approval,
+    "--approval-sha256", sha256(approvalBytes), "--outbox", path.join(WHOLE_FIRM_PROFILE.outputRoot, "synthetic-bootstrap-outbox")];
+  const result = await main(args) as { dryRun: boolean; networkRequests: number; packagesSubmitted: number; manifestRequests: number };
+  assert.deepEqual(result, { dryRun: true, command: "register-manifest", runId: compiled.expected.runId,
+    runManifestSha256: compiled.expected.manifestSha256, manifestRequests: prepareManifestRequests(chunks, "whole-firm", buildHeldCandidateEvidence(compiled.expected, compiled.candidates)).requests.length,
+    packagesSubmitted: 0, networkRequests: 0, requiredConfirmation: "SUBMIT-APPROVED-PROSPECT-RESEARCH" });
+  const wrongBinding = serializeComparisonExport({ schemaVersion: "prospect-enrichment-comparison/v1", projectId: "ssxryjxifwiivghglqer",
+    capturedAt: now, provenance: { reader: "admin-prospect-enrichment-bootstrap/v1", sourceArtifactSha256: "0".repeat(64), operatorAuthenticated: true },
+    identities: [], packages: [], events: [] }, now).snapshot;
+  await fs.writeFile(files.comparison, JSON.stringify(wrongBinding));
+  await assert.rejects(main(args), /bootstrap_comparison_binding_invalid/);
+  const resumedSnapshot = serializeComparisonExport({ schemaVersion: "prospect-enrichment-comparison/v1", projectId: "ssxryjxifwiivghglqer",
+    capturedAt: now, provenance: { reader: "admin-prospect-enrichment-bootstrap-resume/v1", sourceArtifactSha256: protocolHash(request.request), operatorAuthenticated: true },
+    identities: [], packages: [], events: [] }, now).snapshot;
+  await fs.writeFile(files.comparison, JSON.stringify(resumedSnapshot));
+  const resumedRegistration = await main(args) as { dryRun: boolean; packagesSubmitted: number; networkRequests: number };
+  assert.equal(resumedRegistration.dryRun, true);
+  assert.equal(resumedRegistration.packagesSubmitted, 0);
+  assert.equal(resumedRegistration.networkRequests, 0);
+  const submitArgs = ["submit", "--profile", "whole-firm", "--key", "synthetic-package-key", "--manifest", files.source,
+    "--manifest-chunks", files.chunks, "--held-evidence", files.held, "--packages", files.packages, "--snapshot", files.comparison,
+    "--outbox", path.join(WHOLE_FIRM_PROFILE.outputRoot, "synthetic-resume-submit-outbox")];
+  await assert.rejects(main(submitArgs), /finalized_comparison_required/);
+  const finalizedSnapshot = serializeComparisonExport({ schemaVersion: "prospect-enrichment-comparison/v1", projectId: "ssxryjxifwiivghglqer",
+    capturedAt: now, provenance: { reader: "admin-prospect-enrichment-comparison/v1", sourceArtifactSha256: protocolHash(request.request), operatorAuthenticated: true },
+    identities: [], packages: compiled.expected.entries.filter(entry => entry.clientPackageId !== null).map(entry => ({ clientPackageId: entry.clientPackageId!,
+      payloadSha256: entry.expectedPayloadSha256!, state: "missing", serverPackageId: null, visible: null })), events: [] }, now).snapshot;
+  await fs.writeFile(files.comparison, JSON.stringify(finalizedSnapshot));
+  const finalizedRegistration = await main(args) as { dryRun: boolean; packagesSubmitted: number; networkRequests: number };
+  assert.equal(finalizedRegistration.dryRun, true);
+  assert.equal(finalizedRegistration.packagesSubmitted, 0);
+  assert.equal(finalizedRegistration.networkRequests, 0);
+});
+
 test("all-raw-hold whole-firm manifests dry-run without a package and cannot skip a nonempty batch", async t => {
   const dir = await workspace(t), base = wholeFirmFixture();
   const exported = { ...base.exported, revisions: base.exported.revisions.map(() => null) };
   const source = freezeWholeFirmExport(exported, sha256(canonicalJson(exported))), compiled = compileWholeFirmSnapshot(source);
-  const sourceFile = path.join(dir, "source.json"), chunksFile = path.join(dir, "chunks.jsonl"), heldEvidenceFile = path.join(dir, "held-evidence.jsonl"), snapshotFile = path.join(dir, "comparison.json");
+  const sourceFile = path.join(dir, "source.json"), chunksFile = path.join(dir, "chunks.jsonl"), heldEvidenceFile = path.join(dir, "held-evidence.jsonl"), packagesFile = path.join(dir, "packages.json"), snapshotFile = path.join(dir, "comparison.json");
   await fs.writeFile(sourceFile, JSON.stringify(source));
   await fs.writeFile(chunksFile, chunkExpectedRunManifest(compiled.expected, 100, 1_048_576, "whole-firm").map(c => JSON.stringify(c)).join("\n"));
   await fs.writeFile(heldEvidenceFile, buildHeldCandidateEvidence(compiled.expected, compiled.candidates).map(c => JSON.stringify(c)).join("\n"));
-  const comparison = serializeComparisonExport({ schemaVersion: "prospect-enrichment-comparison/v1", projectId: "ssxryjxifwiivghglqer", capturedAt: new Date().toISOString(), provenance: { reader: "synthetic-authenticated-reader", sourceArtifactSha256: "b".repeat(64), operatorAuthenticated: true }, identities: [], packages: [], events: [] });
+  await fs.writeFile(packagesFile, "[]");
+  const request = serializeComparisonRequest(compiled.expected, [], "whole-firm");
+  const comparison = serializeComparisonExport({ schemaVersion: "prospect-enrichment-comparison/v1", projectId: "ssxryjxifwiivghglqer", capturedAt: new Date().toISOString(), provenance: { reader: "admin-prospect-enrichment-comparison/v1", sourceArtifactSha256: protocolHash(request.request), operatorAuthenticated: true }, identities: [], packages: [], events: [] });
   await fs.writeFile(snapshotFile, comparison.body);
-  const args = ["submit", "--profile", "whole-firm", "--manifest-only", "--manifest", sourceFile, "--manifest-chunks", chunksFile, "--held-evidence", heldEvidenceFile, "--snapshot", snapshotFile, "--outbox", path.join(WHOLE_FIRM_PROFILE.outputRoot, "synthetic-never-created-outbox")];
+  const args = ["submit", "--profile", "whole-firm", "--manifest-only", "--manifest", sourceFile, "--manifest-chunks", chunksFile, "--held-evidence", heldEvidenceFile, "--packages", packagesFile, "--snapshot", snapshotFile, "--outbox", path.join(WHOLE_FIRM_PROFILE.outputRoot, "synthetic-never-created-outbox")];
   const result = await main(args) as {dryRun:boolean; networkRequests:number};
   assert.equal(result.dryRun, true); assert.equal(result.networkRequests, 0);
   await fs.writeFile(chunksFile, base.chunks.map(c => JSON.stringify(c)).join("\n"));

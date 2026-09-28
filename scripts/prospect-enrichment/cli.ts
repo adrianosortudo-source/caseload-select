@@ -8,9 +8,9 @@ import { assertNoExclusionTokens, compileExclusionScoped, loadPrivateExclusions 
 import { assertEnvelopeProfile, parseProfile, profileConfig, type EnrichmentProfile } from "./profiles";
 import { assertWholeFirmManifestCoverage, compileWholeFirmSnapshot, freezeWholeFirmExport, type WholeFirmSourceManifest } from "./whole-firm";
 import { snapshotCoordinatorState } from "./whole-firm-coordinator-export";
-import { verifyAndSerializeComparisonExport } from "./comparison-export";
-import { writeComparisonRequest } from "./comparison-request";
-import { prepareManifestRequests, submitManifestChunks, assertManifestPackage } from "./manifest-delivery";
+import { assertManifestRegistrationBinding, assertFinalizedComparisonReader, verifyAndSerializeComparisonExport } from "./comparison-export";
+import { serializeComparisonRequest, writeComparisonRequest } from "./comparison-request";
+import { prepareManifestRequests, submitManifestChunks, assertManifestPackage, checkManifestApproval, validateManifestChunks } from "./manifest-delivery";
 import { buildExpectedRunManifest, buildHeldCandidateEvidence, chunkExpectedRunManifest } from "./run-manifest";
 import { archivedDocuments, extractCandidates, inventory, type SourceManifest } from "./inventory";
 import { DEFAULT_OUTPUT, DEFAULT_ROOTS, object, protocolHash, sha256, within } from "./model";
@@ -23,20 +23,24 @@ const HELP = `Prospect enrichment local tools (dry-run by default)
   inventory --profile whole-firm --coordinator-state PATH
   compile --manifest FILE --run-dir DIR [--actions FILE] [--exclusions PRIVATE_FILE]
   comparison-request --manifest FILE --packages FILE --output FILE [--gzip]
+  register-manifest --profile whole-firm --manifest SOURCE_MANIFEST --manifest-chunks FILE --held-evidence FILE
+         --packages FILE --snapshot FILE --approval FILE --approval-sha256 HASH --outbox DIR --token-file FILE
+         --execute --confirm SUBMIT-APPROVED-PROSPECT-RESEARCH
   validate --file FILE
   reconcile --packages FILE --snapshot FILE --output FILE
   reconcile --export-comparison --file FILE --output FILE
   pilot --packages FILE --actions FILE --snapshot FILE --output FILE
   enqueue --file FILE --outbox DIR
   status --key KEY --outbox DIR
-  submit --key KEY --outbox DIR --manifest-chunks FILE --held-evidence FILE --snapshot FILE
+  submit --key KEY --outbox DIR --manifest-chunks FILE --held-evidence FILE --packages FILE --snapshot FILE
          --approval FILE --approval-sha256 HASH --token-file FILE
          --execute --confirm SUBMIT-APPROVED-PROSPECT-RESEARCH
   receipt --key KEY --outbox DIR --token-file FILE --execute
 Whole-firm commands require --profile whole-firm and use a separate private D: output root.
-Whole-firm submit additionally requires --manifest SOURCE_MANIFEST.
+Whole-firm submit additionally requires --manifest SOURCE_MANIFEST and a finalized-run comparison.
+register-manifest accepts a fresh signed bootstrap/resume comparison, or a finalized-run comparison for exact finalization-receipt recovery. It registers inventory and held bodies only; it never submits packages.
 Use --manifest-only instead of --key only for whole-firm snapshots with zero packages. Default profile remains legacy-backfill.
-submit registers the expected inventory and stages a package. It never reviews/applies canonical evidence.
+register-manifest registers the expected inventory and held bodies only. submit requires that finalized inventory and a fresh finalized-run comparison, then stages one package. Neither command reviews/applies canonical evidence.
 Approval documents must record a real exact user authorization; a file alone does not grant it.`;
 const valueFlags = new Set(["manifest", "run-dir", "file", "packages", "snapshot", "output", "key", "outbox", "approval", "approval-sha256", "token-file", "confirm", "actions", "manifest-chunks", "held-evidence", "profile", "coordinator-state", "exclusions"]);
 function args(argv: string[]) {
@@ -52,6 +56,17 @@ function args(argv: string[]) {
 const required = (options: Record<string, string | boolean>, key: string): string => { const value = options[key]; if (typeof value !== "string" || !value) throw Error(`missing_${key}`); return value; };
 const json = async <T>(file: string): Promise<T> => JSON.parse(await fs.readFile(file, "utf8"));
 async function jsonl<T>(file: string): Promise<T[]> { return (await fs.readFile(file, "utf8")).split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line)); }
+function manifestFromChunks(chunks: ReturnType<typeof validateManifestChunks>) {
+  const first = chunks[0];
+  if (!first) throw Error("manifest_chunks_missing");
+  return {
+    schemaVersion: "prospect-enrichment-run-manifest/v1" as const,
+    runId: first.runId, sourceSystem: first.sourceSystem, sourceName: first.sourceName,
+    sourceManifestSha256: first.sourceManifestSha256, generatedAt: first.generatedAt,
+    expectedPackageCount: first.expectedPackageCount, entries: chunks.flatMap(chunk => chunk.entries),
+    manifestSha256: first.runManifestSha256,
+  };
+}
 function profileOutput(file: string, profile: EnrichmentProfile): string {
   if (!within(profileConfig(profile).outputRoot, file) || DEFAULT_ROOTS.some(r => within(r.path, file))) throw Error("output_must_be_in_profile_private_root");
   return path.resolve(file);
@@ -165,6 +180,32 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     await writeNew(privateOutput(required(options, "output")), result.body);
     return { snapshotSha256: result.snapshot.snapshotSha256, bodySha256: result.bodySha256, capturedAt: result.snapshot.capturedAt, networkRequests: 0 };
   }
+  if (command === "register-manifest") {
+    const allowed = new Set(["profile", "manifest", "manifest-chunks", "held-evidence", "packages", "snapshot", "approval", "approval-sha256", "outbox", "token-file", "execute", "confirm"]);
+    if (profile !== "whole-firm" || [...Object.keys(options)].some(key => !allowed.has(key))) throw Error("register_manifest_scope_invalid");
+    const chunks = validateManifestChunks(await jsonl<unknown>(required(options, "manifest-chunks")), profile);
+    const heldEvidence = await jsonl<unknown>(required(options, "held-evidence"));
+    const prepared = prepareManifestRequests(chunks, profile, heldEvidence);
+    const sourceManifest = await json<WholeFirmSourceManifest>(required(options, "manifest"));
+    assertWholeFirmManifestCoverage(sourceManifest, prepared.chunks);
+    const full = manifestFromChunks(prepared.chunks);
+    const serializedRequest = serializeComparisonRequest(full, await json<unknown>(required(options, "packages")), profile);
+    const comparison = await json<unknown>(required(options, "snapshot"));
+    const assertBootstrapBinding = () => { assertFreshComparison(comparison); assertManifestRegistrationBinding(comparison, protocolHash(serializedRequest.request)); };
+    assertBootstrapBinding();
+    const approvalBytes = await fs.readFile(required(options, "approval"));
+    if (sha256(approvalBytes) !== required(options, "approval-sha256")) throw Error("approval_file_hash_mismatch");
+    const approval = JSON.parse(approvalBytes.toString("utf8")) as DeliveryApproval;
+    checkManifestApproval(prepared.chunks, approval, profile);
+    if (options.execute !== true) return { dryRun: true, command, runId: full.runId, runManifestSha256: full.manifestSha256,
+      manifestRequests: prepared.requests.length, packagesSubmitted: 0, networkRequests: 0,
+      requiredConfirmation: "SUBMIT-APPROVED-PROSPECT-RESEARCH" };
+    if (required(options, "confirm") !== "SUBMIT-APPROVED-PROSPECT-RESEARCH") throw Error("explicit_submission_confirmation_required");
+    const token = (await fs.readFile(required(options, "token-file"), "utf8")).trim();
+    const registration = await submitManifestChunks({ outbox: privateOutput(required(options, "outbox")), profile, chunks: prepared.chunks,
+      heldEvidence, approval, confirmation: required(options, "confirm"), token, beforeNetwork: assertBootstrapBinding });
+    return { phase: "manifest_registration", ...registration, packagesSubmitted: 0 };
+  }
   if (command === "reconcile") {
     const packages = await jsonl<CompiledPackage>(required(options, "packages")), snapshot = await json<ComparisonSnapshot>(required(options, "snapshot"));
     for (const p of packages) assertEnvelopeProfile(p.envelope, profile);
@@ -196,11 +237,18 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     if (manifestOnly && (command !== "submit" || profile !== "whole-firm" || options.key !== undefined)) throw Error("manifest_only_scope_invalid");
     const key = manifestOnly ? null : required(options, "key");
     const comparison = command === "submit" ? await json<unknown>(required(options, "snapshot")) : null;
-    if (command === "submit") assertFreshComparison(comparison);
     const manifestChunks = command === "submit" ? await jsonl<unknown>(required(options, "manifest-chunks")) : null;
     const heldEvidence = command === "submit" && typeof options["held-evidence"] === "string" ? await jsonl<unknown>(options["held-evidence"]) : [];
     const prepared = command === "submit" ? prepareManifestRequests(manifestChunks, profile, heldEvidence) : null;
     if (manifestOnly && prepared!.chunks[0].expectedPackageCount !== 0) throw Error("manifest_only_requires_zero_packages");
+    const finalRequestSha256 = command === "submit"
+      ? protocolHash(serializeComparisonRequest(manifestFromChunks(prepared!.chunks), await json<unknown>(required(options, "packages")), profile).request)
+      : null;
+    const assertFinalizedBinding = () => {
+      assertFreshComparison(comparison);
+      assertFinalizedComparisonReader(comparison, finalRequestSha256!);
+    };
+    if (command === "submit") assertFinalizedBinding();
     const queued = command === "submit" && key ? await readEntry(outbox, key) : null;
     if (queued) assertEnvelopeProfile(queued.envelope, profile);
     if (prepared && queued) assertManifestPackage(prepared.chunks, queued);
@@ -216,11 +264,11 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     }
     const token = (await fs.readFile(required(options, "token-file"), "utf8")).trim();
     if (command === "submit") {
-      assertFreshComparison(comparison);
-      const registration = await submitManifestChunks({ outbox, profile, chunks: prepared!.chunks, heldEvidence, approval: approval!, confirmation: required(options, "confirm"), token, beforeNetwork: () => assertFreshComparison(comparison) });
+      assertFinalizedBinding();
+      const registration = await submitManifestChunks({ outbox, profile, chunks: prepared!.chunks, heldEvidence, approval: approval!, confirmation: required(options, "confirm"), token, beforeNetwork: assertFinalizedBinding });
       if (registration.state !== "finalized" || manifestOnly) return { phase: "manifest_registration", ...registration };
-      assertFreshComparison(comparison);
-      const delivery = await submitOne({ outbox, key: key!, profile, approval: approval!, confirmation: required(options, "confirm"), token, beforeNetwork: () => assertFreshComparison(comparison) });
+      assertFinalizedBinding();
+      const delivery = await submitOne({ outbox, key: key!, profile, approval: approval!, confirmation: required(options, "confirm"), token, beforeNetwork: assertFinalizedBinding });
       return { phase: "package_delivery", manifest: registration, delivery };
     }
     return receiptStatus({ outbox, key: key!, token });

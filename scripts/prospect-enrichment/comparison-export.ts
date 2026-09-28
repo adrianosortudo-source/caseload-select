@@ -25,6 +25,32 @@ function validContent(value: unknown): value is ComparisonExportInput {
   return true;
 }
 
+/** A bootstrap signature is usable for manifest registration only when it binds the complete final request. */
+export function assertBootstrapRegistrationBinding(snapshot: unknown, expectedRequestSha256: string): asserts snapshot is ComparisonSnapshot {
+  if (!object(snapshot) || !object(snapshot.provenance) || !["admin-prospect-enrichment-bootstrap/v1", "admin-prospect-enrichment-bootstrap-resume/v1"].includes(String(snapshot.provenance.reader)) ||
+      snapshot.provenance.sourceArtifactSha256 !== expectedRequestSha256 || !Array.isArray(snapshot.packages) || snapshot.packages.length !== 0) {
+    throw new Error("bootstrap_comparison_binding_invalid");
+  }
+}
+
+/** Registration recovery may also use the finalized reader after the final receipt was lost. */
+export function assertManifestRegistrationBinding(snapshot: unknown, expectedRequestSha256: string): asserts snapshot is ComparisonSnapshot {
+  if (!object(snapshot) || !object(snapshot.provenance)) throw new Error("manifest_registration_comparison_invalid");
+  if (snapshot.provenance.reader === "admin-prospect-enrichment-comparison/v1") {
+    assertFinalizedComparisonReader(snapshot, expectedRequestSha256);
+    return;
+  }
+  assertBootstrapRegistrationBinding(snapshot, expectedRequestSha256);
+}
+
+/** Package delivery is permitted only from the unchanged finalized-run read path. */
+export function assertFinalizedComparisonReader(snapshot: unknown, expectedRequestSha256: string): asserts snapshot is ComparisonSnapshot {
+  if (!object(snapshot) || !object(snapshot.provenance) || snapshot.provenance.reader !== "admin-prospect-enrichment-comparison/v1" ||
+      snapshot.provenance.sourceArtifactSha256 !== expectedRequestSha256) {
+    throw new Error("finalized_comparison_required");
+  }
+}
+
 /** Serializes an actual supported-reader result. This function grants no auth and performs no I/O. */
 export function serializeComparisonExport(input: unknown, now = new Date().toISOString(), signingKey?:ComparisonSigningKey): { snapshot: ComparisonSnapshot; body: string; bodySha256: string } {
   if (!validContent(input)) throw new Error("comparison_export_schema_invalid");

@@ -132,7 +132,25 @@ function hasLeadingEnrichmentGuard(statements: ts.NodeArray<ts.Statement>, mutat
 function countEnrichmentGates(src: string, file: string): number {
   const relative = path.relative(ENRICHMENT_API_DIR, file);
   if (relative.startsWith("..") || path.isAbsolute(relative)) return 0;
+  const normalizedRelative = relative.replace(/\\/g, "/");
+  const comparisonMode = normalizedRelative === "comparison-export/route.ts" ? "finalized"
+    : normalizedRelative === "comparison-export/bootstrap/route.ts" ? "bootstrap" : null;
   const tree = sourceTree(src);
+  if (comparisonMode) {
+    const imported = namedImport(tree, "handleComparisonExport") === (comparisonMode === "finalized" ? "./handler" : "../handler");
+    const handlers = tree.statements.filter((statement) => ts.isFunctionDeclaration(statement) && statement.body && statement.name
+      && statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword)
+      && statement.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword)
+      && /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(statement.name.text));
+    if (!imported || handlers.length !== 1) return 0;
+    const handler = handlers[0];
+    if (!ts.isFunctionDeclaration(handler) || handler.name?.text !== "POST" || !handler.body || handler.body.statements.length !== 1) return 0;
+    const returned = handler.body.statements[0];
+    if (!ts.isReturnStatement(returned) || !returned.expression || !ts.isCallExpression(returned.expression)) return 0;
+    const call = returned.expression;
+    return ts.isIdentifier(call.expression) && call.expression.text === "handleComparisonExport" && call.arguments.length === 2
+      && call.arguments[0].getText() === "request" && ts.isStringLiteral(call.arguments[1]) && call.arguments[1].text === comparisonMode ? 1 : 0;
+  }
   const direct = namedImport(tree, "requireProspectEnrichmentOperator") === ENRICHMENT_AUTH_IMPORT;
   const readImport = namedImport(tree, "readRoute");
   const wrapped = Boolean(readImport?.startsWith(".")
@@ -198,6 +216,28 @@ describe("legacy surface auth: verified prospect enrichment delegation", () => {
     if (!first || !ts.isTryStatement(first)) return;
     expect(hasLeadingEnrichmentGuard(first.tryBlock.statements, false)).toBe(true);
     expect(first.tryBlock.statements.slice(0, 2).some((node) => /work\s*\(/.test(node.getText()))).toBe(false);
+  });
+
+  it("keeps the shared comparison handler behind the authenticated operator-role gate", () => {
+    const tree = sourceTree(read(path.join(ENRICHMENT_API_DIR, "comparison-export", "handler.ts")));
+    expect(namedImport(tree, "requireProspectEnrichmentOperator")).toBe(ENRICHMENT_AUTH_IMPORT);
+    const handler = tree.statements.find((node): node is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(node) && node.name?.text === "handleComparisonExport");
+    expect(handler?.body && hasLeadingEnrichmentGuard(handler.body.statements, true)).toBe(true);
+    expect(handler?.body?.statements[2].getText().replace(/\s+/g, "")).toBe('if(auth.operator.session.role!=="operator")returnprospectEnrichmentJson({error:"Anoperatorsessionisrequired."},403);');
+  });
+
+  it.each([
+    ["comparison-export/route.ts", "./handler", "finalized"],
+    ["comparison-export/bootstrap/route.ts", "../handler", "bootstrap"],
+  ])("recognizes only the exact %s POST delegation", (relative, handlerImport, mode) => {
+    const file = path.join(ENRICHMENT_API_DIR, ...relative.split("/"));
+    const source = read(file);
+    const tree = sourceTree(source);
+    expect(namedImport(tree, "handleComparisonExport")).toBe(handlerImport);
+    expect(countEnrichmentGates(source, file)).toBe(1);
+    expect(countEnrichmentGates(source.replace(`handleComparisonExport(request, "${mode}")`, `handleComparisonExport(request, "wrong")`), file)).toBe(0);
+    expect(countEnrichmentGates(source + " export async function GET(request) { return work(); }", file)).toBe(0);
   });
 
   it("does not count an import, ignored denial, wrong helper, or a second unguarded handler", () => {

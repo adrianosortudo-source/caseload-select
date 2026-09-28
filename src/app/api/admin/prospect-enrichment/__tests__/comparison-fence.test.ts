@@ -7,6 +7,7 @@ vi.mock("../_package-read", () => ({
 import type { ComparisonExportInput } from "../../../../../../scripts/prospect-enrichment/comparison-export";
 import { prospectEnrichmentProtocolHash } from "@/lib/prospect-enrichment-hash";
 import type { ReadDatabase } from "../_package-read";
+import type { RegisteredRunManifest } from "../_comparison-manifest";
 import { verifyComparisonFinalFence, type ComparisonFenceBaseline } from "../_comparison-fence";
 
 const runId = "00000000-0000-4000-8000-000000000001";
@@ -19,6 +20,7 @@ class FakeQuery {
   select(_columns: string) { return this; }
   eq(column: string, value: unknown) { this.filters.push({ kind: "eq", column, value }); return this; }
   in(column: string, value: unknown[]) { this.filters.push({ kind: "in", column, value }); return this; }
+  order() { return this; }
   limit(_count: number) { return this; }
   then(resolve: (value: { data: Record<string, unknown>[]; error: null }) => unknown, reject?: (reason: unknown) => unknown) {
     return Promise.resolve({ data: this.rowsFor(this.table, this.filters), error: null }).then(resolve, reject);
@@ -32,7 +34,7 @@ function baseline(overrides: Partial<ComparisonFenceBaseline> = {}): ComparisonF
     provenance: { reader: "test", sourceArtifactSha256: "a".repeat(64), operatorAuthenticated: true },
     identities: [], packages: [], events: [],
   } as unknown as ComparisonExportInput;
-  return { adminRunId: runId, actor, sourceSystem: "test-source", expectedPackageCount: 0,
+  return { adminRunId: runId, sourceRunKey: "synthetic-run", mode: "finalized", resumeManifest: null, resumeManifestReadSetSha256: null, actor, sourceSystem: "test-source", expectedPackageCount: 0,
     requestedPackageIds: [], expectedEventKeys: [], runPackages: [], actorPackages: [], eventPresence: [],
     eventItems: [], packageDetails: [], identities: [], snapshot, ...overrides };
 }
@@ -42,6 +44,27 @@ function db(rowsFor: (table: string, filters: { kind: "eq" | "in"; column: strin
 }
 
 describe("comparison final consistency fence", () => {
+  it("keeps bootstrap package state empty and rejects a run appearing in the final fence", async () => {
+    const snap = baseline({ adminRunId: null, mode: "bootstrap", runPackages: [], actorPackages: [] });
+    const absent = db(() => []);
+    await expect(verifyComparisonFinalFence({ baseline: snap, client: absent, envelopes: [], readIdentity: async () => [] })).resolves.toBeUndefined();
+    await expect(verifyComparisonFinalFence({ baseline: snap, client: db((table) => table === "prospect_enrichment_runs"
+      ? [{ id: runId, submitted_by: actor, run_key: "synthetic-run", manifest_state: "open" }] : []), envelopes: [], readIdentity: async () => [] })).rejects.toMatchObject({ status: 503 });
+  });
+  it("rechecks an open-run resume binding at the end of the final signing fence", async () => {
+    const manifest = { runId: "synthetic-run", sourceSystem: "test-source", sourceName: "test-source",
+      sourceManifestSha256: "a".repeat(64), generatedAt: "2026-09-23T12:00:00.000Z", expectedPackageCount: 0,
+      entries: [], manifestSha256: "b".repeat(64) } as RegisteredRunManifest;
+    const snap = baseline({ adminRunId: null, mode: "resume", resumeManifest: manifest, resumeManifestReadSetSha256: "c".repeat(64), runPackages: [] });
+    await expect(verifyComparisonFinalFence({ baseline: snap, client: db(() => []), envelopes: [], readIdentity: async () => [] }))
+      .rejects.toMatchObject({ status: 409 });
+  });
+  it("rejects an actor package identity collision during bootstrap final fencing", async () => {
+    const snap = baseline({ adminRunId: null, mode: "bootstrap", requestedPackageIds: ["package-a"], actorPackages: [] });
+    const collision = { id: targetId, run_id: runId, client_package_id: "package-a", submitted_by: "other-actor",
+      research_key: "research-1", payload_sha256: "c".repeat(64), state: "received" };
+    await expect(verifyComparisonFinalFence({ baseline: snap, client: db((table) => table === "prospect_enrichment_packages" ? [collision] : []), envelopes: [], readIdentity: async () => [] })).rejects.toMatchObject({ status: 503 });
+  });
   it("rejects a target-row mutation committed after the second snapshot", async () => {
     const before = { id: targetId, firm_id: runId, count: 4 };
     const after = { ...before, count: 5 };
