@@ -280,6 +280,47 @@ export function verifyOperatorRpcCatalog(rows, receipt, ledgerRows, sources) {
   };
 }
 
+/** Return fixed-schema, non-sensitive comparison statuses for a catalog mismatch. */
+export function operatorRpcCatalogDiagnostic(rows) {
+  if (!Array.isArray(rows) || rows.length !== 1 || !isRecord(rows[0])) {
+    return {
+      schemaVersion: "operator-rpc-catalog-diagnostic/v1",
+      outcome: "unavailable",
+      rowCount: Array.isArray(rows) ? rows.length : null,
+      keyShape: "unavailable",
+      mismatchedProperties: [],
+      properties: null,
+    };
+  }
+
+  const actual = rows[0];
+  const expectedKeys = Object.keys(CATALOG_EXPECTED).sort();
+  const actualKeys = Object.keys(actual).sort();
+  const properties = {
+    schemaName: same(actual.schemaName, CATALOG_EXPECTED.schemaName) ? "match" : "mismatch",
+    functionName: same(actual.functionName, CATALOG_EXPECTED.functionName) ? "match" : "mismatch",
+    identityArguments: same(actual.identityArguments, CATALOG_EXPECTED.identityArguments) ? "match" : "mismatch",
+    languageName: same(actual.languageName, CATALOG_EXPECTED.languageName) ? "match" : "mismatch",
+    securityDefiner: same(actual.securityDefiner, CATALOG_EXPECTED.securityDefiner) ? "match" : "mismatch",
+    searchPathSetting: same(actual.searchPathSetting, CATALOG_EXPECTED.searchPathSetting) ? "match" : "mismatch",
+    definitionMd5: same(actual.definitionMd5, CATALOG_EXPECTED.definitionMd5) ? "match" : "mismatch",
+    anonExecute: same(actual.anonExecute, CATALOG_EXPECTED.anonExecute) ? "match" : "mismatch",
+    authenticatedExecute: same(actual.authenticatedExecute, CATALOG_EXPECTED.authenticatedExecute) ? "match" : "mismatch",
+    publicExecute: same(actual.publicExecute, CATALOG_EXPECTED.publicExecute) ? "match" : "mismatch",
+    nonOwnerExecuteGrantees: same(actual.nonOwnerExecuteGrantees, CATALOG_EXPECTED.nonOwnerExecuteGrantees) ? "match" : "mismatch",
+  };
+  const mismatchedProperties = Object.entries(properties).filter(([, result]) => result === "mismatch").map(([key]) => key);
+  const keyShape = same(actualKeys, expectedKeys) ? "exact" : "mismatch";
+  return {
+    schemaVersion: "operator-rpc-catalog-diagnostic/v1",
+    outcome: mismatchedProperties.length === 0 && keyShape === "exact" ? "verified" : "mismatch",
+    rowCount: 1,
+    keyShape,
+    mismatchedProperties,
+    properties,
+  };
+}
+
 export function catalogQuery() {
   return `SELECT n.nspname AS "schemaName", p.proname AS "functionName", oidvectortypes(p.proargtypes) AS "identityArguments", l.lanname AS "languageName", p.prosecdef AS "securityDefiner", (SELECT setting FROM unnest(p.proconfig) AS setting WHERE setting LIKE 'search_path=%') AS "searchPathSetting", md5(pg_get_functiondef(p.oid)) AS "definitionMd5", has_function_privilege('anon', p.oid, 'EXECUTE') AS "anonExecute", has_function_privilege('authenticated', p.oid, 'EXECUTE') AS "authenticatedExecute", EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS acl WHERE acl.grantee = 0 AND acl.privilege_type = 'EXECUTE') AS "publicExecute", coalesce((SELECT json_agg(r.rolname ORDER BY r.rolname) FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) AS acl JOIN pg_roles r ON r.oid = acl.grantee WHERE acl.grantee <> p.proowner AND acl.grantee <> 0 AND acl.privilege_type = 'EXECUTE'), '[]'::json) AS "nonOwnerExecuteGrantees" FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace JOIN pg_language l ON l.oid = p.prolang WHERE n.nspname = 'public' AND p.proname = 'revalidate_operator_membership_v1' AND oidvectortypes(p.proargtypes) = 'uuid, uuid, boolean';\n`;
 }
@@ -370,7 +411,15 @@ function main(args) {
   } else if (command === "catalog-bound" && rest.length === 2) {
     const payload = safeJson(rest[1]);
     const ledgerRows = Array.isArray(payload) ? payload : isRecord(payload) && Array.isArray(payload.data) ? payload.data : isRecord(payload) && Array.isArray(payload.rows) ? payload.rows : null;
-    console.log(JSON.stringify(verifyOperatorRpcCatalog(safeJson(rest[0]), receipt, ledgerRows, sources)));
+    const rows = safeJson(rest[0]);
+    try {
+      console.log(JSON.stringify(verifyOperatorRpcCatalog(rows, receipt, ledgerRows, sources)));
+    } catch (error) {
+      if (error instanceof Error && error.message === "operator_rpc_catalog_mismatch") {
+        console.log(JSON.stringify(operatorRpcCatalogDiagnostic(rows)));
+      }
+      throw error;
+    }
   } else if (command === "plan" && rest.length === 3) {
     console.log(JSON.stringify(verifyMigrationPlan(safeJson(rest[1]), safeJson(rest[2]), rest[0])));
   } else fail("usage_source_application_source_connection_ledger_query_ledger_summary_catalog_query_ledger_full_ledger_catalog_bound_candidate_prefix_candidate_complete_or_plan");
