@@ -57,7 +57,6 @@ jobs:
     env:
       CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_SHA }}
       CONFIGURED_RECEIPT_SHA256: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_RECEIPT_SHA256 }}
-      COMPLETE_RELEASE_DIR: ${{ runner.temp }}/complete-release
     services:
       postgres:
         image: postgres:17.6-alpine3.21
@@ -69,6 +68,8 @@ jobs:
           --health-cmd "pg_isready -U postgres -d postgres"
           --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
+      - name: Set runner-local release directory
+        run: echo "COMPLETE_RELEASE_DIR=$RUNNER_TEMP/complete-release" >> "$GITHUB_ENV"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: main
@@ -130,7 +131,6 @@ jobs:
     env:
       CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_SHA }}
       CONFIGURED_RECEIPT_SHA256: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_RECEIPT_SHA256 }}
-      COMPLETE_RELEASE_DIR: ${{ runner.temp }}/complete-release
       EXPECTED_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact_id }}
       EXPECTED_ARTIFACT_DIGEST: ${{ needs.preflight.outputs.artifact_digest }}
       EXPECTED_MANIFEST_SHA256: ${{ needs.preflight.outputs.manifest_sha256 }}
@@ -145,6 +145,8 @@ jobs:
           --health-cmd "pg_isready -U postgres -d postgres"
           --health-interval 5s --health-timeout 5s --health-retries 12
     steps:
+      - name: Set runner-local release directory
+        run: echo "COMPLETE_RELEASE_DIR=$RUNNER_TEMP/complete-release" >> "$GITHUB_ENV"
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: main
