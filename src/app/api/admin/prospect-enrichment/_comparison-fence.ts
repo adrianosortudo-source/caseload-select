@@ -4,6 +4,7 @@ import type { ProspectEnrichmentEnvelope } from "@/lib/prospect-enrichment-contr
 import { readPackageDetail, type ReadDatabase } from "./_package-read";
 import { databaseRows, isRecord, ReadApiError, READ_UUID } from "./_read-common";
 import { PROTECTED_GTA_TARGET_TABLES, readProtectedGtaTargetRows } from "./_protected-target-read";
+import { requireResumableRunManifest, type RegisteredRunManifest } from "./_comparison-manifest";
 
 const MAX_FINAL_FENCE_EVENTS = 10_000;
 const MAX_FINAL_FENCE_ITEMS = 50_000;
@@ -24,7 +25,11 @@ type PackageDetail = Awaited<ReturnType<typeof readPackageDetail>>;
 type EventItems = { eventId: string; items: Record<string, unknown>[] };
 type EventPresence = { key: string; rows: { id: unknown; sourceSystem: unknown; semanticSha256: unknown }[] };
 export type ComparisonFenceBaseline = {
-  adminRunId: string;
+  adminRunId: string | null;
+  sourceRunKey: string;
+  mode: "finalized" | "bootstrap" | "resume";
+  resumeManifest: RegisteredRunManifest | null;
+  resumeManifestReadSetSha256: string | null;
   actor: string;
   sourceSystem: string;
   expectedPackageCount: number;
@@ -49,7 +54,7 @@ function runPackageProjection(row: Record<string, unknown>) {
     expectedRevisionSha256: row.expected_revision_sha256, reviewExpiresAt: row.review_expires_at, applyReceipt: row.apply_receipt };
 }
 function actorPackageProjection(row: Record<string, unknown>) {
-  return { id: row.id, runId: row.run_id, clientPackageId: row.client_package_id, researchKey: row.research_key,
+  return { id: row.id, runId: row.run_id, actor: row.submitted_by, clientPackageId: row.client_package_id, researchKey: row.research_key,
     payloadSha256: row.payload_sha256, state: row.state };
 }
 function eventProjection(row: Record<string, unknown>) {
@@ -93,18 +98,25 @@ export async function verifyComparisonFinalFence(input: {
   if (baseline.expectedEventKeys.length > MAX_FINAL_FENCE_EVENTS || baseline.eventItems.length > MAX_FINAL_FENCE_EVENTS || baseline.packageDetails.length > MAX_FINAL_FENCE_PACKAGES ||
       baseline.eventItems.reduce((total, item) => total + item.items.length, 0) > MAX_FINAL_FENCE_ITEMS) fail();
 
-  const runRows = databaseRows(await client.from("prospect_enrichment_packages")
+  if (baseline.mode === "bootstrap") {
+    const registeredRuns = databaseRows(await client.from("prospect_enrichment_runs")
+      .select("id,submitted_by,run_key,manifest_state").eq("submitted_by", baseline.actor).eq("run_key", baseline.sourceRunKey).limit(2));
+    if (registeredRuns.length !== 0 || baseline.adminRunId !== null || baseline.runPackages.length !== 0 || baseline.actorPackages.length !== 0) fail();
+  }
+  if (baseline.mode === "resume" && (!baseline.resumeManifest || !baseline.resumeManifestReadSetSha256 || baseline.adminRunId !== null || baseline.runPackages.length !== 0)) fail();
+  if (baseline.mode === "finalized" && !baseline.adminRunId) fail();
+  const runRows = baseline.adminRunId ? databaseRows(await client.from("prospect_enrichment_packages")
     .select("id,run_id,client_package_id,submitted_by,research_key,payload,payload_sha256,state,firm_id,raw_body_sha256,review_json,review_sha256,expected_revision_sha256,review_expires_at,apply_receipt")
-    .eq("run_id", baseline.adminRunId).limit(baseline.expectedPackageCount + 1));
+    .eq("run_id", baseline.adminRunId).limit(baseline.expectedPackageCount + 1)) : [];
   if (runRows.length > baseline.expectedPackageCount || !same(
     ordered(runRows.map(runPackageProjection), (row) => String(row.clientPackageId)), baseline.runPackages,
   )) fail();
 
   const actorRows: Record<string, unknown>[] = [];
   for (let offset = 0; offset < baseline.requestedPackageIds.length; offset += 100) {
-    actorRows.push(...databaseRows(await client.from("prospect_enrichment_packages")
-      .select("id,run_id,client_package_id,submitted_by,research_key,payload_sha256,state")
-      .eq("submitted_by", baseline.actor).in("client_package_id", baseline.requestedPackageIds.slice(offset, offset + 100)).limit(101)));
+    const query = client.from("prospect_enrichment_packages").select("id,run_id,client_package_id,submitted_by,research_key,payload_sha256,state");
+    const ids = baseline.requestedPackageIds.slice(offset, offset + 100);
+    actorRows.push(...databaseRows(await (baseline.mode !== "finalized" ? query.in("client_package_id", ids).limit(101) : query.eq("submitted_by", baseline.actor).in("client_package_id", ids).limit(101))));
   }
   if (!same(ordered(actorRows.map(actorPackageProjection), (row) => String(row.clientPackageId)), baseline.actorPackages)) fail();
 
@@ -231,5 +243,9 @@ export async function verifyComparisonFinalFence(input: {
     const rows = databaseRows({ data, error });
     if (rows.length !== chunk.length || new Set(rows.map((row) => row.firm_id)).size !== chunk.length) fail();
     for (const row of rows) if (!revisionsByFirm.get(String(row.firm_id))?.has(String(row.enrichment_revision))) fail();
+  }
+  if (baseline.mode === "resume") {
+    const resumed = await requireResumableRunManifest({ manifest: baseline.resumeManifest!, actor: baseline.actor, client });
+    if (resumed.readSetSha256 !== baseline.resumeManifestReadSetSha256) fail();
   }
 }

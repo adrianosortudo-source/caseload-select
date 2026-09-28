@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import type { ComparisonExportInput } from "../comparison-export";
+import { assertBootstrapRegistrationBinding, assertFinalizedComparisonReader, assertManifestRegistrationBinding, type ComparisonExportInput } from "../comparison-export";
 import { serializeSyntheticComparisonExport as serializeComparisonExport } from "../fixtures/comparison-signing";
 import { protocolHash, sha256 } from "../model";
 import { assertFreshComparison } from "../reconciliation";
@@ -48,4 +48,24 @@ test("delivery comparison gate fails closed before networking and at the 15-minu
   assert.throws(() => assertFreshComparison(exported, "2026-09-23T12:15:00.001Z"), /comparison_stale/);
   assert.throws(() => assertFreshComparison(null, source.capturedAt), /comparison_schema_invalid/);
   assert.throws(() => assertFreshComparison({ ...exported, snapshotSha256: "0".repeat(64) }, source.capturedAt), /comparison_hash_mismatch/);
+});
+
+test("bootstrap signatures bind only the final full request and cannot pass the package-delivery reader gate", () => {
+  const bootstrapInput = input();
+  bootstrapInput.provenance.reader = "admin-prospect-enrichment-bootstrap/v1";
+  bootstrapInput.provenance.sourceArtifactSha256 = "f".repeat(64);
+  const bootstrap = serializeComparisonExport(bootstrapInput, bootstrapInput.capturedAt).snapshot;
+  assert.doesNotThrow(() => assertBootstrapRegistrationBinding(bootstrap, "f".repeat(64)));
+  assert.throws(() => assertBootstrapRegistrationBinding(bootstrap, "e".repeat(64)), /bootstrap_comparison_binding_invalid/);
+  assert.throws(() => assertFinalizedComparisonReader(bootstrap, "f".repeat(64)), /finalized_comparison_required/);
+  const resumedInput = { ...bootstrapInput, provenance: { ...bootstrapInput.provenance, reader: "admin-prospect-enrichment-bootstrap-resume/v1" } };
+  const resumed = serializeComparisonExport(resumedInput, resumedInput.capturedAt).snapshot;
+  assert.doesNotThrow(() => assertBootstrapRegistrationBinding(resumed, "f".repeat(64)));
+  assert.throws(() => assertFinalizedComparisonReader(resumed, "f".repeat(64)), /finalized_comparison_required/);
+  assert.throws(() => assertBootstrapRegistrationBinding({ ...bootstrap, packages: [{ clientPackageId: "x" }] }, "f".repeat(64)), /bootstrap_comparison_binding_invalid/);
+  const finalInput = { ...input(), provenance: { ...input().provenance, reader: "admin-prospect-enrichment-comparison/v1" } };
+  const finalized = serializeComparisonExport(finalInput, input().capturedAt).snapshot;
+  assert.doesNotThrow(() => assertFinalizedComparisonReader(finalized, finalInput.provenance.sourceArtifactSha256));
+  assert.doesNotThrow(() => assertManifestRegistrationBinding(finalized, finalInput.provenance.sourceArtifactSha256));
+  assert.throws(() => assertFinalizedComparisonReader(finalized, "e".repeat(64)), /finalized_comparison_required/);
 });

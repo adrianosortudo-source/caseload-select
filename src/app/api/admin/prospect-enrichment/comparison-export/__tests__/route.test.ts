@@ -15,6 +15,7 @@ vi.mock("@/lib/client-import-server", () => ({ validateSameOrigin: vi.fn(() => s
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: { from: state.from } }));
 
 import { POST } from "../route";
+import { POST as bootstrapPOST } from "../bootstrap/route";
 import { readIdentity } from "../../_comparison-identity";
 
 const id = "00000000-0000-4000-8000-000000000001";
@@ -89,6 +90,25 @@ describe("protected comparison export route", () => {
     });
     const response = await POST(compressedRequest);
     expect(response.status).toBe(422);
+    expect(state.from).not.toHaveBeenCalled();
+  });
+});
+
+describe("protected bootstrap comparison export route", () => {
+  it("requires the same operator and same-origin boundary before reading the request", async () => {
+    state.session = null;
+    expect((await bootstrapPOST(request({ invalid: true }))).status).toBe(401);
+    expect(state.from).not.toHaveBeenCalled();
+    state.session = { role: "operator", firm_id: id, lawyer_id: id, exp: 2_000_000_000 };
+    state.sameOrigin = false;
+    expect((await bootstrapPOST(request({ invalid: true }))).status).toBe(403);
+    expect(state.from).not.toHaveBeenCalled();
+  });
+  it("uses the shared strict full-manifest parser and rejects malformed requests without reads", async () => {
+    state.sameOrigin = true;
+    const response = await bootstrapPOST(request({ schemaVersion: "wrong", manifest: {}, packages: [] }));
+    expect(response.status).toBe(422);
+    expect(response.headers.get("cache-control")).toContain("no-store");
     expect(state.from).not.toHaveBeenCalled();
   });
 });
