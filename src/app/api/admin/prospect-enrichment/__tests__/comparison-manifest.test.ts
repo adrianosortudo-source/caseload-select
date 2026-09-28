@@ -53,7 +53,7 @@ function resumableClient(options: { manifest?: RegisteredRunManifest; registered
     prospect_enrichment_packages: options.packages ?? [],
   };
   const db = { from: vi.fn((table: string) => {
-    let filters: { column: string; value: unknown; kind: "eq" | "gt" }[] = [];
+    const filters: { column: string; value: unknown; kind: "eq" | "gt" }[] = [];
     const query = { select: vi.fn(() => query), eq: vi.fn((column: string, value: unknown) => { filters.push({ column, value, kind: "eq" }); return query; }),
       gt: vi.fn((column: string, value: unknown) => { filters.push({ column, value, kind: "gt" }); return query; }), order: vi.fn(() => query),
       limit: vi.fn(async (limit: number) => ({ data: (tables[table] ?? []).filter((row) => filters.every((filter) => filter.kind === "eq" ? row[filter.column] === filter.value : String(row[filter.column]) > String(filter.value))).slice(0, limit), error: null })) };
