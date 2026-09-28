@@ -182,7 +182,7 @@ jobs:
         run: node scripts/prospect-enrichment/temporary-credential.mjs
       - name: Configure pinned TLS trust for coverage migration
         run: node scripts/prospect-enrichment/configure-migration-tls.mjs
-      - name: Apply coverage migration, verify ledger and catalog, and reset the scoped timeout
+      - name: Apply coverage migration, verify ledger and catalog within bounded timeout
         run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs apply-coverage "$RUNNER_TEMP/recovery-preflight" "$RUNNER_TEMP/recovery-preflight/prior"
       - name: Acquire a new credential only after verified coverage
         env:

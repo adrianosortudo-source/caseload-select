@@ -110,9 +110,16 @@ test("recovery workflow requires two sequential environment reviews and blocks t
   assert.equal(workflow.jobs.apply.environment, "Production prospect migrations");
   assert.equal(workflow.jobs.apply.needs, "reconcile");
   const steps = workflow.jobs.apply.steps.map(step => step.name ?? "");
-  const coverage = steps.indexOf("Apply coverage migration, verify ledger and catalog, and reset the scoped timeout");
+  const coverage = steps.indexOf("Apply coverage migration, verify ledger and catalog within bounded timeout");
   const final = steps.indexOf("Apply final profile link only after coverage receipt is verified");
   assert.ok(coverage >= 0 && final > coverage);
   assert.equal(workflow.jobs.apply.steps[final].if, undefined, "GitHub default success gating keeps later phases stopped on an unverified result");
   assert.ok(workflow.jobs.apply.steps.slice(coverage + 1, final).some(step => step.name === "Acquire a new credential only after verified coverage"));
+});
+
+test("coverage writer uses bounded CLI timeout without role-level setting privileges", () => {
+  const source = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/candidate-recovery-gate.mjs"), "utf8");
+  assert.doesNotMatch(source, /ALTER ROLE SESSION_USER|checkRoleTimeout/);
+  assert.match(source, /\{ cwd: staged\.dir, timeout: 210000 \}/);
+  assert.match(source, /verifyRecoveryTimeoutBudget\([^\n]+, 210000, 60000\)/);
 });
