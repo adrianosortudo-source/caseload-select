@@ -1,5 +1,7 @@
 # Finish Admin prospect research enrichment
 
+Current schema-release execution uses [the consolidated release runbook](./prospect-enrichment-complete-release.md): one manual workflow run, one protected read-only preflight job and one dependent protected release job after evidence review. This supersedes the separate dispatch sequence below for the initial eleven-pending migration state only. Existing individual workflows remain recovery tools. The implemented consolidation must pass required tests and actual protected execution before being called complete. CLI-owned artifacts remain under their existing profile-contained output roots; the completion directory records pointers and hashes rather than broadening those filesystem allowlists.
+
 Owner: the existing “Reconcile Luna research in Admin” chat. Executor: Luna in that same chat after model handoff. Date: 2026-09-27. This is the controlling completion plan for this project; older technical runbooks remain implementation references, but their stale release status and repeated conversational approval requests are superseded by current user authorization and AGENTS.md. Provider-enforced protections remain binding.
 
 ## 1. Deliverable and fixed decisions

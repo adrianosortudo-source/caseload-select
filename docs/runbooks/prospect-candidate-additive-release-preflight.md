@@ -1,5 +1,7 @@
 # Prospect candidate additive release preflight
 
+The authorized initial eleven-pending completion release now uses [the consolidated workflow](./prospect-enrichment-complete-release.md), retaining this exact receipt and all immediate ledger/catalog/plan guards. The separate workflows documented below remain read-only diagnosis and bounded recovery tools. They do not require seven separate dispatches when the reviewed consolidated workflow is used.
+
 This document and its machine-readable receipt define a **review-only, read-only preflight**. They do not authorize production migration, data import, candidate linking, qualification changes, Admin cutover, or research-process cutover.
 
 ## Exact source scope

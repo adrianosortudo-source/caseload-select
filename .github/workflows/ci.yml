@@ -229,6 +229,7 @@ jobs:
           npm run test:prospect-enrichment-cli
           node --test scripts/prospect-enrichment/__tests__/migration-gate.node-test.mjs
           node --test scripts/prospect-enrichment/__tests__/additive-release-gate.node-test.mjs
+          node --test scripts/prospect-enrichment/__tests__/complete-release-gate.node-test.mjs
           node --test scripts/prospect-enrichment/__tests__/temporary-credential.node-test.mjs
           node --test scripts/prospect-enrichment/__tests__/database-ca.node-test.mjs
       - name: Run vitest
