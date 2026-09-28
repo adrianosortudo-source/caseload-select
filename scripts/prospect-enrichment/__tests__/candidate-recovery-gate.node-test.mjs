@@ -74,10 +74,10 @@ test("profile link cannot run until coverage read-back has verified", () => {
 });
 
 test("database write timeouts leave an explicit read-back and cleanup reserve inside credential TTL", () => {
-  assert.equal(recovery.verifyRecoveryTimeoutBudget(270000, 210000, 60000), true);
+  assert.equal(recovery.verifyRecoveryTimeoutBudget(360000, 300000, 60000), true);
   assert.equal(recovery.verifyRecoveryTimeoutBudget(180000, 120000, 60000), true);
-  assert.throws(() => recovery.verifyRecoveryTimeoutBudget(269999, 210000, 60000), /candidate_recovery_credential_budget_insufficient/);
-  assert.throws(() => recovery.verifyRecoveryTimeoutBudget(300000, 210000, 0.5), /candidate_recovery_credential_budget_insufficient/);
+  assert.throws(() => recovery.verifyRecoveryTimeoutBudget(359999, 300000, 60000), /candidate_recovery_credential_budget_insufficient/);
+  assert.throws(() => recovery.verifyRecoveryTimeoutBudget(360000, 300000, 0.5), /candidate_recovery_credential_budget_insufficient/);
   assert.throws(() => recovery.verifyRecoveryTimeoutBudget(Number.NaN, 210000, 60000), /candidate_recovery_credential_budget_insufficient/);
 });
 
@@ -113,6 +113,10 @@ test("recovery workflow requires two sequential environment reviews and blocks t
   const coverage = steps.indexOf("Apply coverage migration, verify ledger and catalog within bounded timeout");
   const final = steps.indexOf("Apply final profile link only after coverage receipt is verified");
   assert.ok(coverage >= 0 && final > coverage);
+  const reviewSummary = workflow.jobs.reconcile.steps.find(step => step.name === "Present exact partial ledger and remaining suffix for second protected review").run;
+  assert.match(reviewSummary, /per-session PostgreSQL statement timeout of 240 seconds/);
+  assert.match(reviewSummary, /300-second CLI hard timeout/);
+  assert.match(reviewSummary, /360 seconds credential life including a 60-second read-back reserve/);
   assert.equal(workflow.jobs.apply.steps[final].if, undefined, "GitHub default success gating keeps later phases stopped on an unverified result");
   assert.ok(workflow.jobs.apply.steps.slice(coverage + 1, final).some(step => step.name === "Acquire a new credential only after verified coverage"));
 });
@@ -120,6 +124,10 @@ test("recovery workflow requires two sequential environment reviews and blocks t
 test("coverage writer uses bounded CLI timeout without role-level setting privileges", () => {
   const source = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/candidate-recovery-gate.mjs"), "utf8");
   assert.doesNotMatch(source, /ALTER ROLE SESSION_USER|checkRoleTimeout/);
-  assert.match(source, /\{ cwd: staged\.dir, timeout: 210000 \}/);
-  assert.match(source, /verifyRecoveryTimeoutBudget\([^\n]+, 210000, 60000\)/);
+  assert.match(source, /\{ cwd: staged\.dir, timeout: 300000 \}/);
+  assert.match(source, /verifyRecoveryTimeoutBudget\([^\n]+, 300000, 60000\)/);
+  const credential = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/temporary-credential.mjs"), "utf8");
+  assert.match(credential, /options=-c%20statement_timeout%3D240s/);
+  const gate = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/migration-gate.mjs"), "utf8");
+  assert.match(gate, /\["options", "-c statement_timeout=240s"\]/);
 });

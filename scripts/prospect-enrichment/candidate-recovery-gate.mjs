@@ -202,11 +202,11 @@ function applyCoverage(recoveryDir, priorDir) {
   if (before.ledgerCheck && !same(read(before.ledgerCheck).pending, REMAINING.map(p => path.posix.basename(p)))) fail("candidate_recovery_coverage_prefix_changed");
   const dry = exactDryRun(raw, "coverage-before-", staged.dir, [COVERAGE]);
   run(process.execPath, [path.join(ROOT, "scripts/prospect-enrichment/migration-gate.mjs"), "candidate-recovery-verify-stage", ROOT, staged.dir, staged.proof, "coverage"]);
-  freshCredential(270000);
-  verifyRecoveryTimeoutBudget(Number(process.env.TEMPORARY_DATABASE_EXPIRES_AT) - Date.now(), 210000, 60000);
+  freshCredential(360000);
+  verifyRecoveryTimeoutBudget(Number(process.env.TEMPORARY_DATABASE_EXPIRES_AT) - Date.now(), 300000, 60000);
   state.coverage = "started_unverified"; save(stateFile, state);
   try {
-    run("supabase", ["db", "push", "--yes", "--include-all", "--skip-vault", "--output-format", "json", "--db-url", process.env.MIGRATION_DATABASE_URL], { cwd: staged.dir, timeout: 210000 });
+    run("supabase", ["db", "push", "--yes", "--include-all", "--skip-vault", "--output-format", "json", "--db-url", process.env.MIGRATION_DATABASE_URL], { cwd: staged.dir, timeout: 300000 });
     const after = snapshot(raw, "coverage-after-", [PROFILE_LINK], 10);
     if (!same(read(after.ledgerCheck).pending, [path.posix.basename(PROFILE_LINK)]) || !same(read(after.fullCheck).pendingPaths, [PROFILE_LINK])) fail("candidate_recovery_coverage_readback_invalid");
     const plan = exactDryRun(raw, "coverage-after-", staged.dir, []);
@@ -220,7 +220,7 @@ function applyCoverage(recoveryDir, priorDir) {
     save(path.join(raw, "recovery-marker.json"), { phase: "candidate-coverage", state: "started_unverified", replayAllowed: false, readOnlyReconciliationRequired: true });
     throw error;
   }
-  state.coverage = "verified"; save(stateFile, state); save(path.join(raw, "coverage-receipt.json"), { binding, migration: COVERAGE, state: "verified", dryRun: dry, processTimeoutMs: 210000, readbackReserveMs: 60000 });
+  state.coverage = "verified"; save(stateFile, state); save(path.join(raw, "coverage-receipt.json"), { binding, migration: COVERAGE, state: "verified", dryRun: dry, sessionStatementTimeoutMs: 240000, processTimeoutMs: 300000, readbackReserveMs: 60000 });
 }
 
 function applyProfileLink(recoveryDir, priorDir) {

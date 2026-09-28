@@ -42,7 +42,11 @@ export function validateTemporaryCredential(payload, issuedAt, now = Date.now())
       !Number.isSafeInteger(issuedAt) || issuedAt > now) fail("temporary_credential_response_invalid");
   const expiresAt = issuedAt + payload.ttl_seconds * 1000;
   if (expiresAt - now < 30000) fail("temporary_credential_expired_or_too_short");
-  const url = `postgresql://${payload.role}.${PROJECT_REF}:${encodeURIComponent(payload.password)}@${TEMPORARY_DATABASE_HOST}:5432/postgres?sslmode=verify-full`;
+  // Supabase CLI preserves PostgreSQL runtime parameters when it reconstructs
+  // this connection URL. Supavisor session mode forwards startup options to
+  // PostgreSQL, so the bounded recovery writer can raise only this connection's
+  // statement timeout without changing database- or role-level configuration.
+  const url = `postgresql://${payload.role}.${PROJECT_REF}:${encodeURIComponent(payload.password)}@${TEMPORARY_DATABASE_HOST}:5432/postgres?sslmode=verify-full&options=-c%20statement_timeout%3D240s`;
   return { url, role: payload.role, expiresAt, issuedAt };
 }
 
