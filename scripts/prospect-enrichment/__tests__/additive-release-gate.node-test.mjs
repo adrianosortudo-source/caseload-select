@@ -106,11 +106,22 @@ test("ledger summary reports only row identity and statement-array shape", () =>
   assert.equal(summary.rowCount, 3);
   assert.equal(summary.rows[0].statementField, "null");
   assert.equal(summary.rows[0].statementCount, null);
+  assert.equal(summary.rows[0].statementArrayBlankOnly, false);
   assert.equal(summary.rows[1].statementCount, 1);
+  assert.equal(summary.rows[1].statementArrayBlankOnly, false);
+  assert.equal(summary.rows[1].statementEntryHasOuterWhitespace, false);
   assert.equal(summary.rows[2].identityRecognized, false);
   assert.equal(summary.rows[2].version, null);
   assert.equal(summary.rows[2].name, null);
   assert.doesNotMatch(JSON.stringify(summary), /private SQL|attacker SQL|secret/);
+  const blankSummary = summarizeLedgerPayload([{ version: "20260924180541", name: "restore_operator_membership_rpc", statements: [" "] }]);
+  assert.equal(blankSummary.rows[0].statementArrayBlankOnly, true);
+  assert.equal(blankSummary.rows[0].statementEntryHasOuterWhitespace, true);
+  assert.doesNotMatch(JSON.stringify(blankSummary), /statement contents|private SQL/);
+  const paddedSummary = summarizeLedgerPayload([{ version: "20260924180541", name: "restore_operator_membership_rpc", statements: [" private SQL "] }]);
+  assert.equal(paddedSummary.rows[0].statementArrayBlankOnly, false);
+  assert.equal(paddedSummary.rows[0].statementEntryHasOuterWhitespace, true);
+  assert.doesNotMatch(JSON.stringify(paddedSummary), /private SQL/);
 });
 
 test("ledger accepts only a verified applied RPC plus an exact ordered migration prefix", () => {

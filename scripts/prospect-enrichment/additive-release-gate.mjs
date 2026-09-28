@@ -171,6 +171,10 @@ export function summarizeLedgerPayload(payload) {
         statementField: !statementsPresent ? "missing" : statements === null ? "null" : Array.isArray(statements) ? "array" : typeof statements,
         statementCount: Array.isArray(statements) ? statements.length : null,
         nonStringStatementCount: Array.isArray(statements) ? statements.filter((statement) => typeof statement !== "string").length : null,
+        statementArrayBlankOnly: Array.isArray(statements) && statements.length > 0 &&
+          statements.every((statement) => typeof statement === "string" && statement.trim() === ""),
+        statementEntryHasOuterWhitespace: Array.isArray(statements) &&
+          statements.some((statement) => typeof statement === "string" && statement.trim() !== statement),
       };
     }),
   };
