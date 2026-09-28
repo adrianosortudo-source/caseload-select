@@ -124,7 +124,7 @@ jobs:
           node scripts/prospect-enrichment/additive-release-gate.mjs catalog-query > "$RUNNER_TEMP/rpc-catalog.sql"
           node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/rpc-catalog.sql" --output json --agent no > "$RUNNER_TEMP/rpc-catalog.json"
-          node scripts/prospect-enrichment/additive-release-gate.mjs catalog "$RUNNER_TEMP/rpc-catalog.json" > "$RUNNER_TEMP/rpc-catalog-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs catalog-bound "$RUNNER_TEMP/rpc-catalog.json" "$RUNNER_TEMP/ledger.json" > "$RUNNER_TEMP/rpc-catalog-check.json"
 
       - name: Require exact candidate suffix dry-run and no seeds or roles
         shell: bash
@@ -162,7 +162,7 @@ jobs:
           node scripts/prospect-enrichment/additive-release-gate.mjs candidate-prefix "$RUNNER_TEMP/immediate-ledger-check.json" > "$RUNNER_TEMP/immediate-prefix-check.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/rpc-catalog.sql" --output json --agent no > "$RUNNER_TEMP/immediate-rpc-catalog.json"
-          node scripts/prospect-enrichment/additive-release-gate.mjs catalog "$RUNNER_TEMP/immediate-rpc-catalog.json" > "$RUNNER_TEMP/immediate-rpc-catalog-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs catalog-bound "$RUNNER_TEMP/immediate-rpc-catalog.json" "$RUNNER_TEMP/immediate-ledger.json" > "$RUNNER_TEMP/immediate-rpc-catalog-check.json"
           node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/candidate-migrations-immediate" > "$RUNNER_TEMP/immediate-staged-inventory.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger-readback.sql" --output-format json --agent no > "$RUNNER_TEMP/immediate-full-ledger.json"
@@ -193,7 +193,7 @@ jobs:
           node scripts/prospect-enrichment/additive-release-gate.mjs candidate-complete "$RUNNER_TEMP/post-ledger-check.json" > "$RUNNER_TEMP/post-prefix-check.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs connection > /dev/null
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/rpc-catalog.sql" --output json --agent no > "$RUNNER_TEMP/post-rpc-catalog.json"
-          node scripts/prospect-enrichment/additive-release-gate.mjs catalog "$RUNNER_TEMP/post-rpc-catalog.json" > "$RUNNER_TEMP/post-rpc-catalog-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs catalog-bound "$RUNNER_TEMP/post-rpc-catalog.json" "$RUNNER_TEMP/post-ledger.json" > "$RUNNER_TEMP/post-rpc-catalog-check.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs plan post "$RUNNER_TEMP/post-plan.json" "$RUNNER_TEMP/post-ledger-check.json" > "$RUNNER_TEMP/post-plan-check.json"
 
       - name: Upload redacted candidate additive release evidence

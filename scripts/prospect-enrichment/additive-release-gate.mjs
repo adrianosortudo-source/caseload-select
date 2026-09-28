@@ -360,15 +360,13 @@ function main(args) {
     console.log(JSON.stringify(verifyCandidatePrerequisitePrefix(safeJson(rest[0]))));
   } else if (command === "candidate-complete" && rest.length === 1) {
     console.log(JSON.stringify(verifyCandidateCompletePrefix(safeJson(rest[0]))));
-  } else if (command === "catalog" && rest.length === 1) {
-    console.log(JSON.stringify(verifyOperatorRpcCatalog(safeJson(rest[0]), receipt, null, sources)));
   } else if (command === "catalog-bound" && rest.length === 2) {
     const payload = safeJson(rest[1]);
     const ledgerRows = Array.isArray(payload) ? payload : isRecord(payload) && Array.isArray(payload.data) ? payload.data : isRecord(payload) && Array.isArray(payload.rows) ? payload.rows : null;
     console.log(JSON.stringify(verifyOperatorRpcCatalog(safeJson(rest[0]), receipt, ledgerRows, sources)));
   } else if (command === "plan" && rest.length === 3) {
     console.log(JSON.stringify(verifyMigrationPlan(safeJson(rest[1]), safeJson(rest[2]), rest[0])));
-  } else fail("usage_source_application_source_connection_ledger_query_ledger_summary_catalog_query_ledger_full_ledger_catalog_catalog_bound_candidate_prefix_candidate_complete_or_plan");
+  } else fail("usage_source_application_source_connection_ledger_query_ledger_summary_catalog_query_ledger_full_ledger_catalog_bound_candidate_prefix_candidate_complete_or_plan");
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
