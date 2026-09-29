@@ -88,9 +88,54 @@ test("profile link cannot run until coverage read-back has verified", () => {
   assert.throws(() => recovery.verifyRecoveryPhaseTransition({ coverage: "verified", profileLink: "verified" }, "profile-link"));
 });
 
+test("writer response loss after ledger advances stays unverified and prohibits coverage replay", () => {
+  const persisted = recovery.beginRecoveryCoverageWrite({ coverage: "pending", profileLink: "pending" });
+  const fakeLedger = { appliedPrefixLength: 9 };
+  assert.throws(() => {
+    fakeLedger.appliedPrefixLength = 10; // Commit completed, but the CLI response was lost.
+    throw Error("simulated_writer_response_loss");
+  }, /simulated_writer_response_loss/);
+  assert.deepEqual(persisted, { coverage: "started_unverified", profileLink: "pending" });
+  assert.equal(fakeLedger.appliedPrefixLength, 10);
+  assert.throws(() => recovery.beginRecoveryCoverageWrite(persisted), /candidate_recovery_prior_phase_unverified/);
+  assert.throws(() => recovery.verifyRecoveryPhaseTransition(persisted, "profile-link"), /candidate_recovery_prior_phase_unverified/);
+});
+
+test("every partial coverage read-back failure preserves started_unverified and blocks writer and profile-link", () => {
+  const boundaries = ["ledger", "fullLedger", "dryRun", "catalog"];
+  for (const failedAt of boundaries) {
+    const persisted = recovery.beginRecoveryCoverageWrite({ coverage: "pending", profileLink: "pending" });
+    const checks = { ledger: false, fullLedger: false, dryRun: false, catalog: false };
+    for (const boundary of boundaries) {
+      if (boundary === failedAt) break;
+      checks[boundary] = true;
+    }
+    assert.throws(() => recovery.completeRecoveryCoverageReadback(persisted, checks), /candidate_recovery_coverage_readback_invalid/, failedAt);
+    assert.deepEqual(persisted, { coverage: "started_unverified", profileLink: "pending" }, failedAt);
+    assert.throws(() => recovery.beginRecoveryCoverageWrite(persisted), /candidate_recovery_prior_phase_unverified/, failedAt);
+    assert.throws(() => recovery.verifyRecoveryPhaseTransition(persisted, "profile-link"), /candidate_recovery_prior_phase_unverified/, failedAt);
+  }
+});
+
+test("reviewed prefix-ten resume authorizes read-back only, then profile-link after all checks", () => {
+  const observed = { ...current, appliedPrefixLength: 10, pending: [recovery.PROFILE_LINK], coverageReadbackVerified: true };
+  assert.deepEqual(recovery.verifyRecoveryObservedState(observed), { coverageWriteRequired: false });
+  const resumed = { coverage: "started_unverified", profileLink: "pending" };
+  assert.throws(() => recovery.beginRecoveryCoverageWrite(resumed), /candidate_recovery_prior_phase_unverified/);
+  const verified = recovery.completeRecoveryCoverageReadback(resumed, { ledger: true, fullLedger: true, dryRun: true, catalog: true });
+  assert.equal(recovery.verifyRecoveryPhaseTransition(verified, "profile-link"), true);
+  for (const invalid of [
+    { ledger: false, fullLedger: true, dryRun: true, catalog: true },
+    { ledger: true, fullLedger: false, dryRun: true, catalog: true },
+    { ledger: true, fullLedger: true, dryRun: false, catalog: true },
+    { ledger: true, fullLedger: true, dryRun: true, catalog: false },
+  ]) assert.throws(() => recovery.completeRecoveryCoverageReadback(resumed, invalid), /candidate_recovery_coverage_readback_invalid/);
+});
+
 test("database writer TTL and process limits leave read-back to a separately issued credential", () => {
   assert.equal(recovery.verifyRecoveryTimeoutBudget(300000, 240000, 10000), true);
   assert.equal(recovery.verifyRecoveryTimeoutBudget(180000, 120000, 60000), true);
+  assert.equal(recovery.verifyRecoveryTimeoutBudget(250000, 200000, 50000), true);
   assert.throws(() => recovery.verifyRecoveryTimeoutBudget(249999, 240000, 10000), /candidate_recovery_credential_budget_insufficient/);
   assert.throws(() => recovery.verifyRecoveryTimeoutBudget(300000, 240000, 0.5), /candidate_recovery_credential_budget_insufficient/);
   assert.throws(() => recovery.verifyRecoveryTimeoutBudget(Number.NaN, 210000, 60000), /candidate_recovery_credential_budget_insufficient/);
@@ -152,7 +197,7 @@ test("recovery workflow requires two sequential environment reviews and blocks t
   assert.match(reviewSummary, /transaction-local statement_timeout of 240 seconds before DDL/);
   assert.match(reviewSummary, /300-second credential/);
   assert.match(reviewSummary, /240-second CLI hard timeout/);
-  assert.match(reviewSummary, /separately issued bounded credential is used for read-back/);
+  assert.match(reviewSummary, /read-back uses a separate credential with at least 250 seconds remaining/);
   assert.match(reviewSummary, /prefix ten with only profile-link pending/);
   assert.equal(workflow.jobs.apply.steps[final].if, undefined, "GitHub default success gating keeps later phases stopped on an unverified result");
   assert.ok(workflow.jobs.apply.steps.slice(coverage + 1, final).some(step => step.name === "Acquire a new credential only after verified coverage"));
@@ -166,7 +211,9 @@ test("coverage writer uses bounded CLI timeout without role-level setting privil
   assert.match(source, /\{ cwd: staged\.dir, timeout: 240000 \}/);
   assert.match(source, /freshCredential\(250000\)/);
   assert.match(source, /verifyRecoveryTimeoutBudget\([^\n]+, 240000, 10000\)/);
-  assert.match(source, /freshCredential\(60000\)/);
+  assert.match(source, /freshCredential\(250000\)/);
+  assert.match(source, /verifyRecoveryTimeoutBudget\([^\n]+, 200000, 50000\)/);
+  assert.match(source, /timeout: 20000/);
   assert.match(source, /verify-coverage-readback/);
   const credential = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/temporary-credential.mjs"), "utf8");
   assert.doesNotMatch(credential, /options=-c.*statement_timeout/);
