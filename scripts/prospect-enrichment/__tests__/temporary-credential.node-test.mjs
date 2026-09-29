@@ -102,7 +102,8 @@ test("role, TTL and TLS validation fails closed", () => {
   assert.throws(() => validateTemporaryCredential({ ...payload, ttl_seconds: 60 }, issuedAt, issuedAt + 31000));
   const credential = validateTemporaryCredential(payload, issuedAt);
   const parsedCredentialUrl = new URL(credential.url);
-  assert.equal(parsedCredentialUrl.searchParams.get("options"), "-c statement_timeout=240s");
+  assert.equal(parsedCredentialUrl.searchParams.get("options"), null);
+  assert.equal(parsedCredentialUrl.searchParams.get("sslmode"), "verify-full");
   const env = { ...environment, TEMPORARY_DATABASE_ROLE: credential.role, TEMPORARY_DATABASE_ISSUED_AT: String(issuedAt), TEMPORARY_DATABASE_EXPIRES_AT: String(credential.expiresAt) };
   assert.equal(verifyDirectDatabaseUrl(credential.url, env).credentialMode, "temporary-write-capable");
   assert.equal(verifyDirectDatabaseUrl(credential.url + "&sslrootcert=" + encodeURIComponent(DATABASE_CA_PATH), env).credentialMode, "temporary-write-capable");
@@ -111,7 +112,6 @@ test("role, TTL and TLS validation fails closed", () => {
   assert.throws(() => verifyDirectDatabaseUrl(credential.url, { ...env, TEMPORARY_DATABASE_ROLE: "cli_login_other" }));
   assert.throws(() => verifyDirectDatabaseUrl(credential.url, { ...env, TEMPORARY_DATABASE_EXPIRES_AT: String(Date.now() + 1000) }));
   assert.throws(() => verifyDirectDatabaseUrl(credential.url.replace("verify-full", "require"), env));
-  assert.throws(() => verifyDirectDatabaseUrl(credential.url.replace("240s", "300s"), env));
   assert.throws(() => verifyDirectDatabaseUrl(credential.url + "&options=-c%20statement_timeout%3D240s", env));
   assert.equal(new URL(credential.url).hostname, TEMPORARY_DATABASE_HOST);
   assert.equal(new URL(credential.url).username, payload.role + "." + PROJECT_REF);

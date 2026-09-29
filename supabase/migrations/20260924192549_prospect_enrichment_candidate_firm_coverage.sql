@@ -1,6 +1,7 @@
 -- Additive universal research coverage and proven-firm aggregation.
 -- Existing source rows, prior migrations, intake and production allowlist remain unchanged.
 BEGIN;
+SET LOCAL statement_timeout = '240s';
 
 CREATE INDEX prospect_candidate_identity_cutoff ON public.prospect_research_candidate_history(candidate_id,coverage_revision,verified_firm_id) WHERE item_kind='identity_link';
 CREATE INDEX prospect_candidate_source_latest ON public.prospect_research_candidate_coverage(source_table,source_key,revision DESC);
