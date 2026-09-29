@@ -106,8 +106,8 @@
       "filename": "20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
       "version": "20260924192549",
       "name": "prospect_enrichment_candidate_firm_coverage",
-      "bytes": 60600,
-      "sha256": "59ac2276d615f080a9a431fb57cfd516cc6e2b23284666a64a2f6d728bd696c9"
+      "bytes": 66939,
+      "sha256": "4d10e00185f8d887e6c41dc76e06c3b2fb76c3ba2dbcb6cb3ea83bb980483b8a"
     },
     {
       "path": "supabase/migrations/20260925200000_gta_prospect_operator_database_firm_profile_link.sql",

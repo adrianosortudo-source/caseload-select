@@ -2,14 +2,14 @@
   "schemaVersion": "prospect-candidate-firm-coverage-review/v1",
   "reviewOnly": true,
   "productionApplicationApproved": false,
-  "sourceBaseSha": "93209fc3de5c7dcba4775eb9f42fab1e72eddead",
+  "sourceBaseSha": "610215b991b73be558ddadd1abce39883b8ca584",
   "projectRef": "ssxryjxifwiivghglqer",
   "migration": {
     "path": "supabase/migrations/20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
     "version": "20260924192549",
     "name": "prospect_enrichment_candidate_firm_coverage",
-    "bytes": 60600,
-    "sha256": "59ac2276d615f080a9a431fb57cfd516cc6e2b23284666a64a2f6d728bd696c9"
+    "bytes": 66939,
+    "sha256": "4d10e00185f8d887e6c41dc76e06c3b2fb76c3ba2dbcb6cb3ea83bb980483b8a"
   },
   "prerequisiteCandidateReceipt": "docs/runbooks/prospect-candidate-migration-review.json",
   "prerequisiteCandidateReceiptSha256": "14e989af41a50ceda91aeccf72cb289893f084121fdbf97068e56d968fcca5bd",
