@@ -12,8 +12,9 @@ import { CANDIDATE_RELEASE_PATHS, PROJECT_REF, stageCandidateRecoveryWorkdir, ve
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const oldBinding = { runId: recovery.FAILED_RUN_ID, runAttempt: "1", sourceSha: recovery.FAILED_SOURCE_SHA, projectRef: PROJECT_REF, receiptSha256: recovery.FAILED_RECEIPT_SHA256 };
 const binding = { runId: "99999999999", runAttempt: "1", sourceSha: "a".repeat(40), projectRef: PROJECT_REF, receiptSha256: "b".repeat(64), priorArtifactId: recovery.FAILED_RECEIPTS_ARTIFACT_ID, priorArtifactSha256: recovery.FAILED_RECEIPTS_ARTIFACT_SHA256 };
-const pendingBackfill = { installed: false, complete: false, totalTables: 0, completeTables: 0, rowsProjected: 0 };
-const completeBackfill = { installed: true, complete: true, totalTables: 30, completeTables: 30, rowsProjected: 1200 };
+const pendingBackfill = { installed: false, complete: false, totalTables: 0, completeTables: 0, rowsProjected: 0, status: [] };
+const completeBackfill = { installed: true, complete: true, totalTables: 30, completeTables: 30, rowsProjected: 1200,
+  status: Array.from({ length: 30 }, (_, index) => ({ table_name: `source_${String(index).padStart(2, "0")}`, last_id: null, rows_projected: 40, complete: true })) };
 const current = { appliedPrefixLength: 9, pending: [...recovery.REMAINING], planUpToDate: false, fullLedgerMatchesSource: true, operatorRpcVerified: true, coverageTimeoutControlVerified: true, coverageReadbackVerified: false, coverageBackfill: pendingBackfill };
 
 function makePrior(t) {
@@ -74,6 +75,15 @@ test("recovery preflight accepts only exact prefix-nine write or prefix-ten read
     { ...current, coverageReadbackVerified: true },
     { ...current, appliedPrefixLength: 8 },
   ]) assert.throws(() => recovery.verifyRecoveryObservedState(invalid), /candidate_recovery_live_state_invalid/);
+});
+
+test("recovery preflight validates the complete per-table checkpoint status against aggregates", () => {
+  const resumed = { ...current, appliedPrefixLength: 10, pending: [recovery.PROFILE_LINK], coverageReadbackVerified: true, coverageBackfill: completeBackfill };
+  for (const status of [
+    completeBackfill.status.slice(1),
+    completeBackfill.status.map((row, index) => index === 0 ? { ...row, rows_projected: row.rows_projected + 1 } : row),
+    completeBackfill.status.map((row, index) => index === 0 ? { ...row, table_name: completeBackfill.status[1].table_name } : row),
+  ]) assert.throws(() => recovery.verifyRecoveryObservedState({ ...resumed, coverageBackfill: { ...completeBackfill, status } }), /candidate_recovery_live_state_invalid/);
 });
 
 test("coverage catalog is valid only for the exact prefix-nine pending or prefix-ten installed shape", () => {
@@ -260,6 +270,23 @@ test("same-run review evidence artifact rejects a changed id, digest, run or sou
   assert.throws(() => recovery.verifyRecoveryArtifactMetadata({ ...metadata, id: 14 }, env));
 });
 
+test("pre-review evidence binding requires this exact dispatched main source and reviewed receipt", () => {
+  const env = { GITHUB_RUN_ID: binding.runId, GITHUB_RUN_ATTEMPT: "1", GITHUB_SHA: binding.sourceSha,
+    GITHUB_EVENT_NAME: "workflow_dispatch", GITHUB_REF: "refs/heads/main", GITHUB_REPOSITORY: "adrianosortudo-source/caseload-select",
+    REVIEWED_SOURCE_SHA: binding.sourceSha, REVIEWED_RECEIPT_SHA256: binding.receiptSha256, PROJECT_REF,
+    RECOVERY_CONFIRMATION: recovery.RECOVERY_CONFIRMATION, USE_TEMPORARY_DATABASE_CREDENTIAL: "true" };
+  assert.deepEqual(recovery.verifyPreflightReviewContext(env, binding.sourceSha, binding.sourceSha, binding.receiptSha256), {
+    ...binding,
+  });
+  for (const [key, value] of [["GITHUB_EVENT_NAME", "push"], ["GITHUB_REF", "refs/heads/codex/test"],
+    ["GITHUB_REPOSITORY", "other/repo"], ["REVIEWED_SOURCE_SHA", "c".repeat(40)], ["RECOVERY_CONFIRMATION", ""],
+    ["USE_TEMPORARY_DATABASE_CREDENTIAL", "false"], ["PROJECT_REF", "other-project"]]) {
+    assert.throws(() => recovery.verifyPreflightReviewContext({ ...env, [key]: value }, binding.sourceSha, binding.sourceSha, binding.receiptSha256));
+  }
+  assert.throws(() => recovery.verifyPreflightReviewContext(env, binding.sourceSha, "d".repeat(40), binding.receiptSha256));
+  assert.throws(() => recovery.verifyPreflightReviewContext(env, binding.sourceSha, binding.sourceSha, "e".repeat(64)));
+});
+
 test("recovery workflow requires two sequential environment reviews and blocks the final phase on coverage failure", () => {
   const workflow = yaml.load(fs.readFileSync(path.join(root, ".github/workflows/prospect-candidate-suffix-recovery.yml"), "utf8"));
   const trigger = workflow.on ?? workflow["on"];
@@ -267,7 +294,10 @@ test("recovery workflow requires two sequential environment reviews and blocks t
   assert.equal(workflow.concurrency["cancel-in-progress"], false);
   assert.equal(workflow.jobs.reconcile.environment, "Production prospect migrations");
   assert.equal(workflow.jobs.apply.environment, "Production prospect migrations");
-  assert.equal(workflow.jobs.apply.needs, "reconcile");
+  assert.deepEqual(workflow.jobs.apply.needs, ["reconcile", "verify_preflight"]);
+  assert.equal(workflow.jobs.verify_preflight.needs, "reconcile");
+  assert.equal(workflow.jobs.verify_preflight.environment, undefined, "artifact verification must finish before GitHub creates the second protected review");
+  assert.match(workflow.jobs.verify_preflight.steps.find(step => step.name?.includes("before protected review")).run, /verify-preflight-for-review/);
   assert.equal(workflow.jobs.reconcile.outputs.coverage_write_required, "${{ steps.reconcile.outputs.coverage_write_required }}");
   assert.equal(workflow.jobs.reconcile.outputs.coverage_backfill_required, "${{ steps.reconcile.outputs.coverage_backfill_required }}");
   const steps = workflow.jobs.apply.steps.map(step => step.name ?? "");
@@ -288,6 +318,8 @@ test("recovery workflow requires two sequential environment reviews and blocks t
   assert.match(reviewSummary, /batches of at most 100/);
   assert.match(reviewSummary, /database checkpoints/);
   assert.match(reviewSummary, /prefix ten with only profile-link pending/);
+  assert.match(reviewSummary, /Read-only coverage checkpoints/);
+  assert.match(reviewSummary, /coverageBackfill\.status/);
   assert.equal(workflow.jobs.apply.steps[final].if, undefined, "GitHub default success gating keeps later phases stopped on an unverified result");
   assert.ok(workflow.jobs.apply.steps.slice(coverage + 1, final).some(step => step.name === "Acquire a new credential only after verified coverage"));
   const failedEvidence = workflow.jobs.reconcile.steps.find(step => step.name === "Retain failed preflight evidence");
