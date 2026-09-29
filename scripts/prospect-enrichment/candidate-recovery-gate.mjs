@@ -154,11 +154,22 @@ export function verifyRecoveryObservedState(current) {
   if (!exact(current, ["appliedPrefixLength", "pending", "planUpToDate", "fullLedgerMatchesSource", "operatorRpcVerified", "coverageTimeoutControlVerified", "coverageReadbackVerified", "coverageBackfill"]) ||
       current.planUpToDate !== false || current.fullLedgerMatchesSource !== true || current.operatorRpcVerified !== true || current.coverageTimeoutControlVerified !== true) fail("candidate_recovery_live_state_invalid");
   const backfill = current.coverageBackfill;
-  if (!backfill || !exact(backfill, ["installed", "complete", "totalTables", "completeTables", "rowsProjected"]) ||
+  if (!backfill || !exact(backfill, ["installed", "complete", "totalTables", "completeTables", "rowsProjected", "status"]) ||
       typeof backfill.installed !== "boolean" || typeof backfill.complete !== "boolean" ||
       !Number.isSafeInteger(backfill.totalTables) || backfill.totalTables < 0 || !Number.isSafeInteger(backfill.completeTables) ||
       backfill.completeTables < 0 || backfill.completeTables > backfill.totalTables || !Number.isSafeInteger(backfill.rowsProjected) || backfill.rowsProjected < 0 ||
       backfill.complete !== (backfill.installed && backfill.totalTables > 0 && backfill.completeTables === backfill.totalTables)) fail("candidate_recovery_live_state_invalid");
+  if (!Array.isArray(backfill.status) || backfill.status.length !== backfill.totalTables) fail("candidate_recovery_live_state_invalid");
+  const seenTables = new Set();
+  for (const row of backfill.status) {
+    if (!exact(row, ["table_name", "last_id", "rows_projected", "complete"]) || typeof row.table_name !== "string" ||
+        !/^[a-z][a-z0-9_]{0,62}$/.test(row.table_name) || seenTables.has(row.table_name) ||
+        (row.last_id !== null && (typeof row.last_id !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.last_id))) ||
+        !Number.isSafeInteger(row.rows_projected) || row.rows_projected < 0 || typeof row.complete !== "boolean") fail("candidate_recovery_live_state_invalid");
+    seenTables.add(row.table_name);
+  }
+  if (backfill.status.reduce((sum, row) => sum + row.rows_projected, 0) !== backfill.rowsProjected ||
+      backfill.status.filter(row => row.complete).length !== backfill.completeTables) fail("candidate_recovery_live_state_invalid");
   if (current.appliedPrefixLength === 9 && same(current.pending, REMAINING) && current.coverageReadbackVerified === false &&
       !backfill.installed && !backfill.complete && backfill.totalTables === 0 && backfill.completeTables === 0 && backfill.rowsProjected === 0) return { coverageWriteRequired: true, coverageBackfillRequired: true };
   if (current.appliedPrefixLength === 10 && same(current.pending, [PROFILE_LINK]) && backfill.installed &&
@@ -392,7 +403,7 @@ function currentReadOnly(dir, label) {
     fullLedgerMatchesSource: full.completeSourceCoverage === true && same(full.pendingPaths, snapshotFiles.pending), operatorRpcVerified: catalog.prerequisite === "verified_applied_operator_rpc",
     coverageTimeoutControlVerified: true, coverageReadbackVerified: coverageBackfill.complete, coverageBackfill: {
       installed: coverageBackfill.installed, complete: coverageBackfill.complete, totalTables: coverageBackfill.totalTables,
-      completeTables: coverageBackfill.completeTables, rowsProjected: coverageBackfill.rowsProjected,
+      completeTables: coverageBackfill.completeTables, rowsProjected: coverageBackfill.rowsProjected, status: coverageBackfill.detail ?? [],
     } };
   verifyRecoveryObservedState(current);
   return { current, snapshotFiles, plan };
@@ -430,6 +441,34 @@ function verifyPreflight(recoveryDir, priorDir = path.join(recoveryDir, "prior")
   const binding = checkSource(); verifyFailureArtifactMetadata(read(path.join(priorDir, "artifact-metadata.json")));
   verifyFailureReceipts(priorDir); verifyRecoveryEvidence(read(path.join(recoveryDir, "recovery-evidence.json")), binding, priorDir);
 }
+export function verifyPreflightReviewContext(environment, checkoutSha, mainSha, receiptSha256) {
+  const binding = {
+    runId: environment.GITHUB_RUN_ID, runAttempt: environment.GITHUB_RUN_ATTEMPT, sourceSha: environment.GITHUB_SHA,
+    projectRef: PROJECT_REF, receiptSha256: environment.REVIEWED_RECEIPT_SHA256,
+    priorArtifactId: FAILED_RECEIPTS_ARTIFACT_ID, priorArtifactSha256: FAILED_RECEIPTS_ARTIFACT_SHA256,
+  };
+  if (checkoutSha !== binding.sourceSha || checkoutSha !== mainSha ||
+      environment.GITHUB_EVENT_NAME !== "workflow_dispatch" || environment.GITHUB_REF !== "refs/heads/main" ||
+      environment.GITHUB_REPOSITORY !== "adrianosortudo-source/caseload-select" || binding.runAttempt !== "1" ||
+      environment.REVIEWED_SOURCE_SHA !== binding.sourceSha || environment.PROJECT_REF !== PROJECT_REF ||
+      environment.RECOVERY_CONFIRMATION !== RECOVERY_CONFIRMATION || environment.USE_TEMPORARY_DATABASE_CREDENTIAL !== "true" ||
+      !/^[a-f0-9]{64}$/.test(binding.receiptSha256 ?? "") || receiptSha256 !== binding.receiptSha256) {
+    fail("candidate_recovery_review_artifact_context_invalid");
+  }
+  return binding;
+}
+function verifyPreflightForReview(recoveryDir) {
+  const checkoutSha = run("git", ["rev-parse", "HEAD"]).toString().trim();
+  run("git", ["fetch", "--no-tags", "origin", "main"]);
+  const mainSha = run("git", ["rev-parse", "origin/main"]).toString().trim();
+  const receiptSha256 = sha256(fs.readFileSync(path.join(ROOT, "scripts/prospect-enrichment/additive-release-review.json")));
+  const binding = verifyPreflightReviewContext(process.env, checkoutSha, mainSha, receiptSha256);
+  const priorDir = path.join(recoveryDir, "prior");
+  verifyFailureArtifactMetadata(read(path.join(priorDir, "artifact-metadata.json")));
+  verifyFailureReceipts(priorDir);
+  verifyRecoveryEvidence(read(path.join(recoveryDir, "recovery-evidence.json")), binding, priorDir);
+  return true;
+}
 
 function authorizeCredential() {
   const binding = checkSource(), phase = process.env.COMPLETE_PHASE;
@@ -453,6 +492,7 @@ async function main([command, ...args]) {
   if (command === "preflight" && args.length === 2) return preflight(args[0], args[1]);
   if (command === "verify-preflight" && args.length === 2) return verifyPreflight(args[0], args[1]);
   if (command === "verify-preflight-self-contained" && args.length === 1) return verifyPreflight(args[0]);
+  if (command === "verify-preflight-for-review" && args.length === 1) return verifyPreflightForReview(args[0]);
   if (command === "reconcile" && args.length === 1) return reconcile(args[0]);
   if (command === "current-read-only" && args.length === 2) { console.log(JSON.stringify(currentReadOnly(args[0], args[1]))); return; }
   if (command === "prepare-coverage" && !args.length) return stage("coverage");
