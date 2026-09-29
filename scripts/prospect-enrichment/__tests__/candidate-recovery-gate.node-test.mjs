@@ -89,7 +89,7 @@ test("recovery preflight validates the complete per-table checkpoint status agai
 test("coverage catalog is valid only for the exact prefix-nine pending or prefix-ten installed shape", () => {
   const nine = { list_candidates_present: true, legacy_projection_trigger_present: false, coverage_backfill_batch_present: false, coverage_backfill_status_present: false };
   const ten = { list_candidates_present: true, legacy_projection_trigger_present: true, coverage_backfill_batch_present: true, coverage_backfill_status_present: true };
-  assert.deepEqual(recovery.verifyRecoveryCoverageCatalog(9, [nine]), pendingBackfill);
+  assert.deepEqual(recovery.verifyRecoveryCoverageCatalog(9, [nine]), { installed: false, complete: false, totalTables: 0, completeTables: 0, rowsProjected: 0 });
   assert.deepEqual(recovery.verifyRecoveryCoverageCatalog(10, [ten]), { installed: true });
   for (const [prefix, rows] of [
     [9, [{ ...nine, legacy_projection_trigger_present: true }]],
