@@ -54,7 +54,7 @@ export function safeDatabaseDiagnostic(input) {
     if (Number.isSafeInteger(input.status)) diagnostic.cliExitCode = Math.abs(input.status);
     if (typeof input.signal === "string" && ["SIGABRT", "SIGBUS", "SIGFPE", "SIGHUP", "SIGILL", "SIGINT", "SIGKILL", "SIGPIPE", "SIGQUIT", "SIGSEGV", "SIGTERM"].includes(input.signal)) diagnostic.cliSignal = input.signal;
     if (input.killed === true) diagnostic.cliKilled = true;
-    if (typeof input.code === "string" && ["EACCES", "ECONNREFUSED", "ECONNRESET", "EAI_AGAIN", "ENOENT", "ENOTFOUND", "ETIMEDOUT"].includes(input.code)) diagnostic.cliErrorCode = input.code;
+    if (typeof input.code === "string" && ["EACCES", "ECONNREFUSED", "ECONNRESET", "EAI_AGAIN", "ENOBUFS", "ENOENT", "ENOTFOUND", "ETIMEDOUT"].includes(input.code)) diagnostic.cliErrorCode = input.code;
   }
   return diagnostic;
 }

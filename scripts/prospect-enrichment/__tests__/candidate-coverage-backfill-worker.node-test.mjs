@@ -67,6 +67,12 @@ test("database CLI diagnostics inspect both output streams and retain only safe 
   assert.deepEqual(safeDatabaseDiagnostic({ status: 1, stderr: Buffer.alloc(0), stdout: Buffer.from("ERROR SQLSTATE 57014") }), {
     postgresSqlstate: "57014", sanitizedMessage: "query_canceled", cliExitCode: 1,
   });
+  assert.deepEqual(safeDatabaseDiagnostic({ status: null, signal: "SIGTERM", killed: true, code: "ETIMEDOUT", stderr: Buffer.alloc(0), stdout: Buffer.alloc(0) }), {
+    postgresSqlstate: null, sanitizedMessage: "database_cli_error_without_sqlstate", cliSignal: "SIGTERM", cliKilled: true, cliErrorCode: "ETIMEDOUT",
+  });
+  assert.deepEqual(safeDatabaseDiagnostic({ status: 1, code: "ENOBUFS", stderr: Buffer.alloc(0), stdout: Buffer.alloc(0) }), {
+    postgresSqlstate: null, sanitizedMessage: "database_cli_error_without_sqlstate", cliExitCode: 1, cliErrorCode: "ENOBUFS",
+  });
 });
 
 test("persistent batch failure identifies only the safe operation, table and database category", async () => {
