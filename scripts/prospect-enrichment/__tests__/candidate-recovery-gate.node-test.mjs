@@ -11,7 +11,7 @@ import { CANDIDATE_RELEASE_PATHS, PROJECT_REF, stageCandidateRecoveryWorkdir, ve
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const oldBinding = { runId: recovery.FAILED_RUN_ID, runAttempt: "1", sourceSha: recovery.FAILED_SOURCE_SHA, projectRef: PROJECT_REF, receiptSha256: recovery.FAILED_RECEIPT_SHA256 };
 const binding = { runId: "99999999999", runAttempt: "1", sourceSha: "a".repeat(40), projectRef: PROJECT_REF, receiptSha256: "b".repeat(64), priorArtifactId: recovery.FAILED_RECEIPTS_ARTIFACT_ID, priorArtifactSha256: recovery.FAILED_RECEIPTS_ARTIFACT_SHA256 };
-const current = { appliedPrefixLength: 9, pending: [...recovery.REMAINING], planUpToDate: false, fullLedgerMatchesSource: true, operatorRpcVerified: true, coverageTimeoutControlVerified: true };
+const current = { appliedPrefixLength: 9, pending: [...recovery.REMAINING], planUpToDate: false, fullLedgerMatchesSource: true, operatorRpcVerified: true, coverageTimeoutControlVerified: true, coverageReadbackVerified: false };
 
 function makePrior(t) {
   const tempRoot = path.resolve(root, "..", "..", "07_Prospects", ".candidate-recovery-tests"); fs.mkdirSync(tempRoot, { recursive: true });
@@ -58,7 +58,19 @@ test("recovery manifest binds current run and every prior evidence file and expi
   assert.throws(() => recovery.verifyRecoveryEvidence(manifest, binding, dir, 1800000000001), /candidate_recovery_prior_evidence_changed/);
 });
 
-test("live recovery plan must exactly match the reviewed phase and cannot carry roles or seeds", () => {
+test("recovery preflight accepts only exact prefix-nine write or prefix-ten read-back states", () => {
+  assert.deepEqual(recovery.verifyRecoveryObservedState(current), { coverageWriteRequired: true });
+  const resumed = { ...current, appliedPrefixLength: 10, pending: [recovery.PROFILE_LINK], coverageReadbackVerified: true };
+  assert.deepEqual(recovery.verifyRecoveryObservedState(resumed), { coverageWriteRequired: false });
+  for (const invalid of [
+    { ...resumed, pending: [...recovery.REMAINING] },
+    { ...resumed, coverageReadbackVerified: false },
+    { ...resumed, operatorRpcVerified: false },
+    { ...resumed, fullLedgerMatchesSource: false },
+    { ...current, coverageReadbackVerified: true },
+    { ...current, appliedPrefixLength: 8 },
+  ]) assert.throws(() => recovery.verifyRecoveryObservedState(invalid), /candidate_recovery_live_state_invalid/);
+});test("live recovery plan must exactly match the reviewed phase and cannot carry roles or seeds", () => {
   assert.deepEqual(recovery.verifyRecoveryPlan({ dryRun: true, upToDate: false, migrations: [path.posix.basename(recovery.COVERAGE)], seeds: [], roles: [] }, [recovery.COVERAGE]).migrations, [path.posix.basename(recovery.COVERAGE)]);
   assert.throws(() => recovery.verifyRecoveryPlan({ dryRun: true, upToDate: false, migrations: recovery.REMAINING.map(p => path.posix.basename(p)), seeds: [], roles: [] }, [recovery.COVERAGE]));
   assert.throws(() => recovery.verifyRecoveryPlan({ dryRun: true, upToDate: false, migrations: [path.posix.basename(recovery.COVERAGE)], seeds: [], roles: ["unexpected"] }, [recovery.COVERAGE]));
@@ -68,16 +80,19 @@ test("live recovery plan must exactly match the reviewed phase and cannot carry 
 test("profile link cannot run until coverage read-back has verified", () => {
   assert.equal(recovery.verifyRecoveryPhaseTransition({ coverage: "pending", profileLink: "pending" }, "coverage"), true);
   assert.throws(() => recovery.verifyRecoveryPhaseTransition({ coverage: "started_unverified", profileLink: "pending" }, "profile-link"), /candidate_recovery_prior_phase_unverified/);
+  assert.throws(() => recovery.verifyRecoveryPhaseTransition({ coverage: "started_unverified", profileLink: "pending" }, "coverage"), /candidate_recovery_prior_phase_unverified/);
   assert.throws(() => recovery.verifyRecoveryPhaseTransition({ coverage: "pending", profileLink: "verified" }, "profile-link"));
   assert.equal(recovery.verifyRecoveryPhaseTransition({ coverage: "verified", profileLink: "pending" }, "profile-link"), true);
+  assert.equal(recovery.verifyRecoveryCoverageReadbackTransition({ coverage: "started_unverified", profileLink: "pending" }), true);
+  for (const state of [{ coverage: "pending", profileLink: "pending" }, { coverage: "verified", profileLink: "pending" }, { coverage: "started_unverified", profileLink: "verified" }]) assert.throws(() => recovery.verifyRecoveryCoverageReadbackTransition(state), /candidate_recovery_coverage_readback_not_pending/);
   assert.throws(() => recovery.verifyRecoveryPhaseTransition({ coverage: "verified", profileLink: "verified" }, "profile-link"));
 });
 
-test("database write timeouts leave an explicit read-back and cleanup reserve inside credential TTL", () => {
-  assert.equal(recovery.verifyRecoveryTimeoutBudget(360000, 300000, 60000), true);
+test("database writer TTL and process limits leave read-back to a separately issued credential", () => {
+  assert.equal(recovery.verifyRecoveryTimeoutBudget(300000, 240000, 10000), true);
   assert.equal(recovery.verifyRecoveryTimeoutBudget(180000, 120000, 60000), true);
-  assert.throws(() => recovery.verifyRecoveryTimeoutBudget(359999, 300000, 60000), /candidate_recovery_credential_budget_insufficient/);
-  assert.throws(() => recovery.verifyRecoveryTimeoutBudget(360000, 300000, 0.5), /candidate_recovery_credential_budget_insufficient/);
+  assert.throws(() => recovery.verifyRecoveryTimeoutBudget(249999, 240000, 10000), /candidate_recovery_credential_budget_insufficient/);
+  assert.throws(() => recovery.verifyRecoveryTimeoutBudget(300000, 240000, 0.5), /candidate_recovery_credential_budget_insufficient/);
   assert.throws(() => recovery.verifyRecoveryTimeoutBudget(Number.NaN, 210000, 60000), /candidate_recovery_credential_budget_insufficient/);
 });
 
@@ -124,14 +139,21 @@ test("recovery workflow requires two sequential environment reviews and blocks t
   assert.equal(workflow.jobs.reconcile.environment, "Production prospect migrations");
   assert.equal(workflow.jobs.apply.environment, "Production prospect migrations");
   assert.equal(workflow.jobs.apply.needs, "reconcile");
+  assert.equal(workflow.jobs.reconcile.outputs.coverage_write_required, "${{ steps.reconcile.outputs.coverage_write_required }}");
   const steps = workflow.jobs.apply.steps.map(step => step.name ?? "");
-  const coverage = steps.indexOf("Apply coverage migration, verify ledger and catalog within bounded timeout");
+  const coverage = steps.indexOf("Apply coverage migration within bounded writer credential lifetime");
+  const readbackCredential = steps.indexOf("Acquire fresh credential for coverage read-back after writer or reviewed prefix-ten reconciliation");
+  const readback = steps.indexOf("Verify coverage migration ledger and catalog read-back");
   const final = steps.indexOf("Apply final profile link only after coverage receipt is verified");
-  assert.ok(coverage >= 0 && final > coverage);
+  assert.ok(coverage >= 0 && readbackCredential > coverage && readback > readbackCredential && final > readback);
+  assert.match(workflow.jobs.apply.steps[coverage].if, /post_review_reconcile.outputs.coverage_write_required/);
+  assert.equal(workflow.jobs.apply.steps[readbackCredential].if, undefined, "both writer and prefix-ten resume paths require read-back");
   const reviewSummary = workflow.jobs.reconcile.steps.find(step => step.name === "Present exact partial ledger and remaining suffix for second protected review").run;
   assert.match(reviewSummary, /transaction-local statement_timeout of 240 seconds before DDL/);
-  assert.match(reviewSummary, /300-second CLI hard timeout/);
-  assert.match(reviewSummary, /360 seconds credential life including a 60-second read-back reserve/);
+  assert.match(reviewSummary, /300-second credential/);
+  assert.match(reviewSummary, /240-second CLI hard timeout/);
+  assert.match(reviewSummary, /separately issued bounded credential is used for read-back/);
+  assert.match(reviewSummary, /prefix ten with only profile-link pending/);
   assert.equal(workflow.jobs.apply.steps[final].if, undefined, "GitHub default success gating keeps later phases stopped on an unverified result");
   assert.ok(workflow.jobs.apply.steps.slice(coverage + 1, final).some(step => step.name === "Acquire a new credential only after verified coverage"));
   const failedEvidence = workflow.jobs.reconcile.steps.find(step => step.name === "Retain failed preflight evidence");
@@ -141,8 +163,11 @@ test("recovery workflow requires two sequential environment reviews and blocks t
 test("coverage writer uses bounded CLI timeout without role-level setting privileges", () => {
   const source = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/candidate-recovery-gate.mjs"), "utf8");
   assert.doesNotMatch(source, /ALTER ROLE SESSION_USER|checkRoleTimeout/);
-  assert.match(source, /\{ cwd: staged\.dir, timeout: 300000 \}/);
-  assert.match(source, /verifyRecoveryTimeoutBudget\([^\n]+, 300000, 60000\)/);
+  assert.match(source, /\{ cwd: staged\.dir, timeout: 240000 \}/);
+  assert.match(source, /freshCredential\(250000\)/);
+  assert.match(source, /verifyRecoveryTimeoutBudget\([^\n]+, 240000, 10000\)/);
+  assert.match(source, /freshCredential\(60000\)/);
+  assert.match(source, /verify-coverage-readback/);
   const credential = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/temporary-credential.mjs"), "utf8");
   assert.doesNotMatch(credential, /options=-c.*statement_timeout/);
   const migration = fs.readFileSync(path.join(root, recovery.COVERAGE), "utf8");
