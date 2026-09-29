@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PROJECT_REF } from "../migration-gate.mjs";
+import { DATABASE_CA_PATH } from "../database-ca.mjs";
+import { validateTemporaryCredential } from "../temporary-credential.mjs";
 import { createBackfillCredentialProvider, createCoverageBatchRunner, initialCredentialFromEnvironment, redactedBackfillFailureCode, runCoverageBackfill, safeDatabaseDiagnostic, validateBackfillStatus } from "../candidate-coverage-backfill-worker.mjs";
 
 const id1 = "00000000-0000-4000-8000-000000000001";
@@ -11,6 +13,16 @@ function rows(states) {
     table_name: row.table_name, last_id: row.last_id, rows_projected: row.rows_projected, complete: row.complete }));
 }
 const cred = async () => ({ projectRef: PROJECT_REF, url: "postgresql://masked", role: "cli_login_test", issuedAt: 1, expiresAt: 300001 });
+function testTlsConfig({ environment, mask, persist }) {
+  const url = new URL(environment.MIGRATION_DATABASE_URL);
+  url.searchParams.set("sslrootcert", "/trusted/supabase-root.crt");
+  mask(url.href);
+  persist(url.href);
+}
+function realTemporaryCredential(now, ttlSeconds = 300) {
+  const credential = validateTemporaryCredential({ role: "cli_login_postgres", password: "synthetic-password", ttl_seconds: ttlSeconds }, now);
+  return { ...credential, url: credential.url };
+}
 
 test("production batch adapter accepts its SQL-supported adaptive sizes and rejects out-of-range input", async () => {
   const queries = [];
@@ -154,7 +166,7 @@ test("credential provider uses inherited auth first and refreshes only inside th
     TEMPORARY_DATABASE_EXPIRES_AT: String(now + 240_000),
   };
   const acquire = createBackfillCredentialProvider(environment, {
-    now: () => now, mask: () => {}, validateUrl: () => {},
+    now: () => now, mask: () => {}, validateUrl: () => {}, configureTls: testTlsConfig,
     mint: async ({ persist }) => {
       mintCalls += 1;
       persist({ url: "postgresql://refreshed", role: "cli_login_postgres", issuedAt: now, expiresAt: now + 300_000 });
@@ -163,8 +175,9 @@ test("credential provider uses inherited auth first and refreshes only inside th
   assert.equal((await acquire()).url, environment.MIGRATION_DATABASE_URL);
   assert.equal(mintCalls, 0);
   now += 61_000;
-  assert.equal((await acquire()).url, "postgresql://refreshed");
-  assert.equal((await acquire()).url, "postgresql://refreshed");
+  const renewedUrl = (await acquire()).url;
+  assert.equal(new URL(renewedUrl).searchParams.get("sslrootcert"), "/trusted/supabase-root.crt");
+  assert.equal((await acquire()).url, renewedUrl);
   assert.equal(mintCalls, 1);
 });
 
@@ -177,14 +190,71 @@ test("credential provider refreshes when migration work left less than three min
     TEMPORARY_DATABASE_ISSUED_AT: String(now - 200_000),
     TEMPORARY_DATABASE_EXPIRES_AT: String(now + 100_000),
   }, {
-    now: () => now, mask: () => {}, validateUrl: () => {},
+    now: () => now, mask: () => {}, validateUrl: () => {}, configureTls: testTlsConfig,
     mint: async ({ persist }) => {
       mintCalls += 1;
       persist({ url: "postgresql://refreshed", role: "cli_login_postgres", issuedAt: now, expiresAt: now + 300_000 });
     },
   });
-  assert.equal((await acquire()).url, "postgresql://refreshed");
+  assert.equal(new URL((await acquire()).url).searchParams.get("sslrootcert"), "/trusted/supabase-root.crt");
   assert.equal(mintCalls, 1);
+});
+
+test("refreshed credential gets the exact pinned CA before it is returned or cached", async () => {
+  const now = Date.now();
+  const inherited = realTemporaryCredential(now - 200_000, 300);
+  const inheritedUrl = new URL(inherited.url);
+  inheritedUrl.searchParams.set("sslrootcert", DATABASE_CA_PATH);
+  const environment = {
+    USE_TEMPORARY_DATABASE_CREDENTIAL: "true",
+    MIGRATION_DATABASE_URL: inheritedUrl.href,
+    TEMPORARY_DATABASE_ROLE: inherited.role,
+    TEMPORARY_DATABASE_ISSUED_AT: String(inherited.issuedAt),
+    TEMPORARY_DATABASE_EXPIRES_AT: String(inherited.expiresAt),
+  };
+  const masks = [];
+  let mintCalls = 0;
+  const acquire = createBackfillCredentialProvider(environment, {
+    now: () => now, mask: value => masks.push(value),
+    mint: async ({ persist }) => {
+      mintCalls += 1;
+      const refreshed = realTemporaryCredential(now, 300);
+      assert.equal(new URL(refreshed.url).searchParams.has("sslrootcert"), false, "the credential issuer does not supply the pinned CA");
+      persist(refreshed);
+    },
+  });
+  const refreshed = await acquire();
+  const url = new URL(refreshed.url);
+  assert.equal(url.searchParams.get("sslmode"), "verify-full");
+  assert.equal(url.searchParams.get("sslrootcert"), DATABASE_CA_PATH);
+  assert.equal(url.searchParams.getAll("sslrootcert").length, 1);
+  assert.ok(masks.includes(refreshed.url), "mask the fully configured credential URL before it can be logged");
+  assert.equal(mintCalls, 1);
+  assert.equal((await acquire()).url, refreshed.url, "cache only the TLS-configured URL");
+});
+
+test("refreshed credentials with a caller-supplied CA path fail closed", async () => {
+  const now = Date.now();
+  const inherited = realTemporaryCredential(now - 200_000, 300);
+  const inheritedUrl = new URL(inherited.url);
+  inheritedUrl.searchParams.set("sslrootcert", DATABASE_CA_PATH);
+  const environment = {
+    USE_TEMPORARY_DATABASE_CREDENTIAL: "true",
+    MIGRATION_DATABASE_URL: inheritedUrl.href,
+    TEMPORARY_DATABASE_ROLE: inherited.role,
+    TEMPORARY_DATABASE_ISSUED_AT: String(inherited.issuedAt),
+    TEMPORARY_DATABASE_EXPIRES_AT: String(inherited.expiresAt),
+  };
+  const acquire = createBackfillCredentialProvider(environment, {
+    now: () => now, mask: () => {},
+    mint: async ({ persist }) => {
+      const refreshed = realTemporaryCredential(now, 300);
+      const url = new URL(refreshed.url);
+      url.searchParams.set("sslrootcert", "/tmp/untrusted-ca.pem");
+      persist({ ...refreshed, url: url.href });
+    },
+  });
+  await assert.rejects(acquire(), /candidate_backfill_credential_invalid/);
 });
 
 test("status read-back is exact, unique, internally consistent and cursor-safe", () => {
