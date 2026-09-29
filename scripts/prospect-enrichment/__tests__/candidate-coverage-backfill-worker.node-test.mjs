@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PROJECT_REF } from "../migration-gate.mjs";
-import { runCoverageBackfill, validateBackfillStatus } from "../candidate-coverage-backfill-worker.mjs";
+import { createBackfillCredentialProvider, initialCredentialFromEnvironment, runCoverageBackfill, validateBackfillStatus } from "../candidate-coverage-backfill-worker.mjs";
 
 const id1 = "00000000-0000-4000-8000-000000000001";
 const id2 = "00000000-0000-4000-8000-000000000002";
@@ -11,6 +11,81 @@ function rows(states) {
     table_name: row.table_name, last_id: row.last_id, rows_projected: row.rows_projected, complete: row.complete }));
 }
 const cred = async () => ({ projectRef: PROJECT_REF, url: "postgresql://masked", role: "cli_login_test", issuedAt: 1, expiresAt: 300001 });
+
+test("worker reuses the freshly issued protected credential instead of immediately minting another", () => {
+  const now = 1_000_000;
+  const environment = {
+    MIGRATION_DATABASE_URL: "postgresql://credential-url",
+    TEMPORARY_DATABASE_ROLE: "cli_login_postgres",
+    TEMPORARY_DATABASE_ISSUED_AT: String(now - 1000),
+    TEMPORARY_DATABASE_EXPIRES_AT: String(now + 240_000),
+  };
+  let validationCalls = 0;
+  const initial = initialCredentialFromEnvironment(environment, now, (url, context) => {
+    validationCalls += 1;
+    assert.equal(url, environment.MIGRATION_DATABASE_URL);
+    assert.equal(context.TEMPORARY_DATABASE_ROLE, environment.TEMPORARY_DATABASE_ROLE);
+  });
+  assert.deepEqual(initial, { projectRef: PROJECT_REF, url: environment.MIGRATION_DATABASE_URL, role: environment.TEMPORARY_DATABASE_ROLE,
+    issuedAt: now - 1000, expiresAt: now + 240_000 });
+  assert.equal(validationCalls, 1);
+  assert.equal(initialCredentialFromEnvironment({}, now), null);
+});
+
+test("worker rejects incomplete or malformed inherited credentials and discards nearly expired credentials", () => {
+  const now = 1_000_000;
+  const valid = {
+    MIGRATION_DATABASE_URL: "postgresql://credential-url",
+    TEMPORARY_DATABASE_ROLE: "cli_login_postgres",
+    TEMPORARY_DATABASE_ISSUED_AT: String(now - 1000),
+    TEMPORARY_DATABASE_EXPIRES_AT: String(now + 240_000),
+  };
+  assert.throws(() => initialCredentialFromEnvironment({ MIGRATION_DATABASE_URL: valid.MIGRATION_DATABASE_URL }, now, () => {}), /candidate_backfill_credential_context_invalid/);
+  assert.throws(() => initialCredentialFromEnvironment({ ...valid, TEMPORARY_DATABASE_ROLE: "postgres" }, now, () => {}), /candidate_backfill_credential_context_invalid/);
+  assert.equal(initialCredentialFromEnvironment({ ...valid, TEMPORARY_DATABASE_EXPIRES_AT: String(now + 90_000) }, now, () => {}), null);
+});
+
+test("credential provider uses inherited auth first and refreshes only inside the three-minute safety window", async () => {
+  let now = 1_000_000, mintCalls = 0;
+  const environment = {
+    MIGRATION_DATABASE_URL: "postgresql://credential-url",
+    TEMPORARY_DATABASE_ROLE: "cli_login_postgres",
+    TEMPORARY_DATABASE_ISSUED_AT: String(now - 1000),
+    TEMPORARY_DATABASE_EXPIRES_AT: String(now + 240_000),
+  };
+  const acquire = createBackfillCredentialProvider(environment, {
+    now: () => now, mask: () => {}, validateUrl: () => {},
+    mint: async ({ persist }) => {
+      mintCalls += 1;
+      persist({ url: "postgresql://refreshed", role: "cli_login_postgres", issuedAt: now, expiresAt: now + 300_000 });
+    },
+  });
+  assert.equal((await acquire()).url, environment.MIGRATION_DATABASE_URL);
+  assert.equal(mintCalls, 0);
+  now += 61_000;
+  assert.equal((await acquire()).url, "postgresql://refreshed");
+  assert.equal((await acquire()).url, "postgresql://refreshed");
+  assert.equal(mintCalls, 1);
+});
+
+test("credential provider refreshes when migration work left less than three minutes on the inherited credential", async () => {
+  const now = 1_000_000;
+  let mintCalls = 0;
+  const acquire = createBackfillCredentialProvider({
+    MIGRATION_DATABASE_URL: "postgresql://nearly-expired",
+    TEMPORARY_DATABASE_ROLE: "cli_login_postgres",
+    TEMPORARY_DATABASE_ISSUED_AT: String(now - 200_000),
+    TEMPORARY_DATABASE_EXPIRES_AT: String(now + 100_000),
+  }, {
+    now: () => now, mask: () => {}, validateUrl: () => {},
+    mint: async ({ persist }) => {
+      mintCalls += 1;
+      persist({ url: "postgresql://refreshed", role: "cli_login_postgres", issuedAt: now, expiresAt: now + 300_000 });
+    },
+  });
+  assert.equal((await acquire()).url, "postgresql://refreshed");
+  assert.equal(mintCalls, 1);
+});
 
 test("status read-back is exact, unique, internally consistent and cursor-safe", () => {
   assert.deepEqual(validateBackfillStatus(rows([

@@ -90,6 +90,37 @@ function responseRows(value) {
   if (Array.isArray(parsed?.rows)) return parsed.rows;
   fail("candidate_backfill_query_response_invalid");
 }
+export function initialCredentialFromEnvironment(environment, now = Date.now(), validateUrl = verifyDirectDatabaseUrl) {
+  const keys = ["MIGRATION_DATABASE_URL", "TEMPORARY_DATABASE_ROLE", "TEMPORARY_DATABASE_ISSUED_AT", "TEMPORARY_DATABASE_EXPIRES_AT"];
+  const present = keys.filter(key => typeof environment[key] === "string" && environment[key].length > 0);
+  if (present.length === 0) return null;
+  if (present.length !== keys.length) fail("candidate_backfill_credential_context_invalid");
+  const issuedAt = Number(environment.TEMPORARY_DATABASE_ISSUED_AT);
+  const expiresAt = Number(environment.TEMPORARY_DATABASE_EXPIRES_AT);
+  if (!Number.isSafeInteger(issuedAt) || issuedAt > now || !Number.isSafeInteger(expiresAt) || expiresAt - issuedAt < 60000 ||
+      expiresAt - issuedAt > 86400000 || typeof environment.TEMPORARY_DATABASE_ROLE !== "string" ||
+      !/^cli_login_[a-z0-9_]{1,53}$/.test(environment.TEMPORARY_DATABASE_ROLE)) {
+    fail("candidate_backfill_credential_context_invalid");
+  }
+  // The coverage migration can consume most of the original five-minute TTL.
+  // Discard a credential inside the refresh window and mint a fresh one instead.
+  if (expiresAt - now <= 180000) return null;
+  validateUrl(environment.MIGRATION_DATABASE_URL, { ...environment, TEMPORARY_DATABASE_ISSUED_AT: String(issuedAt), TEMPORARY_DATABASE_EXPIRES_AT: String(expiresAt) }, []);
+  return { url: environment.MIGRATION_DATABASE_URL, role: environment.TEMPORARY_DATABASE_ROLE, issuedAt, expiresAt, projectRef: PROJECT_REF };
+}
+export function createBackfillCredentialProvider(environment, { now = Date.now, mint = acquireTemporaryCredential,
+  mask = value => process.stdout.write(`::add-mask::${value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A")}\n`),
+  validateUrl = verifyDirectDatabaseUrl } = {}) {
+  let cachedCredential = initialCredentialFromEnvironment(environment, now(), validateUrl);
+  return async () => {
+    if (cachedCredential && cachedCredential.expiresAt - now() > 180000) return cachedCredential;
+    let credential;
+    await mint({ environment, authorize: async () => {}, mask, persist: value => { credential = value; } });
+    if (!credential || credential.expiresAt - now() < 90000) fail("candidate_backfill_credential_budget_insufficient");
+    cachedCredential = { ...credential, projectRef: PROJECT_REF };
+    return cachedCredential;
+  };
+}
 function runSql(sql, credential) {
   verifyDirectDatabaseUrl(credential.url, {
     ...process.env, MIGRATION_DATABASE_URL: credential.url, TEMPORARY_DATABASE_ROLE: credential.role,
@@ -111,18 +142,7 @@ async function main() {
   if (process.env.CREDENTIAL_GATE !== "candidate-recovery" || process.env.COMPLETE_PHASE !== "coverage-backfill" ||
       process.env.USE_TEMPORARY_DATABASE_CREDENTIAL !== "true" || !process.env.MIGRATION_ACCESS_TOKEN || !process.env.RUNNER_TEMP) fail("candidate_backfill_authorization_invalid");
   execFileSync(process.execPath, [path.join(ROOT, "scripts/prospect-enrichment/candidate-recovery-gate.mjs"), "credential-authorization"], { cwd: ROOT, stdio: "pipe" });
-  let cachedCredential;
-  const acquire = async () => {
-    if (cachedCredential && cachedCredential.expiresAt - Date.now() > 180000) return cachedCredential;
-    let credential;
-    await acquireTemporaryCredential({ environment: process.env, authorize: async () => {},
-      mask: value => process.stdout.write(`::add-mask::${value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A")}\n`),
-      persist: value => { credential = value; },
-    });
-    if (!credential || credential.expiresAt - Date.now() < 90000) fail("candidate_backfill_credential_budget_insufficient");
-    cachedCredential = { ...credential, projectRef: PROJECT_REF };
-    return cachedCredential;
-  };
+  const acquire = createBackfillCredentialProvider(process.env);
   const statusQuery = async () => {
     const credential = await acquire();
     return responseRows(runSql("SELECT * FROM prospect_candidate_private.coverage_backfill_status();\n", credential));
