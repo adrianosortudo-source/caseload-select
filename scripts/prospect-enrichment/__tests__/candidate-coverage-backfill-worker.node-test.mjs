@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PROJECT_REF } from "../migration-gate.mjs";
-import { createBackfillCredentialProvider, createCoverageBatchRunner, initialCredentialFromEnvironment, redactedBackfillFailureCode, runCoverageBackfill, validateBackfillStatus } from "../candidate-coverage-backfill-worker.mjs";
+import { createBackfillCredentialProvider, createCoverageBatchRunner, initialCredentialFromEnvironment, redactedBackfillFailureCode, runCoverageBackfill, safeDatabaseDiagnostic, validateBackfillStatus } from "../candidate-coverage-backfill-worker.mjs";
 
 const id1 = "00000000-0000-4000-8000-000000000001";
 const id2 = "00000000-0000-4000-8000-000000000002";
@@ -36,6 +36,35 @@ test("worker diagnostics preserve only enumerated safe codes", () => {
   assert.equal(redactedBackfillFailureCode(Error("candidate_backfill_query_exit_timeout_or_signal")), "candidate_backfill_query_exit_timeout_or_signal");
   assert.equal(redactedBackfillFailureCode(Error("Bearer synthetic-token")), "candidate_backfill_unexpected_failure");
   assert.equal(redactedBackfillFailureCode(Error("candidate_backfill_query_exit_secret")), "candidate_backfill_unexpected_failure");
+});
+
+test("database diagnostics retain SQLSTATE and a fixed category without CLI details", () => {
+  const diagnostic = safeDatabaseDiagnostic(Buffer.from('ERROR: insert failed for secret firm name\nDETAIL: Key (id)=(secret-value) already exists. SQLSTATE 23505\npostgresql://user:password@host/db'));
+  assert.deepEqual(diagnostic, { postgresSqlstate: "23505", sanitizedMessage: "unique_violation" });
+  assert.equal(JSON.stringify(diagnostic).includes("secret"), false);
+  assert.deepEqual(safeDatabaseDiagnostic("temporary credential expired"), {
+    postgresSqlstate: null, sanitizedMessage: "database_cli_error_without_sqlstate",
+  });
+});
+
+test("persistent batch failure identifies only the safe operation, table and database category", async () => {
+  const status = [{ table_name: "gta_prospect_offices", last_id: id1, rows_projected: 100, complete: false }];
+  await assert.rejects(runCoverageBackfill({
+    readStatus: async () => rows(status), acquire: cred,
+    runBatch: async () => {
+      const error = Error("candidate_backfill_query_exit_1");
+      error.safeDatabaseDiagnostic = { postgresSqlstate: "23503", sanitizedMessage: "foreign_key_violation" };
+      throw error;
+    },
+  }), error => {
+    assert.match(error.message, /candidate_backfill_query_exit_1/);
+    assert.deepEqual(error.safeContext, {
+      operation: "coverage_backfill_batch", tableName: "gta_prospect_offices", batchSize: 1,
+      checkpointRowsProjected: 100, postgresSqlstate: "23503", sanitizedMessage: "foreign_key_violation",
+    });
+    assert.equal(JSON.stringify(error.safeContext).includes(id1), false);
+    return true;
+  });
 });
 
 test("production adapter lets the worker downshift after an atomic batch failure", async () => {
