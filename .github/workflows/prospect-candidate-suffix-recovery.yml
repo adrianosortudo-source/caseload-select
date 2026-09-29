@@ -44,6 +44,7 @@ jobs:
       artifact_id: ${{ steps.upload.outputs.artifact-id }}
       artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
       manifest_sha256: ${{ steps.reconcile.outputs.manifest_sha256 }}
+      coverage_write_required: ${{ steps.reconcile.outputs.coverage_write_required }}
     env:
       CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_SHA }}
       CONFIGURED_RECEIPT_SHA256: ${{ vars.PROSPECT_CANDIDATE_RELEASE_REVIEWED_RECEIPT_SHA256 }}
@@ -109,7 +110,7 @@ jobs:
           MANIFEST_SHA256: ${{ steps.reconcile.outputs.manifest_sha256 }}
         shell: bash
         run: |
-          printf 'Review recovery artifact %s (SHA-256 %s), manifest %s, run %s attempt %s, source %s, receipt %s.\n\nThis recovery is bound to failed run 36460908921 and its verified prefix of nine migrations. Only candidate coverage and the final profile-link migration remain. The reviewed coverage migration explicitly sets a transaction-local statement_timeout of 240 seconds before DDL; the workflow verifies this control in the exact migration source before proceeding. The writer has a 300-second CLI hard timeout and requires at least 360 seconds credential life including a 60-second read-back reserve. The final migration stays blocked until coverage read-back verifies.\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST_SHA256" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Review recovery artifact %s (SHA-256 %s), manifest %s, run %s attempt %s, source %s, receipt %s.\n\nThis recovery is bound to failed run 36460908921 and its verified prefix of nine migrations. The live ledger must be either the exact original prefix of nine with coverage plus profile-link pending, or prefix ten with only profile-link pending and the coverage catalog verified. The reviewed coverage migration explicitly sets a transaction-local statement_timeout of 240 seconds before DDL; the workflow verifies this control in the exact migration source before proceeding. The writer uses a fresh 300-second credential, a 240-second CLI hard timeout, and a 10-second startup reserve. After successful writer exit, read-back uses a separate credential with at least 250 seconds remaining: four SQL checks are capped at 20 seconds each, the exact dry-run at 120 seconds, and 50 seconds are reserved for overhead. The final migration stays blocked until coverage read-back verifies.\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST_SHA256" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
       - name: Retain failed preflight evidence
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -175,17 +176,31 @@ jobs:
       - name: Configure pinned TLS trust
         run: node scripts/prospect-enrichment/configure-migration-tls.mjs
       - name: Reconcile live state again after second review
+        id: post_review_reconcile
         run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs reconcile "$RUNNER_TEMP/recovery-preflight"
       - name: Acquire a fresh bounded credential for candidate coverage only
+        if: steps.post_review_reconcile.outputs.coverage_write_required == 'true'
         env:
           COMPLETE_PHASE: coverage
           CREDENTIAL_GATE: candidate-recovery
           MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
         run: node scripts/prospect-enrichment/temporary-credential.mjs
       - name: Configure pinned TLS trust for coverage migration
+        if: steps.post_review_reconcile.outputs.coverage_write_required == 'true'
         run: node scripts/prospect-enrichment/configure-migration-tls.mjs
-      - name: Apply coverage migration, verify ledger and catalog within bounded timeout
+      - name: Apply coverage migration within bounded writer credential lifetime
+        if: steps.post_review_reconcile.outputs.coverage_write_required == 'true'
         run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs apply-coverage "$RUNNER_TEMP/recovery-preflight" "$RUNNER_TEMP/recovery-preflight/prior"
+      - name: Acquire fresh credential for coverage read-back after writer or reviewed prefix-ten reconciliation
+        env:
+          COMPLETE_PHASE: coverage-readback
+          CREDENTIAL_GATE: candidate-recovery
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned TLS trust for coverage read-back
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Verify coverage migration ledger and catalog read-back
+        run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs verify-coverage-readback "$RUNNER_TEMP/recovery-preflight" "$RUNNER_TEMP/recovery-preflight/prior"
       - name: Acquire a new credential only after verified coverage
         env:
           COMPLETE_PHASE: profile-link
