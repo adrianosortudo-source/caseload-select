@@ -57,5 +57,14 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   const path = await download.path();
   const html = await import("node:fs/promises").then(fs => fs.readFile(path!, "utf8"));
   expect(html).toContain("Desired Client Blueprint");
-  expect(html).toContain(result.brief.definition_sentence);
+  const exportedDefinition = html.match(/<section class="definition"><h2>Our desired-client definition<\/h2><p>([\s\S]*?)<\/p><\/section>/)?.[1];
+  expect(exportedDefinition).toBeDefined();
+  const plainDefinition = exportedDefinition!
+    .replace(/<[^>]*>/g, "")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'");
+  expect(plainDefinition).toBe(result.brief.definition_sentence);
 });
