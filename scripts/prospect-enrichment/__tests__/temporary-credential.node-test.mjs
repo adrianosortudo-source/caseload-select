@@ -141,7 +141,7 @@ test("all workflows authorize before optional authentication and retain connecti
     assert.doesNotMatch(JSON.stringify(workflow), /supabase link|--linked|--debug/);
   }
   const recovery = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/candidate-recovery-gate.mjs"), "utf8");
-  assert.match(recovery, /"preflight", "reconcile", "coverage", "coverage-readback", "profile-link"/);
+  assert.match(recovery, /"preflight", "reconcile", "coverage", "coverage-backfill", "coverage-readback", "profile-link"/);
   const helper = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/temporary-credential.mjs"), "utf8");
   assert.match(helper, /additive-release-gate\.mjs"\), "receipt"/);
   assert.doesNotMatch(helper, /method: "DELETE"|read_only: true|SUPABASE_ACCESS_TOKEN/);
