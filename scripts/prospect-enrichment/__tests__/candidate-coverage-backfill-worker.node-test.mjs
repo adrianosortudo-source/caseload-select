@@ -47,6 +47,28 @@ test("database diagnostics retain SQLSTATE and a fixed category without CLI deta
   });
 });
 
+test("database CLI diagnostics inspect both output streams and retain only safe process facts", () => {
+  const diagnostic = safeDatabaseDiagnostic({
+    status: 1,
+    signal: null,
+    killed: false,
+    code: "ECONNRESET",
+    stderr: Buffer.from("request failed for secret-firm; connection reset by peer; postgresql://user:password@host/db"),
+    stdout: Buffer.from("secret firm contents"),
+  });
+  assert.deepEqual(diagnostic, {
+    postgresSqlstate: null,
+    sanitizedMessage: "database_connection_error",
+    cliExitCode: 1,
+    cliErrorCode: "ECONNRESET",
+  });
+  assert.equal(JSON.stringify(diagnostic).includes("secret"), false);
+  assert.equal(JSON.stringify(diagnostic).includes("password"), false);
+  assert.deepEqual(safeDatabaseDiagnostic({ status: 1, stderr: Buffer.alloc(0), stdout: Buffer.from("ERROR SQLSTATE 57014") }), {
+    postgresSqlstate: "57014", sanitizedMessage: "query_canceled", cliExitCode: 1,
+  });
+});
+
 test("persistent batch failure identifies only the safe operation, table and database category", async () => {
   const status = [{ table_name: "gta_prospect_offices", last_id: id1, rows_projected: 100, complete: false }];
   await assert.rejects(runCoverageBackfill({
