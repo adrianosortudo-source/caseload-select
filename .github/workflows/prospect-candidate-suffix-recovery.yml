@@ -111,7 +111,8 @@ jobs:
           MANIFEST_SHA256: ${{ steps.reconcile.outputs.manifest_sha256 }}
         shell: bash
         run: |
-          printf 'Review recovery artifact %s (SHA-256 %s), manifest %s, run %s attempt %s, source %s, receipt %s.\n\nThis recovery is bound to failed run 36460908921 and its verified prefix of nine migrations. The live ledger must be the exact prefix nine with both recovery migrations pending, or prefix ten with only profile-link pending and the private coverage backfill status installed. The coverage migration installs schema and triggers only; a separate checkpointed worker processes source rows in batches of at most 100, renewing its protected temporary credential and resuming only from database checkpoints. Any lost batch response is reconciled against database status before retry; the profile-link migration remains blocked until all inventory tables report complete and independent ledger, source-coverage, catalog and dry-run checks pass.\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST_SHA256" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Review recovery artifact %s (SHA-256 %s), manifest %s, run %s attempt %s, source %s, receipt %s.\n\nThis recovery is bound to failed run 36460908921 and its verified prefix of nine migrations. The live ledger must be the exact prefix nine with both recovery migrations pending, or prefix ten with only profile-link pending and the private coverage backfill status installed. The coverage migration installs schema and triggers only; a separate checkpointed worker processes source rows in batches of at most 100, renewing its protected temporary credential and resuming only from database checkpoints. Any lost batch response is reconciled against database status before retry; the profile-link migration remains blocked until all inventory tables report complete and independent ledger, source-coverage, catalog and dry-run checks pass.\n\n### Read-only coverage checkpoints\n\n| Source table | Last completed UUID | Projected rows | Complete |\n| --- | --- | ---: | :---: |\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST_SHA256" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
+          jq -r '.current.coverageBackfill.status[] | "| " + .table_name + " | " + (.last_id // "none") + " | " + (.rows_projected|tostring) + " | " + (if .complete then "yes" else "no" end) + " |"' "$RUNNER_TEMP/recovery-preflight/recovery-evidence.json" >> "$GITHUB_STEP_SUMMARY"
       - name: Retain failed preflight evidence
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -122,8 +123,43 @@ jobs:
             ${{ runner.temp }}/candidate-recovery
           if-no-files-found: warn
 
-  apply:
+  verify_preflight:
     needs: reconcile
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_ARTIFACT_ID: ${{ needs.reconcile.outputs.artifact_id }}
+      EXPECTED_ARTIFACT_DIGEST: ${{ needs.reconcile.outputs.artifact_digest }}
+      EXPECTED_MANIFEST_SHA256: ${{ needs.reconcile.outputs.manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Verify exact preflight artifact metadata before creating the second review gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$EXPECTED_ARTIFACT_ID" > "$RUNNER_TEMP/recovery-artifact-metadata.json"
+          node scripts/prospect-enrichment/candidate-recovery-gate.mjs verify-recovery-artifact "$RUNNER_TEMP/recovery-artifact-metadata.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.reconcile.outputs.artifact_id }}
+          path: ${{ runner.temp }}/recovery-preflight
+          merge-multiple: true
+      - name: Verify the immutable manifest, ledger, migration plan and every table checkpoint before protected review
+        run: |
+          set -euo pipefail
+          test "$(sha256sum "$RUNNER_TEMP/recovery-preflight/recovery-evidence.json" | cut -d ' ' -f1)" = "$EXPECTED_MANIFEST_SHA256"
+          node scripts/prospect-enrichment/candidate-recovery-gate.mjs verify-preflight-for-review "$RUNNER_TEMP/recovery-preflight"
+      - name: Publish verification result for the second reviewer
+        run: printf 'The uploaded artifact ID, artifact digest, manifest hash, source binding, exact migration suffix, and all per-table checkpoint rows verified successfully before this job entered the protected apply environment.\n' >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    needs: [reconcile, verify_preflight]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: Production prospect migrations
