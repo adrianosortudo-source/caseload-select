@@ -33,7 +33,7 @@ test('successful third attempt creates one AI profile and enforces the retry lim
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   await page.getByRole('button', { name: 'Try again', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Desired Client Blueprint', exact: true })).toBeVisible();
-  await expect(page.getByText(fixture.result.brief.portrait.text, { exact: true })).toBeVisible();
+  await expect(page.getByText(fixture.result.brief.definition_sentence, { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Try again', exact: true })).toHaveCount(0);
   expect(requests.map(request => request.analysisIndex)).toEqual([0, 1, 2]);
   expect(new Set(requests.map(request => request.reviewRunId)).size).toBe(1);

@@ -44,7 +44,7 @@ test('Review consent creates an AI Desired Client Blueprint', async ({ page }) =
   await seedReview(page);
   await page.getByRole('button', { name: 'Create my profile', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Desired Client Blueprint', exact: true })).toBeVisible();
-  await expect(page.getByText(fixture.result.brief.portrait.text, { exact: true })).toBeVisible();
+  await expect(page.getByText(fixture.result.brief.definition_sentence, { exact: true })).toBeVisible();
   expect(calls).toBe(1);
 });
 

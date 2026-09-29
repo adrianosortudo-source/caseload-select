@@ -48,7 +48,7 @@ test('a saved AI result opens the synthesized Blueprint report', async ({ page }
   await page.getByRole('button', { name: 'Continue my saved draft' }).click();
   await expect(page.getByRole('heading', { name: 'Desired Client Blueprint', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Desired client portrait', exact: true }).first()).toBeVisible();
-  await expect(page.getByText(fixture.result.brief.portrait.text, { exact: true })).toBeVisible();
+  await expect(page.getByText(fixture.result.brief.definition_sentence, { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Download one-page PDF', exact: true })).toBeVisible();
   for (const width of [1440, 1024, 768, 640, 375, 320]) {
     await page.setViewportSize({ width, height: 900 });
