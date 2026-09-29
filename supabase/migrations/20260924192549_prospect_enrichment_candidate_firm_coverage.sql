@@ -47,6 +47,17 @@ LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
  ) inventory(name,kind,columns,excluded)
 $$;
 
+-- Durable, source-row-free progress for the resumable legacy inventory pass.
+-- Counts track rows projected by batches, not a migration-time table scan.
+CREATE TABLE prospect_candidate_private.legacy_backfill_progress (
+ table_name text PRIMARY KEY,
+ last_id uuid NULL,
+ rows_projected bigint NOT NULL DEFAULT 0 CHECK (rows_projected >= 0),
+ complete boolean NOT NULL DEFAULT false,
+ updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
+);
+REVOKE ALL ON TABLE prospect_candidate_private.legacy_backfill_progress FROM PUBLIC, anon, authenticated, service_role;
+
 -- Future columns are not exposed automatically. Coverage reports their omission.
 CREATE FUNCTION prospect_candidate_private.legacy_research_row(p_table text,p_row jsonb)
 RETURNS jsonb LANGUAGE sql IMMUTABLE SET search_path = '' AS $$
@@ -276,6 +287,63 @@ BEGIN
  RETURN NEW;
 END $$;
 
+CREATE FUNCTION prospect_candidate_private.legacy_projection_delete_trigger()
+RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+BEGIN
+ PERFORM prospect_candidate_private.project_legacy(TG_TABLE_NAME,to_jsonb(OLD));
+ RETURN OLD;
+END $$;
+
+CREATE FUNCTION prospect_candidate_private.coverage_backfill_batch(p_table text,p_expected_cursor uuid,p_batch_size integer)
+RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE progress prospect_candidate_private.legacy_backfill_progress%ROWTYPE;
+        previous_cursor uuid; next_cursor uuid; projected integer:=0; source record;
+BEGIN
+ SET LOCAL statement_timeout='60s';
+ IF p_batch_size IS NULL OR p_batch_size<1 OR p_batch_size>100 THEN
+   RAISE EXCEPTION 'coverage backfill batch size must be between 1 and 100';
+ END IF;
+ IF NOT EXISTS(SELECT 1 FROM prospect_candidate_private.legacy_inventory() i WHERE i.table_name=p_table) THEN
+   RAISE EXCEPTION 'unsupported coverage backfill inventory table';
+ END IF;
+ SELECT * INTO progress FROM prospect_candidate_private.legacy_backfill_progress p WHERE p.table_name=p_table FOR UPDATE;
+ IF NOT FOUND THEN RAISE EXCEPTION 'coverage backfill progress row is missing'; END IF;
+ IF progress.last_id IS DISTINCT FROM p_expected_cursor THEN RAISE EXCEPTION 'coverage backfill cursor changed'; END IF;
+ previous_cursor:=progress.last_id;
+ next_cursor:=progress.last_id;
+ IF NOT progress.complete THEN
+   FOR source IN EXECUTE format(
+     'SELECT s.id AS source_id,to_jsonb(s) AS payload FROM public.%I s WHERE ($1 IS NULL OR s.id>$1) ORDER BY s.id LIMIT $2 FOR UPDATE',p_table
+   ) USING progress.last_id,p_batch_size LOOP
+     PERFORM prospect_candidate_private.project_legacy(p_table,source.payload);
+     next_cursor:=source.source_id;
+     projected:=projected+1;
+   END LOOP;
+   UPDATE prospect_candidate_private.legacy_backfill_progress p
+   SET last_id=next_cursor,rows_projected=p.rows_projected+projected,
+       complete=(projected<p_batch_size),updated_at=clock_timestamp()
+   WHERE p.table_name=p_table
+   RETURNING p.* INTO progress;
+ END IF;
+ RETURN jsonb_build_object('table_name',p_table,'previous_cursor',previous_cursor,'last_id',progress.last_id,
+   'rows_projected',progress.rows_projected,'complete',progress.complete);
+END $$;
+
+CREATE FUNCTION prospect_candidate_private.coverage_backfill_status()
+RETURNS TABLE(total_tables integer,complete_tables integer,incomplete_tables integer,table_name text,last_id uuid,rows_projected bigint,complete boolean)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
+DECLARE total_count integer; complete_count integer;
+BEGIN
+ IF EXISTS(SELECT i.table_name FROM prospect_candidate_private.legacy_inventory() i EXCEPT SELECT p.table_name FROM prospect_candidate_private.legacy_backfill_progress p)
+    OR EXISTS(SELECT p.table_name FROM prospect_candidate_private.legacy_backfill_progress p EXCEPT SELECT i.table_name FROM prospect_candidate_private.legacy_inventory() i) THEN
+   RAISE EXCEPTION 'coverage backfill inventory and progress disagree';
+ END IF;
+ SELECT count(*)::integer,count(*) FILTER(WHERE p.complete)::integer
+ INTO total_count,complete_count FROM prospect_candidate_private.legacy_backfill_progress p;
+ RETURN QUERY SELECT total_count,complete_count,total_count-complete_count,p.table_name,p.last_id,p.rows_projected,p.complete
+ FROM prospect_candidate_private.legacy_backfill_progress p ORDER BY p.table_name;
+END $$;
+
 CREATE FUNCTION prospect_candidate_private.enrichment_firm_refresh_trigger()
 RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 BEGIN
@@ -322,14 +390,35 @@ BEGIN
   END IF;
 END $$;
 
-DO $$ DECLARE item record; source record;
+DO $$ DECLARE item record; relation_oid oid; id_type oid; id_attnum smallint; id_not_null boolean; id_unique boolean; inserted integer; expected integer;
 BEGIN
- FOR item IN SELECT * FROM prospect_candidate_private.legacy_inventory() LOOP
-   EXECUTE format('CREATE TRIGGER candidate_legacy_projection AFTER INSERT OR UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION prospect_candidate_private.legacy_projection_trigger()',item.table_name);
-   FOR source IN EXECUTE format('SELECT to_jsonb(s) data FROM public.%I s ORDER BY id',item.table_name) LOOP
-     PERFORM prospect_candidate_private.project_legacy(item.table_name,source.data);
-   END LOOP;
+ -- Keyset progress uses UUID ordering and therefore rejects any inventory
+ -- source whose id is missing, nullable, non-UUID, or not uniquely ordered.
+ FOR item IN SELECT table_name FROM prospect_candidate_private.legacy_inventory() LOOP
+   relation_oid:=NULL; id_type:=NULL; id_attnum:=NULL; id_not_null:=NULL; id_unique:=false;
+   SELECT c.oid,a.atttypid,a.attnum,a.attnotnull INTO relation_oid,id_type,id_attnum,id_not_null
+   FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
+   LEFT JOIN pg_catalog.pg_attribute a ON a.attrelid=c.oid AND a.attname='id' AND a.attnum>0 AND NOT a.attisdropped
+   WHERE n.nspname='public' AND c.relname=item.table_name AND c.relkind IN ('r','p');
+   IF relation_oid IS NULL OR id_type IS DISTINCT FROM 'uuid'::regtype OR id_not_null IS DISTINCT FROM true THEN
+     RAISE EXCEPTION 'legacy coverage inventory table %.id must be a non-null uuid',item.table_name;
+   END IF;
+   SELECT EXISTS(SELECT 1 FROM pg_catalog.pg_constraint c WHERE c.conrelid=relation_oid AND c.contype IN ('p','u')
+     AND c.convalidated AND c.conkey=ARRAY[id_attnum]::smallint[]) INTO id_unique;
+   IF NOT id_unique THEN RAISE EXCEPTION 'legacy coverage inventory table %.id must be uniquely ordered',item.table_name; END IF;
  END LOOP;
+
+ -- Installing both triggers holds the table lock until this migration commits;
+ -- all subsequent writes are projected while the bounded worker catches up.
+ FOR item IN SELECT table_name FROM prospect_candidate_private.legacy_inventory() LOOP
+   EXECUTE format('CREATE TRIGGER candidate_legacy_projection AFTER INSERT OR UPDATE ON public.%I FOR EACH ROW EXECUTE FUNCTION prospect_candidate_private.legacy_projection_trigger()',item.table_name);
+   EXECUTE format('CREATE TRIGGER candidate_legacy_delete_projection BEFORE DELETE ON public.%I FOR EACH ROW EXECUTE FUNCTION prospect_candidate_private.legacy_projection_delete_trigger()',item.table_name);
+ END LOOP;
+ INSERT INTO prospect_candidate_private.legacy_backfill_progress(table_name)
+ SELECT table_name FROM prospect_candidate_private.legacy_inventory();
+ GET DIAGNOSTICS inserted=ROW_COUNT;
+ SELECT count(*)::integer INTO expected FROM prospect_candidate_private.legacy_inventory();
+ IF inserted<>expected THEN RAISE EXCEPTION 'legacy coverage progress inventory initialization mismatch'; END IF;
 END $$;
 CREATE TRIGGER candidate_z_firm_refresh AFTER INSERT OR UPDATE ON public.prospect_enrichment_packages
  FOR EACH ROW EXECUTE FUNCTION prospect_candidate_private.enrichment_firm_refresh_trigger();
@@ -665,6 +754,10 @@ BEGIN
  RETURN jsonb_build_object('candidate',data,'profileChoices',choices,'coverageRevision',cutoff,'readWarnings',warnings,'complete',warnings='[]'::jsonb);
 END $$;
 
+ALTER TABLE prospect_candidate_private.legacy_backfill_progress OWNER TO postgres;
+ALTER FUNCTION prospect_candidate_private.legacy_projection_delete_trigger() OWNER TO postgres;
+ALTER FUNCTION prospect_candidate_private.coverage_backfill_batch(text,uuid,integer) OWNER TO postgres;
+ALTER FUNCTION prospect_candidate_private.coverage_backfill_status() OWNER TO postgres;
 REVOKE ALL ON ALL FUNCTIONS IN SCHEMA prospect_candidate_private FROM PUBLIC, anon, authenticated, service_role;
 GRANT EXECUTE ON FUNCTION prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint),
  prospect_candidate_private.get_candidate(uuid,bigint),prospect_candidate_private.list_history(uuid,integer,uuid,bigint),

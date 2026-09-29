@@ -12,7 +12,9 @@ import { CANDIDATE_RELEASE_PATHS, PROJECT_REF, stageCandidateRecoveryWorkdir, ve
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const oldBinding = { runId: recovery.FAILED_RUN_ID, runAttempt: "1", sourceSha: recovery.FAILED_SOURCE_SHA, projectRef: PROJECT_REF, receiptSha256: recovery.FAILED_RECEIPT_SHA256 };
 const binding = { runId: "99999999999", runAttempt: "1", sourceSha: "a".repeat(40), projectRef: PROJECT_REF, receiptSha256: "b".repeat(64), priorArtifactId: recovery.FAILED_RECEIPTS_ARTIFACT_ID, priorArtifactSha256: recovery.FAILED_RECEIPTS_ARTIFACT_SHA256 };
-const current = { appliedPrefixLength: 9, pending: [...recovery.REMAINING], planUpToDate: false, fullLedgerMatchesSource: true, operatorRpcVerified: true, coverageTimeoutControlVerified: true, coverageReadbackVerified: false };
+const pendingBackfill = { installed: false, complete: false, totalTables: 0, completeTables: 0, rowsProjected: 0 };
+const completeBackfill = { installed: true, complete: true, totalTables: 30, completeTables: 30, rowsProjected: 1200 };
+const current = { appliedPrefixLength: 9, pending: [...recovery.REMAINING], planUpToDate: false, fullLedgerMatchesSource: true, operatorRpcVerified: true, coverageTimeoutControlVerified: true, coverageReadbackVerified: false, coverageBackfill: pendingBackfill };
 
 function makePrior(t) {
   const tempRoot = path.resolve(root, "..", "..", "07_Prospects", ".candidate-recovery-tests"); fs.mkdirSync(tempRoot, { recursive: true });
@@ -60,12 +62,13 @@ test("recovery manifest binds current run and every prior evidence file and expi
 });
 
 test("recovery preflight accepts only exact prefix-nine write or prefix-ten read-back states", () => {
-  assert.deepEqual(recovery.verifyRecoveryObservedState(current), { coverageWriteRequired: true });
-  const resumed = { ...current, appliedPrefixLength: 10, pending: [recovery.PROFILE_LINK], coverageReadbackVerified: true };
-  assert.deepEqual(recovery.verifyRecoveryObservedState(resumed), { coverageWriteRequired: false });
+  assert.deepEqual(recovery.verifyRecoveryObservedState(current), { coverageWriteRequired: true, coverageBackfillRequired: true });
+  const resumed = { ...current, appliedPrefixLength: 10, pending: [recovery.PROFILE_LINK], coverageReadbackVerified: true, coverageBackfill: completeBackfill };
+  assert.deepEqual(recovery.verifyRecoveryObservedState(resumed), { coverageWriteRequired: false, coverageBackfillRequired: false });
   for (const invalid of [
     { ...resumed, pending: [...recovery.REMAINING] },
     { ...resumed, coverageReadbackVerified: false },
+    { ...resumed, coverageBackfill: { ...completeBackfill, complete: false } },
     { ...resumed, operatorRpcVerified: false },
     { ...resumed, fullLedgerMatchesSource: false },
     { ...current, coverageReadbackVerified: true },
@@ -73,21 +76,23 @@ test("recovery preflight accepts only exact prefix-nine write or prefix-ten read
   ]) assert.throws(() => recovery.verifyRecoveryObservedState(invalid), /candidate_recovery_live_state_invalid/);
 });
 
-test("coverage catalog is valid only for the exact prefix-nine pending or prefix-ten applied shape", () => {
-  assert.equal(recovery.verifyRecoveryCoverageCatalog(9, [{ list_candidates_present: true, legacy_projection_trigger_present: false }]), false);
-  assert.equal(recovery.verifyRecoveryCoverageCatalog(10, [{ list_candidates_present: true, legacy_projection_trigger_present: true }]), true);
+test("coverage catalog is valid only for the exact prefix-nine pending or prefix-ten installed shape", () => {
+  const nine = { list_candidates_present: true, legacy_projection_trigger_present: false, coverage_backfill_batch_present: false, coverage_backfill_status_present: false };
+  const ten = { list_candidates_present: true, legacy_projection_trigger_present: true, coverage_backfill_batch_present: true, coverage_backfill_status_present: true };
+  assert.deepEqual(recovery.verifyRecoveryCoverageCatalog(9, [nine]), pendingBackfill);
+  assert.deepEqual(recovery.verifyRecoveryCoverageCatalog(10, [ten]), { installed: true });
   for (const [prefix, rows] of [
-    [9, [{ list_candidates_present: true, legacy_projection_trigger_present: true }]],
-    [9, [{ list_candidates_present: false, legacy_projection_trigger_present: false }]],
-    [9, [{ list_candidates_present: false, legacy_projection_trigger_present: true }]],
-    [10, [{ list_candidates_present: true, legacy_projection_trigger_present: false }]],
-    [10, [{ list_candidates_present: false, legacy_projection_trigger_present: false }]],
-    [10, [{ list_candidates_present: false, legacy_projection_trigger_present: true }]],
-    [11, [{ list_candidates_present: true, legacy_projection_trigger_present: true }]],
+    [9, [{ ...nine, legacy_projection_trigger_present: true }]],
+    [9, [{ ...nine, list_candidates_present: false }]],
+    [9, [{ ...nine, coverage_backfill_batch_present: true }]],
+    [10, [{ ...ten, legacy_projection_trigger_present: false }]],
+    [10, [{ ...ten, list_candidates_present: false }]],
+    [10, [{ ...ten, coverage_backfill_status_present: false }]],
+    [11, [ten]],
     [9, []],
-    [10, [{ list_candidates_present: true, legacy_projection_trigger_present: true }, { list_candidates_present: true, legacy_projection_trigger_present: true }]],
-    [9, [{ list_candidates_present: true, legacy_projection_trigger_present: "false" }]],
-    [9, [{ list_candidates_present: true, legacy_projection_trigger_present: false, unexpected: true }]],
+    [10, [ten, ten]],
+    [9, [{ ...nine, legacy_projection_trigger_present: "false" }]],
+    [9, [{ ...nine, unexpected: true }]],
   ]) assert.throws(() => recovery.verifyRecoveryCoverageCatalog(prefix, rows), /candidate_recovery_coverage_catalog_invalid/);
 });
 
@@ -146,11 +151,11 @@ test("injected recovery adapters persist uncertainty and run prefix-ten read-bac
   }), /candidate_recovery_prior_phase_unverified/);
   assert.equal(replayAttempts, 0);
 
-  for (const failedAt of ["ledger", "fullLedger", "dryRun", "catalog"]) {
+  for (const failedAt of ["ledger", "fullLedger", "dryRun", "catalog", "backfill"]) {
     const name = `readback-${failedAt}`;
     put(`${name}-state.json`, { coverage: "started_unverified", profileLink: "pending" });
     const called = [];
-    const stages = Object.fromEntries(["ledger", "fullLedger", "dryRun", "catalog"].map(stage => [stage, () => {
+    const stages = Object.fromEntries(["ledger", "fullLedger", "dryRun", "catalog", "backfill"].map(stage => [stage, () => {
       called.push(stage);
       if (stage === failedAt) throw Error(`simulated_${stage}_failure`);
     }]));
@@ -159,28 +164,28 @@ test("injected recovery adapters persist uncertainty and run prefix-ten read-bac
     }), new RegExp(`simulated_${failedAt}_failure`));
     assert.deepEqual(get(`${name}-state.json`), { coverage: "started_unverified", profileLink: "pending" }, failedAt);
     assert.equal(fs.existsSync(file(`${name}-receipt.json`)), false, failedAt);
-    assert.deepEqual(called, ["ledger", "fullLedger", "dryRun", "catalog"].slice(0, ["ledger", "fullLedger", "dryRun", "catalog"].indexOf(failedAt) + 1));
+    assert.deepEqual(called, ["ledger", "fullLedger", "dryRun", "catalog", "backfill"].slice(0, ["ledger", "fullLedger", "dryRun", "catalog", "backfill"].indexOf(failedAt) + 1));
     assert.throws(() => recovery.beginRecoveryCoverageWrite(get(`${name}-state.json`)), /candidate_recovery_prior_phase_unverified/);
     assert.throws(() => recovery.verifyRecoveryPhaseTransition(get(`${name}-state.json`), "profile-link"), /candidate_recovery_prior_phase_unverified/);
   }
 
-  const observed = { ...current, appliedPrefixLength: 10, pending: [recovery.PROFILE_LINK], coverageReadbackVerified: true };
+  const observed = { ...current, appliedPrefixLength: 10, pending: [recovery.PROFILE_LINK], coverageReadbackVerified: true, coverageBackfill: completeBackfill };
   const { coverageWriteRequired } = recovery.verifyRecoveryObservedState(observed);
   assert.equal(coverageWriteRequired, false);
   let writerCalls = 0; const readbackOrder = [];
   if (coverageWriteRequired) writerCalls += 1;
   put("resume-state.json", { coverage: "started_unverified", profileLink: "pending" });
-  const stages = Object.fromEntries(["ledger", "fullLedger", "dryRun", "catalog"].map(stage => [stage, () => { readbackOrder.push(stage); }]));
+  const stages = Object.fromEntries(["ledger", "fullLedger", "dryRun", "catalog", "backfill"].map(stage => [stage, () => { readbackOrder.push(stage); }]));
   await recovery.runRecoveryCoverageReadback({ stateFile: file("resume-state.json"), receiptFile: file("resume-receipt.json"), markerFile: file("resume-marker.json"), stages, receipt: () => ({ state: "verified" }) });
   assert.equal(writerCalls, 0);
-  assert.deepEqual(readbackOrder, ["ledger", "fullLedger", "dryRun", "catalog"]);
+  assert.deepEqual(readbackOrder, ["ledger", "fullLedger", "dryRun", "catalog", "backfill"]);
   assert.deepEqual(get("resume-state.json"), { coverage: "verified", profileLink: "pending" });
   assert.deepEqual(get("resume-receipt.json"), { state: "verified" });
   assert.equal(recovery.verifyRecoveryPhaseTransition(get("resume-state.json"), "profile-link"), true);
 });
 
 test("every partial coverage read-back failure preserves started_unverified and blocks writer and profile-link", () => {
-  const boundaries = ["ledger", "fullLedger", "dryRun", "catalog"];
+  const boundaries = ["ledger", "fullLedger", "dryRun", "catalog", "backfill"];
   for (const failedAt of boundaries) {
     const persisted = recovery.beginRecoveryCoverageWrite({ coverage: "pending", profileLink: "pending" });
     const checks = { ledger: false, fullLedger: false, dryRun: false, catalog: false };
@@ -196,17 +201,18 @@ test("every partial coverage read-back failure preserves started_unverified and 
 });
 
 test("reviewed prefix-ten resume authorizes read-back only, then profile-link after all checks", () => {
-  const observed = { ...current, appliedPrefixLength: 10, pending: [recovery.PROFILE_LINK], coverageReadbackVerified: true };
-  assert.deepEqual(recovery.verifyRecoveryObservedState(observed), { coverageWriteRequired: false });
+  const observed = { ...current, appliedPrefixLength: 10, pending: [recovery.PROFILE_LINK], coverageReadbackVerified: true, coverageBackfill: completeBackfill };
+  assert.deepEqual(recovery.verifyRecoveryObservedState(observed), { coverageWriteRequired: false, coverageBackfillRequired: false });
   const resumed = { coverage: "started_unverified", profileLink: "pending" };
   assert.throws(() => recovery.beginRecoveryCoverageWrite(resumed), /candidate_recovery_prior_phase_unverified/);
-  const verified = recovery.completeRecoveryCoverageReadback(resumed, { ledger: true, fullLedger: true, dryRun: true, catalog: true });
+  const verified = recovery.completeRecoveryCoverageReadback(resumed, { ledger: true, fullLedger: true, dryRun: true, catalog: true, backfill: true });
   assert.equal(recovery.verifyRecoveryPhaseTransition(verified, "profile-link"), true);
   for (const invalid of [
-    { ledger: false, fullLedger: true, dryRun: true, catalog: true },
-    { ledger: true, fullLedger: false, dryRun: true, catalog: true },
-    { ledger: true, fullLedger: true, dryRun: false, catalog: true },
-    { ledger: true, fullLedger: true, dryRun: true, catalog: false },
+    { ledger: false, fullLedger: true, dryRun: true, catalog: true, backfill: true },
+    { ledger: true, fullLedger: false, dryRun: true, catalog: true, backfill: true },
+    { ledger: true, fullLedger: true, dryRun: false, catalog: true, backfill: true },
+    { ledger: true, fullLedger: true, dryRun: true, catalog: false, backfill: true },
+    { ledger: true, fullLedger: true, dryRun: true, catalog: true, backfill: false },
   ]) assert.throws(() => recovery.completeRecoveryCoverageReadback(resumed, invalid), /candidate_recovery_coverage_readback_invalid/);
 });
 
@@ -263,19 +269,24 @@ test("recovery workflow requires two sequential environment reviews and blocks t
   assert.equal(workflow.jobs.apply.environment, "Production prospect migrations");
   assert.equal(workflow.jobs.apply.needs, "reconcile");
   assert.equal(workflow.jobs.reconcile.outputs.coverage_write_required, "${{ steps.reconcile.outputs.coverage_write_required }}");
+  assert.equal(workflow.jobs.reconcile.outputs.coverage_backfill_required, "${{ steps.reconcile.outputs.coverage_backfill_required }}");
   const steps = workflow.jobs.apply.steps.map(step => step.name ?? "");
   const coverage = steps.indexOf("Apply coverage migration within bounded writer credential lifetime");
+  const backfill = steps.indexOf("Run checkpointed candidate coverage backfill until all source tables are complete");
   const readbackCredential = steps.indexOf("Acquire fresh credential for coverage read-back after writer or reviewed prefix-ten reconciliation");
   const readback = steps.indexOf("Verify coverage migration ledger and catalog read-back");
   const final = steps.indexOf("Apply final profile link only after coverage receipt is verified");
-  assert.ok(coverage >= 0 && readbackCredential > coverage && readback > readbackCredential && final > readback);
+  assert.ok(coverage >= 0 && backfill > coverage && readbackCredential > backfill && readback > readbackCredential && final > readback);
   assert.match(workflow.jobs.apply.steps[coverage].if, /post_review_reconcile.outputs.coverage_write_required/);
+  assert.match(workflow.jobs.apply.steps[backfill].if, /post_review_reconcile.outputs.coverage_backfill_required/);
+  assert.equal(workflow.jobs.apply.steps[backfill].env.COMPLETE_PHASE, "coverage-backfill");
+  assert.equal(workflow.jobs.apply.steps[backfill].env.CREDENTIAL_GATE, "candidate-recovery");
+  assert.equal(workflow.jobs.apply.steps[backfill].env.MIGRATION_ACCESS_TOKEN, "${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}");
   assert.equal(workflow.jobs.apply.steps[readbackCredential].if, undefined, "both writer and prefix-ten resume paths require read-back");
   const reviewSummary = workflow.jobs.reconcile.steps.find(step => step.name === "Present exact partial ledger and remaining suffix for second protected review").run;
-  assert.match(reviewSummary, /transaction-local statement_timeout of 240 seconds before DDL/);
-  assert.match(reviewSummary, /300-second credential/);
-  assert.match(reviewSummary, /240-second CLI hard timeout/);
-  assert.match(reviewSummary, /read-back uses a separate credential with at least 250 seconds remaining/);
+  assert.match(reviewSummary, /checkpointed worker/);
+  assert.match(reviewSummary, /batches of at most 100/);
+  assert.match(reviewSummary, /database checkpoints/);
   assert.match(reviewSummary, /prefix ten with only profile-link pending/);
   assert.equal(workflow.jobs.apply.steps[final].if, undefined, "GitHub default success gating keeps later phases stopped on an unverified result");
   assert.ok(workflow.jobs.apply.steps.slice(coverage + 1, final).some(step => step.name === "Acquire a new credential only after verified coverage"));
@@ -293,6 +304,7 @@ test("coverage writer uses bounded CLI timeout without role-level setting privil
   assert.match(source, /verifyRecoveryTimeoutBudget\([^\n]+, 200000, 50000\)/);
   assert.match(source, /timeout: 20000/);
   assert.match(source, /verify-coverage-readback/);
+  assert.match(source, /coverage_backfill_status/);
   const credential = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/temporary-credential.mjs"), "utf8");
   assert.doesNotMatch(credential, /options=-c.*statement_timeout/);
   const migration = fs.readFileSync(path.join(root, recovery.COVERAGE), "utf8");

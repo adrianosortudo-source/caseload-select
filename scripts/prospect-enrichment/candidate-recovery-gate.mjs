@@ -5,6 +5,7 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { sha256, PROJECT_REF, CANDIDATE_RELEASE_PATHS, verifyDirectDatabaseUrl, findProjectEnvFiles } from "./migration-gate.mjs";
+import { validateBackfillStatus } from "./candidate-coverage-backfill-worker.mjs";
 
 export const FAILED_RUN_ID = "36460908921";
 export const FAILED_RECEIPTS_ARTIFACT_ID = "10987967959";
@@ -150,18 +151,27 @@ function snapshot(raw, label, pendingPaths = REMAINING, expectedPrefix = 9, quer
   return { ledger: out("ledger.json"), full: out("full.json"), ledgerCheck: out("ledger-check.json"), fullCheck: out("full-ledger-check.json"), catalogCheck: out("catalog-check.json"), pending: livePending, prefix: livePrefix };
 }
 export function verifyRecoveryObservedState(current) {
-  if (!exact(current, ["appliedPrefixLength", "pending", "planUpToDate", "fullLedgerMatchesSource", "operatorRpcVerified", "coverageTimeoutControlVerified", "coverageReadbackVerified"]) ||
+  if (!exact(current, ["appliedPrefixLength", "pending", "planUpToDate", "fullLedgerMatchesSource", "operatorRpcVerified", "coverageTimeoutControlVerified", "coverageReadbackVerified", "coverageBackfill"]) ||
       current.planUpToDate !== false || current.fullLedgerMatchesSource !== true || current.operatorRpcVerified !== true || current.coverageTimeoutControlVerified !== true) fail("candidate_recovery_live_state_invalid");
-  if (current.appliedPrefixLength === 9 && same(current.pending, REMAINING) && current.coverageReadbackVerified === false) return { coverageWriteRequired: true };
-  if (current.appliedPrefixLength === 10 && same(current.pending, [PROFILE_LINK]) && current.coverageReadbackVerified === true) return { coverageWriteRequired: false };
+  const backfill = current.coverageBackfill;
+  if (!backfill || !exact(backfill, ["installed", "complete", "totalTables", "completeTables", "rowsProjected"]) ||
+      typeof backfill.installed !== "boolean" || typeof backfill.complete !== "boolean" ||
+      !Number.isSafeInteger(backfill.totalTables) || backfill.totalTables < 0 || !Number.isSafeInteger(backfill.completeTables) ||
+      backfill.completeTables < 0 || backfill.completeTables > backfill.totalTables || !Number.isSafeInteger(backfill.rowsProjected) || backfill.rowsProjected < 0 ||
+      backfill.complete !== (backfill.installed && backfill.totalTables > 0 && backfill.completeTables === backfill.totalTables)) fail("candidate_recovery_live_state_invalid");
+  if (current.appliedPrefixLength === 9 && same(current.pending, REMAINING) && current.coverageReadbackVerified === false &&
+      !backfill.installed && !backfill.complete && backfill.totalTables === 0 && backfill.completeTables === 0 && backfill.rowsProjected === 0) return { coverageWriteRequired: true, coverageBackfillRequired: true };
+  if (current.appliedPrefixLength === 10 && same(current.pending, [PROFILE_LINK]) && backfill.installed &&
+      current.coverageReadbackVerified === backfill.complete) return { coverageWriteRequired: false, coverageBackfillRequired: !backfill.complete };
   fail("candidate_recovery_live_state_invalid");
 }
 export function verifyRecoveryCoverageCatalog(appliedPrefixLength, rows) {
-  if (!Array.isArray(rows) || rows.length !== 1 || !exact(rows[0], ["list_candidates_present", "legacy_projection_trigger_present"]) ||
-      typeof rows[0].list_candidates_present !== "boolean" || typeof rows[0].legacy_projection_trigger_present !== "boolean") fail("candidate_recovery_coverage_catalog_invalid");
-  const { list_candidates_present: listCandidatesPresent, legacy_projection_trigger_present: legacyProjectionTriggerPresent } = rows[0];
-  if (appliedPrefixLength === 9 && listCandidatesPresent === true && legacyProjectionTriggerPresent === false) return false;
-  if (appliedPrefixLength === 10 && listCandidatesPresent === true && legacyProjectionTriggerPresent === true) return true;
+  if (!Array.isArray(rows) || rows.length !== 1 || !exact(rows[0], ["list_candidates_present", "legacy_projection_trigger_present", "coverage_backfill_batch_present", "coverage_backfill_status_present"]) ||
+      Object.values(rows[0]).some(value => typeof value !== "boolean")) fail("candidate_recovery_coverage_catalog_invalid");
+  const { list_candidates_present: listCandidatesPresent, legacy_projection_trigger_present: legacyProjectionTriggerPresent,
+    coverage_backfill_batch_present: batchPresent, coverage_backfill_status_present: statusPresent } = rows[0];
+  if (appliedPrefixLength === 9 && listCandidatesPresent === true && legacyProjectionTriggerPresent === false && !batchPresent && !statusPresent) return { installed: false, complete: false, totalTables: 0, completeTables: 0, rowsProjected: 0 };
+  if (appliedPrefixLength === 10 && listCandidatesPresent === true && legacyProjectionTriggerPresent === true && batchPresent && statusPresent) return { installed: true };
   fail("candidate_recovery_coverage_catalog_invalid");
 }
 export function verifyRecoveryPlan(plan, expected) {
@@ -219,7 +229,7 @@ export function beginRecoveryCoverageWrite(state) {
 }
 export function completeRecoveryCoverageReadback(state, checks) {
   verifyRecoveryCoverageReadbackTransition(state);
-  if (!exact(checks, ["ledger", "fullLedger", "dryRun", "catalog"]) || Object.values(checks).some(value => value !== true))
+  if (!exact(checks, ["ledger", "fullLedger", "dryRun", "catalog", "backfill"]) || Object.values(checks).some(value => value !== true))
     fail("candidate_recovery_coverage_readback_invalid");
   return { ...state, coverage: "verified" };
 }
@@ -238,7 +248,7 @@ export async function runRecoveryCoverageWriter({ stateFile, receiptFile, marker
 export async function runRecoveryCoverageReadback({ stateFile, receiptFile, markerFile, stages, receipt }) {
   const state = read(stateFile);
   verifyRecoveryCoverageReadbackTransition(state);
-  const order = ["ledger", "fullLedger", "dryRun", "catalog"];
+  const order = ["ledger", "fullLedger", "dryRun", "catalog", "backfill"];
   if (!exact(stages, order) || typeof receipt !== "function") fail("candidate_recovery_coverage_readback_invalid");
   try {
     const results = {};
@@ -315,14 +325,16 @@ function verifyCoverageReadback(recoveryDir, priorDir) {
         if (!evidence.plan.upToDate) fail("candidate_recovery_coverage_plan_not_empty");
       },
       catalog: () => {
-        const check = path.join(raw, "coverage-catalog-check.sql");
-        fs.writeFileSync(check, "SELECT to_regprocedure('prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)') IS NOT NULL AS list_candidates_present, EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='candidate_legacy_projection' AND NOT tgisinternal) AS legacy_projection_trigger_present;\n");
-        query(check, path.join(raw, "coverage-catalog-check.json"), readbackTimeouts);
-        const catalog = read(path.join(raw, "coverage-catalog-check.json")), rows = Array.isArray(catalog) ? catalog : catalog.data ?? catalog.rows;
-        if (verifyRecoveryCoverageCatalog(10, rows) !== true) fail("candidate_recovery_coverage_catalog_invalid");
+        const catalog = coverageCatalog(raw, "coverage-readback-", 10);
+        if (catalog.installed !== true) fail("candidate_recovery_coverage_catalog_invalid");
+      },
+      backfill: () => {
+        evidence.backfill = readCoverageBackfillStatus(raw, "coverage-readback-");
+        if (!evidence.backfill.complete) fail("candidate_recovery_backfill_incomplete");
       },
     },
-    receipt: () => ({ binding, migration: COVERAGE, state: "verified", dryRun: evidence.plan, sessionStatementTimeoutMs: 240000, processTimeoutMs: 240000, readbackCredentialTtlBounded: true }),
+    receipt: () => ({ binding, migration: COVERAGE, state: "verified", dryRun: evidence.plan, sessionStatementTimeoutMs: 240000, processTimeoutMs: 240000,
+      backfill: { complete: evidence.backfill.complete, totalTables: evidence.backfill.totalTables, rowsProjected: evidence.backfill.rowsProjected }, readbackCredentialTtlBounded: true }),
   });
 }
 function applyProfileLink(recoveryDir, priorDir) {
@@ -353,10 +365,19 @@ function applyProfileLink(recoveryDir, priorDir) {
 
 function coverageCatalog(raw, label, appliedPrefixLength) {
   const check = path.join(raw, label + "coverage-catalog-check.sql");
-  fs.writeFileSync(check, "SELECT to_regprocedure('prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)') IS NOT NULL AS list_candidates_present, EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='candidate_legacy_projection' AND NOT tgisinternal) AS legacy_projection_trigger_present;\n");
+  fs.writeFileSync(check, "SELECT to_regprocedure('prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)') IS NOT NULL AS list_candidates_present, EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='candidate_legacy_projection' AND NOT tgisinternal) AS legacy_projection_trigger_present, to_regprocedure('prospect_candidate_private.coverage_backfill_batch(text,uuid,integer)') IS NOT NULL AS coverage_backfill_batch_present, to_regprocedure('prospect_candidate_private.coverage_backfill_status()') IS NOT NULL AS coverage_backfill_status_present;\n");
   query(check, path.join(raw, label + "coverage-catalog-check.json"));
   const catalog = read(path.join(raw, label + "coverage-catalog-check.json")), rows = Array.isArray(catalog) ? catalog : catalog.data ?? catalog.rows;
   return verifyRecoveryCoverageCatalog(appliedPrefixLength, rows);
+}
+function readCoverageBackfillStatus(raw, label) {
+  const sql = path.join(raw, label + "coverage-backfill-status.sql"), output = path.join(raw, label + "coverage-backfill-status.json");
+  fs.writeFileSync(sql, "SELECT * FROM prospect_candidate_private.coverage_backfill_status();\n");
+  query(sql, output, { timeout: 60000 });
+  const result = read(output), rows = Array.isArray(result) ? result : result.data ?? result.rows;
+  const status = validateBackfillStatus(rows), completeTables = status.filter(row => row.complete).length;
+  return { installed: true, complete: completeTables === status.length, totalTables: status.length, completeTables,
+    rowsProjected: status.reduce((sum, row) => sum + row.rows_projected, 0), detail: status };
 }
 function currentReadOnly(dir, label) {
   verifyRecoveryCoverageTimeout(fs.readFileSync(path.join(ROOT, COVERAGE), "utf8"));
@@ -364,11 +385,15 @@ function currentReadOnly(dir, label) {
   const snapshotFiles = snapshot(dir, label, null, null);
   const plan = exactDryRun(dir, label, staged.dir, snapshotFiles.pending);
   const ledger = read(snapshotFiles.ledgerCheck), full = read(snapshotFiles.fullCheck), catalog = read(snapshotFiles.catalogCheck);
-  const coveragePresent = coverageCatalog(dir, label, snapshotFiles.prefix);
+  const coverageCatalogState = coverageCatalog(dir, label, snapshotFiles.prefix);
+  const coverageBackfill = coverageCatalogState.installed ? readCoverageBackfillStatus(dir, label) : coverageCatalogState;
   snapshotFiles.coverageCatalogCheck = path.join(dir, label + "coverage-catalog-check.json");
   const current = { appliedPrefixLength: ledger.appliedPrefixLength, pending: [...snapshotFiles.pending], planUpToDate: plan.upToDate,
     fullLedgerMatchesSource: full.completeSourceCoverage === true && same(full.pendingPaths, snapshotFiles.pending), operatorRpcVerified: catalog.prerequisite === "verified_applied_operator_rpc",
-    coverageTimeoutControlVerified: true, coverageReadbackVerified: coveragePresent };
+    coverageTimeoutControlVerified: true, coverageReadbackVerified: coverageBackfill.complete, coverageBackfill: {
+      installed: coverageBackfill.installed, complete: coverageBackfill.complete, totalTables: coverageBackfill.totalTables,
+      completeTables: coverageBackfill.completeTables, rowsProjected: coverageBackfill.rowsProjected,
+    } };
   verifyRecoveryObservedState(current);
   return { current, snapshotFiles, plan };
 }
@@ -382,7 +407,7 @@ function reconcile(recoveryDir) {
   save(path.join(rootTemp("state"), "phase-state.json"), state);
   if (!coverageWriteRequired) save(path.join(rootTemp("coverage"), "coverage-resume-receipt.json"), { binding: manifest.binding, migration: COVERAGE, state: "read_only_observed_pending_verification", source: "reviewed_live_reconciliation" });
   save(path.join(rootTemp("reconcile"), "reconciled-state.json"), { state: "exact_reviewed_suffix_confirmed", current, coverageWriteRequired });
-  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `coverage_write_required=${coverageWriteRequired}\n`);
+  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `coverage_write_required=${coverageWriteRequired}\ncoverage_backfill_required=${verifyRecoveryObservedState(current).coverageBackfillRequired}\n`);
 }
 
 function preflight(evidenceDir, priorDir) {
@@ -398,7 +423,8 @@ function preflight(evidenceDir, priorDir) {
   fs.copyFileSync(path.join(priorDir, "artifact-metadata.json"), path.join(archivedPrior, "artifact-metadata.json"));
   for (const key of Object.keys(snapshotFiles)) if (typeof snapshotFiles[key] === "string") fs.copyFileSync(snapshotFiles[key], path.join(evidenceDir, path.basename(snapshotFiles[key])));
   save(path.join(evidenceDir, "plan-check.json"), plan);
-  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `manifest_sha256=${sha256(fs.readFileSync(path.join(evidenceDir, "recovery-evidence.json")))}\ncoverage_write_required=${verifyRecoveryObservedState(current).coverageWriteRequired}\n`);
+  const phases = verifyRecoveryObservedState(current);
+  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `manifest_sha256=${sha256(fs.readFileSync(path.join(evidenceDir, "recovery-evidence.json")))}\ncoverage_write_required=${phases.coverageWriteRequired}\ncoverage_backfill_required=${phases.coverageBackfillRequired}\n`);
 }
 function verifyPreflight(recoveryDir, priorDir = path.join(recoveryDir, "prior")) {
   const binding = checkSource(); verifyFailureArtifactMetadata(read(path.join(priorDir, "artifact-metadata.json")));
@@ -407,11 +433,11 @@ function verifyPreflight(recoveryDir, priorDir = path.join(recoveryDir, "prior")
 
 function authorizeCredential() {
   const binding = checkSource(), phase = process.env.COMPLETE_PHASE;
-  if (!["preflight", "reconcile", "coverage", "coverage-readback", "profile-link"].includes(phase)) fail("candidate_recovery_credential_phase_invalid");
-  if (phase === "coverage" || phase === "coverage-readback" || phase === "profile-link") {
+  if (!["preflight", "reconcile", "coverage", "coverage-backfill", "coverage-readback", "profile-link"].includes(phase)) fail("candidate_recovery_credential_phase_invalid");
+  if (phase === "coverage" || phase === "coverage-backfill" || phase === "coverage-readback" || phase === "profile-link") {
     const state = read(path.join(rootTemp("state"), "phase-state.json"));
     if (phase === "coverage") verifyRecoveryPhaseTransition(state, "coverage");
-    else if (phase === "coverage-readback") verifyRecoveryCoverageReadbackTransition(state);
+    else if (phase === "coverage-backfill" || phase === "coverage-readback") verifyRecoveryCoverageReadbackTransition(state);
     else verifyRecoveryPhaseTransition(state, "profile-link");
   }
   const directory = rootTemp("credentials"), marker = path.join(directory, phase + ".json");
