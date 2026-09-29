@@ -22,6 +22,24 @@ const BACKFILL_FAILURE_CODES = new Set([
   "candidate_backfill_credential_budget_insufficient", "candidate_backfill_arguments_invalid", "candidate_backfill_authorization_invalid",
   "candidate_backfill_batch_response_invalid",
 ]);
+const SQLSTATE_MESSAGES = new Map([
+  ["23502", "not_null_violation"], ["23503", "foreign_key_violation"], ["23505", "unique_violation"],
+  ["23514", "check_violation"], ["22P02", "invalid_text_representation"], ["22001", "string_data_right_truncation"],
+  ["42501", "insufficient_privilege"], ["57014", "query_canceled"], ["40001", "serialization_failure"],
+  ["40P01", "deadlock_detected"], ["P0001", "raised_exception"],
+]);
+
+export function safeDatabaseDiagnostic(stderr) {
+  const text = Buffer.isBuffer(stderr) ? stderr.toString("utf8") : typeof stderr === "string" ? stderr : "";
+  // Keep only a PostgreSQL SQLSTATE and a fixed, non-sensitive category. Never
+  // emit CLI stderr: it can contain row values, connection details, or tokens.
+  const match = text.match(/(?:SQLSTATE\s*[:=]?\s*|\bcode\s*[:=]\s*["']?)([0-9A-Z]{5})\b/i);
+  const sqlstate = match?.[1]?.toUpperCase() ?? null;
+  return {
+    postgresSqlstate: sqlstate,
+    sanitizedMessage: sqlstate ? SQLSTATE_MESSAGES.get(sqlstate) ?? "postgresql_error" : "database_cli_error_without_sqlstate",
+  };
+}
 
 export function redactedBackfillFailureCode(error) {
   const credentialCode = redactedFailureCode(error);
@@ -83,7 +101,16 @@ export async function runCoverageBackfill({ readStatus, runBatch, acquire, onPro
       if (advanced) { noProgress = 0; batchSizes.set(before.table_name, BATCH_SIZE); onProgress(status); continue; }
       noProgress += 1;
       if (batchSize > 1) batchSizes.set(before.table_name, Math.max(1, Math.floor(batchSize / 2)));
-      else if (noProgress > maxNoProgress) throw error;
+      else if (noProgress > maxNoProgress) {
+        if (error && typeof error === "object") {
+          error.safeContext = {
+            operation: "coverage_backfill_batch", tableName: before.table_name, batchSize,
+            checkpointRowsProjected: before.rows_projected,
+            ...(error.safeDatabaseDiagnostic ?? {}),
+          };
+        }
+        throw error;
+      }
       continue; // Transaction did not advance its checkpoint; retry is safe.
     }
     status = validateBackfillStatus(await readStatus());
@@ -148,7 +175,9 @@ function runSql(sql, credential) {
       { cwd: ROOT, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60000, maxBuffer: 4 * 1024 * 1024 });
   } catch (error) {
     const status = Number.isInteger(error.status) ? String(Math.abs(error.status)) : "timeout_or_signal";
-    fail(`candidate_backfill_query_exit_${status}`);
+    const failure = Error(`candidate_backfill_query_exit_${status}`);
+    failure.safeDatabaseDiagnostic = safeDatabaseDiagnostic(error.stderr);
+    throw failure;
   } finally { fs.rmSync(temp, { force: true }); }
 }
 
@@ -174,7 +203,12 @@ async function main() {
   const acquire = createBackfillCredentialProvider(process.env);
   const statusQuery = async () => {
     const credential = await acquire();
-    return responseRows(runSql("SELECT * FROM prospect_candidate_private.coverage_backfill_status();\n", credential));
+    try {
+      return responseRows(runSql("SELECT * FROM prospect_candidate_private.coverage_backfill_status();\n", credential));
+    } catch (error) {
+      if (error && typeof error === "object") error.safeContext = { operation: "coverage_backfill_status", ...(error.safeDatabaseDiagnostic ?? {}) };
+      throw error;
+    }
   };
   const runBatch = createCoverageBatchRunner();
   const markerPath = path.join(path.resolve(process.env.RUNNER_TEMP), "candidate-recovery", "coverage-backfill-marker.json");
@@ -191,7 +225,8 @@ async function main() {
     fs.rmSync(markerPath, { force: true });
     process.stdout.write(JSON.stringify(receipt) + "\n");
   } catch (error) {
-    process.stderr.write(`${redactedBackfillFailureCode(error)}\n`);
+    const diagnostic = error && typeof error === "object" ? error.safeContext : null;
+    process.stderr.write(`${JSON.stringify({ event: "coverage_backfill_failure", code: redactedBackfillFailureCode(error), ...(diagnostic ?? {}) })}\n`);
     process.exitCode = 1;
   }
 }
