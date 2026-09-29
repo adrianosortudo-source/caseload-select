@@ -1,56 +1,56 @@
 import { expect, test } from "@playwright/test";
-import { capture, choose, layout, next } from "./helpers";
+import { capture, layout } from "./helpers";
 import { STAGE_DEFINITIONS } from "../../src/lib/desired-client/screens";
 
 for (const width of [1440, 1024, 768, 640, 375, 320]) {
-  test("orientation copy fits at " + width + "px", async ({ page }) => {
+  test("welcome and first step fit at " + width + "px", async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto("/tools/desired-client-matter");
-    await expect(page.getByText("A one-page Desired Client Blueprint", { exact: false })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Define your desired client" })).toBeVisible();
+    await expect(page.getByText("A firm can have a full calendar and still be building the wrong practice.", { exact: false })).toBeVisible();
     await expect(page.getByText("about 10 minutes", { exact: false })).toBeVisible();
     await layout(page);
     if (width === 1440 || width === 320) await capture(page, "orientation-" + width + "-welcome");
     await page.getByRole("button", { name: "Define my desired client" }).click();
     await expect(page.getByText(STAGE_DEFINITIONS[0].explanation)).toBeVisible();
     await layout(page);
-    if (width === 1440 || width === 320) await capture(page, "orientation-" + width + "-focus");
+    if (width === 1440 || width === 320) await capture(page, "orientation-" + width + "-practice");
   });
 }
 
-test("every section explains its purpose during the guided journey", async ({ page }) => {
+test("the six sections explain their purpose and allow explicit unknowns", async ({ page }) => {
   await page.setViewportSize({ width: 768, height: 1000 });
   await page.goto("/tools/desired-client-matter");
   await page.getByRole("button", { name: "Define my desired client" }).click();
-  await choose(page, "Business & commercial");
-  await choose(page, "Commercial agreement drafting and review");
-  await choose(page, "We already do it and want more");
-  await next(page);
-  await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
-  await choose(page, "A business purchase, sale or ownership change is planned");
-  await choose(page, "Before a planned decision or change");
-  await choose(page, "Business or organization");
-  await next(page);
-  await expect(page.getByText(STAGE_DEFINITIONS[2].explanation)).toBeVisible();
-  await choose(page, "Complete a planned transaction or process");
-  await choose(page, "I'm worried about the cost");
-  await choose(page, "I don't know what happens next");
-  await next(page);
-  await expect(page.getByText(STAGE_DEFINITIONS[3].explanation)).toBeVisible();
-  await choose(page, "It uses work we do well");
-  await choose(page, "The fee usually supports the effort");
-  await choose(page, "Usually worthwhile");
-  await next(page);
-  await expect(page.getByText(STAGE_DEFINITIONS[4].explanation)).toBeVisible();
-  await choose(page, "A clearly agreed scope");
-  await choose(page, "Yes, with the current team");
-  await choose(page, "They are open to agreeing the scope and next step");
-  await next(page);
-  await expect(page.getByText(STAGE_DEFINITIONS[5].explanation)).toBeVisible();
-  await choose(page, "More of the work we already handle well");
-  await choose(page, "Several matters we have handled");
-  await choose(page, "Fee and time records");
-  await next(page);
+
+  const group = (name: string) => page.getByRole("group", { name, exact: true });
+  const chooseLast = async (name: string, role: "radio" | "checkbox" = "radio") => group(name).getByRole(role).last().check();
+  const continueToNext = async (stage: number) => {
+    await page.getByRole("button", { name: "Continue", exact: true }).click();
+    if (stage < 7) await expect(page.getByText(STAGE_DEFINITIONS[stage - 1].explanation)).toBeVisible();
+    else await expect(page.getByRole("heading", { name: STAGE_DEFINITIONS[stage - 1].heading })).toBeVisible();
+  };
+
+  await chooseLast("What do you want this profile to help your firm do?");
+  await continueToNext(2);
+  await page.getByLabel("Practice area for the work list").selectOption({ label: "Business & commercial" });
+  await chooseLast("Which type of legal work should we focus on?");
+  await chooseLast("Who is the client in this situation?");
+  await chooseLast("What event or situation creates the need for legal help?");
+  await chooseLast("At what stage does the client usually contact a lawyer?");
+  await continueToNext(3);
+  await chooseLast("Why would the firm choose this work again?", "checkbox");
+  await chooseLast("How does the fee compare with the effort?");
+  await continueToNext(4);
+  await chooseLast("Which early signs would make this matter worth a closer look?", "checkbox");
+  await continueToNext(5);
+  await chooseLast("What evidence has the firm seen for this type of work?", "checkbox");
+  await continueToNext(6);
+  await chooseLast("Could the firm take on more of this work now?");
+  await chooseLast("Which result would show that more of this work is worthwhile?");
+  await continueToNext(7);
   await expect(page.getByRole("heading", { name: "Review your direction" })).toBeVisible();
+  await expect(page.getByText("Not sure", { exact: true })).toBeVisible();
   await layout(page);
   await capture(page, "orientation-768-review");
 });

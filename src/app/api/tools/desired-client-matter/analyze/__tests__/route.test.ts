@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import type { AnalysisRequestEnvelope, DesiredClientAnswers } from "@/lib/desired-client/types";
+import { buildDefinitionSentence } from "@/lib/desired-client/definition";
+import { completeAnswers } from "@/lib/desired-client/__tests__/blueprint-helpers";
 
 const mocks = vi.hoisted(() => ({
   GoogleGenerativeAI: vi.fn(),
@@ -20,18 +22,18 @@ vi.mock("@/lib/rate-limit", () => ({
 import { POST } from "../route";
 
 const ROUTE = "https://app.caseloadselect.ca/api/tools/desired-client-matter/analyze";
-const B0: DesiredClientAnswers = {
-  schema_version: "dcm-v2.2", revision: 1,
-  focus: { area: "business", work: "business_agreements", work_other: "", service_area: "Ontario", certainty: "chosen", route: "established", comparison: null },
-  situation: { trigger: "business.transaction", timing: "planning", role: "business_organization", role_other: "", contact: null },
-  client: { goals: ["complete"], concerns: ["cost", "next"], decision_needs: ["options"] },
-  value: { reasons: ["client_benefit", "fees", "skills"], fee_effort: "worthwhile", collected_fee: null, team_hours: null, payment: null },
-  delivery: { conditions: ["scope", "information"], capacity: "room", limit: null, fit_signals: ["scope"] },
-  direction: { aim: "more_current", evidence: ["repeated", "records"], less: "within", less_note: "routine low-fee work" },
-  clarifications: { FOCUS_UNCLEAR: null, CLIENT_GOAL_UNCLEAR: null, CURRENT_CAPACITY_CONFLICT: null, FEE_EFFORT_CONFLICT: null, EXPERIENCE_DIRECTION_CONFLICT: null },
-};
+const B0: DesiredClientAnswers = (() => {
+  const answers = completeAnswers();
+  answers.revision = 1;
+  answers.practice.firm_type = "Ontario business law firm";
+  answers.opportunity = {
+    sources: ["retained_matters"], data_basis: "unknown", source_detail: "Recent retained matters provide a starting point to review.",
+    period: "", enquiry_count: "", retained_count: "", conversion: "", acquisition_cost: "", uncertainty: "",
+  };
+  return answers;
+})();
 const ENVELOPE: AnalysisRequestEnvelope = {
-  schemaVersion: 2,
+  schemaVersion: 3,
   requestId: "11111111-1111-4111-8111-111111111111",
   answerRevision: 1,
   reviewRunId: "22222222-2222-4222-8222-222222222222",
@@ -40,19 +42,30 @@ const ENVELOPE: AnalysisRequestEnvelope = {
   answers: B0,
   clarifications: [],
 };
-const MODEL_RESULT = {
-  clarification_code: null,
-  brief: { report_version: "dcm-blueprint-v1",
-    portrait: { text: "The firm wants more established agreement work for organizations planning a transaction. They seek advice to understand their options, and the work uses the firm's relevant skills.", kind: "preference", source_answer_ids: ["focus.work", "situation.role", "situation.trigger", "client.goals", "value.reasons"] },
-    client_need: { text: "The client wants to complete a planned process and may need clarity on cost and next steps.", kind: "experience", source_answer_ids: ["client.goals", "client.concerns"] },
-    firm_value: { text: "The firm values client benefit and skills. The fee is usually worthwhile, and the current team has room.", kind: "experience", source_answer_ids: ["value.reasons", "value.fee_effort", "delivery.capacity"] },
-    marketing: {
-      message: { text: "Understand the steps before moving ahead.", kind: "suggestion", source_answer_ids: ["client.goals"] },
-      content: { text: "What to clarify before a planned agreement.", kind: "suggestion", source_answer_ids: ["focus.work"] },
-      next_step: { text: "Request an initial conversation.", kind: "suggestion", source_answer_ids: ["client.goals"] },
-    }, open_questions: [],
-  },
-};
+const claim = (text: string, source: string, basis: "firm_preference" | "hypothesis" = "firm_preference") => ({
+  text, kind: basis === "firm_preference" ? "preference" : "hypothesis", source_answer_ids: [source], evidence_basis: basis,
+});
+const MODEL_RESULT = (() => {
+  const brief = {
+    report_version: "dcm-blueprint-v2",
+    definition_sentence: "",
+    definition_components: {
+      firm: claim("an Ontario business law firm", "practice.firm_type"),
+      client_matter: claim("business owners preparing to acquire an established business", "focus.work"),
+      reasons: claim("the work fits the firm's skills and client benefit goals", "value.reasons"),
+      outcome: claim("repeatable retained matters", "repeatability.success_measure"),
+    },
+    practice_context: { claims: [claim("The firm wants to grow proven acquisition work.", "practice.direction")] },
+    desired_client_matter: { claims: [claim("The client is a business owner considering an acquisition.", "situation.role")] },
+    value_rationale: { claims: [claim("The firm values the client benefit and its relevant skills.", "value.reasons")] },
+    relevance_signals: { claims: [claim("The firm identified scope as a useful fit signal.", "delivery.fit_signals")] },
+    opportunity_evidence: { claims: [claim("Retained matters are a source the firm can review.", "opportunity.sources", "hypothesis")] },
+    repeatability: { claims: [claim("Retained matters are the proposed measure of progress.", "repeatability.success_measure")] },
+    open_questions: [],
+  };
+  brief.definition_sentence = buildDefinitionSentence(brief as never, false);
+  return { clarification_code: null, brief };
+})();
 const ORIGINAL_ENV = new Map<string, string | undefined>();
 const ENV_KEYS = ["DESIRED_CLIENT_AI_ENABLED", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"];
 
@@ -131,6 +144,18 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     await expectNoStore(response);
   });
 
+  it("requires the current v3 answer contract and does not accept legacy schema envelopes", async () => {
+    const oldEnvelope = { ...ENVELOPE, schemaVersion: 2 };
+    const oldAnswers = { ...ENVELOPE, answers: { ...B0, schema_version: "dcm-v2.2" } };
+    for (const invalid of [oldEnvelope, oldAnswers]) {
+      const response = await POST(makeRequest(JSON.stringify(invalid)));
+      expect(response.status).toBe(400);
+      expect((await response.json()).error.code).toBe("INVALID_REQUEST");
+      await expectNoStore(response);
+    }
+    expect(mocks.GoogleGenerativeAI).not.toHaveBeenCalled();
+  });
+
   it("keeps AI disabled unless the server opt-in, key and both Redis settings exist", async () => {
     process.env.DESIRED_CLIENT_AI_ENABLED = "false";
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
@@ -146,6 +171,12 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body).toMatchObject({ ok: true, requestId: ENVELOPE.requestId, answerRevision: 1, reviewRunId: ENVELOPE.reviewRunId, result: MODEL_RESULT });
+    expect(body.result.brief.report_version).toBe("dcm-blueprint-v2");
+    expect(body.result.brief.definition_sentence).toContain("We help");
+    expect(Object.keys(body.result.brief)).toEqual([
+      "report_version", "definition_sentence", "definition_components", "practice_context", "desired_client_matter",
+      "value_rationale", "relevance_signals", "opportunity_evidence", "repeatability", "open_questions",
+    ]);
     expect(mocks.checkRateLimit.mock.calls).toEqual([
       ["desiredClientAnalyze", "203.0.113.42"],
       ["desiredClientDaily", "203.0.113.42"],
@@ -165,14 +196,14 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
 
   it("allows eligible clarification before the final attempt and forbids it on the final attempt", async () => {
     const answers = { ...B0, delivery: { ...B0.delivery, capacity: "change" as const } };
-    mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CURRENT_CAPACITY_CONFLICT" }));
+    mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CAPACITY_CONFLICT" }));
     const early = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 1 })));
     expect(early.status).toBe(200);
-    expect((await early.json()).result.clarification_code).toBe("CURRENT_CAPACITY_CONFLICT");
+    expect((await early.json()).result.clarification_code).toBe("CAPACITY_CONFLICT");
     const earlyPrompt = JSON.parse(mocks.generateContent.mock.calls[0][0] as string);
-    expect(earlyPrompt.eligible_codes).toContain("CURRENT_CAPACITY_CONFLICT");
+    expect(earlyPrompt.eligible_codes).toContain("CAPACITY_CONFLICT");
 
-    mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CURRENT_CAPACITY_CONFLICT" }));
+    mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CAPACITY_CONFLICT" }));
     const final = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 2 })));
     expect(final.status).toBe(502);
     expect((await final.json()).error.code).toBe("INVALID_AI_OUTPUT");

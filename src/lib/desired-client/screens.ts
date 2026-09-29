@@ -1,47 +1,52 @@
 import type { DesiredClientAnswers } from "./types";
+
 export type StageId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
-export interface StageDefinition { id: StageId; label: string; heading: string; explanation: string; previewAfter?: boolean; }
+export interface StageDefinition { id: StageId; label: string; heading: string; explanation: string; }
+
 export const STAGE_DEFINITIONS: readonly StageDefinition[] = [
-  { id: 1, label: "1 Focus", heading: "What legal work do you want more of?", explanation: "Choose one type of work for this profile. A specific focus helps you describe the right client situation and gives your marketing a clear direction." },
-  { id: 2, label: "2 Situation", heading: "What brings this client to a lawyer?", explanation: "Identify the event behind the inquiry, the stage the matter has reached, and who needs help. This makes the profile recognizable in marketing and in an initial conversation." },
-  { id: 3, label: "3 Client goal", heading: "What is the client trying to achieve?", explanation: "Describe the progress the client wants and what may make taking the next step difficult. These answers help the profile speak to a situation the client can recognize." },
-  { id: 4, label: "4 Value", heading: "Why does your firm want more of this work?", explanation: "A desirable matter should benefit the client and support the practice you want to build. Consider the effort, your team's strengths, and the work you would prefer to handle again." },
-  { id: 5, label: "5 Delivery", heading: "When is this work a good fit to deliver?", explanation: "Identify what helps your team serve the client well and what to establish early in an inquiry. The profile will turn these answers into practical questions for review." },
-  { id: 6, label: "6 Direction", heading: "What direction should this profile support?", explanation: "Connect the profile to the practice you want to build and identify what supports your choices. This keeps established experience, future preferences, and open assumptions clear." },
-  { id: 7, label: "7 Review", heading: "Review your direction", explanation: "Your answers shape the client profile. We will mark what is still uncertain." },
+  { id: 1, label: "1 Practice", heading: "What kind of practice are we building?", explanation: "Your desired client should support work your firm can do well and wants to become known for. Choose the direction that best describes what this profile should help you decide." },
+  { id: 2, label: "2 Client & matter", heading: "Which client situation and matter do we want more of?", explanation: "Choose one type of legal work and describe who needs help, what has happened, and when they tend to contact a lawyer. You can compare two types of work here if you are deciding between them." },
+  { id: 3, label: "3 Value", heading: "Why would we choose this work again?", explanation: "Consider what the firm keeps, what delivery requires and why the team wants this work. Use what you know; estimates and unknowns are welcome." },
+  { id: 4, label: "4 Fit", heading: "What makes an enquiry relevant to this profile?", explanation: "Choose observable signs that would make this type of matter worth a closer look. These are prompts for a lawyer to review, not automatic acceptance rules." },
+  { id: 5, label: "5 Opportunity", heading: "What tells us we can attract this work?", explanation: "Start with enquiries, retained matters, referrals or other experience the firm has actually seen. It is fine if the direction has not been tested yet." },
+  { id: 6, label: "6 Repeatability", heading: "What would make more of this work worthwhile?", explanation: "Decide what your team can support and what result would justify doing it again. A first profile can set a direction before every measure is known." },
+  { id: 7, label: "Review", heading: "Review your direction", explanation: "Your answers shape a provisional client-and-matter profile. Review the direction and the questions still to resolve before asking AI to create the blueprint." },
 ];
+
 export const COMPARISON_STEPS = [
   { id: 1, heading: "Which two types of work are you considering?" },
   { id: 2, heading: "Compare the two types of work" },
   { id: 3, heading: "Which work should this profile explore?" },
 ] as const;
-export const STAGE_SUMMARY_OWNERS: Record<number, StageId> = { 1: 1, 2: 3, 3: 4, 4: 5, 5: 6 };
+
+export const STAGE_SUMMARY_OWNERS: Record<number, StageId> = { 1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6 };
 export function getStageDefinition(stage: StageId): StageDefinition { return STAGE_DEFINITIONS[stage - 1]; }
+
+/** Only the ten core groups gate progress. Explicit unknown choices count as answers. */
 export function getMissingRequiredFields(answers: DesiredClientAnswers): string[] {
   const missing: string[] = [];
+  if (!answers.practice.direction || answers.practice.direction === "other" && !answers.write_ins?.aim?.trim()) missing.push("practice.direction");
   if (!answers.focus.area) missing.push("focus.area");
-  if (!answers.focus.work) missing.push("focus.work");
-  if (!answers.focus.route) missing.push("focus.route");
+  if (!answers.focus.work || answers.focus.work === "other" && !answers.focus.work_other.trim()) missing.push("focus.work");
+  if (!answers.situation.role || answers.situation.role === "other" && !answers.situation.role_other.trim()) missing.push("situation.role");
   if (!answers.situation.trigger && !answers.write_ins?.trigger?.trim()) missing.push("situation.trigger");
-  if (!answers.situation.timing && !answers.write_ins?.timing?.trim()) missing.push("situation.timing");
-  if (!answers.situation.role) missing.push("situation.role");
-  if (answers.delivery.fit_signals.length === 0 && !answers.write_ins?.fit_signals?.trim()) missing.push("delivery.fit_signals");
-  if (answers.client.goals.length === 0 && !answers.write_ins?.goals?.trim()) missing.push("client.goals");
+  if (!answers.situation.timing) missing.push("situation.timing");
   if (answers.value.reasons.length === 0 && !answers.write_ins?.reasons?.trim()) missing.push("value.reasons");
-  if (!answers.value.fee_effort && !answers.write_ins?.fee_effort?.trim()) missing.push("value.fee_effort");
-  if (!answers.delivery.capacity && !answers.write_ins?.capacity?.trim()) missing.push("delivery.capacity");
-  if (!answers.direction.aim && !answers.write_ins?.aim?.trim()) missing.push("direction.aim");
-  if (answers.direction.evidence.length === 0 && !answers.write_ins?.evidence?.trim()) missing.push("direction.evidence");
+  if (answers.delivery.fit_signals.length === 0 && !answers.write_ins?.fit_signals?.trim()) missing.push("delivery.fit_signals");
+  if (answers.opportunity.sources.length === 0) missing.push("opportunity.sources");
+  if (!answers.delivery.capacity) missing.push("delivery.capacity");
+  if (!answers.repeatability.success_measure || answers.repeatability.success_measure === "other" && !answers.repeatability.success_other.trim()) missing.push("repeatability.success_measure");
   return missing;
 }
+
 export function getMissingFieldsForStage(stage: StageId, answers: DesiredClientAnswers): string[] {
   const byStage: Record<Exclude<StageId, 7>, string[]> = {
-    1: ["focus.area", "focus.work", "focus.route"],
-    2: ["situation.trigger", "situation.timing", "situation.role"],
-    3: ["client.goals"],
-    4: ["value.reasons", "value.fee_effort"],
-    5: ["delivery.capacity", "delivery.fit_signals"],
-    6: ["direction.aim", "direction.evidence"],
+    1: ["practice.direction"],
+    2: ["focus.area", "focus.work", "situation.role", "situation.trigger", "situation.timing"],
+    3: ["value.reasons"],
+    4: ["delivery.fit_signals"],
+    5: ["opportunity.sources"],
+    6: ["delivery.capacity", "repeatability.success_measure"],
   };
   const missing = new Set(getMissingRequiredFields(answers));
   return stage === 7 ? [] : byStage[stage].filter((key) => missing.has(key));
@@ -49,9 +54,5 @@ export function getMissingFieldsForStage(stage: StageId, answers: DesiredClientA
 export function isStageComplete(stage: StageId, answers: DesiredClientAnswers): boolean {
   return getMissingFieldsForStage(stage, answers).length === 0;
 }
-export function nextStage(stage: StageId): StageId {
-  return Math.min(7, stage + 1) as StageId;
-}
-export function previousStage(stage: StageId): StageId {
-  return Math.max(1, stage - 1) as StageId;
-}
+export function nextStage(stage: StageId): StageId { return Math.min(7, stage + 1) as StageId; }
+export function previousStage(stage: StageId): StageId { return Math.max(1, stage - 1) as StageId; }

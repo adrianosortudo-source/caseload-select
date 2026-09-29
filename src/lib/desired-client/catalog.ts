@@ -2,6 +2,7 @@ import type {
   AimId, AreaId, AnswerReferencePath, CapacityId, CollectedFeeId, ComparisonCandidate,
   ConcernId, ConditionId, ContactId, DesiredClientAnswers, EvidenceId, FeeEffortId,
   DecisionNeedId, FitSignalId, GoalId, LessId, LimitId, PaymentId, ReasonId, RoleId, TeamHoursId, TimingId, TriggerId, WorkId, WriteInKey,
+  OpportunitySourceId, PracticeDirectionId, SuccessMeasureId,
 } from "./types";
 
 export interface AreaPack {
@@ -208,8 +209,23 @@ export const AIM_LABELS: Record<AimId, string> = {
   unknown: "We're still choosing a direction",
 };
 export const LESS_LABELS: Record<LessId, string> = {
-  within: "Other work within this practice area", outside: "Work outside this practice area",
+  within: "Other work within this practice area", outside: "Work outside this practice",
   model: "Work that needs a delivery model we do not offer", none: "Nothing identified yet",
+};
+export const PRACTICE_DIRECTION_LABELS: Record<PracticeDirectionId, string> = {
+  grow_proven: "Grow work the firm is equipped to handle", narrow_specialty: "Concentrate on a narrower specialty",
+  explore_direction: "Explore a new direction", improve_delivery: "Improve delivery",
+  other: "Another practice direction", unknown: "Not sure yet",
+};
+export const OPPORTUNITY_SOURCE_LABELS: Record<OpportunitySourceId, string> = {
+  comparable_enquiries: "Comparable enquiries received", retained_matters: "Comparable matters retained",
+  professional_referrals: "Professional referrals", repeat_clients: "Repeat clients", website_search: "Website or search enquiries",
+  other_source: "Another source", no_evidence: "No evidence yet", unknown: "Not sure yet",
+};
+export const SUCCESS_MEASURE_LABELS: Record<SuccessMeasureId, string> = {
+  retained_matters: "More of the specified matters retained", contribution_effort: "Contribution relative to effort",
+  predictable_delivery: "More predictable delivery", practice_mix_reputation: "Desired practice mix or reputation",
+  other: "Another firm-approved outcome", unknown: "Not sure yet",
 };
 export const WRITE_IN_QUESTIONS: Record<WriteInKey, string> = {
   timing: "When does this client usually seek help?", contact: "Who makes the first contact?",
@@ -256,7 +272,7 @@ const CLARIFICATION_LABELS: Record<string, string> = {
   reconsider_work: "The work needs reconsideration", current_evidence: "Work we already handle",
   future_direction: "A direction we are building", ...GOAL_LABELS,
 };
-const UNKNOWN_VALUES = new Set(["unknown", "undecided", "private"]);
+const UNKNOWN_VALUES = new Set(["unknown", "undecided", "private", "not sure yet"]);
 
 function getPathValue(answers: DesiredClientAnswers, path: AnswerReferencePath): unknown {
   const [top, second, third, fourth] = path.split(".");
@@ -278,7 +294,8 @@ function labelReference(path: AnswerReferencePath, value: unknown, answers: Desi
   if (Array.isArray(value)) return value.map((item) => labelReference(path, item, answers) ?? String(item)).join(", ");
   if (typeof value !== "string") return String(value);
   if (path === "focus.area") return isKnownArea(value) ? AREA_CATALOG[value].label : value;
-  if (path === "focus.work") return isKnownArea(answers.focus.area) ? getWorkLabel(answers.focus.area, value as WorkId | "other") : value;
+  if (path === "focus.work") return answers.focus.work === "other" && (!answers.focus.work_other.trim() || answers.focus.work_other.trim().toLowerCase() === "not sure yet")
+    ? "Not sure yet" : isKnownArea(answers.focus.area) ? getWorkLabel(answers.focus.area, value as WorkId | "other") : value;
   if (path === "situation.role") return isKnownArea(answers.focus.area) ? getRoleLabel(answers.focus.area, value as RoleId | "other" | "unknown") : value;
   if (path === "value.reasons") return getReasonLabel(value as ReasonId, answers.focus.route);
   if (path === "value.fee_effort") return getFeeEffortLabel(value as FeeEffortId, answers.focus.route);
@@ -303,6 +320,12 @@ function labelReference(path: AnswerReferencePath, value: unknown, answers: Desi
   if (path === "direction.evidence") return EVIDENCE_LABELS[value as EvidenceId];
   if (path === "direction.less") return LESS_LABELS[value as LessId];
   if (path === "focus.route") return ROUTE_LABELS[value as keyof typeof ROUTE_LABELS];
+  if (path === "practice.direction") return PRACTICE_DIRECTION_LABELS[value as PracticeDirectionId];
+  if (path === "opportunity.sources") return OPPORTUNITY_SOURCE_LABELS[value as OpportunitySourceId];
+  if (path === "opportunity.data_basis") return ({ recorded: "Firm-reported recorded evidence", estimated: "Firm estimate", unknown: "Not established" } as const)[value as "recorded" | "estimated" | "unknown"];
+  if (path === "repeatability.success_measure") return SUCCESS_MEASURE_LABELS[value as SuccessMeasureId];
+  if (path === "value.amount_basis") return ({ recorded: "Firm-reported recorded figure", estimated: "Firm estimate", unknown: "Not established" } as const)[value as "recorded" | "estimated" | "unknown"];
+  if (path === "value.amount_scope") return ({ per_matter: "Per matter", range: "Range", other: "Other scope" } as const)[value as "per_matter" | "range" | "other"];
   if (path.startsWith("clarifications.")) return CLARIFICATION_LABELS[value] ?? value;
   if (path.startsWith("focus.comparison.")) {
     if (path.endsWith(".work") && isKnownArea(answers.focus.area)) return getWorkLabel(answers.focus.area, value as WorkId);
@@ -322,8 +345,9 @@ export function resolveAnswerReference(path: AnswerReferencePath, answers: Desir
   const raw = getPathValue(answers, path);
   const present = raw !== undefined;
   const normalizedEmpty = typeof raw === "string" && raw.trim().length === 0;
-  const unknown = !present || raw === null || normalizedEmpty || (Array.isArray(raw) && (raw.length === 0 || raw.some((item) => typeof item === "string" && UNKNOWN_VALUES.has(item))))
-    || (typeof raw === "string" && UNKNOWN_VALUES.has(raw));
+  const unknown = !present || raw === null || normalizedEmpty || (Array.isArray(raw) && (raw.length === 0 || raw.some((item) => typeof item === "string" && UNKNOWN_VALUES.has(item.toLowerCase()))))
+    || (typeof raw === "string" && UNKNOWN_VALUES.has(raw.toLowerCase()))
+    || (path === "focus.work" && answers.focus.work === "other" && (!answers.focus.work_other.trim() || answers.focus.work_other.trim().toLowerCase() === "not sure yet"));
   const value = labelReference(path, raw, answers);
   return { value: value?.trim() || null, present, unknown };
 }

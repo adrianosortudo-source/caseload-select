@@ -1,34 +1,195 @@
 "use client";
+
 import { useMemo, useRef, useState } from "react";
-import { buildBlueprintViewModel } from "@/lib/desired-client/blueprint";
-import { createMarkdownDownload, createProfileDownload } from "@/lib/desired-client/export";
-import type { ClarificationCode, DesiredClientAnswers, SavedBrief } from "@/lib/desired-client/types";
+import { buildBlueprintViewModel, EVIDENCE_BASIS_LABELS } from "@/lib/desired-client/blueprint";
+import { createHtmlDownload, createProfileDownload } from "@/lib/desired-client/export";
+import type { ClarificationCode, DesiredClientAnswers, DesiredClientBrief, SavedBrief } from "@/lib/desired-client/types";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 
-export function BriefView({saved,answers,dismissedCode,reviewed,onReview,onEdit,onAnother,onClear,storageWarning}:{saved:SavedBrief;answers:DesiredClientAnswers;dismissedCode:ClarificationCode|null;reviewed:boolean;onReview:(v:boolean)=>void;onEdit:(stage:1|2|3|4|5|6)=>void;onAnother:()=>void;onClear:()=>void;storageWarning:boolean}){
- const [copied,setCopied]=useState(false),[copyFailed,setCopyFailed]=useState(false),[pdfFailed,setPdfFailed]=useState(false),[confirm,setConfirm]=useState<"another"|"clear"|null>(null),[busy,setBusy]=useState(false); const fallback=useRef<HTMLTextAreaElement>(null);
- const model=useMemo(()=>buildBlueprintViewModel(saved.brief,answers,{mode:saved.mode,generatedAt:saved.generatedAt,wordingReviewed:reviewed,openClarificationCode:dismissedCode??saved.openClarificationCode}),[saved,answers,reviewed,dismissedCode]);
- const text=createProfileDownload(saved,answers).content, markdown=createMarkdownDownload(saved,answers);
- async function copy(){setCopied(false);setCopyFailed(false);try{await navigator.clipboard.writeText(text);setCopied(true);}catch{setCopyFailed(true);setTimeout(()=>{fallback.current?.focus();fallback.current?.select();},0);}}
- function downloadSupporting(){const url=URL.createObjectURL(new Blob([markdown.content],{type:markdown.mimeType}));const link=document.createElement("a");link.href=url;link.download=markdown.filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
- async function downloadPdf(){setPdfFailed(false);setBusy(true);try{const {downloadBlueprintPdf}=await import("@/lib/desired-client/pdf-export");await downloadBlueprintPdf(model,saved,answers);}catch{setPdfFailed(true);}finally{setBusy(false);}}
- const b=saved.brief;
- return <article className="dc-brief" data-ui-component-content="desired-client-brief">
-  <header className="dc-brief__header"><h1 data-ui-copy="heading">Desired Client Blueprint</h1><p data-ui-copy="supporting">{model.status}{model.provisional?" · Provisional direction":""} · AI-assisted working draft · {model.date}</p></header>
-  {storageWarning&&<p className="dc-alert" data-ui-copy="supporting">This browser could not save your progress. You can still finish and download your blueprint.</p>}
-  <section className="dc-profile" data-ui-component-content="desired-client-profile"><h2 data-ui-copy="heading">Desired client portrait</h2><p className="dc-profile__definition" data-ui-copy="body">{b.portrait.text}</p><div className="dc-blueprint-context">{[["CLIENT CONTEXT",model.context.client],["STARTING POINT",model.context.startingPoint],["WORK TO ATTRACT",model.context.work]].map(([label,value])=><section key={label}><h3 data-ui-copy="supporting">{label}</h3><p data-ui-copy="body">{value}</p></section>)}</div></section>
-  <div className="dc-blueprint-columns"><section className="dc-brief__section"><h2 data-ui-copy="heading">Client need</h2><p data-ui-copy="body">{b.client_need.text}</p></section><section className="dc-brief__section"><h2 data-ui-copy="heading">Firm value</h2><p data-ui-copy="body">{b.firm_value.text}</p></section></div>
-  <section className="dc-brief__section"><h2 data-ui-copy="heading">Marketing direction</h2><dl className="dc-fact-row"><dt data-ui-copy="supporting">Message</dt><dd data-ui-copy="body">{b.marketing.message.text}</dd></dl><dl className="dc-fact-row"><dt data-ui-copy="supporting">Content idea</dt><dd data-ui-copy="body">{b.marketing.content.text}</dd></dl><dl className="dc-fact-row"><dt data-ui-copy="supporting">Next step</dt><dd data-ui-copy="body">{b.marketing.next_step.text}</dd></dl></section>
-  <section className="dc-brief__section"><h2 data-ui-copy="heading">Proposed Screen questions</h2><div className="dc-screen-table"><div className="dc-screen-table__head"><span>Signal</span><span>Ask or establish</span><span>Use</span></div>{model.screens.rows.map(row=><div className="dc-screen-table__row" key={row.id}><h3 data-ui-copy="heading">{row.label}</h3><div data-ui-copy="body"><p>{row.ask_summary}</p><details><summary>Questions and desired conditions</summary><ul>{row.questions.map(q=><li key={q.id}>{q.question}{q.desired_condition?` Desired: ${q.desired_condition}`:""}</li>)}</ul></details></div><p data-ui-copy="supporting">{row.use_summary}</p></div>)}</div><p data-ui-copy="supporting">Missing information calls for clarification. These proposed checks do not activate scoring or decide whether to accept a matter.</p></section>
-  <section className="dc-brief__section"><h2 data-ui-copy="heading">Still to confirm</h2>{model.stillToConfirm.length?model.stillToConfirm.map(n=><p key={n} data-ui-copy="body">{n}</p>):<p data-ui-copy="body">No unresolved questions identified. Test this profile against actual client and delivery evidence.</p>}{model.allNotes.length>2&&<details open><summary>Further notes</summary><ul>{model.allNotes.slice(2).map(n=><li key={n}>{n}</li>)}</ul></details>}</section>
-  <details className="dc-brief__section" open><summary data-ui-copy="heading">Answers and sources</summary><p>Evidence: {model.evidence.length?model.evidence.join("; "):"No client evidence selected"}. Based on information supplied by the firm.</p>{model.sourceDetails.map(slot=><section key={slot.slot}><h3>{slot.slot}</h3><p>{slot.statement.text} <span className="dc-kind">{slot.statement.kind}</span></p><ul>{slot.answers.map(source=><li key={source.path}>{source.question}: {source.answer??"Not supplied"}</li>)}</ul></section>)}<h3>All selected answers</h3><ul>{model.allAnswers.map((answer,i)=><li key={`${i}-${answer.question}`}>{answer.question}: {answer.answer}</li>)}</ul></details>
-  <p className="dc-footnote" data-ui-copy="body">Based on your answers. Marketing direction and proposed inquiry checks; a lawyer decides whether to accept an individual matter.</p>
-  <p data-ui-copy="body">Does this describe the client and work you want more of?</p><label className="dc-reviewed"><input type="checkbox" disabled={busy} checked={reviewed} onChange={e=>onReview(e.currentTarget.checked)}/><span>I have reviewed this wording and the proposed inquiry checks.</span></label><p data-ui-copy="supporting">This confirms your review of the profile. Screen settings are not changed.</p>
-  {copied&&<p role="status">Profile copied.</p>}{copyFailed&&<><p role="status">The profile could not be copied automatically. Select and copy the profile text below.</p><textarea ref={fallback} aria-label="Select and copy profile" readOnly value={text}/></>}
-  {pdfFailed&&<p className="dc-alert" role="status">The PDF could not be prepared. Your answers are still saved. Use the supporting detail download or try again.</p>}
-  <div className="dc-actions dc-brief__actions"><button className="dc-button dc-button--primary" disabled={busy} onClick={downloadPdf}>{busy?"Preparing PDF…":"Download one-page PDF"}</button><button className="dc-button dc-button--secondary" disabled={busy} onClick={copy}>Copy profile</button><button className="dc-button dc-button--secondary" disabled={busy} onClick={downloadSupporting}>Download supporting detail</button><button className="dc-button dc-button--secondary" disabled={busy} onClick={()=>window.print()}>Print profile</button></div>
-  <div className="dc-actions" aria-label="Edit profile answers">{([[1,"Focus"],[2,"Situation"],[3,"Client goal"],[4,"Value"],[5,"Delivery"],[6,"Direction"]] as const).map(([stage,label])=><button key={stage} className="dc-button dc-button--secondary" disabled={busy} onClick={()=>onEdit(stage)}>Edit {label}</button>)}</div>
-  <div className="dc-actions"><button className="dc-button dc-button--secondary" disabled={busy} onClick={()=>setConfirm("another")}>Start another</button><button className="dc-button dc-button--secondary" disabled={busy} onClick={()=>setConfirm("clear")}>Clear draft</button></div>
-  {confirm&&<ConfirmationDialog open onClose={()=>setConfirm(null)} labelledBy="dc-confirm-title"><h2 id="dc-confirm-title">{confirm==="another"?"Replace the draft saved in this browser?":"Clear the draft and brief saved in this browser?"}</h2>{confirm==="another"&&<p>Download your profile first if you want to keep a copy.</p>}<button className="dc-button dc-button--primary" onClick={()=>{confirm==="another"?onAnother():onClear();setConfirm(null);}}>{confirm==="another"?"Replace draft":"Clear draft"}</button><button className="dc-button dc-button--secondary" onClick={()=>setConfirm(null)}>Keep draft</button></ConfirmationDialog>}
- </article>;
+const EDIT_LINKS = [
+  [1, "Edit practice"],
+  [2, "Edit client and matter"],
+  [3, "Edit value"],
+  [4, "Edit fit"],
+  [5, "Edit opportunity"],
+  [6, "Edit repeatability"],
+] as const;
+
+function definitionSegments(sentence: string, components: DesiredClientBrief["definition_components"]) {
+  const matches = Object.entries(components)
+    .map(([key, statement]) => ({ key, text: statement.text.trim(), start: statement.text.trim() ? sentence.indexOf(statement.text.trim()) : -1 }))
+    .filter((part) => part.start >= 0)
+    .sort((a, b) => a.start - b.start);
+  const parts: Array<{ text: string; key?: string }> = [];
+  let cursor = 0;
+  for (const match of matches) {
+    if (match.start < cursor) continue;
+    if (match.start > cursor) parts.push({ text: sentence.slice(cursor, match.start) });
+    parts.push({ text: sentence.slice(match.start, match.start + match.text.length), key: match.key });
+    cursor = match.start + match.text.length;
+  }
+  if (cursor < sentence.length) parts.push({ text: sentence.slice(cursor) });
+  return parts.map((part, index) => part.key
+    ? <strong key={`${part.key}-${index}`}>{part.text}</strong>
+    : <span key={`plain-${index}`}>{part.text}</span>);
+}
+
+function saveDownload(filename: string, content: string, mimeType: string) {
+  const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function sourceSnapshotRows(saved: SavedBrief, brief: NonNullable<Extract<SavedBrief["brief"], { report_version: "dcm-blueprint-v1" }>>) {
+  const snapshot = saved.sourceAnswersSnapshot;
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot) || !("schema_version" in snapshot) || snapshot.schema_version !== "dcm-v2.2") return [];
+  const statements = [brief.portrait, brief.client_need, brief.firm_value, brief.marketing.message, brief.marketing.content, brief.marketing.next_step, ...brief.open_questions];
+  const paths = [...new Set(statements.flatMap((item) => item.source_answer_ids))];
+  return paths.map((path) => {
+    let current: unknown = snapshot;
+    for (const segment of path.split(".")) {
+      if (!current || typeof current !== "object" || Array.isArray(current) || !Object.hasOwn(current, segment)) { current = null; break; }
+      current = (current as Record<string, unknown>)[segment];
+    }
+    const answer = Array.isArray(current)
+      ? current.map((item) => typeof item === "string" ? item.replaceAll("_", " ") : "").filter(Boolean).join(", ")
+      : typeof current === "string" ? current.replaceAll("_", " ")
+        : typeof current === "number" || typeof current === "boolean" ? String(current) : "Not recorded";
+    return { path, answer };
+  });
+}
+
+export function BriefView({
+  saved,
+  answers,
+  reviewed,
+  onReview,
+  onEdit,
+  onAnother,
+  onClear,
+  storageWarning,
+}: {
+  saved: SavedBrief;
+  answers: DesiredClientAnswers;
+  dismissedCode: ClarificationCode | null;
+  reviewed: boolean;
+  onReview: (v: boolean) => void;
+  onEdit: (stage: 1 | 2 | 3 | 4 | 5 | 6) => void;
+  onAnother: () => void;
+  onClear: () => void;
+  storageWarning: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [copyFailed, setCopyFailed] = useState(false);
+  const [htmlFailed, setHtmlFailed] = useState(false);
+  const [confirm, setConfirm] = useState<"another" | "clear" | null>(null);
+  const fallback = useRef<HTMLTextAreaElement>(null);
+  const legacyBrief = saved.brief.report_version === "dcm-blueprint-v1" ? saved.brief : null;
+  const currentBrief = saved.brief.report_version === "dcm-blueprint-v2" ? saved.brief : null;
+  const legacy = legacyBrief !== null;
+  const model = useMemo(() => currentBrief ? buildBlueprintViewModel(currentBrief, answers, {
+    mode: saved.mode,
+    generatedAt: saved.generatedAt,
+    wordingReviewed: reviewed,
+    openClarificationCode: saved.openClarificationCode,
+  }) : null, [saved, answers, reviewed, currentBrief]);
+  const text = createProfileDownload(saved, answers).content;
+
+  async function copyProfile() {
+    setCopied(false);
+    setCopyFailed(false);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+    } catch {
+      setCopyFailed(true);
+      window.setTimeout(() => {
+        fallback.current?.focus();
+        fallback.current?.select();
+      }, 0);
+    }
+  }
+
+  function downloadHtml() {
+    setHtmlFailed(false);
+    try {
+      const file = createHtmlDownload(saved, answers);
+      saveDownload(file.filename, file.content, file.mimeType);
+    } catch {
+      setHtmlFailed(true);
+    }
+  }
+
+  const report = legacyBrief;
+  return <article className={`dc-brief${legacy ? " dc-brief--legacy" : " dc-brief--blueprint"}`} data-ui-component-content="desired-client-blueprint">
+    <header className="dc-brief__header" data-ui-component-content="desired-client-blueprint-header">
+      {legacy
+        ? <><p className="dc-eyebrow" data-ui-copy="supporting">ORIGINAL REPORT VERSION</p><h1 data-ui-copy="heading">Desired Client Blueprint</h1><p className="dc-report-status" data-ui-copy="supporting">Original dcm-blueprint-v1 · {saved.mode === "ai" ? "AI-assisted" : "Structured"} · {new Date(saved.generatedAt).toLocaleDateString("en-CA")}</p></>
+        : <><p className="dc-eyebrow" data-ui-copy="supporting">CASELOAD SELECT · DESIRED CLIENT &amp; MATTER BLUEPRINT</p><h1 data-ui-copy="heading">{model!.title}</h1><p className="dc-report-meta" data-ui-copy="supporting">{model!.modeLabel} · Created {model!.date}</p><div className="dc-report-status"><strong data-ui-copy="supporting">{model!.status}</strong><span data-ui-copy="supporting">{model!.evidenceStatus}</span></div></>}
+    </header>
+    {storageWarning && <p className="dc-alert dc-screen-only" data-ui-copy="supporting">This browser could not save your progress. You can still finish and download your blueprint.</p>}
+    {legacy && report ? <>
+      <section className="dc-report-definition" data-ui-component-content="desired-client-legacy-definition"><h2 data-ui-copy="supporting">Desired client portrait</h2><p data-ui-copy="body">{report.portrait.text}</p><span className="dc-evidence-label">Original classification: {report.portrait.kind}</span></section>
+      <div className="dc-report-cards dc-report-cards--legacy">
+        <section className="dc-report-card"><h2 data-ui-copy="heading">Client need</h2><p data-ui-copy="body">{report.client_need.text}</p><span className="dc-evidence-label">Original classification: {report.client_need.kind}</span></section>
+        <section className="dc-report-card"><h2 data-ui-copy="heading">Firm value</h2><p data-ui-copy="body">{report.firm_value.text}</p><span className="dc-evidence-label">Original classification: {report.firm_value.kind}</span></section>
+        <section className="dc-report-card dc-report-card--wide"><h2 data-ui-copy="heading">Marketing direction</h2><div className="dc-legacy-list">{([["Message", report.marketing.message], ["Content", report.marketing.content], ["Next step", report.marketing.next_step]] as const).map(([label, item]) => <p key={label} data-ui-copy="body"><strong>{label}:</strong> {item.text}</p>)}</div></section>
+        <section className="dc-report-card dc-report-card--wide"><h2 data-ui-copy="heading">Open questions</h2>{report.open_questions.length ? <ul>{report.open_questions.map((item, index) => <li key={`${index}-${item.text}`}>{item.text}</li>)}</ul> : <p>No open questions were recorded.</p>}</section>
+      </div>
+      <p className="dc-report-footnote" data-ui-copy="supporting">This saved report remains in its original version. Create a new blueprint to use the current six-card format.</p>
+      {saved.sourceAnswersSnapshot && <details className="dc-report-supporting dc-screen-only"><summary>Original answer sources</summary><ul>{sourceSnapshotRows(saved, report).map((row) => <li key={row.path}><strong>{row.path.replaceAll(".", " · ").replaceAll("_", " ")}:</strong> {row.answer}</li>)}</ul></details>}
+    </> : model && <>
+      <section className="dc-report-definition" data-ui-component-content="desired-client-definition">
+        <h2 data-ui-copy="supporting">Our desired-client definition</h2>
+        <p data-ui-copy="body">{definitionSegments(model.definition, model.definitionComponents)}</p>
+      </section>
+      <div className="dc-report-cards" data-ui-component-content="desired-client-blueprint-cards">
+        {model.cards.map((card) => <section className="dc-report-card" key={card.id} data-ui-component-content={`desired-client-card-${card.id}`}>
+          <h2 data-ui-copy="heading">{card.title}</h2>
+          <div className="dc-report-card__claims">
+            {card.claims.map((claim, index) => <div className="dc-report-claim" key={`${card.id}-${index}`}>
+              <p data-ui-copy="body">{claim.text}</p>
+              <span className="dc-evidence-label" data-ui-copy="supporting">{EVIDENCE_BASIS_LABELS[claim.evidence_basis]}</span>
+            </div>)}
+            {card.contribution && <div className="dc-calculated-metric"><strong>{card.contribution.label}</strong><span>{card.contribution.amount}</span><small>{EVIDENCE_BASIS_LABELS[card.contribution.basis]} · {card.contribution.scope}</small></div>}
+            {card.opportunityBasis && <span className="dc-evidence-label dc-opportunity-basis">Numeric and source results: {card.opportunityBasis}</span>}
+          </div>
+        </section>)}
+      </div>
+      <section className="dc-report-open-questions" data-ui-component-content="desired-client-open-questions">
+        <h2 data-ui-copy="heading">Points still to resolve</h2>
+        {model.openQuestions.length ? <ul>{model.openQuestions.map((item, index) => <li key={`${index}-${item.text}`} data-ui-copy="body"><span>{item.text}</span><span className="dc-evidence-label">{EVIDENCE_BASIS_LABELS[item.evidence_basis]}</span></li>)}</ul> : <p data-ui-copy="body">No specific open question was recorded.</p>}
+      </section>
+      <p className="dc-report-footnote" data-ui-copy="supporting">Evidence labels describe the source and certainty of the information. Firm-reported information has not been independently audited. The firm decides which matters to accept.</p>
+      <details className="dc-report-supporting dc-screen-only">
+        <summary>Supporting answers and sources</summary>
+        <div className="dc-report-source-list">{model.sourceDetails.map((slot, slotIndex) => <section key={`${slotIndex}-${slot.slot}`}>
+          <h3>{slot.slot}</h3>
+          <p><span className="dc-evidence-label">{EVIDENCE_BASIS_LABELS[slot.statement.evidence_basis]}</span> {slot.statement.text}</p>
+          {slot.answers.length > 0 && <ul>{slot.answers.map((source, index) => <li key={`${slotIndex}-${index}-${source.path}`}><strong>{source.question}:</strong> {source.answer ?? "Not supplied"}</li>)}</ul>}
+        </section>)}</div>
+        <h3>Answers supplied</h3><ul>{model.allAnswers.map((answer, index) => <li key={`${index}-${answer.question}`}><strong>{answer.question}:</strong> {answer.answer}</li>)}</ul>
+      </details>
+    </>}
+
+    <div className="dc-report-review dc-screen-only">
+      <p data-ui-copy="body">Does this describe the client and work you want more of?</p>
+      <label className="dc-reviewed"><input type="checkbox" checked={reviewed} onChange={(event) => onReview(event.currentTarget.checked)} /><span>{legacy ? "I have reviewed this original report wording." : "I confirm this direction for our firm."}</span></label>
+      {!legacy && <p className="dc-report-review__note" data-ui-copy="supporting">Confirming the direction does not turn estimates or hypotheses into verified facts.</p>}
+    </div>
+    {copied && <p role="status" className="dc-screen-only">Profile copied.</p>}
+    {copyFailed && <><p role="status" className="dc-screen-only">The profile could not be copied automatically. Select and copy the profile text below.</p><textarea className="dc-screen-only" ref={fallback} aria-label="Select and copy profile" readOnly value={text} /></>}
+    {htmlFailed && <p className="dc-alert dc-screen-only" role="status">The HTML report could not be prepared. Your answers are still saved.</p>}
+    <div className="dc-actions dc-brief__actions dc-screen-only" aria-label="Blueprint actions">
+      {!legacy && <button className="dc-button dc-button--primary" onClick={downloadHtml}>Download HTML report</button>}
+      <button className="dc-button dc-button--secondary" onClick={copyProfile}>Copy profile</button>
+      <button className="dc-button dc-button--secondary" onClick={() => window.print()}>Print blueprint</button>
+    </div>
+    {!legacy && <div className="dc-actions dc-report-edit-links dc-screen-only" aria-label="Edit blueprint answers">{EDIT_LINKS.map(([stage, label]) => <button key={stage} className="dc-button dc-button--secondary" onClick={() => onEdit(stage)}>{label}</button>)}</div>}
+    <div className="dc-actions dc-screen-only"><button className="dc-button dc-button--secondary" onClick={() => setConfirm("another")}>Start another</button><button className="dc-button dc-button--secondary" onClick={() => setConfirm("clear")}>Clear draft</button></div>
+    {confirm && <ConfirmationDialog open onClose={() => setConfirm(null)} labelledBy="dc-confirm-title"><h2 id="dc-confirm-title">{confirm === "another" ? "Replace the draft saved in this browser?" : "Clear the draft and blueprint saved in this browser?"}</h2>{confirm === "another" && <p>Download your blueprint first if you want to keep a copy.</p>}<button className="dc-button dc-button--primary" onClick={() => { confirm === "another" ? onAnother() : onClear(); setConfirm(null); }}>{confirm === "another" ? "Replace draft" : "Clear draft"}</button><button className="dc-button dc-button--secondary" onClick={() => setConfirm(null)}>Keep draft</button></ConfirmationDialog>}
+  </article>;
 }
