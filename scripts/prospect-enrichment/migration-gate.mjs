@@ -405,14 +405,12 @@ export function verifyDirectDatabaseUrl(value, environment = {}, projectEnvFiles
     fail("database_url_target_or_options_prohibited");
   }
   const options = [...url.searchParams];
-  const timeoutOptions = temporary ? [["sslmode", "verify-full"], ["options", "-c statement_timeout=240s"]] : [];
-  const pinnedCertificate = same(options, [["sslmode", "verify-full"], ["sslrootcert", DATABASE_CA_PATH]]) ||
-    (temporary && same(options, [...timeoutOptions, ["sslrootcert", DATABASE_CA_PATH]]));
+  const pinnedCertificate = same(options, [["sslmode", "verify-full"], ["sslrootcert", DATABASE_CA_PATH]]);
   if (pinnedCertificate) verifyDatabaseCaFile();
   if (url.protocol !== "postgresql:" || url.hostname !== (temporary ? TEMPORARY_DATABASE_HOST : "db." + PROJECT_REF + ".supabase.co") ||
       url.port !== "5432" || url.pathname !== "/postgres" || url.hash ||
       !password || hasAsciiControl(password, 31) ||
-      !(pinnedCertificate || same(options, [["sslmode", "verify-full"]]) || (temporary && same(options, timeoutOptions)))) fail("database_url_target_or_options_prohibited");
+      !(pinnedCertificate || same(options, [["sslmode", "verify-full"]]))) fail("database_url_target_or_options_prohibited");
   return { host: url.hostname, port: 5432, database: "postgres", user: username, sslmode: "verify-full", connectionMode: "explicit-db-url", ...(temporary ? { credentialMode: "temporary-write-capable" } : {}), ...(pinnedCertificate ? { certificateTrust: "pinned-supabase-root-2021" } : {}) };
 }
 

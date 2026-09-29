@@ -11,7 +11,7 @@ import { CANDIDATE_RELEASE_PATHS, PROJECT_REF, stageCandidateRecoveryWorkdir, ve
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const oldBinding = { runId: recovery.FAILED_RUN_ID, runAttempt: "1", sourceSha: recovery.FAILED_SOURCE_SHA, projectRef: PROJECT_REF, receiptSha256: recovery.FAILED_RECEIPT_SHA256 };
 const binding = { runId: "99999999999", runAttempt: "1", sourceSha: "a".repeat(40), projectRef: PROJECT_REF, receiptSha256: "b".repeat(64), priorArtifactId: recovery.FAILED_RECEIPTS_ARTIFACT_ID, priorArtifactSha256: recovery.FAILED_RECEIPTS_ARTIFACT_SHA256 };
-const current = { appliedPrefixLength: 9, pending: [...recovery.REMAINING], planUpToDate: false, fullLedgerMatchesSource: true, operatorRpcVerified: true, sessionStatementTimeoutVerified: true };
+const current = { appliedPrefixLength: 9, pending: [...recovery.REMAINING], planUpToDate: false, fullLedgerMatchesSource: true, operatorRpcVerified: true, coverageTimeoutControlVerified: true };
 
 function makePrior(t) {
   const tempRoot = path.resolve(root, "..", "..", "07_Prospects", ".candidate-recovery-tests"); fs.mkdirSync(tempRoot, { recursive: true });
@@ -81,14 +81,18 @@ test("database write timeouts leave an explicit read-back and cleanup reserve in
   assert.throws(() => recovery.verifyRecoveryTimeoutBudget(Number.NaN, 210000, 60000), /candidate_recovery_credential_budget_insufficient/);
 });
 
-test("recovery requires the live PostgreSQL session to confirm its 240-second statement timeout", t => {
-  assert.equal(recovery.verifyRecoverySessionTimeout([{ session_timeout_matches: true }]), true);
-  assert.equal(recovery.verifyRecoverySessionTimeout(JSON.stringify([{ session_timeout_matches: true }])), true);
-  for (const value of [[], [{ session_timeout_matches: false }], [{ session_timeout_matches: true }, { session_timeout_matches: true }], { error: "query failed" }, "not json"]) {
-    assert.throws(() => recovery.verifyRecoverySessionTimeout(value), /candidate_recovery_session_timeout_unverified/);
-  }
+test("coverage migration sets a transaction-local 240-second timeout before DDL", t => {
+  const migration = fs.readFileSync(path.join(root, recovery.COVERAGE), "utf8");
+  assert.equal(recovery.verifyRecoveryCoverageTimeout(migration), true);
+  for (const changed of [
+    migration.replace("SET LOCAL statement_timeout = '240s';", "SET LOCAL statement_timeout = '120s';"),
+    migration.replace("SET LOCAL statement_timeout = '240s';", ""),
+    migration.replace("SET LOCAL statement_timeout = '240s';", "").replace("COMMIT;", "SET LOCAL statement_timeout = '240s';\nCOMMIT;"),
+    migration.replace("SET LOCAL statement_timeout = '240s';", "SET LOCAL statement_timeout = '240s';\nSET LOCAL statement_timeout = '240s';"),
+    migration.replace("BEGIN;", "-- pg-delta: transaction=false\nBEGIN;"),
+  ]) assert.throws(() => recovery.verifyRecoveryCoverageTimeout(changed), /candidate_recovery_coverage_timeout_control_invalid/);
   const dir = makePrior(t);
-  const invalid = { ...current, sessionStatementTimeoutVerified: false };
+  const invalid = { ...current, coverageTimeoutControlVerified: false };
   assert.throws(() => recovery.createRecoveryEvidence(binding, dir, invalid, 1800000000000), /candidate_recovery_live_state_invalid/);
 });
 
@@ -125,12 +129,13 @@ test("recovery workflow requires two sequential environment reviews and blocks t
   const final = steps.indexOf("Apply final profile link only after coverage receipt is verified");
   assert.ok(coverage >= 0 && final > coverage);
   const reviewSummary = workflow.jobs.reconcile.steps.find(step => step.name === "Present exact partial ledger and remaining suffix for second protected review").run;
-  assert.match(reviewSummary, /live PostgreSQL session reports exactly 240 seconds/);
+  assert.match(reviewSummary, /transaction-local statement_timeout of 240 seconds before DDL/);
   assert.match(reviewSummary, /300-second CLI hard timeout/);
   assert.match(reviewSummary, /360 seconds credential life including a 60-second read-back reserve/);
-  assert.match(reviewSummary, /live PostgreSQL session reports exactly 240 seconds/);
   assert.equal(workflow.jobs.apply.steps[final].if, undefined, "GitHub default success gating keeps later phases stopped on an unverified result");
   assert.ok(workflow.jobs.apply.steps.slice(coverage + 1, final).some(step => step.name === "Acquire a new credential only after verified coverage"));
+  const failedEvidence = workflow.jobs.reconcile.steps.find(step => step.name === "Retain failed preflight evidence");
+  assert.match(failedEvidence.with.path, /candidate-recovery/);
 });
 
 test("coverage writer uses bounded CLI timeout without role-level setting privileges", () => {
@@ -139,7 +144,7 @@ test("coverage writer uses bounded CLI timeout without role-level setting privil
   assert.match(source, /\{ cwd: staged\.dir, timeout: 300000 \}/);
   assert.match(source, /verifyRecoveryTimeoutBudget\([^\n]+, 300000, 60000\)/);
   const credential = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/temporary-credential.mjs"), "utf8");
-  assert.match(credential, /options=-c%20statement_timeout%3D240s/);
-  const gate = fs.readFileSync(path.join(root, "scripts/prospect-enrichment/migration-gate.mjs"), "utf8");
-  assert.match(gate, /\["options", "-c statement_timeout=240s"\]/);
+  assert.doesNotMatch(credential, /options=-c.*statement_timeout/);
+  const migration = fs.readFileSync(path.join(root, recovery.COVERAGE), "utf8");
+  assert.equal(recovery.verifyRecoveryCoverageTimeout(migration), true);
 });
