@@ -6,6 +6,7 @@ import os from "node:os";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { acquireTemporaryCredential, redactedFailureCode } from "./temporary-credential.mjs";
+import { configureMigrationTls } from "./configure-migration-tls.mjs";
 import { PROJECT_REF, verifyDirectDatabaseUrl } from "./migration-gate.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
@@ -170,13 +171,31 @@ export function initialCredentialFromEnvironment(environment, now = Date.now(), 
 }
 export function createBackfillCredentialProvider(environment, { now = Date.now, mint = acquireTemporaryCredential,
   mask = value => process.stdout.write(`::add-mask::${value.replaceAll("%", "%25").replaceAll("\r", "%0D").replaceAll("\n", "%0A")}\n`),
-  validateUrl = verifyDirectDatabaseUrl } = {}) {
+  validateUrl = verifyDirectDatabaseUrl, configureTls = configureMigrationTls } = {}) {
   let cachedCredential = initialCredentialFromEnvironment(environment, now(), validateUrl);
   return async () => {
     if (cachedCredential && cachedCredential.expiresAt - now() > 180000) return cachedCredential;
     let credential;
     await mint({ environment, authorize: async () => {}, mask, persist: value => { credential = value; } });
     if (!credential || credential.expiresAt - now() < 90000) fail("candidate_backfill_credential_budget_insufficient");
+    // Minted credentials do not include the reviewed CA path. Reapply and
+    // verify the same pinned TLS configuration used by the workflow before
+    // caching a refreshed URL or allowing any subsequent database query.
+    let pinnedUrl;
+    try {
+      configureTls({
+        environment: {
+          ...environment,
+          MIGRATION_DATABASE_URL: credential.url,
+          TEMPORARY_DATABASE_ROLE: credential.role,
+          TEMPORARY_DATABASE_ISSUED_AT: String(credential.issuedAt),
+          TEMPORARY_DATABASE_EXPIRES_AT: String(credential.expiresAt),
+        },
+        projectEnvFiles: [], mask, persist: value => { pinnedUrl = value; },
+      });
+    } catch { fail("candidate_backfill_credential_invalid"); }
+    if (typeof pinnedUrl !== "string" || !pinnedUrl) fail("candidate_backfill_credential_invalid");
+    credential = { ...credential, url: pinnedUrl };
     cachedCredential = { ...credential, projectRef: PROJECT_REF };
     return cachedCredential;
   };
