@@ -7,7 +7,7 @@ const fixture = { answers: completeAnswers(), result: validBlueprint() };
 test('optional question groups stay visible through the guided discovery flow', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 900 });
   await page.goto('/tools/desired-client-matter');
-  await page.getByRole('button', { name: 'Define my desired client' }).click();
+  await page.getByRole('button', { name: 'Build my client profile' }).first().click();
   await page.getByLabel('Business & commercial', { exact: true }).check();
   await page.getByLabel('Commercial agreement drafting and review', { exact: true }).check();
   await page.getByLabel('We already do it and want more', { exact: true }).check();

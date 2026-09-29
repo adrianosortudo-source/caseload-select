@@ -3,7 +3,7 @@ import { choose, next } from './helpers';
 
 test('comparison keeps the lawyer’s provisional choice and only fills unanswered ratings', async ({ page }) => {
   await page.goto('/tools/desired-client-matter');
-  await page.getByRole('button', { name: 'Define my desired client', exact: true }).click();
+  await page.getByRole('button', { name: 'Build my client profile', exact: true }).first().click();
   await choose(page, 'Business & commercial');
   await choose(page, 'Commercial agreement drafting and review');
   await choose(page, 'We are building toward it');
@@ -35,7 +35,7 @@ test('comparison keeps the lawyer’s provisional choice and only fills unanswer
 test('keyboard controls report a missing required answer and keep visible focus', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/tools/desired-client-matter');
-  const begin = page.getByRole('button', { name: 'Define my desired client', exact: true });
+  const begin = page.getByRole('button', { name: 'Build my client profile', exact: true }).first();
   await begin.focus();
   await page.keyboard.press('Enter');
   const heading = page.getByRole('heading', { name: 'What legal work do you want more of?', exact: true });

@@ -5,7 +5,7 @@ for (const width of [320, 768]) {
   test("custom-only answers complete the guided flow at " + width + "px", async ({ page }) => {
     await page.setViewportSize({ width, height: 1000 });
     await page.goto("/tools/desired-client-matter");
-    await page.getByRole("button", { name: "Define my desired client" }).click();
+    await page.getByRole("button", { name: "Build my client profile" }).first().click();
     await page.getByLabel("Business & commercial", { exact: true }).check();
     await page.getByLabel("Buying or selling a business", { exact: true }).check();
     await page.getByLabel("We already do it and want more", { exact: true }).check();
