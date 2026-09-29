@@ -156,6 +156,14 @@ export function verifyRecoveryObservedState(current) {
   if (current.appliedPrefixLength === 10 && same(current.pending, [PROFILE_LINK]) && current.coverageReadbackVerified === true) return { coverageWriteRequired: false };
   fail("candidate_recovery_live_state_invalid");
 }
+export function verifyRecoveryCoverageCatalog(appliedPrefixLength, rows) {
+  if (!Array.isArray(rows) || rows.length !== 1 || !exact(rows[0], ["list_candidates_present", "legacy_projection_trigger_present"]) ||
+      typeof rows[0].list_candidates_present !== "boolean" || typeof rows[0].legacy_projection_trigger_present !== "boolean") fail("candidate_recovery_coverage_catalog_invalid");
+  const { list_candidates_present: listCandidatesPresent, legacy_projection_trigger_present: legacyProjectionTriggerPresent } = rows[0];
+  if (appliedPrefixLength === 9 && listCandidatesPresent === true && legacyProjectionTriggerPresent === false) return false;
+  if (appliedPrefixLength === 10 && listCandidatesPresent === true && legacyProjectionTriggerPresent === true) return true;
+  fail("candidate_recovery_coverage_catalog_invalid");
+}
 export function verifyRecoveryPlan(plan, expected) {
   if (!plan || typeof plan !== "object" || Array.isArray(plan) || plan.dryRun !== true ||
       plan.upToDate !== (expected.length === 0) || !same(plan.migrations, expected.map(p => path.posix.basename(p))) ||
@@ -311,7 +319,7 @@ function verifyCoverageReadback(recoveryDir, priorDir) {
         fs.writeFileSync(check, "SELECT to_regprocedure('prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)') IS NOT NULL AS list_candidates_present, EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='candidate_legacy_projection' AND NOT tgisinternal) AS legacy_projection_trigger_present;\n");
         query(check, path.join(raw, "coverage-catalog-check.json"), readbackTimeouts);
         const catalog = read(path.join(raw, "coverage-catalog-check.json")), rows = Array.isArray(catalog) ? catalog : catalog.data ?? catalog.rows;
-        if (!Array.isArray(rows) || rows.length !== 1 || rows[0].list_candidates_present !== true || rows[0].legacy_projection_trigger_present !== true) fail("candidate_recovery_coverage_catalog_invalid");
+        if (verifyRecoveryCoverageCatalog(10, rows) !== true) fail("candidate_recovery_coverage_catalog_invalid");
       },
     },
     receipt: () => ({ binding, migration: COVERAGE, state: "verified", dryRun: evidence.plan, sessionStatementTimeoutMs: 240000, processTimeoutMs: 240000, readbackCredentialTtlBounded: true }),
@@ -343,13 +351,12 @@ function applyProfileLink(recoveryDir, priorDir) {
   } catch (error) { save(path.join(raw, "recovery-marker.json"), { phase: "candidate-profile-link", state: "started_unverified", replayAllowed: false, readOnlyReconciliationRequired: true }); throw error; }
 }
 
-function coverageCatalog(raw, label) {
+function coverageCatalog(raw, label, appliedPrefixLength) {
   const check = path.join(raw, label + "coverage-catalog-check.sql");
   fs.writeFileSync(check, "SELECT to_regprocedure('prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)') IS NOT NULL AS list_candidates_present, EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='candidate_legacy_projection' AND NOT tgisinternal) AS legacy_projection_trigger_present;\n");
   query(check, path.join(raw, label + "coverage-catalog-check.json"));
   const catalog = read(path.join(raw, label + "coverage-catalog-check.json")), rows = Array.isArray(catalog) ? catalog : catalog.data ?? catalog.rows;
-  if (!Array.isArray(rows) || rows.length !== 1 || typeof rows[0].list_candidates_present !== "boolean" || typeof rows[0].legacy_projection_trigger_present !== "boolean" || rows[0].list_candidates_present !== rows[0].legacy_projection_trigger_present) fail("candidate_recovery_coverage_catalog_invalid");
-  return rows[0].list_candidates_present;
+  return verifyRecoveryCoverageCatalog(appliedPrefixLength, rows);
 }
 function currentReadOnly(dir, label) {
   verifyRecoveryCoverageTimeout(fs.readFileSync(path.join(ROOT, COVERAGE), "utf8"));
@@ -357,7 +364,7 @@ function currentReadOnly(dir, label) {
   const snapshotFiles = snapshot(dir, label, null, null);
   const plan = exactDryRun(dir, label, staged.dir, snapshotFiles.pending);
   const ledger = read(snapshotFiles.ledgerCheck), full = read(snapshotFiles.fullCheck), catalog = read(snapshotFiles.catalogCheck);
-  const coveragePresent = coverageCatalog(dir, label);
+  const coveragePresent = coverageCatalog(dir, label, snapshotFiles.prefix);
   snapshotFiles.coverageCatalogCheck = path.join(dir, label + "coverage-catalog-check.json");
   const current = { appliedPrefixLength: ledger.appliedPrefixLength, pending: [...snapshotFiles.pending], planUpToDate: plan.upToDate,
     fullLedgerMatchesSource: full.completeSourceCoverage === true && same(full.pendingPaths, snapshotFiles.pending), operatorRpcVerified: catalog.prerequisite === "verified_applied_operator_rpc",

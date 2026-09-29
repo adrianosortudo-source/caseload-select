@@ -71,7 +71,27 @@ test("recovery preflight accepts only exact prefix-nine write or prefix-ten read
     { ...current, coverageReadbackVerified: true },
     { ...current, appliedPrefixLength: 8 },
   ]) assert.throws(() => recovery.verifyRecoveryObservedState(invalid), /candidate_recovery_live_state_invalid/);
-});test("live recovery plan must exactly match the reviewed phase and cannot carry roles or seeds", () => {
+});
+
+test("coverage catalog is valid only for the exact prefix-nine pending or prefix-ten applied shape", () => {
+  assert.equal(recovery.verifyRecoveryCoverageCatalog(9, [{ list_candidates_present: true, legacy_projection_trigger_present: false }]), false);
+  assert.equal(recovery.verifyRecoveryCoverageCatalog(10, [{ list_candidates_present: true, legacy_projection_trigger_present: true }]), true);
+  for (const [prefix, rows] of [
+    [9, [{ list_candidates_present: true, legacy_projection_trigger_present: true }]],
+    [9, [{ list_candidates_present: false, legacy_projection_trigger_present: false }]],
+    [9, [{ list_candidates_present: false, legacy_projection_trigger_present: true }]],
+    [10, [{ list_candidates_present: true, legacy_projection_trigger_present: false }]],
+    [10, [{ list_candidates_present: false, legacy_projection_trigger_present: false }]],
+    [10, [{ list_candidates_present: false, legacy_projection_trigger_present: true }]],
+    [11, [{ list_candidates_present: true, legacy_projection_trigger_present: true }]],
+    [9, []],
+    [10, [{ list_candidates_present: true, legacy_projection_trigger_present: true }, { list_candidates_present: true, legacy_projection_trigger_present: true }]],
+    [9, [{ list_candidates_present: true, legacy_projection_trigger_present: "false" }]],
+    [9, [{ list_candidates_present: true, legacy_projection_trigger_present: false, unexpected: true }]],
+  ]) assert.throws(() => recovery.verifyRecoveryCoverageCatalog(prefix, rows), /candidate_recovery_coverage_catalog_invalid/);
+});
+
+test("live recovery plan must exactly match the reviewed phase and cannot carry roles or seeds", () => {
   assert.deepEqual(recovery.verifyRecoveryPlan({ dryRun: true, upToDate: false, migrations: [path.posix.basename(recovery.COVERAGE)], seeds: [], roles: [] }, [recovery.COVERAGE]).migrations, [path.posix.basename(recovery.COVERAGE)]);
   assert.throws(() => recovery.verifyRecoveryPlan({ dryRun: true, upToDate: false, migrations: recovery.REMAINING.map(p => path.posix.basename(p)), seeds: [], roles: [] }, [recovery.COVERAGE]));
   assert.throws(() => recovery.verifyRecoveryPlan({ dryRun: true, upToDate: false, migrations: [path.posix.basename(recovery.COVERAGE)], seeds: [], roles: ["unexpected"] }, [recovery.COVERAGE]));
