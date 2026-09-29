@@ -32,7 +32,7 @@ test("worker reuses the freshly issued protected credential instead of immediate
   assert.equal(initialCredentialFromEnvironment({}, now), null);
 });
 
-test("worker rejects incomplete, malformed or nearly expired inherited credentials", () => {
+test("worker rejects incomplete or malformed inherited credentials and discards nearly expired credentials", () => {
   const now = 1_000_000;
   const valid = {
     MIGRATION_DATABASE_URL: "postgresql://credential-url",
@@ -42,7 +42,7 @@ test("worker rejects incomplete, malformed or nearly expired inherited credentia
   };
   assert.throws(() => initialCredentialFromEnvironment({ MIGRATION_DATABASE_URL: valid.MIGRATION_DATABASE_URL }, now, () => {}), /candidate_backfill_credential_context_invalid/);
   assert.throws(() => initialCredentialFromEnvironment({ ...valid, TEMPORARY_DATABASE_ROLE: "postgres" }, now, () => {}), /candidate_backfill_credential_context_invalid/);
-  assert.throws(() => initialCredentialFromEnvironment({ ...valid, TEMPORARY_DATABASE_EXPIRES_AT: String(now + 90_000) }, now, () => {}), /candidate_backfill_credential_context_invalid/);
+  assert.equal(initialCredentialFromEnvironment({ ...valid, TEMPORARY_DATABASE_EXPIRES_AT: String(now + 90_000) }, now, () => {}), null);
 });
 
 test("credential provider uses inherited auth first and refreshes only inside the three-minute safety window", async () => {
@@ -64,6 +64,25 @@ test("credential provider uses inherited auth first and refreshes only inside th
   assert.equal(mintCalls, 0);
   now += 61_000;
   assert.equal((await acquire()).url, "postgresql://refreshed");
+  assert.equal((await acquire()).url, "postgresql://refreshed");
+  assert.equal(mintCalls, 1);
+});
+
+test("credential provider refreshes when migration work left less than three minutes on the inherited credential", async () => {
+  const now = 1_000_000;
+  let mintCalls = 0;
+  const acquire = createBackfillCredentialProvider({
+    MIGRATION_DATABASE_URL: "postgresql://nearly-expired",
+    TEMPORARY_DATABASE_ROLE: "cli_login_postgres",
+    TEMPORARY_DATABASE_ISSUED_AT: String(now - 200_000),
+    TEMPORARY_DATABASE_EXPIRES_AT: String(now + 100_000),
+  }, {
+    now: () => now, mask: () => {}, validateUrl: () => {},
+    mint: async ({ persist }) => {
+      mintCalls += 1;
+      persist({ url: "postgresql://refreshed", role: "cli_login_postgres", issuedAt: now, expiresAt: now + 300_000 });
+    },
+  });
   assert.equal((await acquire()).url, "postgresql://refreshed");
   assert.equal(mintCalls, 1);
 });

@@ -97,10 +97,14 @@ export function initialCredentialFromEnvironment(environment, now = Date.now(), 
   if (present.length !== keys.length) fail("candidate_backfill_credential_context_invalid");
   const issuedAt = Number(environment.TEMPORARY_DATABASE_ISSUED_AT);
   const expiresAt = Number(environment.TEMPORARY_DATABASE_EXPIRES_AT);
-  if (!Number.isSafeInteger(issuedAt) || issuedAt > now || !Number.isSafeInteger(expiresAt) || expiresAt <= now + 90000 ||
-      typeof environment.TEMPORARY_DATABASE_ROLE !== "string" || !/^cli_login_[a-z0-9_]{1,53}$/.test(environment.TEMPORARY_DATABASE_ROLE)) {
+  if (!Number.isSafeInteger(issuedAt) || issuedAt > now || !Number.isSafeInteger(expiresAt) || expiresAt - issuedAt < 60000 ||
+      expiresAt - issuedAt > 86400000 || typeof environment.TEMPORARY_DATABASE_ROLE !== "string" ||
+      !/^cli_login_[a-z0-9_]{1,53}$/.test(environment.TEMPORARY_DATABASE_ROLE)) {
     fail("candidate_backfill_credential_context_invalid");
   }
+  // The coverage migration can consume most of the original five-minute TTL.
+  // Discard a credential inside the refresh window and mint a fresh one instead.
+  if (expiresAt - now <= 180000) return null;
   validateUrl(environment.MIGRATION_DATABASE_URL, { ...environment, TEMPORARY_DATABASE_ISSUED_AT: String(issuedAt), TEMPORARY_DATABASE_EXPIRES_AT: String(expiresAt) }, []);
   return { url: environment.MIGRATION_DATABASE_URL, role: environment.TEMPORARY_DATABASE_ROLE, issuedAt, expiresAt, projectRef: PROJECT_REF };
 }
