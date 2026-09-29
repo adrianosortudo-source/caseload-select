@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PROJECT_REF } from "../migration-gate.mjs";
-import { createBackfillCredentialProvider, initialCredentialFromEnvironment, runCoverageBackfill, validateBackfillStatus } from "../candidate-coverage-backfill-worker.mjs";
+import { createBackfillCredentialProvider, createCoverageBatchRunner, initialCredentialFromEnvironment, redactedBackfillFailureCode, runCoverageBackfill, validateBackfillStatus } from "../candidate-coverage-backfill-worker.mjs";
 
 const id1 = "00000000-0000-4000-8000-000000000001";
 const id2 = "00000000-0000-4000-8000-000000000002";
@@ -11,6 +11,49 @@ function rows(states) {
     table_name: row.table_name, last_id: row.last_id, rows_projected: row.rows_projected, complete: row.complete }));
 }
 const cred = async () => ({ projectRef: PROJECT_REF, url: "postgresql://masked", role: "cli_login_test", issuedAt: 1, expiresAt: 300001 });
+
+test("production batch adapter accepts its SQL-supported adaptive sizes and rejects out-of-range input", async () => {
+  const queries = [];
+  const runBatch = createCoverageBatchRunner((sql, credential) => {
+    queries.push({ sql, credential });
+    const size = Number(sql.slice(0, sql.indexOf(" AS result")).split(", ").at(-1).replace(")", ""));
+    return JSON.stringify([{ result: { table_name: "alpha", previous_cursor: null, last_id: id1, rows_projected: size, complete: false } }]);
+  });
+  const credential = await cred();
+  for (const size of [100, 50, 1]) {
+    const result = await runBatch("alpha", null, size, credential);
+    assert.equal(result.rows_projected, size);
+    assert.match(queries.at(-1).sql, new RegExp(`, ${size}\\) AS result`));
+    assert.equal(queries.at(-1).credential, credential);
+  }
+  for (const size of [0, 101, 1.5]) await assert.rejects(runBatch("alpha", null, size, credential), /candidate_backfill_arguments_invalid/);
+  assert.equal(queries.length, 3);
+});
+
+test("worker diagnostics preserve only enumerated safe codes", () => {
+  assert.equal(redactedBackfillFailureCode(Error("candidate_backfill_arguments_invalid")), "candidate_backfill_arguments_invalid");
+  assert.equal(redactedBackfillFailureCode(Error("candidate_backfill_query_exit_1")), "candidate_backfill_query_exit_1");
+  assert.equal(redactedBackfillFailureCode(Error("candidate_backfill_query_exit_timeout_or_signal")), "candidate_backfill_query_exit_timeout_or_signal");
+  assert.equal(redactedBackfillFailureCode(Error("Bearer synthetic-token")), "candidate_backfill_unexpected_failure");
+  assert.equal(redactedBackfillFailureCode(Error("candidate_backfill_query_exit_secret")), "candidate_backfill_unexpected_failure");
+});
+
+test("production adapter lets the worker downshift after an atomic batch failure", async () => {
+  let states = [{ table_name: "alpha", last_id: null, rows_projected: 0, complete: false }];
+  const sizes = [];
+  const runBatch = createCoverageBatchRunner(sql => {
+    const size = Number(sql.slice(0, sql.indexOf(" AS result")).split(", ").at(-1).replace(")", ""));
+    sizes.push(size);
+    if (size === 100) throw Error("candidate_backfill_query_exit_1");
+    const result = { table_name: "alpha", previous_cursor: null, last_id: id1, rows_projected: 1, complete: true };
+    states = [{ table_name: "alpha", last_id: id1, rows_projected: 1, complete: true }];
+    return JSON.stringify([{ result }]);
+  });
+  const result = await runCoverageBackfill({ readStatus: async () => rows(states), acquire: cred, runBatch });
+  assert.equal(result.complete, true);
+  assert.equal(result.rowsProjected, 1);
+  assert.deepEqual(sizes, [100, 50]);
+});
 
 test("worker reuses the freshly issued protected credential instead of immediately minting another", () => {
   const now = 1_000_000;

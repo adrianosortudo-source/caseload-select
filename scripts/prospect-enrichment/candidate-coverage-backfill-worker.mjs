@@ -15,6 +15,21 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const TABLE = /^[a-z][a-z0-9_]{0,62}$/;
 const fail = code => { throw Error(code); };
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+const BACKFILL_FAILURE_CODES = new Set([
+  "candidate_backfill_status_invalid", "candidate_backfill_batch_result_invalid", "candidate_backfill_batch_no_progress",
+  "candidate_backfill_credential_invalid", "candidate_backfill_table_disappeared", "candidate_backfill_checkpoint_mismatch",
+  "candidate_backfill_no_progress", "candidate_backfill_query_response_invalid", "candidate_backfill_credential_context_invalid",
+  "candidate_backfill_credential_budget_insufficient", "candidate_backfill_arguments_invalid", "candidate_backfill_authorization_invalid",
+  "candidate_backfill_batch_response_invalid",
+]);
+
+export function redactedBackfillFailureCode(error) {
+  const credentialCode = redactedFailureCode(error);
+  if (credentialCode !== "temporary_credential_unexpected_failure") return credentialCode;
+  const code = error instanceof Error ? error.message : "";
+  if (BACKFILL_FAILURE_CODES.has(code) || /^candidate_backfill_query_exit_(?:[1-9][0-9]*|timeout_or_signal)$/.test(code)) return code;
+  return "candidate_backfill_unexpected_failure";
+}
 
 export function validateBackfillStatus(rows) {
   if (!Array.isArray(rows) || rows.length === 0) fail("candidate_backfill_status_invalid");
@@ -137,6 +152,20 @@ function runSql(sql, credential) {
   } finally { fs.rmSync(temp, { force: true }); }
 }
 
+export function createCoverageBatchRunner(query = runSql) {
+  return async (table, cursor, size, credential) => {
+    if (!TABLE.test(table) || (cursor !== null && !UUID.test(cursor)) || !Number.isSafeInteger(size) || size < 1 || size > BATCH_SIZE) {
+      fail("candidate_backfill_arguments_invalid");
+    }
+    const tableSql = `'${table}'`;
+    const cursorSql = cursor === null ? "NULL::uuid" : `'${cursor}'::uuid`;
+    const rows = responseRows(query(`SELECT prospect_candidate_private.coverage_backfill_batch(${tableSql}, ${cursorSql}, ${size}) AS result;\n`, credential));
+    if (rows.length !== 1) fail("candidate_backfill_batch_response_invalid");
+    const result = rows[0].result;
+    return typeof result === "string" ? JSON.parse(result) : result;
+  };
+}
+
 async function main() {
   if (process.argv.length !== 2) fail("candidate_backfill_arguments_invalid");
   if (process.env.CREDENTIAL_GATE !== "candidate-recovery" || process.env.COMPLETE_PHASE !== "coverage-backfill" ||
@@ -147,15 +176,7 @@ async function main() {
     const credential = await acquire();
     return responseRows(runSql("SELECT * FROM prospect_candidate_private.coverage_backfill_status();\n", credential));
   };
-  const runBatch = async (table, cursor, size, credential) => {
-    if (!TABLE.test(table) || (cursor !== null && !UUID.test(cursor)) || size !== BATCH_SIZE) fail("candidate_backfill_arguments_invalid");
-    const tableSql = `'${table}'`;
-    const cursorSql = cursor === null ? "NULL::uuid" : `'${cursor}'::uuid`;
-    const rows = responseRows(runSql(`SELECT prospect_candidate_private.coverage_backfill_batch(${tableSql}, ${cursorSql}, ${size}) AS result;\n`, credential));
-    if (rows.length !== 1) fail("candidate_backfill_batch_response_invalid");
-    const result = rows[0].result;
-    return typeof result === "string" ? JSON.parse(result) : result;
-  };
+  const runBatch = createCoverageBatchRunner();
   const markerPath = path.join(path.resolve(process.env.RUNNER_TEMP), "candidate-recovery", "coverage-backfill-marker.json");
   fs.mkdirSync(path.dirname(markerPath), { recursive: true });
   fs.writeFileSync(markerPath, JSON.stringify({ phase: "candidate-coverage-backfill", state: "started_unverified", replayAllowed: false, readOnlyReconciliationRequired: true }) + "\n");
@@ -170,7 +191,7 @@ async function main() {
     fs.rmSync(markerPath, { force: true });
     process.stdout.write(JSON.stringify(receipt) + "\n");
   } catch (error) {
-    process.stderr.write(`${redactedFailureCode(error)}\n`);
+    process.stderr.write(`${redactedBackfillFailureCode(error)}\n`);
     process.exitCode = 1;
   }
 }
