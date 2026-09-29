@@ -41,7 +41,9 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   await expect(page.getByRole("heading", { name: "Review your direction", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Create my Desired Client Blueprint", exact: true }).click();
 
-  await expect(page.getByRole("heading", { name: "Desired Client Blueprint", exact: true })).toBeVisible();
+  const blueprintTitle = page.getByRole("heading", { level: 1 });
+  await expect(blueprintTitle).toBeVisible();
+  await expect(blueprintTitle).toContainText("Business & commercial");
   await expect(page.getByText(result.brief.definition_sentence, { exact: true })).toBeVisible();
   await expect(page.getByText("Our desired-client definition", { exact: true })).toBeVisible();
   await expect(page.getByText("Points still to resolve", { exact: true })).toBeVisible();
