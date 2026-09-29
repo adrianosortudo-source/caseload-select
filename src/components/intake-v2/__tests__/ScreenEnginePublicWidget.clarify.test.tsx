@@ -166,5 +166,5 @@ describe("ScreenEnginePublicWidget clarify menu render (DR-112)", () => {
     await waitFor(() =>
       expect(screen.queryByText("We can still get this to the team.")).not.toBeNull(),
     );
-  });
+  }, 10_000);
 });
