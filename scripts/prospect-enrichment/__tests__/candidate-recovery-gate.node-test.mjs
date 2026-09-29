@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
@@ -99,6 +100,63 @@ test("writer response loss after ledger advances stays unverified and prohibits 
   assert.equal(fakeLedger.appliedPrefixLength, 10);
   assert.throws(() => recovery.beginRecoveryCoverageWrite(persisted), /candidate_recovery_prior_phase_unverified/);
   assert.throws(() => recovery.verifyRecoveryPhaseTransition(persisted, "profile-link"), /candidate_recovery_prior_phase_unverified/);
+});
+
+test("injected recovery adapters persist uncertainty and run prefix-ten read-back without replay", async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "candidate-recovery-faults-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const file = (name) => path.join(root, name), put = (name, value) => fs.writeFileSync(file(name), JSON.stringify(value));
+  const get = (name) => JSON.parse(fs.readFileSync(file(name), "utf8"));
+
+  put("writer-state.json", { coverage: "pending", profileLink: "pending" });
+  const fakeLedger = { appliedPrefixLength: 9 };
+  await assert.rejects(recovery.runRecoveryCoverageWriter({
+    stateFile: file("writer-state.json"), receiptFile: file("writer-receipt.json"), markerFile: file("writer-marker.json"),
+    state: get("writer-state.json"), receipt: { state: "verified" },
+    write: () => { fakeLedger.appliedPrefixLength = 10; throw Error("simulated_commit_response_loss"); },
+  }), /simulated_commit_response_loss/);
+  assert.equal(fakeLedger.appliedPrefixLength, 10);
+  assert.deepEqual(get("writer-state.json"), { coverage: "started_unverified", profileLink: "pending" });
+  assert.equal(fs.existsSync(file("writer-receipt.json")), false);
+  assert.deepEqual(get("writer-marker.json"), { phase: "candidate-coverage", state: "started_unverified", replayAllowed: false, readOnlyReconciliationRequired: true });
+  let replayAttempts = 0;
+  await assert.rejects(recovery.runRecoveryCoverageWriter({
+    stateFile: file("writer-state.json"), receiptFile: file("writer-receipt.json"), markerFile: file("writer-marker.json"),
+    state: get("writer-state.json"), receipt: { state: "verified" }, write: () => { replayAttempts += 1; },
+  }), /candidate_recovery_prior_phase_unverified/);
+  assert.equal(replayAttempts, 0);
+
+  for (const failedAt of ["ledger", "fullLedger", "dryRun", "catalog"]) {
+    const name = `readback-${failedAt}`;
+    put(`${name}-state.json`, { coverage: "started_unverified", profileLink: "pending" });
+    const called = [];
+    const stages = Object.fromEntries(["ledger", "fullLedger", "dryRun", "catalog"].map(stage => [stage, () => {
+      called.push(stage);
+      if (stage === failedAt) throw Error(`simulated_${stage}_failure`);
+    }]));
+    await assert.rejects(recovery.runRecoveryCoverageReadback({
+      stateFile: file(`${name}-state.json`), receiptFile: file(`${name}-receipt.json`), markerFile: file(`${name}-marker.json`), stages, receipt: () => ({ state: "verified" }),
+    }), new RegExp(`simulated_${failedAt}_failure`));
+    assert.deepEqual(get(`${name}-state.json`), { coverage: "started_unverified", profileLink: "pending" }, failedAt);
+    assert.equal(fs.existsSync(file(`${name}-receipt.json`)), false, failedAt);
+    assert.deepEqual(called, ["ledger", "fullLedger", "dryRun", "catalog"].slice(0, ["ledger", "fullLedger", "dryRun", "catalog"].indexOf(failedAt) + 1));
+    assert.throws(() => recovery.beginRecoveryCoverageWrite(get(`${name}-state.json`)), /candidate_recovery_prior_phase_unverified/);
+    assert.throws(() => recovery.verifyRecoveryPhaseTransition(get(`${name}-state.json`), "profile-link"), /candidate_recovery_prior_phase_unverified/);
+  }
+
+  const observed = { ...current, appliedPrefixLength: 10, pending: [recovery.PROFILE_LINK], coverageReadbackVerified: true };
+  const { coverageWriteRequired } = recovery.verifyRecoveryObservedState(observed);
+  assert.equal(coverageWriteRequired, false);
+  let writerCalls = 0; const readbackOrder = [];
+  if (coverageWriteRequired) writerCalls += 1;
+  put("resume-state.json", { coverage: "started_unverified", profileLink: "pending" });
+  const stages = Object.fromEntries(["ledger", "fullLedger", "dryRun", "catalog"].map(stage => [stage, () => { readbackOrder.push(stage); }]));
+  await recovery.runRecoveryCoverageReadback({ stateFile: file("resume-state.json"), receiptFile: file("resume-receipt.json"), markerFile: file("resume-marker.json"), stages, receipt: () => ({ state: "verified" }) });
+  assert.equal(writerCalls, 0);
+  assert.deepEqual(readbackOrder, ["ledger", "fullLedger", "dryRun", "catalog"]);
+  assert.deepEqual(get("resume-state.json"), { coverage: "verified", profileLink: "pending" });
+  assert.deepEqual(get("resume-receipt.json"), { state: "verified" });
+  assert.equal(recovery.verifyRecoveryPhaseTransition(get("resume-state.json"), "profile-link"), true);
 });
 
 test("every partial coverage read-back failure preserves started_unverified and blocks writer and profile-link", () => {

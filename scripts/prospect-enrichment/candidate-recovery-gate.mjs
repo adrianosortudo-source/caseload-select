@@ -215,6 +215,35 @@ export function completeRecoveryCoverageReadback(state, checks) {
     fail("candidate_recovery_coverage_readback_invalid");
   return { ...state, coverage: "verified" };
 }
+export async function runRecoveryCoverageWriter({ stateFile, receiptFile, markerFile, state, receipt, write }) {
+  const started = beginRecoveryCoverageWrite(state);
+  save(stateFile, started);
+  try {
+    await write();
+    save(receiptFile, receipt);
+    return started;
+  } catch (error) {
+    save(markerFile, { phase: "candidate-coverage", state: "started_unverified", replayAllowed: false, readOnlyReconciliationRequired: true });
+    throw error;
+  }
+}
+export async function runRecoveryCoverageReadback({ stateFile, receiptFile, markerFile, stages, receipt }) {
+  const state = read(stateFile);
+  verifyRecoveryCoverageReadbackTransition(state);
+  const order = ["ledger", "fullLedger", "dryRun", "catalog"];
+  if (!exact(stages, order) || typeof receipt !== "function") fail("candidate_recovery_coverage_readback_invalid");
+  try {
+    const results = {};
+    for (const phase of order) { await stages[phase](); results[phase] = true; }
+    const verified = completeRecoveryCoverageReadback(state, results);
+    save(receiptFile, receipt());
+    save(stateFile, verified);
+    return verified;
+  } catch (error) {
+    save(markerFile, { phase: "candidate-coverage-readback", state: "started_unverified", replayAllowed: false, readOnlyReconciliationRequired: true });
+    throw error;
+  }
+}
 export function verifyRecoveryCoverageTimeout(migration) {
   if (typeof migration !== "string" || /pg-delta:\s*transaction=false/i.test(migration)) fail("candidate_recovery_coverage_timeout_control_invalid");
   const begin = /^\s*BEGIN;\s*$/gim, commit = /^\s*COMMIT;\s*$/gim, timeout = /^\s*SET LOCAL statement_timeout = '240s';\s*$/gim;
@@ -239,14 +268,11 @@ function applyCoverage(recoveryDir, priorDir) {
   run(process.execPath, [path.join(ROOT, "scripts/prospect-enrichment/migration-gate.mjs"), "candidate-recovery-verify-stage", ROOT, staged.dir, staged.proof, "coverage"]);
   freshCredential(250000);
   verifyRecoveryTimeoutBudget(Number(process.env.TEMPORARY_DATABASE_EXPIRES_AT) - Date.now(), 240000, 10000);
-  const startedState = beginRecoveryCoverageWrite(state); save(stateFile, startedState);
-  try {
-    run("supabase", ["db", "push", "--yes", "--include-all", "--skip-vault", "--output-format", "json", "--db-url", process.env.MIGRATION_DATABASE_URL], { cwd: staged.dir, timeout: 240000 });
-    save(path.join(raw, "coverage-writer-receipt.json"), { binding, migration: COVERAGE, state: "write_command_succeeded_readback_pending", dryRun: dry, sessionStatementTimeoutMs: 240000, processTimeoutMs: 240000, credentialMode: "temporary-write-capable" });
-  } catch (error) {
-    save(path.join(raw, "recovery-marker.json"), { phase: "candidate-coverage", state: "started_unverified", replayAllowed: false, readOnlyReconciliationRequired: true });
-    throw error;
-  }
+  return runRecoveryCoverageWriter({
+    stateFile, receiptFile: path.join(raw, "coverage-writer-receipt.json"), markerFile: path.join(raw, "recovery-marker.json"), state,
+    receipt: { binding, migration: COVERAGE, state: "write_command_succeeded_readback_pending", dryRun: dry, sessionStatementTimeoutMs: 240000, processTimeoutMs: 240000, credentialMode: "temporary-write-capable" },
+    write: () => run("supabase", ["db", "push", "--yes", "--include-all", "--skip-vault", "--output-format", "json", "--db-url", process.env.MIGRATION_DATABASE_URL], { cwd: staged.dir, timeout: 240000 }),
+  });
 }
 
 function verifyCoverageReadback(recoveryDir, priorDir) {
@@ -265,25 +291,31 @@ function verifyCoverageReadback(recoveryDir, priorDir) {
   }
   freshCredential(250000);
   verifyRecoveryTimeoutBudget(Number(process.env.TEMPORARY_DATABASE_EXPIRES_AT) - Date.now(), 200000, 50000);
-  try {
-    const readbackTimeouts = { timeout: 20000 };
-    const staged = stage("coverage", "coverage-readback");
-    const after = snapshot(raw, "coverage-after-", [PROFILE_LINK], 10, readbackTimeouts);
-    if (!same(read(after.ledgerCheck).pending, [path.posix.basename(PROFILE_LINK)]) || !same(read(after.fullCheck).pendingPaths, [PROFILE_LINK])) fail("candidate_recovery_coverage_readback_invalid");
-    const plan = exactDryRun(raw, "coverage-after-", staged.dir, [], 120000);
-    if (!plan.upToDate) fail("candidate_recovery_coverage_plan_not_empty");
-    const check = path.join(raw, "coverage-catalog-check.sql");
-    fs.writeFileSync(check, "SELECT to_regprocedure('prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)') IS NOT NULL AS list_candidates_present, EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='candidate_legacy_projection' AND NOT tgisinternal) AS legacy_projection_trigger_present;\n");
-    query(check, path.join(raw, "coverage-catalog-check.json"), readbackTimeouts);
-    const catalog = read(path.join(raw, "coverage-catalog-check.json")), rows = Array.isArray(catalog) ? catalog : catalog.data ?? catalog.rows;
-    if (!Array.isArray(rows) || rows.length !== 1 || rows[0].list_candidates_present !== true || rows[0].legacy_projection_trigger_present !== true) fail("candidate_recovery_coverage_catalog_invalid");
-    const verifiedState = completeRecoveryCoverageReadback(state, { ledger: true, fullLedger: true, dryRun: true, catalog: true });
-    save(stateFile, verifiedState);
-    save(path.join(raw, "coverage-receipt.json"), { binding, migration: COVERAGE, state: "verified", dryRun: plan, sessionStatementTimeoutMs: 240000, processTimeoutMs: 240000, readbackCredentialTtlBounded: true });
-  } catch (error) {
-    save(path.join(raw, "recovery-marker.json"), { phase: "candidate-coverage-readback", state: "started_unverified", replayAllowed: false, readOnlyReconciliationRequired: true });
-    throw error;
-  }
+  const readbackTimeouts = { timeout: 20000 }, staged = stage("coverage", "coverage-readback"), evidence = {};
+  return runRecoveryCoverageReadback({
+    stateFile, receiptFile: path.join(raw, "coverage-receipt.json"), markerFile: path.join(raw, "recovery-marker.json"),
+    stages: {
+      ledger: () => {
+        evidence.after = snapshot(raw, "coverage-after-", [PROFILE_LINK], 10, readbackTimeouts);
+        if (!same(read(evidence.after.ledgerCheck).pending, [path.posix.basename(PROFILE_LINK)])) fail("candidate_recovery_coverage_readback_invalid");
+      },
+      fullLedger: () => {
+        if (!same(read(evidence.after.fullCheck).pendingPaths, [PROFILE_LINK])) fail("candidate_recovery_coverage_readback_invalid");
+      },
+      dryRun: () => {
+        evidence.plan = exactDryRun(raw, "coverage-after-", staged.dir, [], 120000);
+        if (!evidence.plan.upToDate) fail("candidate_recovery_coverage_plan_not_empty");
+      },
+      catalog: () => {
+        const check = path.join(raw, "coverage-catalog-check.sql");
+        fs.writeFileSync(check, "SELECT to_regprocedure('prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)') IS NOT NULL AS list_candidates_present, EXISTS (SELECT 1 FROM pg_trigger WHERE tgname='candidate_legacy_projection' AND NOT tgisinternal) AS legacy_projection_trigger_present;\n");
+        query(check, path.join(raw, "coverage-catalog-check.json"), readbackTimeouts);
+        const catalog = read(path.join(raw, "coverage-catalog-check.json")), rows = Array.isArray(catalog) ? catalog : catalog.data ?? catalog.rows;
+        if (!Array.isArray(rows) || rows.length !== 1 || rows[0].list_candidates_present !== true || rows[0].legacy_projection_trigger_present !== true) fail("candidate_recovery_coverage_catalog_invalid");
+      },
+    },
+    receipt: () => ({ binding, migration: COVERAGE, state: "verified", dryRun: evidence.plan, sessionStatementTimeoutMs: 240000, processTimeoutMs: 240000, readbackCredentialTtlBounded: true }),
+  });
 }
 function applyProfileLink(recoveryDir, priorDir) {
   const binding = checkSource(), manifest = read(path.join(recoveryDir, "recovery-evidence.json"));
