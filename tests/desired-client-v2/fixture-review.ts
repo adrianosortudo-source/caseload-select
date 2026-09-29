@@ -43,7 +43,7 @@ const results = fixtures.map(({ id, answers }) => ({ id, answers, brief: buildSt
 await mkdir(path.join(root, 'docs/desired-client-v2/review'), { recursive: true });
 await writeFile(path.join(root, 'docs/desired-client-v2/review/structured-fixtures.json'), JSON.stringify(results, null, 2) + '\n');
 for (const result of results) console.log(JSON.stringify({
-  id: result.id, definition: result.brief.portrait.text, kind: result.brief.portrait.kind,
+  id: result.id, definition: result.brief.definition_sentence, kind: result.brief.definition_components.client_matter.kind,
   checks: result.brief.open_questions.map(s => s.text),
 }));
 
