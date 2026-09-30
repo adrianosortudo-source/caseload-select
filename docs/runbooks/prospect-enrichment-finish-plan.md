@@ -58,6 +58,10 @@ Historical app evidence showed that the main registry and operator access work w
 
 After run `36361852842` receives its required environment approval, use the current pushed workflows and release contracts, not copied commands from an older runbook paragraph. Read workflow_dispatch choices and current CLI help to construct exact inputs; no invented flags. The read-only preflight comes first. Only after it succeeds may the plan claim actual schema, ACL, function-signature or migration-history evidence.
 
+### Current reader repair checkpoint (2026-09-30)
+
+The protected recovery has since verified the complete 33-table coverage backfill (8,716 projected rows), the profile-link migration, and an empty coverage-only dry run in Actions run `36649630031`. The live candidate reader still fails with a PostgreSQL statement timeout, so A2 is not complete. PR #348 is being extended with a source-search-first reader migration plus the historical cutoff regression. Production release must use `.github/workflows/prospect-candidate-reader-repair.yml`: its first protected job is read-only and exports the exact ledger, prerequisite catalog, migration hash and dry-run evidence; the dependent second job requires a new review, rechecks the same dispatch SHA and artifact, applies only the reader migration, then verifies exact stored statements, permissions, indexes and an empty pending plan. Keep the apply job blocked on any mismatch. Afterward prove the authenticated live candidate, run and package readers and existing operator access before continuing A3-A7.
+
 Fixed branches:
 
 1. Objects and ledger exactly match: apply no migration; test the app's actual project/schema configuration, service-role permissions and PostgREST cache. Refresh schema cache through an authorized supported operation only when stale visibility is demonstrated; re-read endpoints.

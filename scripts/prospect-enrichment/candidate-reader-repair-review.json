@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "prospect-candidate-reader-repair-review/v1",
+  "projectRef": "ssxryjxifwiivghglqer",
+  "reviewOnly": true,
+  "productionApplicationApproved": false,
+  "migration": {
+    "path": "supabase/migrations/20260930004100_prospect_candidate_reader_timeout_fix.sql",
+    "filename": "20260930004100_prospect_candidate_reader_timeout_fix.sql",
+    "version": "20260930004100",
+    "name": "prospect_candidate_reader_timeout_fix",
+    "bytes": 16645,
+    "sha256": "13b4639992619cbf80634e3762642bb37b6269be865c154525d0c8e8a3bd3c82"
+  },
+  "exclusions": [
+    "No research data import or identity link",
+    "No qualification or campaign state change",
+    "No seeds or roles"
+  ]
+}
