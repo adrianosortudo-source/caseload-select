@@ -49,6 +49,14 @@ test("stable claim requires singleton valid domain-bound registrations and captu
   assert.equal(evaluate(v => { ((context(v).receipts as Record<string, unknown>[])[0].registration as Record<string, unknown>).firmId = other; }).conflicting, true);
   assert.equal(evaluate(v => { (context(v).history as Record<string, unknown>[])[0].domain = "different.example"; }).conflicting, true);
   assert.equal(evaluate(() => undefined, {}).stableFirmId, null);
+  for (const field of ["canonicalDomain", "domain"] as const) {
+    const missing = evaluate(v => { const registration = (context(v).receipts as Record<string, unknown>[])[0].registration as Record<string, unknown>; delete registration.canonicalDomain; delete registration.domain; registration[field] = null; });
+    assert.equal(missing.stableFirmId, null); assert.equal(missing.conflicting, false);
+  }
+  assert.equal(evaluate(v => { delete context(v).canonicalDomain; }).conflicting, false);
+  assert.equal(evaluate(v => { delete (v.result as { record: Record<string, unknown> }).record.canonicalDomain; }).conflicting, false);
+  const missingEnvelopeDomain = retainedWholeFirmStableClaim(revision, { ...envelope, subject: { ...envelope.subject, canonicalDomain: null } }, source.originalExport.sourceInventory);
+  assert.equal(missingEnvelopeDomain.stableFirmId, null); assert.equal(missingEnvelopeDomain.conflicting, false);
   const claim = evaluate(() => undefined); assert.equal(claim.proof?.capturedSha256, digest); assert.equal(claim.proof?.receiptPointer, "/candidateContext/receipts/0");
 });
 

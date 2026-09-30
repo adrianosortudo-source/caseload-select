@@ -31,13 +31,17 @@ export function retainedWholeFirmStableClaim(revision: unknown, envelope: Prospe
   const stableFirmId = context.stableIds[0] as string;
   if (!Array.isArray(context.identityConflicts) || context.identityConflicts.length || envelope.subject.identityState === "conflict") return fail("Retained identity context records a conflict or lacks its explicit conflict inventory.", (Array.isArray(context.identityConflicts) && context.identityConflicts.length > 0) || envelope.subject.identityState === "conflict");
   const canonicalDomain = domain(context.canonicalDomain);
-  if (!canonicalDomain || domain(record.canonicalDomain) !== canonicalDomain || domain(envelope.subject.canonicalDomain) !== canonicalDomain || (packet.canonicalDomain != null && domain(packet.canonicalDomain) !== canonicalDomain) || (typeof context.key === "string" && context.key.startsWith("domain:") && domain(context.key.slice(7)) !== canonicalDomain)) return fail("Retained candidate and packet domain claims do not match exactly.", true);
+  const absent = (value: unknown) => value == null || (typeof value === "string" && !value.trim());
+  if ([context.canonicalDomain, record.canonicalDomain, envelope.subject.canonicalDomain].some(absent)) return fail("Required retained candidate or packet domain provenance is missing.");
+  if (!canonicalDomain || domain(record.canonicalDomain) !== canonicalDomain || domain(envelope.subject.canonicalDomain) !== canonicalDomain || (!absent(packet.canonicalDomain) && domain(packet.canonicalDomain) !== canonicalDomain) || (typeof context.key === "string" && context.key.startsWith("domain:") && domain(context.key.slice(7)) !== canonicalDomain)) return fail("Retained candidate and packet domain claims do not match exactly.", true);
   if ([envelope.subject.stableFirmId, record.firmId, packet.stableFirmId].some(v => v != null && v !== stableFirmId)) return fail("An existing packet stable identifier differs from the retained claim.", true);
   if (!object(sourceInventory) || !object(sourceInventory.provenance) || !HASH.test(String(sourceInventory.provenance.sourceSha256)) || !Array.isArray(sourceInventory.provenance.references)) return fail("Frozen source capture provenance is missing.");
   const references = sourceInventory.provenance.references as unknown[];
   const receipts = Array.isArray(context.receipts) ? context.receipts.filter(object) : [];
   const registrations = receipts.filter(receipt => object(receipt.registration));
-  const matchingDomain = (value: Record<string, unknown>) => [value.canonicalDomain, value.domain].some(v => v != null) && [value.canonicalDomain, value.domain].filter(v => v != null).every(v => domain(v) === canonicalDomain);
+  const matchingDomain = (value: Record<string, unknown>) => [value.canonicalDomain, value.domain].some(v => !absent(v)) && [value.canonicalDomain, value.domain].filter(v => !absent(v)).every(v => domain(v) === canonicalDomain);
+  const missingBinding = (value: Record<string, unknown>) => absent(value.firmId) || [value.canonicalDomain, value.domain].every(absent);
+  if (registrations.some(receipt => missingBinding(receipt.registration as Record<string, unknown>))) return fail("Retained registration receipt identity provenance is incomplete.");
   if (!registrations.length || registrations.some(receipt => { const registration = receipt.registration as Record<string, unknown>; return registration.firmId !== stableFirmId || !matchingDomain(registration); })) return fail("Retained registration receipts are missing or contradict the stable identifier and domain.", registrations.length > 0);
   let proof: RetainedStableClaimProof | null = null;
   for (const receipt of registrations) {
@@ -47,6 +51,7 @@ export function retainedWholeFirmStableClaim(revision: unknown, envelope: Prospe
   }
   if (!proof) return fail("No matching registration query artifact has a verified frozen capture hash.");
   const history = Array.isArray(context.history) ? context.history.filter(object).filter(entry => entry.event === "identity-bound-from-registration-readback") : [];
+  if (history.some(missingBinding)) return fail("Retained identity-binding history provenance is incomplete.");
   if (history.some(entry => entry.firmId !== stableFirmId || !matchingDomain(entry) || (entry.queryArtifactSha256 != null && !HASH.test(String(entry.queryArtifactSha256))))) return fail("Retained identity-binding history contradicts the registration claim.", true);
   return { stableFirmId, issue: null, proof, conflicting: false };
 }
