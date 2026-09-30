@@ -16,17 +16,24 @@ const expectCatalog = {
  invalid_date_coverage_index:true
 };
 describe("candidate reader repair gate", () => {
- it("binds the review receipt to exact migration bytes and never grants write approval", () => {
+ it("binds the review receipt to both exact migration sources and never grants write approval", () => {
   expect(source.verified).toBe(true);
   expect(source.productionApplicationApproved).toBe(false);
+  expect(source.migrations.map(item => item.filename)).toEqual([
+   "20260930050000_prospect_candidate_coverage_warning_index.sql",
+   "20260930130000_prospect_candidate_reader_defer_legacy_audit.sql",
+  ]);
   const receipt=JSON.parse(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json","utf8"));
-  expect(()=>verifyReaderRepairReceipt({...receipt,migration:{...receipt.migration,sha256:"0".repeat(64)}})).toThrow("reader_repair_receipt_source_mismatch");
+  expect(()=>verifyReaderRepairReceipt({...receipt,migrations:receipt.migrations.map((item,index)=>index===1?{...item,sha256:"0".repeat(64)}:item)})).toThrow("reader_repair_receipt_source_mismatch");
  });
- it("accepts only the exact one-migration preflight and empty post-plan", () => {
-  const pending={phase:"candidate-reader-repair-pending",pendingPaths:["supabase/migrations/20260930050000_prospect_candidate_coverage_warning_index.sql"]};
-  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:["20260930050000_prospect_candidate_coverage_warning_index.sql"],seeds:[],roles:[]},pending,"pre").exactScope).toBe(true);
-  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:["other.sql"],seeds:[],roles:[]},pending,"pre")).toThrow("unexpected_reader_repair_plan");
-  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},pending,"post")).toThrow("invalid_reader_repair_plan");
+ it("accepts only the exact ordered pending suffix and empty post-plan", () => {
+  const first="20260930050000_prospect_candidate_coverage_warning_index.sql";
+  const second="20260930130000_prospect_candidate_reader_defer_legacy_audit.sql";
+  const pending=(files:string[])=>({phase:"candidate-reader-repair-pending",pendingPaths:files.map(file=>"supabase/migrations/"+file)});
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,second],seeds:[],roles:[]},pending([first,second]),"pre").exactScope).toBe(true);
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[second],seeds:[],roles:[]},pending([second]),"pre").exactScope).toBe(true);
+  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first],seeds:[],roles:[]},pending([first]),"pre")).toThrow("unexpected_reader_repair_plan");
+  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},pending([first,second]),"post")).toThrow("invalid_reader_repair_plan");
   expect(verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},{phase:"complete",pendingPaths:[]},"post").upToDate).toBe(true);
  });
  it("binds two protected reviews to one source and makes apply depend on a read-only artifact", () => {

@@ -1,13 +1,18 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CANDIDATE_READER_REPAIR_PATH, PROJECT_REF, sha256, verifyLedgerStatements } from "./migration-gate.mjs";
+import { CANDIDATE_READER_REPAIR_PATHS, PROJECT_REF, sha256, verifyLedgerStatements } from "./migration-gate.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const receiptPath = "scripts/prospect-enrichment/candidate-reader-repair-review.json";
 const fail = code => { throw new Error(code); };
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
 const isRecord = x => x !== null && typeof x === "object" && !Array.isArray(x);
-const filename = path.posix.basename(CANDIDATE_READER_REPAIR_PATH), version = filename.slice(0,14), name = filename.slice(15,-4);
+const normalizedSource = source => Buffer.from(source.toString("utf8").replace(/\r\n/g,"\n"),"utf8");
+const migrationIdentity = migrationPath => {
+ const filename=path.posix.basename(migrationPath);
+ return {path:migrationPath,filename,version:filename.slice(0,14),name:filename.slice(15,-4)};
+};
+const repairMigrations = Object.freeze(CANDIDATE_READER_REPAIR_PATHS.map(migrationIdentity));
 export const catalogExpectations = {
  candidate_list_service_role_execute:true,candidate_list_anon_execute:false,candidate_list_auth_execute:false,
  candidate_detail_service_role_execute:true,candidate_detail_anon_execute:false,candidate_detail_auth_execute:false,
@@ -19,21 +24,30 @@ export const catalogExpectations = {
  invalid_date_coverage_index:true
 };
 export function createReaderRepairReceipt(sourceRoot=root) {
- const absolute=path.join(sourceRoot,CANDIDATE_READER_REPAIR_PATH), stat=fs.lstatSync(absolute);
- if(!stat.isFile()||stat.isSymbolicLink()) fail("reader_repair_source_invalid");
- const source=fs.readFileSync(absolute);
- return {schemaVersion:"prospect-candidate-reader-repair-review/v1",projectRef:PROJECT_REF,reviewOnly:true,
-  productionApplicationApproved:false,migration:{path:CANDIDATE_READER_REPAIR_PATH,filename,version,name,bytes:source.length,sha256:sha256(source)},
+ const migrations=repairMigrations.map(identity=>{
+  const absolute=path.join(sourceRoot,identity.path), stat=fs.lstatSync(absolute);
+  if(!stat.isFile()||stat.isSymbolicLink()) fail("reader_repair_source_invalid");
+  const source=normalizedSource(fs.readFileSync(absolute));
+  return {...identity,bytes:source.length,sha256:sha256(source)};
+ });
+ return {schemaVersion:"prospect-candidate-reader-repair-review/v2",projectRef:PROJECT_REF,reviewOnly:true,
+  productionApplicationApproved:false,migrations,
   exclusions:["No research data import or identity link","No qualification or campaign state change","No seeds or roles"]};
 }
 export function verifyReaderRepairReceipt(receipt,sourceRoot=root) {
  const expected=createReaderRepairReceipt(sourceRoot); if(!same(receipt,expected)) fail("reader_repair_receipt_source_mismatch");
- return {projectRef:PROJECT_REF,migration:expected.migration,productionApplicationApproved:false,verified:true};
+ return {projectRef:PROJECT_REF,migrations:expected.migrations,productionApplicationApproved:false,verified:true};
 }
 export function verifyReaderRepairPlan(plan,ledgerCheck,phase) {
  if(!isRecord(plan)||!isRecord(ledgerCheck)||!["pre","post"].includes(phase)||
   ledgerCheck.phase!==(phase==="pre"?"candidate-reader-repair-pending":"complete")||!Array.isArray(ledgerCheck.pendingPaths)) fail("invalid_reader_repair_plan");
- const pending=phase==="pre"?[filename]:[];
+ const pendingPaths=ledgerCheck.pendingPaths;
+ const permittedPending=phase==="pre"?[
+  repairMigrations.map(item=>item.path),
+  repairMigrations.slice(-1).map(item=>item.path),
+ ]:[[]];
+ if(!permittedPending.some(paths=>same(pendingPaths,paths))) fail("unexpected_reader_repair_plan");
+ const pending=pendingPaths.map(item=>path.posix.basename(item));
  if(!same(ledgerCheck.pendingPaths.map(x=>path.posix.basename(x)),pending)||plan.dryRun!==true||
   plan.upToDate!==(phase==="post")||!same(plan.migrations,pending)||!same(plan.seeds,[])||!same(plan.roles,[])) fail("unexpected_reader_repair_plan");
  return {phase,migrations:pending,dryRun:true,upToDate:phase==="post",exactScope:true};
@@ -73,8 +87,14 @@ export function verifyReaderCatalog(payload) {
 }
 export function verifyTargetLedgerStatements(payload,sourceRoot=root) {
  const rows=Array.isArray(payload)?payload:isRecord(payload)&&Array.isArray(payload.data)?payload.data:isRecord(payload)&&Array.isArray(payload.rows)?payload.rows:null;
- if(!rows||rows.length!==1||!isRecord(rows[0])||!same(Object.keys(rows[0]).sort(),["name","statements","version"])||rows[0].version!==version||rows[0].name!==name) fail("reader_repair_target_ledger_invalid");
- return {version,name,...verifyLedgerStatements(fs.readFileSync(path.join(sourceRoot,CANDIDATE_READER_REPAIR_PATH)),rows[0].statements)};
+ if(!rows||rows.length!==repairMigrations.length||rows.some(row=>!isRecord(row)||!same(Object.keys(row).sort(),["name","statements","version"]))) fail("reader_repair_target_ledger_invalid");
+ const ordered=[...rows].sort((a,b)=>a.version.localeCompare(b.version));
+ const checks=repairMigrations.map((identity,index)=>{
+  const row=ordered[index];
+  if(row.version!==identity.version||row.name!==identity.name) fail("reader_repair_target_ledger_invalid");
+  return {version:identity.version,name:identity.name,...verifyLedgerStatements(normalizedSource(fs.readFileSync(path.join(sourceRoot,identity.path))),row.statements)};
+ });
+ return {migrations:checks};
 }
 const readJson=f=>JSON.parse(fs.readFileSync(f,"utf8"));
 const writeJson=(f,x)=>fs.writeFileSync(f,JSON.stringify(x,null,2)+"\n");

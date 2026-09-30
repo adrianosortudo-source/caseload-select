@@ -8,7 +8,7 @@ import yaml from "js-yaml";
 import {
   CLI_VERSION, CONFIRMATION, MIGRATION_PATHS, PROJECT_REF, RELEASE_PATH,
   PREVIEW_MIGRATION_PATHS, QUALIFICATION_HISTORY, QUALIFICATION_HISTORY_CONFIRMATION,
-  CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, CANDIDATE_READER_REPAIR_PATH, HISTORICAL_LEDGER_NAME_ALIASES,
+  CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, CANDIDATE_READER_REPAIR_PATH, CANDIDATE_READER_REPAIR_PATHS, HISTORICAL_LEDGER_NAME_ALIASES,
   compareQualificationCatalogs, stageProductionWorkdir, stagePrerequisiteWorkdir, verifyFullMigrationLedger, verifyQualificationRepairAuthorization,
   createReleaseManifest, findProjectEnvFiles, ledgerQuery, sha256, verifyConfirmation, verifyDirectDatabaseUrl, verifyExecutionGate,
   verifyLedgerStatements, verifyMigrationLedger, verifyMigrationPlan, verifyReleaseManifest,
@@ -361,13 +361,13 @@ test("candidate full ledger accepts exact ordered receipt suffix and rejects unr
   assert.throws(() => verifyFullMigrationLedger([baselineRow], base, "candidate-pending", CANDIDATE_RELEASE_PATHS), /unexpected_full_history_delta/);
 });
 
-test("candidate reader coverage repair permits only its new migration after the existing reader fix and candidate release", t => {
+test("candidate reader repair permits only its exact ordered migration suffix after the existing reader fix and candidate release", t => {
   const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "candidate-reader-ledger-test-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const dir = path.join(base, "supabase", "migrations");
   fs.mkdirSync(dir, { recursive: true });
   const baseline = "20260413_legacy_numeric.sql";
-  for (const relative of ["supabase/migrations/" + baseline, ...CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, CANDIDATE_READER_REPAIR_PATH]) {
+  for (const relative of ["supabase/migrations/" + baseline, ...CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, ...CANDIDATE_READER_REPAIR_PATHS]) {
     fs.writeFileSync(path.join(dir, path.basename(relative)), "SELECT 1;\n");
   }
   const makeRow = relative => {
@@ -375,10 +375,14 @@ test("candidate reader coverage repair permits only its new migration after the 
     return { version: match[1], name: match[2] };
   };
   const applied = [makeRow(baseline), ...CANDIDATE_RELEASE_PATHS.map(makeRow), makeRow(CANDIDATE_READER_TIMEOUT_PATH)].sort((a, b) => a.version.localeCompare(b.version));
-  assert.deepEqual(verifyFullMigrationLedger(applied, base, "candidate-reader-repair-pending", [CANDIDATE_READER_REPAIR_PATH]).pendingPaths, [CANDIDATE_READER_REPAIR_PATH]);
+  assert.deepEqual(verifyFullMigrationLedger(applied, base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS).pendingPaths, [...CANDIDATE_READER_REPAIR_PATHS]);
+  const earlierApplied = [...applied, makeRow(CANDIDATE_READER_REPAIR_PATHS[0])].sort((a, b) => a.version.localeCompare(b.version));
+  assert.deepEqual(verifyFullMigrationLedger(earlierApplied, base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS).pendingPaths, [CANDIDATE_READER_REPAIR_PATHS[1]]);
   assert.throws(() => verifyFullMigrationLedger(applied, base, "candidate-reader-repair-pending", []), /invalid_candidate_reader_repair_pending_scope/);
-  assert.throws(() => verifyFullMigrationLedger(applied.filter(row => row.version !== makeRow(CANDIDATE_READER_TIMEOUT_PATH).version), base, "candidate-reader-repair-pending", [CANDIDATE_READER_REPAIR_PATH]), /unexpected_full_history_delta/);
-  assert.throws(() => verifyFullMigrationLedger([...applied, makeRow(CANDIDATE_READER_REPAIR_PATH)].sort((a, b) => a.version.localeCompare(b.version)), base, "candidate-reader-repair-pending", [CANDIDATE_READER_REPAIR_PATH]), /unexpected_full_history_delta/);
+  assert.throws(() => verifyFullMigrationLedger(applied, base, "candidate-reader-repair-pending", [...CANDIDATE_READER_REPAIR_PATHS].reverse()), /invalid_candidate_reader_repair_pending_scope/);
+  assert.throws(() => verifyFullMigrationLedger(applied.filter(row => row.version !== makeRow(CANDIDATE_READER_TIMEOUT_PATH).version), base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS), /unexpected_full_history_delta/);
+  const laterAppliedOnly = [...applied, makeRow(CANDIDATE_READER_REPAIR_PATHS[1])].sort((a, b) => a.version.localeCompare(b.version));
+  assert.throws(() => verifyFullMigrationLedger(laterAppliedOnly, base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS), /unexpected_full_history_delta/);
 });
 
 test("qualification catalog comparison rejects missing tables, changed indexes, constraints, and column privileges", t => {

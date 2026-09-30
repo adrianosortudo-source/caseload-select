@@ -47,6 +47,10 @@ export const CANDIDATE_RELEASE_PATHS = Object.freeze([
 ]);
 export const CANDIDATE_READER_TIMEOUT_PATH = "supabase/migrations/20260930004100_prospect_candidate_reader_timeout_fix.sql";
 export const CANDIDATE_READER_REPAIR_PATH = "supabase/migrations/20260930050000_prospect_candidate_coverage_warning_index.sql";
+export const CANDIDATE_READER_REPAIR_PATHS = Object.freeze([
+  CANDIDATE_READER_REPAIR_PATH,
+  "supabase/migrations/20260930130000_prospect_candidate_reader_defer_legacy_audit.sql",
+]);
 export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
 export const RELEASE_PATH = "scripts/prospect-enrichment/migration-release.json";
@@ -256,7 +260,7 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
     const prefixLength = CANDIDATE_RELEASE_PATHS.length - candidatePendingPaths.length;
     if (prefixLength < 0 || !same(candidatePendingPaths, CANDIDATE_RELEASE_PATHS.slice(prefixLength))) fail("invalid_candidate_pending_suffix");
   } else if (phase === "candidate-reader-repair-pending") {
-    if (!same(candidatePendingPaths, [CANDIDATE_READER_REPAIR_PATH])) fail("invalid_candidate_reader_repair_pending_scope");
+    if (!same(candidatePendingPaths, CANDIDATE_READER_REPAIR_PATHS)) fail("invalid_candidate_reader_repair_pending_scope");
   } else if (candidatePendingPaths !== undefined) fail("invalid_full_ledger_input");
   const { migrations } = sourceMigrationInventory(sourceRoot, { requirePreviewSources: false });
   const localByVersion = new Map(migrations.filter(item => !PREVIEW_MIGRATION_PATHS.includes(item.path)).map(item => [item.version, item]));
@@ -277,7 +281,10 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
     ? [...QUALIFICATION_HISTORY.map(item => item.path), ...MIGRATION_PATHS].sort()
     : phase === "enrichment-pending" ? [...MIGRATION_PATHS].sort()
       : phase === "candidate-pending" || phase === "candidate-reader-repair-pending" ? [...candidatePendingPaths].sort() : [];
-  if (!same(pending, expected)) fail("unexpected_full_history_delta");
+  if (phase === "candidate-reader-repair-pending") {
+    const permittedSuffixes = [CANDIDATE_READER_REPAIR_PATHS, CANDIDATE_READER_REPAIR_PATHS.slice(-1)];
+    if (!permittedSuffixes.some(suffix => same(pending, [...suffix].sort()))) fail("unexpected_full_history_delta");
+  } else if (!same(pending, expected)) fail("unexpected_full_history_delta");
   return { phase, remoteVersionCount: remote.size, stagedMigrationCount: localByVersion.size, pendingPaths: pending, completeSourceCoverage: true };
 }
 
