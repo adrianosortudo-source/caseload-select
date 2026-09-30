@@ -189,7 +189,7 @@ export function BriefView({
     <div className="dc-report-review dc-screen-only">
       <p data-ui-copy="body">Have you reviewed this draft wording?</p>
       <label className="dc-reviewed"><input type="checkbox" checked={reviewed} onChange={(event) => onReview(event.currentTarget.checked)} /><span>{legacy ? "I have reviewed this original report wording." : "I have reviewed this draft wording."}</span></label>
-      {!legacy && <p className="dc-report-review__note" data-ui-copy="supporting">Reviewing wording does not verify the firm's experience, establish its economics, or approve a proposed target. The firm remains responsible for those decisions.</p>}
+      {!legacy && <p className="dc-report-review__note" data-ui-copy="supporting">Reviewing wording does not verify the firm&apos;s experience, establish its economics, or approve a proposed target. The firm remains responsible for those decisions.</p>}
     </div>
     {copied && <p role="status" className="dc-screen-only">Profile copied.</p>}
     {copyFailed && <><p role="status" className="dc-screen-only">The profile could not be copied automatically. Select and copy the profile text below.</p><textarea className="dc-screen-only" ref={fallback} aria-label="Select and copy profile" readOnly value={text} /></>}

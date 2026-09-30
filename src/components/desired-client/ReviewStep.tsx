@@ -82,7 +82,7 @@ export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,b
     <section className="dc-review__generate" data-ui-component-content="desired-client-ai-consent">
       <h2 data-ui-copy="heading">{REVIEW_COPY.prepareAI}</h2>
       <p data-ui-copy="body">AI will connect your choices into a Desired Client Blueprint: the client situation and matter, why the work fits the firm, the signs of a relevant enquiry, what the firm has seen so far, and what would make the work worth repeating. It will keep reported experience, estimates, preferences and unknowns distinct. You can review and correct the draft.</p>
-      <p data-ui-copy="supporting">The blueprint is a working marketing definition. It does not verify the firm's experience or economics, approve a target, decide whether to accept a client, or activate a lead score. The firm makes those judgments.</p>
+      <p data-ui-copy="supporting">The blueprint is a working marketing definition. It does not verify the firm&apos;s experience or economics, approve a target, decide whether to accept a client, or activate a lead score. The firm makes those judgments.</p>
       <p data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure}</p>
       <p data-ui-copy="supporting">Selecting “{REVIEW_COPY.prepareAI}” sends your answers to Google Gemini for this draft. Describe patterns of work only. Do not enter confidential or identifying client information.</p>
       <div className="dc-actions">
