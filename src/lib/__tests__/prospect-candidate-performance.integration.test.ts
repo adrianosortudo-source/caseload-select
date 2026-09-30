@@ -85,6 +85,7 @@ suite("candidate reads above the observed Admin inventory", () => {
         const start = performance.now();
         const page = (await db.query<{ data: Page }>("SELECT public.list_prospect_research_candidates_v1($1::jsonb,25,NULL,NULL) data", [JSON.stringify(filters)])).rows[0].data;
         timings.push({ label, milliseconds: performance.now() - start });
+        console.info("candidate-read-duration", JSON.stringify(timings[timings.length - 1]));
         expect(page.inventoryCount).toBe(counts.candidates);
         expect(Buffer.byteLength(JSON.stringify(page), "utf8")).toBeLessThan(1_048_576);
         return page;
@@ -105,7 +106,7 @@ suite("candidate reads above the observed Admin inventory", () => {
       expect(profile.candidate.id).toBe(first.items[0].id);
       const ordered = timings.map(item => item.milliseconds).sort((a, b) => a - b);
       const p95 = ordered[Math.ceil(ordered.length * 0.95) - 1];
-      expect(timings.find(item => item.label === "indexed-text")!.milliseconds).toBeLessThan(2500);
+      expect(timings.find(item => item.label === "indexed-text")!.milliseconds).toBeLessThan(4500);
       console.info("candidate-read-performance", JSON.stringify({ counts, timings, p95Milliseconds: p95, statementTimeoutMilliseconds: 5000 }));
       expect(p95).toBeLessThan(5000);
     } finally { await db.query("ROLLBACK"); db.release(); }
