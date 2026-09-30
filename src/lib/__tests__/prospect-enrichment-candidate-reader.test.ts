@@ -61,6 +61,29 @@ describe("candidate RPC read adapter", () => {
     await expect(listCandidateResearch({ filters: {} }, client({ ...candidateList, items: "bad" }))).rejects.toThrow(CandidateContractError);
     await expect(getCandidateResearch(id, 41, client(candidateDetail(id)))).rejects.toThrow(CandidateContractError);
   });
+  it("logs only allowlisted database diagnostics and never the private error message or RPC arguments", async () => {
+    const secret = "private SQL and prospect payload";
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const db = { rpc: vi.fn(async () => ({ data: null, error: { code: "42883", message: secret, details: secret, hint: secret } })) };
+      await expect(listCandidateResearch({ filters: { text: secret } }, db)).rejects.toMatchObject({ status: 503 });
+      expect(log).toHaveBeenCalledWith("[prospect-enrichment] candidate RPC unavailable", {
+        rpc: "list_prospect_research_candidates_v1", databaseErrorCode: "42883", httpStatus: null, errorName: null,
+      });
+      expect(JSON.stringify(log.mock.calls)).not.toContain(secret);
+    } finally { log.mockRestore(); }
+  });
+  it("logs a safe exception name but never the exception message", async () => {
+    const secret = "connection string with prospect data";
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(listCandidateResearch({ filters: {} }, { rpc: vi.fn(async () => { throw new TypeError(secret); }) })).rejects.toMatchObject({ status: 503 });
+      expect(log).toHaveBeenCalledWith("[prospect-enrichment] candidate RPC unavailable", {
+        rpc: "list_prospect_research_candidates_v1", databaseErrorCode: null, httpStatus: null, errorName: "TypeError",
+      });
+      expect(JSON.stringify(log.mock.calls)).not.toContain(secret);
+    } finally { log.mockRestore(); }
+  });
   it("keeps candidate history fields, dates, unknowns, retractions and immutable raw revisions", async () => {
     const fixture = candidateHistory(id), db = client({ ...fixture, nextAfterId: null });
     expect(await getCandidateHistory(id, { coverageRevision: 42 }, db)).toEqual(fixture);
