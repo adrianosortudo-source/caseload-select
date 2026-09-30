@@ -104,7 +104,7 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
       <p data-ui-copy="body">{STAGE_DEFINITIONS[stage-1].explanation}</p>
     </div>
     {notice&&<p className="dc-alert" role="status" data-ui-copy="supporting">{notice}</p>}
-    <div className="dc-stage__layout"><div className="dc-stage__questions">
+    <div className="dc-stage__layout"><div className="dc-stage__questions" data-ui-component-content={`desired-client-stage-questions-${stage}`}>
       {stage===1&&<>
         {radio("dc-practice-direction","What do you want this profile to help your firm do?",PRACTICE_DIRECTION_OPTIONS,answers.practice.direction,(a,v)=>{
           a.practice.direction=v as typeof a.practice.direction;
