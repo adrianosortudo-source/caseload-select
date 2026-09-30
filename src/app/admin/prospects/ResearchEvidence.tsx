@@ -5,7 +5,10 @@ import type { ReactNode } from "react";
 export const researchButton = "inline-flex items-center justify-center rounded-md border border-border-brand bg-white px-3 py-2 text-sm font-semibold text-navy hover:bg-parchment disabled:cursor-not-allowed disabled:opacity-50";
 export const researchInput = "w-full rounded-md border border-border-brand bg-white px-3 py-2 text-sm text-navy";
 
-export function researchLabel(value: string): string { return value.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ").replace(/^./, (letter) => letter.toUpperCase()); }
+export function researchLabel(value: string): string {
+  if (value === "legacy_source_audit_deferred") return "Full legacy source audit is pending";
+  return value.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ").replace(/^./, (letter) => letter.toUpperCase());
+}
 export function researchUrl(value: unknown): string | null {
   if (typeof value !== "string") return null;
   try { const parsed = new URL(value); return ["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password ? value : null; } catch { return null; }

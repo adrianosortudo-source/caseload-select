@@ -477,7 +477,11 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       await db.query("INSERT INTO public.prospect_source_captures(requested_url,retrieval_method,observed_at,policy_state) VALUES('https://synthetic.example/unprojected','synthetic',now(),'allowed')");
       const missing = await list(db);
       expect(missing.complete).toBe(false);
-      expect(missing.readWarnings).toContain("legacy_source_rows_unprojected:prospect_source_captures:1");
+      expect(missing.readWarnings).toContain("legacy_source_audit_deferred");
+      expect(missing.readWarnings).not.toContain("legacy_source_rows_unprojected:prospect_source_captures:1");
+      const audit = await db.query<{ warnings: string[] }>(
+        "SELECT prospect_candidate_private.coverage_warnings_full_audit($1::bigint) warnings", [missing.coverageRevision]);
+      expect(audit.rows[0].warnings).toContain("legacy_source_rows_unprojected:prospect_source_captures:1");
     } finally { await db.query("ROLLBACK"); db.release(); }
   }, 90_000);
 
