@@ -1,16 +1,26 @@
 {
-  "schemaVersion": "prospect-candidate-reader-repair-review/v1",
+  "schemaVersion": "prospect-candidate-reader-repair-review/v2",
   "projectRef": "ssxryjxifwiivghglqer",
   "reviewOnly": true,
   "productionApplicationApproved": false,
-  "migration": {
-    "path": "supabase/migrations/20260930050000_prospect_candidate_coverage_warning_index.sql",
-    "filename": "20260930050000_prospect_candidate_coverage_warning_index.sql",
-    "version": "20260930050000",
-    "name": "prospect_candidate_coverage_warning_index",
-    "bytes": 6655,
-    "sha256": "605be547547046b74cc4dbf4aa5b75fc07dfb1c3bea811fb5f307f1ddf309c15"
-  },
+  "migrations": [
+    {
+      "path": "supabase/migrations/20260930050000_prospect_candidate_coverage_warning_index.sql",
+      "filename": "20260930050000_prospect_candidate_coverage_warning_index.sql",
+      "version": "20260930050000",
+      "name": "prospect_candidate_coverage_warning_index",
+      "bytes": 6655,
+      "sha256": "605be547547046b74cc4dbf4aa5b75fc07dfb1c3bea811fb5f307f1ddf309c15"
+    },
+    {
+      "path": "supabase/migrations/20260930130000_prospect_candidate_reader_defer_legacy_audit.sql",
+      "filename": "20260930130000_prospect_candidate_reader_defer_legacy_audit.sql",
+      "version": "20260930130000",
+      "name": "prospect_candidate_reader_defer_legacy_audit",
+      "bytes": 1248,
+      "sha256": "f6ffab0605121a3ac1af86f2df7d4ae88edc2b383422f9f03ed43282fc3a500a"
+    }
+  ],
   "exclusions": [
     "No research data import or identity link",
     "No qualification or campaign state change",
