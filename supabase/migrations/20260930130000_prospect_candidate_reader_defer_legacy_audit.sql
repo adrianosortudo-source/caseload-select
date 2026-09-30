@@ -17,7 +17,7 @@ LANGUAGE sql STABLE SET search_path = '' AS $$
 $$;
 
 COMMENT ON FUNCTION prospect_candidate_private.coverage_warnings(bigint) IS
-  'Bounded candidate-reader warnings. The explicit deferred marker keeps complete=false until the protected full legacy-source audit succeeds.';
+  'Bounded candidate-reader warnings. The explicit deferred marker keeps complete=false; a separate protected audit and later certification change are required to report full legacy-source coverage.';
 
 REVOKE ALL ON FUNCTION prospect_candidate_private.coverage_warnings(bigint)
   FROM PUBLIC, anon, authenticated, service_role;
