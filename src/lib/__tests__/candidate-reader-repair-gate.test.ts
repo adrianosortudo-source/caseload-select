@@ -24,7 +24,9 @@ describe("candidate reader repair gate", () => {
    "20260930130000_prospect_candidate_reader_defer_legacy_audit.sql",
   ]);
   const receipt=JSON.parse(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json","utf8"));
-  expect(()=>verifyReaderRepairReceipt({...receipt,migrations:receipt.migrations.map((item,index)=>index===1?{...item,sha256:"0".repeat(64)}:item)})).toThrow("reader_repair_receipt_source_mismatch");
+  const changedReceipt={...receipt,migrations:[...receipt.migrations]};
+  changedReceipt.migrations[1]={...changedReceipt.migrations[1],sha256:"0".repeat(64)};
+  expect(()=>verifyReaderRepairReceipt(changedReceipt)).toThrow("reader_repair_receipt_source_mismatch");
  });
  it("accepts only the exact ordered pending suffix and empty post-plan", () => {
   const first="20260930050000_prospect_candidate_coverage_warning_index.sql";
