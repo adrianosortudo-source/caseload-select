@@ -1,5 +1,7 @@
 # Desired Client Blueprint update: Luna execution package
 
+> Historical plan: this package describes an earlier blueprint version. For the current six-section practice-direction amendment, use [AMENDMENT_PRACTICE_EXPERIENCE_2026-09-30.md](AMENDMENT_PRACTICE_EXPERIENCE_2026-09-30.md). That amendment supersedes conflicting report and discovery details for the current implementation only; this history remains unchanged below.
+
 Prepared by Astra on 26 September 2026. Status: implementation plan, not an implemented or released change.
 
 ## Outcome

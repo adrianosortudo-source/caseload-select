@@ -55,8 +55,16 @@ export type AimId = "more_current" | "narrower" | "new_area" | "new_model" | "un
 export type LessId = "within" | "outside" | "model" | "none";
 export type OpportunitySourceId = "comparable_enquiries" | "retained_matters" | "professional_referrals" | "repeat_clients" | "website_search" | "other_source" | "no_evidence" | "unknown";
 export type SuccessMeasureId = "retained_matters" | "contribution_effort" | "predictable_delivery" | "practice_mix_reputation" | "other" | "unknown";
-export type EvidenceBasis = "firm_reported_recorded" | "firm_reported_estimate" | "firm_preference" | "source_observed" | "hypothesis" | "unknown";
+export type EvidenceBasis = "firm_reported_recorded" | "firm_reported_estimate" | "firm_reported_experience" | "firm_reported_observation" | "client_reported" | "firm_preference" | "source_observed" | "hypothesis" | "unknown";
 export type PracticeDirectionId = "grow_proven" | "narrow_specialty" | "explore_direction" | "improve_delivery" | "other" | "unknown";
+export type PracticeExperienceId = "regular" | "occasional" | "adjacent" | "new" | "unknown";
+export type DevelopmentNeedId = "expertise" | "support" | "process" | "capacity" | "unknown";
+export type LessWorkReasonId = "preference" | "capacity" | "effort" | "financial" | "model" | "unknown";
+export type ClientChoicePriorityId = "relevant_experience" | "clear_options" | "clear_fees" | "communication" | "availability" | "approach" | "language" | "community" | "other" | "unknown";
+export type FirmStrengthId = "matter_experience" | "specialist_knowledge" | "clear_advice" | "practical_approach" | "responsive_service" | "language_or_community" | "other" | "unknown";
+export type ClientInsightBasis = "client_feedback" | "firm_observation" | "firm_hypothesis" | "unknown";
+export type InterviewStage = 1 | 2 | 3 | 4 | 5 | 6;
+export type InterviewClarificationPurpose = "client_matter_specificity" | "client_goal_detail" | "firm_desirability" | "client_choice_criteria" | "strength_and_support" | "decision_pathway_observation" | "discovery_evidence" | "economics_effort_conflict" | "capacity_conflict";
 export type WriteInKey = "timing" | "contact" | "goals" | "concerns" | "reasons" | "fee_effort" | "conditions" | "capacity" | "limit" | "aim" | "evidence" | "trigger" | "decision_needs" | "fit_signals";
 export type ClarificationCode = "CLIENT_MATTER_UNCLEAR" | "VALUE_EFFORT_CONFLICT" | "CAPACITY_CONFLICT" | "REPEATABILITY_UNPROVEN" | "OPPORTUNITY_UNSUPPORTED";
 export type ClarificationAnswer =
@@ -91,8 +99,9 @@ export interface PendingWorkComparison {
   selected: "a" | "b";
 }
 export interface DesiredClientAnswers {
-  schema_version: "dcm-v3.0";
+  schema_version: "dcm-v3.2";
   revision: number;
+  interview: { ai_clarification_consent: boolean; clarification_count: number; clarified_stages: InterviewStage[]; followups: InterviewClarificationAnswer[] };
   /** Optional for drafts saved before write-in answers were introduced. */
   write_ins?: Partial<Record<WriteInKey, string>>;
   focus: {
@@ -104,8 +113,8 @@ export interface DesiredClientAnswers {
     route: RouteId | null;
     comparison: WorkComparison | null;
   };
-  practice: { direction: PracticeDirectionId | null; firm_type: string; capability: string; enjoys: string };
-  client_context: { geography: string; relevant_circumstances: string; community_focus: string; language_service_needs: string; repeat_matter_pattern: string };
+  practice: { direction: PracticeDirectionId | null; firm_type: string; capability: string; enjoys: string; experience: PracticeExperienceId | null; development_needs: DevelopmentNeedId[]; client_strength: FirmStrengthId | null; client_strength_effect: string; client_strength_support: string };
+  client_context: { geography: string; relevant_circumstances: string; community_focus: string; language_service_needs: string; repeat_matter_pattern: string; discovery_behaviour: string };
   situation: {
     trigger: TriggerId | "unknown" | null;
     timing: TimingId | null;
@@ -113,7 +122,7 @@ export interface DesiredClientAnswers {
     role_other: string;
     contact: ContactId | null;
   };
-  client: { goals: GoalId[]; concerns: ConcernId[]; decision_needs: DecisionNeedId[] };
+  client: { goals: GoalId[]; goal_detail: string; concerns: ConcernId[]; decision_needs: DecisionNeedId[]; decision_context: string; pathway_basis: ClientInsightBasis | null; choice_priorities: ClientChoicePriorityId[]; choice_detail: string; choice_basis: ClientInsightBasis | null };
   value: {
     reasons: ReasonId[];
     fee_effort: FeeEffortId | null;
@@ -127,25 +136,27 @@ export interface DesiredClientAnswers {
     amount_scope: "per_matter" | "range" | "other" | null;
   };
   delivery: { conditions: ConditionId[]; capacity: CapacityId | null; limit: LimitId | null; fit_signals: FitSignalId[] };
-  direction: { aim: AimId | null; evidence: EvidenceId[]; less: LessId | null; less_note: string };
+  direction: { aim: AimId | null; evidence: EvidenceId[]; less: LessId | null; less_reason: LessWorkReasonId | null; less_note: string };
   opportunity: { sources: OpportunitySourceId[]; data_basis: "recorded" | "estimated" | "unknown" | null; source_detail: string; period: string; enquiry_count: string; retained_count: string; conversion: string; acquisition_cost: string; uncertainty: string };
   repeatability: { success_measure: SuccessMeasureId | null; success_other: string; target: string; review_period: string; additional_matters: string; staffing_constraint: string };
   clarifications: Record<ClarificationCode, ClarificationAnswer | null>;
 }
 
 export type AnswerReferencePath =
+  | "client.goal_detail" | "client.decision_context" | "client.pathway_basis" | "client.choice_priorities" | "client.choice_detail" | "client.choice_basis" | "practice.client_strength" | "practice.client_strength_effect" | "practice.client_strength_support" | "client_context.discovery_behaviour"
   | `write_ins.${WriteInKey}`
   | "focus.area" | "focus.work" | "focus.work_other" | "focus.service_area" | "focus.certainty" | "focus.route"
-  | "practice.direction" | "practice.firm_type" | "practice.capability" | "practice.enjoys"
+  | "practice.direction" | "practice.firm_type" | "practice.capability" | "practice.enjoys" | "practice.experience" | "practice.development_needs"
   | "client_context.geography" | "client_context.relevant_circumstances" | "client_context.community_focus" | "client_context.language_service_needs" | "client_context.repeat_matter_pattern"
   | "situation.trigger" | "situation.timing" | "situation.role" | "situation.role_other" | "situation.contact"
   | "client.goals" | "client.concerns" | "client.decision_needs" | "value.reasons" | "value.fee_effort" | "value.collected_fee"
   | "value.team_hours" | "value.payment" | "value.currency" | "value.fee_amount" | "value.direct_cost_amount" | "value.amount_basis" | "value.amount_scope"
   | "delivery.conditions" | "delivery.capacity" | "delivery.limit" | "delivery.fit_signals"
-  | "direction.aim" | "direction.evidence" | "direction.less" | "direction.less_note"
+  | "direction.aim" | "direction.evidence" | "direction.less" | "direction.less_reason" | "direction.less_note"
   | "opportunity.sources" | "opportunity.data_basis" | "opportunity.source_detail" | "opportunity.period" | "opportunity.enquiry_count" | "opportunity.retained_count" | "opportunity.conversion" | "opportunity.acquisition_cost" | "opportunity.uncertainty"
   | "repeatability.success_measure" | "repeatability.success_other" | "repeatability.target" | "repeatability.review_period" | "repeatability.additional_matters" | "repeatability.staffing_constraint"
   | `clarifications.${ClarificationCode}`
+  | `interview.followups.${number}`
   | `focus.comparison.${"a" | "b"}.${"work" | "fee_effort" | "team_fit" | "capacity" | "evidence"}`;
 
 export type StatementKind = "experience" | "preference" | "hypothesis" | "unknown" | "suggestion";
@@ -168,7 +179,7 @@ export interface LegacyDesiredClientBriefV1 {
 }
 export interface EvidenceLinkedStatement extends DesiredClientStatement { evidence_basis: EvidenceBasis; }
 export interface EvidenceCard { claims: EvidenceLinkedStatement[]; }
-export interface DesiredClientBrief {
+export interface DesiredClientBriefV2 {
   report_version: "dcm-blueprint-v2";
   definition_sentence: string;
   definition_components: { firm: EvidenceLinkedStatement; client_matter: EvidenceLinkedStatement; reasons: EvidenceLinkedStatement; outcome: EvidenceLinkedStatement };
@@ -180,7 +191,39 @@ export interface DesiredClientBrief {
   repeatability: EvidenceCard;
   open_questions: EvidenceLinkedStatement[];
 }
-export type SavedBriefContent = DesiredClientBrief | LegacyDesiredClientBriefV1;
+export interface PracticeContextCard {
+  current_practice: EvidenceLinkedStatement;
+  work_to_grow: EvidenceLinkedStatement;
+  experience_supporting_direction: EvidenceLinkedStatement;
+  development_needs: EvidenceLinkedStatement;
+  marketing_emphasis_to_reduce: EvidenceLinkedStatement;
+}
+export interface DesiredClientBrief {
+  report_version: "dcm-blueprint-v3";
+  definition_sentence: string;
+  definition_components: { firm: EvidenceLinkedStatement; client_matter: EvidenceLinkedStatement; reasons: EvidenceLinkedStatement; outcome: EvidenceLinkedStatement };
+  practice_context: PracticeContextCard;
+  desired_client_matter: EvidenceCard;
+  value_rationale: EvidenceCard;
+  relevance_signals: EvidenceCard;
+  opportunity_evidence: EvidenceCard;
+  repeatability: EvidenceCard;
+  open_questions: EvidenceLinkedStatement[];
+}
+export interface ClientDecisionPathway { trigger:EvidenceLinkedStatement; first_contact:EvidenceLinkedStatement; decision:EvidenceLinkedStatement; desired_progress:EvidenceLinkedStatement; }
+export interface DesiredClientBriefV4 {
+  report_version: "dcm-blueprint-v4";
+  definition_sentence: string;
+  definition_components: { client: EvidenceLinkedStatement; client_matter: EvidenceLinkedStatement; reasons: EvidenceLinkedStatement; outcome: EvidenceLinkedStatement };
+  client_and_matter: EvidenceCard;
+  client_goals_needs: EvidenceCard;
+  why_firm_wants_work: EvidenceCard;
+  why_client_chooses_firm: EvidenceCard;
+  decision_pathway: ClientDecisionPathway;
+  recognizable_circumstances: EvidenceCard;
+  evidence_and_open_questions: EvidenceCard;
+}
+export type SavedBriefContent = DesiredClientBriefV4 | DesiredClientBrief | DesiredClientBriefV2 | LegacyDesiredClientBriefV1;
 /** Used only by the explicitly validated v2.1 local migration path. */
 export interface LegacyDesiredClientBrief {
   definition: DesiredClientStatement;
@@ -193,11 +236,12 @@ export interface LegacyDesiredClientBrief {
   work_to_promote_less: DesiredClientStatement[];
 }
 export interface AnalysisResult {
-  brief: DesiredClientBrief;
+  brief: DesiredClientBriefV4;
   clarification_code: ClarificationCode | null;
 }
 export interface AnalysisRequestEnvelope {
-  schemaVersion: 3;
+  schemaVersion: 4;
+  operation: "generate";
   requestId: string;
   answerRevision: number;
   reviewRunId: string;
@@ -206,6 +250,10 @@ export interface AnalysisRequestEnvelope {
   answers: DesiredClientAnswers;
   clarifications: Array<{ code: ClarificationCode; answer: string }>;
 }
+export interface InterviewClarificationAnswer { id:string; stage:InterviewStage; purpose:InterviewClarificationPurpose; source_answer_ids:AnswerReferencePath[]; question:string; answer:string; choiceId?:string; skipped:boolean; reflection?:string; }
+export interface InterviewClarificationRequestEnvelope { schemaVersion:4; operation:"clarify"; requestId:string; answerRevision:number; interviewRunId:string; clarificationIndex:0|1|2; stage:InterviewStage; aiConsent:true; answers:DesiredClientAnswers; }
+export type InterviewClarificationPrompt = { outcome:"ask"; id:string; stage:InterviewStage; purpose:InterviewClarificationPurpose; source_answer_ids:AnswerReferencePath[]; question:string; choices:Array<{id:string;label:string}>; reflection:string } | { outcome:"continue"; reason:string };
+export interface InterviewClarificationSuccessEnvelope { ok:true; requestId:string; answerRevision:number; interviewRunId:string; prompt:InterviewClarificationPrompt; }
 export type AnalysisFailureCode = "INVALID_REQUEST" | "ORIGIN_DENIED" | "TOO_LARGE" | "RATE_LIMITED" | "AI_DISABLED" | "AI_UNAVAILABLE" | "INVALID_AI_OUTPUT";
 export interface AnalysisSuccessEnvelope {
   ok: true;
@@ -221,7 +269,7 @@ export interface AnalysisFailureEnvelope {
 }
 export interface SavedBrief {
   brief: SavedBriefContent;
-  sourceAnswersVersion?: "dcm-v2.2" | "dcm-v3.0";
+  sourceAnswersVersion?: "dcm-v2.2" | "dcm-v3.0" | "dcm-v3.1" | "dcm-v3.2";
   sourceAnswersSnapshot?: unknown;
   sourceBriefRevision: number;
   generatedAt: string;

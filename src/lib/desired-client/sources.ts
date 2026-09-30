@@ -11,6 +11,10 @@ export const STATEMENT_KIND_LABELS: Record<StatementKind, string> = {
 };
 
 function questionLabel(path: AnswerReferencePath, answers: DesiredClientAnswers): string {
+  if (path.startsWith("interview.followups.")) {
+    const item = answers.interview.followups[Number(path.slice("interview.followups.".length))];
+    return item?.question ?? "Interview clarification";
+  }
   if (path.startsWith("write_ins.")) return `Other answer to: ${WRITE_IN_QUESTIONS[path.slice("write_ins.".length) as keyof typeof WRITE_IN_QUESTIONS]}`;
   if (path.startsWith("clarifications.")) {
     const code = path.slice("clarifications.".length) as keyof typeof CLARIFICATION_BANK;
@@ -30,11 +34,17 @@ function questionLabel(path: AnswerReferencePath, answers: DesiredClientAnswers)
     "practice.firm_type": "Firm or practice type",
     "practice.capability": "What capabilities support this work?",
     "practice.enjoys": "What work does the team enjoy?",
+    "practice.experience": "How much experience does the firm have with this type of work?",
+    "practice.development_needs": "What would help the firm build or support this work?",
+    "practice.client_strength": "Which relevant strength can the firm bring to this matter?",
+    "practice.client_strength_effect": "How would that strength help this client?",
+    "practice.client_strength_support": "What experience or evidence supports that strength?",
     "client_context.geography": "Where is this work offered?",
-    "client_context.relevant_circumstances": "What relevant client circumstances matter?",
+    "client_context.relevant_circumstances": "What client or matter circumstances distinguish a good-fit enquiry?",
     "client_context.community_focus": "Which community or audience does the firm serve?",
     "client_context.language_service_needs": "What language or service needs should the firm plan for?",
     "client_context.repeat_matter_pattern": "Describe a matter pattern the firm would welcome again",
+    "client_context.discovery_behaviour": "How do clients find or approach the firm for this work?",
     "focus.area": "What legal work do you want more of?",
     "focus.work": "Which type of work should we focus on?",
     "focus.work_other": "Describe the work in a few words",
@@ -47,6 +57,12 @@ function questionLabel(path: AnswerReferencePath, answers: DesiredClientAnswers)
     "situation.role_other": "Describe the role in a few words",
     "situation.contact": "Who makes the first contact?",
     "client.goals": "What does the client most want to achieve?",
+    "client.goal_detail": "What would progress look like in this situation?",
+    "client.decision_context": "Who is involved in deciding or paying for the legal help?",
+    "client.pathway_basis": "How does the firm know this decision pathway?",
+    "client.choice_priorities": "What matters to the client when choosing a firm?",
+    "client.choice_detail": "What else may matter to the client?",
+    "client.choice_basis": "What is the basis for the firm's view of client choice?",
     "client.concerns": route === "established" ? "What concern have you heard from these clients?" : "What might concern these clients?",
     "client.decision_needs": "What would help this client feel ready to take the next step?",
     "value.reasons": "What makes this work worth pursuing?",
@@ -66,6 +82,7 @@ function questionLabel(path: AnswerReferencePath, answers: DesiredClientAnswers)
     "direction.aim": "What should this work help the firm become known for?",
     "direction.evidence": "What supports this direction?",
     "direction.less": "Work to promote less",
+    "direction.less_reason": "Why should this work receive less marketing attention?",
     "direction.less_note": "Name the work in a few words",
     "opportunity.sources": "What past source or evidence supports this direction?",
     "opportunity.source_detail": "Describe the opportunity source",

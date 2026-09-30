@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { buildBlueprintViewModel, EVIDENCE_BASIS_LABELS } from "@/lib/desired-client/blueprint";
 import { createHtmlDownload, createProfileDownload } from "@/lib/desired-client/export";
-import type { ClarificationCode, DesiredClientAnswers, DesiredClientBrief, SavedBrief } from "@/lib/desired-client/types";
+import type { ClarificationCode, DesiredClientAnswers, DesiredClientBrief, DesiredClientBriefV4, SavedBrief } from "@/lib/desired-client/types";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 
 const EDIT_LINKS = [
@@ -15,7 +15,7 @@ const EDIT_LINKS = [
   [6, "Edit repeatability"],
 ] as const;
 
-function definitionSegments(sentence: string, components: DesiredClientBrief["definition_components"]) {
+function definitionSegments(sentence: string, components: DesiredClientBrief["definition_components"] | DesiredClientBriefV4["definition_components"]) {
   const matches = Object.entries(components)
     .map(([key, statement]) => ({ key, text: statement.text.trim(), start: statement.text.trim() ? sentence.indexOf(statement.text.trim()) : -1 }))
     .filter((part) => part.start >= 0)
@@ -88,7 +88,7 @@ export function BriefView({
   const [confirm, setConfirm] = useState<"another" | "clear" | null>(null);
   const fallback = useRef<HTMLTextAreaElement>(null);
   const legacyBrief = saved.brief.report_version === "dcm-blueprint-v1" ? saved.brief : null;
-  const currentBrief = saved.brief.report_version === "dcm-blueprint-v2" ? saved.brief : null;
+  const currentBrief = saved.brief.report_version === "dcm-blueprint-v2" || saved.brief.report_version === "dcm-blueprint-v3" || saved.brief.report_version === "dcm-blueprint-v4" ? saved.brief : null;
   const legacy = legacyBrief !== null;
   const model = useMemo(() => currentBrief ? buildBlueprintViewModel(currentBrief, answers, {
     mode: saved.mode,
@@ -146,6 +146,17 @@ export function BriefView({
         <h2 data-ui-copy="supporting">Our desired-client definition</h2>
         <p data-ui-copy="body">{definitionSegments(model.definition, model.definitionComponents)}</p>
       </section>
+      {model.decisionPathway && <section className="dc-report-decision-pathway" aria-labelledby="dc-decision-pathway-title" data-ui-component-content="desired-client-decision-pathway">
+        <div className="dc-report-decision-pathway__heading"><h2 id="dc-decision-pathway-title" data-ui-copy="heading">Client decision pathway</h2><span data-ui-copy="supporting">Separate working interpretation · review with the firm</span></div>
+        <div className="dc-report-decision-pathway__steps">{([
+          ["Situation / trigger", model.decisionPathway.trigger],
+          ["First contact", model.decisionPathway.first_contact],
+          ["Decision", model.decisionPathway.decision],
+          ["Desired progress", model.decisionPathway.desired_progress],
+        ] as const).map(([label, statement]) => <div className="dc-report-decision-pathway__step" key={label}>
+          <h3 data-ui-copy="supporting">{label}</h3><p data-ui-copy="body">{statement.text}</p><span className="dc-evidence-label" data-ui-copy="supporting">{EVIDENCE_BASIS_LABELS[statement.evidence_basis]}</span>
+        </div>)}</div>
+      </section>}
       <div className="dc-report-cards" data-ui-component-content="desired-client-blueprint-cards">
         {model.cards.map((card) => <section className="dc-report-card" key={card.id} data-ui-component-content={`desired-client-card-${card.id}`}>
           <h2 data-ui-copy="heading">{card.title}</h2>
@@ -159,10 +170,10 @@ export function BriefView({
           </div>
         </section>)}
       </div>
-      <section className="dc-report-open-questions" data-ui-component-content="desired-client-open-questions">
+      {saved.brief.report_version !== "dcm-blueprint-v4" && <section className="dc-report-open-questions" data-ui-component-content="desired-client-open-questions">
         <h2 data-ui-copy="heading">Points still to resolve</h2>
         {model.openQuestions.length ? <ul>{model.openQuestions.map((item, index) => <li key={`${index}-${item.text}`} data-ui-copy="body"><span>{item.text}</span><span className="dc-evidence-label">{EVIDENCE_BASIS_LABELS[item.evidence_basis]}</span></li>)}</ul> : <p data-ui-copy="body">No specific open question was recorded.</p>}
-      </section>
+      </section>}
       <p className="dc-report-footnote" data-ui-copy="supporting">Evidence labels describe the source and certainty of the information. Firm-reported information has not been independently audited. The firm decides which matters to accept.</p>
       <details className="dc-report-supporting dc-screen-only">
         <summary>Supporting answers and sources</summary>
@@ -176,9 +187,9 @@ export function BriefView({
     </>}
 
     <div className="dc-report-review dc-screen-only">
-      <p data-ui-copy="body">Does this describe the client and work you want more of?</p>
-      <label className="dc-reviewed"><input type="checkbox" checked={reviewed} onChange={(event) => onReview(event.currentTarget.checked)} /><span>{legacy ? "I have reviewed this original report wording." : "I confirm this direction for our firm."}</span></label>
-      {!legacy && <p className="dc-report-review__note" data-ui-copy="supporting">Confirming the direction does not turn estimates or hypotheses into verified facts.</p>}
+      <p data-ui-copy="body">Have you reviewed this draft wording?</p>
+      <label className="dc-reviewed"><input type="checkbox" checked={reviewed} onChange={(event) => onReview(event.currentTarget.checked)} /><span>{legacy ? "I have reviewed this original report wording." : "I have reviewed this draft wording."}</span></label>
+      {!legacy && <p className="dc-report-review__note" data-ui-copy="supporting">Reviewing wording does not verify the firm's experience, establish its economics, or approve a proposed target. The firm remains responsible for those decisions.</p>}
     </div>
     {copied && <p role="status" className="dc-screen-only">Profile copied.</p>}
     {copyFailed && <><p role="status" className="dc-screen-only">The profile could not be copied automatically. Select and copy the profile text below.</p><textarea className="dc-screen-only" ref={fallback} aria-label="Select and copy profile" readOnly value={text} /></>}
