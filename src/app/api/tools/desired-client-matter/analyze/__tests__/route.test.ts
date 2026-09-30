@@ -33,7 +33,7 @@ const B0: DesiredClientAnswers = (() => {
   return answers;
 })();
 const ENVELOPE: AnalysisRequestEnvelope = {
-  schemaVersion: 3,
+  schemaVersion: 4,
   requestId: "11111111-1111-4111-8111-111111111111",
   answerRevision: 1,
   reviewRunId: "22222222-2222-4222-8222-222222222222",

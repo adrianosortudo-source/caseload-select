@@ -319,7 +319,7 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const timingAddsContext=answers.situation.timing&&answers.situation.timing!=="unknown"&&!(answers.situation.timing==="planning"&&/planned|prepar|before/i.test(triggerText));
   const timingPhrase=timingAddsContext?`, ${TIMING_PHRASES[answers.situation.timing!]}`:"";
   const matterDescription=`legal help with ${workText} ${triggerClause}${timingPhrase}`;
-  const sentenceMatterPaths=unique([...matterPaths,...(answers.situation.trigger==="unknown"&&!triggerText?["situation.trigger"]:[])]);
+  const sentenceMatterPaths:AnswerReferencePath[]=unique([...matterPaths,...(answers.situation.trigger==="unknown"&&!triggerText?["situation.trigger" as const]:[])]);
   const sentenceMatter=sentenceMatterPaths.length?linked(matterDescription,triggerText?"hypothesis":"unknown",sentenceMatterPaths):unknownClaim("The specific client situation and matter have not yet been defined.","focus.work");
   const reasonFragments: string[] = [];
   for (const id of answers.value.reasons) {

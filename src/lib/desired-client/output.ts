@@ -142,9 +142,10 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   if(!exact(pathway,["trigger","first_contact","decision","desired_progress"]))return null;
   const pathwayFields=["trigger","first_contact","decision","desired_progress"] as const;
   for(const field of pathwayFields)if(!validStatement(pathway[field],answers,"decision_pathway"))return null;
-  const expectedSentence=buildDefinitionSentence(brief as unknown as DesiredClientBriefV4,false);
-  if(brief.definition_sentence.trim()!==expectedSentence||wordCount(expectedSentence)>85||expectedSentence.length>650)return null;
-  const reportWords=[...cardNames.flatMap(field=>(brief[field] as {claims:EvidenceLinkedStatement[]}).claims.map(claim=>claim.text)),...pathwayFields.map(field=>pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
+  const typedBrief=brief as unknown as DesiredClientBriefV4;
+  const expectedSentence=buildDefinitionSentence(typedBrief,false);
+  if(typedBrief.definition_sentence.trim()!==expectedSentence||wordCount(expectedSentence)>85||expectedSentence.length>650)return null;
+  const reportWords=[...cardNames.flatMap(field=>typedBrief[field].claims.map(claim=>claim.text)),...pathwayFields.map(field=>typedBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
   if(reportWords>800)return null;
   return value as unknown as AnalysisResult;
 }

@@ -15,6 +15,8 @@ export const EVIDENCE_BASIS_LABELS: Record<EvidenceBasis, string> = {
   firm_reported_recorded: "Firm-reported records",
   firm_reported_estimate: "Firm estimate",
   firm_reported_experience: "Firm-reported experience",
+  firm_reported_observation: "Firm-reported observation",
+  client_reported: "Client-reported information",
   firm_preference: "Firm preference",
   source_observed: "Observed source",
   hypothesis: "To test",
@@ -103,7 +105,7 @@ function evidenceStatus(brief: DesiredClientBrief | DesiredClientBriefV2 | Desir
 export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClientBriefV2 | DesiredClientBriefV4, answers: DesiredClientAnswers, meta: BlueprintMetadata): BlueprintViewModel {
   const definitions = brief.report_version === "dcm-blueprint-v4" ? V4_CARD_DEFINITIONS : CARD_DEFINITIONS;
   const cards: BlueprintCard[] = definitions.map(([id, title, key]) => {
-    const rawClaims = brief.report_version === "dcm-blueprint-v4"
+    const rawClaims: EvidenceLinkedStatement[] = brief.report_version === "dcm-blueprint-v4"
       ? (brief[key as keyof DesiredClientBriefV4] as EvidenceCard).claims
       : key === "practice_context"
         ? brief.report_version === "dcm-blueprint-v3" ? Object.values(brief.practice_context) : brief.practice_context.claims
@@ -130,13 +132,13 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
     ...cards.flatMap((card) => card.claims.map((statement, index) => [`${card.title} · Claim ${index + 1}`, statement] as const)),
     ...Object.entries(brief.definition_components).map(([key, statement]) => [`Definition: ${key.replaceAll("_", " ")}`, statement] as const),
     ...(brief.report_version === "dcm-blueprint-v4"
-      ? Object.entries(brief.decision_pathway).map(([key, statement]) => [`Client decision pathway · ${key.replaceAll("_", " ")}`, statement] as const)
+      ? (Object.entries(brief.decision_pathway) as Array<[string, EvidenceLinkedStatement]>).map(([key, statement]) => [`Client decision pathway · ${key.replaceAll("_", " ")}`, statement] as const)
       : brief.open_questions.map((statement, index) => [`Point to resolve ${index + 1}`, statement] as const)),
   ];
   const sourceDetails = detailStatements.map(([slot, statement]) => ({
     slot,
     statement,
-    answers: statement.source_answer_ids.map((path) => ({ ...getSourceDetails(path, answers), path })),
+    answers: statement.source_answer_ids.map((path: AnswerReferencePath) => ({ ...getSourceDetails(path, answers), path })),
   }));
   const allAnswers = ANSWER_PATHS.flatMap((path) => {
     const source = getSourceDetails(path, answers);

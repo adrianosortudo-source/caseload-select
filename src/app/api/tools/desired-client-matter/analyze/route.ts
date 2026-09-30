@@ -94,8 +94,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
       if (!decision.ok) return fail(value.requestId, "RATE_LIMITED", 429, rateLimitHeaders(decision));
     }
     const outcome = await runInterviewClarification(value);
-    if (outcome.mode === "unavailable") return fail(value.requestId, "AI_UNAVAILABLE", 502);
-    if (outcome.mode === "invalid_output") return fail(value.requestId, "INVALID_AI_OUTPUT", 502);
+    if (outcome.mode !== "live") return fail(value.requestId, outcome.mode === "unavailable" ? "AI_UNAVAILABLE" : "INVALID_AI_OUTPUT", 502);
     return NextResponse.json(outcome.response, { headers: NO_STORE });
   }
 
