@@ -167,14 +167,14 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     await expectNoStore(response);
   });
 
-  it("allows eligible clarification before the final attempt and forbids it on the final attempt", async () => {
+  it("rejects legacy post-draft clarification codes because v4 follow-ups happen during discovery", async () => {
     const answers = { ...B0, delivery: { ...B0.delivery, capacity: "change" as const } };
     mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CAPACITY_CONFLICT" }));
     const early = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 1 })));
-    expect(early.status).toBe(200);
-    expect((await early.json()).result.clarification_code).toBe("CAPACITY_CONFLICT");
+    expect(early.status).toBe(502);
+    expect((await early.json()).error.code).toBe("INVALID_AI_OUTPUT");
     const earlyPrompt = JSON.parse(mocks.generateContent.mock.calls[0][0] as string);
-    expect(earlyPrompt.eligible_codes).toContain("CAPACITY_CONFLICT");
+    expect(earlyPrompt.eligible_codes).toEqual([]);
 
     mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CAPACITY_CONFLICT" }));
     const final = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 2 })));

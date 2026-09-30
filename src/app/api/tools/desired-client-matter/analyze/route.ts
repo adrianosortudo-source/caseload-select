@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
-import { desiredClientModelId, eligibleDesiredClientClarifications, runDesiredClientAnalysis } from "@/lib/desired-client/analyze";
+import { desiredClientModelId, runDesiredClientAnalysis } from "@/lib/desired-client/analyze";
 import { runInterviewClarification, validateInterviewClarificationRequest } from "@/lib/desired-client/interview-clarification";
 import { validateAnalysisRequest } from "@/lib/desired-client/validation";
 import type { AnalysisFailureCode, AnalysisFailureEnvelope, AnalysisSuccessEnvelope, InterviewClarificationSuccessEnvelope } from "@/lib/desired-client/types";
@@ -118,7 +118,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
     if (!decision.ok) return fail(validation.value.requestId, "RATE_LIMITED", 429, rateLimitHeaders(decision));
   }
 
-  const eligibleCodes = eligibleDesiredClientClarifications(validation.value);
+  // v4 creates the complete blueprint in one response. Follow-ups happen
+  // during discovery through the separate clarify operation, never afterward.
+  const eligibleCodes: [] = [];
   const outcome = await runDesiredClientAnalysis(validation.value, eligibleCodes);
   if (outcome.mode === "unavailable") return fail(validation.value.requestId, "AI_UNAVAILABLE", 502);
   if (outcome.mode === "invalid_output") return fail(validation.value.requestId, "INVALID_AI_OUTPUT", 502);
