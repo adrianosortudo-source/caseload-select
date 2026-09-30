@@ -8,14 +8,15 @@ const fail = code => { throw new Error(code); };
 const same = (a,b) => JSON.stringify(a) === JSON.stringify(b);
 const isRecord = x => x !== null && typeof x === "object" && !Array.isArray(x);
 const filename = path.posix.basename(CANDIDATE_READER_REPAIR_PATH), version = filename.slice(0,14), name = filename.slice(15,-4);
-const catalogExpectations = {
+export const catalogExpectations = {
  candidate_list_service_role_execute:true,candidate_list_anon_execute:false,candidate_list_auth_execute:false,
  candidate_detail_service_role_execute:true,candidate_detail_anon_execute:false,candidate_detail_auth_execute:false,
  candidate_history_service_role_execute:true,candidate_history_anon_execute:false,candidate_history_auth_execute:false,
  candidate_chunk_service_role_execute:true,candidate_chunk_anon_execute:false,candidate_chunk_auth_execute:false,
  private_list_service_role_execute:true,private_list_anon_execute:false,private_list_auth_execute:false,
  private_firm_links_service_role_execute:false,private_firm_links_anon_execute:false,private_firm_links_auth_execute:false,
- history_metadata_search_index:true,identity_by_candidate_index:true,identity_by_firm_index:true
+ history_metadata_search_index:true,identity_by_candidate_index:true,identity_by_firm_index:true,
+ invalid_date_coverage_index:true
 };
 export function createReaderRepairReceipt(sourceRoot=root) {
  const absolute=path.join(sourceRoot,CANDIDATE_READER_REPAIR_PATH), stat=fs.lstatSync(absolute);
@@ -59,7 +60,8 @@ export const catalogQuery=[
 " 'private_firm_links_auth_execute',has_function_privilege('authenticated','prospect_candidate_private.identity_links_for_firms(bigint,uuid[])','EXECUTE'),",
 " 'history_metadata_search_index',to_regclass('public.prospect_candidate_history_metadata_search') IS NOT NULL,",
 " 'identity_by_candidate_index',to_regclass('public.prospect_candidate_identity_by_candidate') IS NOT NULL,",
-" 'identity_by_firm_index',to_regclass('public.prospect_candidate_identity_by_firm') IS NOT NULL",
+" 'identity_by_firm_index',to_regclass('public.prospect_candidate_identity_by_firm') IS NOT NULL,",
+" 'invalid_date_coverage_index',to_regclass('public.prospect_candidate_invalid_date_coverage') IS NOT NULL",
 ") AS reader_contract;"
 ].join("\n");
 export function verifyReaderCatalog(payload) {
