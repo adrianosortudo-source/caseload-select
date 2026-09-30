@@ -9,6 +9,31 @@ CREATE INDEX prospect_candidate_history_metadata_search
       || coalesce(relative_path,'') || ' ' || coalesce(source_pointer,''))
   );
 
+CREATE INDEX prospect_candidate_identity_by_candidate
+  ON public.prospect_research_candidate_history(candidate_id,coverage_revision,verified_firm_id)
+  WHERE item_kind='identity_link';
+CREATE INDEX prospect_candidate_identity_by_firm
+  ON public.prospect_research_candidate_history(verified_firm_id,candidate_id,coverage_revision)
+  WHERE item_kind='identity_link';
+
+CREATE OR REPLACE FUNCTION prospect_candidate_private.identity_links_for_firms(p_cutoff bigint,p_firms uuid[])
+RETURNS TABLE(candidate_id uuid,verified_firm_id uuid)
+LANGUAGE sql STABLE SET search_path = '' AS $$
+ SELECT h.candidate_id,h.verified_firm_id FROM public.prospect_research_candidate_history h
+ WHERE h.item_kind='identity_link' AND h.coverage_revision<=p_cutoff
+ AND h.verified_firm_id=ANY(coalesce(p_firms,'{}'::uuid[]))
+ AND (h.source_table<>'legacy_verified_identity' OR (h.original_json->>'sourceRowSha256'=(
+   SELECT c.snapshot->>'sourceRowSha256' FROM public.prospect_research_candidate_coverage c
+   WHERE c.source_table=h.original_json->>'sourceTable' AND c.source_key=h.original_json->>'sourceRowId' AND c.revision<=p_cutoff
+   ORDER BY c.revision DESC LIMIT 1)
+ AND h.payload_sha256=(SELECT c.snapshot#>>'{row,proofSha256}' FROM public.prospect_research_candidate_coverage c
+   WHERE c.source_table='legacy_identity_assessment' AND c.source_key=h.source_key AND c.revision<=p_cutoff ORDER BY c.revision DESC LIMIT 1)
+ AND NOT EXISTS(SELECT 1 FROM jsonb_array_elements(h.original_json->'dependencies') dependency WHERE dependency->>'rowSha256' IS DISTINCT FROM (
+   SELECT c.snapshot->>'sourceRowSha256' FROM public.prospect_research_candidate_coverage c
+   WHERE c.source_table=dependency->>'table' AND c.source_key=dependency->>'key' AND c.revision<=p_cutoff ORDER BY c.revision DESC LIMIT 1))))
+$$;
+REVOKE ALL ON FUNCTION prospect_candidate_private.identity_links_for_firms(bigint,uuid[]) FROM PUBLIC, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION prospect_candidate_private.list_candidates(p_filters jsonb,p_limit integer,p_after_id uuid,p_coverage_revision bigint)
 RETURNS jsonb LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path = '' AS $$
 DECLARE cutoff bigint; warnings jsonb; result jsonb;
@@ -18,10 +43,94 @@ BEGIN
  PERFORM prospect_candidate_private.check_filters(p_filters);
  cutoff:=prospect_candidate_private.cutoff(p_coverage_revision); warnings:=prospect_candidate_private.coverage_warnings(cutoff);
 
+ -- Search first, then resolve identity only for actual matches and their
+ -- verified-firm groups. This preserves group-search semantics without
+ -- validating every historical identity link for a selective text query.
+ IF p_filters ? 'text' AND (p_filters-'text')='{}'::jsonb AND btrim(p_filters->>'text')<>''
+    AND numnode(plainto_tsquery('simple'::regconfig,btrim(p_filters->>'text')))>0 THEN
+   WITH text_terms AS MATERIALIZED (
+     SELECT DISTINCT btrim(term) term,plainto_tsquery('simple'::regconfig,btrim(term)) query
+     FROM regexp_split_to_table(coalesce(p_filters->>'text',''),'\s+') term
+     WHERE numnode(plainto_tsquery('simple'::regconfig,btrim(term)))>0
+   ), text_hits AS MATERIALIZED (
+     SELECT f.candidate_id,t.term FROM text_terms t JOIN public.prospect_research_candidate_search_chunks f
+       ON f.search_document @@ t.query WHERE f.coverage_revision<=cutoff
+     UNION
+     SELECT h.candidate_id,t.term FROM text_terms t JOIN public.prospect_research_candidate_history h
+       ON strpos(lower(h.original_json::text),lower(t.term))>0
+       JOIN public.prospect_research_candidate_projection_issues i ON i.revision_id=h.id
+       WHERE h.coverage_revision<=cutoff
+     UNION
+     SELECT named.id,t.term FROM text_terms t JOIN public.prospect_research_candidates named
+       ON to_tsvector('simple'::regconfig,named.identity_key||' '||named.identity_namespace) @@ t.query
+       WHERE named.created_revision<=cutoff
+     UNION
+     SELECT h.candidate_id,t.term FROM text_terms t JOIN public.prospect_research_candidate_history h
+       ON to_tsvector('simple'::regconfig,coalesce(h.source_table,'')||' '||coalesce(h.source_root,'')||' '
+         ||coalesce(h.relative_path,'')||' '||coalesce(h.source_pointer,'')) @@ t.query
+       WHERE h.coverage_revision<=cutoff
+   ), hit_candidates AS MATERIALIZED (
+     SELECT DISTINCT candidate_id FROM text_hits
+   ), hit_identities AS MATERIALIZED (
+     SELECT hits.candidate_id,count(DISTINCT links.verified_firm_id) firm_count,
+       min(links.verified_firm_id::text)::uuid firm_id
+     FROM hit_candidates hits
+     LEFT JOIN LATERAL prospect_candidate_private.identity_links_for(cutoff,hits.candidate_id) links ON true
+     GROUP BY hits.candidate_id
+   ), matched_groups AS MATERIALIZED (
+     SELECT CASE WHEN identities.firm_count=1 THEN 'firm:'||identities.firm_id::text
+       ELSE 'candidate:'||identities.candidate_id::text END group_key
+     FROM text_hits hits JOIN hit_identities identities USING(candidate_id)
+     GROUP BY CASE WHEN identities.firm_count=1 THEN 'firm:'||identities.firm_id::text
+       ELSE 'candidate:'||identities.candidate_id::text END
+     HAVING count(DISTINCT hits.term)=(SELECT count(*) FROM text_terms)
+   ), selected_firms AS MATERIALIZED (
+     SELECT DISTINCT identities.firm_id FROM hit_identities identities
+     JOIN matched_groups groups ON groups.group_key='firm:'||identities.firm_id::text
+     WHERE identities.firm_count=1
+   ), expanded_identity_links AS MATERIALIZED (
+     SELECT DISTINCT links.candidate_id
+     FROM prospect_candidate_private.identity_links_for_firms(cutoff,ARRAY(SELECT firm_id FROM selected_firms)) links
+   ), expanded_firms AS MATERIALIZED (
+     SELECT candidates.candidate_id,count(DISTINCT links.verified_firm_id) firm_count,
+       min(links.verified_firm_id::text)::uuid firm_id
+     FROM expanded_identity_links candidates
+     LEFT JOIN LATERAL prospect_candidate_private.identity_links_for(cutoff,candidates.candidate_id) links ON true
+     GROUP BY candidates.candidate_id
+   ), selected_candidates AS MATERIALIZED (
+     SELECT candidate_id,firm_id,'firm:'||firm_id::text group_key
+     FROM expanded_firms WHERE firm_count=1 AND EXISTS(
+       SELECT 1 FROM selected_firms WHERE selected_firms.firm_id=expanded_firms.firm_id)
+     UNION ALL
+     SELECT candidate_id,NULL::uuid,'candidate:'||candidate_id::text
+     FROM hit_identities WHERE firm_count<>1 AND EXISTS(
+       SELECT 1 FROM matched_groups WHERE group_key='candidate:'||hit_identities.candidate_id::text)
+   ), filtered AS MATERIALIZED (
+     SELECT DISTINCT selected.candidate_id id FROM selected_candidates selected
+     JOIN matched_groups groups ON groups.group_key=selected.group_key
+   ), page_ids AS MATERIALIZED (
+     SELECT id FROM filtered WHERE p_after_id IS NULL OR id>p_after_id ORDER BY id LIMIT p_limit
+   ), summaries AS MATERIALIZED (
+     SELECT id,prospect_candidate_private.summary(id,cutoff) data FROM page_ids
+   ), sized AS (
+     SELECT *,sum(octet_length(data::text)) OVER(ORDER BY id) bytes FROM summaries
+   ), page AS MATERIALIZED (
+     SELECT * FROM sized WHERE bytes<=1040000 ORDER BY id
+   )
+   SELECT jsonb_build_object('items',coalesce((SELECT jsonb_agg(data ORDER BY id) FROM page),'[]'),
+     'nextAfterId',CASE WHEN EXISTS(SELECT 1 FROM filtered WHERE id>(SELECT max(id::text)::uuid FROM page))
+       THEN (SELECT max(id::text) FROM page) ELSE NULL END,
+     'inventoryCount',(SELECT count(*) FROM public.prospect_research_candidates WHERE created_revision<=cutoff),
+     'filteredCount',(SELECT count(*) FROM filtered),'coverageRevision',cutoff,'readWarnings',warnings,
+     'complete',warnings='[]'::jsonb) INTO result;
+   RETURN result;
+ END IF;
+
  -- The default page has no filter predicate. Avoid resolving every historical
  -- identity link merely to return 25 summaries; resolve identities only for
  -- those page rows inside summary(). Counts and UUID keyset paging stay exact.
- IF p_filters='{}'::jsonb THEN
+ IF p_filters='{}'::jsonb OR (p_filters ? 'text' AND (p_filters-'text')='{}'::jsonb
+    AND (btrim(p_filters->>'text')='' OR numnode(plainto_tsquery('simple'::regconfig,btrim(p_filters->>'text')))=0)) THEN
    WITH inventory AS MATERIALIZED (
      SELECT c.id FROM public.prospect_research_candidates c WHERE c.created_revision<=cutoff
    ), page_ids AS MATERIALIZED (

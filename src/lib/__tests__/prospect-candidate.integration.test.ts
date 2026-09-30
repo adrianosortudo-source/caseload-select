@@ -174,6 +174,13 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       expect((await list(db, { text: "Smith Immigration", fieldPointer: "/research/fixtureGroup", fieldValue: group })).filteredCount).toBe(5);
       expect(page.items.every(item => !item.originalStatuses.includes("failed"))).toBe(true);
       expect((await list(db, { text: "retained insight", fieldPointer: "/research/fixtureGroup", fieldValue: group })).filteredCount).toBe(5);
+      expect((await list(db, { text: "retained insight" })).filteredCount).toBe(5);
+      const firstTextPage = await list(db, { text: "retained insight" }, 3);
+      expect(firstTextPage.items).toHaveLength(3);
+      expect(firstTextPage.filteredCount).toBe(5);
+      const secondTextPage = await list(db, { text: "retained insight" }, 3, firstTextPage.nextAfterId, firstTextPage.coverageRevision);
+      expect(secondTextPage.filteredCount).toBe(5);
+      expect(new Set([...firstTextPage.items, ...secondTextPage.items].map(item => item.id)).size).toBe(5);
       expect((await list(db, { fieldPointer: "/research/weird/x~1y~0z", fieldValue: false })).items.some(x => x.id === chosen.id)).toBe(true);
       expect((await list(db, { fieldPointer: "/research/weird/x~1y~0z", fieldValue: "false" })).items.some(x => x.id === chosen.id)).toBe(false);
       expect((await list(db, { sourceUrl: "https://synthetic.example/team", observedFrom: "2026-09-22", observedTo: "2026-09-22" })).items.some(x => x.id === chosen.id)).toBe(true);
@@ -205,9 +212,13 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       const first = await list(db, filters, 2);
       expect(first.items).toHaveLength(2); expect(first.nextAfterId).not.toBeNull(); expect(first.filteredCount).toBe(4);
       const original = await history(db, first.items[0].id, first.coverageRevision);
+      expect((await list(db, { text: group }, 100, null, first.coverageRevision)).filteredCount).toBe(4);
       await register(db, [{ key: group + "new", raw: { fixtureGroup: group, status: "not_selected" } },
         { key: first.items[0].identityKey, raw: { fixtureGroup: group, status: "rejected", observedAt: "not-a-date", retrievedAt: "yesterday" } }]);
       const second = await list(db, filters, 2, first.nextAfterId, first.coverageRevision);
+      const historicalText = await list(db, { text: group }, 100, null, first.coverageRevision);
+      expect(historicalText.filteredCount).toBe(4);
+      expect(historicalText.items.every(item => item.identityKey !== group + "new")).toBe(true);
       expect(second.filteredCount).toBe(4); expect(second.inventoryCount).toBe(first.inventoryCount);
       expect(new Set([...first.items, ...second.items].map(x => x.id)).size).toBe(4);
       expect(second.nextAfterId).toBeNull();

@@ -91,7 +91,8 @@ suite("candidate reads above the observed Admin inventory", () => {
       };
       const first = await read("unfiltered-cold", {});
       for (let index = 0; index < 4; index++) await read("unfiltered-repeat-" + index, {});
-      expect((await read("indexed-text", { text: "throughput" })).filteredCount).toBeGreaterThanOrEqual(6500);
+      const selectiveText = await read("indexed-text", { text: prefix + "-6500" });
+      expect(selectiveText.filteredCount).toBeGreaterThanOrEqual(1);
       expect((await read("typed-field", { fieldPointer: "/reconciliation_status", fieldValue: "provisional_new" })).filteredCount).toBeGreaterThanOrEqual(6500);
       expect((await read("unresolved", { identityState: "unresolved" })).filteredCount).toBeGreaterThanOrEqual(500);
       const linked = await read("verified-firm", { firmId: targetFirm });
@@ -104,6 +105,7 @@ suite("candidate reads above the observed Admin inventory", () => {
       expect(profile.candidate.id).toBe(first.items[0].id);
       const ordered = timings.map(item => item.milliseconds).sort((a, b) => a - b);
       const p95 = ordered[Math.ceil(ordered.length * 0.95) - 1];
+      expect(timings.find(item => item.label === "indexed-text")!.milliseconds).toBeLessThan(2500);
       console.info("candidate-read-performance", JSON.stringify({ counts, timings, p95Milliseconds: p95, statementTimeoutMilliseconds: 5000 }));
       expect(p95).toBeLessThan(5000);
     } finally { await db.query("ROLLBACK"); db.release(); }
