@@ -75,7 +75,7 @@ export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,b
         {getMissingFieldsForStage(stage,answers).length>0&&<p data-ui-copy="supporting">One or more required choices in this section still need an answer.</p>}
       </div><button type="button" className="dc-button dc-button--secondary" disabled={loading} onClick={()=>onEdit(stage)}>{COMMON_COPY.edit}</button>
     </div>)}</div>
-    <section className="dc-summary-row dc-summary-row--open" aria-label="Still open">
+    <section className="dc-summary-row dc-summary-row--open" aria-label="Still open" data-ui-component-content="desired-client-review-open-items">
       <div><h2 data-ui-copy="heading">Still open</h2>{openItems.length?<ul>{openItems.map(({label},index)=><li key={index} data-ui-copy="body">{label}</li>)}</ul>:<p data-ui-copy="supporting">No material gaps identified from these answers.</p>}</div>
       {openItems.length>0&&<div className="dc-actions">{[...new Set(openItems.map(item=>item.stage))].map(stage=><button key={stage} type="button" className="dc-button dc-button--secondary" disabled={loading} onClick={()=>onEdit(stage)}>Edit {STAGE_DEFINITIONS[stage-1].label.replace(/^\d+\s*/,"")}</button>)}</div>}
     </section>

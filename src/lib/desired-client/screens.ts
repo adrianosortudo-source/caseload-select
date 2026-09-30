@@ -4,12 +4,12 @@ export type StageId = 1 | 2 | 3 | 4 | 5 | 6 | 7;
 export interface StageDefinition { id: StageId; label: string; heading: string; explanation: string; }
 
 export const STAGE_DEFINITIONS: readonly StageDefinition[] = [
-  { id: 1, label: "1 Practice direction", heading: "What work does the firm want to build around?", explanation: "Name the direction, relevant current-practice context, and work that should receive less marketing emphasis." },
-  { id: 2, label: "2 Client & matter", heading: "Which client situation and specific matter do you want more of?", explanation: "Choose the work, who needs help, what has happened, the stage they are at, and the progress they seek. Compare two types of work if you are deciding between them." },
-  { id: 3, label: "3 Why this work", heading: "Why would the firm welcome this work again?", explanation: "Consider client benefit, fees, effort, the team’s experience, enjoyment and capacity. Separate what you have observed from estimates and hopes." },
-  { id: 4, label: "4 Why this firm", heading: "Why might this client choose your firm?", explanation: "Consider what this client values, which firm strength matters to them, and what experience or evidence supports that strength. It is fine if you are still finding out." },
+  { id: 1, label: "1 Practice", heading: "What work does the firm want to build around?", explanation: "Name the direction, relevant current-practice context, and work that should receive less marketing emphasis." },
+  { id: 2, label: "2 Matter focus", heading: "Which client situation and specific matter do you want more of?", explanation: "Choose the work, who needs help, what has happened, the stage they are at, and the progress they seek. Compare two types of work if you are deciding between them." },
+  { id: 3, label: "3 Work value", heading: "Why would the firm welcome this work again?", explanation: "Consider client benefit, fees, effort, the team’s experience, enjoyment and capacity. Separate what you have observed from estimates and hopes." },
+  { id: 4, label: "4 Firm fit", heading: "Why might this client choose your firm?", explanation: "Consider what this client values, which firm strength matters to them, and what experience or evidence supports that strength. It is fine if you are still finding out." },
   { id: 5, label: "5 Matter signals", heading: "What would help you recognize this matter?", explanation: "Describe visible circumstances that distinguish this work and merit a closer look. These are prompts for lawyer review, not automatic acceptance rules." },
-  { id: 6, label: "6 Discovery & evidence", heading: "Where have these clients come from, and what do you know?", explanation: "Use enquiries, retained matters, referrals, repeat clients or other experience. Mark estimates and unknowns clearly; you do not need a campaign plan." },
+  { id: 6, label: "6 Evidence", heading: "Where have these clients come from, and what do you know?", explanation: "Use enquiries, retained matters, referrals, repeat clients or other experience. Mark estimates and unknowns clearly; you do not need a campaign plan." },
   { id: 7, label: "Review", heading: "Review your direction", explanation: "Your answers shape a provisional client-and-matter profile. Review the direction and the questions still to resolve before asking AI to create the blueprint." },
 ];
 

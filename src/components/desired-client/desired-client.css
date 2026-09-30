@@ -38,6 +38,7 @@
 .dc-option__error{width:100%;margin-top:.5rem;color:#8b1e1e;font-size:.9375rem;font-weight:700}
 .dc-text-field{display:grid;gap:.5rem;width:100%;min-width:0;color:var(--dc-ink)}
 .dc-text-field>span:first-child{font-weight:700;text-wrap:balance}
+.dc-text-field>span[data-ui-copy="body"]{text-wrap:pretty}
 .dc-text-field input,.dc-text-field textarea,.dc-brief textarea,.dc-route select{width:100%;min-width:0;min-height:2.75rem;padding:.625rem .75rem;border:1px solid var(--dc-border);border-radius:.375rem;background:var(--dc-white);color:var(--dc-ink);font:400 1rem/1.5 var(--font-dm-sans),sans-serif}
 .dc-text-field input:focus-visible,.dc-text-field textarea:focus-visible,.dc-route select:focus-visible{border-color:var(--dc-navy)}
 .dc-optional{display:grid;gap:1rem;width:100%;min-width:0;padding:1rem;border:1px solid var(--dc-border);border-radius:.375rem;background:var(--dc-white)}
