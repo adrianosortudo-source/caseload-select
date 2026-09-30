@@ -22,7 +22,7 @@ export default function ResearchComparisonExport({ sourceRunKey }: { sourceRunKe
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Admin could not verify the comparison request."); }
     finally { setBusy(false); }
   }
-  return <section className="min-w-0 rounded-md border border-border-brand bg-white p-4" aria-label="Export authenticated comparison" data-ui-component-content="research-comparison-export">
+  return <section className="min-w-0" aria-label="Export authenticated comparison" data-ui-component-content="research-comparison-export">
     <h3 className="text-base font-semibold text-navy" data-ui-copy="heading">Verify research against Admin</h3>
     <p className="mt-2 text-sm" data-ui-copy="body">Upload the complete private comparison request. Admin reads current records and signs a snapshot without changing prospect records.</p>
     <p className="mt-1 text-pretty text-sm" data-ui-copy="supporting">Use an initial check before registering a new run, or a finalized check after its inventory is registered.</p>

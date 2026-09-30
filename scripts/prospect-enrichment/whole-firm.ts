@@ -1,7 +1,8 @@
 import { parseProspectEnrichmentEnvelope, type ProspectEnrichmentEnvelope, type JsonValue } from "../../src/lib/prospect-enrichment-contract";
 import type { CompiledPackage } from "./compiler";
 import { validateLegacyAssessmentProjectionClaims, type LegacyAssessmentProjectionClaim } from "./legacy-projections";
-import { canonicalJson, displayCategory, object, ordinal, protocolHash, type Issue } from "./model";
+import { canonicalJson, displayCategory, object, ordinal, protocolHash, sha256, type Issue } from "./model";
+import { retainedWholeFirmStableClaim, validWholeFirmIdentityClaimPolicy, type WholeFirmIdentityClaimPolicy } from "./whole-firm-identity-claims";
 import { buildExpectedRunManifest, type CandidateCoverage, type ExpectedRunManifest } from "./run-manifest";
 import { bindReconciledPackages, type ReconciledAction } from "./reconciliation";
 import type { ManifestChunk } from "./manifest-delivery";
@@ -12,6 +13,8 @@ export type WholeFirmCoordinatorExport = {
   snapshotAt: string;
   expectedRevisions: { revisionId: string; researchKey: string }[];
   revisions: unknown[];
+  compilerIdentityClaimPolicy?: WholeFirmIdentityClaimPolicy;
+  sourceInventory?: unknown;
 };
 export type WholeFirmSourceManifest = {
   schemaVersion: "prospect-whole-firm-source-manifest/v1";
@@ -37,6 +40,15 @@ export function verifyWholeFirmManifest(input: WholeFirmSourceManifest): void {
   const rebuilt = freezeWholeFirmExport(input.originalExport, input.sourceExportSha256);
   if (canonicalJson(rebuilt) !== canonicalJson(input)) throw Error("whole_firm_source_manifest_hash_mismatch");
 }
+/** New source/run/package identities; complete retained originals remain unchanged. */
+export function deriveWholeFirmIdentityClaimSource(source: WholeFirmSourceManifest, provenance: Pick<WholeFirmIdentityClaimPolicy, "compilerCommit" | "compilerFileSha256" | "baselineLedgerSha256">): WholeFirmSourceManifest {
+  verifyWholeFirmManifest(source);
+  if (source.originalExport.compilerIdentityClaimPolicy !== undefined) throw Error("whole_firm_identity_claim_source_already_derived");
+  const policy: WholeFirmIdentityClaimPolicy = { schemaVersion: "prospect-whole-firm-identity-claim-policy/v1", policyVersion: "retained-registration-stable-claim/v1", parentSourceManifestSha256: source.manifestSha256, ...provenance };
+  if (!validWholeFirmIdentityClaimPolicy(policy)) throw Error("whole_firm_identity_claim_policy_invalid");
+  const exported = { ...source.originalExport, compilerIdentityClaimPolicy: policy };
+  return freezeWholeFirmExport(exported, sha256(canonicalJson(exported) + "\n"));
+}
 type RevisionCoverage = CandidateCoverage & { revisionId: string; original: unknown; originalStatus: unknown };
 export function compileWholeFirmSnapshot(source: WholeFirmSourceManifest, actions?: ReconciledAction[]): { packages: CompiledPackage[]; candidates: RevisionCoverage[]; issues: Issue[]; expected: ExpectedRunManifest } {
   verifyWholeFirmManifest(source);
@@ -55,8 +67,16 @@ export function compileWholeFirmSnapshot(source: WholeFirmSourceManifest, action
     const proposed = { ...original.standardEnvelope, subject, schemaVersion: "prospect-enrichment/v1", runId, packageId: wholeFirmPackageId(runId, expected.researchKey, revision), sourceSystem: WHOLE_FIRM_PROFILE.sourceSystem, sourceName: WHOLE_FIRM_PROFILE.sourceName, generatedAt: source.snapshotAt };
     const parsed = parseProspectEnrichmentEnvelope(proposed);
     if (!parsed.ok) { for (const issue of parsed.issues) hold("hold_schema", issue.path + ": " + issue.message); continue; }
-    const envelope: ProspectEnrichmentEnvelope = parsed.envelope;
+    let envelope: ProspectEnrichmentEnvelope = parsed.envelope;
     if (envelope.subject.researchKey !== expected.researchKey || protocolHash(envelope.originalResearch.content) !== protocolHash(revision)) { hold("whole_firm_revision_evidence_mismatch", "The envelope must preserve this exact immutable revision content and researchKey."); continue; }
+    if (source.originalExport.compilerIdentityClaimPolicy !== undefined) {
+      if (!validWholeFirmIdentityClaimPolicy(source.originalExport.compilerIdentityClaimPolicy)) { hold("retained_identity_claim_hold", "Derived claim policy provenance is invalid."); }
+      else {
+        const claim = retainedWholeFirmStableClaim(revision, envelope, source.originalExport.sourceInventory);
+        if (claim.issue) { hold(claim.issue.code, claim.issue.reason); if (claim.conflicting) envelope = { ...envelope, subject: { ...envelope.subject, identityState: "conflict" } }; }
+        else if (envelope.subject.stableFirmId === null) envelope = { ...envelope, subject: { ...envelope.subject, stableFirmId: claim.stableFirmId, identityState: "unresolved" } };
+      }
+    }
     if (envelope.assessment === null && envelope.observations.length === 0) {
       // Typed-empty held/incomplete research still has its complete original content.
       hold("whole_firm_evidence_hold", "No typed observation or assessment is present; complete raw revision remains staged research only.");
