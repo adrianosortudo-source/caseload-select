@@ -9,6 +9,14 @@ export type CandidateReadClient = { rpc(name: string, args: Record<string, unkno
 export class CandidateReadError extends Error {
   constructor(message: string, readonly status: 404 | 422 | 503) { super(message); this.name = "CandidateReadError"; }
 }
+type CandidateReadRpc = "list_prospect_research_candidates_v1" | "get_prospect_research_candidate_v1" | "list_prospect_research_candidate_history_v1" | "get_prospect_research_candidate_revision_chunk_v1";
+function candidateRpcErrorDetails(error: unknown, rpc: CandidateReadRpc) {
+  const value = error && typeof error === "object" && !Array.isArray(error) ? error as Record<string, unknown> : {};
+  const code = typeof value.code === "string" && /^[A-Z0-9_]{3,16}$/.test(value.code) ? value.code : null;
+  const status = typeof value.status === "number" && Number.isInteger(value.status) && value.status >= 100 && value.status <= 599 ? value.status : null;
+  const errorName = error instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,39}$/.test(error.name) ? error.name : null;
+  return { rpc, databaseErrorCode: code, httpStatus: status, errorName };
+}
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 function row(value: unknown): Record<string, unknown> { if (!value || typeof value !== "object" || Array.isArray(value)) throw new CandidateContractError(); return value as Record<string, unknown>; }
 function nonnegative(value: unknown): number { if (!Number.isSafeInteger(value) || (value as number) < 0) throw new CandidateContractError(); return value as number; }
@@ -28,10 +36,18 @@ function decode(cursor: string | undefined, expectedScope: string): { afterId: s
     return { afterId: value.afterId, coverageRevision: nonnegative(value.coverageRevision) };
   } catch { throw new CandidateReadError("The cursor does not belong to these research filters.", 422); }
 }
-async function rpc(name: string, args: Record<string, unknown>, client?: CandidateReadClient): Promise<unknown> {
-  const db: CandidateReadClient = client ?? (await import("@/lib/supabase-admin")).supabaseAdmin as unknown as CandidateReadClient;
-  let result; try { result = await db.rpc(name, args); } catch { throw new CandidateReadError("Candidate research could not be loaded. Coverage is unverified.", 503); }
-  if (result.error) throw new CandidateReadError("Candidate research could not be loaded. Coverage is unverified.", 503);
+async function rpc(name: CandidateReadRpc, args: Record<string, unknown>, client?: CandidateReadClient): Promise<unknown> {
+  let result; try {
+    const db: CandidateReadClient = client ?? (await import("@/lib/supabase-admin")).supabaseAdmin as unknown as CandidateReadClient;
+    result = await db.rpc(name, args);
+  } catch (error) {
+    console.error("[prospect-enrichment] candidate RPC unavailable", candidateRpcErrorDetails(error, name));
+    throw new CandidateReadError("Candidate research could not be loaded. Coverage is unverified.", 503);
+  }
+  if (result.error) {
+    console.error("[prospect-enrichment] candidate RPC unavailable", candidateRpcErrorDetails(result.error, name));
+    throw new CandidateReadError("Candidate research could not be loaded. Coverage is unverified.", 503);
+  }
   return result.data;
 }
 function pageLimit(value: number, max: number): number { if (!Number.isSafeInteger(value) || value < 1 || value > max) throw new CandidateReadError("Invalid research page size.", 422); return value; }
