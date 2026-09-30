@@ -37,16 +37,17 @@ suite("candidate reads above the observed Admin inventory", () => {
       // Bounded setup batches let PostgreSQL refresh statistics as the synthetic
       // journal grows. The measured read allowance below stays exactly five seconds.
       const auditSetupStart = performance.now();
+      const auditSetupBatchSize = 100;
       await db.query("SET LOCAL statement_timeout = '60s'");
-      for (let first = 1; first <= 6000; first += 500) {
+      for (let first = 1; first <= 6000; first += auditSetupBatchSize) {
         await db.query(`INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record)
           SELECT $1,f.source_record_key,$2,'accepted','created',f.id,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name)
-          FROM public.gta_prospect_firms f JOIN generate_series($4::integer,$5::integer) n ON f.source_record_key=$3||'-'||n`, [batchId, "a".repeat(64), prefix, first, first + 499]);
+          FROM public.gta_prospect_firms f JOIN generate_series($4::integer,$5::integer) n ON f.source_record_key=$3||'-'||n`, [batchId, "a".repeat(64), prefix, first, first + auditSetupBatchSize - 1]);
         for (const table of ["gta_prospect_import_audit", "prospect_research_candidate_coverage", "prospect_research_candidate_history"]) {
           await db.query("ANALYZE public." + table);
         }
         const elapsed = performance.now() - auditSetupStart;
-        console.info("candidate-setup-progress", JSON.stringify({ appliedAuditRows: first + 499, milliseconds: elapsed }));
+        console.info("candidate-setup-progress", JSON.stringify({ appliedAuditRows: first + auditSetupBatchSize - 1, milliseconds: elapsed }));
         expect(elapsed).toBeLessThan(600_000);
       }
       const targetFirm = (await db.query<{ id: string }>("SELECT id FROM public.gta_prospect_firms WHERE source_record_key=$1", [prefix + "-1"])).rows[0].id;
