@@ -38,4 +38,11 @@ describe("adaptive interview clarification validation", () => {
   it("accepts prior answered clarification history containing its stored reflection", () => {
     expect(validateInterviewClarificationRequest(nextStageRequest()).valid).toBe(true);
   });
+  it("accepts bounded multiline clarification answers and rejects overlong histories", () => {
+    const request=nextStageRequest();
+    request.answers.interview.followups[0].answer="The team enjoys the strategic work.\nIt also draws on our transaction experience.";
+    expect(validateInterviewClarificationRequest(request).valid).toBe(true);
+    request.answers.interview.followups[0].answer=Array(13).fill("line").join("\n");
+    expect(validateInterviewClarificationRequest(request).valid).toBe(false);
+  });
 });

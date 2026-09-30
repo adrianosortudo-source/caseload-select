@@ -250,7 +250,19 @@ export interface AnalysisRequestEnvelope {
   answers: DesiredClientAnswers;
   clarifications: Array<{ code: ClarificationCode; answer: string }>;
 }
-export interface InterviewClarificationAnswer { id:string; stage:InterviewStage; purpose:InterviewClarificationPurpose; source_answer_ids:AnswerReferencePath[]; question:string; answer:string; choiceId?:string; skipped:boolean; reflection?:string; }
+export interface InterviewClarificationAnswer { id:string; stage:InterviewStage; purpose:InterviewClarificationPurpose; source_answer_ids:AnswerReferencePath[]; source_answer_fingerprint?:string; question:string; answer:string; choiceId?:string; skipped:boolean; reflection?:string; }
+
+/** A compact, deterministic stamp for the exact answers that supported a follow-up. */
+export function interviewClarificationSourceFingerprint(answers:DesiredClientAnswers, paths:readonly AnswerReferencePath[]):string {
+  const values=paths.map((path)=>[path,path.split(".").reduce<unknown>((value,key)=>value&&typeof value==="object"?(value as Record<string,unknown>)[key]:undefined,answers)]);
+  const source=JSON.stringify(values);
+  let a=0x811c9dc5,b=0x9e3779b9;
+  for(let i=0;i<source.length;i++){const code=source.charCodeAt(i);a=Math.imul(a^code,0x01000193);b=Math.imul(b^code,0x85ebca6b);}
+  return `${(a>>>0).toString(16).padStart(8,"0")}${(b>>>0).toString(16).padStart(8,"0")}`;
+}
+export function isInterviewClarificationCurrent(answer:InterviewClarificationAnswer, answers:DesiredClientAnswers):boolean {
+  return typeof answer.source_answer_fingerprint==="string"&&answer.source_answer_fingerprint===interviewClarificationSourceFingerprint(answers,answer.source_answer_ids);
+}
 export interface InterviewClarificationRequestEnvelope { schemaVersion:4; operation:"clarify"; requestId:string; answerRevision:number; interviewRunId:string; clarificationIndex:0|1|2; stage:InterviewStage; aiConsent:true; answers:DesiredClientAnswers; }
 export type InterviewClarificationPrompt = { outcome:"ask"; id:string; stage:InterviewStage; purpose:InterviewClarificationPurpose; source_answer_ids:AnswerReferencePath[]; question:string; choices:Array<{id:string;label:string}>; reflection:string } | { outcome:"continue"; reason:string };
 export interface InterviewClarificationSuccessEnvelope { ok:true; requestId:string; answerRevision:number; interviewRunId:string; prompt:InterviewClarificationPrompt; }

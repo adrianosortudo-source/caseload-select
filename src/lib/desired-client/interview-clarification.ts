@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai";
 import { getAnswerLabel, resolveAnswerReference } from "./catalog";
 import { getMissingFieldsForStage } from "./screens";
-import { validateDraftAnswers } from "./validation";
+import { isBoundedMultilineText, validateDraftAnswers } from "./validation";
 import type {
   AnswerReferencePath, DesiredClientAnswers, InterviewClarificationAnswer,
   InterviewClarificationPrompt, InterviewClarificationPurpose,
@@ -55,7 +55,7 @@ function validateHistory(value: unknown, answers: DesiredClientAnswers): value i
       !Array.isArray(item.source_answer_ids) || item.source_answer_ids.length < 1 || item.source_answer_ids.length > 8 ||
       !item.source_answer_ids.every((p) => typeof p === "string" && inStage(p, item.stage as InterviewStage) && nonblankSource(p as AnswerReferencePath, answers)) ||
       typeof item.question !== "string" || !item.question.trim() || item.question.length > 140 || /[\r\n]/.test(item.question) ||
-      typeof item.answer !== "string" || item.answer.length > 220 || /[\r\n]/.test(item.answer) ||
+      !isBoundedMultilineText(item.answer, 220) ||
       typeof item.skipped !== "boolean" || (item.skipped ? item.answer !== "" : !item.answer.trim()) ||
       (item.choiceId !== undefined && (typeof item.choiceId !== "string" || !/^[a-z0-9_-]{1,48}$/.test(item.choiceId))) ||
       (item.reflection !== undefined && (typeof item.reflection !== "string" || item.reflection.length > 240 || /[\r\n]/.test(item.reflection) || item.reflection.trim().split(/\s+/).filter(Boolean).length > 35))) return false;

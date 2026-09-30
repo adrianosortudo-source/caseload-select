@@ -66,9 +66,12 @@ function isEnum(value: unknown, choices: readonly string[], nullable = false): b
 }
 
 function isOptionalText(value: unknown): value is string {
-  return typeof value === "string" && value.length <= TEXT_MAX && !/[\r\n]/.test(value);
+  return isBoundedMultilineText(value, TEXT_MAX);
 }
-function isTextLimit(value:unknown,max:number):value is string{return typeof value==="string"&&value.length<=max&&!/[\r\n]/.test(value);}
+export function isBoundedMultilineText(value: unknown, max: number): value is string {
+  return typeof value === "string" && value.length <= max && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value) && value.split(/\r\n|\r|\n/).length <= 12;
+}
+function isTextLimit(value:unknown,max:number):value is string{return isBoundedMultilineText(value,max);}
 
 function isUniqueChoiceArray(value: unknown, choices: readonly string[], max: number, min = 0): value is string[] {
   return Array.isArray(value) && value.length >= min && value.length <= max &&
@@ -247,11 +250,17 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
     if (!hasExactKeys(interview, ["ai_clarification_consent", "clarification_count", "clarified_stages", "followups"]) || typeof interview.ai_clarification_consent !== "boolean" ||
       !Number.isSafeInteger(interview.clarification_count) || (interview.clarification_count as number) < 0 || (interview.clarification_count as number) > 3 ||
       !Array.isArray(interview.clarified_stages) || interview.clarified_stages.length !== interview.clarification_count || interview.clarified_stages.some((stage) => ![1,2,3,4,5,6].includes(stage as number)) || new Set(interview.clarified_stages).size !== interview.clarified_stages.length ||
-      !Array.isArray(interview.followups) || interview.followups.length > 3 || interview.followups.some((item) => !isRecord(item) || !hasExactKeys(item, ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "skipped"]) && !hasExactKeys(item, ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "choiceId", "skipped"]) && !hasExactKeys(item, ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "skipped", "reflection"]) && !hasExactKeys(item, ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "choiceId", "skipped", "reflection"]) ||
+      !Array.isArray(interview.followups) || interview.followups.length > 3 || interview.followups.some((item) => !isRecord(item) || ![
+        ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "skipped"],
+        ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "choiceId", "skipped"],
+        ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "skipped", "reflection"],
+        ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "choiceId", "skipped", "reflection"],
+      ].some((keys) => hasExactKeys(item,keys)||hasExactKeys(item,[...keys,"source_answer_fingerprint"])) ||
         typeof item.id !== "string" || item.id.length > 64 || !/^[a-z0-9_-]+$/i.test(item.id) || ![1,2,3,4,5,6].includes(item.stage as number) ||
         !["client_matter_specificity","client_goal_detail","firm_desirability","client_choice_criteria","strength_and_support","decision_pathway_observation","discovery_evidence","economics_effort_conflict","capacity_conflict"].includes(String(item.purpose)) ||
         !Array.isArray(item.source_answer_ids) || item.source_answer_ids.length < 1 || item.source_answer_ids.length > 8 || item.source_answer_ids.some((path) => typeof path !== "string") ||
-        typeof item.question !== "string" || item.question.length < 1 || item.question.length > 140 || /[\r\n]/.test(item.question) || typeof item.answer !== "string" || item.answer.length > 220 || /[\r\n]/.test(item.answer) ||
+        typeof item.question !== "string" || item.question.length < 1 || item.question.length > 140 || /[\r\n]/.test(item.question) || !isBoundedMultilineText(item.answer,220) ||
+        item.source_answer_fingerprint !== undefined && (typeof item.source_answer_fingerprint !== "string" || !/^[0-9a-f]{16}$/.test(item.source_answer_fingerprint)) ||
         typeof item.skipped !== "boolean" || item.skipped && item.answer !== "" || !item.skipped && item.answer.trim().length === 0 || item.choiceId !== undefined && (typeof item.choiceId !== "string" || item.choiceId.length > 48 || !/^[a-z0-9_-]+$/i.test(item.choiceId)) || item.reflection !== undefined && (typeof item.reflection !== "string" || item.reflection.length > 240)) ||
       (interview.followups as RecordValue[]).some((item, index, all) => all.findIndex((other) => other.id === item.id) !== index || all.findIndex((other) => other.stage === item.stage) !== index || !(interview.clarified_stages as unknown[]).includes(item.stage))) return false;
   }
@@ -266,7 +275,7 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
   if (version === "dcm-v3.2") Object.assign(textLimits, {"practice.client_strength_effect":240,"practice.client_strength_support":240,"client_context.discovery_behaviour":360,"client.goal_detail":240,"client.decision_context":240,"client.choice_detail":180});
   for (const [field, max] of Object.entries(textLimits)) {
     const [group, key] = field.split("."); const val = ({ practice, client_context: clientContext, client, value: valueGroup, opportunity, repeatability } as Record<string, RecordValue>)[group][key];
-    if (typeof val !== "string" || val.length > max || /[\r\n]/.test(val)) return false;
+    if (!isBoundedMultilineText(val, max)) return false;
   }
   if (version === "dcm-v3.2") {
     const goals = a.client as RecordValue;

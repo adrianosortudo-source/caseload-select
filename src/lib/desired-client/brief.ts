@@ -33,10 +33,13 @@ export function buildDraftPreview(answers: DesiredClientAnswers): DraftPreview {
     : answers.situation.role === "other" ? answers.situation.role_other.trim() || "Client role still to specify"
     : area ? getRoleLabel(area, answers.situation.role) : "Client role still to specify";
   const goals = answers.client.goals.length === 1 && answers.client.goals[0] === "unknown" ? "Client goal still to establish" : [...answers.client.goals.map((goal) => GOAL_LABELS[goal]), ...(answers.write_ins?.goals?.trim() ? [answers.write_ins.goals.trim()] : [])].join(", ") || "Client goal still to establish";
+  const specificMatter = answers.client_context.repeat_matter_pattern.trim();
+  const geography = answers.client_context.geography.trim();
+  const clientContext = [role, geography && `in ${geography}`].filter(Boolean).join(" ");
   const notes: string[] = [];
   if (answers.focus.route === "new") notes.push("This is a direction you are building toward.");
   if (answers.focus.route === "exploring" || answers.focus.certainty === "provisional") notes.push("This is a direction to test.");
-  return { label: "Your starting point", badge: "Draft to refine", rows: [{ label: "Work", value: work }, { label: "Client", value: role }, { label: "Goal", value: goals }], notes };
+  return { label: "Your starting point", badge: "Draft to refine", rows: [{ label: "Work", value: specificMatter ? `${work}: ${specificMatter}` : work }, { label: "Client", value: clientContext || role }, { label: "Goal", value: goals }], notes };
 }
 
 export { buildStructuredBlueprintV4 as buildStructuredBrief } from "./structured-blueprint";

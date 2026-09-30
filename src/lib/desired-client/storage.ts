@@ -4,11 +4,12 @@ import { validateAnalysisResult } from "./output";
 import { resolveAnswerReference } from "./catalog";
 import { validateDraftAnswers, validateLegacyV22DraftAnswers, validateLegacyV31DraftAnswers } from "./validation";
 import { migrateV21Answers, migrateV22Answers, migrateV30Answers, migrateV31Answers } from "./migration";
-import type { AnalysisResult, AnswerReferencePath, ClarificationCode, DesiredClientAnswers, DesiredClientBriefV2, LegacyDesiredClientBriefV1, SavedBrief, SavedDraft } from "./types";
+import { interviewClarificationSourceFingerprint, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBriefV2, type LegacyDesiredClientBriefV1, type SavedBrief, type SavedDraft } from "./types";
 
 export const DRAFT_STORAGE_KEY = "cls-desired-client-v2";
 export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export type DraftLoadResult = { status: "empty" } | { status: "expired" } | { status: "corrupt" } | { status: "unavailable" } | { status: "ready"; draft: SavedDraft; migrated?: boolean };
+export type DraftSaveResult = { status: "saved"; draft: SavedDraft } | { status: "invalid" } | { status: "unavailable" };
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
 const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 
@@ -117,7 +118,7 @@ export function validateSavedDraft(value: unknown): SavedDraft | null {
     || typeof value.lastEditedAt !== "string" || typeof value.expiresAt !== "string") return null;
   const edited = Date.parse(value.lastEditedAt), expires = Date.parse(value.expiresAt);
   if (!Number.isFinite(edited) || !Number.isFinite(expires) || expires <= edited || expires - edited > DRAFT_TTL_MS + 1000) return null;
-  const answers = value.answers;
+  const answers = hydrateLegacyFollowupFingerprints(value.answers);
   const savedBrief = value.savedBrief === undefined ? undefined : restoreSavedBrief(value.savedBrief, answers);
   return { schemaVersion: 2, answers, currentStage: Number(value.currentStage), lastEditedAt: new Date(edited).toISOString(), expiresAt: new Date(expires).toISOString(), ...(savedBrief ? { savedBrief } : {}) };
 }
@@ -141,12 +142,13 @@ export function loadDraft(storage: Storage, now = Date.now()): DraftLoadResult {
   return draft ? { status: "ready", draft } : { status: "corrupt" };
 }
 
-export function saveDraft(storage: Storage, answers: DesiredClientAnswers, currentStage: number, savedBrief?: SavedBrief, now = Date.now()): SavedDraft | null {
-  if (!validateDraftAnswers(answers) || !Number.isInteger(currentStage) || currentStage < 1 || currentStage > 7) return null;
+export function saveDraft(storage: Storage, answers: DesiredClientAnswers, currentStage: number, savedBrief?: SavedBrief, now = Date.now()): DraftSaveResult {
+  if (!validateDraftAnswers(answers) || !Number.isInteger(currentStage) || currentStage < 1 || currentStage > 7) return { status: "invalid" };
   let editedAt = now;
   let expiresAt = now + DRAFT_TTL_MS;
+  let old: string | null;
+  try { old = storage.getItem(DRAFT_STORAGE_KEY); } catch { return { status: "unavailable" }; }
   try {
-    const old = storage.getItem(DRAFT_STORAGE_KEY);
     if (old) {
       const parsed = JSON.parse(old) as unknown;
       const previous = validateSavedDraft(parsed);
@@ -161,7 +163,14 @@ export function saveDraft(storage: Storage, answers: DesiredClientAnswers, curre
   const safeBrief = savedBrief ? restoreSavedBrief(savedBrief, answers) : undefined;
   const draft: SavedDraft = { schemaVersion: 2, answers, currentStage, lastEditedAt: timestamp,
     expiresAt: new Date(expiresAt).toISOString(), ...(safeBrief ? { savedBrief: safeBrief } : {}) };
-  try { storage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft)); return draft; } catch { return null; }
+  try { storage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft)); return { status: "saved", draft }; } catch { return { status: "unavailable" }; }
+}
+
+function hydrateLegacyFollowupFingerprints(input: DesiredClientAnswers): DesiredClientAnswers {
+  if(input.schema_version!=="dcm-v3.2"||input.interview.followups.every((item)=>item.source_answer_fingerprint))return input;
+  const answers=structuredClone(input);
+  answers.interview.followups=answers.interview.followups.map((item)=>item.source_answer_fingerprint?item:{...item,source_answer_fingerprint:interviewClarificationSourceFingerprint(answers,item.source_answer_ids)});
+  return answers;
 }
 export function clearDraft(storage: Storage): boolean { try { storage.removeItem(DRAFT_STORAGE_KEY); return true; } catch { return false; } }
 export function savedAnalysis(result: AnalysisResult, answers: DesiredClientAnswers): SavedBrief | undefined {

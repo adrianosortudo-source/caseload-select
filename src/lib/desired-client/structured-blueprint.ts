@@ -1,7 +1,7 @@
 import { getAnswerLabel, getWorkLabel, REASON_LABELS, resolveAnswerReference, TIMING_PHRASES } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
 import { calculateContribution } from "./economics";
-import type { AnswerReferencePath, DesiredClientAnswers, DesiredClientBrief, DesiredClientBriefV4, EvidenceBasis, EvidenceLinkedStatement } from "./types";
+import { isInterviewClarificationCurrent, type AnswerReferencePath, type DesiredClientAnswers, type DesiredClientBrief, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
 
 const clean = (value: string | null | undefined) => (value ?? "").trim().replace(/\s+/g, " ");
 const present = (answers: DesiredClientAnswers, path: AnswerReferencePath) => resolveAnswerReference(path, answers);
@@ -44,7 +44,8 @@ function matterDefinition(answers: DesiredClientAnswers): string {
   const trigger = text(answers, "situation.trigger") || clean(answers.write_ins?.trigger) || "a situation to be clarified";
   const timing = text(answers, "situation.timing");
   const location = clean(answers.client_context.geography);
-  return `${roleText} seeking ${work}${trigger ? ` when ${trigger.toLowerCase()}` : ""}${timing ? `, at the ${timing.toLowerCase()} stage` : ""}${location ? ` in ${location}` : ""}`;
+  const specificMatter = clean(answers.client_context.repeat_matter_pattern);
+  return `${roleText} seeking ${work}${trigger ? ` when ${trigger.toLowerCase()}` : ""}${timing ? `, at the ${timing.toLowerCase()} stage` : ""}${location ? ` in ${location}` : ""}${specificMatter ? `; specifically, ${specificMatter}` : ""}`;
 }
 function reasonText(answers: DesiredClientAnswers): string {
   const selected = answers.value.reasons.filter((id) => id !== "undecided").map((id) => REASON_LABELS[id].toLowerCase());
@@ -78,7 +79,7 @@ function fitTexts(answers: DesiredClientAnswers): string[] {
 export function buildStructuredBlueprint(answers: DesiredClientAnswers): DesiredClientBrief {
   const firmLabel = clean(answers.practice.firm_type) || (answers.focus.area ? `law firms focused on ${areaWork(answers).toLowerCase()}` : "law firms defining a preferred type of work");
   const firmPaths = knownPaths(answers, ["practice.firm_type", "focus.area", "focus.work", "focus.work_other", "practice.direction"]);
-  const matterPaths = knownPaths(answers, ["focus.work", "focus.work_other", "situation.role", "situation.role_other", "situation.trigger", "write_ins.trigger", "situation.timing", "client_context.geography"]);
+  const matterPaths = knownPaths(answers, ["focus.work", "focus.work_other", "situation.role", "situation.role_other", "situation.trigger", "write_ins.trigger", "situation.timing", "client_context.geography", "client_context.repeat_matter_pattern"]);
   const calculatedContribution = calculateContribution(answers);
   const reasonPaths = calculatedContribution
     ? knownPaths(answers, ["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"])
@@ -131,7 +132,7 @@ export function buildStructuredBlueprint(answers: DesiredClientAnswers): Desired
   else matterClaims.push(linked("The client role, situation and specific matter still need definition.", "unknown", ["focus.work"]));
   const goals = answerClaim(answers, ["client.goals", "write_ins.goals"], (values) => `Desired client progress: ${values.join("; ")}.`, answers.focus.route === "established" ? "hypothesis" : "hypothesis");
   if (goals) matterClaims.push(goals);
-  const clientNeeds = answerClaim(answers, ["client_context.relevant_circumstances", "client_context.community_focus", "client_context.language_service_needs", "client_context.repeat_matter_pattern"], (values) => `Relevant circumstances or service needs: ${values.join("; ")}.`, "hypothesis");
+  const clientNeeds = answerClaim(answers, ["client_context.relevant_circumstances", "client_context.community_focus", "client_context.language_service_needs"], (values) => `Relevant circumstances or service needs: ${values.join("; ")}.`, "hypothesis");
   if (clientNeeds) matterClaims.push(clientNeeds);
 
   const valueClaims: EvidenceLinkedStatement[] = [];
@@ -213,7 +214,7 @@ function insightBasis(value:DesiredClientAnswers["client"]["pathway_basis"]|Desi
 function unknownClaim(label:string,path:AnswerReferencePath):EvidenceLinkedStatement{return linked(label,"unknown",[path]);}
 function interviewClaims(answers:DesiredClientAnswers, stages:number[], prefix:string):EvidenceLinkedStatement[] {
   return answers.interview.followups.flatMap((item,index)=>{
-    if(item.skipped||!stages.includes(item.stage))return [];
+    if(item.skipped||!stages.includes(item.stage)||!isInterviewClarificationCurrent(item,answers))return [];
     // Answers in the first three stages state the firm's chosen direction or
     // reasons. Later answers about client choice, observable behaviour and
     // opportunity are retained as hypotheses unless separately evidenced.
@@ -225,7 +226,7 @@ function interviewClaims(answers:DesiredClientAnswers, stages:number[], prefix:s
 /** Deterministic v4 profile. It turns the answers into six useful sections without inventing client behaviour. */
 export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):DesiredClientBriefV4 {
   const matter= matterDefinition(answers);
-  const matterPaths=knownPaths(answers,["focus.work","focus.work_other","situation.trigger","write_ins.trigger","situation.timing"]);
+  const matterPaths=knownPaths(answers,["focus.work","focus.work_other","situation.trigger","write_ins.trigger","situation.timing","client_context.repeat_matter_pattern"]);
   const clientMatter = matterPaths.length ? linked(matter,"hypothesis",matterPaths) : unknownClaim("The specific client role, situation and matter are still to be defined.","focus.work");
   const progressPaths=knownPaths(answers,["client.goals","client.goal_detail"]);
   const progress=progressPaths.length ? linked(`The client is seeking ${[text(answers,"client.goals"),clean(answers.client.goal_detail)].filter(Boolean).join(": ")}.`,"hypothesis",progressPaths) : unknownClaim("The client's desired progress has not been established.","client.goals");
@@ -237,7 +238,7 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const firmRationale=reasonPaths.length?linked(`The firm wants this work for the following reported reasons and conditions: ${reasonLabels.join("; ")||text(answers,"value.reasons")}.`,"firm_preference",reasonPaths):unknownClaim("The firm's reasons for wanting more of this work are not yet established.","value.reasons");
   const economicsPaths=knownPaths(answers,["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]);
   const contribution=calculateContribution(answers);
-  const economicsText=economicsPaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")+(contribution?`; calculated contribution before overhead and acquisition costs: ${contribution.amount}`:"");
+  const economicsText=economicsPaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")+(contribution?`; ${contribution.basis==="firm_reported_estimate"?"estimated":"firm-record-based"} contribution before overhead and acquisition costs: ${contribution.amount} per matter, calculated as collected fee less direct delivery cost`:"");
   const experiencePaths=knownPaths(answers,["practice.experience","practice.capability","practice.development_needs"]);
   const deliveryPaths=knownPaths(answers,["delivery.capacity","write_ins.capacity","repeatability.staffing_constraint","repeatability.additional_matters","direction.less_note","direction.less_reason"]);
   const rangePaths=knownPaths(answers,["value.collected_fee","value.team_hours","value.payment"]);
@@ -274,7 +275,7 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
     desired_progress:pathway("Progress sought",["client.goals","client.goal_detail"],"The client's desired progress is not established."),
   };
 
-  const signalPaths=knownPaths(answers,["client_context.relevant_circumstances","client_context.geography","client_context.community_focus","client_context.language_service_needs","client_context.repeat_matter_pattern","delivery.fit_signals","delivery.conditions"]);
+  const signalPaths=knownPaths(answers,["client_context.relevant_circumstances","client_context.geography","client_context.community_focus","client_context.language_service_needs","delivery.fit_signals","delivery.conditions"]);
   const recognizability=signalPaths.length?linked(`Circumstances and early signs to recognize or confirm: ${signalPaths.map(path=>text(answers,path)).filter(Boolean).join("; ")}.`,"hypothesis",signalPaths):unknownClaim("Observable circumstances that distinguish this matter have not been supplied.","client_context.relevant_circumstances");
   const recognizabilityClaims=[recognizability,...(answers.client_context.discovery_behaviour.trim()?[linked(`Discovery behaviour supplied by the firm, to confirm: ${clean(answers.client_context.discovery_behaviour)}.`,"hypothesis",["client_context.discovery_behaviour"])]:[]),...interviewClaims(answers,[5],"Clarification: ")].slice(0,6);
 
@@ -318,7 +319,8 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const triggerClause=triggerText?`when ${lowerFirst(triggerText)}`:"while the precise triggering situation remains to be specified";
   const timingAddsContext=answers.situation.timing&&answers.situation.timing!=="unknown"&&!(answers.situation.timing==="planning"&&/planned|prepar|before/i.test(triggerText));
   const timingPhrase=timingAddsContext?`, ${TIMING_PHRASES[answers.situation.timing!]}`:"";
-  const matterDescription=`legal help with ${workText} ${triggerClause}${timingPhrase}`;
+  const specificMatter=clean(answers.client_context.repeat_matter_pattern);
+  const matterDescription=`legal help with ${workText} ${triggerClause}${timingPhrase}${specificMatter?`; specifically, ${lowerFirst(specificMatter)}`:""}`;
   const sentenceMatterPaths:AnswerReferencePath[]=unique([...matterPaths,...(answers.situation.trigger==="unknown"&&!triggerText?["situation.trigger" as const]:[])]);
   const sentenceMatter=sentenceMatterPaths.length?linked(matterDescription,triggerText?"hypothesis":"unknown",sentenceMatterPaths):unknownClaim("The specific client situation and matter have not yet been defined.","focus.work");
   const reasonFragments: string[] = [];

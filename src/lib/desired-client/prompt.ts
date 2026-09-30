@@ -1,7 +1,7 @@
 import { AREA_CATALOG, WRITE_IN_KEYS, getRoleOptions, getWorkOptions, resolveAnswerReference } from "./catalog";
 import { getSourceDetails } from "./sources";
 import { BLUEPRINT_RESPONSE_SCHEMA } from "./output";
-import type { AnalysisRequestEnvelope, AnswerReferencePath, ClarificationCode, DesiredClientAnswers } from "./types";
+import { isInterviewClarificationCurrent, type AnalysisRequestEnvelope, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers } from "./types";
 
 const SOURCE_PATHS: AnswerReferencePath[] = [
   "focus.area", "focus.work", "focus.work_other", "focus.service_area", "focus.certainty", "focus.route",
@@ -27,7 +27,7 @@ Every statement must cite one to eight present, relevant answer paths and set an
 
 The opening sentence must identify the specific kind of client separately from the specific situation and matter. Use this structure: “The firm wants to attract and serve [specific kind of client] when [specific client situation and matter], because [the firm's reported economic and delivery reasons], and progress will be assessed against [firm-approved outcome or explicitly proposed target].” Use no literal brackets. Keep evidence status explicit; do not call estimates verified or proposed targets approved. If no measure was supplied, say that a measure of progress is still to be agreed. Do not describe the law firm as its own client.
 
-Populate the six Blueprint sections: client_and_matter (role, situation, specific work, stage and relevant geography); client_goals_needs (desired progress, concerns, barriers and decision participants); why_firm_wants_work (preference, reported experience, fees, direct costs, effort, payment, capacity and constraints); why_client_chooses_firm (client choice factors, a relevant firm strength, the practical effect and supporting evidence); decision_pathway (four source-linked fields for trigger, first_contact, decision and desired_progress); recognizable_circumstances (observable characteristics, service needs and early signals for lawyer review); evidence_and_open_questions (records, client feedback, experience, estimates, preferences, hypotheses and consequential gaps). The six content cards plus the pathway may total up to 800 words. Do not omit information to meet a one-page fit; the design can be revised later.
+Populate the six Blueprint sections: client_and_matter (client role, situation, specific transaction or matter, represented side where supplied, actual legal work, documents, stage and relevant geography); client_goals_needs (desired progress, concerns, barriers and decision participants); why_firm_wants_work (preference, reported experience, fees, direct costs, effort, payment, capacity and constraints); why_client_chooses_firm (client choice factors, a relevant firm strength, the practical effect and supporting evidence); decision_pathway (four source-linked fields for trigger, first_contact, decision and desired_progress); recognizable_circumstances (observable characteristics, service needs and early signals for lawyer review); evidence_and_open_questions (records, client feedback, experience, estimates, preferences, hypotheses and consequential gaps). Preserve concrete detail the firm supplied. Do not replace a specific matter with its broad practice-area label. Do not calculate contribution, margin, profit or rates in generated prose; the interface separately displays only a deterministically calculated contribution when the supplied amounts are comparable. The six content cards plus the pathway may total up to 800 words. Do not omit information to meet a one-page fit; the design can be revised later.
 
 The firm's client-choice evidence basis is in client.choice_basis; pathway basis is in client.pathway_basis. Use client_reported only when the corresponding basis says clients have told the firm, firm_reported_observation only when it says the firm has observed it, hypothesis only when marked as the firm's hypothesis or clearly framed as an inference. When either basis is absent or unknown, do not promote selected factors into established client behaviour. A firm-selected strength is a stated strength, not superiority; supporting experience remains firm-reported and is not independent verification. Distinguish adjacent or new work from established experience.
 
@@ -44,6 +44,8 @@ function selectedCatalog(area: AnalysisRequestEnvelope["answers"]["focus"]["area
 
 function resolvedAnswers(answers: DesiredClientAnswers): Record<string, { question: string; text: string | null; unknown: boolean }> {
   return Object.fromEntries(SOURCE_PATHS.flatMap((path) => {
+    const followupMatch=/^interview\.followups\.(\d+)$/.exec(path);
+    if(followupMatch){const item=answers.interview.followups[Number(followupMatch[1])];if(!item||!isInterviewClarificationCurrent(item,answers))return [];}
     const resolved = resolveAnswerReference(path, answers);
     if (!resolved.present) return [];
     const source = getSourceDetails(path, answers);
@@ -65,6 +67,7 @@ function untrustedTextFields(answers: DesiredClientAnswers) {
 }
 
 export function buildDesiredClientUserPrompt(request: AnalysisRequestEnvelope, eligibleCodes: readonly ClarificationCode[]): string {
+  const currentFollowups=request.answers.interview.followups.map((item,index)=>({item,index})).filter(({item})=>isInterviewClarificationCurrent(item,request.answers));
   const resolved = resolvedAnswers(request.answers);
   const unknownSourcePaths = Object.entries(resolved).filter(([, value]) => value.unknown).map(([path]) => path);
   // The model reflection is UI guidance, not user evidence. Keep it out of the
@@ -74,8 +77,10 @@ export function buildDesiredClientUserPrompt(request: AnalysisRequestEnvelope, e
     interview: {
       ...request.answers.interview,
       followups: request.answers.interview.followups.map((answer) => {
+        if(!isInterviewClarificationCurrent(answer,request.answers))return null;
         const userAnswer = { ...answer };
         delete userAnswer.reflection;
+        delete userAnswer.source_answer_fingerprint;
         return userAnswer;
       }),
     },
@@ -91,7 +96,7 @@ export function buildDesiredClientUserPrompt(request: AnalysisRequestEnvelope, e
     eligible_codes: eligibleCodes,
     asked_codes: request.clarifications.map((item) => item.code),
     analysis_index: request.analysisIndex,
-    clarification_answers: request.answers.interview.followups.map((item,index)=>({answer_id:`interview.followups.${index}`,stage:item.stage,question:item.question,answer:item.skipped?"Skipped":item.answer,source_answer_ids:item.source_answer_ids,reflection_excluded_from_evidence:true})),
+    clarification_answers: currentFollowups.map(({item,index})=>({answer_id:`interview.followups.${index}`,stage:item.stage,question:item.question,answer:item.skipped?"Skipped":item.answer,source_answer_ids:item.source_answer_ids,reflection_excluded_from_evidence:true})),
     instruction: "Cite only present, relevant source answer paths. Unknown paths may support only a plainly stated gap, never a factual claim. Match evidence_basis to the selected choice_basis/pathway_basis. Do not use unselected comparison candidates. Keep the specific client type distinct from the situation and matter in the opening sentence. Include the separate client decision pathway, mark inferred stages as hypotheses, and use the law firm's desired-client perspective, never a firm-as-client perspective. Distinguish reported records, estimates, experience and preference; targets remain approved only if the firm has explicitly approved them. Keep all source material traceable and the full report under 800 words.",
   });
 }

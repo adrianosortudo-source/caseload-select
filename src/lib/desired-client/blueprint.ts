@@ -114,7 +114,9 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
     const claims = key === "practice_context" && brief.report_version === "dcm-blueprint-v3"
       ? rawClaims.map((claim, index) => ({ ...claim, text: `${practiceLabels[index]}: ${claim.text}` }))
       : rawClaims;
-    const contribution = id === "value" && brief.report_version !== "dcm-blueprint-v4" ? calculateContribution(answers) : null;
+    // Economics is derived by the application and shown beside the firm's
+    // rationale. It must never depend on AI-authored arithmetic in a claim.
+    const contribution = (id === "value" || id === "whyWork") ? calculateContribution(answers) : null;
     const opportunityHasResults = brief.report_version !== "dcm-blueprint-v4" && id === "opportunity" && Boolean(answers.opportunity.sources.length || answers.opportunity.source_detail.trim() || answers.opportunity.enquiry_count.trim() || answers.opportunity.retained_count.trim() || answers.opportunity.conversion.trim() || answers.opportunity.acquisition_cost.trim());
     const opportunityBasis = opportunityHasResults && answers.opportunity.data_basis
       ? answers.opportunity.data_basis === "recorded" ? "Firm-reported records" : answers.opportunity.data_basis === "estimated" ? "Firm estimate" : "Basis unknown"

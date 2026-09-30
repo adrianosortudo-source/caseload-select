@@ -43,7 +43,7 @@ function questionLabel(path: AnswerReferencePath, answers: DesiredClientAnswers)
     "client_context.relevant_circumstances": "What client or matter circumstances distinguish a good-fit enquiry?",
     "client_context.community_focus": "Which community or audience does the firm serve?",
     "client_context.language_service_needs": "What language or service needs should the firm plan for?",
-    "client_context.repeat_matter_pattern": "Describe a matter pattern the firm would welcome again",
+    "client_context.repeat_matter_pattern": "Which specific matter and legal work would the firm welcome again?",
     "client_context.discovery_behaviour": "How do clients find or approach the firm for this work?",
     "focus.area": "What legal work do you want more of?",
     "focus.work": "Which type of work should we focus on?",

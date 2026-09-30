@@ -1,6 +1,7 @@
 import { resolveAnswerReference, WRITE_IN_KEYS } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
-import type { AnalysisResult, AnswerReferencePath, ClarificationCode, DesiredClientAnswers, DesiredClientBrief, DesiredClientBriefV4, EvidenceBasis, EvidenceLinkedStatement } from "./types";
+import { calculateContribution } from "./economics";
+import { isInterviewClarificationCurrent, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBrief, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
 
 const SOURCE_PATHS = new Set<string>([
   "focus.area", "focus.work", "focus.work_other", "focus.service_area", "focus.certainty", "focus.route",
@@ -23,7 +24,7 @@ const SOURCE_PATHS = new Set<string>([
 const BASIS: readonly EvidenceBasis[] = ["firm_reported_recorded", "firm_reported_estimate", "firm_reported_experience", "firm_reported_observation", "client_reported", "firm_preference", "source_observed", "hypothesis", "unknown"];
 const KIND = ["experience", "preference", "hypothesis", "unknown", "suggestion"] as const;
 const BUDGETS = {
-  definition_client_type: [25, 180], definition_client_matter: [45, 320], definition_reasons: [35, 250], definition_outcome: [25, 180],
+  definition_client_type: [25, 300], definition_client_matter: [75, 600], definition_reasons: [35, 300], definition_outcome: [25, 240],
   practice_context: [60, 420], desired_client_matter: [100, 700], value_rationale: [90, 650], relevance_signals: [70, 500], opportunity_evidence: [70, 500], repeatability: [65, 450], open: [25, 180],
   practice_current_practice: [30, 180], practice_work_to_grow: [30, 180], practice_experience_supporting: [35, 210], practice_development_needs: [30, 180], practice_marketing_emphasis: [35, 210],
   client_and_matter:[95,650], client_goals_needs:[95,650], why_firm_wants_work:[100,700], why_client_chooses_firm:[95,650],
@@ -42,9 +43,9 @@ function allowedPaths(slot: string): readonly string[] {
   if (slot === "practice_development_needs") return ["practice.experience", "practice.development_needs"];
   if (slot === "practice_marketing_emphasis") return ["direction.less", "direction.less_note", "direction.less_reason"];
   if (slot === "definition_client_type") return ["situation.role", "situation.role_other", "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus"];
-  if (slot === "definition_client_matter") return ["focus.area", "focus.work", "focus.work_other", "situation.trigger", "situation.role", "situation.role_other", "situation.timing", "client_context.geography", "client_context.relevant_circumstances", "write_ins.trigger"];
+  if (slot === "definition_client_matter") return ["focus.area", "focus.work", "focus.work_other", "situation.trigger", "situation.role", "situation.role_other", "situation.timing", "client_context.geography", "client_context.relevant_circumstances", "client_context.repeat_matter_pattern", "write_ins.trigger"];
   if (slot === "practice_context") return ["practice.", "focus.", "direction."];
-  if (slot === "client_and_matter") return ["focus.","situation.","client_context.geography","client_context.relevant_circumstances","write_ins.trigger"];
+  if (slot === "client_and_matter") return ["focus.","situation.","client_context.geography","client_context.relevant_circumstances","client_context.repeat_matter_pattern","write_ins.trigger"];
   if (slot === "client_goals_needs") return ["client.","situation.","client_context.","write_ins.goals","write_ins.concerns","write_ins.decision_needs"];
   if (slot === "why_firm_wants_work") return ["practice.","value.","delivery.","direction.","repeatability.staffing_constraint","repeatability.additional_matters","write_ins.reasons","write_ins.fee_effort","write_ins.conditions","write_ins.capacity","write_ins.limit"];
   if (slot === "why_client_chooses_firm") return ["client.choice_","practice.client_strength","practice.capability","practice.experience"];
@@ -71,7 +72,7 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   const permitted = (path:string) => {
     if (!path.startsWith("interview.followups.")) return prefixes.some(prefix => path.startsWith(prefix));
     const item = answers.interview.followups[Number(path.split(".")[2])];
-    return !!item && !item.skipped && (followupStages[slot] ?? []).includes(item.stage);
+    return !!item && !item.skipped && isInterviewClarificationCurrent(item,answers) && (followupStages[slot] ?? []).includes(item.stage);
   };
   if (paths.length < 1 || paths.length > 8 || paths.some((path) => typeof path !== "string" || !SOURCE_PATHS.has(path) || !permitted(path)) || new Set(paths).size !== paths.length) return false;
   let hasUnknown = false;
@@ -115,7 +116,18 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   if (["source_observed", "hypothesis"].includes(value.evidence_basis as string) && value.kind !== "experience" && value.kind !== "hypothesis" && value.kind !== "suggestion") return false;
   if (slot === "open" && value.kind !== "unknown" && value.kind !== "suggestion") return false;
   if (slot !== "open" && value.kind === "suggestion") return false;
-  if (numericTokens(text).some((token) => !numericTokens(supportedValues.join(" ")).includes(token))) return false;
+  const supportedNumberTokens = numericTokens(supportedValues.join(" "));
+  const unsupportedTokens = numericTokens(text).filter((token) => !supportedNumberTokens.includes(token));
+  if (unsupportedTokens.length) {
+    // Permit only the application's independently recomputed contribution,
+    // only in the firm-value card, with the complete economics source set.
+    // All other numbers still need to occur literally in cited answers.
+    const contribution = slot === "why_firm_wants_work" ? calculateContribution(answers) : null;
+    const economicsSources = ["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"];
+    const hasAllSources = economicsSources.every((path) => paths.includes(path));
+    const calculatedTokens = contribution ? numericTokens(contribution.amount) : [];
+    if (!contribution || !hasAllSources || !/\bcontribution\b/i.test(text) || unsupportedTokens.some((token) => !calculatedTokens.includes(token))) return false;
+  }
   return true;
 }
 
@@ -132,6 +144,11 @@ function validCard(value: unknown, answers: DesiredClientAnswers, slot: string):
 export function validateAnalysisResult(value: unknown, answers: DesiredClientAnswers, _eligibleCodes: readonly ClarificationCode[]): AnalysisResult | null {
   if (!exact(value, ["brief", "clarification_code"]) || value.clarification_code !== null) return null;
   const brief=value.brief;
+  // A valid citation is not permission to invent a matter subtype. Guard the
+  // hostile-takeover substitution found in the audit unless the firm actually
+  // supplied that phrase in its answers.
+  const suppliedText = JSON.stringify(answers).toLocaleLowerCase("en-CA");
+  if (JSON.stringify(brief).toLocaleLowerCase("en-CA").includes("hostile takeover") && !suppliedText.includes("hostile takeover")) return null;
   const cardNames=["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const;
   if(!exact(brief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"])||brief.report_version!=="dcm-blueprint-v4"||typeof brief.definition_sentence!=="string")return null;
   if(!exact(brief.definition_components,["client","client_matter","reasons","outcome"]))return null;
@@ -144,7 +161,10 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   for(const field of pathwayFields)if(!validStatement(pathway[field],answers,"decision_pathway"))return null;
   const typedBrief=brief as unknown as DesiredClientBriefV4;
   const expectedSentence=buildDefinitionSentence(typedBrief,false);
-  if(typedBrief.definition_sentence.trim()!==expectedSentence||wordCount(expectedSentence)>85||expectedSentence.length>650)return null;
+  // The definition is assembled from bounded, source-linked fields. A hard
+  // 85-word ceiling rejected valid, specific client-and-matter definitions;
+  // keep a generous abuse limit while preserving supported detail.
+  if(typedBrief.definition_sentence.trim()!==expectedSentence||expectedSentence.length>1600)return null;
   const reportWords=[...cardNames.flatMap(field=>typedBrief[field].claims.map(claim=>claim.text)),...pathwayFields.map(field=>typedBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
   if(reportWords>800)return null;
   return value as unknown as AnalysisResult;

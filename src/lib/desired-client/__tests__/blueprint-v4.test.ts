@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { validateAnalysisResult } from "../output";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { buildDefinitionSentence } from "../definition";
+import { buildDraftPreview } from "../brief";
 import { completeAnswers, evidence, validBlueprint } from "./blueprint-helpers";
+import { interviewClarificationSourceFingerprint } from "../types";
 
 describe("v4 provenance and client pathway", () => {
   it("keeps the law firm out of the desired-client identity and does not approve a target on wording review", () => {
@@ -57,6 +59,18 @@ describe("v4 provenance and client pathway", () => {
     expect(b.why_firm_wants_work.claims.some(s=>s.evidence_basis==="firm_reported_estimate")).toBe(true);
     expect(b.recognizable_circumstances.claims.some(s=>s.text.includes("Buyers speak to their accountant"))).toBe(true);
   });
+  it("carries a specific acquisition matter through preview, sentence and client-and-matter report", () => {
+    const a=completeAnswers();
+    a.client_context.geography="Ontario";
+    a.client_context.repeat_matter_pattern="A buyer of an established operating business who needs an asset purchase agreement drafted or reviewed before final terms are agreed";
+    a.client.goal_detail="Understand which assets and liabilities are included, what payment and closing obligations apply, and how contractual risks are allocated";
+    const preview=buildDraftPreview(a);
+    const blueprint=buildStructuredBlueprintV4(a);
+    expect(preview.rows[0].value).toContain("asset purchase agreement");
+    expect(blueprint.definition_sentence).toContain("asset purchase agreement drafted or reviewed");
+    expect(blueprint.client_and_matter.claims[0].text).toContain("before final terms are agreed");
+    expect(blueprint.client_goals_needs.claims.some(claim=>claim.text.includes("contractual risks are allocated"))).toBe(true);
+  });
   it("keeps the generated opening definition concise and states a useful measure", () => {
     const a=completeAnswers();
     const b=buildStructuredBlueprintV4(a);
@@ -69,11 +83,19 @@ describe("v4 provenance and client pathway", () => {
   it("labels clarification answers by the kind of information they contribute", () => {
     const a=completeAnswers();
     a.interview.followups=[
-      {id:"11111111-1111-4111-8111-111111111111",stage:3,purpose:"firm_desirability",source_answer_ids:["value.reasons"],question:"Why does the firm want this work?",answer:"It lets us use our transaction experience.",skipped:false,reflection:""},
-      {id:"22222222-2222-4222-8222-222222222222",stage:6,purpose:"discovery_evidence",source_answer_ids:["opportunity.sources"],question:"How do clients seek help?",answer:"They often ask their accountant first.",skipped:false,reflection:""},
+      {id:"11111111-1111-4111-8111-111111111111",stage:3,purpose:"firm_desirability",source_answer_ids:["value.reasons"],question:"Why does the firm want this work?",answer:"It lets us use our transaction experience.",skipped:false,reflection:"",source_answer_fingerprint:interviewClarificationSourceFingerprint(a,["value.reasons"])},
+      {id:"22222222-2222-4222-8222-222222222222",stage:6,purpose:"discovery_evidence",source_answer_ids:["opportunity.sources"],question:"How do clients seek help?",answer:"They often ask their accountant first.",skipped:false,reflection:"",source_answer_fingerprint:interviewClarificationSourceFingerprint(a,["opportunity.sources"])},
     ];
     const b=buildStructuredBlueprintV4(a);
     expect(b.why_firm_wants_work.claims.some(claim=>claim.text.includes("It lets us use our transaction experience.")&&claim.evidence_basis==="firm_preference")).toBe(true);
     expect(b.evidence_and_open_questions.claims.some(claim=>claim.text.includes("They often ask their accountant first.")&&claim.evidence_basis==="hypothesis")).toBe(true);
+  });
+  it("excludes a follow-up after its cited answer changes but keeps it after unrelated edits",()=>{
+    const a=completeAnswers();
+    a.interview.followups=[{id:"11111111-1111-4111-8111-111111111111",stage:3,purpose:"firm_desirability",source_answer_ids:["value.reasons"],question:"Why does the firm want this work?",answer:"We enjoy the strategic work.",skipped:false,source_answer_fingerprint:interviewClarificationSourceFingerprint(a,["value.reasons"])}];
+    a.practice.enjoys="We value technically complex work";
+    expect(JSON.stringify(buildStructuredBlueprintV4(a))).toContain("We enjoy the strategic work.");
+    a.value.reasons=["client_impact"];
+    expect(JSON.stringify(buildStructuredBlueprintV4(a))).not.toContain("We enjoy the strategic work.");
   });
 });
