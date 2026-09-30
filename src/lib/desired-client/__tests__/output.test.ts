@@ -1,24 +1,9 @@
-import {describe,expect,it} from "vitest";
-import {validateAnalysisResult} from "../output";
-import {completeAnswers,validBlueprint} from "./blueprint-helpers";
-describe("AI Blueprint output contract",()=>{
- it("accepts a grounded seven-slot profile",()=>expect(validateAnalysisResult(validBlueprint(),completeAnswers(),[])).not.toBeNull());
- it("rejects the answer-list schema and extra keys",()=>{
-  const old={brief:{definition:{},client_goals:[],firm_reasons:[],delivery_conditions:[],evidence:[],open_questions:[],marketing:{},work_to_promote_less:[]},clarification_code:null};
-  expect(validateAnalysisResult(old,completeAnswers(),[])).toBeNull();
-  const extra=validBlueprint() as unknown as Record<string,unknown>;extra.extra=true;
-  expect(validateAnalysisResult(extra,completeAnswers(),[])).toBeNull();
- });
- it("enforces slot budgets, valid sources, and suggestion-only marketing",()=>{
-  const a=completeAnswers(),large=structuredClone(validBlueprint());large.brief.portrait.text="x ".repeat(61);
-  expect(validateAnalysisResult(large,a,[])).toBeNull();
-  const fabricated=structuredClone(validBlueprint());fabricated.brief.portrait.source_answer_ids=["focus.industry" as never];
-  expect(validateAnalysisResult(fabricated,a,[])).toBeNull();
-  const unsuggested=structuredClone(validBlueprint());unsuggested.brief.marketing.message.kind="preference";
-  expect(validateAnalysisResult(unsuggested,a,[])).toBeNull();
- });
- it("requires unknown-source language to remain an open question",()=>{
-  const a=completeAnswers(),candidate=structuredClone(validBlueprint());candidate.brief.portrait.source_answer_ids.push("situation.contact");
-  expect(validateAnalysisResult(candidate,a,[])).toBeNull();
- });
+import { describe, expect, it } from "vitest";
+import { validateAnalysisResult } from "../output";
+import { completeAnswers, validBlueprint } from "./blueprint-helpers";
+describe("AI Blueprint output contract", () => {
+  it("accepts six grounded cards with distinct evidence labels", () => { const value = validBlueprint(); expect(validateAnalysisResult(value, completeAnswers(), [])).not.toBeNull(); expect(value.brief.opportunity_evidence.claims[0].evidence_basis).toBe("unknown"); expect(value.brief.practice_context.claims[0].evidence_basis).toBe("firm_preference"); });
+  it("rejects legacy answer-list schemas, extra keys, and wrong versions", () => { const good = validBlueprint(), answers = completeAnswers(); expect(validateAnalysisResult({ brief: { definition: {}, client_goals: [], firm_reasons: [], marketing: {} }, clarification_code: null }, answers, [])).toBeNull(); expect(validateAnalysisResult({ ...good, unexpected: true }, answers, [])).toBeNull(); expect(validateAnalysisResult({ ...good, brief: { ...good.brief, report_version: "dcm-blueprint-v1" } }, answers, [])).toBeNull(); });
+  it("rejects unsupported citations, definition drift, and slot overflow", () => { const answers = completeAnswers(), good = validBlueprint(); const fabricated = structuredClone(good); fabricated.brief.practice_context.claims[0].source_answer_ids = ["focus.industry" as never]; expect(validateAnalysisResult(fabricated, answers, [])).toBeNull(); const sentence = structuredClone(good); sentence.brief.definition_sentence += " Extra."; expect(validateAnalysisResult(sentence, answers, [])).toBeNull(); const long = structuredClone(good); long.brief.desired_client_matter.claims[0].text = "x ".repeat(101); expect(validateAnalysisResult(long, answers, [])).toBeNull(); });
+  it("rejects an unknown claim cited only to known information and an incorrect evidence basis", () => { const answers = completeAnswers(), good = validBlueprint(); answers.opportunity.source_detail = "Monthly enquiry log"; const wrongUnknown = structuredClone(good); wrongUnknown.brief.opportunity_evidence.claims[0].source_answer_ids = ["opportunity.source_detail"]; expect(validateAnalysisResult(wrongUnknown, answers, [])).toBeNull(); const mismatch = structuredClone(good); mismatch.brief.value_rationale.claims[0].evidence_basis = "firm_reported_recorded"; expect(validateAnalysisResult(mismatch, answers, [])).toBeNull(); });
 });

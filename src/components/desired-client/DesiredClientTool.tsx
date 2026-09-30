@@ -6,7 +6,7 @@ import { buildDraftPreview } from "@/lib/desired-client/brief";
 import { validateAnalysisResult } from "@/lib/desired-client/output";
 import { getEligibleClarificationCodes } from "@/lib/desired-client/clarifications";
 import { clearDraft, loadDraft, saveDraft, type DraftLoadResult } from "@/lib/desired-client/storage";
-import { advanceStage, answerClarification, applyAnalysis, beginAiRun, canEnterStage, commitComparison, editAnswers, enterTool, failAnalysis, initialToolState, markReviewed, moveToStage, recordAiAttempt, type ToolState } from "@/lib/desired-client/state";
+import { advanceStage, answerClarification, applyAnalysis, applyStructuredFallback, beginAiRun, canEnterStage, commitComparison, editAnswers, enterTool, failAnalysis, initialToolState, markReviewed, moveToStage, recordAiAttempt, type ToolState } from "@/lib/desired-client/state";
 import { STAGE_DEFINITIONS, type StageId } from "@/lib/desired-client/screens";
 import type { AnalysisFailureEnvelope, AnalysisRequestEnvelope, AnalysisSuccessEnvelope, PendingWorkComparison, SavedDraft } from "@/lib/desired-client/types";
 import { WelcomeScreen } from "./WelcomeScreen";
@@ -38,7 +38,7 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
    const requestId=crypto.randomUUID(),controller=new AbortController();abortRef.current=controller;
    let timedOut=false;
    const timeout=window.setTimeout(()=>{timedOut=true;controller.abort();},16000);
-   const request:AnalysisRequestEnvelope={schemaVersion:2,requestId,answerRevision:snapshot.answers.revision,reviewRunId:snapshot.reviewRunId,analysisIndex:(snapshot.requestCount-1) as 0|1|2,aiConsent:true,answers:snapshot.answers,clarifications:snapshot.askedClarifications.map(code=>({code,answer:String(snapshot.answers.clarifications[code])}))};
+   const request:AnalysisRequestEnvelope={schemaVersion:3,requestId,answerRevision:snapshot.answers.revision,reviewRunId:snapshot.reviewRunId,analysisIndex:(snapshot.requestCount-1) as 0|1|2,aiConsent:true,answers:snapshot.answers,clarifications:snapshot.askedClarifications.map(code=>({code,answer:String(snapshot.answers.clarifications[code])}))};
    const sameRequest=(current:ToolState)=>current.reviewRunId===snapshot.reviewRunId&&current.answers.revision===snapshot.answers.revision&&current.requestCount===snapshot.requestCount;
    try{
      const response=await fetch("/api/tools/desired-client-matter/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(request),signal:controller.signal});
@@ -78,6 +78,7 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
  const onCompareCommit=(side:"a"|"b",certainty:"chosen"|"provisional")=>commit(commitComparison({...stateRef.current,comparisonDraft:{...stateRef.current.comparisonDraft!,selected:side}},certainty));
  const onPrimary=()=>prepareAI(true);
  const retryAI=()=>prepareAI(false);
+ const createStructured=()=>commit(applyStructuredFallback(stateRef.current));
 
  return <div className={`dc-app${embedded?" dc-app--embedded":""}`}>
    <div className="dc-main" data-ui-component-content="desired-client-app-main">
@@ -88,9 +89,9 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
     {state.view==="questions"&&<GuidedQuestionStage stage={state.stage} answers={state.answers} onEdit={updateAnswers} onBack={backStage} onNext={nextStage} onCompare={beginComparison} error={state.error==="changed"} notice={state.error==="focusChanged"?COMMON_COPY.workChanged:""} preview={state.stage>3?<DraftPreview preview={buildDraftPreview(state.answers)}/>:undefined}/>}
     {state.view==="comparison"&&state.answers.focus.area&&<ComparisonStep area={state.answers.focus.area} draft={state.comparisonDraft} step={state.comparisonStep} onDraft={comparisonDraft} onStep={step=>commit({...stateRef.current,comparisonStep:step})} onBack={abandonComparison} onCommit={onCompareCommit}/>}
     {state.view==="clarification"&&state.activeClarification&&<ClarificationStep code={state.activeClarification} onAnswer={onAnswerClarification}/>}
-    {state.view==="review"&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced}/>}
+    {state.view==="review"&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced}/>}
     {state.view==="brief"&&state.savedBrief&&<BriefView saved={state.savedBrief} answers={state.answers} dismissedCode={state.dismissedCode} reviewed={state.reviewed} onReview={value=>commit(markReviewed(stateRef.current,value))} onEdit={editStage} onAnother={createAnother} onClear={clearStored} storageWarning={state.storageMessage==="unavailable"}/>}
-    {state.view==="brief"&&!state.savedBrief&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced}/>}
+    {state.view==="brief"&&!state.savedBrief&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced}/>}
    </div>
    {embedded&&<a className="dc-open-window" href="/tools/desired-client-matter" target="_blank" rel="noreferrer">Open the tool in its own window</a>}
  </div>;

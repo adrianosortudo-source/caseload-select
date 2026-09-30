@@ -53,8 +53,12 @@ export type PaymentId = "predictable" | "varies" | "uncertain" | "unknown";
 export type CapacityId = "room" | "limited" | "change" | "unknown";
 export type AimId = "more_current" | "narrower" | "new_area" | "new_model" | "unknown";
 export type LessId = "within" | "outside" | "model" | "none";
+export type OpportunitySourceId = "comparable_enquiries" | "retained_matters" | "professional_referrals" | "repeat_clients" | "website_search" | "other_source" | "no_evidence" | "unknown";
+export type SuccessMeasureId = "retained_matters" | "contribution_effort" | "predictable_delivery" | "practice_mix_reputation" | "other" | "unknown";
+export type EvidenceBasis = "firm_reported_recorded" | "firm_reported_estimate" | "firm_preference" | "source_observed" | "hypothesis" | "unknown";
+export type PracticeDirectionId = "grow_proven" | "narrow_specialty" | "explore_direction" | "improve_delivery" | "other" | "unknown";
 export type WriteInKey = "timing" | "contact" | "goals" | "concerns" | "reasons" | "fee_effort" | "conditions" | "capacity" | "limit" | "aim" | "evidence" | "trigger" | "decision_needs" | "fit_signals";
-export type ClarificationCode = "FOCUS_UNCLEAR" | "CLIENT_GOAL_UNCLEAR" | "CURRENT_CAPACITY_CONFLICT" | "FEE_EFFORT_CONFLICT" | "EXPERIENCE_DIRECTION_CONFLICT";
+export type ClarificationCode = "CLIENT_MATTER_UNCLEAR" | "VALUE_EFFORT_CONFLICT" | "CAPACITY_CONFLICT" | "REPEATABILITY_UNPROVEN" | "OPPORTUNITY_UNSUPPORTED";
 export type ClarificationAnswer =
   | "choose_specific" | "keep_broad" | Exclude<GoalId, "unknown">
   | "limited_now" | "build_first" | "improve_model" | "reconsider_work"
@@ -87,7 +91,7 @@ export interface PendingWorkComparison {
   selected: "a" | "b";
 }
 export interface DesiredClientAnswers {
-  schema_version: "dcm-v2.2";
+  schema_version: "dcm-v3.0";
   revision: number;
   /** Optional for drafts saved before write-in answers were introduced. */
   write_ins?: Partial<Record<WriteInKey, string>>;
@@ -100,6 +104,8 @@ export interface DesiredClientAnswers {
     route: RouteId | null;
     comparison: WorkComparison | null;
   };
+  practice: { direction: PracticeDirectionId | null; firm_type: string; capability: string; enjoys: string };
+  client_context: { geography: string; relevant_circumstances: string; community_focus: string; language_service_needs: string; repeat_matter_pattern: string };
   situation: {
     trigger: TriggerId | "unknown" | null;
     timing: TimingId | null;
@@ -114,19 +120,31 @@ export interface DesiredClientAnswers {
     collected_fee: CollectedFeeId | null;
     team_hours: TeamHoursId | null;
     payment: PaymentId | null;
+    currency: string;
+    fee_amount: string;
+    direct_cost_amount: string;
+    amount_basis: "recorded" | "estimated" | "unknown" | null;
+    amount_scope: "per_matter" | "range" | "other" | null;
   };
   delivery: { conditions: ConditionId[]; capacity: CapacityId | null; limit: LimitId | null; fit_signals: FitSignalId[] };
   direction: { aim: AimId | null; evidence: EvidenceId[]; less: LessId | null; less_note: string };
+  opportunity: { sources: OpportunitySourceId[]; data_basis: "recorded" | "estimated" | "unknown" | null; source_detail: string; period: string; enquiry_count: string; retained_count: string; conversion: string; acquisition_cost: string; uncertainty: string };
+  repeatability: { success_measure: SuccessMeasureId | null; success_other: string; target: string; review_period: string; additional_matters: string; staffing_constraint: string };
   clarifications: Record<ClarificationCode, ClarificationAnswer | null>;
 }
 
 export type AnswerReferencePath =
   | `write_ins.${WriteInKey}`
   | "focus.area" | "focus.work" | "focus.work_other" | "focus.service_area" | "focus.certainty" | "focus.route"
+  | "practice.direction" | "practice.firm_type" | "practice.capability" | "practice.enjoys"
+  | "client_context.geography" | "client_context.relevant_circumstances" | "client_context.community_focus" | "client_context.language_service_needs" | "client_context.repeat_matter_pattern"
   | "situation.trigger" | "situation.timing" | "situation.role" | "situation.role_other" | "situation.contact"
   | "client.goals" | "client.concerns" | "client.decision_needs" | "value.reasons" | "value.fee_effort" | "value.collected_fee"
-  | "value.team_hours" | "value.payment" | "delivery.conditions" | "delivery.capacity" | "delivery.limit" | "delivery.fit_signals"
+  | "value.team_hours" | "value.payment" | "value.currency" | "value.fee_amount" | "value.direct_cost_amount" | "value.amount_basis" | "value.amount_scope"
+  | "delivery.conditions" | "delivery.capacity" | "delivery.limit" | "delivery.fit_signals"
   | "direction.aim" | "direction.evidence" | "direction.less" | "direction.less_note"
+  | "opportunity.sources" | "opportunity.data_basis" | "opportunity.source_detail" | "opportunity.period" | "opportunity.enquiry_count" | "opportunity.retained_count" | "opportunity.conversion" | "opportunity.acquisition_cost" | "opportunity.uncertainty"
+  | "repeatability.success_measure" | "repeatability.success_other" | "repeatability.target" | "repeatability.review_period" | "repeatability.additional_matters" | "repeatability.staffing_constraint"
   | `clarifications.${ClarificationCode}`
   | `focus.comparison.${"a" | "b"}.${"work" | "fee_effort" | "team_fit" | "capacity" | "evidence"}`;
 
@@ -136,7 +154,7 @@ export interface DesiredClientStatement {
   kind: StatementKind;
   source_answer_ids: AnswerReferencePath[];
 }
-export interface DesiredClientBrief {
+export interface LegacyDesiredClientBriefV1 {
   report_version: "dcm-blueprint-v1";
   portrait: DesiredClientStatement;
   client_need: DesiredClientStatement;
@@ -148,6 +166,21 @@ export interface DesiredClientBrief {
     next_step: DesiredClientStatement;
   };
 }
+export interface EvidenceLinkedStatement extends DesiredClientStatement { evidence_basis: EvidenceBasis; }
+export interface EvidenceCard { claims: EvidenceLinkedStatement[]; }
+export interface DesiredClientBrief {
+  report_version: "dcm-blueprint-v2";
+  definition_sentence: string;
+  definition_components: { firm: EvidenceLinkedStatement; client_matter: EvidenceLinkedStatement; reasons: EvidenceLinkedStatement; outcome: EvidenceLinkedStatement };
+  practice_context: EvidenceCard;
+  desired_client_matter: EvidenceCard;
+  value_rationale: EvidenceCard;
+  relevance_signals: EvidenceCard;
+  opportunity_evidence: EvidenceCard;
+  repeatability: EvidenceCard;
+  open_questions: EvidenceLinkedStatement[];
+}
+export type SavedBriefContent = DesiredClientBrief | LegacyDesiredClientBriefV1;
 /** Used only by the explicitly validated v2.1 local migration path. */
 export interface LegacyDesiredClientBrief {
   definition: DesiredClientStatement;
@@ -164,7 +197,7 @@ export interface AnalysisResult {
   clarification_code: ClarificationCode | null;
 }
 export interface AnalysisRequestEnvelope {
-  schemaVersion: 2;
+  schemaVersion: 3;
   requestId: string;
   answerRevision: number;
   reviewRunId: string;
@@ -187,7 +220,9 @@ export interface AnalysisFailureEnvelope {
   error: { code: AnalysisFailureCode };
 }
 export interface SavedBrief {
-  brief: DesiredClientBrief;
+  brief: SavedBriefContent;
+  sourceAnswersVersion?: "dcm-v2.2" | "dcm-v3.0";
+  sourceAnswersSnapshot?: unknown;
   sourceBriefRevision: number;
   generatedAt: string;
   wordingReviewed: boolean;

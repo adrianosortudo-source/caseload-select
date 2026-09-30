@@ -30,34 +30,16 @@ const SQLSTATE_MESSAGES = new Map([
   ["40P01", "deadlock_detected"], ["P0001", "raised_exception"],
 ]);
 
-export function safeDatabaseDiagnostic(input) {
-  const asText = value => Buffer.isBuffer(value) ? value.toString("utf8") : typeof value === "string" ? value : "";
-  const isProcessError = input && typeof input === "object" && !Buffer.isBuffer(input);
-  const text = isProcessError ? `${asText(input.stderr)}\n${asText(input.stdout)}` : asText(input);
-  // Parse both CLI streams because the CLI may put a failed query response on
-  // stdout. Keep only SQLSTATEs, fixed categories, and bounded process fields;
-  // never emit raw CLI output, which can contain row values or credentials.
+export function safeDatabaseDiagnostic(stderr) {
+  const text = Buffer.isBuffer(stderr) ? stderr.toString("utf8") : typeof stderr === "string" ? stderr : "";
+  // Keep only a PostgreSQL SQLSTATE and a fixed, non-sensitive category. Never
+  // emit CLI stderr: it can contain row values, connection details, or tokens.
   const match = text.match(/(?:SQLSTATE\s*[:=]?\s*|\bcode\s*[:=]\s*["']?)([0-9A-Z]{5})\b/i);
   const sqlstate = match?.[1]?.toUpperCase() ?? null;
-  let sanitizedMessage = sqlstate ? SQLSTATE_MESSAGES.get(sqlstate) ?? "postgresql_error" : "database_cli_error_without_sqlstate";
-  if (!sqlstate) {
-    if (/certificate|tls|ssl handshake/i.test(text)) sanitizedMessage = "tls_connection_error";
-    else if (/password authentication failed|authentication failed|unauthorized|invalid login/i.test(text)) sanitizedMessage = "database_authentication_error";
-    else if (/timeout|timed out|deadline exceeded/i.test(text)) sanitizedMessage = "database_cli_timeout";
-    else if (/connection refused|connection reset|could not connect|server closed the connection|no route to host|network is unreachable/i.test(text)) sanitizedMessage = "database_connection_error";
-    else if (/unknown flag|unknown option|unexpected argument/i.test(text)) sanitizedMessage = "database_cli_argument_error";
-  }
-  const diagnostic = {
+  return {
     postgresSqlstate: sqlstate,
-    sanitizedMessage,
+    sanitizedMessage: sqlstate ? SQLSTATE_MESSAGES.get(sqlstate) ?? "postgresql_error" : "database_cli_error_without_sqlstate",
   };
-  if (isProcessError) {
-    if (Number.isSafeInteger(input.status)) diagnostic.cliExitCode = Math.abs(input.status);
-    if (typeof input.signal === "string" && ["SIGABRT", "SIGBUS", "SIGFPE", "SIGHUP", "SIGILL", "SIGINT", "SIGKILL", "SIGPIPE", "SIGQUIT", "SIGSEGV", "SIGTERM"].includes(input.signal)) diagnostic.cliSignal = input.signal;
-    if (input.killed === true) diagnostic.cliKilled = true;
-    if (typeof input.code === "string" && ["EACCES", "ECONNREFUSED", "ECONNRESET", "EAI_AGAIN", "ENOBUFS", "ENOENT", "ENOTFOUND", "ETIMEDOUT"].includes(input.code)) diagnostic.cliErrorCode = input.code;
-  }
-  return diagnostic;
 }
 
 export function redactedBackfillFailureCode(error) {
@@ -213,7 +195,7 @@ function runSql(sql, credential) {
   } catch (error) {
     const status = Number.isInteger(error.status) ? String(Math.abs(error.status)) : "timeout_or_signal";
     const failure = Error(`candidate_backfill_query_exit_${status}`);
-    failure.safeDatabaseDiagnostic = safeDatabaseDiagnostic(error);
+    failure.safeDatabaseDiagnostic = safeDatabaseDiagnostic(error.stderr);
     throw failure;
   } finally { fs.rmSync(temp, { force: true }); }
 }

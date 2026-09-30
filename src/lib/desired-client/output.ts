@@ -1,56 +1,125 @@
 import { resolveAnswerReference, WRITE_IN_KEYS } from "./catalog";
-import type { AnalysisResult, AnswerReferencePath, ClarificationCode, DesiredClientAnswers, DesiredClientBrief, DesiredClientStatement } from "./types";
+import { buildDefinitionSentence } from "./definition";
+import type { AnalysisResult, AnswerReferencePath, ClarificationCode, DesiredClientAnswers, DesiredClientBrief, EvidenceBasis, EvidenceLinkedStatement } from "./types";
 
 const SOURCE_PATHS = new Set<string>([
   "focus.area", "focus.work", "focus.work_other", "focus.service_area", "focus.certainty", "focus.route",
+  "practice.direction", "practice.firm_type", "practice.capability", "practice.enjoys",
+  "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus", "client_context.language_service_needs", "client_context.repeat_matter_pattern",
   "situation.trigger", "situation.timing", "situation.role", "situation.role_other", "situation.contact",
-  "client.goals", "client.concerns", "client.decision_needs", "value.reasons", "value.fee_effort", "value.collected_fee", "value.team_hours", "value.payment",
-  "delivery.conditions", "delivery.capacity", "delivery.limit", "delivery.fit_signals", "direction.aim", "direction.evidence", "direction.less", "direction.less_note",
-  ...WRITE_IN_KEYS.map(key => `write_ins.${key}`),
-  "clarifications.FOCUS_UNCLEAR", "clarifications.CLIENT_GOAL_UNCLEAR", "clarifications.CURRENT_CAPACITY_CONFLICT", "clarifications.FEE_EFFORT_CONFLICT", "clarifications.EXPERIENCE_DIRECTION_CONFLICT",
-  ...(["a", "b"] as const).flatMap(side => ["work", "fee_effort", "team_fit", "capacity", "evidence"].map(field => `focus.comparison.${side}.${field}`)),
+  "client.goals", "client.concerns", "client.decision_needs",
+  "value.reasons", "value.fee_effort", "value.collected_fee", "value.team_hours", "value.payment", "value.currency", "value.fee_amount", "value.direct_cost_amount", "value.amount_basis", "value.amount_scope",
+  "delivery.conditions", "delivery.capacity", "delivery.limit", "delivery.fit_signals",
+  "direction.aim", "direction.evidence", "direction.less", "direction.less_note",
+  "opportunity.sources", "opportunity.data_basis", "opportunity.source_detail", "opportunity.period", "opportunity.enquiry_count", "opportunity.retained_count", "opportunity.conversion", "opportunity.acquisition_cost", "opportunity.uncertainty",
+  "repeatability.success_measure", "repeatability.success_other", "repeatability.target", "repeatability.review_period", "repeatability.additional_matters", "repeatability.staffing_constraint",
+  ...WRITE_IN_KEYS.map((key) => `write_ins.${key}`),
+  "clarifications.CLIENT_MATTER_UNCLEAR", "clarifications.VALUE_EFFORT_CONFLICT", "clarifications.CAPACITY_CONFLICT", "clarifications.REPEATABILITY_UNPROVEN", "clarifications.OPPORTUNITY_UNSUPPORTED",
+  ...(["a", "b"] as const).flatMap((side) => ["work", "fee_effort", "team_fit", "capacity", "evidence"].map((field) => `focus.comparison.${side}.${field}`)),
 ]);
+const BASIS: readonly EvidenceBasis[] = ["firm_reported_recorded", "firm_reported_estimate", "firm_preference", "source_observed", "hypothesis", "unknown"];
 const KIND = ["experience", "preference", "hypothesis", "unknown", "suggestion"] as const;
-const FIELDS = { portrait: [60,420], client_need: [35,250], firm_value: [45,320], message: [14,100], content: [16,115], next_step: [14,100], open: [18,130] } as const;
-const UNKNOWN_BANNED = /\u2014|<\/?[a-z][^>]*>|https?:\/\/|\bwww\.|\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b|\[[^\]]+\]\([^)]+\)|%|\bpercent(?:age)?\b/i;
-const numericTokens = (s:string) => [...s.matchAll(/(?:[$€£]\s*)?\d+(?:[\s,]\d{3})*(?:\.\d+)?/gu)].map(m=>m[0].replace(/[^\d.]/g,""));
-const record = (v:unknown):v is Record<string,unknown> => !!v && typeof v === "object" && !Array.isArray(v);
-const exact = (v:unknown, keys:string[]):v is Record<string,unknown> => record(v) && Object.keys(v).length===keys.length && keys.every(k=>Object.hasOwn(v,k));
-function validStatement(v:unknown,a:DesiredClientAnswers,budget:readonly [number,number],slot:string):v is DesiredClientStatement {
-  if(!exact(v,["text","kind","source_answer_ids"]) || typeof v.text!=="string" || typeof v.kind!=="string" || !KIND.includes(v.kind as typeof KIND[number]) || !Array.isArray(v.source_answer_ids)) return false;
-  const text=v.text.trim().replace(/\s+/g," "), words=text.split(" ").filter(Boolean).length;
-  if(!text || text.length>budget[1] || words>budget[0] || UNKNOWN_BANNED.test(text) || (numericTokens(text).length>0 && /\b(?:profit|ROI|return on investment|net margin|hourly rate|per hour)\b/i.test(text))) return false;
-  const paths=v.source_answer_ids as unknown[];
-  if(paths.length<1||paths.length>8||paths.some(p=>typeof p!=="string"||!SOURCE_PATHS.has(p))||new Set(paths).size!==paths.length) return false;
-  const unknownPaths:string[]=[]; const resolvedValues:string[]=[];
-  for(const path of paths as AnswerReferencePath[]) {
-    const resolved=resolveAnswerReference(path,a);
-    if(!resolved.present||resolved.value===null) return false;
-    if(resolved.unknown) unknownPaths.push(path); else resolvedValues.push(resolved.value);
+const BUDGETS = {
+  definition_firm: [25, 180], definition_client: [45, 320], definition_reasons: [35, 250], definition_outcome: [25, 180],
+  practice_context: [60, 420], desired_client_matter: [100, 700], value_rationale: [90, 650], relevance_signals: [70, 500], opportunity_evidence: [70, 500], repeatability: [65, 450], open: [25, 180],
+} as const;
+const BANNED = /\u2014|<\/?[a-z][^>]*>|https?:\/\/|\bwww\.|\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b|\[[^\]]+\]\([^)]+\)/i;
+const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
+const exact = (value: unknown, keys: readonly string[]): value is Record<string, unknown> => record(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
+const wordCount = (text: string) => text.trim().split(/\s+/u).filter(Boolean).length;
+const numericTokens = (text: string) => [...text.matchAll(/(?:[$€£]\s*)?\d+(?:[\s,]\d{3})*(?:\.\d+)?\s*%?/gu)].map((match) => match[0].replace(/[^\d.%]/g, ""));
+
+function allowedPaths(slot: string): readonly string[] {
+  if (slot.startsWith("definition_firm") || slot === "practice_context") return ["practice.", "focus.", "direction."];
+  if (slot.startsWith("definition_client") || slot === "desired_client_matter") return ["focus.", "situation.", "client.", "client_context.", "write_ins.trigger"];
+  if (slot.startsWith("definition_reasons") || slot === "value_rationale") return ["value.", "delivery.", "practice.", "write_ins.reasons"];
+  if (slot.startsWith("definition_outcome") || slot === "repeatability") return ["repeatability.", "direction.", "value.", "delivery.capacity"];
+  if (slot === "relevance_signals") return ["delivery.", "client_context.", "situation.trigger", "write_ins.conditions", "write_ins.fit_signals", "write_ins.limit"];
+  if (slot === "opportunity_evidence") return ["opportunity."];
+  if (slot === "open") return [...SOURCE_PATHS].map((path) => path.slice(0, path.lastIndexOf(".") + 1));
+  return [];
+}
+
+function validStatement(value: unknown, answers: DesiredClientAnswers, slot: string): value is EvidenceLinkedStatement {
+  const budget = BUDGETS[slot as keyof typeof BUDGETS] ?? BUDGETS.open;
+  if (!exact(value, ["text", "kind", "source_answer_ids", "evidence_basis"]) || typeof value.text !== "string" || typeof value.kind !== "string" || !KIND.includes(value.kind as typeof KIND[number]) || !Array.isArray(value.source_answer_ids) || typeof value.evidence_basis !== "string" || !BASIS.includes(value.evidence_basis as EvidenceBasis)) return false;
+  const text = value.text.trim().replace(/\s+/g, " ");
+  if (!text || text.length > budget[1] || wordCount(text) > budget[0] || BANNED.test(text)) return false;
+  const paths = value.source_answer_ids as unknown[];
+  const prefixes = allowedPaths(slot);
+  if (paths.length < 1 || paths.length > 8 || paths.some((path) => typeof path !== "string" || !SOURCE_PATHS.has(path) || !prefixes.some((prefix) => path.startsWith(prefix))) || new Set(paths).size !== paths.length) return false;
+  let hasUnknown = false;
+  const supportedValues: string[] = [];
+  for (const path of paths as AnswerReferencePath[]) {
+    const resolved = resolveAnswerReference(path, answers);
+    if (!resolved.present || (resolved.value === null && value.evidence_basis !== "unknown")) return false;
+    if (resolved.unknown) hasUnknown = true;
+    else if (typeof resolved.value === "string") supportedValues.push(resolved.value);
+    else return false;
   }
-  if(unknownPaths.length && !(slot==="open" && v.kind==="suggestion")) return false;
-  if(slot==="portrait" && v.kind==="experience" && (a.focus.route!=="established" || paths.every(p=>String(p).startsWith("focus.")))) return false;
-  if(["message","content","next_step"].includes(slot) && v.kind!=="suggestion") return false;
-  if(numericTokens(text).some(n=>!numericTokens(resolvedValues.join(" ")).includes(n))) return false;
+  if (hasUnknown !== (value.evidence_basis === "unknown")) return false;
+  if (value.evidence_basis === "unknown" && value.kind !== "unknown") return false;
+  if (value.evidence_basis === "firm_reported_recorded") {
+    const valueFigure = paths.some((path) => typeof path === "string" && path.startsWith("value."));
+    const opportunityFigure = paths.some((path) => typeof path === "string" && path.startsWith("opportunity."));
+    if (!(valueFigure && answers.value.amount_basis === "recorded") && !(opportunityFigure && answers.opportunity.data_basis === "recorded")) return false;
+  }
+  if (value.evidence_basis === "firm_reported_estimate") {
+    const valueFigure = paths.some((path) => typeof path === "string" && path.startsWith("value."));
+    const opportunityFigure = paths.some((path) => typeof path === "string" && path.startsWith("opportunity."));
+    if (!(valueFigure && answers.value.amount_basis === "estimated") && !(opportunityFigure && answers.opportunity.data_basis === "estimated")) return false;
+  }
+  if (value.evidence_basis === "source_observed" && !(paths.includes("opportunity.sources") && answers.opportunity.sources.some((source) => source !== "unknown"))) return false;
+  if (["firm_reported_recorded", "firm_reported_estimate"].includes(value.evidence_basis as string) && value.kind !== "experience" && value.kind !== "hypothesis") return false;
+  if (value.evidence_basis === "firm_preference" && value.kind !== "preference") return false;
+  if (["source_observed", "hypothesis"].includes(value.evidence_basis as string) && value.kind !== "experience" && value.kind !== "hypothesis" && value.kind !== "suggestion") return false;
+  if (slot === "open" && value.kind !== "unknown" && value.kind !== "suggestion") return false;
+  if (slot !== "open" && value.kind === "suggestion") return false;
+  if (numericTokens(text).some((token) => !numericTokens(supportedValues.join(" ")).includes(token))) return false;
   return true;
 }
-function validArray(v:unknown,a:DesiredClientAnswers,budget:readonly [number,number],min:number,max:number,slot:string):v is DesiredClientStatement[] {
-  return Array.isArray(v)&&v.length>=min&&v.length<=max&&v.every(item=>validStatement(item,a,budget,slot));
+
+function checkDefinitionPart(value: unknown, answers: DesiredClientAnswers, slot: string): value is EvidenceLinkedStatement {
+  return validStatement(value, answers, slot);
 }
-export function validateAnalysisResult(value:unknown,answers:DesiredClientAnswers,eligibleCodes:readonly ClarificationCode[]):AnalysisResult|null {
-  if(!exact(value,["brief","clarification_code"])) return null;
-  if(value.clarification_code!==null && (typeof value.clarification_code!=="string"||value.clarification_code!==eligibleCodes[0])) return null;
-  const b=value.brief;
-  if(!exact(b,["report_version","portrait","client_need","firm_value","marketing","open_questions"])||b.report_version!=="dcm-blueprint-v1") return null;
-  if(!validStatement(b.portrait,answers,FIELDS.portrait,"portrait")||!validStatement(b.client_need,answers,FIELDS.client_need,"client_need")||!validStatement(b.firm_value,answers,FIELDS.firm_value,"firm_value")) return null;
-  if(!exact(b.marketing,["message","content","next_step"])||!validStatement(b.marketing.message,answers,FIELDS.message,"message")||!validStatement(b.marketing.content,answers,FIELDS.content,"content")||!validStatement(b.marketing.next_step,answers,FIELDS.next_step,"next_step")) return null;
-  if(!validArray(b.open_questions,answers,FIELDS.open,0,2,"open")) return null;
+
+function validCard(value: unknown, answers: DesiredClientAnswers, slot: string): value is { claims: EvidenceLinkedStatement[] } {
+  const valid = exact(value, ["claims"]) && Array.isArray(value.claims) && value.claims.length >= 1 && value.claims.length <= 6 &&
+    value.claims.every((claim) => validStatement(claim, answers, slot));
+  return valid;
+}
+
+export function validateAnalysisResult(value: unknown, answers: DesiredClientAnswers, eligibleCodes: readonly ClarificationCode[]): AnalysisResult | null {
+  if (!exact(value, ["brief", "clarification_code"])) return null;
+  if (value.clarification_code !== null && (typeof value.clarification_code !== "string" || value.clarification_code !== eligibleCodes[0])) return null;
+  const brief = value.brief;
+  const fields = ["report_version", "definition_sentence", "definition_components", "practice_context", "desired_client_matter", "value_rationale", "relevance_signals", "opportunity_evidence", "repeatability", "open_questions"];
+  if (!exact(brief, fields) || brief.report_version !== "dcm-blueprint-v2" || typeof brief.definition_sentence !== "string") return null;
+  if (!exact(brief.definition_components, ["firm", "client_matter", "reasons", "outcome"])) return null;
+  const components = brief.definition_components;
+  if (!checkDefinitionPart(components.firm, answers, "definition_firm") || !checkDefinitionPart(components.client_matter, answers, "definition_client") || !checkDefinitionPart(components.reasons, answers, "definition_reasons") || !checkDefinitionPart(components.outcome, answers, "definition_outcome")) return null;
+  const linkedFields = ["practice_context", "desired_client_matter", "value_rationale", "relevance_signals", "opportunity_evidence", "repeatability"] as const;
+  for (const field of linkedFields) if (!validCard(brief[field], answers, field)) return null;
+  if (!Array.isArray(brief.open_questions) || brief.open_questions.length > 4 || brief.open_questions.some((item) => !validStatement(item, answers, "open"))) return null;
+  const expectedSentence = buildDefinitionSentence(brief as unknown as DesiredClientBrief, false);
+  if (brief.definition_sentence.trim() !== expectedSentence) return null;
+  if (wordCount(expectedSentence) > 85 || expectedSentence.length > 650) return null;
+  const typedBrief = brief as unknown as DesiredClientBrief;
+  const reportWords = [...linkedFields.flatMap((field) => typedBrief[field].claims.map((claim) => claim.text)), ...typedBrief.open_questions.map((item) => item.text)].reduce((sum, text) => sum + wordCount(text), wordCount(expectedSentence));
+  if (reportWords > 500) return null;
   return value as unknown as AnalysisResult;
 }
-const STATEMENT_SCHEMA={type:"object",properties:{text:{type:"string"},kind:{type:"string",enum:["experience","preference","hypothesis","unknown","suggestion"]},source_answer_ids:{type:"array",minItems:1,maxItems:8,items:{type:"string"}}},required:["text","kind","source_answer_ids"]} as const;
+
+const LINKED_STATEMENT_SCHEMA = { type: "object", properties: { text: { type: "string" }, kind: { type: "string", enum: KIND }, source_answer_ids: { type: "array", minItems: 1, maxItems: 8, items: { type: "string" } }, evidence_basis: { type: "string", enum: BASIS } }, required: ["text", "kind", "source_answer_ids", "evidence_basis"] } as const;
+const EVIDENCE_CARD_SCHEMA = { type: "object", properties: { claims: { type: "array", minItems: 1, maxItems: 6, items: LINKED_STATEMENT_SCHEMA } }, required: ["claims"] } as const;
 export const BLUEPRINT_RESPONSE_SCHEMA = {
-  type:"object", properties:{
-    clarification_code:{type:"string",nullable:true,enum:["FOCUS_UNCLEAR","CLIENT_GOAL_UNCLEAR","CURRENT_CAPACITY_CONFLICT","FEE_EFFORT_CONFLICT","EXPERIENCE_DIRECTION_CONFLICT"]},
-    brief:{type:"object",properties:{report_version:{type:"string",enum:["dcm-blueprint-v1"]},portrait:STATEMENT_SCHEMA,client_need:STATEMENT_SCHEMA,firm_value:STATEMENT_SCHEMA,marketing:{type:"object",properties:{message:STATEMENT_SCHEMA,content:STATEMENT_SCHEMA,next_step:STATEMENT_SCHEMA},required:["message","content","next_step"]},open_questions:{type:"array",maxItems:2,items:STATEMENT_SCHEMA}},required:["report_version","portrait","client_need","firm_value","marketing","open_questions"]}
-  },required:["clarification_code","brief"]
+  type: "object", properties: {
+    clarification_code: { type: "string", nullable: true, enum: ["CLIENT_MATTER_UNCLEAR", "VALUE_EFFORT_CONFLICT", "CAPACITY_CONFLICT", "REPEATABILITY_UNPROVEN", "OPPORTUNITY_UNSUPPORTED"] },
+    brief: { type: "object", properties: {
+      report_version: { type: "string", enum: ["dcm-blueprint-v2"] }, definition_sentence: { type: "string" },
+      definition_components: { type: "object", properties: { firm: LINKED_STATEMENT_SCHEMA, client_matter: LINKED_STATEMENT_SCHEMA, reasons: LINKED_STATEMENT_SCHEMA, outcome: LINKED_STATEMENT_SCHEMA }, required: ["firm", "client_matter", "reasons", "outcome"] },
+      practice_context: EVIDENCE_CARD_SCHEMA, desired_client_matter: EVIDENCE_CARD_SCHEMA, value_rationale: EVIDENCE_CARD_SCHEMA, relevance_signals: EVIDENCE_CARD_SCHEMA, opportunity_evidence: EVIDENCE_CARD_SCHEMA, repeatability: EVIDENCE_CARD_SCHEMA,
+      open_questions: { type: "array", maxItems: 4, items: LINKED_STATEMENT_SCHEMA },
+    }, required: ["report_version", "definition_sentence", "definition_components", "practice_context", "desired_client_matter", "value_rationale", "relevance_signals", "opportunity_evidence", "repeatability", "open_questions"] },
+  }, required: ["clarification_code", "brief"],
 } as const;

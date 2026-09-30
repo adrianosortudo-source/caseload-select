@@ -10,10 +10,11 @@ import type {
   WorkComparison,
 } from "./types";
 
-const ANSWER_KEYS = ["schema_version", "revision", "focus", "situation", "client", "value", "delivery", "direction", "clarifications"] as const;
+const ANSWER_KEYS = ["schema_version", "revision", "focus", "practice", "client_context", "situation", "client", "value", "delivery", "direction", "opportunity", "repeatability", "clarifications"] as const;
 const CLARIFICATION_CODES: readonly ClarificationCode[] = [
-  "FOCUS_UNCLEAR", "CLIENT_GOAL_UNCLEAR", "CURRENT_CAPACITY_CONFLICT", "FEE_EFFORT_CONFLICT", "EXPERIENCE_DIRECTION_CONFLICT",
+  "CLIENT_MATTER_UNCLEAR", "VALUE_EFFORT_CONFLICT", "CAPACITY_CONFLICT", "REPEATABILITY_UNPROVEN", "OPPORTUNITY_UNSUPPORTED",
 ];
+const LEGACY_CLARIFICATION_CODES = ["FOCUS_UNCLEAR", "CLIENT_GOAL_UNCLEAR", "CURRENT_CAPACITY_CONFLICT", "FEE_EFFORT_CONFLICT", "EXPERIENCE_DIRECTION_CONFLICT"] as const;
 const GOALS: readonly GoalId[] = ["understand", "complete", "resolve", "protect", "prepare", "respond", "unknown"];
 const CONTACT_ROLE_SET: ReadonlySet<string> = new Set(CONTACT_ROLE_IDS);
 const TEXT_MAX = 180;
@@ -40,6 +41,9 @@ const ENUMS = {
   less: ["within", "outside", "model", "none"],
   candidateTeam: ["proven", "stretch", "unknown"],
   candidateEvidence: ["repeated", "few", "none"],
+  practiceDirection: ["grow_proven", "narrow_specialty", "explore_direction", "improve_delivery", "other", "unknown"],
+  opportunitySources: ["comparable_enquiries", "retained_matters", "professional_referrals", "repeat_clients", "website_search", "other_source", "no_evidence", "unknown"],
+  successMeasure: ["retained_matters", "contribution_effort", "predictable_delivery", "practice_mix_reputation", "other", "unknown"],
 } as const;
 
 type RecordValue = Record<string, unknown>;
@@ -77,17 +81,19 @@ function validCandidate(value: unknown, area: AreaId): value is ComparisonCandid
 }
 
 function validClarificationAnswer(code: ClarificationCode, answer: unknown): answer is ClarificationAnswer {
+  if (typeof answer === "string" && answer.trim().length > 0 && answer.length <= 220 && !/[\r\n]/.test(answer)) return true;
   switch (code) {
-    case "FOCUS_UNCLEAR": return answer === "keep_broad";
-    case "CLIENT_GOAL_UNCLEAR": return typeof answer === "string" && GOALS.includes(answer as GoalId) && answer !== "unknown";
-    case "CURRENT_CAPACITY_CONFLICT": return answer === "limited_now" || answer === "build_first";
-    case "FEE_EFFORT_CONFLICT": return answer === "improve_model" || answer === "reconsider_work";
-    case "EXPERIENCE_DIRECTION_CONFLICT": return answer === "current_evidence" || answer === "future_direction";
+    case "CLIENT_MATTER_UNCLEAR": return answer === "choose_specific" || answer === "keep_broad";
+    case "VALUE_EFFORT_CONFLICT": return answer === "improve_model" || answer === "reconsider_work";
+    case "CAPACITY_CONFLICT": return answer === "limited_now" || answer === "build_first";
+    case "REPEATABILITY_UNPROVEN": return answer === "current_evidence" || answer === "future_direction";
+    case "OPPORTUNITY_UNSUPPORTED": return answer === "current_evidence" || answer === "future_direction";
   }
 }
 
-function validateAnswers(value: unknown, answerRevision: number, requireComplete: boolean): value is DesiredClientAnswers {
-  if (!hasExactKeys(value, ANSWER_KEYS) && !hasExactKeys(value, [...ANSWER_KEYS, "write_ins"])) return false;
+function validateLegacyV22Answers(value: unknown, answerRevision: number, requireComplete = false): boolean {
+  const legacyKeys = ["schema_version", "revision", "focus", "situation", "client", "value", "delivery", "direction", "clarifications"] as const;
+  if (!hasExactKeys(value, legacyKeys) && !hasExactKeys(value, [...legacyKeys, "write_ins"])) return false;
   const answers = value;
   if (answers.schema_version !== "dcm-v2.2" || answers.revision !== answerRevision ||
       !Number.isSafeInteger(answers.revision) || answers.revision < 0) return false;
@@ -164,10 +170,10 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
       !isEnum(direction.less, ENUMS.less, true) || !isOptionalText(direction.less_note)) return false;
   if (direction.less_note.trim() !== "" && !["within", "outside", "model"].includes(String(direction.less))) return false;
 
-  if (!hasExactKeys(answers.clarifications, CLARIFICATION_CODES)) return false;
-  for (const code of CLARIFICATION_CODES) {
+  if (!hasExactKeys(answers.clarifications, LEGACY_CLARIFICATION_CODES)) return false;
+  for (const code of LEGACY_CLARIFICATION_CODES) {
     const answer = answers.clarifications[code];
-    if (answer !== null && !validClarificationAnswer(code, answer)) return false;
+    if (answer !== null && !validLegacyClarificationAnswer(code, answer)) return false;
   }
   // Clarification answers carry their required canonical updates into the next
   // same-run snapshot, so the submitted history and current fields cannot drift.
@@ -187,6 +193,84 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
     (direction.aim !== null || own("aim")) && (direction.evidence.length > 0 || own("evidence"));
 }
 
+function validLegacyClarificationAnswer(code: typeof LEGACY_CLARIFICATION_CODES[number], answer: unknown): boolean {
+  switch (code) {
+    case "FOCUS_UNCLEAR": return answer === "keep_broad";
+    case "CLIENT_GOAL_UNCLEAR": return typeof answer === "string" && GOALS.includes(answer as GoalId) && answer !== "unknown";
+    case "CURRENT_CAPACITY_CONFLICT": return answer === "limited_now" || answer === "build_first";
+    case "FEE_EFFORT_CONFLICT": return answer === "improve_model" || answer === "reconsider_work";
+    case "EXPERIENCE_DIRECTION_CONFLICT": return answer === "current_evidence" || answer === "future_direction";
+  }
+}
+
+function validateAnswers(value: unknown, answerRevision: number, requireComplete: boolean): value is DesiredClientAnswers {
+  if (!hasExactKeys(value, ANSWER_KEYS) && !hasExactKeys(value, [...ANSWER_KEYS, "write_ins"])) return false;
+  const a = value as RecordValue;
+  if (a.schema_version !== "dcm-v3.0" || a.revision !== answerRevision || !Number.isSafeInteger(a.revision) || a.revision < 0) return false;
+  const wi = a.write_ins;
+  if (wi !== undefined && (!isRecord(wi) || Object.keys(wi).some(k => !WRITE_IN_KEYS.includes(k as typeof WRITE_IN_KEYS[number]) || !isOptionalText(wi[k])))) return false;
+  const own = (key: typeof WRITE_IN_KEYS[number]) => isRecord(wi) && typeof wi[key] === "string" && (wi[key] as string).trim().length > 0;
+  const exactGroup = (name: string, keys: string[]) => hasExactKeys(a[name], keys);
+
+  if (!exactGroup("focus", ["area", "work", "work_other", "service_area", "certainty", "route", "comparison"]) ||
+    !exactGroup("practice", ["direction", "firm_type", "capability", "enjoys"]) ||
+    !exactGroup("client_context", ["geography", "relevant_circumstances", "community_focus", "language_service_needs", "repeat_matter_pattern"]) ||
+    !exactGroup("situation", ["trigger", "timing", "role", "role_other", "contact"]) ||
+    !exactGroup("client", ["goals", "concerns", "decision_needs"]) ||
+    !exactGroup("value", ["reasons", "fee_effort", "collected_fee", "team_hours", "payment", "currency", "fee_amount", "direct_cost_amount", "amount_basis", "amount_scope"]) ||
+    !exactGroup("delivery", ["conditions", "capacity", "limit", "fit_signals"]) ||
+    !exactGroup("direction", ["aim", "evidence", "less", "less_note"]) ||
+    !exactGroup("opportunity", ["sources", "data_basis", "source_detail", "period", "enquiry_count", "retained_count", "conversion", "acquisition_cost", "uncertainty"]) ||
+    !exactGroup("repeatability", ["success_measure", "success_other", "target", "review_period", "additional_matters", "staffing_constraint"]) ||
+    !hasExactKeys(a.clarifications, CLARIFICATION_CODES)) return false;
+
+  const focus = a.focus as RecordValue;
+  const practice = a.practice as RecordValue;
+  const clientContext = a.client_context as RecordValue;
+  const situation = a.situation as RecordValue;
+  const client = a.client as RecordValue;
+  const valueGroup = a.value as RecordValue;
+  const delivery = a.delivery as RecordValue;
+  const direction = a.direction as RecordValue;
+  const opportunity = a.opportunity as RecordValue;
+  const repeatability = a.repeatability as RecordValue;
+  const clarifications = a.clarifications as RecordValue;
+
+  for (const [field, max] of Object.entries({"practice.firm_type":180,"practice.capability":600,"practice.enjoys":600,
+    "client_context.geography":240,"client_context.relevant_circumstances":600,"client_context.community_focus":300,
+    "client_context.language_service_needs":300,"client_context.repeat_matter_pattern":600,"value.currency":12,
+    "value.fee_amount":80,"value.direct_cost_amount":80,"opportunity.source_detail":400,"opportunity.period":120,
+    "opportunity.enquiry_count":80,"opportunity.retained_count":80,"opportunity.conversion":80,"opportunity.acquisition_cost":80,
+    "opportunity.uncertainty":400,"repeatability.success_other":240,"repeatability.target":160,"repeatability.review_period":120,
+    "repeatability.additional_matters":120,"repeatability.staffing_constraint":300})) {
+    const [group, key] = field.split("."); const val = ({ practice, client_context: clientContext, value: valueGroup, opportunity, repeatability } as Record<string, RecordValue>)[group][key];
+    if (typeof val !== "string" || val.length > max || /[\r\n]/.test(val)) return false;
+  }
+  if (!isEnum(practice.direction, ENUMS.practiceDirection, true) || !isEnum(valueGroup.amount_basis, ["recorded","estimated","unknown"], true) ||
+    !isEnum(opportunity.data_basis, ["recorded","estimated","unknown"], true) ||
+    !isEnum(valueGroup.amount_scope, ["per_matter","range","other"], true) || !isEnum(repeatability.success_measure, ENUMS.successMeasure, true)) return false;
+  if (!isUniqueChoiceArray(opportunity.sources, ENUMS.opportunitySources, 8) || !exclusive(opportunity.sources,"unknown") || !exclusive(opportunity.sources,"no_evidence")) return false;
+  if (repeatability.success_measure !== "other" && (repeatability.success_other as string).trim()) return false;
+  if (Object.values(clarifications).some((answer, i) => answer !== null && !validClarificationAnswer(CLARIFICATION_CODES[i], answer))) return false;
+
+  const legacyProjection = {
+    schema_version: "dcm-v2.2", revision: a.revision, ...(wi ? {write_ins:wi} : {}), focus:{...focus,certainty:focus.certainty === "provisional" && !focus.comparison ? "chosen" : focus.certainty},
+    situation, client,
+    value:{reasons:valueGroup.reasons,fee_effort:valueGroup.fee_effort,collected_fee:valueGroup.collected_fee,team_hours:valueGroup.team_hours,payment:valueGroup.payment},
+    delivery,direction,
+    clarifications:{FOCUS_UNCLEAR:null,CLIENT_GOAL_UNCLEAR:null,CURRENT_CAPACITY_CONFLICT:null,FEE_EFFORT_CONFLICT:null,EXPERIENCE_DIRECTION_CONFLICT:null},
+  };
+  if (!validateLegacyV22Answers(legacyProjection, answerRevision, false)) return false;
+  if (!requireComplete) return true;
+  return !!focus.area && focus.work !== null && focus.route !== null && practice.direction !== null &&
+    situation.trigger !== null && situation.timing !== null && situation.role !== null && (valueGroup.reasons as unknown[]).length > 0 &&
+    delivery.capacity !== null && (delivery.fit_signals as unknown[]).length > 0 && (opportunity.sources as unknown[]).length > 0 && repeatability.success_measure !== null;
+}
+
+export function validateLegacyV22DraftAnswers(value: unknown): boolean {
+  return isRecord(value) && value.schema_version === "dcm-v2.2" && validateLegacyV22Answers(value, value.revision as number, false);
+}
+
 /** Validates an incomplete saved draft without rejecting a normal mid-edit state. */
 export function validateDraftAnswers(value: unknown): value is DesiredClientAnswers {
   if (!isRecord(value) || !Number.isSafeInteger(value.revision) || (value.revision as number) < 0) return false;
@@ -200,7 +284,7 @@ export type AnalysisRequestValidation =
 export function validateAnalysisRequest(input: unknown): AnalysisRequestValidation {
   const keys = ["schemaVersion", "requestId", "answerRevision", "reviewRunId", "analysisIndex", "aiConsent", "answers", "clarifications"];
   if (!hasExactKeys(input, keys)) return { valid: false, reason: "invalid envelope keys" };
-  if (input.schemaVersion !== 2 || input.aiConsent !== true || !Number.isSafeInteger(input.answerRevision) ||
+  if (input.schemaVersion !== 3 || input.aiConsent !== true || !Number.isSafeInteger(input.answerRevision) ||
       (input.answerRevision as number) < 0 || ![0, 1, 2].includes(input.analysisIndex as number)) {
     return { valid: false, reason: "invalid envelope values" };
   }

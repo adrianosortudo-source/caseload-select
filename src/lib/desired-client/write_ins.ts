@@ -2,11 +2,11 @@ import { WRITE_IN_KEYS } from "./catalog";
 import type { DesiredClientAnswers, WriteInKey } from "./types";
 
 const LABELS: Record<WriteInKey, string> = {
-  timing: "Timing", contact: "First contact", goals: "Client goal",
+  timing: "Preferred stage of engagement", contact: "First contact", goals: "Client goal",
   concerns: "Client concern", reasons: "Reason to pursue the work", fee_effort: "Fee compared with effort",
-  conditions: "Delivery condition", capacity: "Current capacity", limit: "Important limit",
-  aim: "Direction", evidence: "Supporting evidence",
-  trigger: "Situation prompting help", decision_needs: "What would help the client decide", fit_signals: "Early fit signals",
+  conditions: "Delivery condition", capacity: "Current capacity", limit: "Important delivery limit",
+  aim: "Practice direction", evidence: "Evidence supporting the direction",
+  trigger: "Situation prompting help", decision_needs: "What would help the client decide", fit_signals: "Observable enquiry fit signals",
 };
 
 /** Supplied wording stays visible even when a short brief paraphrases it. */
