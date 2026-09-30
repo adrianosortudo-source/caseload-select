@@ -45,7 +45,8 @@ export const CANDIDATE_RELEASE_PATHS = Object.freeze([
   "supabase/migrations/20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
   "supabase/migrations/20260925200000_gta_prospect_operator_database_firm_profile_link.sql",
 ]);
-export const CANDIDATE_READER_REPAIR_PATH = "supabase/migrations/20260930004100_prospect_candidate_reader_timeout_fix.sql";
+export const CANDIDATE_READER_TIMEOUT_PATH = "supabase/migrations/20260930004100_prospect_candidate_reader_timeout_fix.sql";
+export const CANDIDATE_READER_REPAIR_PATH = "supabase/migrations/20260930050000_prospect_candidate_coverage_warning_index.sql";
 export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
 export const RELEASE_PATH = "scripts/prospect-enrichment/migration-release.json";

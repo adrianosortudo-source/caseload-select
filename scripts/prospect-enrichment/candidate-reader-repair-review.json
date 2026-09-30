@@ -4,12 +4,12 @@
   "reviewOnly": true,
   "productionApplicationApproved": false,
   "migration": {
-    "path": "supabase/migrations/20260930004100_prospect_candidate_reader_timeout_fix.sql",
-    "filename": "20260930004100_prospect_candidate_reader_timeout_fix.sql",
-    "version": "20260930004100",
-    "name": "prospect_candidate_reader_timeout_fix",
-    "bytes": 16645,
-    "sha256": "13b4639992619cbf80634e3762642bb37b6269be865c154525d0c8e8a3bd3c82"
+    "path": "supabase/migrations/20260930050000_prospect_candidate_coverage_warning_index.sql",
+    "filename": "20260930050000_prospect_candidate_coverage_warning_index.sql",
+    "version": "20260930050000",
+    "name": "prospect_candidate_coverage_warning_index",
+    "bytes": 6655,
+    "sha256": "605be547547046b74cc4dbf4aa5b75fc07dfb1c3bea811fb5f307f1ddf309c15"
   },
   "exclusions": [
     "No research data import or identity link",
