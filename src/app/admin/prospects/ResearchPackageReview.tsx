@@ -83,7 +83,8 @@ export default function ResearchPackageReview({ packageId, initialData }: { pack
       const result = await readResearchResponse<Record<string, unknown>>(response);
       if (result.outcome !== "already_applied") throw new Error("Admin did not confirm an unchanged, already-applied receipt. Stop and inspect the package history.");
       const appliedReceipt = record.receipt as Record<string, unknown>;
-      if (stableProspectEnrichmentJson({ ...result, outcome: "applied" }) !== stableProspectEnrichmentJson(appliedReceipt)) {
+      const replayedReceipt = Object.fromEntries(Object.entries(result).filter(([key]) => key !== "outcome"));
+      if (stableProspectEnrichmentJson(replayedReceipt) !== stableProspectEnrichmentJson(appliedReceipt)) {
         throw new Error("Admin returned a different application receipt. Stop and reconcile the package before continuing.");
       }
       setMessage("Duplicate protection verified. Admin returned the original applied receipt.");
