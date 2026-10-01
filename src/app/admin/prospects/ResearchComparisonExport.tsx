@@ -1,23 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { prepareResearchComparisonUpload, researchComparisonEndpoint, verifyResearchComparisonResponse, type ResearchComparisonMode } from "@/lib/prospect-enrichment-comparison-upload";
 import { readResearchResponse } from "./ResearchEvidence";
 
 export default function ResearchComparisonExport({ sourceRunKey }: { sourceRunKey?: string }) {
   const [mode, setMode] = useState<ResearchComparisonMode>(sourceRunKey ? "finalized" : "bootstrap");
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null), [status, setStatus] = useState<string | null>(null);
+  const [download, setDownload] = useState<{ href: string; filename: string } | null>(null);
+  useEffect(() => () => { if (download) URL.revokeObjectURL(download.href); }, [download]);
   async function exportSnapshot(file: File | undefined) {
     if (!file) return;
-    setBusy(true); setError(null); setStatus(null);
+    setBusy(true); setError(null); setStatus(null); setDownload(null);
     try {
       const upload = await prepareResearchComparisonUpload(file, sourceRunKey);
       const response = await fetch(researchComparisonEndpoint(mode), { method: "POST", headers: upload.headers, body: upload.body, cache: "no-store", credentials: "same-origin" });
       const result = await readResearchResponse<Record<string, unknown>>(response);
       verifyResearchComparisonResponse(result, mode, upload.requestSha256);
       const blob = new Blob([JSON.stringify(result, null, 2) + "\n"], { type: "application/json" });
-      const url = URL.createObjectURL(blob), anchor = document.createElement("a");
-      anchor.href = url; anchor.download = `prospect-enrichment-comparison-${upload.runId}.json`; anchor.click(); window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const url = URL.createObjectURL(blob), filename = `prospect-enrichment-comparison-${upload.runId}.json`;
+      setDownload({ href: url, filename });
       setStatus("Admin read-back finished.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Admin could not verify the comparison request."); }
     finally { setBusy(false); }
@@ -45,7 +47,7 @@ export default function ResearchComparisonExport({ sourceRunKey }: { sourceRunKe
       <li data-ui-copy="supporting">Split into complete child runs.</li>
     </ul>
     {busy && <p role="status" className="mt-2 text-sm" data-ui-copy="supporting">Reading Admin records…</p>}
-    {status && <div role="status" className="mt-2 space-y-1 text-sm"><p data-ui-copy="supporting">{status}</p><p data-ui-copy="supporting">Save the download with this run.</p></div>}
+    {status && <div role="status" className="mt-2 space-y-1 text-sm"><p data-ui-copy="supporting">{status}</p>{download && <a className="inline-block rounded-md border border-border-brand px-3 py-2 font-semibold text-navy underline" href={download.href} download={download.filename}>Download signed comparison</a>}<p data-ui-copy="supporting">Save the download with this run.</p></div>}
     {error && <p role="alert" className="mt-2 text-sm" data-ui-copy="supporting">{error}</p>}
   </section>;
 }
