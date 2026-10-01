@@ -5,8 +5,9 @@ import { getAnswerLabel, resolveAnswerReference } from "./catalog";
 import { getMissingFieldsForStage } from "./screens";
 import { isBoundedMultilineText, validateDraftAnswers } from "./validation";
 import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
-import type {
-  AnswerReferencePath, DesiredClientAnswers, InterviewClarificationAnswer,
+import {
+  isInterviewClarificationCurrent,
+  type AnswerReferencePath, type DesiredClientAnswers, type InterviewClarificationAnswer,
   InterviewClarificationPrompt, InterviewClarificationPurpose,
   InterviewClarificationRequestEnvelope, InterviewClarificationSuccessEnvelope,
   InterviewStage,
