@@ -32,6 +32,7 @@ const GATES = Object.freeze({
   "candidate-preflight": ["additive-release-gate.mjs", "source-authorization"],
   "candidate-release": ["additive-release-gate.mjs", "application-source-authorization"],
   "candidate-reader-repair": ["candidate-reader-repair-gate.mjs", "source"],
+  "candidate-registration-repair": ["candidate-registration-repair-gate.mjs", "source-authorization"],
 });
 
 export function validateTemporaryCredential(payload, issuedAt, now = Date.now()) {
