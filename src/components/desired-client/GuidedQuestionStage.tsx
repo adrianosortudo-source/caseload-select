@@ -155,7 +155,7 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
         {area&&<p className="dc-question-example" data-ui-copy="supporting"><strong>Example, not a suggested answer:</strong> {TRIGGER_EXAMPLES[area]}</p>}
         {radio("dc-timing","At what stage does the client usually contact a lawyer?",entries(TIMING_LABELS),answers.situation.timing,(a,v)=>{a.situation.timing=v as typeof a.situation.timing;clearWriteIn(a,"timing");},"For example, before a decision, once a problem appears, or close to a deadline.")}
         {radio("dc-contact","Who usually makes the first contact?",entries(CONTACT_LABELS),answers.situation.contact,(a,v)=>{a.situation.contact=v as typeof a.situation.contact;},"Optional client-pathway detail. Roles only, not names.",false)}
-        <section className="dc-optional"><h2>Specific matter and client context</h2>
+        <section className="dc-stage__group"><h2>Specific matter and client context</h2>
           {text("Where should the firm be able to serve this client?",answers.client_context.geography,(a,v)=>{a.client_context.geography=v;},"Add relevant cities, regions, provinces or jurisdictions.")}
           {text("What client or matter circumstances would help distinguish a good-fit enquiry?",answers.client_context.relevant_circumstances,(a,v)=>{a.client_context.relevant_circumstances=v;},"Include circumstances that matter for this service. Do not assume wealth, income, assets or business size.")}
           {text("Is there a community the firm specifically serves?",answers.client_context.community_focus,(a,v)=>{a.client_context.community_focus=v;},"Describe a genuine service or community focus. Do not infer an individual client's needs from background.")}
