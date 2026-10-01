@@ -33,6 +33,18 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
   const pool = new Pool({ connectionString: databaseUrl, max: 4 });
   afterAll(async () => { await pool.end(); });
 
+  it("gives registration projection RPCs a bounded timeout above the authenticator default", async () => {
+    const result = await pool.query<{ proname: string; proconfig: string[] | null }>(
+      `SELECT proname, proconfig FROM pg_proc
+       WHERE oid IN (
+         'public.register_prospect_enrichment_manifest_chunk_v1(text,jsonb,boolean)'::regprocedure,
+         'public.record_prospect_enrichment_manifest_hold_evidence_v1(text,text,text,jsonb)'::regprocedure
+       ) ORDER BY proname`,
+    );
+    expect(result.rows).toHaveLength(2);
+    for (const row of result.rows) expect(row.proconfig).toContain("statement_timeout=30s");
+  });
+
   it("keeps package history private and append-only, and invalidates a review when an import batch completes", async () => {
     const suffix = randomUUID().replaceAll("-", "");
     const sourceRecordKey = `pe-test-${suffix}`;
@@ -227,7 +239,26 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
         );
         return result.rows[0].receipt;
       };
-      expect(await heldEvidenceReceipt()).toMatchObject({ outcome: "held_evidence_recorded", runId: runKey, entryId: heldCandidateEntry.entryId, evidenceSha256: heldCandidateEvidenceSha256 });
+      await writerB.query("BEGIN");
+      try {
+        await writerB.query("SET LOCAL ROLE service_role");
+        const privilege = await writerB.query<{ can_update_manifest: boolean }>(
+          "SELECT has_table_privilege(current_user,'public.prospect_enrichment_run_manifest_items','UPDATE') AS can_update_manifest",
+        );
+        expect(privilege.rows[0].can_update_manifest).toBe(false);
+        const serviceReceipt = await writerB.query<{ receipt: Record<string, unknown> }>(
+          `SELECT public.record_prospect_enrichment_manifest_hold_evidence_v1($1,$2,$3,$4::jsonb) AS receipt`,
+          [`integration-${suffix}`, runKey, heldCandidateEntry.entryId, JSON.stringify(heldCandidateEvidence)],
+        );
+        expect(serviceReceipt.rows[0].receipt).toMatchObject({
+          outcome: "held_evidence_recorded", runId: runKey, entryId: heldCandidateEntry.entryId,
+          evidenceSha256: heldCandidateEvidenceSha256,
+        });
+        await writerB.query("COMMIT");
+      } catch (error) {
+        await writerB.query("ROLLBACK");
+        throw error;
+      }
       expect(await heldEvidenceReceipt()).toMatchObject({ outcome: "held_evidence_replayed", runId: runKey, entryId: heldCandidateEntry.entryId, evidenceSha256: heldCandidateEvidenceSha256 });
       expect(await registerManifest(true)).toMatchObject({ outcome: "finalized", manifestState: "finalized" });
       expect(await registerManifest(true)).toMatchObject({ outcome: "already_finalized", manifestState: "finalized" });
