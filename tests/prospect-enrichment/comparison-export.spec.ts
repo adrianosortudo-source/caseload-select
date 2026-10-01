@@ -11,11 +11,13 @@ test("comparison export binds the upload to the logical run key, not the Admin d
   await waitForResearch(page);
 
   const responsePromise = page.waitForResponse((response) => response.url().endsWith("/api/admin/prospect-enrichment/comparison-export") && response.request().method() === "POST");
-  const downloadPromise = page.waitForEvent("download");
   await page.locator("#prospect-comparison-request").setInputFiles(fixture.comparisonRequestPath);
   const response = await responsePromise;
   const exportBody = response.status() === 200 ? null : await response.json();
   expect(response.status(), JSON.stringify(exportBody?.diagnostic ?? exportBody)).toBe(200);
+  await expect(page.getByRole("link", { name: "Download signed comparison" })).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download signed comparison" }).click();
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toBe("prospect-enrichment-comparison-" + fixture.sourceRunKey + ".json");
   const snapshot = JSON.parse(readFileSync(await download.path(), "utf8")) as { signature?: { algorithm?: unknown; signatureBase64?: unknown } };
@@ -54,8 +56,10 @@ test("initial comparison is available with no recorded runs and preserves gzip t
     expect((await renderedCopyFailures(page)).filter((failure) => failure.startsWith("research-comparison-export/"))).toEqual([]);
     await test.info().attach(`comparison-upload-${width}`, { body: await page.locator('[aria-label="Export authenticated comparison"]').screenshot(), contentType: "image/png" });
   }
-  const downloadPromise = page.waitForEvent("download");
   await page.locator("#prospect-comparison-request").setInputFiles({ name: "initial-request.json.gz", mimeType: "application/gzip", buffer: compressed });
+  await expect(page.getByRole("link", { name: "Download signed comparison" })).toBeVisible();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("link", { name: "Download signed comparison" }).click();
   expect((await downloadPromise).suggestedFilename()).toBe("prospect-enrichment-comparison-" + fixture.sourceRunKey + ".json");
   expect(encoding).toBe("gzip"); expect(wireBody).toEqual(compressed);
 });
