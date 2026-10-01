@@ -4,9 +4,10 @@ import { WELCOME_COPY } from "@/lib/desired-client/copy";
 
 export interface WelcomeScreenProps {
   onStart: () => void;
+  aiAvailable?: boolean | null;
 }
 
-export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
+export function WelcomeScreen({ onStart, aiAvailable = null }: WelcomeScreenProps) {
   return (
     <section
       className="dc-welcome"
@@ -19,7 +20,9 @@ export function WelcomeScreen({ onStart }: WelcomeScreenProps) {
       <p className="dc-welcome__description" data-ui-copy="body">
         {WELCOME_COPY.description}
       </p>
-      <p className="dc-welcome__supporting" data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure}</p>
+      {aiAvailable === false
+        ? <p className="dc-welcome__availability" role="status" data-ui-copy="supporting">AI-assisted drafting and follow-up questions are currently unavailable. You can still complete the exercise and create a structured Desired Client Blueprint from your answers.</p>
+        : <p className="dc-welcome__supporting" data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure}</p>}
       <div className="dc-welcome__guide" data-ui-component-content="desired-client-welcome-guide">
         <p data-ui-copy="body"><strong>Time:</strong> {WELCOME_COPY.time}</p>
         <p data-ui-copy="body"><strong>How it works:</strong> {WELCOME_COPY.process}</p>

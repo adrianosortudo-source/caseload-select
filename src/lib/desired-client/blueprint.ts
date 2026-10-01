@@ -1,7 +1,8 @@
-import { AREA_CATALOG, getWorkLabel } from "./catalog";
+import { AREA_CATALOG, getAnswerLabel, getWorkLabel } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
 import { calculateContribution, type CalculatedContribution } from "./economics";
 import { getSourceDetails } from "./sources";
+import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
 import type { AnswerReferencePath, ClientDecisionPathway, DesiredClientAnswers, DesiredClientBrief, DesiredClientBriefV2, DesiredClientBriefV4, EvidenceBasis, EvidenceCard, EvidenceLinkedStatement, SavedBrief } from "./types";
 
 export type BlueprintMetadata = {
@@ -44,6 +45,8 @@ export type BlueprintViewModel = {
   cards: BlueprintCard[];
   decisionPathway: ClientDecisionPathway | null;
   openQuestions: EvidenceLinkedStatement[];
+  conditions: string[];
+  progressReview: { metric: string; target: string; reviewPeriod: string; status: string };
   sourceDetails: Array<{ slot: string; statement: EvidenceLinkedStatement; answers: Array<{ path: AnswerReferencePath; question: string; answer: string | null }> }>;
   allAnswers: Array<{ question: string; answer: string }>;
 };
@@ -70,19 +73,6 @@ const V4_CARD_DEFINITIONS = [
   ["recognition", "Recognizable circumstances", "recognizable_circumstances"],
   ["evidence", "Evidence and open questions", "evidence_and_open_questions"],
 ] as const;
-
-const ANSWER_PATHS: AnswerReferencePath[] = [
-  "focus.area", "focus.work", "focus.work_other", "focus.service_area", "focus.certainty", "focus.route",
-  "practice.direction", "practice.firm_type", "practice.capability", "practice.enjoys", "practice.experience", "practice.development_needs",
-  "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus", "client_context.language_service_needs", "client_context.repeat_matter_pattern",
-  "situation.trigger", "write_ins.trigger", "situation.timing", "situation.role", "situation.role_other", "situation.contact",
-  "client.goals", "write_ins.goals", "client.concerns", "write_ins.concerns", "client.decision_needs", "write_ins.decision_needs",
-  "value.reasons", "write_ins.reasons", "value.fee_effort", "write_ins.fee_effort", "value.collected_fee", "value.team_hours", "value.payment", "value.currency", "value.fee_amount", "value.direct_cost_amount", "value.amount_basis", "value.amount_scope",
-  "delivery.conditions", "write_ins.conditions", "delivery.capacity", "write_ins.capacity", "delivery.limit", "write_ins.limit", "delivery.fit_signals", "write_ins.fit_signals",
-  "direction.aim", "write_ins.aim", "direction.evidence", "write_ins.evidence", "direction.less", "direction.less_reason", "direction.less_note",
-  "opportunity.sources", "opportunity.source_detail", "opportunity.period", "opportunity.enquiry_count", "opportunity.retained_count", "opportunity.conversion", "opportunity.acquisition_cost", "opportunity.uncertainty",
-  "repeatability.success_measure", "repeatability.success_other", "repeatability.target", "repeatability.review_period", "repeatability.additional_matters", "repeatability.staffing_constraint",
-];
 
 function evidenceStatus(brief: DesiredClientBrief | DesiredClientBriefV2 | DesiredClientBriefV4): string {
   const statements = brief.report_version === "dcm-blueprint-v4"
@@ -142,7 +132,7 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
     statement,
     answers: statement.source_answer_ids.map((path: AnswerReferencePath) => ({ ...getSourceDetails(path, answers), path })),
   }));
-  const allAnswers = ANSWER_PATHS.flatMap((path) => {
+  const allAnswers = DESIRED_CLIENT_ANSWER_PATHS.flatMap((path) => {
     const source = getSourceDetails(path, answers);
     return source.answer === null || !source.answer.trim() ? [] : [{ question: source.question, answer: source.answer }];
   }).filter((item, index, list) => list.findIndex((candidate) => candidate.question === item.question && candidate.answer === item.answer) === index);
@@ -152,6 +142,29 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
     : answers.focus.area && answers.focus.work ? getWorkLabel(answers.focus.area, answers.focus.work) : "Matter to define";
   const title = work && work !== "Matter to define" ? `${area}: ${work}` : `${area} desired client profile`;
   const confirmed = meta.wordingReviewed;
+  const contributionResult = calculateContribution(answers);
+  const conditions: string[] = [];
+  if (!answers.client_context.repeat_matter_pattern.trim()) conditions.push("The specific legal engagement still needs to be defined.");
+  if (!answers.client.goal_detail.trim()) conditions.push(answers.client.goals.includes("unknown") ? "The firm marked the client's practical benefit as not yet known." : "The practical benefit to the client still needs to be described.");
+  if (answers.delivery.capacity === "unknown" || !answers.delivery.capacity) conditions.push("Capacity to take on more of this work has not been established.");
+  if (answers.delivery.capacity === "limited") conditions.push("Current capacity is limited; confirm what volume the team can support.");
+  if (answers.delivery.capacity === "change") conditions.push("The team reported that growth depends on a delivery change.");
+  if (answers.repeatability.staffing_constraint.trim()) conditions.push(`Before increasing volume, the firm identified this prerequisite: ${answers.repeatability.staffing_constraint.trim()}`);
+  if (answers.repeatability.additional_matters.trim() && /^(0|none|no additional|zero)\b/i.test(answers.repeatability.additional_matters.trim())) conditions.push("The firm reported no additional matter capacity at present.");
+  if (contributionResult && contributionResult.amount.startsWith("-")) conditions.push(`The supplied fee and direct-cost figures calculate to a negative contribution of ${contributionResult.amount} before overhead and acquisition costs; resolve this conflict before treating the work as commercially attractive.`);
+  else if ((answers.value.fee_amount.trim() || answers.value.direct_cost_amount.trim()) && !contributionResult) conditions.push("The supplied financial figures could not be compared on the same currency, scope and per-matter basis.");
+  if (answers.opportunity.uncertainty.trim()) conditions.push(`Demand uncertainty reported by the firm: ${answers.opportunity.uncertainty.trim()}`);
+  if (answers.opportunity.sources.includes("unknown") || answers.opportunity.sources.includes("no_evidence")) conditions.push("Demand and acquisition evidence still need to be established.");
+  if (answers.practice.experience === "new" && answers.practice.development_needs.length) conditions.push("This is a new area for the firm; identify the development work required before increasing volume.");
+  const progressMeasure = answers.repeatability.success_measure && answers.repeatability.success_measure !== "unknown"
+    ? answers.repeatability.success_measure === "other" ? answers.repeatability.success_other.trim() : getAnswerLabel("repeatability.success_measure", answers) ?? ""
+    : "";
+  const progressReview = {
+    metric: progressMeasure || "Not selected",
+    target: answers.repeatability.target.trim() || "Not set",
+    reviewPeriod: answers.repeatability.review_period.trim() || "Not set",
+    status: progressMeasure && answers.repeatability.target.trim() ? "Proposed; firm approval required" : "Needs definition",
+  };
   return {
     title,
     status: confirmed ? "Wording reviewed" : "Draft wording",
@@ -164,6 +177,8 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
     cards,
     decisionPathway: brief.report_version === "dcm-blueprint-v4" ? brief.decision_pathway : null,
     openQuestions: brief.report_version === "dcm-blueprint-v4" ? [] : brief.open_questions,
+    conditions,
+    progressReview,
     sourceDetails,
     allAnswers,
   };

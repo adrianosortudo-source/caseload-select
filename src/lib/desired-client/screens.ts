@@ -32,7 +32,9 @@ export function getMissingRequiredFields(answers: DesiredClientAnswers): string[
   if (!answers.situation.role || answers.situation.role === "other" && !answers.situation.role_other.trim()) missing.push("situation.role");
   if (!answers.situation.trigger && !answers.write_ins?.trigger?.trim()) missing.push("situation.trigger");
   if (!answers.situation.timing) missing.push("situation.timing");
+  if (!answers.client_context.repeat_matter_pattern.trim()) missing.push("client_context.repeat_matter_pattern");
   if (answers.client.goals.length === 0) missing.push("client.goals");
+  if (!answers.client.goal_detail.trim() && !answers.client.goals.includes("unknown")) missing.push("client.goal_detail");
   if (answers.value.reasons.length === 0 && !answers.write_ins?.reasons?.trim()) missing.push("value.reasons");
   if (!answers.value.fee_effort) missing.push("value.fee_effort");
   if (answers.client.choice_priorities.length === 0) missing.push("client.choice_priorities");
@@ -45,7 +47,7 @@ export function getMissingRequiredFields(answers: DesiredClientAnswers): string[
 export function getMissingFieldsForStage(stage: StageId, answers: DesiredClientAnswers): string[] {
   const byStage: Record<Exclude<StageId, 7>, string[]> = {
     1: ["practice.direction"],
-    2: ["focus.area", "focus.work", "situation.role", "situation.trigger", "situation.timing", "client.goals", "practice.experience"],
+    2: ["focus.area", "focus.work", "situation.role", "situation.trigger", "situation.timing", "client_context.repeat_matter_pattern", "client.goals", "client.goal_detail", "practice.experience"],
     3: ["value.reasons", "value.fee_effort"],
     4: ["client.choice_priorities", "practice.client_strength"],
     5: ["delivery.fit_signals"],

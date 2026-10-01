@@ -10,9 +10,10 @@ describe("v4 provenance and client pathway", () => {
   it("keeps the law firm out of the desired-client identity and does not approve a target on wording review", () => {
     const result=validBlueprint();
     expect(result.brief.definition_components).not.toHaveProperty("firm");
-    expect(result.brief.definition_sentence).toMatch(/^The firm wants to attract and serve business owners seeking/);
-    expect(buildDefinitionSentence(result.brief,true)).toBe(buildDefinitionSentence(result.brief,false));
-    expect(result.brief.definition_sentence).toContain("proposed");
+    expect(result.brief.definition_sentence).toMatch(/^The firm wants to attract and serve business owners for matters such as/);
+    expect(buildDefinitionSentence(result.brief,true,completeAnswers().client.goal_detail)).toBe(buildDefinitionSentence(result.brief,false,completeAnswers().client.goal_detail));
+    expect(result.brief.definition_sentence).toContain("so the client can understand the assets, liabilities and closing obligations");
+    expect(result.brief.definition_sentence).not.toContain("progress will be assessed");
   });
   it("requires the separate pathway and rejects an omitted stage", () => {
     const result=validBlueprint();
@@ -81,14 +82,22 @@ describe("v4 provenance and client pathway", () => {
     expect(brief.recognizable_circumstances.claims[0].text).toContain(a.client_context.relevant_circumstances);
     expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
   });
-  it("keeps the generated opening definition concise and states a useful measure", () => {
+  it("keeps the generated opening definition concise and separates the progress measure", () => {
     const a=completeAnswers();
     const b=buildStructuredBlueprintV4(a);
     expect(validateAnalysisResult({brief:b,clarification_code:null},a,[])).not.toBeNull();
     expect(b.definition_sentence.split(/\s+/).length).toBeLessThanOrEqual(85);
-    expect(b.definition_sentence).toContain("seeking legal help with");
+    expect(b.definition_sentence).toContain("for matters such as a business buyer");
     expect(b.definition_sentence).toContain("because the firm cites");
-    expect(b.definition_sentence).toContain("a measure of retained matters");
+    expect(b.definition_sentence).toContain("so the client can understand the assets");
+    expect(b.definition_sentence).not.toContain("retained matters");
+  });
+  it("keeps the complete long matter answer in supporting detail while producing a valid bounded definition",()=>{
+    const a=completeAnswers();
+    a.client_context.repeat_matter_pattern=`A buyer of an established operating business needs an asset purchase agreement drafted or reviewed before agreeing to final terms. ${"The buyer also needs advice on due diligence, excluded assets, assumed liabilities, payment mechanics, closing conditions and allocation of contractual risk. ".repeat(4)}`.slice(0,514);
+    const brief=buildStructuredBlueprintV4(a);
+    expect(brief.definition_components.client_matter.text.length).toBeLessThanOrEqual(600);
+    expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
   });
   it("labels clarification answers by the kind of information they contribute", () => {
     const a=completeAnswers();

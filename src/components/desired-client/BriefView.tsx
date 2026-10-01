@@ -146,6 +146,20 @@ export function BriefView({
         <h2 data-ui-copy="supporting">Our desired-client definition</h2>
         <p data-ui-copy="body">{definitionSegments(model.definition, model.definitionComponents)}</p>
       </section>
+      <section className="dc-report-conditions" aria-labelledby="dc-conditions-title" data-ui-component-content="desired-client-conditions">
+        <h2 id="dc-conditions-title" data-ui-copy="heading">Conditions and unresolved questions</h2>
+        <p data-ui-copy="supporting">Resolve these constraints or evidence gaps before treating this direction as ready to grow.</p>
+        {model.conditions.length ? <ul>{model.conditions.map((condition, index) => <li key={`${index}-${condition}`} data-ui-copy="body">{condition}</li>)}</ul> : <p data-ui-copy="supporting">No material constraint or uncertainty was recorded in these answers.</p>}
+      </section>
+      <section className="dc-report-progress" aria-labelledby="dc-progress-title" data-ui-component-content="desired-client-progress-review">
+        <h2 id="dc-progress-title" data-ui-copy="heading">Progress review</h2>
+        <dl>
+          <div><dt>Measure</dt><dd>{model.progressReview.metric}</dd></div>
+          <div><dt>Target</dt><dd>{model.progressReview.target}</dd></div>
+          <div><dt>Review period</dt><dd>{model.progressReview.reviewPeriod}</dd></div>
+          <div><dt>Status</dt><dd>{model.progressReview.status}</dd></div>
+        </dl>
+      </section>
       {model.decisionPathway && <section className="dc-report-decision-pathway" aria-labelledby="dc-decision-pathway-title" data-ui-component-content="desired-client-decision-pathway">
         <div className="dc-report-decision-pathway__heading"><h2 id="dc-decision-pathway-title" data-ui-copy="heading">Client decision pathway</h2><span data-ui-copy="supporting">Separate working interpretation · review with the firm</span></div>
         <div className="dc-report-decision-pathway__steps">{([

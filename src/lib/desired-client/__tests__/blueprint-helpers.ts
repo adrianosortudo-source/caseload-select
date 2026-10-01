@@ -6,6 +6,8 @@ export function completeAnswers(): DesiredClientAnswers {
   a.focus = { ...a.focus, area: "business", work: "business_acquisitions", service_area: "Ontario", route: "established", certainty: "chosen" };
   a.practice = { ...a.practice, direction: "grow_proven", experience:"regular", client_strength:"unknown", firm_type: "Ontario business law firms", capability: "Business acquisition advice", enjoys: "Transaction planning" };
   a.situation = { ...a.situation, trigger: "business.transaction", timing: "planning", role: "business_owner" };
+  a.client_context.repeat_matter_pattern = "A business buyer who needs an asset purchase agreement drafted or reviewed before committing to final terms.";
+  a.client.goal_detail = "Understand the assets, liabilities and closing obligations before deciding whether to proceed.";
   a.client.choice_priorities=["unknown"]; a.client.goals = ["understand"]; a.client.concerns = ["next"]; a.client.decision_needs = ["options"];
   a.value.reasons = ["client_benefit", "skills"]; a.value.fee_effort = "worthwhile";
   a.delivery.capacity = "room"; a.delivery.fit_signals = ["scope"];
@@ -20,7 +22,7 @@ export function validBlueprint(): AnalysisResult {
  report_version:"dcm-blueprint-v4", definition_sentence:"",
  definition_components:{
  client:evidence("business owners","hypothesis","situation.role"),
- client_matter:evidence("legal advice before committing to a planned business acquisition","hypothesis","focus.work","situation.role","situation.trigger"),
+ client_matter:evidence("A buyer preparing to acquire an established business who needs agreement advice to clarify what the buyer receives and must do","hypothesis","client_context.repeat_matter_pattern"),
  reasons:evidence("the work fits the team's experience and preferences","firm_preference","value.reasons"),
  outcome:evidence("a proposed measure of comparable matters retained","firm_preference","repeatability.success_measure")},
  client_and_matter:{claims:[evidence("Business owners seek acquisition advice before committing to a transaction.","hypothesis","focus.work","situation.role","situation.trigger")]},
@@ -35,6 +37,6 @@ export function validBlueprint(): AnalysisResult {
  decision:evidence("Decision participants and sequence remain open.","unknown","client.decision_context"),
  desired_progress:evidence("The client's progress is a hypothesis to validate.","hypothesis","client.goals")}
  };
- brief.definition_sentence=buildDefinitionSentence(brief,false);
+ brief.definition_sentence=buildDefinitionSentence(brief,false,completeAnswers().client.goal_detail,completeAnswers().client.goals.includes("unknown"));
  return {brief,clarification_code:null};
 }

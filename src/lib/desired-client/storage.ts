@@ -4,7 +4,7 @@ import { validateAnalysisResult } from "./output";
 import { resolveAnswerReference } from "./catalog";
 import { validateDraftAnswers, validateLegacyV22DraftAnswers, validateLegacyV31DraftAnswers } from "./validation";
 import { migrateV21Answers, migrateV22Answers, migrateV30Answers, migrateV31Answers } from "./migration";
-import { interviewClarificationSourceFingerprint, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBriefV2, type LegacyDesiredClientBriefV1, type SavedBrief, type SavedDraft } from "./types";
+import { type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBriefV2, type LegacyDesiredClientBriefV1, type SavedBrief, type SavedDraft } from "./types";
 
 export const DRAFT_STORAGE_KEY = "cls-desired-client-v2";
 export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -167,10 +167,10 @@ export function saveDraft(storage: Storage, answers: DesiredClientAnswers, curre
 }
 
 function hydrateLegacyFollowupFingerprints(input: DesiredClientAnswers): DesiredClientAnswers {
-  if(input.schema_version!=="dcm-v3.2"||input.interview.followups.every((item)=>item.source_answer_fingerprint))return input;
-  const answers=structuredClone(input);
-  answers.interview.followups=answers.interview.followups.map((item)=>item.source_answer_fingerprint?item:{...item,source_answer_fingerprint:interviewClarificationSourceFingerprint(answers,item.source_answer_ids)});
-  return answers;
+  // Historical clarifications without a fingerprint cannot be proven to belong
+  // to the current answer context. Keep them for the user's record, but do not
+  // stamp them against potentially edited answers during migration.
+  return input;
 }
 export function clearDraft(storage: Storage): boolean { try { storage.removeItem(DRAFT_STORAGE_KEY); return true; } catch { return false; } }
 export function savedAnalysis(result: AnalysisResult, answers: DesiredClientAnswers): SavedBrief | undefined {
