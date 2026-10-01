@@ -99,7 +99,7 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
    if(!snapshot.reviewRunId||snapshot.requestCount<1||snapshot.requestCount>3||!snapshot.loading)return;
    const requestId=crypto.randomUUID(),controller=new AbortController();abortRef.current=controller;
    let timedOut=false;
-   const timeout=window.setTimeout(()=>{timedOut=true;controller.abort();},16000);
+   const timeout=window.setTimeout(()=>{timedOut=true;controller.abort();},27000);
    const request:AnalysisRequestEnvelope={schemaVersion:4,operation:"generate",requestId,answerRevision:snapshot.answers.revision,reviewRunId:snapshot.reviewRunId,analysisIndex:(snapshot.requestCount-1) as 0|1|2,aiConsent:true,answers:snapshot.answers,clarifications:[]};
    const sameRequest=(current:ToolState)=>current.reviewRunId===snapshot.reviewRunId&&current.answers.revision===snapshot.answers.revision&&current.requestCount===snapshot.requestCount;
    try{
@@ -135,7 +135,7 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
    if(!reserveClarificationRequest(interviewRequestBudget.current,interviewRunId)){commit({...advanceStage(current),error:"clarificationUnavailable"});return;}
    commit({...current,interviewRunId,clarificationLoading:true,error:""});
    const request:InterviewClarificationRequestEnvelope={schemaVersion:4,operation:"clarify",requestId,answerRevision:current.answers.revision,interviewRunId,clarificationIndex:current.answers.interview.clarification_count as 0|1|2,stage,aiConsent:true,answers:current.answers};
-   let timedOut=false;const timeout=window.setTimeout(()=>{timedOut=true;controller.abort();},10500);
+   let timedOut=false;const timeout=window.setTimeout(()=>{timedOut=true;controller.abort();},22000);
    try{
      const response=await fetch("/api/tools/desired-client-matter/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(request),signal:controller.signal});
      let payload:unknown;try{payload=await response.json();}catch{payload=null;}

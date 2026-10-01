@@ -4,6 +4,7 @@ import { GoogleGenerativeAI, type GenerationConfig } from "@google/generative-ai
 import { getAnswerLabel, resolveAnswerReference } from "./catalog";
 import { getMissingFieldsForStage } from "./screens";
 import { isBoundedMultilineText, validateDraftAnswers } from "./validation";
+import { safeProviderFailureMetadata } from "./provider-diagnostics";
 import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
 import {
   isInterviewClarificationCurrent,
@@ -14,7 +15,7 @@ import {
 } from "./types";
 
 const MODEL = "gemini-2.5-flash";
-const TIMEOUT_MS = 9000;
+const TIMEOUT_MS = 21_000;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PURPOSES: readonly InterviewClarificationPurpose[] = ["client_matter_specificity", "client_goal_detail", "firm_desirability", "client_choice_criteria", "strength_and_support", "decision_pathway_observation", "discovery_evidence", "economics_effort_conflict", "capacity_conflict"];
 const STAGE_PATHS: Record<InterviewStage, readonly string[]> = {
@@ -164,5 +165,14 @@ export async function runInterviewClarification(request: InterviewClarificationR
     const prompt = validateModelPrompt(raw, request);
     if (!prompt) return { mode: "invalid_output" };
     return { mode: "live", response: { ok: true, requestId: request.requestId, answerRevision: request.answerRevision, interviewRunId: request.interviewRunId, prompt } };
-  } catch { return { mode: "unavailable" }; }
+  } catch (error) {
+    // Do not log the provider message because it may include submitted answers.
+    console.warn("[desired-client] clarification provider request failed", {
+      requestId: request.requestId,
+      model: MODEL,
+      stage: request.stage,
+      ...safeProviderFailureMetadata(error),
+    });
+    return { mode: "unavailable" };
+  }
 }
