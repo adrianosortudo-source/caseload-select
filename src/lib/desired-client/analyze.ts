@@ -40,8 +40,19 @@ export async function runDesiredClientAnalysis(
     const response = await model.generateContent(buildDesiredClientUserPrompt(request, eligibleCodes));
     let parsed: unknown;
     try { parsed = JSON.parse(response.response.text()); }
-    catch { return { mode: "invalid_output" }; }
-    const result = validateAnalysisResult(parsed, request.answers, eligibleCodes);
+    catch {
+      console.warn("[desired-client] analysis output rejected", { requestId: request.requestId, model: MODEL, field: "report", reason: "invalid_json" });
+      return { mode: "invalid_output" };
+    }
+    let validationFailure: { field: string; reason: string } | null = null;
+    const result = validateAnalysisResult(parsed, request.answers, eligibleCodes, (failure) => { validationFailure ??= failure; });
+    if (!result) {
+      console.warn("[desired-client] analysis output rejected", {
+        requestId: request.requestId,
+        model: MODEL,
+        ...(validationFailure ?? { field: "report", reason: "unclassified_validation_failure" }),
+      });
+    }
     return result ? { mode: "live", result } : { mode: "invalid_output" };
   } catch (error) {
     // Provider exceptions can contain submitted text. Never log their messages.
