@@ -52,7 +52,7 @@ export function verifyPreflightEvidence(evidence, binding, files, now = Date.now
   const catalog = JSON.parse(files["qualification-catalog-check.json"]);
   if (catalog.scratchAndProductionCatalogsMatch !== true || catalog.tableCount !== 14 || !/^[a-f0-9]{64}$/.test(catalog.productionCatalogSha256 ?? "")) fail("complete_release_catalog_evidence_invalid");
   const ledger = JSON.parse(files["ledger-check.json"]);
-  if (ledger.appliedPrefixLength !== 0 || ledger.pending?.length !== 11) fail("complete_release_initial_prefix_required");
+  if (ledger.appliedPrefixLength !== 0 || ledger.pending?.length !== 12) fail("complete_release_initial_prefix_required");
   return { productionCatalogSha256: catalog.productionCatalogSha256, binding };
 }
 export function assertPhaseTransition(state, phase) {
@@ -216,7 +216,7 @@ function phaseRun(phase, evidence, download) {
   }, verify: () => {
     const after = snapshot(raw, evidence, phase + "-post-", allStage);
     plan(raw, evidence, phase + "-recovery-", allStage, after.proof);
-    if (read(after.proof).appliedPrefixLength !== { qualification: 2, enrichment: 8, candidate: 11 }[phase]) fail("complete_release_post_prefix_mismatch");
+    if (read(after.proof).appliedPrefixLength !== { qualification: 2, enrichment: 8, candidate: 12 }[phase]) fail("complete_release_post_prefix_mismatch");
     if (phase === "qualification") gate("migration-gate", ["ledger-delta", before.full, after.full, "20260921120000", "20260921121500"], path.join(evidence, "qualification-delta-check.json"));
     else {
       if (phase === "enrichment") {

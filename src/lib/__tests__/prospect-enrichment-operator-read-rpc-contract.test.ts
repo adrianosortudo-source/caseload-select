@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260923182000_prospect_enrichment_operator_read_rpc.sql"), "utf8");
+const migration = readFileSync(resolve(process.cwd(), "supabase/migrations/20260923182000_prospect_enrichment_operator_read_rpc.sql"), "utf8").replace(/\r\n/g, "\n");
 
 describe("fixed-path prospect enrichment read RPC", () => {
   it("is service-role-only, fixed-path, bounded, and takes no caller-supplied projection", () => {

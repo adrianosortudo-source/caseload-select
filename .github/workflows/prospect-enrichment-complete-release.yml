@@ -95,7 +95,7 @@ jobs:
         run: node scripts/prospect-enrichment/temporary-credential.mjs
       - name: Configure pinned TLS trust
         run: node scripts/prospect-enrichment/configure-migration-tls.mjs
-      - name: Read-only full ledger, catalog and exact eleven-file preflight
+      - name: Read-only full ledger, catalog and exact twelve-file preflight
         id: preflight
         env:
           POSTGRES_CONTAINER_ID: ${{ job.services.postgres.id }}
@@ -114,7 +114,7 @@ jobs:
           MANIFEST_DIGEST: ${{ steps.preflight.outputs.manifest_sha256 }}
         shell: bash
         run: |
-          printf 'Review artifact %s (SHA-256 %s), manifest %s, run %s attempt %s, source %s, receipt %s.\n\nApprove the next protected job only after reviewing this evidence for the exact two-version history repair, six enrichment migrations and three candidate migrations.\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST_DIGEST" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Review artifact %s (SHA-256 %s), manifest %s, run %s attempt %s, source %s, receipt %s.\n\nApprove the next protected job only after reviewing this evidence for the exact two-version history repair, six enrichment migrations and four candidate/registration migrations.\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST_DIGEST" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
       - name: Retain failed preflight checks
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -208,7 +208,7 @@ jobs:
         run: node scripts/prospect-enrichment/temporary-credential.mjs
       - name: Configure candidate TLS trust
         run: node scripts/prospect-enrichment/configure-migration-tls.mjs
-      - name: Apply and verify exact three candidate migrations
+      - name: Apply and verify exact four candidate and registration migrations
         run: node scripts/prospect-enrichment/complete-release-gate.mjs candidate "$RUNNER_TEMP/release-evidence" "$RUNNER_TEMP/reviewed-preflight"
       - name: Preserve phase receipts and failure recovery evidence
         if: always()

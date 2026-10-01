@@ -14,6 +14,10 @@ const holdEvidenceMigration = readFileSync(
   resolve(process.cwd(), "supabase/migrations/20260924071322_prospect_enrichment_manifest_hold_evidence.sql"),
   "utf8",
 );
+const registrationReliabilityMigration = readFileSync(
+  resolve(process.cwd(), "supabase/migrations/20260924185000_prospect_enrichment_registration_rpc_reliability.sql"),
+  "utf8",
+);
 
 function functionDefinition(name: string): string {
   const start = migration.indexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
@@ -105,5 +109,18 @@ describe("prospect enrichment protected-table RPC boundary", () => {
     const stage = holdEvidenceMigration.slice(holdEvidenceMigration.indexOf("CREATE OR REPLACE FUNCTION public.stage_prospect_enrichment_package_v1("));
     expect(stage).toContain("manifest_row.client_items IS DISTINCT FROM actual_lineage");
     expect(stage).toContain("RETURN jsonb_build_object('outcome','manifest_required')");
+  });
+
+  it("keeps manifest evidence readable without UPDATE privilege and bounds the expensive projection RPCs", () => {
+    const holdEvidence = registrationReliabilityMigration.slice(
+      registrationReliabilityMigration.indexOf("CREATE OR REPLACE FUNCTION public.record_prospect_enrichment_manifest_hold_evidence_v1("),
+    );
+    expect(holdEvidence).toContain("WHERE run_id = p_run_id AND entry_id = p_entry_id;");
+    expect(holdEvidence).not.toMatch(/WHERE run_id = p_run_id AND entry_id = p_entry_id\s+FOR UPDATE/i);
+    expect(holdEvidence).toContain("SET statement_timeout = '30s'");
+    expect(registrationReliabilityMigration).toContain(
+      "ALTER FUNCTION public.register_prospect_enrichment_manifest_chunk_v1(text,jsonb,boolean)\n  SET statement_timeout = '30s'",
+    );
+    expect(registrationReliabilityMigration).not.toMatch(/GRANT\s+UPDATE\s+ON\s+TABLE\s+public\.prospect_enrichment_run_manifest_items/i);
   });
 });

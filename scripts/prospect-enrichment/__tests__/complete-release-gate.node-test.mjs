@@ -26,7 +26,7 @@ const pending = () => ({ qualification: "pending", enrichment: "pending", candid
 const now = Date.parse("2026-09-28T18:00:00.000Z");
 const files = Object.fromEntries(gate.EVIDENCE_FILES.map(name => [name, Buffer.from(JSON.stringify({ proof: name }))]));
 files["qualification-catalog-check.json"] = Buffer.from(JSON.stringify({ scratchAndProductionCatalogsMatch: true, tableCount: 14, productionCatalogSha256: "c".repeat(64) }));
-files["ledger-check.json"] = Buffer.from(JSON.stringify({ appliedPrefixLength: 0, pending: Array.from({ length: 11 }, (_, index) => String(index)) }));
+files["ledger-check.json"] = Buffer.from(JSON.stringify({ appliedPrefixLength: 0, pending: Array.from({ length: 12 }, (_, index) => String(index)) }));
 
 test("preflight evidence binds every member to run, attempt, main, project and receipt", () => {
   const evidence = gate.createPreflightEvidence(binding, files, now);
@@ -89,7 +89,7 @@ test("a freshly hashed failed catalog or partial prefix is still insufficient ev
     { "qualification-catalog-check.json": Buffer.from(JSON.stringify({ scratchAndProductionCatalogsMatch: false, tableCount: 14, productionCatalogSha256: "c".repeat(64) })) },
     { "qualification-catalog-check.json": Buffer.from(JSON.stringify({ scratchAndProductionCatalogsMatch: true, tableCount: 13, productionCatalogSha256: "c".repeat(64) })) },
     { "ledger-check.json": Buffer.from(JSON.stringify({ appliedPrefixLength: 1, pending: Array(10).fill("pending") })) },
-    { "ledger-check.json": Buffer.from(JSON.stringify({ appliedPrefixLength: 0, pending: Array(12).fill("pending") })) },
+    { "ledger-check.json": Buffer.from(JSON.stringify({ appliedPrefixLength: 0, pending: Array(11).fill("pending") })) },
   ]) {
     const changed = { ...files, ...change };
     const evidence = gate.createPreflightEvidence(binding, changed, now);
