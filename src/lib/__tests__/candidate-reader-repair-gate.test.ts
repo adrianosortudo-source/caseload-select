@@ -13,28 +13,38 @@ const expectCatalog = {
  private_list_service_role_execute:true,private_list_anon_execute:false,private_list_auth_execute:false,
  private_firm_links_service_role_execute:false,private_firm_links_anon_execute:false,private_firm_links_auth_execute:false,
  history_metadata_search_index:true,identity_by_candidate_index:true,identity_by_firm_index:true,
- invalid_date_coverage_index:true
+ invalid_date_coverage_index:true,
+ apply_refresh_security_definer:true,apply_refresh_empty_search_path:true,
+ apply_refresh_update_transition:true,apply_refresh_own_core_audit_excluded:true,
+ apply_refresh_current_identity_excluded:true
 };
 describe("candidate reader repair gate", () => {
- it("binds the review receipt to both exact migration sources and never grants write approval", () => {
+ it("binds the review receipt to all three exact migration sources and never grants write approval", () => {
   expect(source.verified).toBe(true);
   expect(source.productionApplicationApproved).toBe(false);
   expect(source.migrations.map(item => item.filename)).toEqual([
    "20260930050000_prospect_candidate_coverage_warning_index.sql",
    "20260930130000_prospect_candidate_reader_defer_legacy_audit.sql",
+   "20260930225510_prospect_enrichment_apply_refresh_gate.sql",
   ]);
   const receipt=JSON.parse(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json","utf8"));
   const changedReceipt={...receipt,migrations:[...receipt.migrations]};
   changedReceipt.migrations[1]={...changedReceipt.migrations[1],sha256:"0".repeat(64)};
   expect(()=>verifyReaderRepairReceipt(changedReceipt)).toThrow("reader_repair_receipt_source_mismatch");
+  changedReceipt.migrations=[...receipt.migrations];
+  changedReceipt.migrations[2]={...changedReceipt.migrations[2],sha256:"0".repeat(64)};
+  expect(()=>verifyReaderRepairReceipt(changedReceipt)).toThrow("reader_repair_receipt_source_mismatch");
  });
  it("accepts only the exact ordered pending suffix and empty post-plan", () => {
   const first="20260930050000_prospect_candidate_coverage_warning_index.sql";
   const second="20260930130000_prospect_candidate_reader_defer_legacy_audit.sql";
+  const third="20260930225510_prospect_enrichment_apply_refresh_gate.sql";
   const pending=(files:string[])=>({phase:"candidate-reader-repair-pending",pendingPaths:files.map(file=>"supabase/migrations/"+file)});
-  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,second],seeds:[],roles:[]},pending([first,second]),"pre").exactScope).toBe(true);
-  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[second],seeds:[],roles:[]},pending([second]),"pre").exactScope).toBe(true);
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,second,third],seeds:[],roles:[]},pending([first,second,third]),"pre").exactScope).toBe(true);
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[second,third],seeds:[],roles:[]},pending([second,third]),"pre").exactScope).toBe(true);
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[third],seeds:[],roles:[]},pending([third]),"pre").exactScope).toBe(true);
   expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first],seeds:[],roles:[]},pending([first]),"pre")).toThrow("unexpected_reader_repair_plan");
+  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[third,second],seeds:[],roles:[]},pending([third,second]),"pre")).toThrow("unexpected_reader_repair_plan");
   expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},pending([first,second]),"post")).toThrow("invalid_reader_repair_plan");
   expect(verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},{phase:"complete",pendingPaths:[]},"post").upToDate).toBe(true);
  });
@@ -55,8 +65,13 @@ describe("candidate reader repair gate", () => {
  });
  it("requires exact candidate reader grants, private helper revocation and supporting indexes", () => {
   expect(catalogQuery).toContain("has_function_privilege('anon'");
-  expect(verifyReaderCatalog([{reader_contract:expectCatalog}]).catalogChecks).toBe(22);
+  expect(verifyReaderCatalog([{reader_contract:expectCatalog}]).catalogChecks).toBe(27);
   expect(()=>verifyReaderCatalog([{reader_contract:{...expectCatalog,candidate_list_anon_execute:true}}])).toThrow("reader_catalog_contract_mismatch");
   expect(()=>verifyReaderCatalog([{reader_contract:{...expectCatalog,identity_by_firm_index:false}}])).toThrow("reader_catalog_contract_mismatch");
+  for(const field of ["apply_refresh_security_definer","apply_refresh_empty_search_path","apply_refresh_update_transition",
+   "apply_refresh_own_core_audit_excluded","apply_refresh_current_identity_excluded"]) {
+   expect(catalogQuery).toContain(field);
+   expect(()=>verifyReaderCatalog([{reader_contract:{...expectCatalog,[field]:false}}])).toThrow("reader_catalog_contract_mismatch");
+  }
  });
 });
