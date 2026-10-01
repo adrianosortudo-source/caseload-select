@@ -11,7 +11,7 @@ describe("Desired Client Blueprint synthesis", () => {
     expect(brief.definition_sentence).toBe(buildDefinitionSentence(brief, false, answers.client.goal_detail, answers.client.goals.includes("unknown")));
     expect(brief.definition_sentence).toContain("The firm wants to attract and serve");
     expect([brief.why_client_chooses_firm, brief.client_and_matter, brief.why_firm_wants_work, brief.recognizable_circumstances, brief.evidence_and_open_questions, brief.client_goals_needs]).toHaveLength(6);
-    expect(brief.client_and_matter.claims.map((claim) => claim.text).join(" ")).toMatch(/owner or founder.*buying or selling a business/i);
+    expect(brief.client_and_matter.claims.map((claim) => claim.text).join(" ")).toContain(answers.client_context.repeat_matter_pattern);
     expect(brief.evidence_and_open_questions.claims.some((claim) => claim.evidence_basis === "unknown")).toBe(true);
   });
   it("keeps missing details explicit in sparse drafts", () => {
