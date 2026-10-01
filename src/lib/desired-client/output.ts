@@ -1,26 +1,10 @@
-import { resolveAnswerReference, WRITE_IN_KEYS } from "./catalog";
+import { resolveAnswerReference } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
 import { calculateContribution } from "./economics";
+import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
 import { isInterviewClarificationCurrent, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBrief, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
 
-const SOURCE_PATHS = new Set<string>([
-  "focus.area", "focus.work", "focus.work_other", "focus.service_area", "focus.certainty", "focus.route",
-  "practice.direction", "practice.firm_type", "practice.capability", "practice.enjoys",
-  "practice.experience", "practice.development_needs",
-  "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus", "client_context.language_service_needs", "client_context.repeat_matter_pattern",
-  "situation.trigger", "situation.timing", "situation.role", "situation.role_other", "situation.contact",
-  "client.goals", "client.concerns", "client.decision_needs",
-  "value.reasons", "value.fee_effort", "value.collected_fee", "value.team_hours", "value.payment", "value.currency", "value.fee_amount", "value.direct_cost_amount", "value.amount_basis", "value.amount_scope",
-  "delivery.conditions", "delivery.capacity", "delivery.limit", "delivery.fit_signals",
-  "direction.aim", "direction.evidence", "direction.less", "direction.less_reason", "direction.less_note",
-  "opportunity.sources", "opportunity.data_basis", "opportunity.source_detail", "opportunity.period", "opportunity.enquiry_count", "opportunity.retained_count", "opportunity.conversion", "opportunity.acquisition_cost", "opportunity.uncertainty",
-  "repeatability.success_measure", "repeatability.success_other", "repeatability.target", "repeatability.review_period", "repeatability.additional_matters", "repeatability.staffing_constraint",
-  ...WRITE_IN_KEYS.map((key) => `write_ins.${key}`),
-  "interview.followups.0", "interview.followups.1", "interview.followups.2",
-  "client.goal_detail", "client.decision_context", "client.pathway_basis", "client.choice_priorities", "client.choice_detail", "client.choice_basis", "practice.client_strength", "practice.client_strength_effect", "practice.client_strength_support", "client_context.discovery_behaviour",
-  "clarifications.CLIENT_MATTER_UNCLEAR", "clarifications.VALUE_EFFORT_CONFLICT", "clarifications.CAPACITY_CONFLICT", "clarifications.REPEATABILITY_UNPROVEN", "clarifications.OPPORTUNITY_UNSUPPORTED",
-  ...(["a", "b"] as const).flatMap((side) => ["work", "fee_effort", "team_fit", "capacity", "evidence"].map((field) => `focus.comparison.${side}.${field}`)),
-]);
+const SOURCE_PATHS = new Set<string>(DESIRED_CLIENT_ANSWER_PATHS);
 const BASIS: readonly EvidenceBasis[] = ["firm_reported_recorded", "firm_reported_estimate", "firm_reported_experience", "firm_reported_observation", "client_reported", "firm_preference", "source_observed", "hypothesis", "unknown"];
 const KIND = ["experience", "preference", "hypothesis", "unknown", "suggestion"] as const;
 const BUDGETS = {
@@ -34,7 +18,11 @@ const BANNED = /\u2014|<\/?[a-z][^>]*>|https?:\/\/|\bwww\.|\b[A-Z0-9._%+-]+@[A-Z
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const exact = (value: unknown, keys: readonly string[]): value is Record<string, unknown> => record(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 const wordCount = (text: string) => text.trim().split(/\s+/u).filter(Boolean).length;
-const numericTokens = (text: string) => [...text.matchAll(/(?:[$€£]\s*)?\d+(?:[\s,]\d{3})*(?:\.\d+)?\s*%?/gu)].map((match) => match[0].replace(/[^\d.%]/g, ""));
+const numericTokens = (text: string) => [...text.matchAll(/[+-]?\s*(?:[$€£]\s*)?\d+(?:[\s,]\d{3})*(?:\.\d+)?\s*%?/gu)].map((match) => {
+  const raw = match[0].replace(/\s/g, "");
+  const sign = raw.startsWith("-") ? "-" : raw.startsWith("+") ? "+" : "";
+  return sign + raw.replace(/[^\d.%]/g, "");
+});
 
 function allowedPaths(slot: string): readonly string[] {
   if (slot === "practice_current_practice") return ["practice.firm_type"];
@@ -87,6 +75,8 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   }
   if (hasUnknown !== (value.evidence_basis === "unknown")) return false;
   if (value.evidence_basis === "unknown" && value.kind !== "unknown") return false;
+  const contributionCheck = slot === "why_firm_wants_work" ? calculateContribution(answers) : null;
+  if (contributionCheck?.amount.startsWith("-") && /\b(?:profitable|positive (?:contribution|margin)|fees? (?:are )?worthwhile|fees? support(?:s)? the effort|margin is positive)\b/i.test(text)) return false;
   if (value.evidence_basis === "firm_reported_recorded") {
     const valueFigure = paths.some((path) => typeof path === "string" && path.startsWith("value."));
     const opportunityFigure = paths.some((path) => typeof path === "string" && path.startsWith("opportunity."));
@@ -162,14 +152,14 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   const pathwayFields=["trigger","first_contact","decision","desired_progress"] as const;
   for(const field of pathwayFields)if(!validStatement(pathway[field],answers,"decision_pathway"))return null;
   const typedBrief=brief as unknown as DesiredClientBriefV4;
-  const expectedSentence=buildDefinitionSentence(typedBrief,false);
+  const expectedSentence=buildDefinitionSentence(typedBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
   // The definition is assembled from bounded, source-linked fields. A hard
   // 85-word ceiling rejected valid, specific client-and-matter definitions;
   // keep a generous abuse limit while preserving supported detail.
-  if(typedBrief.definition_sentence.trim()!==expectedSentence||expectedSentence.length>1600)return null;
+  if(typedBrief.definition_sentence.length>1600||expectedSentence.length>1600)return null;
   const reportWords=[...cardNames.flatMap(field=>typedBrief[field].claims.map(claim=>claim.text)),...pathwayFields.map(field=>typedBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
   if(reportWords>800)return null;
-  return value as unknown as AnalysisResult;
+  return { clarification_code: null, brief: { ...typedBrief, definition_sentence: expectedSentence } };
 }
 
 const LINKED_STATEMENT_SCHEMA = { type: "object", properties: { text: { type: "string" }, kind: { type: "string", enum: KIND }, source_answer_ids: { type: "array", minItems: 1, maxItems: 8, items: { type: "string" } }, evidence_basis: { type: "string", enum: BASIS } }, required: ["text", "kind", "source_answer_ids", "evidence_basis"] } as const;

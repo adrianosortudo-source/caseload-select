@@ -18,7 +18,7 @@ vi.mock("@/lib/rate-limit", () => ({
   rateLimitHeaders: mocks.rateLimitHeaders,
 }));
 
-import { POST } from "../route";
+import { GET, POST } from "../route";
 
 const ROUTE = "https://app.caseloadselect.ca/api/tools/desired-client-matter/analyze";
 const B0: DesiredClientAnswers = (() => {
@@ -72,6 +72,23 @@ afterEach(() => {
     if (value === undefined) delete process.env[key]; else process.env[key] = value;
   }
   vi.restoreAllMocks();
+});
+
+describe("GET /api/tools/desired-client-matter/analyze readiness", () => {
+  it("reports only whether live AI is ready and does not cache the result", async () => {
+    process.env.DESIRED_CLIENT_AI_ENABLED="false";
+    const disabled=await GET();
+    expect(await disabled.json()).toEqual({enabled:false});
+    await expectNoStore(disabled);
+    process.env.DESIRED_CLIENT_AI_ENABLED="true";
+    const enabled=await GET();
+    expect(await enabled.json()).toEqual({enabled:true});
+    await expectNoStore(enabled);
+    delete process.env.UPSTASH_REDIS_REST_TOKEN;
+    const incomplete=await GET();
+    expect(await incomplete.json()).toEqual({enabled:false});
+    await expectNoStore(incomplete);
+  });
 });
 
 describe("POST /api/tools/desired-client-matter/analyze", () => {

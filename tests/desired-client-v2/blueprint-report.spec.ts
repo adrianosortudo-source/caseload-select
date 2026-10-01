@@ -20,6 +20,10 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   }, { key: storageKey, savedAnswers: answers });
 
   await page.route(route, async requestRoute => {
+    if (requestRoute.request().method() === "GET") {
+      await requestRoute.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: true }) });
+      return;
+    }
     analysisCalls += 1;
     const request = requestRoute.request().postDataJSON();
     await requestRoute.fulfill({

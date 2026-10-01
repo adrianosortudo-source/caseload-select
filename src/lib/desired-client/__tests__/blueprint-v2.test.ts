@@ -4,9 +4,9 @@ import { validateAnalysisResult } from "../output";
 import { completeAnswers, validBlueprint } from "./blueprint-helpers";
 describe("Desired Client Blueprint v4 contract", () => {
   it("accepts a grounded six-card profile with its deterministic one-sentence definition", () => {
-    const result = validBlueprint();
+    const result = validBlueprint(), answers = completeAnswers();
     expect(result.brief.report_version).toBe("dcm-blueprint-v4");
-    expect(result.brief.definition_sentence).toBe(buildDefinitionSentence(result.brief, false));
+    expect(result.brief.definition_sentence).toBe(buildDefinitionSentence(result.brief, false, answers.client.goal_detail, answers.client.goals.includes("unknown")));
     expect([result.brief.why_client_chooses_firm, result.brief.client_and_matter, result.brief.why_firm_wants_work, result.brief.recognizable_circumstances, result.brief.evidence_and_open_questions, result.brief.client_goals_needs]).toHaveLength(6);
     expect(validateAnalysisResult(result, completeAnswers(), [])).not.toBeNull();
   });
@@ -18,7 +18,8 @@ describe("Desired Client Blueprint v4 contract", () => {
   });
   it("rejects mismatched definitions, unsupported sources, and evidence-basis mismatches", () => {
     const answers = completeAnswers(), candidate = validBlueprint();
-    expect(validateAnalysisResult({ ...candidate, brief: { ...candidate.brief, definition_sentence: "A different sentence." } }, answers, [])).toBeNull();
+    const mismatched = validateAnalysisResult({ ...candidate, brief: { ...candidate.brief, definition_sentence: "A different sentence." } }, answers, []);
+    expect(mismatched?.brief.definition_sentence).toBe(buildDefinitionSentence(candidate.brief, false, answers.client.goal_detail, answers.client.goals.includes("unknown")));
     const fabricated = structuredClone(candidate); fabricated.brief.why_firm_wants_work.claims[0].source_answer_ids = ["focus.industry" as never];
     expect(validateAnalysisResult(fabricated, answers, [])).toBeNull();
     const mismatch = structuredClone(candidate); mismatch.brief.why_firm_wants_work.claims[0].evidence_basis = "firm_reported_recorded";

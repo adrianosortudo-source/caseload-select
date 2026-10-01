@@ -277,6 +277,7 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
     const [group, key] = field.split("."); const val = ({ practice, client_context: clientContext, client, value: valueGroup, opportunity, repeatability } as Record<string, RecordValue>)[group][key];
     if (!isBoundedMultilineText(val, max)) return false;
   }
+  if (requireComplete && (!String(clientContext.repeat_matter_pattern).trim() || (!String(client.goal_detail).trim() && !(client.goals as GoalId[]).includes("unknown")))) return false;
   if (version === "dcm-v3.2") {
     const goals = a.client as RecordValue;
     if (!isTextLimit(goals.goal_detail,240) || !isTextLimit(goals.decision_context,240) || !isTextLimit(goals.choice_detail,180) ||

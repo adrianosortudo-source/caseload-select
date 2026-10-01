@@ -4,6 +4,7 @@ import { REVIEW_COPY, COMMON_COPY, WELCOME_COPY } from "@/lib/desired-client/cop
 import { AREA_CATALOG, CAPACITY_LABELS, COLLECTED_FEE_LABELS, CONDITION_LABELS, DECISION_NEED_LABELS, DEVELOPMENT_NEED_LABELS, FIT_SIGNAL_LABELS, GOAL_LABELS, LESS_WORK_REASON_LABELS, LIMIT_LABELS, PAYMENT_LABELS, PRACTICE_EXPERIENCE_LABELS, PRACTICE_DIRECTION_LABELS, REASON_LABELS, TEAM_HOURS_LABELS, TIMING_LABELS, TRIGGER_LABELS, getFeeEffortLabel, getRoleLabel, getWorkLabel } from "@/lib/desired-client/catalog";
 import { STAGE_DEFINITIONS, getMissingFieldsForStage } from "@/lib/desired-client/screens";
 import { createAnswersDownload } from "@/lib/desired-client/export";
+import { calculateContribution } from "@/lib/desired-client/economics";
 import type { DesiredClientAnswers } from "@/lib/desired-client/types";
 
 type Stage = 1|2|3|4|5|6;
@@ -13,9 +14,9 @@ const CLIENT_CHOICE:Record<string,string>={relevant_experience:"Experience with 
 const FIRM_STRENGTH:Record<string,string>={matter_experience:"Relevant experience with this matter",specialist_knowledge:"Specific knowledge the matter calls for",clear_advice:"Clear explanation of options and consequences",practical_approach:"A practical approach to the client's goal",responsive_service:"A service approach that fits the client's needs",language_or_community:"Language or community-informed service",other:"Another strength",unknown:"Not established yet"};
 const filled=(...values:Array<string|null|undefined>)=>values.filter((value):value is string=>Boolean(value?.trim()));
 const valueLabel=(value:string|null|undefined,labels:Record<string,string>)=>value?labels[value]??value:"";
-export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,briefNeedsUpdate,loading,error,retryAllowed,legacyBriefReplaced=false}:{
+export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,briefNeedsUpdate,loading,error,retryAllowed,legacyBriefReplaced=false,aiAvailable=true}:{
   answers:DesiredClientAnswers; onCreate:()=>void; onRetry:()=>void; onEdit:(stage:Stage)=>void; onCreateStructured?:()=>void;
-  briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged";retryAllowed:boolean;legacyBriefReplaced?:boolean;
+  briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged";retryAllowed:boolean;legacyBriefReplaced?:boolean;aiAvailable?:boolean;
 }) {
   const area=answers.focus.area;
   const work=answers.focus.work==="other"?answers.focus.work_other:area&&answers.focus.work?getWorkLabel(area,answers.focus.work):"";
@@ -49,8 +50,14 @@ export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,b
   if(!answers.value.fee_effort||answers.value.fee_effort==="unknown") openItems.push({stage:3,label:"Value relative to delivery effort needs confirmation"});
   if(!answers.delivery.fit_signals.length&&!answers.write_ins?.fit_signals?.trim()) openItems.push({stage:5,label:"Observable enquiry signals are not yet defined"});
   if(answers.opportunity.sources.includes("unknown")||answers.opportunity.sources.includes("no_evidence")) openItems.push({stage:6,label:"Demand and acquisition evidence remains unestablished"});
+  if(answers.opportunity.uncertainty.trim()) openItems.push({stage:6,label:"Demand uncertainty to resolve: "+answers.opportunity.uncertainty.trim()});
   if(!answers.repeatability.success_measure||answers.repeatability.success_measure==="unknown") openItems.push({stage:6,label:"A measure of progress still needs to be agreed"});
   if(!answers.delivery.capacity||answers.delivery.capacity==="unknown") openItems.push({stage:3,label:"Capacity for more of this work remains unknown"});
+  if(answers.delivery.capacity==="limited") openItems.push({stage:3,label:"Capacity is limited; confirm the amount of additional work the team can support"});
+  if(answers.delivery.capacity==="change") openItems.push({stage:3,label:"Growth depends on a capacity change before the firm can take on more work"});
+  if(answers.repeatability.staffing_constraint.trim()) openItems.push({stage:6,label:"Staffing prerequisite: "+answers.repeatability.staffing_constraint.trim()});
+  const contribution=calculateContribution(answers);
+  if(contribution?.amount.includes("-")) openItems.push({stage:3,label:"The supplied fee and direct-cost figures calculate to a negative contribution ("+contribution.amount+"); reconcile the figures before treating this work as economically attractive"});
   function downloadAnswers(){
     const file=createAnswersDownload(answers),url=URL.createObjectURL(new Blob([file.content],{type:file.mimeType})),link=document.createElement("a");
     link.href=url;link.download=file.filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -84,14 +91,13 @@ export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,b
       {openItems.length>0&&<div className="dc-actions">{[...new Set(openItems.map(item=>item.stage))].map(stage=><button key={stage} type="button" className="dc-button dc-button--secondary" disabled={loading} onClick={()=>onEdit(stage)}>Edit {STAGE_DEFINITIONS[stage-1].label.replace(/^\d+\s*/,"")}</button>)}</div>}
     </section>
     <section className="dc-review__generate" data-ui-component-content="desired-client-ai-consent">
-      <h2 data-ui-copy="heading">{REVIEW_COPY.prepareAI}</h2>
-      <p data-ui-copy="body">AI will connect your choices into a Desired Client Blueprint: the client situation and matter, why the work fits the firm, the signs of a relevant enquiry, what the firm has seen so far, and what would make the work worth repeating. It will keep reported experience, estimates, preferences and unknowns distinct. You can review and correct the draft.</p>
+      <h2 data-ui-copy="heading">{aiAvailable?REVIEW_COPY.prepareAI:"Create a structured Desired Client Blueprint"}</h2>
+      {aiAvailable?<p data-ui-copy="body">AI will connect your choices into a Desired Client Blueprint: the client situation and matter, why the work fits the firm, the signs of a relevant enquiry, what the firm has seen so far, and what would make the work worth repeating. It will keep reported experience, estimates, preferences and unknowns distinct. You can review and correct the draft.</p>:<p className="dc-alert" role="status" data-ui-copy="body">AI-assisted drafting is currently unavailable. You can still create a structured draft from your answers.</p>}
       <p data-ui-copy="supporting">The blueprint is a working marketing definition. It does not verify the firm&apos;s experience or economics, approve a target, decide whether to accept a client, or activate a lead score. The firm makes those judgments.</p>
-      <p data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure}</p>
-      <p data-ui-copy="supporting">Selecting “{REVIEW_COPY.prepareAI}” sends your answers to Google Gemini for this draft. Describe patterns of work only. Do not enter confidential or identifying client information.</p>
+      {aiAvailable&&<><p data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure}</p><p data-ui-copy="supporting">Selecting “{REVIEW_COPY.prepareAI}” sends your answers to Google Gemini for this draft. Describe patterns of work only. Do not enter confidential or identifying client information.</p></>}
       <div className="dc-actions">
-        {error?(retryAllowed&&<button type="button" className="dc-button dc-button--primary" disabled={loading} onClick={onRetry}>{REVIEW_COPY.tryAgain}</button>):<button type="button" className="dc-button dc-button--primary" disabled={loading} onClick={onCreate}>{loading?REVIEW_COPY.creatingAI:REVIEW_COPY.prepareAI}</button>}
-        {error&&onCreateStructured&&<button type="button" className="dc-button dc-button--secondary" disabled={loading} onClick={onCreateStructured}>Continue with a structured draft</button>}
+        {!aiAvailable&&onCreateStructured?<button type="button" className="dc-button dc-button--primary" disabled={loading} onClick={onCreateStructured}>Create structured draft</button>:error?(retryAllowed&&<button type="button" className="dc-button dc-button--primary" disabled={loading} onClick={onRetry}>{REVIEW_COPY.tryAgain}</button>):<button type="button" className="dc-button dc-button--primary" disabled={loading} onClick={onCreate}>{loading?REVIEW_COPY.creatingAI:REVIEW_COPY.prepareAI}</button>}
+        {aiAvailable&&error&&onCreateStructured&&<button type="button" className="dc-button dc-button--secondary" disabled={loading} onClick={onCreateStructured}>Continue with a structured draft</button>}
         <button type="button" className="dc-button dc-button--secondary" disabled={loading} onClick={downloadAnswers}>{error?REVIEW_COPY.answerDownloadAgain:REVIEW_COPY.answerDownload}</button>
       </div>
     </section>

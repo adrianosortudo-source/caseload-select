@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { completeAnswers } from "./blueprint-helpers";
 import { validateInterviewClarificationRequest } from "../interview-clarification";
+import { interviewClarificationSourceFingerprint } from "../types";
 import type { InterviewClarificationRequestEnvelope } from "../types";
 
 function nextStageRequest(): InterviewClarificationRequestEnvelope {
@@ -44,5 +45,18 @@ describe("adaptive interview clarification validation", () => {
     expect(validateInterviewClarificationRequest(request).valid).toBe(true);
     request.answers.interview.followups[0].answer=Array(13).fill("line").join("\n");
     expect(validateInterviewClarificationRequest(request).valid).toBe(false);
+  });
+  it("accepts a fingerprinted answered follow-up on the next clarification request", () => {
+    const request=nextStageRequest();
+    const followup=request.answers.interview.followups[0];
+    followup.source_answer_fingerprint=interviewClarificationSourceFingerprint(request.answers,followup.source_answer_ids);
+    expect(validateInterviewClarificationRequest(request).valid).toBe(true);
+  });
+  it("keeps an old follow-up in the answer history without treating its changed source as current", () => {
+    const request=nextStageRequest();
+    const followup=request.answers.interview.followups[0];
+    followup.source_answer_fingerprint=interviewClarificationSourceFingerprint(request.answers,followup.source_answer_ids);
+    request.answers.practice.direction="explore_direction";
+    expect(validateInterviewClarificationRequest(request).valid).toBe(true);
   });
 });

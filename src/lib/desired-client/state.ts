@@ -57,6 +57,9 @@ export function editAnswers(s:ToolState, edit:(answers:DesiredClientAnswers)=>De
     answers.practice.experience = null;
     answers.practice.development_needs = [];
     answers.practice.capability = "";
+    answers.practice.client_strength = null;
+    answers.practice.client_strength_effect = "";
+    answers.practice.client_strength_support = "";
     const writeIns = answers.write_ins ?? {};
     for (const key of Object.keys(writeIns)) if (key !== "aim") delete writeIns[key as keyof typeof writeIns];
     answers.write_ins = writeIns;

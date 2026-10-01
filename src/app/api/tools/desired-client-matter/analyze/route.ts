@@ -14,6 +14,17 @@ const MAX_BODY_BYTES = 32_768;
 const NO_STORE = { "Cache-Control": "no-store" };
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+function desiredClientAiEnabled(): boolean {
+  const apiKey = process.env.GOOGLE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim();
+  return process.env.DESIRED_CLIENT_AI_ENABLED === "true" && Boolean(apiKey) &&
+    Boolean(process.env.UPSTASH_REDIS_REST_URL?.trim()) && Boolean(process.env.UPSTASH_REDIS_REST_TOKEN?.trim());
+}
+
+/** Exposes only the enabled state so the tool can set honest expectations. */
+export async function GET(): Promise<NextResponse<{ enabled: boolean }>> {
+  return NextResponse.json({ enabled: desiredClientAiEnabled() }, { headers: NO_STORE });
+}
+
 function fail(requestId: string, code: AnalysisFailureCode, status: number, extraHeaders: Record<string, string> = {}): NextResponse<AnalysisFailureEnvelope> {
   return NextResponse.json({ ok: false, requestId, error: { code } }, { status, headers: { ...NO_STORE, ...extraHeaders } });
 }
@@ -83,9 +94,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
     const validation = validateInterviewClarificationRequest(parsed);
     if (!validation.valid) return fail(requestId, "INVALID_REQUEST", 400);
     const value = validation.value;
-    const apiKey = process.env.GOOGLE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim();
-    if (process.env.DESIRED_CLIENT_AI_ENABLED !== "true" || !apiKey ||
-        !process.env.UPSTASH_REDIS_REST_URL?.trim() || !process.env.UPSTASH_REDIS_REST_TOKEN?.trim()) {
+    if (!desiredClientAiEnabled()) {
       return fail(value.requestId, "AI_DISABLED", 503);
     }
     const ip = ipFromRequest(request);
@@ -101,9 +110,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
   const validation = validateAnalysisRequest(parsed);
   if (!validation.valid) return fail(requestId, "INVALID_REQUEST", 400);
 
-  const apiKey = process.env.GOOGLE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim();
-  if (process.env.DESIRED_CLIENT_AI_ENABLED !== "true" || !apiKey ||
-      !process.env.UPSTASH_REDIS_REST_URL?.trim() || !process.env.UPSTASH_REDIS_REST_TOKEN?.trim()) {
+  if (!desiredClientAiEnabled()) {
     return fail(validation.value.requestId, "AI_DISABLED", 503);
   }
 

@@ -39,6 +39,7 @@ test("the six sections explain their purpose and allow explicit unknowns", async
   await chooseLast("Who is the client in this situation?");
   await chooseLast("What event or situation creates the need for legal help?");
   await chooseLast("At what stage does the client usually contact a lawyer?");
+  await page.getByLabel("Which specific matter and legal work would the firm welcome again?").fill("A buyer of an established business needs an asset purchase agreement reviewed before final terms are agreed.");
   await chooseLast("What progress does this client want?");
   await continueToNext(3);
   await chooseLast("Why would the firm choose this work again?", "checkbox");

@@ -4,7 +4,7 @@ export const WELCOME_COPY = {
   time: "Plan for about 10 minutes for a first draft. Comparing two types of work or adding detail will take longer.",
   process: "Six guided sections take you from the practice you want to build to the client situation, matter, value, fit signals, opportunity and measure of success. Choose from examples, write your own answer, or mark something as not yet known.",
   preparation: "Think about work you would gladly handle again, what the team put into it, and what made it worthwhile. Records are not required. You can share estimates or leave figures unknown.",
-  outcome: "A Desired Client Blueprint that brings your choices together into a specific client-and-matter definition, explains why the work fits, identifies evidence and gaps, and sets a firm-approved measure for progress. Review and correct the draft before using it in marketing.",
+  outcome: "A Desired Client Blueprint that defines the client, specific legal work and practical benefit; explains why the firm wants the work; keeps constraints and evidence gaps visible; and gives a separate progress measure, target and review period. Review and correct the draft before using it in marketing.",
   supporting: "One type of work at a time. No account or email required.",
   privacy: "Describe patterns of work, not individual clients. Do not enter names, identifying details or confidential information.",
   aiDisclosure: "AI will draft a Desired Client Blueprint from the answers you provide. The result is a working draft for your review; reported experience, estimates and unknowns will remain distinct.",
