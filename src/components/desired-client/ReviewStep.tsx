@@ -15,7 +15,7 @@ const filled=(...values:Array<string|null|undefined>)=>values.filter((value):val
 const valueLabel=(value:string|null|undefined,labels:Record<string,string>)=>value?labels[value]??value:"";
 export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,briefNeedsUpdate,loading,error,retryAllowed,legacyBriefReplaced=false}:{
   answers:DesiredClientAnswers; onCreate:()=>void; onRetry:()=>void; onEdit:(stage:Stage)=>void; onCreateStructured?:()=>void;
-  briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"changed"|"focusChanged";retryAllowed:boolean;legacyBriefReplaced?:boolean;
+  briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged";retryAllowed:boolean;legacyBriefReplaced?:boolean;
 }) {
   const area=answers.focus.area;
   const work=answers.focus.work==="other"?answers.focus.work_other:area&&answers.focus.work?getWorkLabel(area,answers.focus.work):"";
@@ -62,6 +62,7 @@ export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,b
     {legacyBriefReplaced&&<p className="dc-alert" data-ui-copy="body">{WELCOME_COPY.legacyBriefReplaced}</p>}
     {error==="unavailable"&&<p className="dc-alert" role="alert" data-ui-copy="body">{COMMON_COPY.aiUnavailable}</p>}
     {error==="invalid"&&<p className="dc-alert" role="alert" data-ui-copy="body">{COMMON_COPY.aiInvalid}</p>}
+    {error==="structuredInvalid"&&<p className="dc-alert" role="alert" data-ui-copy="body">{COMMON_COPY.structuredInvalid}</p>}
     <section className="dc-review__definition-check" aria-label="Practice direction confirmation summary">
       <h2 data-ui-copy="heading">Check the practice direction before creating a draft</h2>
       <p data-ui-copy="body">Current practice: {answers.practice.firm_type.trim()||"Not described yet"}</p>

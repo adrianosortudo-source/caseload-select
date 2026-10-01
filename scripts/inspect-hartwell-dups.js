@@ -40,7 +40,6 @@ async function main() {
   console.log(`\nFirst 3 duplicate ids: ${duplicates.slice(0, 3).map(f => f.id).join(', ')}`);
   console.log(`Last 3 duplicate ids: ${duplicates.slice(-3).map(f => f.id).join(', ')}`);
 
-  const allIds = firms.map(f => f.id);
   const dupIds = duplicates.map(f => f.id);
 
   // FK dependency check — count rows in each referencing table that point to any duplicate firm

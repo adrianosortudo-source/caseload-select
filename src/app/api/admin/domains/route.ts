@@ -18,7 +18,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin as supabase } from "@/lib/supabase-admin";
-import { addVercelDomain, removeVercelDomain, getVercelDomainStatus } from "@/lib/vercel-domains";
+import { addVercelDomain, removeVercelDomain } from "@/lib/vercel-domains";
 import { isCronAuthorized } from "@/lib/cron-auth";
 
 // Each handler calls isCronAuthorized directly (no local wrapper) so the

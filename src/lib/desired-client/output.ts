@@ -116,7 +116,9 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   if (["source_observed", "hypothesis"].includes(value.evidence_basis as string) && value.kind !== "experience" && value.kind !== "hypothesis" && value.kind !== "suggestion") return false;
   if (slot === "open" && value.kind !== "unknown" && value.kind !== "suggestion") return false;
   if (slot !== "open" && value.kind === "suggestion") return false;
-  const supportedNumberTokens = numericTokens(supportedValues.join(" "));
+  // Parse each answer independently so whitespace between two cited answers
+  // cannot be mistaken for a thousands separator across the answer boundary.
+  const supportedNumberTokens = supportedValues.flatMap((supportedValue) => numericTokens(supportedValue));
   const unsupportedTokens = numericTokens(text).filter((token) => !supportedNumberTokens.includes(token));
   if (unsupportedTokens.length) {
     // Permit only the application's independently recomputed contribution,

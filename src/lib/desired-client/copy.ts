@@ -44,6 +44,7 @@ export const COMMON_COPY = {
   previewGoalMissing: "Client outcome still to establish",
   aiUnavailable: "AI could not create the blueprint just now. Your answers are still here. Retry or continue with a clearly labelled structured draft.",
   aiInvalid: "AI did not return a usable blueprint. Your answers are still here. Retry or continue with a clearly labelled structured draft.",
+  structuredInvalid: "The structured blueprint could not be assembled from these answers. Your answers are still here. Review the matter details and try again.",
   briefChanged: "Your answers changed. Create the blueprint again so it reflects the updated direction.",
   workChanged: "Your selected work changed. Review the client situation, value, fit, opportunity and repeatability sections again.",
 } as const;

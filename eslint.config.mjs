@@ -34,6 +34,12 @@ const eslintConfig = [
     },
   },
   {
+    files: ["docs/prototypes/desired-client-blueprint/verify-brand.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
     // One-off acceptance/dry-run scripts (not part of the shipped app, both
     // say so in their own header comments) that query untyped
     // supabase.from(...).select("*") rows directly. Real typing would mean

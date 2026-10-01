@@ -308,10 +308,12 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
     : "";
   const outcome=success?linked(outcomeText,"firm_preference",outcomePaths.length?outcomePaths:["repeatability.success_measure"]):unknownClaim("A progress measure has not been selected; none is inferred.","repeatability.success_measure");
   const clientRolePaths=knownPaths(answers,["situation.role","situation.role_other"]);
-  const clientTypePaths=clientRolePaths.length?knownPaths(answers,[...clientRolePaths,"client_context.geography","client_context.relevant_circumstances","client_context.community_focus"]):[];
+  // Keep the identity field concise: descriptive circumstances belong in the
+  // recognition card, where the full wording remains visible and actionable.
+  const clientTypePaths=clientRolePaths.length?knownPaths(answers,[...clientRolePaths,"client_context.geography","client_context.community_focus"]):[];
   const clientRole=answers.situation.role&&answers.situation.role!=="unknown"?role(answers):"";
   const rolePhrase=clientRole?(answers.situation.role==="other"?clientRole:`${/^[aeiou]/i.test(clientRole)?"an":"a"} ${clientRole.toLocaleLowerCase("en-CA")}`):"";
-  const clientDetails=[rolePhrase,clean(answers.client_context.geography)?`in ${clean(answers.client_context.geography)}`:"",clean(answers.client_context.relevant_circumstances)?`with relevant circumstances: ${clean(answers.client_context.relevant_circumstances)}`:"",clean(answers.client_context.community_focus)?`serving the ${clean(answers.client_context.community_focus)} community`:""].filter(Boolean);
+  const clientDetails=[rolePhrase,clean(answers.client_context.geography)?`in ${clean(answers.client_context.geography)}`:"",clean(answers.client_context.community_focus)?`serving the ${clean(answers.client_context.community_focus)} community`:""].filter(Boolean);
   const clientType=clientTypePaths.length?linked(clientDetails.join(" "),"firm_preference",clientTypePaths):unknownClaim("The specific kind of client the firm wants to attract has not yet been defined.","situation.role");
   const triggerText=answers.situation.trigger&&answers.situation.trigger!=="unknown"?text(answers,"situation.trigger"):clean(answers.write_ins?.trigger);
   const lowerFirst=(value:string)=>value.charAt(0).toLocaleLowerCase("en-CA")+value.slice(1);

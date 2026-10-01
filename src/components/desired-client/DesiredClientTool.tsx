@@ -47,8 +47,8 @@ export function reserveClarificationRequest(budget:ClarificationRequestBudget,ru
   if(budget.count>=6)return false;
   budget.count+=1;return true;
 }
-function isClarificationPrompt(value:unknown,stage:StageId,answers:DesiredClientAnswers):value is Extract<InterviewClarificationPrompt,{outcome:"ask"}> {
-  if(stage===7||!value||typeof value!=="object"||Array.isArray(value))return false;
+function isClarificationPrompt(value:unknown,stage:InterviewStage,answers:DesiredClientAnswers):value is Extract<InterviewClarificationPrompt,{outcome:"ask"}> {
+  if(!value||typeof value!=="object"||Array.isArray(value))return false;
   const prompt=value as Record<string,unknown>,expected=["outcome","id","stage","purpose","source_answer_ids","question","choices","reflection"];
   if(Object.keys(prompt).length!==expected.length||expected.some(key=>!Object.hasOwn(prompt,key))||prompt.outcome!=="ask"||prompt.stage!==stage||typeof prompt.id!=="string"||!PROMPT_UUID.test(prompt.id)||
     !PROMPT_PURPOSES[stage].includes(prompt.purpose as InterviewClarificationPurpose)||typeof prompt.question!=="string"||!prompt.question.trim()||prompt.question.length>140||/[\r\n]/.test(prompt.question)||
@@ -57,7 +57,7 @@ function isClarificationPrompt(value:unknown,stage:StageId,answers:DesiredClient
   const sources=prompt.source_answer_ids as unknown[];
   if(new Set(sources).size!==sources.length||!sources.every(source=>{
     if(typeof source!=="string"||!PROMPT_SOURCE_PREFIXES[stage].some(prefix=>prefix.endsWith(".")?source.startsWith(prefix):source===prefix))return false;
-    try{const resolved=resolveAnswerReference(source as AnswerReferencePath,answers),value=resolved.value;return resolved.present&&(typeof value==="string"?value.trim().length>0:Array.isArray(value)?value.length>0:false);}catch{return false;}
+    try{const resolved=resolveAnswerReference(source as AnswerReferencePath,answers),value=resolved.value;return resolved.present&&typeof value==="string"&&value.trim().length>0;}catch{return false;}
   }))return false;
   const choiceIds=new Set<string>();
   return prompt.choices.every(choice=>{
@@ -67,7 +67,7 @@ function isClarificationPrompt(value:unknown,stage:StageId,answers:DesiredClient
     choiceIds.add(item.id);return true;
   });
 }
-export function showValidClarificationPrompt(state:ToolState,stage:StageId,runId:string,prompt:unknown):ToolState|null {
+export function showValidClarificationPrompt(state:ToolState,stage:InterviewStage,runId:string,prompt:unknown):ToolState|null {
   if(!isClarificationPrompt(prompt,stage,state.answers)||state.answers.interview.clarification_count>=3||state.answers.interview.clarified_stages.includes(stage))return null;
   const counted=recordClarificationAttempt(state,stage,runId);
   return counted.answers.interview.clarification_count===state.answers.interview.clarification_count+1?showInterviewClarification(counted,prompt):null;
@@ -124,8 +124,8 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
    }finally{window.clearTimeout(timeout);if(abortRef.current===controller)abortRef.current=null;}
  },[commit]);
  const requestStageClarification=useCallback(async()=>{
-   const current=stateRef.current,stage=current.stage;
-   if(current.view!=="questions"||stage===7)return;
+    const current=stateRef.current,stage=current.stage;
+    if(stage===7||current.view!=="questions")return;
    if(!current.answers.interview.ai_clarification_consent||current.answers.interview.clarification_count>=3||current.answers.interview.clarified_stages.includes(stage)){
      commit(advanceStage(current));return;
    }

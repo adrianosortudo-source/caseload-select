@@ -71,6 +71,16 @@ describe("v4 provenance and client pathway", () => {
     expect(blueprint.client_and_matter.claims[0].text).toContain("before final terms are agreed");
     expect(blueprint.client_goals_needs.claims.some(claim=>claim.text.includes("contractual risks are allocated"))).toBe(true);
   });
+  it("keeps detailed client circumstances out of the concise identity and validates the full acquisition profile", () => {
+    const a=completeAnswers();
+    a.client_context.geography="Ontario";
+    a.client_context.relevant_circumstances="The buyer has identified an operating business, is seeking acquisition counsel before signing final terms, and has draft financial and transaction information available for review.";
+    a.client_context.repeat_matter_pattern="A buyer needs an asset purchase agreement drafted or reviewed before final terms are agreed, including advice on included assets and liabilities, payment and closing obligations, and allocation of contractual risks.";
+    const brief=buildStructuredBlueprintV4(a);
+    expect(brief.definition_components.client.text).toBe("an owner or founder in Ontario");
+    expect(brief.recognizable_circumstances.claims[0].text).toContain(a.client_context.relevant_circumstances);
+    expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
+  });
   it("keeps the generated opening definition concise and states a useful measure", () => {
     const a=completeAnswers();
     const b=buildStructuredBlueprintV4(a);
@@ -95,7 +105,7 @@ describe("v4 provenance and client pathway", () => {
     a.interview.followups=[{id:"11111111-1111-4111-8111-111111111111",stage:3,purpose:"firm_desirability",source_answer_ids:["value.reasons"],question:"Why does the firm want this work?",answer:"We enjoy the strategic work.",skipped:false,source_answer_fingerprint:interviewClarificationSourceFingerprint(a,["value.reasons"])}];
     a.practice.enjoys="We value technically complex work";
     expect(JSON.stringify(buildStructuredBlueprintV4(a))).toContain("We enjoy the strategic work.");
-    a.value.reasons=["client_impact"];
+    a.value.reasons=["client_benefit"];
     expect(JSON.stringify(buildStructuredBlueprintV4(a))).not.toContain("We enjoy the strategic work.");
   });
 });

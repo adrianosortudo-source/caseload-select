@@ -11,7 +11,7 @@ export interface ToolState {
   savedBrief: SavedBrief|null; briefNeedsUpdate:boolean; reviewed: boolean; aiConsent: boolean; reviewRunId: string|null; requestCount: number;
   askedClarifications: ClarificationCode[]; activeClarification: ClarificationCode|null; dismissedCode: ClarificationCode|null;
   interviewRunId:string|null; interviewPrompt:Extract<InterviewClarificationPrompt,{outcome:"ask"}>|null; clarificationLoading:boolean;
-  loading: boolean; retryAllowed:boolean; error: ""|"unavailable"|"invalid"|"changed"|"focusChanged"|"clarificationUnavailable"; storageMessage: ""|"saved"|"unavailable"|"expired"|"invalid"; copyFailed: boolean;
+  loading: boolean; retryAllowed:boolean; error: ""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged"|"clarificationUnavailable"; storageMessage: ""|"saved"|"unavailable"|"expired"|"invalid"; copyFailed: boolean;
   legacyBriefReplaced:boolean;
 }
 const emptyMap = () => ({ CLIENT_MATTER_UNCLEAR:null, VALUE_EFFORT_CONFLICT:null, CAPACITY_CONFLICT:null, REPEATABILITY_UNPROVEN:null, OPPORTUNITY_UNSUPPORTED:null });
@@ -20,7 +20,7 @@ export function enterTool(restored?:{answers:DesiredClientAnswers;stage:StageId;
   const savedBrief=restored?.savedBrief;
   const stage=restored?.stage??1;
   return { ...initialToolState(), view:savedBrief?"brief":stage===7?"review":"questions", mode:savedBrief?.mode??"ai", answers:restored?.answers??emptyAnswers(), stage,
-    visitedStages:restored?[1,2,3,4,5,6,7].filter(n=>n<stage) as StageId[]:[], savedBrief, reviewed:savedBrief?.wordingReviewed??false, dismissedCode:savedBrief?.openClarificationCode??null,legacyBriefReplaced:false };
+    visitedStages:restored?[1,2,3,4,5,6,7].filter(n=>n<stage) as StageId[]:[], savedBrief:savedBrief??null, reviewed:savedBrief?.wordingReviewed??false, dismissedCode:savedBrief?.openClarificationCode??null,legacyBriefReplaced:false };
 }
 export function canEnterStage(s:ToolState, stage:StageId):boolean {
   if(stage===7) return [1,2,3,4,5,6].every(n=>getMissingFieldsForStage(n as StageId,s.answers).length===0) && s.stagesToRevisit.length===0;
@@ -130,7 +130,7 @@ export function applyAnalysis(s:ToolState, result:AnalysisResult):ToolState {
 export function applyStructuredFallback(s:ToolState):ToolState {
   if (s.loading || getMissingRequiredFields(s.answers).length > 0) return s;
   const result = validateAnalysisResult({ brief: buildStructuredBlueprintV4(s.answers), clarification_code: null }, s.answers, []);
-  if (!result) return failAnalysis(s, "invalid");
+  if (!result) return { ...s, loading: false, retryAllowed: false, error: "structuredInvalid" };
   const savedBrief: SavedBrief = {
     brief: result.brief, sourceAnswersVersion: "dcm-v3.2", sourceAnswersSnapshot: structuredClone(s.answers),
     sourceBriefRevision: s.answers.revision, generatedAt: new Date().toISOString(), wordingReviewed: false, mode: "structured",
