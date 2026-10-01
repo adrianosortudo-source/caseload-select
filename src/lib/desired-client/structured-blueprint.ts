@@ -84,7 +84,9 @@ function fitTexts(answers: DesiredClientAnswers): string[] {
 export function buildStructuredBlueprint(answers: DesiredClientAnswers): DesiredClientBrief {
   const firmLabel = clean(answers.practice.firm_type) || (answers.focus.area ? `law firms focused on ${areaWork(answers).toLowerCase()}` : "law firms defining a preferred type of work");
   const firmPaths = knownPaths(answers, ["practice.firm_type", "focus.area", "focus.work", "focus.work_other", "practice.direction"]);
-  const matterPaths = knownPaths(answers, ["focus.work", "focus.work_other", "situation.role", "situation.role_other", "situation.trigger", "write_ins.trigger", "situation.timing", "client_context.geography", "client_context.repeat_matter_pattern"]);
+  const matterPaths = clean(answers.client_context.repeat_matter_pattern)
+    ? knownPaths(answers, ["client_context.repeat_matter_pattern"])
+    : knownPaths(answers, ["focus.work", "focus.work_other", "situation.role", "situation.role_other", "situation.trigger", "write_ins.trigger", "situation.timing", "client_context.geography"]);
   const calculatedContribution = calculateContribution(answers);
   const reasonPaths = calculatedContribution
     ? knownPaths(answers, ["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"])
@@ -231,7 +233,9 @@ function interviewClaims(answers:DesiredClientAnswers, stages:number[], prefix:s
 /** Deterministic v4 profile. It turns the answers into six useful sections without inventing client behaviour. */
 export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):DesiredClientBriefV4 {
   const matter= matterDefinition(answers);
-  const matterPaths=knownPaths(answers,["focus.work","focus.work_other","situation.trigger","write_ins.trigger","situation.timing","client_context.repeat_matter_pattern"]);
+  const matterPaths=clean(answers.client_context.repeat_matter_pattern)
+    ?knownPaths(answers,["client_context.repeat_matter_pattern"])
+    :knownPaths(answers,["focus.work","focus.work_other","situation.trigger","write_ins.trigger","situation.timing"]);
   const clientMatter = matterPaths.length ? linked(matter,"hypothesis",matterPaths) : unknownClaim("The specific client role, situation and matter are still to be defined.","focus.work");
   const progressPaths=knownPaths(answers,["client.goals","client.goal_detail"]);
   const progress=progressPaths.length ? linked(`The client is seeking ${[text(answers,"client.goals"),clean(answers.client.goal_detail)].filter(Boolean).join(": ")}.`,"hypothesis",progressPaths) : unknownClaim("The client's desired progress has not been established.","client.goals");
