@@ -507,7 +507,8 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
         [packageId, reviewSha256, expectedRevisionSha256, operatorId],
       );
       expect(replayed.rows[0].receipt).toMatchObject({ outcome: "already_applied", schemaVersion: "prospect-enrichment-apply-receipt/v1", packageId, firmId });
-      expect(stableProspectEnrichmentJson({ ...replayed.rows[0].receipt, outcome: "applied" })).toBe(stableProspectEnrichmentJson(applyReceipt));
+      const replayReceipt = Object.fromEntries(Object.entries(replayed.rows[0].receipt).filter(([key]) => key !== "outcome"));
+      expect(stableProspectEnrichmentJson(replayReceipt)).toBe(stableProspectEnrichmentJson(applyReceipt));
       expect(await captureReplaySnapshot()).toEqual(stateBeforeReplay);
 
       const privileges = await observer.query<{ anon_select: boolean; auth_select: boolean; service_insert: boolean }>(
