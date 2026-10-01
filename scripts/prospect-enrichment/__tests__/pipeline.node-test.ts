@@ -8,7 +8,7 @@ import { compileCandidate } from "../compiler";
 import { deriveLegacyAssessmentProjection } from "../legacy-projection-mapper";
 import type { ProspectEnrichmentEnvelope } from "../../../src/lib/prospect-enrichment-contract";
 import { items, reconcilePackage, selectPilot, type ComparisonSnapshot } from "../reconciliation";
-import { enqueue, readEntry, readState, retryTime, submitOne, type ApprovalManifest } from "../outbox";
+import { enqueue, readEntry, readState, retryTime, submitOne, verifyIdenticalReplay, type ApprovalManifest } from "../outbox";
 import { candidate, sample, snapshot } from "../fixtures/synthetic";
 import { protocolHash, within } from "../model";
 import { serializeSyntheticComparisonExport, resignSyntheticComparisonSnapshot } from "../fixtures/comparison-signing";
@@ -133,6 +133,49 @@ test("immutable outbox replays exact bytes after timeout and rejects changed app
   const second = await submitOne({ ...options, now: "2026-09-23T12:00:05.000Z" }); assert.equal(second.state, "received"); assert.equal(second.attempts, 2); assert.equal(sent[0], sent[1]);
   assert.equal((await readEntry(temp, queued.entry.key)).body, sent[0]);
   await assert.rejects(submitOne({ ...options, approval: { ...approval, packages: [] } }), /exact_approval_scope/);
+});
+test("server replay verification is one-shot, exact, and leaves the received receipt and state unchanged", async t => {
+  const temp = await workspace(t), fixedFirmId = "11111111-1111-4111-8111-111111111111";
+  const sourceEnvelope = compileCandidate(candidate({ workKey: "synthetic-server-replay", firmName: "Synthetic", status: "held" }), snapshot).packages[0].envelope;
+  const envelope = { ...sourceEnvelope, subject: { ...sourceEnvelope.subject, databaseFirmId: fixedFirmId } };
+  const queued = await enqueue(temp, envelope, snapshot.snapshotAt);
+  const approval: ApprovalManifest = { schemaVersion: "prospect-enrichment-delivery-approval/v1", scope: "pilot", targetOrigin: "https://admin.caseloadselect.ca", projectId: "ssxryjxifwiivghglqer", sourceManifestSha256: snapshot.manifestSha256, approvalReference: "synthetic-test-authorization-only", packages: [{ clientPackageId: envelope.packageId, payloadSha256: queued.entry.payloadSha256 }] };
+  const serverPackageId = "33333333-3333-4333-8333-333333333333";
+  await submitOne({ outbox: temp, key: queued.entry.key, approval, confirmation: "SUBMIT-APPROVED-PROSPECT-RESEARCH", token: "synthetic-token", now: snapshot.snapshotAt, fetcher: (async () => new Response(JSON.stringify({ clientPackageId: envelope.packageId, payloadSha256: queued.entry.payloadSha256, packageId: serverPackageId, state: "received", receivedAt: snapshot.snapshotAt }), { status: 201 })) as typeof fetch });
+  const live = comparison(envelope);
+  live.packages.push({ clientPackageId: envelope.packageId, payloadSha256: queued.entry.payloadSha256, state: "applied", serverPackageId, visible: true });
+  Object.assign(live, resignSyntheticComparisonSnapshot(live));
+  const stateBefore = await fs.readFile(path.join(temp, "states", `${queued.entry.key}.json`), "utf8");
+  const receiptBefore = await fs.readFile(path.join(temp, "receipts", `${queued.entry.key}.json`), "utf8");
+  let calls = 0;
+  const result = await verifyIdenticalReplay({ outbox: temp, key: queued.entry.key, approval, confirmation: "VERIFY-IDENTICAL-PROSPECT-REPLAY", token: "synthetic-token", comparison: live, now: snapshot.snapshotAt, fetcher: (async (url, init) => {
+    calls++; assert.equal(url, "https://admin.caseloadselect.ca/api/internal/prospect-enrichment/drafts");
+    assert.equal((init?.headers as Record<string, string>)["Idempotency-Key"], queued.entry.key); assert.equal(init?.body, queued.entry.body);
+    return new Response(JSON.stringify({ packageId: serverPackageId, clientPackageId: envelope.packageId, payloadSha256: queued.entry.payloadSha256, runId: envelope.runId, state: "applied", receivedAt: snapshot.snapshotAt }), { status: 200 });
+  }) as typeof fetch });
+  assert.deepEqual({ verified: result.verified, networkRequests: result.networkRequests, httpStatus: result.httpStatus }, { verified: true, networkRequests: 1, httpStatus: 200 });
+  assert.equal(calls, 1);
+  assert.equal(await fs.readFile(path.join(temp, "states", `${queued.entry.key}.json`), "utf8"), stateBefore);
+  assert.equal(await fs.readFile(path.join(temp, "receipts", `${queued.entry.key}.json`), "utf8"), receiptBefore);
+  const replay = await verifyIdenticalReplay({ outbox: temp, key: queued.entry.key, approval, confirmation: "VERIFY-IDENTICAL-PROSPECT-REPLAY", token: "synthetic-token", comparison: live, fetcher: (async () => { calls++; throw Error("must not repeat"); }) as typeof fetch });
+  assert.equal(replay.networkRequests, 0); assert.equal(calls, 1);
+});
+test("server replay verification records ambiguous or non-replay outcomes and never retries", async t => {
+  const temp = await workspace(t), fixedFirmId = "11111111-1111-4111-8111-111111111111";
+  const original = compileCandidate(candidate({ workKey: "synthetic-replay-hold", firmName: "Synthetic" }), snapshot).packages[0].envelope;
+  const envelope = { ...original, subject: { ...original.subject, databaseFirmId: fixedFirmId } }, queued = await enqueue(temp, envelope, snapshot.snapshotAt);
+  const approval: ApprovalManifest = { schemaVersion: "prospect-enrichment-delivery-approval/v1", scope: "pilot", targetOrigin: "https://admin.caseloadselect.ca", projectId: "ssxryjxifwiivghglqer", sourceManifestSha256: snapshot.manifestSha256, approvalReference: "synthetic-test-authorization-only", packages: [{ clientPackageId: envelope.packageId, payloadSha256: queued.entry.payloadSha256 }] };
+  const serverPackageId = "33333333-3333-4333-8333-333333333333";
+  await submitOne({ outbox: temp, key: queued.entry.key, approval, confirmation: "SUBMIT-APPROVED-PROSPECT-RESEARCH", token: "synthetic-token", now: snapshot.snapshotAt, fetcher: (async () => new Response(JSON.stringify({ clientPackageId: envelope.packageId, payloadSha256: queued.entry.payloadSha256, packageId: serverPackageId, state: "received", receivedAt: snapshot.snapshotAt }), { status: 201 })) as typeof fetch });
+  const live = comparison(envelope); live.packages.push({ clientPackageId: envelope.packageId, payloadSha256: queued.entry.payloadSha256, state: "applied", serverPackageId, visible: true }); Object.assign(live, resignSyntheticComparisonSnapshot(live));
+  let calls = 0;
+  const duplicate = { ...live, packages: [...live.packages, ...live.packages] };
+  await assert.rejects(verifyIdenticalReplay({ outbox: temp, key: queued.entry.key, approval, confirmation: "VERIFY-IDENTICAL-PROSPECT-REPLAY", token: "synthetic-token", comparison: duplicate, fetcher: (async () => { calls++; throw Error("must never run"); }) as typeof fetch }), /comparison_binding_mismatch/);
+  assert.equal(calls, 0);
+  const result = await verifyIdenticalReplay({ outbox: temp, key: queued.entry.key, approval, confirmation: "VERIFY-IDENTICAL-PROSPECT-REPLAY", token: "synthetic-token", comparison: live, fetcher: (async () => { calls++; return new Response("", { status: 201 }); }) as typeof fetch });
+  assert.equal(result.verified, false); assert.equal(result.reason, "server_did_not_confirm_replay"); assert.equal(calls, 1);
+  await assert.rejects(verifyIdenticalReplay({ outbox: temp, key: queued.entry.key, approval, confirmation: "VERIFY-IDENTICAL-PROSPECT-REPLAY", token: "synthetic-token", comparison: live, fetcher: (async () => { calls++; throw Error("must not repeat"); }) as typeof fetch }), /already_attempted/);
+  assert.equal(calls, 1);
 });
 test("delivery stops on 401, preserves rate-limit retry-after and caps retries", async t => {
   const temp = await workspace(t);
