@@ -19,6 +19,21 @@ export type DesiredClientAnalysisOutcome =
 
 export function desiredClientModelId(): string { return MODEL; }
 
+function logRejectedOutput(
+  requestId: string,
+  failure: { field: string; reason: string },
+): void {
+  // Keep diagnostics in one message: Vercel's runtime log view drops extra
+  // console arguments, which hid the bounded details when passed separately.
+  console.warn(JSON.stringify({
+    event: "[desired-client] analysis output rejected",
+    requestId,
+    model: MODEL,
+    field: failure.field.slice(0, 80),
+    reason: failure.reason.slice(0, 80),
+  }));
+}
+
 export async function runDesiredClientAnalysis(
   request: AnalysisRequestEnvelope,
   eligibleCodes: readonly ClarificationCode[],
@@ -41,17 +56,13 @@ export async function runDesiredClientAnalysis(
     let parsed: unknown;
     try { parsed = JSON.parse(response.response.text()); }
     catch {
-      console.warn("[desired-client] analysis output rejected", { requestId: request.requestId, model: MODEL, field: "report", reason: "invalid_json" });
+      logRejectedOutput(request.requestId, { field: "report", reason: "invalid_json" });
       return { mode: "invalid_output" };
     }
     let validationFailure: { field: string; reason: string } | null = null;
     const result = validateAnalysisResult(parsed, request.answers, eligibleCodes, (failure) => { validationFailure ??= failure; });
     if (!result) {
-      console.warn("[desired-client] analysis output rejected", {
-        requestId: request.requestId,
-        model: MODEL,
-        ...(validationFailure ?? { field: "report", reason: "unclassified_validation_failure" }),
-      });
+      logRejectedOutput(request.requestId, validationFailure ?? { field: "report", reason: "unclassified_validation_failure" });
     }
     return result ? { mode: "live", result } : { mode: "invalid_output" };
   } catch (error) {
