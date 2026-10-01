@@ -1,20 +1,11 @@
 import { AREA_CATALOG, WRITE_IN_KEYS, getRoleOptions, getWorkOptions, resolveAnswerReference } from "./catalog";
 import { getSourceDetails } from "./sources";
-import { BLUEPRINT_RESPONSE_SCHEMA } from "./output";
+import { allowedSourceAnswerPathsForAnswers, BLUEPRINT_RESPONSE_SCHEMA } from "./output";
+import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
 import { isInterviewClarificationCurrent, type AnalysisRequestEnvelope, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers } from "./types";
 
-const SOURCE_PATHS: AnswerReferencePath[] = [
-  "focus.area", "focus.work", "focus.work_other", "focus.service_area", "focus.certainty", "focus.route",
-  "practice.direction", "practice.firm_type", "practice.capability", "practice.enjoys", "practice.experience", "practice.development_needs", "direction.less_reason",
-  "practice.client_strength", "practice.client_strength_effect", "practice.client_strength_support",
-  "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus", "client_context.language_service_needs", "client_context.repeat_matter_pattern", "client_context.discovery_behaviour",
-  "situation.trigger", "situation.timing", "situation.role", "situation.role_other", "situation.contact", "client.goals", "client.goal_detail", "client.concerns", "client.decision_needs", "client.decision_context", "client.pathway_basis", "client.choice_priorities", "client.choice_detail", "client.choice_basis",
-  "value.reasons", "value.fee_effort", "value.collected_fee", "value.team_hours", "value.payment", "value.currency", "value.fee_amount", "value.direct_cost_amount", "value.amount_basis", "value.amount_scope",
-  "delivery.conditions", "delivery.capacity", "delivery.limit", "delivery.fit_signals", "direction.aim", "direction.evidence", "direction.less", "direction.less_note",
-  "opportunity.sources", "opportunity.data_basis", "opportunity.source_detail", "opportunity.period", "opportunity.enquiry_count", "opportunity.retained_count", "opportunity.conversion", "opportunity.acquisition_cost", "opportunity.uncertainty",
-  "repeatability.success_measure", "repeatability.success_other", "repeatability.target", "repeatability.review_period", "repeatability.additional_matters", "repeatability.staffing_constraint",
-  ...WRITE_IN_KEYS.map((key) => `write_ins.${key}` as AnswerReferencePath), "interview.followups.0", "interview.followups.1", "interview.followups.2",
-];
+const SOURCE_PATHS: AnswerReferencePath[] = DESIRED_CLIENT_ANSWER_PATHS;
+const REPORT_SOURCE_SLOTS = ["definition_client_type", "definition_client_matter", "definition_reasons", "definition_outcome", "client_and_matter", "client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "decision_pathway", "recognizable_circumstances", "evidence_and_open_questions"] as const;
 
 export const DESIRED_CLIENT_RESPONSE_SCHEMA = BLUEPRINT_RESPONSE_SCHEMA;
 
@@ -69,6 +60,7 @@ function untrustedTextFields(answers: DesiredClientAnswers) {
 export function buildDesiredClientUserPrompt(request: AnalysisRequestEnvelope, eligibleCodes: readonly ClarificationCode[]): string {
   const currentFollowups=request.answers.interview.followups.map((item,index)=>({item,index})).filter(({item})=>isInterviewClarificationCurrent(item,request.answers));
   const resolved = resolvedAnswers(request.answers);
+  const sourcePathsBySlot = Object.fromEntries(REPORT_SOURCE_SLOTS.map((slot) => [slot, allowedSourceAnswerPathsForAnswers(slot, request.answers).filter((path) => Object.hasOwn(resolved, path))]));
   const unknownSourcePaths = Object.entries(resolved).filter(([, value]) => value.unknown).map(([path]) => path);
   // The model reflection is UI guidance, not user evidence. Keep it out of the
   // serialized answer snapshot as well as excluding it from source resolution.
@@ -91,12 +83,13 @@ export function buildDesiredClientUserPrompt(request: AnalysisRequestEnvelope, e
     catalog: selectedCatalog(request.answers.focus.area),
     answers: answersForModel,
     resolved_answers: resolved,
+    source_paths_by_slot: sourcePathsBySlot,
     untrusted_text_fields: untrustedTextFields(request.answers),
     unknown_source_paths: unknownSourcePaths,
     eligible_codes: eligibleCodes,
     asked_codes: request.clarifications.map((item) => item.code),
     analysis_index: request.analysisIndex,
     clarification_answers: currentFollowups.map(({item,index})=>({answer_id:`interview.followups.${index}`,stage:item.stage,question:item.question,answer:item.skipped?"Skipped":item.answer,source_answer_ids:item.source_answer_ids,reflection_excluded_from_evidence:true})),
-    instruction: "Cite only present, relevant source answer paths. Unknown paths may support only a plainly stated gap, never a factual claim. Match evidence_basis to the selected choice_basis/pathway_basis. Do not use unselected comparison candidates. Keep the specific client type distinct from a concise client_matter clause naming the situation and specific legal engagement. The application inserts the practical benefit supplied by the firm and constructs the opening sentence from the components. Set definition_sentence to an empty string and do not place the progress target there. Include the separate client decision pathway, mark inferred stages as hypotheses, and use the law firm's desired-client perspective, never a firm-as-client perspective. Distinguish reported records, estimates and preference. Keep all source material traceable and the full report under 800 words.",
+    instruction: "For each output field, cite only source answer paths listed for that slot in source_paths_by_slot. Cite one to eight distinct paths; never use a path from another slot or invent a path. Unknown paths may support only a plainly stated gap, never a factual claim. Match evidence_basis to the selected choice_basis/pathway_basis. Do not use unselected comparison candidates. Keep the specific client type distinct from a concise client_matter clause naming the situation and specific legal engagement. The application inserts the practical benefit supplied by the firm and constructs the opening sentence from the components. Set definition_sentence to an empty string and do not place the progress target there. Include the separate client decision pathway, mark inferred stages as hypotheses, and use the law firm's desired-client perspective, never a firm-as-client perspective. Distinguish reported records, estimates and preference. Keep all source material traceable and the full report under 800 words.",
   });
 }

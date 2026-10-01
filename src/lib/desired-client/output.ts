@@ -2,9 +2,10 @@ import { resolveAnswerReference } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
 import { calculateContribution, hasNegativeContribution } from "./economics";
 import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
-import { isInterviewClarificationCurrent, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBrief, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
+import { isInterviewClarificationCurrent, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
 
 const SOURCE_PATHS = new Set<string>(DESIRED_CLIENT_ANSWER_PATHS);
+const FOLLOWUP_STAGES: Record<string, number[]> = { client_and_matter:[1,2], client_goals_needs:[2], why_firm_wants_work:[3], why_client_chooses_firm:[4], recognizable_circumstances:[5,6], evidence_and_open_questions:[1,2,3,4,5,6], decision_pathway:[2,5,6], definition_client_type:[2], definition_client_matter:[2], definition_reasons:[3], definition_outcome:[6] };
 const BASIS: readonly EvidenceBasis[] = ["firm_reported_recorded", "firm_reported_estimate", "firm_reported_experience", "firm_reported_observation", "client_reported", "firm_preference", "source_observed", "hypothesis", "unknown"];
 const KIND = ["experience", "preference", "hypothesis", "unknown", "suggestion"] as const;
 const BUDGETS = {
@@ -50,6 +51,30 @@ function allowedPaths(slot: string): readonly string[] {
   return [];
 }
 
+/** Exact registered answer paths the model may cite for a report slot. Keep
+ * prompt guidance and validation aligned by deriving both from this policy. */
+export function allowedSourceAnswerPaths(slot: string): AnswerReferencePath[] {
+  const prefixes = allowedPaths(slot);
+  return DESIRED_CLIENT_ANSWER_PATHS.filter((path) => prefixes.some((prefix) => path.startsWith(prefix)));
+}
+
+export function permittedSourceAnswerPath(path: string, answers: DesiredClientAnswers, slot: string): boolean {
+  if (!path.startsWith("interview.followups.")) return allowedPaths(slot).some((prefix) => path.startsWith(prefix));
+  const indexText = path.slice("interview.followups.".length);
+  if (!/^\d+$/.test(indexText)) return false;
+  const item = answers.interview.followups[Number(indexText)];
+  return !!item && !item.skipped && isInterviewClarificationCurrent(item, answers) && (FOLLOWUP_STAGES[slot] ?? []).includes(item.stage);
+}
+
+export function allowedSourceAnswerPathsForAnswers(slot: string, answers: DesiredClientAnswers): string[] {
+  const paths: string[] = allowedSourceAnswerPaths(slot);
+  answers.interview.followups.forEach((item, index) => {
+    const path = `interview.followups.${index}`;
+    if (isInterviewClarificationCurrent(item, answers) && !item.skipped && permittedSourceAnswerPath(path, answers, slot)) paths.push(path);
+  });
+  return paths;
+}
+
 function validStatement(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string) => void): value is EvidenceLinkedStatement {
   const reject = (reason: string) => { reportFailure?.(reason); return false; };
   const budget = BUDGETS[slot as keyof typeof BUDGETS] ?? BUDGETS.open;
@@ -57,14 +82,10 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   const text = value.text.trim().replace(/\s+/g, " ");
   if (!text || text.length > budget[1] || wordCount(text) > budget[0] || BANNED.test(text)) return reject("statement_text_budget_or_format");
   const paths = value.source_answer_ids as unknown[];
-  const prefixes = allowedPaths(slot);
-  const followupStages: Record<string, number[]> = { client_and_matter:[1,2], client_goals_needs:[2], why_firm_wants_work:[3], why_client_chooses_firm:[4], recognizable_circumstances:[5,6], evidence_and_open_questions:[1,2,3,4,5,6], decision_pathway:[2,5,6], definition_client_type:[2], definition_client_matter:[2], definition_reasons:[3], definition_outcome:[6] };
-  const permitted = (path:string) => {
-    if (!path.startsWith("interview.followups.")) return prefixes.some(prefix => path.startsWith(prefix));
-    const item = answers.interview.followups[Number(path.split(".")[2])];
-    return !!item && !item.skipped && isInterviewClarificationCurrent(item,answers) && (followupStages[slot] ?? []).includes(item.stage);
-  };
-  if (paths.length < 1 || paths.length > 8 || paths.some((path) => typeof path !== "string" || !SOURCE_PATHS.has(path) || !permitted(path)) || new Set(paths).size !== paths.length) return reject("source_answer_paths");
+  if (paths.length < 1 || paths.length > 8) return reject("source_answer_path_count");
+  if (new Set(paths).size !== paths.length) return reject("source_answer_path_duplicate");
+  if (paths.some((path) => typeof path !== "string" || !(SOURCE_PATHS.has(path) || /^interview\.followups\.\d+$/.test(path)))) return reject("source_answer_path_unrecognized");
+  if (paths.some((path) => !permittedSourceAnswerPath(path as string, answers, slot))) return reject("source_answer_path_not_allowed_for_slot");
   let hasUnknown = false;
   const supportedValues: string[] = [];
   for (const path of paths as AnswerReferencePath[]) {
