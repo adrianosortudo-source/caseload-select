@@ -4,7 +4,6 @@ import { getEligibleClarificationCodes } from "./clarifications";
 import {
   buildDesiredClientSystemPrompt,
   buildDesiredClientUserPrompt,
-  DESIRED_CLIENT_RESPONSE_SCHEMA,
 } from "./prompt";
 import { validateAnalysisResult } from "./output";
 import { safeProviderFailureMetadata } from "./provider-diagnostics";
@@ -35,7 +34,6 @@ export async function runDesiredClientAnalysis(
         temperature: 0.2,
         maxOutputTokens: 4096,
         responseMimeType: "application/json",
-        responseSchema: DESIRED_CLIENT_RESPONSE_SCHEMA as never,
         thinkingConfig: { thinkingBudget: 512 },
       } as GenerationConfig & { thinkingConfig: { thinkingBudget: number } },
     }, { timeout: REQUEST_TIMEOUT_MS });
