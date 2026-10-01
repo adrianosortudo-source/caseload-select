@@ -420,8 +420,8 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
       expect(sourceEvent.rows).toHaveLength(1);
       expect(item.rows).toHaveLength(1);
 
-      const allPackageItems = await writerA.query<{ id: string; client_item_id: string }>(
-        `SELECT id,client_item_id FROM public.prospect_enrichment_items WHERE package_id=$1 ORDER BY client_item_id`, [packageId],
+      const allPackageItems = await writerA.query<{ id: string; client_item_id: string; item_kind: string }>(
+        `SELECT id,client_item_id,item_kind FROM public.prospect_enrichment_items WHERE package_id=$1 ORDER BY client_item_id`, [packageId],
       );
       const operatorId = randomUUID();
       const packageVerification = {
@@ -442,7 +442,10 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
         payloadSha256,
         identity: { choice: "existing", firmId, coreInput: null },
         items: allPackageItems.rows.map((storedItem) => ({
-          itemId: storedItem.id, disposition: "retain_only", reason: "Synthetic integration evidence remains retained without changing the profile.", profileChoice: null,
+          itemId: storedItem.id,
+          disposition: storedItem.item_kind === "research_attempt" ? "accept_new" : "retain_only",
+          reason: storedItem.item_kind === "research_attempt" ? null : "Synthetic source evidence remains retained without a separate profile choice.",
+          profileChoice: null,
         })),
       };
       const reviewSha256 = prospectEnrichmentProtocolHash(review);
@@ -465,7 +468,7 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
       const canonicalVerification = {
         visibilityScope: "canonical", payloadSha256, readbackSha256: "2".repeat(64),
         expectedReceiptSha256: prospectEnrichmentProtocolHash(applyReceipt),
-        sourceCount: 1, itemCount: 2, targetCount: 0, verificationVersion: "prospect-enrichment-readback/v1",
+        sourceCount: 1, itemCount: 2, targetCount: 2, verificationVersion: "prospect-enrichment-readback/v1",
       };
       const canonicalVerificationReceipt = await writerA.query<{ receipt: Record<string, unknown> }>(
         `SELECT public.record_prospect_enrichment_verification_v1($1,$2,'canonical',$3::jsonb) AS receipt`,
@@ -476,6 +479,36 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
         `SELECT public.record_prospect_enrichment_verification_v1($1,$2,'canonical',$3::jsonb)`,
         [packageId, payloadSha256, JSON.stringify({ ...canonicalVerification, expectedReceiptSha256: "9".repeat(64) })],
       )).rejects.toThrow(/receipt_mismatch/i);
+
+      const captureReplaySnapshot = async () => {
+        const result = await writerA.query<{ snapshot: Record<string, unknown> }>(
+          `SELECT jsonb_build_object(
+             'package', (SELECT to_jsonb(package_row) FROM public.prospect_enrichment_packages package_row WHERE package_row.id=$1),
+             'sourceEvents', (SELECT coalesce(jsonb_agg(to_jsonb(source_event) ORDER BY source_event.id), '[]'::jsonb) FROM public.prospect_enrichment_source_events source_event WHERE source_event.first_package_id=$1),
+             'items', (SELECT coalesce(jsonb_agg(to_jsonb(package_item) ORDER BY package_item.id), '[]'::jsonb) FROM public.prospect_enrichment_items package_item WHERE package_item.package_id=$1),
+             'targets', (SELECT coalesce(jsonb_agg(to_jsonb(target) ORDER BY target.item_id, target.target_table, target.target_id), '[]'::jsonb) FROM public.prospect_enrichment_item_targets target JOIN public.prospect_enrichment_items package_item ON package_item.id=target.item_id WHERE package_item.package_id=$1),
+             'sourceCaptures', (SELECT coalesce(jsonb_agg(to_jsonb(source_capture) ORDER BY source_capture.id), '[]'::jsonb) FROM public.prospect_source_captures source_capture JOIN public.prospect_enrichment_item_targets target ON target.target_table='prospect_source_captures' AND target.target_id=source_capture.id JOIN public.prospect_enrichment_items package_item ON package_item.id=target.item_id WHERE package_item.package_id=$1),
+             'researchAttempts', (SELECT coalesce(jsonb_agg(to_jsonb(research_attempt) ORDER BY research_attempt.id), '[]'::jsonb) FROM public.prospect_research_attempts research_attempt JOIN public.prospect_enrichment_item_targets target ON target.target_table='prospect_research_attempts' AND target.target_id=research_attempt.id JOIN public.prospect_enrichment_items package_item ON package_item.id=target.item_id WHERE package_item.package_id=$1),
+             'profileChoices', (SELECT coalesce(jsonb_agg(to_jsonb(choice) ORDER BY choice.id), '[]'::jsonb) FROM public.prospect_enrichment_profile_choices choice WHERE choice.package_id=$1),
+             'events', (SELECT coalesce(jsonb_agg(to_jsonb(package_event) ORDER BY package_event.id), '[]'::jsonb) FROM public.prospect_enrichment_events package_event WHERE package_event.package_id=$1),
+             'firm', (SELECT to_jsonb(firm_row) FROM public.gta_prospect_firms firm_row WHERE firm_row.id=$2)
+           ) AS snapshot`, [packageId, firmId],
+        );
+        return result.rows[0].snapshot;
+      };
+      const stateBeforeReplay = await captureReplaySnapshot();
+      const replayTargets = await writerA.query<{ target_table: string }>(
+        `SELECT target.target_table FROM public.prospect_enrichment_item_targets target JOIN public.prospect_enrichment_items package_item ON package_item.id=target.item_id WHERE package_item.package_id=$1 AND package_item.item_kind='research_attempt' ORDER BY target.target_table`,
+        [packageId],
+      );
+      expect(replayTargets.rows.map((target) => target.target_table)).toEqual(["prospect_research_attempts", "prospect_source_captures"]);
+      const replayed = await writerA.query<{ receipt: Record<string, unknown> }>(
+        `SELECT public.apply_prospect_enrichment_package_v1($1,$2,$3,$4) AS receipt`,
+        [packageId, reviewSha256, expectedRevisionSha256, operatorId],
+      );
+      expect(replayed.rows[0].receipt).toMatchObject({ outcome: "already_applied", schemaVersion: "prospect-enrichment-apply-receipt/v1", packageId, firmId });
+      expect(stableProspectEnrichmentJson({ ...replayed.rows[0].receipt, outcome: "applied" })).toBe(stableProspectEnrichmentJson(applyReceipt));
+      expect(await captureReplaySnapshot()).toEqual(stateBeforeReplay);
 
       const privileges = await observer.query<{ anon_select: boolean; auth_select: boolean; service_insert: boolean }>(
         `SELECT has_table_privilege('anon','public.prospect_enrichment_packages','SELECT') AS anon_select,
@@ -514,8 +547,11 @@ integrationDescribe("prospect enrichment v1 PostgreSQL contract", () => {
         clientItemId, itemKind: "observation", itemId: item.rows[0].id,
         actualSourceEventKey: sourceEventKey,
         actualSemanticSha256: expectedItems.find((expectedItem) => expectedItem.clientItemId === clientItemId)?.semanticSha256,
-        disposition: "retain_only", targets: [],
+        disposition: "accept_new",
       });
+      const appliedManifestItem = manifestItems.find((manifestItem) => manifestItem.clientItemId === clientItemId);
+      expect(appliedManifestItem?.targets).toHaveLength(2);
+      expect((appliedManifestItem?.targets as Array<{ table: string }>).map((target) => target.table).sort()).toEqual(["prospect_research_attempts", "prospect_source_captures"]);
       const heldManifestRow = allManifestEntries.rows.find((row) => (row.manifest_entry as { clientPackageId?: string | null }).clientPackageId === null);
       expect(heldManifestRow).toMatchObject({ package_id: null, reconciliation_state: "source_hold", items: [] });
       const heldReadback = await observer.query<Record<string, unknown>>(

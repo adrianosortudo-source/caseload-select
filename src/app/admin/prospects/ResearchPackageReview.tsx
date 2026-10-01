@@ -5,6 +5,7 @@ import NewFirmEvidenceReview from "./NewFirmEvidenceReview";
 import type { ProspectEnrichmentNewCoreOptions, SourceBoundNewCoreInput } from "@/lib/prospect-enrichment-core-evidence";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { JsonValue, ProspectEnrichmentEnvelope, ProspectEnrichmentSource } from "@/lib/prospect-enrichment-contract";
+import { stableProspectEnrichmentJson } from "@/lib/prospect-enrichment-json";
 import { ResearchError, ResearchJson, ResearchSource, ResearchOriginal, ResearchPanel, readResearchResponse, researchButton, researchInput, researchLabel, researchUrl } from "./ResearchEvidence";
 
 export type ResearchItemDisposition = "accept_new" | "link_existing" | "retain_only";
@@ -23,6 +24,7 @@ export default function ResearchPackageReview({ packageId, initialData }: { pack
   const [page, setPage] = useState(0); const [choices, setChoices] = useState<Record<string, Choice>>({}); const [identity, setIdentity] = useState("unresolved");
   const [newCoreInput, setNewCoreInput] = useState<SourceBoundNewCoreInput | null>(null);
   const [review, setReview] = useState<ReviewReceipt | null>(null); const [acknowledged, setAcknowledged] = useState(false); const [message, setMessage] = useState<string | null>(null); const [verification, setVerification] = useState<unknown>(null); const [rejectReason, setRejectReason] = useState("");
+  const [replayAcknowledged, setReplayAcknowledged] = useState(false);
   const load = useCallback(async (signal?: AbortSignal) => {
     try { const response = await fetch(`/api/admin/prospect-enrichment/packages/${encodeURIComponent(packageId)}`, { cache: "no-store", signal }); const result = await readResearchResponse<ResearchPackageReviewView>(response, "package"); if (result.packageId !== packageId || !result.payload || !Array.isArray(result.items) || !Array.isArray(result.sources)) throw new Error("The research package response was incomplete."); setRecord(result); setError(null); }
     catch (cause) { if (cause instanceof DOMException && cause.name === "AbortError") return; setError(cause instanceof Error ? cause.message : "The research package could not be loaded."); }
@@ -68,6 +70,29 @@ export default function ResearchPackageReview({ packageId, initialData }: { pack
       await readResearchResponse(response); setMessage("Evidence saved. Admin visibility is being checked."); setAcknowledged(false); setReview(null); await load(); await verify("canonical");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "The evidence could not be applied."); } finally { setBusy(null); }
   }
+  async function replayApplied() {
+    if (!record || record.state !== "applied" || !record.receipt || !replayAcknowledged
+      || !record.reviewSha256 || !/^[a-f0-9]{64}$/.test(record.reviewSha256)
+      || !record.expectedRevisionSha256 || !/^[a-f0-9]{64}$/.test(record.expectedRevisionSha256)) return;
+    setBusy("replay"); setError(null); setMessage(null); setVerification(null);
+    try {
+      const response = await fetch(`/api/admin/prospect-enrichment/packages/${packageId}/apply`, {
+        method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ reviewSha256: record.reviewSha256, expectedRevisionSha256: record.expectedRevisionSha256, acknowledged: true }),
+      });
+      const result = await readResearchResponse<Record<string, unknown>>(response);
+      if (result.outcome !== "already_applied") throw new Error("Admin did not confirm an unchanged, already-applied receipt. Stop and inspect the package history.");
+      const appliedReceipt = record.receipt as Record<string, unknown>;
+      if (stableProspectEnrichmentJson({ ...result, outcome: "applied" }) !== stableProspectEnrichmentJson(appliedReceipt)) {
+        throw new Error("Admin returned a different application receipt. Stop and reconcile the package before continuing.");
+      }
+      setMessage("Duplicate protection verified. Admin returned the original applied receipt.");
+      setReplayAcknowledged(false);
+      await load();
+      await verify("canonical");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "The saved application could not be verified."); }
+    finally { setBusy(null); }
+  }
   async function reject() {
     if (!record || terminal || !rejectReason.trim()) return;
     setBusy("reject"); setError(null);
@@ -107,6 +132,7 @@ export default function ResearchPackageReview({ packageId, initialData }: { pack
       </ResearchPanel>
       {review && <ResearchPanel title="Confirm reviewed changes" name="research-package-confirmation"><ResearchJson value={review.review ?? choices} /><label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span>I reviewed this exact package and the changes shown below.</span></label><div><button className={`${researchButton} bg-navy text-white`} type="button" disabled={!acknowledged || Boolean(busy)} onClick={() => void apply()}>{busy === "apply" ? "Applying evidence…" : "Apply reviewed evidence"}</button></div></ResearchPanel>}
       <ResearchPanel title="Original research" name="research-package-original"><ResearchOriginal content={record.payload.originalResearch.content} unmappedPaths={record.payload.originalResearch.unmappedPaths} sourcePath={record.payload.originalResearch.sourcePath} sourcePointer={record.payload.originalResearch.sourcePointer} sha256={record.payload.originalResearch.sourceSha256} /><div><button type="button" className={researchButton} disabled={Boolean(busy) || record.state === "rejected" || record.state === "superseded"} onClick={async () => { setBusy("verify"); setError(null); try { await verify(record.state === "applied" ? "canonical" : "package"); } catch (cause) { setError(cause instanceof Error ? cause.message : "Verification could not be completed."); } finally { setBusy(null); } }}>{record.state === "applied" ? "Verify applied evidence visibility" : "Verify retained research visibility"}</button></div>{verification !== null && <ResearchJson value={verification} />}<details><summary className="cursor-pointer text-sm font-semibold">Import receipt and event history</summary><div className="mt-3 space-y-3"><ResearchJson value={record.receipt} /><ResearchJson value={record.events} /></div></details></ResearchPanel>
+      {record.state === "applied" && <ResearchPanel title="Check duplicate protection" name="research-package-replay" description="Use the saved review and revision hashes. Admin must return the original receipt without adding evidence or changing this firm's profile."><p className="w-full text-sm" data-ui-copy="supporting">This sends the exact saved application again. It does not create new research or new profile choices.</p><label className="flex w-full items-start gap-2 text-sm"><input className="mt-1 shrink-0" type="checkbox" checked={replayAcknowledged} disabled={Boolean(busy) || !record.reviewSha256 || !record.expectedRevisionSha256 || !record.receipt} onChange={(event) => setReplayAcknowledged(event.target.checked)} /><span>I confirm this exact replay is only to verify duplicate protection.</span></label><div><button type="button" className={researchButton} disabled={Boolean(busy) || !replayAcknowledged || !record.reviewSha256 || !record.expectedRevisionSha256 || !record.receipt} onClick={() => void replayApplied()}>{busy === "replay" ? "Checking saved receipt…" : "Verify duplicate protection"}</button></div>{(!record.reviewSha256 || !record.expectedRevisionSha256 || !record.receipt) && <p className="w-full text-sm" data-ui-copy="supporting">The saved receipt or review hashes are unavailable. Reload this package before retrying.</p>}</ResearchPanel>}
       {!terminal && <ResearchPanel title="Reject this submission" name="research-package-reject" description="Rejecting preserves research; qualification stays the same."><label className="block text-sm font-semibold">Rejection reason<textarea className={`${researchInput} mt-2`} value={rejectReason} onChange={(event) => setRejectReason(event.target.value)} /></label><div><button type="button" className={researchButton} disabled={Boolean(busy) || !rejectReason.trim()} onClick={() => void reject()}>Reject submission and retain research</button></div></ResearchPanel>}
     </>}
   </div>;
