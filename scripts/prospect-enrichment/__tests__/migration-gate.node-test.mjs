@@ -59,8 +59,8 @@ function verifyCoverageReviewOnlyReceipt(receipt, coverageBytes, candidateReceip
   return coverageMigrationPath;
 }
 
-test("release manifest keeps exactly six production migrations plus two separately documented review-only candidate migrations", () => {
-  const featurePaths = fs.readdirSync(path.join(root, "supabase/migrations")).filter(name => /_prospect_enrichment_|_fix_gta_prospect_operator_projection_gaps\.sql$/.test(name)).sort().map(name => "supabase/migrations/" + name);
+test("migration inventory contains only exact production and receipt-bound review-only prospect migrations", () => {
+  const featurePaths = fs.readdirSync(path.join(root, "supabase/migrations")).filter(name => /_prospect_(?:enrichment|candidate)_|_fix_gta_prospect_operator_projection_gaps\.sql$/.test(name)).sort().map(name => "supabase/migrations/" + name);
   const candidateBytes = execFileSync("git", ["cat-file", "blob", "HEAD:" + candidateMigrationPath], { cwd: root });
   const prerequisiteBytes = execFileSync("git", ["cat-file", "blob", "HEAD:" + RELEASE_PATH], { cwd: root });
   const reviewOnly = JSON.parse(fs.readFileSync(path.join(root, candidateReviewPath), "utf8"));
@@ -73,7 +73,7 @@ test("release manifest keeps exactly six production migrations plus two separate
   assert.ok(!MIGRATION_PATHS.includes(documentedCoverage));
   for (const changed of [{ ...coverageReview, productionApplicationApproved: true }, { ...coverageReview, reviewOnly: false }, { ...coverageReview, prerequisiteCatalogReview: "complete" }, { ...coverageReview, migration: { ...coverageReview.migration, sha256: "0".repeat(64) } }, { ...coverageReview, prerequisiteCandidateReceiptSha256: "0".repeat(64) }]) assert.throws(() => verifyCoverageReviewOnlyReceipt(changed, coverageBytes, candidateReceiptBytes, candidateBytes));
   assert.throws(() => verifyMigrationPlan({ ...plan("pre"), migrations: [...plan("pre").migrations, path.posix.basename(documentedCoverage)] }, manifest, "pre"), /unexpected_pending/);
-  assert.deepEqual([...MIGRATION_PATHS, documentedAddition, documentedCoverage].sort(), featurePaths, "any other feature migration requires explicit release review");
+  assert.deepEqual([...MIGRATION_PATHS, documentedAddition, documentedCoverage, CANDIDATE_READER_TIMEOUT_PATH, ...CANDIDATE_READER_REPAIR_PATHS].sort(), featurePaths, "any other feature migration requires explicit release review");
   assert.deepEqual(Buffer.from(fs.readFileSync(path.join(root, candidateMigrationPath), "utf8").replace(/\r\n/g, "\n")), candidateBytes);
   assert.ok(!MIGRATION_PATHS.includes(documentedAddition), "candidate review receipt must not authorize production application");
   for (const changed of [{ ...reviewOnly, productionApplicationApproved: true }, { ...reviewOnly, reviewOnly: false }, { ...reviewOnly, migration: { ...reviewOnly.migration, sha256: "0".repeat(64) } }]) {
@@ -361,7 +361,7 @@ test("candidate full ledger accepts exact ordered receipt suffix and rejects unr
   assert.throws(() => verifyFullMigrationLedger([baselineRow], base, "candidate-pending", CANDIDATE_RELEASE_PATHS), /unexpected_full_history_delta/);
 });
 
-test("candidate reader repair permits only its exact ordered migration suffix after the existing reader fix and candidate release", t => {
+test("candidate reader repair permits only its exact ordered suffix after the existing reader fix and candidate release", t => {
   const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "candidate-reader-ledger-test-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const dir = path.join(base, "supabase", "migrations");
@@ -376,8 +376,11 @@ test("candidate reader repair permits only its exact ordered migration suffix af
   };
   const applied = [makeRow(baseline), ...CANDIDATE_RELEASE_PATHS.map(makeRow), makeRow(CANDIDATE_READER_TIMEOUT_PATH)].sort((a, b) => a.version.localeCompare(b.version));
   assert.deepEqual(verifyFullMigrationLedger(applied, base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS).pendingPaths, [...CANDIDATE_READER_REPAIR_PATHS]);
-  const earlierApplied = [...applied, makeRow(CANDIDATE_READER_REPAIR_PATHS[0])].sort((a, b) => a.version.localeCompare(b.version));
-  assert.deepEqual(verifyFullMigrationLedger(earlierApplied, base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS).pendingPaths, [CANDIDATE_READER_REPAIR_PATHS[1]]);
+  for (let appliedCount = 1; appliedCount < CANDIDATE_READER_REPAIR_PATHS.length; appliedCount++) {
+    const appliedPrefix = [...applied, ...CANDIDATE_READER_REPAIR_PATHS.slice(0, appliedCount).map(makeRow)].sort((a, b) => a.version.localeCompare(b.version));
+    assert.deepEqual(verifyFullMigrationLedger(appliedPrefix, base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS).pendingPaths,
+      CANDIDATE_READER_REPAIR_PATHS.slice(appliedCount));
+  }
   assert.throws(() => verifyFullMigrationLedger(applied, base, "candidate-reader-repair-pending", []), /invalid_candidate_reader_repair_pending_scope/);
   assert.throws(() => verifyFullMigrationLedger(applied, base, "candidate-reader-repair-pending", [...CANDIDATE_READER_REPAIR_PATHS].reverse()), /invalid_candidate_reader_repair_pending_scope/);
   assert.throws(() => verifyFullMigrationLedger(applied.filter(row => row.version !== makeRow(CANDIDATE_READER_TIMEOUT_PATH).version), base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS), /unexpected_full_history_delta/);

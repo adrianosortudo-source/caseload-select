@@ -50,6 +50,7 @@ export const CANDIDATE_READER_REPAIR_PATH = "supabase/migrations/20260930050000_
 export const CANDIDATE_READER_REPAIR_PATHS = Object.freeze([
   CANDIDATE_READER_REPAIR_PATH,
   "supabase/migrations/20260930130000_prospect_candidate_reader_defer_legacy_audit.sql",
+  "supabase/migrations/20260930225510_prospect_enrichment_apply_refresh_gate.sql",
 ]);
 export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
@@ -282,7 +283,7 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
     : phase === "enrichment-pending" ? [...MIGRATION_PATHS].sort()
       : phase === "candidate-pending" || phase === "candidate-reader-repair-pending" ? [...candidatePendingPaths].sort() : [];
   if (phase === "candidate-reader-repair-pending") {
-    const permittedSuffixes = [CANDIDATE_READER_REPAIR_PATHS, CANDIDATE_READER_REPAIR_PATHS.slice(-1)];
+    const permittedSuffixes = CANDIDATE_READER_REPAIR_PATHS.map((_, index) => CANDIDATE_READER_REPAIR_PATHS.slice(index));
     if (!permittedSuffixes.some(suffix => same(pending, [...suffix].sort()))) fail("unexpected_full_history_delta");
   } else if (!same(pending, expected)) fail("unexpected_full_history_delta");
   return { phase, remoteVersionCount: remote.size, stagedMigrationCount: localByVersion.size, pendingPaths: pending, completeSourceCoverage: true };

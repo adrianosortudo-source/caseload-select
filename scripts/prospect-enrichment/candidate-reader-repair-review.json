@@ -19,6 +19,14 @@
       "name": "prospect_candidate_reader_defer_legacy_audit",
       "bytes": 1248,
       "sha256": "f6ffab0605121a3ac1af86f2df7d4ae88edc2b383422f9f03ed43282fc3a500a"
+    },
+    {
+      "path": "supabase/migrations/20260930225510_prospect_enrichment_apply_refresh_gate.sql",
+      "filename": "20260930225510_prospect_enrichment_apply_refresh_gate.sql",
+      "version": "20260930225510",
+      "name": "prospect_enrichment_apply_refresh_gate",
+      "bytes": 1886,
+      "sha256": "bf9a315e050b03c25f6ff258534dcee2f632bf5a0484d0e225d8c54fe9587875"
     }
   ],
   "exclusions": [

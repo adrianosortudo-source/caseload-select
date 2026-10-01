@@ -21,7 +21,10 @@ export const catalogExpectations = {
  private_list_service_role_execute:true,private_list_anon_execute:false,private_list_auth_execute:false,
  private_firm_links_service_role_execute:false,private_firm_links_anon_execute:false,private_firm_links_auth_execute:false,
  history_metadata_search_index:true,identity_by_candidate_index:true,identity_by_firm_index:true,
- invalid_date_coverage_index:true
+ invalid_date_coverage_index:true,
+ apply_refresh_security_definer:true,apply_refresh_empty_search_path:true,
+ apply_refresh_update_transition:true,apply_refresh_own_core_audit_excluded:true,
+ apply_refresh_current_identity_excluded:true
 };
 export function createReaderRepairReceipt(sourceRoot=root) {
  const migrations=repairMigrations.map(identity=>{
@@ -42,10 +45,9 @@ export function verifyReaderRepairPlan(plan,ledgerCheck,phase) {
  if(!isRecord(plan)||!isRecord(ledgerCheck)||!["pre","post"].includes(phase)||
   ledgerCheck.phase!==(phase==="pre"?"candidate-reader-repair-pending":"complete")||!Array.isArray(ledgerCheck.pendingPaths)) fail("invalid_reader_repair_plan");
  const pendingPaths=ledgerCheck.pendingPaths;
- const permittedPending=phase==="pre"?[
-  repairMigrations.map(item=>item.path),
-  repairMigrations.slice(-1).map(item=>item.path),
- ]:[[]];
+ const permittedPending=phase==="pre"
+  ? repairMigrations.map((_,index)=>repairMigrations.slice(index).map(item=>item.path))
+  : [[]];
  if(!permittedPending.some(paths=>same(pendingPaths,paths))) fail("unexpected_reader_repair_plan");
  const pending=pendingPaths.map(item=>path.posix.basename(item));
  if(!same(ledgerCheck.pendingPaths.map(x=>path.posix.basename(x)),pending)||plan.dryRun!==true||
@@ -75,7 +77,12 @@ export const catalogQuery=[
 " 'history_metadata_search_index',to_regclass('public.prospect_candidate_history_metadata_search') IS NOT NULL,",
 " 'identity_by_candidate_index',to_regclass('public.prospect_candidate_identity_by_candidate') IS NOT NULL,",
 " 'identity_by_firm_index',to_regclass('public.prospect_candidate_identity_by_firm') IS NOT NULL,",
-" 'invalid_date_coverage_index',to_regclass('public.prospect_candidate_invalid_date_coverage') IS NOT NULL",
+" 'invalid_date_coverage_index',to_regclass('public.prospect_candidate_invalid_date_coverage') IS NOT NULL,",
+" 'apply_refresh_security_definer',(SELECT p.prosecdef FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure),",
+" 'apply_refresh_empty_search_path',(SELECT coalesce(p.proconfig @> ARRAY['search_path=\"\"']::text[],false) FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure),",
+" 'apply_refresh_update_transition',(SELECT position('TG_OP = ''UPDATE''' in p.prosrc)>0 AND position('OLD.state IS DISTINCT FROM ''applied''' in p.prosrc)>0 AND position('NEW.state = ''applied''' in p.prosrc)>0 AND position('NEW.firm_id IS NOT NULL' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure),",
+" 'apply_refresh_own_core_audit_excluded',(SELECT position('b.source_name = ''pe-''' in p.prosrc)>0 AND position('b.source_sha256 = NEW.payload_sha256' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure),",
+" 'apply_refresh_current_identity_excluded',(SELECT position('h.package_id IS DISTINCT FROM NEW.id' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure)",
 ") AS reader_contract;"
 ].join("\n");
 export function verifyReaderCatalog(payload) {
