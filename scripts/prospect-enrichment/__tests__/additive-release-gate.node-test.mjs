@@ -408,7 +408,7 @@ test("candidate CLI inventory excludes preview SQL and reconciles the complete p
   const pending = MIGRATION_PATHS.slice(CANDIDATE_PREREQUISITE_PREFIX_LENGTH);
   const pendingVersions = new Set(pending.map(file => path.basename(file).split("_")[0]));
   const before = rows.filter(row => !pendingVersions.has(row.version));
-  assert.equal(verifyFullMigrationLedger(before, staged, "candidate-pending", pending).pendingPaths.length, 3);
+  assert.equal(verifyFullMigrationLedger(before, staged, "candidate-pending", pending).pendingPaths.length, 4);
   assert.equal(verifyFullMigrationLedger(rows, staged, "candidate-pending", []).pendingPaths.length, 0);
   assert.throws(() => verifyFullMigrationLedger([...before, { version: "20990101000000", name: "unreviewed" }], staged, "candidate-pending", pending), /remote_migration_source_missing_or_mismatched/);
   assert.throws(() => verifyFullMigrationLedger(before.slice(1), staged, "candidate-pending", pending), /unexpected_full_history_delta/);

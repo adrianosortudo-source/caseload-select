@@ -89,7 +89,7 @@ test("a freshly hashed failed catalog or partial prefix is still insufficient ev
     { "qualification-catalog-check.json": Buffer.from(JSON.stringify({ scratchAndProductionCatalogsMatch: false, tableCount: 14, productionCatalogSha256: "c".repeat(64) })) },
     { "qualification-catalog-check.json": Buffer.from(JSON.stringify({ scratchAndProductionCatalogsMatch: true, tableCount: 13, productionCatalogSha256: "c".repeat(64) })) },
     { "ledger-check.json": Buffer.from(JSON.stringify({ appliedPrefixLength: 1, pending: Array(10).fill("pending") })) },
-    { "ledger-check.json": Buffer.from(JSON.stringify({ appliedPrefixLength: 0, pending: Array(12).fill("pending") })) },
+    { "ledger-check.json": Buffer.from(JSON.stringify({ appliedPrefixLength: 0, pending: Array(11).fill("pending") })) },
   ]) {
     const changed = { ...files, ...change };
     const evidence = gate.createPreflightEvidence(binding, changed, now);
