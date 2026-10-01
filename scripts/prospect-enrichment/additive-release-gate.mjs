@@ -35,6 +35,7 @@ export const MIGRATION_PATHS = Object.freeze([
   "supabase/migrations/20260924071322_prospect_enrichment_manifest_hold_evidence.sql",
   "supabase/migrations/20260924093317_fix_gta_prospect_operator_projection_gaps.sql",
   "supabase/migrations/20260924172758_prospect_enrichment_candidate_profiles.sql",
+  "supabase/migrations/20260924185000_prospect_enrichment_registration_rpc_reliability.sql",
   "supabase/migrations/20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
   "supabase/migrations/20260925200000_gta_prospect_operator_database_firm_profile_link.sql",
 ]);
@@ -102,7 +103,7 @@ export function createReleaseReceipt(sources) {
     migrations: RELEASE_IDENTITIES.map(describe),
     exclusions: [
       "No seeds or roles",
-      "No migration outside the eleven exact ordered entries above",
+      "No migration outside the twelve exact ordered entries above",
       "The already-applied operator membership RPC is verified as a prerequisite and is never reapplied",
       "No data intake, import, identity linking, qualification change, or research-process cutover",
     ],

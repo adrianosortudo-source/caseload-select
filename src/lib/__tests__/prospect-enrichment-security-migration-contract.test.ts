@@ -15,7 +15,7 @@ const holdEvidenceMigration = readFileSync(
   "utf8",
 );
 const registrationReliabilityMigration = readFileSync(
-  resolve(process.cwd(), "supabase/migrations/20261001180000_prospect_enrichment_registration_rpc_reliability.sql"),
+  resolve(process.cwd(), "supabase/migrations/20260924185000_prospect_enrichment_registration_rpc_reliability.sql"),
   "utf8",
 );
 

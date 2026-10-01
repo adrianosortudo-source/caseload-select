@@ -111,7 +111,7 @@ jobs:
           MANIFEST_SHA256: ${{ steps.reconcile.outputs.manifest_sha256 }}
         shell: bash
         run: |
-          printf 'Review recovery artifact %s (SHA-256 %s), manifest %s, run %s attempt %s, source %s, receipt %s.\n\nThis recovery is bound to failed run 36460908921 and its verified prefix of nine migrations. The live ledger must be the exact prefix nine with both recovery migrations pending, or prefix ten with only profile-link pending and the private coverage backfill status installed. The coverage migration installs schema and triggers only; a separate checkpointed worker processes source rows in batches of at most 100, renewing its protected temporary credential and resuming only from database checkpoints. Any lost batch response is reconciled against database status before retry; the profile-link migration remains blocked until all inventory tables report complete and independent ledger, source-coverage, catalog and dry-run checks pass.\n\n### Read-only coverage checkpoints\n\n| Source table | Last completed UUID | Projected rows | Complete |\n| --- | --- | ---: | :---: |\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST_SHA256" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Review recovery artifact %s (SHA-256 %s), manifest %s, run %s attempt %s, source %s, receipt %s.\n\nThis recovery is bound to failed run 36460908921 and its verified prefix of nine migrations. The live ledger must be the exact prefix nine with the registration-reliability, coverage and profile-link migrations pending, or prefix eleven with only profile-link pending and the private coverage backfill status installed. The first protected writer applies the registration RPC repair and coverage schema together; the read-back verifies both before a separate checkpointed worker processes source rows in batches of at most 100, renewing its protected temporary credential and resuming only from database checkpoints. Any lost batch response is reconciled against database status before retry; the profile-link migration remains blocked until all inventory tables report complete and independent ledger, source-coverage, catalog and dry-run checks pass.\n\n### Read-only coverage checkpoints\n\n| Source table | Last completed UUID | Projected rows | Complete |\n| --- | --- | ---: | :---: |\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST_SHA256" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
           jq -r '.current.coverageBackfill.status[] | "| " + .table_name + " | " + (.last_id // "none") + " | " + (.rows_projected|tostring) + " | " + (if .complete then "yes" else "no" end) + " |"' "$RUNNER_TEMP/recovery-preflight/recovery-evidence.json" >> "$GITHUB_STEP_SUMMARY"
       - name: Retain failed preflight evidence
         if: failure()
@@ -225,7 +225,7 @@ jobs:
       - name: Configure pinned TLS trust for coverage migration
         if: steps.post_review_reconcile.outputs.coverage_write_required == 'true'
         run: node scripts/prospect-enrichment/configure-migration-tls.mjs
-      - name: Apply coverage migration within bounded writer credential lifetime
+      - name: Apply registration RPC repair and coverage migration within bounded writer credential lifetime
         if: steps.post_review_reconcile.outputs.coverage_write_required == 'true'
         run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs apply-coverage "$RUNNER_TEMP/recovery-preflight" "$RUNNER_TEMP/recovery-preflight/prior"
       - name: Run checkpointed candidate coverage backfill until all source tables are complete
@@ -235,7 +235,7 @@ jobs:
           CREDENTIAL_GATE: candidate-recovery
           MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
         run: node scripts/prospect-enrichment/candidate-coverage-backfill-worker.mjs
-      - name: Acquire fresh credential for coverage read-back after writer or reviewed prefix-ten reconciliation
+      - name: Acquire fresh credential for coverage read-back after writer or reviewed prefix-eleven reconciliation
         env:
           COMPLETE_PHASE: coverage-readback
           CREDENTIAL_GATE: candidate-recovery
@@ -243,7 +243,7 @@ jobs:
         run: node scripts/prospect-enrichment/temporary-credential.mjs
       - name: Configure pinned TLS trust for coverage read-back
         run: node scripts/prospect-enrichment/configure-migration-tls.mjs
-      - name: Verify coverage migration ledger and catalog read-back
+      - name: Verify registration RPC repair and coverage ledger and catalog read-back
         run: node scripts/prospect-enrichment/candidate-recovery-gate.mjs verify-coverage-readback "$RUNNER_TEMP/recovery-preflight" "$RUNNER_TEMP/recovery-preflight/prior"
       - name: Acquire a new credential only after verified coverage
         env:

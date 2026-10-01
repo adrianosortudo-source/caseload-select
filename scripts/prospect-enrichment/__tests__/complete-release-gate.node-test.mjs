@@ -26,7 +26,7 @@ const pending = () => ({ qualification: "pending", enrichment: "pending", candid
 const now = Date.parse("2026-09-28T18:00:00.000Z");
 const files = Object.fromEntries(gate.EVIDENCE_FILES.map(name => [name, Buffer.from(JSON.stringify({ proof: name }))]));
 files["qualification-catalog-check.json"] = Buffer.from(JSON.stringify({ scratchAndProductionCatalogsMatch: true, tableCount: 14, productionCatalogSha256: "c".repeat(64) }));
-files["ledger-check.json"] = Buffer.from(JSON.stringify({ appliedPrefixLength: 0, pending: Array.from({ length: 11 }, (_, index) => String(index)) }));
+files["ledger-check.json"] = Buffer.from(JSON.stringify({ appliedPrefixLength: 0, pending: Array.from({ length: 12 }, (_, index) => String(index)) }));
 
 test("preflight evidence binds every member to run, attempt, main, project and receipt", () => {
   const evidence = gate.createPreflightEvidence(binding, files, now);

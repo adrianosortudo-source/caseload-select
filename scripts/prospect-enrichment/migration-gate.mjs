@@ -42,6 +42,7 @@ export const CANDIDATE_RELEASE_PATHS = Object.freeze([
   ...QUALIFICATION_HISTORY.map(item => item.path),
   ...MIGRATION_PATHS,
   "supabase/migrations/20260924172758_prospect_enrichment_candidate_profiles.sql",
+  "supabase/migrations/20260924185000_prospect_enrichment_registration_rpc_reliability.sql",
   "supabase/migrations/20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
   "supabase/migrations/20260925200000_gta_prospect_operator_database_firm_profile_link.sql",
 ]);

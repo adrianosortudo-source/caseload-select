@@ -73,7 +73,7 @@ test("migration inventory contains only exact production and receipt-bound revie
   assert.ok(!MIGRATION_PATHS.includes(documentedCoverage));
   for (const changed of [{ ...coverageReview, productionApplicationApproved: true }, { ...coverageReview, reviewOnly: false }, { ...coverageReview, prerequisiteCatalogReview: "complete" }, { ...coverageReview, migration: { ...coverageReview.migration, sha256: "0".repeat(64) } }, { ...coverageReview, prerequisiteCandidateReceiptSha256: "0".repeat(64) }]) assert.throws(() => verifyCoverageReviewOnlyReceipt(changed, coverageBytes, candidateReceiptBytes, candidateBytes));
   assert.throws(() => verifyMigrationPlan({ ...plan("pre"), migrations: [...plan("pre").migrations, path.posix.basename(documentedCoverage)] }, manifest, "pre"), /unexpected_pending/);
-  assert.deepEqual([...MIGRATION_PATHS, documentedAddition, documentedCoverage, CANDIDATE_READER_TIMEOUT_PATH, ...CANDIDATE_READER_REPAIR_PATHS].sort(), featurePaths, "any other feature migration requires explicit release review");
+  assert.deepEqual([...MIGRATION_PATHS, documentedAddition, documentedCoverage, "supabase/migrations/20260924185000_prospect_enrichment_registration_rpc_reliability.sql", CANDIDATE_READER_TIMEOUT_PATH, ...CANDIDATE_READER_REPAIR_PATHS].sort(), featurePaths, "any other feature migration requires explicit release review");
   assert.deepEqual(Buffer.from(fs.readFileSync(path.join(root, candidateMigrationPath), "utf8").replace(/\r\n/g, "\n")), candidateBytes);
   assert.ok(!MIGRATION_PATHS.includes(documentedAddition), "candidate review receipt must not authorize production application");
   for (const changed of [{ ...reviewOnly, productionApplicationApproved: true }, { ...reviewOnly, reviewOnly: false }, { ...reviewOnly, migration: { ...reviewOnly.migration, sha256: "0".repeat(64) } }]) {
@@ -440,7 +440,7 @@ test("dotenv detection covers both directories and all pinned default filenames 
 });
 
 
-test("current eleven-migration tree stages only prerequisites, preserving separate candidate authority", async t => {
+test("current twelve-migration tree stages only prerequisites, preserving separate candidate authority", async t => {
   const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "prerequisite-stage-test-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const source = path.join(base, "source");

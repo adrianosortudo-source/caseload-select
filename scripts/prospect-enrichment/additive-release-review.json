@@ -102,6 +102,14 @@
       "sha256": "7ef9a868772bc74d20ffe531596da90731ae7217b86302c586c6d3219740d480"
     },
     {
+      "path": "supabase/migrations/20260924185000_prospect_enrichment_registration_rpc_reliability.sql",
+      "filename": "20260924185000_prospect_enrichment_registration_rpc_reliability.sql",
+      "version": "20260924185000",
+      "name": "prospect_enrichment_registration_rpc_reliability",
+      "bytes": 5150,
+      "sha256": "3c6fb7ac04e214827434d2182e6df1bf32a928bb261df2a58b3edbbfd4db9c5b"
+    },
+    {
       "path": "supabase/migrations/20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
       "filename": "20260924192549_prospect_enrichment_candidate_firm_coverage.sql",
       "version": "20260924192549",
@@ -120,7 +128,7 @@
   ],
   "exclusions": [
     "No seeds or roles",
-    "No migration outside the eleven exact ordered entries above",
+    "No migration outside the twelve exact ordered entries above",
     "The already-applied operator membership RPC is verified as a prerequisite and is never reapplied",
     "No data intake, import, identity linking, qualification change, or research-process cutover"
   ]
