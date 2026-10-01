@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en-CA">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1E2F58">
+  <title>Desired Client Blueprint | CaseLoad Select</title>
+  <style>
+    @font-face { font-family: "Manrope"; src: url("assets/Manrope-latin.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
+    @font-face { font-family: "DM Sans"; src: url("assets/DM-Sans-latin.woff2") format("woff2"); font-weight: 100 1000; font-display: swap; }
+    @font-face { font-family: "Oxanium"; src: url("assets/Oxanium-latin.woff2") format("woff2"); font-weight: 200 800; font-display: swap; }
+    :root {
+      color-scheme: light;
+      --ink: #0D1520;
+      --navy: #1E2F58;
+      --navy-soft: #1E2F58;
+      --paper: #F4F3EF;
+      --white: #FFFFFF;
+      --line: #D7DAE0;
+      --muted: #46546B;
+      --gold: #C4B49A;
+      --gold-pale: #F4F3EF;
+      --teal-pale: #F4F3EF;
+      --blue-pale: #F4F3EF;
+      --rose-pale: #F4F3EF;
+      --heading: "Manrope", Arial, sans-serif;
+      --label: "Oxanium", Arial, sans-serif;
+      --sans: "DM Sans", Arial, sans-serif;
+    }
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; scroll-padding-top: 2rem; }
+    body { margin: 0; background: var(--paper); color: var(--ink); font: 15px/1.58 var(--sans); }
+    button, a { font: inherit; }
+    button:focus-visible, a:focus-visible { outline: 3px solid var(--gold); outline-offset: 3px; }
+    ::selection { color: white; background: var(--navy-soft); }
+    .topbar { height: 66px; padding: 0 clamp(1rem, 4vw, 3.5rem); display: flex; align-items: center; justify-content: space-between; color: #fff; background: var(--navy); }
+    .brand { display: flex; gap: .8rem; align-items: center; color: white; font-weight: 700; letter-spacing: .015em; text-decoration: none; }
+    .topbar-note { color: #e2e6ec; font-size: 12px; letter-spacing: .07em; text-transform: uppercase; }
+    .layout { width: min(1460px, 100%); margin: 0 auto; padding: 2.25rem clamp(1rem, 3.4vw, 3.25rem) 4rem; display: grid; grid-template-columns: 218px minmax(0, 1fr); gap: clamp(1.25rem, 3vw, 3rem); align-items: start; }
+    .rail { position: sticky; top: 24px; padding: 1.25rem .2rem 1.5rem; }
+    .rail-title { margin: 0 0 1rem; color: var(--muted); font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; }
+    .rail nav { display: grid; }
+    .rail a { position: relative; display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: .55rem; align-items: baseline; padding: .63rem .45rem; border-radius: 0; color: var(--navy); font-size: 13px; text-decoration: none; transition: background .18s ease, color .18s ease; }
+    .rail a:hover, .rail a[aria-current="location"] { color: var(--navy); background: var(--paper); }
+    .rail-index { color: var(--navy); font: 800 12px var(--heading); }
+    .rail-note { margin-top: 1.6rem; padding-top: 1rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    .rail-actions { display: grid; gap: .55rem; margin-top: 1rem; }
+    .action { min-height: 42px; border: 1px solid var(--navy); border-radius: 0; padding: .55rem .8rem; color: var(--navy); background: transparent; text-align: center; cursor: pointer; }
+    .action:hover { color: white; background: var(--navy); }
+    .report { min-width: 0; overflow: hidden; border: 1px solid var(--line); background: var(--white); box-shadow: none; }
+    .report-head { position: relative; overflow: hidden; padding: clamp(1.7rem, 4vw, 3.5rem); color: white; background: var(--navy); }
+    .head-row { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+    .head-title { margin: 0; font: 800 clamp(2.2rem, 5vw, 4.2rem)/1.02 var(--heading); letter-spacing: -.025em; }
+    .head-meta { margin: .7rem 0 0; color: #cbd4e2; font-size: 13px; }
+    .sample-stamp { flex: 0 0 auto; padding: .42rem .65rem; border: 1px solid var(--gold); color: var(--gold); font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+    .status-row { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1.45rem; }
+    .status { display: inline-flex; align-items: center; gap: .4rem; padding: .32rem .55rem; border: 1px solid rgb(255 255 255 / 25%); border-radius: 0; color: #edf0f5; font-size: 12px; }
+    .report-body { padding: clamp(1.1rem, 3vw, 2.25rem); }
+    .definition { position: relative; margin: 0 0 1.7rem; padding: 1.35rem clamp(1rem, 3vw, 2rem); border: 1px solid var(--line); background: var(--paper); }
+    .definition-label { margin: 0 0 .5rem; color: var(--navy); font-size: 12px; font-weight: 700; letter-spacing: .02em; }
+    .definition p { margin: 0; font: 800 clamp(1.2rem, 2.3vw, 1.75rem)/1.48 var(--heading); text-wrap: pretty; }
+    .definition-foot { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-top: .9rem; color: var(--muted); font-size: 12px; }
+    .text-button { border: 0; padding: .2rem 0; color: var(--navy); background: transparent; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+    .pathway { margin: 0 0 2.25rem; padding: 1rem 1rem 1.15rem; border: 1px solid var(--line); background: var(--paper); }
+    .pathway-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: .8rem; }
+    .pathway h2 { margin: 0; color: var(--navy); font: 800 18px var(--heading); }
+    .pathway-head p { margin: 0; color: var(--muted); font-size: 12px; }
+    .pathway-track { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px; }
+    .pathway-step { position: relative; min-height: 77px; padding: .65rem .62rem; border-top: 1px solid var(--navy); background: var(--paper); }
+    .pathway-step:not(:last-child)::after { position: absolute; z-index: 1; top: 13px; right: -5px; width: 9px; height: 9px; border-top: 1px solid var(--navy); border-right: 1px solid var(--navy); background: var(--paper); content: ""; transform: rotate(45deg); }
+    .pathway-step b { display: block; margin-bottom: .24rem; color: var(--navy); font: 800 12px var(--heading); }
+    .pathway-step span { display: block; color: var(--navy); font-size: 12px; line-height: 1.35; }
+    .sections { display: grid; gap: 0; }
+    .section { scroll-margin-top: 1rem; padding: 1.75rem 0 1.85rem; border-top: 1px solid var(--line); }
+    .section-heading { display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: start; gap: .75rem; margin-bottom: 1.15rem; }
+    .section-index { display: grid; place-items: center; width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 0; color: var(--navy); font: 800 14px var(--heading); }
+    .section-index--word { width: auto; min-width: 34px; padding: 0 .38rem; border-radius: 0; font: 700 12px var(--sans); letter-spacing: .04em; text-transform: uppercase; }
+    .section-heading h2 { margin: -.12rem 0 .2rem; color: var(--navy); font: 800 clamp(1.4rem, 2.5vw, 2rem)/1.2 var(--heading); }
+    .section-heading p { margin: 0; color: var(--muted); font-size: 13px; }
+    .evidence-tag { display: inline-flex; align-items: center; align-self: start; gap: .38rem; padding: .29rem .47rem; border-radius: 0; color: var(--navy); background: var(--blue-pale); font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .evidence-tag.recorded { color: var(--navy); background: var(--teal-pale); }
+    .evidence-tag.estimate { color: var(--navy); background: var(--gold-pale); }
+    .evidence-tag.unknown { color: var(--navy); background: var(--rose-pale); }
+    .data-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+    .data-cell { min-width: 0; padding: 1rem 1.1rem; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+    .data-cell.wide { grid-column: 1 / -1; }
+    .data-cell.direction-feature { color: white; background: var(--navy); }
+    .data-cell.direction-feature .data-label { color: var(--gold); }
+    .data-cell.direction-feature .data-value { color: white; font: 800 1.35rem/1.4 var(--heading); }
+    .practice-group { padding: 1.1rem 0; border-top: 1px solid var(--line); }
+    .practice-group h3 { margin: 0 0 .65rem; color: var(--navy); font: 800 17px var(--heading); }
+    .experience-list { display: grid; border-top: 1px solid var(--line); }
+    .experience-row { display: grid; grid-template-columns: minmax(140px, .65fr) minmax(0, 1.6fr) minmax(125px, .55fr); gap: .9rem; align-items: start; padding: .8rem 0; border-bottom: 1px solid var(--line); }
+    .experience-row h4 { margin: 0; color: var(--navy); font-size: 13px; }
+    .experience-row p { margin: 0; font-size: 14px; }
+    .data-label { margin: 0 0 .42rem; color: var(--navy); font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+    .data-value { margin: 0; color: var(--navy); font-size: 14px; text-wrap: pretty; }
+    .data-value strong { color: var(--navy); }
+    .subnote { display: block; margin-top: .4rem; color: var(--muted); font-size: 12px; line-height: 1.4; }
+    .matter-flow { display: grid; grid-template-columns: 1.05fr 30px 1.1fr 30px 1.15fr; align-items: stretch; gap: .35rem; margin: .3rem 0 1rem; }
+    .flow-node { padding: .85rem; border: 1px solid var(--line); background: var(--paper); }
+    .flow-node.emphasis { border-color: var(--line); background: var(--paper); }
+    .flow-node h3 { margin: 0 0 .35rem; color: var(--navy); font-size: 12px; letter-spacing: .03em; text-transform: uppercase; }
+    .flow-node p { margin: 0; font-size: 13px; line-height: 1.45; }
+    .flow-arrow { position: relative; display: grid; place-items: center; min-width: 0; }
+    .flow-arrow::before { width: 100%; height: 1px; background: var(--navy); content: ""; }
+    .flow-arrow::after { position: absolute; right: 2px; width: 8px; height: 8px; border-top: 1px solid var(--navy); border-right: 1px solid var(--navy); content: ""; transform: rotate(45deg); }
+    .client-path { margin: 1.2rem 0 1rem; padding: .9rem 1rem 1rem; border-top: 1px solid var(--navy); background: var(--paper); }
+    .client-path-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: .5rem 1rem; margin-bottom: .65rem; }
+    .client-path-head h3 { margin: 0; color: var(--navy); font: 800 16px var(--heading); }
+    .client-path-track { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .5rem; }
+    .client-path-step { position: relative; padding: .7rem .75rem; border: 1px solid var(--line); background: var(--white); }
+    .client-path-step + .client-path-step::before { position: absolute; top: 50%; left: -.51rem; width: 8px; height: 8px; border-top: 1px solid var(--navy); border-right: 1px solid var(--navy); background: var(--white); content: ""; transform: translateY(-50%) rotate(45deg); }
+    .client-path-step b { display: block; margin-bottom: .25rem; color: var(--navy); font-size: 12px; }
+    .client-path-step p { margin: 0; color: var(--navy); font-size: 13px; line-height: 1.4; }
+    .interpretation-note { margin: .65rem 0 0; color: var(--muted); font-size: 12px; }
+    .tag-list { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .6rem; }
+    .tag { display: inline-block; padding: .24rem .48rem; border: 1px solid var(--line); color: var(--navy); background: var(--paper); font-size: 12px; }
+    .evidence-list { display: grid; }
+    .evidence-row { display: grid; grid-template-columns: minmax(140px, .72fr) minmax(0, 1.6fr) minmax(118px, .55fr); gap: .85rem; align-items: start; padding: .8rem 0; border-top: 1px solid var(--line); }
+    .evidence-row:first-child { border-top: 0; }
+    .evidence-row h3 { margin: 0; color: var(--navy); font-size: 12px; }
+    .evidence-row p { margin: 0; font-size: 13px; }
+    .evidence-row .evidence-tag { justify-self: start; }
+    .signal-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border-top: 1px solid var(--line); }
+    .signal { display: grid; grid-template-columns: 23px minmax(0, 1fr); gap: .6rem; padding: .75rem .5rem .75rem 0; border-bottom: 1px solid var(--line); }
+    .signal-mark { position: relative; display: grid; place-items: center; width: 20px; height: 20px; border-radius: 0; background: var(--teal-pale); }
+    .signal-mark::after { width: 8px; height: 5px; border-right: 2px solid var(--navy); border-bottom: 2px solid var(--navy); content: ""; transform: translateY(-1px) rotate(45deg); }
+    .signal p { margin: 0; font-size: 13px; }
+    .open-item { margin-top: .8rem; padding: .85rem 1rem; border: 1px solid var(--line); background: var(--paper); }
+    .open-item h3 { margin: 0 0 .3rem; color: var(--navy); font-size: 12px; letter-spacing: .03em; text-transform: uppercase; }
+    .open-item p { margin: 0; font-size: 13px; }
+    .metric-card { display: grid; grid-template-columns: 1fr auto; gap: 1rem; align-items: center; margin-top: .9rem; padding: 1rem 1.1rem; border: 1px solid var(--line); background: var(--paper); }
+    .metric-card h3 { margin: 0 0 .28rem; color: var(--navy); font: 800 17px var(--heading); }
+    .metric-card p { margin: 0; color: var(--navy); font-size: 12px; }
+    .metric-target { min-width: 135px; padding-left: 1rem; border-left: 1px solid var(--line); text-align: right; }
+    .metric-target strong { display: block; color: var(--navy); font: 800 21px var(--heading); }
+    .metric-target span { color: var(--navy); font-size: 12px; }
+    .translation { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; margin-top: 1.4rem; }
+    .translation article { padding: .8rem .9rem; border-top: 1px solid var(--navy); background: var(--paper); }
+    .translation h3 { margin: 0 0 .25rem; color: var(--navy); font: 800 14px var(--heading); }
+    .translation p { margin: 0; color: var(--navy); font-size: 12px; }
+    .report-end { display: flex; justify-content: space-between; gap: 1rem; padding: 1rem clamp(1.1rem, 3vw, 2.25rem); border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
+    .screen-only { display: block; }
+    .toast { position: fixed; right: 1.25rem; bottom: 1.25rem; z-index: 5; padding: .7rem 1rem; color: white; background: var(--navy); box-shadow: none; opacity: 0; transform: translateY(8px); transition: opacity .2s ease, transform .2s ease; pointer-events: none; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    @media (max-width: 1000px) {
+      .layout { grid-template-columns: 1fr; }
+      .rail { position: static; padding: 0; }
+      .rail-title, .rail-note, .rail-actions { display: none; }
+      .rail nav { display: flex; overflow-x: auto; gap: .3rem; padding: .25rem 0 .6rem; scrollbar-color: var(--gold) transparent; }
+      .rail a { flex: 0 0 auto; display: block; padding: .55rem .7rem; border: 1px solid var(--line); background: var(--paper); }
+      .rail a::before { display: none; }
+      .rail-index { margin-right: .3rem; }
+    }
+    @media (max-width: 700px) {
+      .topbar { min-height: 56px; height: auto; }
+      .topbar-note { display: none; }
+      .layout { padding-top: 1rem; }
+      .head-row { display: block; }
+      .sample-stamp { display: inline-block; margin-top: 1rem; }
+      .pathway-track { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .pathway-step:nth-child(3)::after { display: none; }
+      .data-grid { grid-template-columns: 1fr; }
+      .data-cell.wide { grid-column: auto; }
+      .matter-flow { grid-template-columns: 1fr; }
+      .flow-arrow { min-height: 18px; }
+      .flow-arrow::before { width: 1px; height: 100%; }
+      .flow-arrow::after { right: auto; bottom: 1px; transform: rotate(135deg); }
+      .evidence-row { grid-template-columns: 1fr; gap: .35rem; }
+      .experience-row { grid-template-columns: 1fr; gap: .35rem; }
+      .signal-list, .translation { grid-template-columns: 1fr; }
+      .metric-card { grid-template-columns: 1fr; }
+      .metric-target { padding: .6rem 0 0; border-top: 1px solid var(--line); border-left: 0; text-align: left; }
+      .definition-foot { align-items: flex-start; flex-direction: column; gap: .35rem; }
+    }
+    @media (max-width: 380px) {
+      .brand { gap: .5rem; font-size: 12px; }
+      .brand-mark { width: 24px; height: 24px; }
+      .pathway-head { align-items: flex-start; flex-direction: column; gap: .2rem; }
+      .pathway-step { min-height: 84px; padding: .55rem .45rem; }
+      .pathway-step span { font-size: 12px; }
+      .client-path-track { grid-template-columns: 1fr; }
+      .client-path-step + .client-path-step::before { top: -.5rem; left: 1rem; transform: rotate(135deg); }
+      .section-heading { grid-template-columns: 34px minmax(0, 1fr); }
+      .section-index { width: 29px; height: 29px; }
+      .section-heading .evidence-tag { grid-column: 2; }
+    }
+    @page { size: letter portrait; margin: 12mm; }
+    @media print {
+      :root { --ink: #0D1520; }
+      body { background: #fff; font-size: 9.3pt; line-height: 1.42; print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+      .topbar { height: auto; padding: 0 0 6mm; color: var(--navy); background: white; border-bottom: 1px solid var(--line); }
+      .brand { color: var(--navy); font-size: 9pt; }
+      .brand-mark { border-color: var(--navy); }
+      .topbar-note, .rail, .screen-only, .toast { display: none !important; }
+      .layout { display: block; width: 100%; padding: 6mm 0 0; }
+      .report { overflow: visible; border: 0; box-shadow: none; }
+      .report-head { padding: 9mm; }
+      .report-head::after { right: -35px; bottom: -150px; }
+      .head-title { font-size: 29pt; }
+      .head-meta { font-size: 9.5pt; }
+      .status-row { margin-top: 5mm; }
+      .report-body { padding: 6mm 0 0; }
+      .definition { margin-bottom: 5mm; padding: 5mm 7mm; }
+      .definition p { font-size: 13pt; line-height: 1.35; }
+      .definition-foot { margin-top: 2mm; }
+      .pathway { margin-bottom: 5mm; padding: 4mm; break-inside: avoid; }
+      .pathway-step { min-height: 18mm; padding: 2.4mm; }
+      .pathway-step span { font-size: 9pt; }
+      .pathway-step b { font-size: 9pt; }
+      .section { padding: 6mm 0; break-inside: avoid; }
+      .section-heading { margin-bottom: 3mm; }
+      .section-heading h2 { font-size: 16pt; }
+      .section-heading p { font-size: 9pt; }
+      .data-cell { padding: 3mm; }
+      .data-value, .flow-node p, .evidence-row p, .signal p, .client-path-step p { font-size: 9.5pt; }
+      .data-label { font-size: 9pt; }
+      .matter-flow { grid-template-columns: 1.05fr 8mm 1.1fr 8mm 1.15fr; }
+      .flow-node { padding: 3mm; }
+      .flow-node h3 { font-size: 9pt; }
+      .client-path { break-inside: avoid; }
+      .client-path-step { padding: 2.5mm; }
+      .client-path-step b, .client-path-head h3, .interpretation-note { font-size: 9pt; }
+      .evidence-row { padding: 2.5mm 0; }
+      .evidence-row h3 { font-size: 9pt; }
+      .tag { padding: 1mm 2mm; font-size: 9pt; }
+      .open-item { margin-top: 3mm; padding: 3mm; }
+      .open-item p { font-size: 9pt; }
+      .metric-card { margin-top: 3mm; padding: 3mm; break-inside: avoid; }
+      .metric-card h3 { font-size: 12pt; }
+      .metric-card p, .metric-target span { font-size: 9pt; }
+      .metric-target strong { font-size: 16pt; }
+      .translation { gap: 2mm; margin-top: 4mm; }
+      .translation article { padding: 3mm; }
+      .translation h3 { font-size: 9pt; }
+      .translation p { font-size: 9pt; }
+      .report-end { padding: 3mm 0 0; font-size: 9pt; }
+      a { color: inherit; text-decoration: none; }
+      .section#desired, .section#goals, .section#why-work { break-inside: auto; }
+      .section#goals, .section#recognition, .section#evidence { break-before: page; }
+    }
+    .traceability { margin-top: 1rem; padding: .8rem 1rem; border: 0; background: var(--teal-pale); } .traceability h3 { margin: 0 0 .25rem; color: var(--navy); font: 800 14px var(--heading); } .traceability p { margin: 0; font-size: 12px; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; } }
+  
+    .brand-logo { display: block; width: 238px; height: auto; }
+    .brand-logo--print { display: none; }
+    .topbar { min-height: 80px; height: auto; padding-block: 18px; gap: 1.5rem; }
+    .topbar-note, .rail-title, .rail a, .rail-index, .sample-stamp, .status, .definition-label, .data-label, .evidence-tag, .section-index, .pathway-step b, .client-path-step b { font-family: var(--label); font-weight: 600; }
+    .report { border: 0; }
+    .head-row { display: grid; grid-template-columns: minmax(0, 1fr); }
+    .sample-stamp { justify-self: start; }
+    .head-title { font-size: clamp(2rem, 4vw, 3.6rem); line-height: 1.16; letter-spacing: -.025em; }
+    .section-heading { grid-template-columns: 1fr auto; gap: .65rem; }
+    .section-heading > div { grid-column: 1 / -1; grid-row: 2; min-width: 0; }
+    .section-index { border: 0; justify-self: start; place-items: start; width: auto; height: auto; font-size: 18px; color: var(--navy); }
+    .section-heading > .evidence-tag { grid-column: 2; grid-row: 1; }
+    .evidence-tag { white-space: normal; color: var(--navy); }
+    .definition { border: 0; background: var(--paper); }
+    .definition p { font-family: var(--sans); font-weight: 400; }
+    .definition-foot { display: grid; grid-template-columns: 1fr; }
+    .definition-foot .text-button { justify-self: start; }
+    .pathway { border: 0; padding: 0; background: transparent; }
+    .pathway-head { display: grid; grid-template-columns: 1fr; gap: .4rem; }
+    .pathway-track { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .pathway-step { border: 0; background: var(--paper); color: var(--navy); text-decoration: none; }
+    .pathway-step:nth-child(3)::after { display: none; }
+    .data-cell.direction-feature .subnote { color: white; }
+    .data-cell.direction-feature .data-value { font-family: var(--sans); font-weight: 500; }
+    .client-path { border: 0; }
+    .client-path-head { display: grid; grid-template-columns: 1fr; gap: .5rem; }
+    .client-path-head .evidence-tag { justify-self: start; background: var(--white); }
+    .client-path-track { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .client-path-step { border: 0; }
+    .client-path-step:nth-child(3)::before { display: none; }
+    .evidence-row { grid-template-columns: minmax(0, 1fr) auto; gap: .45rem 1rem; }
+    .evidence-row h3 { grid-column: 1 / -1; }
+    .evidence-row p { grid-column: 1 / -1; grid-row: 2; }
+    .evidence-row .evidence-tag { grid-column: 1 / -1; grid-row: 3; }
+    .open-item, .metric-card { border: 0; background: var(--paper); }
+    .report-end { display: grid; grid-template-columns: 1fr; gap: .4rem; }
+    .rail a[aria-current="location"] { color: var(--navy); background: var(--gold); }
+    :where(h1,h2,h3,h4,p) { min-width: 0; text-wrap: pretty; }
+    @media (max-width: 700px) {
+      .report-head { padding: 1.25rem; }
+      .report-body { padding: 1rem; }
+      .layout { padding-inline: .75rem; }
+      .client-path-track, .pathway-track { grid-template-columns: 1fr; }
+      .pathway-step::after, .client-path-step::before { display: none !important; }
+      .section-heading h2 { font-size: 1.45rem; }
+      .section-heading > .evidence-tag { grid-column: 2; grid-row: 1; }
+    }
+    @media print {
+      .brand-logo--screen { display: none; }
+      .brand-logo--print { display: block; width: 58mm; }
+      .head-title { font-size: 26pt; }
+      .pathway-track { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .client-path-track { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .section-heading, .data-cell, .evidence-row, .client-path-step { break-inside: avoid; }
+    }
+    .rail, .layout > * { min-width: 0; }
+    .subnote { text-wrap: pretty; }
+    .data-value, .subnote, .evidence-row p, .client-path-step p, .interpretation-note { text-wrap: pretty; }
+    @media (min-width: 1001px) and (max-width: 1150px) { .layout { grid-template-columns: 190px minmax(0, 1fr); gap: 1.5rem; } }
+    @media (max-width: 800px) { .data-grid { grid-template-columns: 1fr; } }
+    @media (max-width: 700px) { .head-title { font-size: 1.85rem; } .data-cell { padding: .85rem; } }
+    @media (max-width: 700px) { .section-heading h2 { font-size: 1.25rem; } }
+    @media (max-width: 420px) {
+      .layout { padding-inline: 0; }
+      .report-body { padding: .75rem; }
+      .report-head { padding: .75rem; }
+      .head-title { font-size: 1.4rem; }
+      .data-cell { padding: .75rem; }
+      .data-cell.direction-feature .data-value { font-size: 1rem; }
+      .pathway h2 { font-size: 1rem; }
+      .open-item { padding: .75rem; }
+    }
+    @media (max-width: 420px) {
+      .definition p, #goals .section-heading h2, #why-firm .data-cell.wide .data-value, #recognition .data-cell:last-child .data-value { text-wrap: wrap; }
+      .interpretation-note { font-size: 13px; }
+    }
+    @media (max-width: 420px) { #goals .section-heading h2 { font-size: 1.18rem; } }
+    @media (max-width: 340px) { .interpretation-note { font-size: 14px; } .data-value { font-size: 15px; } }
+    @media (max-width: 420px) { #goals .section-heading h2 { text-wrap: pretty; font-size: 1.3rem; } }
+    @media (max-width: 340px) { .data-cell { padding: .5rem; } }
+    @media (min-width: 341px) and (max-width: 420px) { #goals .section-heading h2 { font-size: 23px; text-wrap: wrap; } }
+    @media (max-width: 340px) { .data-value { font-size: 14px; } }
+</style>
+</head>
+<body><header class="topbar"><a class="brand" href="#top"><img class="brand-logo brand-logo--screen" src="assets/lockup-horizontal-dark-transparent.png" alt="CaseLoad Select"><img class="brand-logo brand-logo--print" src="assets/lockup-horizontal-light-transparent.png" alt="CaseLoad Select"></a><span class="topbar-note">Desired Client Blueprint · Design example</span></header>
+<div class="layout" id="top"><aside class="rail" aria-label="Blueprint navigation"><p class="rail-title">Blueprint contents</p><nav><a href="#desired"><span class="rail-index">1</span>Desired client &amp; matter</a><a href="#goals"><span class="rail-index">2</span>Client goals &amp; needs</a><a href="#why-work"><span class="rail-index">3</span>Why we want this work</a><a href="#why-firm"><span class="rail-index">4</span>Why clients choose us</a><a href="#recognition"><span class="rail-index">5</span>Recognizable circumstances</a><a href="#evidence"><span class="rail-index">6</span>Evidence &amp; open questions</a></nav><div class="rail-note">A marketing profile built from the firm’s answers. It does not decide whether to accept a matter.</div><div class="rail-actions"><button class="action" type="button" data-copy>Copy definition</button><button class="action" type="button" onclick="window.print()">Print</button></div></aside>
+<main class="report" aria-labelledby="report-title"><header class="report-head"><div class="head-row"><div><h1 class="head-title" id="report-title">Desired Client Blueprint</h1><p class="head-meta">Commercial agreements for planned business transactions · Ontario</p></div><span class="sample-stamp">Synthetic example</span></div><div class="status-row"><span class="status">Working profile</span><span class="status">All firm details are synthetic</span><span class="status">Illustrative fixture · September 2026</span></div></header>
+<div class="report-body"><section class="definition" aria-labelledby="definition-heading"><h2 class="definition-label" id="definition-heading">The desired client and matter, in one sentence</h2><p id="definition-text">The firm wants to attract and serve <strong>Ontario business organizations whose manager contacts the firm</strong> for <strong>drafting or review of commercial agreements related to a planned business transaction</strong>, because the firm reports valuing client benefit, fees that support the effort, and a fit with its skills; progress will be assessed against a measure still to be agreed.</p><div class="definition-foot"><span>Synthetic synthesis from the example fixture. The progress measure remains open.</span><button type="button" class="text-button screen-only" data-copy>Copy sentence</button></div></section>
+<section class="pathway" aria-labelledby="pathway-title"><div class="pathway-head"><h2 id="pathway-title">How this profile was developed</h2><p>Six questions shape a client-and-matter direction.</p></div><div class="pathway-track"><a class="pathway-step" href="#desired"><b>Desired work</b><span>Practice, client and matter</span></a><a class="pathway-step" href="#goals"><b>Client decision</b><span>Goals, needs and next steps</span></a><a class="pathway-step" href="#why-work"><b>Firm value</b><span>Why choose this work again</span></a><a class="pathway-step" href="#why-firm"><b>Client choice</b><span>Why this firm may be selected</span></a><a class="pathway-step" href="#recognition"><b>Recognition</b><span>Situation and discovery</span></a><a class="pathway-step" href="#evidence"><b>Evidence</b><span>Known facts and open questions</span></a></div></section><div class="sections">
+<section class="section" id="desired"><div class="section-heading"><span class="section-index">1</span><div><h2>Desired client and matter</h2><p>Define who is facing what situation and the specific legal work they need. The fixture identifies a transaction pattern but leaves the agreement and client stage broad.</p></div><span class="evidence-tag recorded">Fixture answers</span></div><div class="data-grid"><div class="data-cell"><p class="data-label">Practice &amp; service area</p><p class="data-value">Business law, with a focus on business agreements, in Ontario.</p><span class="subnote">Selected: business · business agreements · Ontario.</span></div><div class="data-cell"><p class="data-label">Client / organization</p><p class="data-value">A business organization involved in a planned business purchase, sale or ownership change. The contact is represented as a manager.</p><span class="subnote">Company size, ownership structure and the manager’s authority are unknown.</span></div><div class="data-cell wide direction-feature"><p class="data-label">Work the firm wants more of</p><p class="data-value">Commercial agreement drafting and review for businesses or organizations in Ontario, often before a planned decision or change, with the fixture pointing to business transactions. The desired work supports completing the transaction and protecting important interests.</p><span class="subnote">The exact agreement, transaction side and legal scope remain unspecified.</span></div><div class="data-cell"><p class="data-label">Timing</p><p class="data-value">Planning stage. The client is preparing for a transaction.</p></div><div class="data-cell"><p class="data-label">Specific matter still to clarify</p><p class="data-value">Which agreement is needed, what transaction step it relates to, and what advice or drafting the client seeks.</p><span class="evidence-tag unknown">Open detail</span></div></div></section>
+<section class="section" id="goals"><div class="section-heading"><span class="section-index">2</span><div><h2>Client goals, needs and decision pathway</h2><p>Show what the client hopes to accomplish and what may hold up a decision. Separate selected goals from unknown journey details.</p></div><span class="evidence-tag recorded">Goals selected</span></div><div class="data-grid"><div class="data-cell"><p class="data-label">Client goals</p><p class="data-value">Complete the planned transaction and protect important interests.</p><span class="subnote">Both selected in the fixture; what “protect” means is unspecified.</span></div><div class="data-cell"><p class="data-label">Concerns the client may raise</p><p class="data-value">Cost and what happens next.</p><span class="subnote">Concern categories are selected; the client’s words and decision needs are unknown.</span></div></div><div class="client-path"><div class="client-path-head"><h3>Client decision pathway</h3><span class="evidence-tag estimate">Working interpretation · details open</span></div><div class="client-path-track"><div class="client-path-step"><b>Situation</b><p>A business purchase, sale or ownership change is planned.</p></div><div class="client-path-step"><b>Need for help</b><p>Business-agreement advice may help complete the transaction and protect interests.</p></div><div class="client-path-step"><b>Decision needs</b><p>Cost and next steps are concerns. Specific questions or reassurance needed are unknown.</p></div><div class="client-path-step"><b>Next decision</b><p>Whether to proceed and engage legal help, including the actual sequence, is unknown.</p></div></div><p class="interpretation-note">Cautious interpretation of the selected situation, goals and concerns. The fixture has no detailed client journey or decision-needs answer.</p></div></section>
+<section class="section" id="why-work"><div class="section-heading"><span class="section-index">3</span><div><h2>Why the firm wants this work</h2><p>Place the stated reasons beside fee, effort and capacity, without inventing financial conclusions.</p></div><span class="evidence-tag recorded">Fixture answers</span></div><div class="evidence-list"><div class="evidence-row"><h3>Reasons to choose this work</h3><p>Client benefit, fees and the firm’s skills are selected as reasons this work is valuable.</p><span class="evidence-tag recorded">Selected</span></div><div class="evidence-row"><h3>Fee relative to effort</h3><p>The firm marks this work as worthwhile relative to effort.</p><span class="evidence-tag recorded">Selected</span></div><div class="evidence-row"><h3>Fee per matter</h3><p>C$15,000 to under C$50,000.</p><span class="evidence-tag estimate">Fixture range</span></div><div class="evidence-row"><h3>Team time</h3><p>More than 40 and up to 100 hours.</p><span class="evidence-tag estimate">Fixture range</span></div><div class="evidence-row"><h3>Payment timing</h3><p>Varies. A typical schedule or collection pattern is not provided.</p><span class="evidence-tag unknown">Variable / detail open</span></div><div class="evidence-row"><h3>Experience &amp; records</h3><p>The firm reports having handled several matters of this type and having fee and time records.</p><span class="evidence-tag recorded">direction.evidence</span></div><div class="evidence-row"><h3>Delivery conditions</h3><p>Clear scope and timely client information are identified as conditions that support effective delivery.</p><span class="evidence-tag recorded">delivery.conditions</span></div><div class="evidence-row"><h3>Capacity</h3><p>The firm selects that it has room with its current team.</p><span class="evidence-tag recorded">Selected</span></div></div><div class="open-item"><h3>Economic picture to validate</h3><p>The fixture gives fee and team-hour ranges and says records exist, but the records are not included here and the ranges are not linked to the same matters. Direct delivery cost, overhead, acquisition cost, write-offs and collection data are absent, so do not infer margin or profit.</p></div></section>
+<section class="section" id="why-firm"><div class="section-heading"><span class="section-index">4</span><div><h2>Why clients choose this firm</h2><p>Capture actual selection criteria and evidence. The current fixture establishes neither.</p></div><span class="evidence-tag unknown">Evidence needed</span></div><div class="data-grid"><div class="data-cell"><p class="data-label">Choice criteria to investigate</p><p class="data-value">Experience, fee clarity, responsiveness, ability to explain options, or another factor clients name.</p><span class="subnote">Interview prompts only, not claims about this synthetic firm.</span></div><div class="data-cell"><p class="data-label">Evidence from clients</p><p class="data-value">Unknown. No feedback, reasons for selection, referral comments, or comparison with alternatives is supplied.</p><span class="evidence-tag unknown">Not in fixture</span></div><div class="data-cell wide"><p class="data-label">Questions for the firm</p><p class="data-value">What did clients say mattered when choosing counsel? What did they compare? What specific experience or explanation helped them proceed? Which examples can the firm substantiate?</p></div></div></section>
+<section class="section" id="recognition"><div class="section-heading"><span class="section-index">5</span><div><h2>Recognizable circumstances and discovery behaviour</h2><p>Describe how this client situation appears and how people seek help. Keep known facts separate from details still to discover.</p></div><span class="evidence-tag">Partial picture</span></div><div class="data-grid"><div class="data-cell"><p class="data-label">Known circumstances</p><p class="data-value">A business purchase, sale or ownership change is planned; the client is at the planning stage; a manager is the stated contact.</p></div><div class="data-cell"><p class="data-label">Known concerns</p><p class="data-value">Cost and what happens next. The trigger for the enquiry and how these concerns appear in conversation are unknown.</p></div><div class="data-cell"><p class="data-label">How clients find or compare counsel</p><p class="data-value">Unknown. No referral, search, professional-network or other discovery route is provided.</p><span class="evidence-tag unknown">Ask the firm</span></div><div class="data-cell"><p class="data-label">Recognizable signals</p><p class="data-value">A planned transaction and a request for business-agreement support are the only supported indicators. Stage, agreement and urgency need clarification.</p></div></div><div class="open-item"><h3>Discovery questions</h3><p>What happens just before clients contact the firm? What have they decided or agreed? What deadline is approaching? Who else is involved? Where did they look for help, and what did they compare?</p></div></section>
+<section class="section" id="evidence"><div class="section-heading"><span class="section-index">6</span><div><h2>Evidence and open questions</h2><p>Show exactly which statements come from the fixture and which still need confirmation.</p></div><span class="evidence-tag unknown">Working draft</span></div><div class="evidence-list"><div class="evidence-row"><h3>Practice &amp; geography</h3><p>Business law, business agreements, Ontario.</p><span class="evidence-tag recorded">focus.area, focus.work, focus.service_area</span></div><div class="evidence-row"><h3>Situation &amp; timing</h3><p>Business purchase, sale or ownership change planned; planning stage; business organization; manager contact.</p><span class="evidence-tag recorded">situation.trigger, timing, role, contact</span></div><div class="evidence-row"><h3>Goals &amp; concerns</h3><p>Complete and protect; cost and next steps.</p><span class="evidence-tag recorded">client.goals, client.concerns</span></div><div class="evidence-row"><h3>Decision needs</h3><p>Marked unknown. Specific client questions and decision sequence are not supplied.</p><span class="evidence-tag unknown">client.decision_needs</span></div><div class="evidence-row"><h3>Firm value &amp; effort</h3><p>Client benefit, fees and skills; worthwhile relative to effort; C$15,000 to under C$50,000; over 40 to 100 hours; payment varies.</p><span class="evidence-tag recorded">value.reasons, fee_effort, collected_fee, team_hours, payment</span></div><div class="evidence-row"><h3>Capacity &amp; fit signals</h3><p>Room with current team selected; specific fit signals marked unknown.</p><span class="evidence-tag recorded">delivery.capacity, delivery.fit_signals</span></div><div class="evidence-row"><h3>Client choice, proof &amp; discovery</h3><p>Why clients select the firm, evidence supporting that reason, and how they discover or compare counsel remain unknown.</p><span class="evidence-tag unknown">Not answered</span></div></div><div class="open-item"><h3>Questions for the next conversation</h3><p>Which agreement and transaction step define the desired matter? What does “protect” mean to these clients? What do they need to know about cost and next steps? Why do clients choose this firm, and what evidence supports that? How do they find and compare counsel? What client-approved measure will show progress?</p></div><div class="traceability"><h3>Fixture traceability</h3><p>This example is synthetic and illustrative. Fixture: <code>tests/desired-client-v2/fixtures/ai-profile-synthetic.json</code>. Sections 1–3 map to <code>focus.*</code>, <code>situation.*</code>, <code>client.*</code>, <code>value.*</code>, <code>direction.*</code> and <code>delivery.*</code>. Sections 4–5 are open because no client-choice evidence or discovery behaviour is supplied. Interpretive wording is labelled; unsupported facts remain open.</p></div></section></div></div>
+<footer class="report-end"><span>CaseLoad Select · Desired Client Blueprint</span><span>Synthetic example for design review. Not a client profile or firm fact.</span></footer></main></div><div class="toast" role="status" aria-live="polite">Definition copied</div>
+  <script>
+    const toast = document.querySelector('.toast');
+    let toastTimer;
+    document.querySelectorAll('[data-copy]').forEach((button) => button.addEventListener('click', async () => {
+      const definition = document.querySelector('#definition-text').textContent.trim();
+      try {
+        await navigator.clipboard.writeText(definition);
+        toast.textContent = 'Definition copied';
+      } catch {
+        const definitionNode = document.querySelector('#definition-text');
+        const selection = window.getSelection();
+        if (definitionNode && selection) {
+          const range = document.createRange();
+          range.selectNodeContents(definitionNode);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        }
+        toast.textContent = 'Definition selected. Press Ctrl+C or Command+C to copy';
+      }
+      toast.classList.add('show');
+      window.clearTimeout(toastTimer);
+      toastTimer = window.setTimeout(() => toast.classList.remove('show'), 2400);
+    }));
+    const sections = [...document.querySelectorAll('.section[id]')];
+    const links = [...document.querySelectorAll('.rail nav a')];
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          links.forEach((link) => link.toggleAttribute('aria-current', link.hash === `#${entry.target.id}`));
+          links.forEach((link) => link.setAttribute('aria-current', link.hash === `#${entry.target.id}` ? 'location' : 'false'));
+        }
+      }
+    }, { rootMargin: '-15% 0px -70% 0px' });
+    sections.forEach((section) => observer.observe(section));
+  </script>
+</body>
+</html>

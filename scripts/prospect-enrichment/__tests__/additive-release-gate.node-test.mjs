@@ -223,7 +223,7 @@ test("operator RPC catalog accepts only the reviewed security, definition, and e
   assert.match(catalogQuery(), /has_function_privilege\('authenticated'/);
   assert.match(catalogQuery(), /aclexplode/);
   const ledgerRows = rowsForPrefix(0);
-  const ledgerProof = verifyLedgerState(ledgerRows, fakeReceipt, fakeSources);
+  verifyLedgerState(ledgerRows, fakeReceipt, fakeSources);
   const catalogProof = verifyOperatorRpcCatalog([CATALOG_EXPECTED], fakeReceipt, ledgerRows, fakeSources);
   assert.equal(catalogProof.prerequisite, "verified_applied_operator_rpc");
   assert.equal(catalogProof.ledgerStatementVerification, "ledger_statements_match_reviewed_source");

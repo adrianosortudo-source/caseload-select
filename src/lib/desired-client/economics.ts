@@ -8,21 +8,24 @@ export interface CalculatedContribution {
   scope: "per matter";
 }
 
-function amount(value: string): number | null {
-  const normalized = value.trim().replace(/,/g, "");
-  if (!/^\d+(?:\.\d{1,2})?$/.test(normalized)) return null;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : null;
+function amountInCents(value: string): number | null {
+  const input = value.trim();
+  // Accept a single non-negative amount, with either no grouping or valid
+  // thousands groups. Do not turn a range or malformed "1,2" into a number.
+  if (!/^(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d{1,2})?$/.test(input)) return null;
+  const [whole, fraction = ""] = input.replace(/,/g, "").split(".");
+  const cents = Number(whole) * 100 + Number(fraction.padEnd(2, "0"));
+  return Number.isSafeInteger(cents) ? cents : null;
 }
 
 /** Calculate only when the firm supplied comparable, single per-matter amounts. */
 export function calculateContribution(answers: DesiredClientAnswers): CalculatedContribution | null {
-  const fee = amount(answers.value.fee_amount);
-  const cost = amount(answers.value.direct_cost_amount);
+  const fee = amountInCents(answers.value.fee_amount);
+  const cost = amountInCents(answers.value.direct_cost_amount);
   const currency = answers.value.currency.trim().toUpperCase();
   if (fee === null || cost === null || answers.value.amount_scope !== "per_matter" || !["recorded", "estimated"].includes(answers.value.amount_basis ?? "") || !/^[A-Z]{3}$/.test(currency)) return null;
   try {
-    const formatted = new Intl.NumberFormat("en-CA", { style: "currency", currency, maximumFractionDigits: 2 }).format(fee - cost);
+    const formatted = new Intl.NumberFormat("en-CA", { style: "currency", currency, maximumFractionDigits: 2 }).format((fee - cost) / 100);
     return { label: "Contribution before overhead and acquisition costs", amount: formatted, currency, basis: answers.value.amount_basis === "recorded" ? "firm_reported_recorded" : "firm_reported_estimate", scope: "per matter" };
   } catch {
     return null;

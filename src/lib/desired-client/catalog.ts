@@ -217,6 +217,19 @@ export const PRACTICE_DIRECTION_LABELS: Record<PracticeDirectionId, string> = {
   explore_direction: "Explore a new direction", improve_delivery: "Improve delivery",
   other: "Another practice direction", unknown: "Not sure yet",
 };
+export const PRACTICE_EXPERIENCE_LABELS = {
+  regular: "We handle this work regularly", occasional: "We have handled it occasionally",
+  adjacent: "We handle related work", new: "This would be new work for the firm", unknown: "Not sure yet",
+} as const;
+export const DEVELOPMENT_NEED_LABELS = {
+  expertise: "Develop expertise", support: "Add specialist or team support",
+  process: "Build a process", capacity: "Create capacity", unknown: "Not sure yet",
+} as const;
+export const LESS_WORK_REASON_LABELS = {
+  preference: "The firm prefers other work", capacity: "Capacity is limited",
+  effort: "The effort is hard to support", financial: "The financial return does not justify the effort",
+  model: "It does not fit the firm's service model", unknown: "Not sure yet",
+} as const;
 export const OPPORTUNITY_SOURCE_LABELS: Record<OpportunitySourceId, string> = {
   comparable_enquiries: "Comparable enquiries received", retained_matters: "Comparable matters retained",
   professional_referrals: "Professional referrals", repeat_clients: "Repeat clients", website_search: "Website or search enquiries",
@@ -275,6 +288,11 @@ const CLARIFICATION_LABELS: Record<string, string> = {
 const UNKNOWN_VALUES = new Set(["unknown", "undecided", "private", "not sure yet"]);
 
 function getPathValue(answers: DesiredClientAnswers, path: AnswerReferencePath): unknown {
+  if (path.startsWith("interview.followups.")) {
+    const index = Number(path.slice("interview.followups.".length));
+    const item = Number.isInteger(index) ? answers.interview.followups[index] : undefined;
+    return item && !item.skipped ? item.answer : item ? "unknown" : undefined;
+  }
   const [top, second, third, fourth] = path.split(".");
   if (top === "focus" && second === "comparison") {
     const comparison = answers.focus.comparison;
@@ -303,6 +321,14 @@ function labelReference(path: AnswerReferencePath, value: unknown, answers: Desi
   if (path === "value.team_hours") return TEAM_HOURS_LABELS[value as TeamHoursId];
   if (path === "value.payment") return PAYMENT_LABELS[value as PaymentId];
   if (path === "client.goals") return GOAL_LABELS[value as GoalId];
+  if (path === "client.choice_basis" || path === "client.pathway_basis") return ({ client_feedback:"Clients have told the firm", firm_observation:"The firm has observed this", firm_hypothesis:"The firm is testing a hypothesis", unknown:"Not established" } as Record<string,string>)[value] ?? value;
+  if (path.startsWith("interview.followups.")) return value === "unknown" ? "Not established" : value;
+  if (path === "client.choice_priorities") return ({
+    relevant_experience:"Relevant matter experience", clear_options:"Clear options", clear_fees:"Clear scope and fees", communication:"Clear communication", availability:"Timely availability", approach:"Suitable approach", language:"Preferred language", community:"Community understanding", other:"Another client priority", unknown:"Not established",
+  } as Record<string,string>)[value] ?? value;
+  if (path === "practice.client_strength") return ({
+    matter_experience:"Relevant matter experience", specialist_knowledge:"Specific matter knowledge", clear_advice:"Clear explanation of options", practical_approach:"Practical approach", responsive_service:"Responsive service", language_or_community:"Language or community-informed service", other:"Another firm strength", unknown:"Not established",
+  } as Record<string,string>)[value] ?? value;
   if (path === "client.concerns") return CONCERN_LABELS[value as ConcernId];
   if (path === "client.decision_needs") return DECISION_NEED_LABELS[value as DecisionNeedId];
   if (path === "delivery.fit_signals") return FIT_SIGNAL_LABELS[value as FitSignalId];
@@ -321,6 +347,9 @@ function labelReference(path: AnswerReferencePath, value: unknown, answers: Desi
   if (path === "direction.less") return LESS_LABELS[value as LessId];
   if (path === "focus.route") return ROUTE_LABELS[value as keyof typeof ROUTE_LABELS];
   if (path === "practice.direction") return PRACTICE_DIRECTION_LABELS[value as PracticeDirectionId];
+  if (path === "practice.experience") return PRACTICE_EXPERIENCE_LABELS[value as keyof typeof PRACTICE_EXPERIENCE_LABELS];
+  if (path === "practice.development_needs") return DEVELOPMENT_NEED_LABELS[value as keyof typeof DEVELOPMENT_NEED_LABELS];
+  if (path === "direction.less_reason") return LESS_WORK_REASON_LABELS[value as keyof typeof LESS_WORK_REASON_LABELS];
   if (path === "opportunity.sources") return OPPORTUNITY_SOURCE_LABELS[value as OpportunitySourceId];
   if (path === "opportunity.data_basis") return ({ recorded: "Firm-reported recorded evidence", estimated: "Firm estimate", unknown: "Not established" } as const)[value as "recorded" | "estimated" | "unknown"];
   if (path === "repeatability.success_measure") return SUCCESS_MEASURE_LABELS[value as SuccessMeasureId];

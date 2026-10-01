@@ -44,22 +44,6 @@ const ALLOWED_COLUMN_GRANTS = new Set([
   'intake_firms.subdomain',
 ]);
 
-async function sql(query) {
-  const res = await fetch(`${url}/rest/v1/rpc/exec_sql`, {
-    method: 'POST',
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ query }),
-  });
-  if (!res.ok) {
-    throw new Error(`exec_sql ${res.status}: ${await res.text()}`);
-  }
-  return res.json();
-}
-
 // The Supabase MCP path isn't available from CI, so query via PostgREST direct
 // SELECTs against the information_schema. PostgREST exposes the schema only
 // if the catalog views are exposed, which they are not by default. So we use

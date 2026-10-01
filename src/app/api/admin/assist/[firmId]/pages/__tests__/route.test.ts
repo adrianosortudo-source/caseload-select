@@ -23,12 +23,12 @@ vi.mock('@/lib/supabase-admin', () => {
   const from = (table: string) => {
     if (table !== 'assist_corpus_pages') throw new Error(`unexpected table in test: ${table}`);
     return {
-      select: (cols: string) => ({
+      select: (cols: string) => { void cols; return ({
         eq: () => ({
           order: () => Promise.resolve({ data: state.listRows, error: null }),
           maybeSingle: () => Promise.resolve({ data: state.findRow, error: null }),
         }),
-      }),
+      }); },
       update: (row: unknown) => ({
         eq: () => {
           state.updateCalls.push(row);

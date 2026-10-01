@@ -1,5 +1,6 @@
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
+import reactHooks from "eslint-plugin-react-hooks";
 
 const eslintConfig = [
   {
@@ -15,6 +16,7 @@ const eslintConfig = [
   {
     // React Compiler-readiness rules: new in this ruleset, 51 pre-existing hits.
     // Downgraded to warn for the baseline; tracked for a dedicated follow-up pass.
+    plugins: { "react-hooks": reactHooks },
     rules: {
       "react-hooks/set-state-in-effect": "warn",
       "react-hooks/refs": "warn",
@@ -27,6 +29,12 @@ const eslintConfig = [
     // Standalone CommonJS scripts (no "type": "module" in package.json) —
     // require() is the correct import mechanism here, not a lint violation.
     files: ["scripts/**/*.js", "supabase/*.js"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
+    },
+  },
+  {
+    files: ["docs/prototypes/desired-client-blueprint/verify-brand.cjs"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
     },

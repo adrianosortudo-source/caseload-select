@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import type { AnalysisRequestEnvelope, DesiredClientAnswers } from "@/lib/desired-client/types";
-import { buildDefinitionSentence } from "@/lib/desired-client/definition";
-import { completeAnswers } from "@/lib/desired-client/__tests__/blueprint-helpers";
+import { completeAnswers, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
 
 const mocks = vi.hoisted(() => ({
   GoogleGenerativeAI: vi.fn(),
@@ -26,14 +25,11 @@ const B0: DesiredClientAnswers = (() => {
   const answers = completeAnswers();
   answers.revision = 1;
   answers.practice.firm_type = "Ontario business law firm";
-  answers.opportunity = {
-    sources: ["retained_matters"], data_basis: "unknown", source_detail: "Recent retained matters provide a starting point to review.",
-    period: "", enquiry_count: "", retained_count: "", conversion: "", acquisition_cost: "", uncertainty: "",
-  };
   return answers;
 })();
 const ENVELOPE: AnalysisRequestEnvelope = {
-  schemaVersion: 3,
+  schemaVersion: 4,
+  operation: "generate",
   requestId: "11111111-1111-4111-8111-111111111111",
   answerRevision: 1,
   reviewRunId: "22222222-2222-4222-8222-222222222222",
@@ -42,30 +38,7 @@ const ENVELOPE: AnalysisRequestEnvelope = {
   answers: B0,
   clarifications: [],
 };
-const claim = (text: string, source: string, basis: "firm_preference" | "hypothesis" = "firm_preference") => ({
-  text, kind: basis === "firm_preference" ? "preference" : "hypothesis", source_answer_ids: [source], evidence_basis: basis,
-});
-const MODEL_RESULT = (() => {
-  const brief = {
-    report_version: "dcm-blueprint-v2",
-    definition_sentence: "",
-    definition_components: {
-      firm: claim("an Ontario business law firm", "practice.firm_type"),
-      client_matter: claim("business owners preparing to acquire an established business", "focus.work"),
-      reasons: claim("the work fits the firm's skills and client benefit goals", "value.reasons"),
-      outcome: claim("repeatable retained matters", "repeatability.success_measure"),
-    },
-    practice_context: { claims: [claim("The firm wants to grow proven acquisition work.", "practice.direction")] },
-    desired_client_matter: { claims: [claim("The client is a business owner considering an acquisition.", "situation.role")] },
-    value_rationale: { claims: [claim("The firm values the client benefit and its relevant skills.", "value.reasons")] },
-    relevance_signals: { claims: [claim("The firm identified scope as a useful fit signal.", "delivery.fit_signals")] },
-    opportunity_evidence: { claims: [claim("Retained matters are a source the firm can review.", "opportunity.sources", "hypothesis")] },
-    repeatability: { claims: [claim("Retained matters are the proposed measure of progress.", "repeatability.success_measure")] },
-    open_questions: [],
-  };
-  brief.definition_sentence = buildDefinitionSentence(brief as never, false);
-  return { clarification_code: null, brief };
-})();
+const MODEL_RESULT = validBlueprint();
 const ORIGINAL_ENV = new Map<string, string | undefined>();
 const ENV_KEYS = ["DESIRED_CLIENT_AI_ENABLED", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"];
 
@@ -171,11 +144,11 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(response.status).toBe(200);
     const body = await response.json();
     expect(body).toMatchObject({ ok: true, requestId: ENVELOPE.requestId, answerRevision: 1, reviewRunId: ENVELOPE.reviewRunId, result: MODEL_RESULT });
-    expect(body.result.brief.report_version).toBe("dcm-blueprint-v2");
-    expect(body.result.brief.definition_sentence).toContain("We help");
+    expect(body.result.brief.report_version).toBe("dcm-blueprint-v4");
+    expect(body.result.brief.definition_sentence).toContain("The firm wants to attract and serve");
     expect(Object.keys(body.result.brief)).toEqual([
-      "report_version", "definition_sentence", "definition_components", "practice_context", "desired_client_matter",
-      "value_rationale", "relevance_signals", "opportunity_evidence", "repeatability", "open_questions",
+      "report_version", "definition_sentence", "definition_components", "client_and_matter", "client_goals_needs",
+      "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions", "decision_pathway",
     ]);
     expect(mocks.checkRateLimit.mock.calls).toEqual([
       ["desiredClientAnalyze", "203.0.113.42"],
@@ -194,14 +167,14 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     await expectNoStore(response);
   });
 
-  it("allows eligible clarification before the final attempt and forbids it on the final attempt", async () => {
+  it("rejects legacy post-draft clarification codes because v4 follow-ups happen during discovery", async () => {
     const answers = { ...B0, delivery: { ...B0.delivery, capacity: "change" as const } };
     mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CAPACITY_CONFLICT" }));
     const early = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 1 })));
-    expect(early.status).toBe(200);
-    expect((await early.json()).result.clarification_code).toBe("CAPACITY_CONFLICT");
+    expect(early.status).toBe(502);
+    expect((await early.json()).error.code).toBe("INVALID_AI_OUTPUT");
     const earlyPrompt = JSON.parse(mocks.generateContent.mock.calls[0][0] as string);
-    expect(earlyPrompt.eligible_codes).toContain("CAPACITY_CONFLICT");
+    expect(earlyPrompt.eligible_codes).toEqual([]);
 
     mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CAPACITY_CONFLICT" }));
     const final = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 2 })));

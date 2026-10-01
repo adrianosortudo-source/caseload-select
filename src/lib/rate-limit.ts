@@ -175,7 +175,9 @@ export type RateLimitBucket =
   | "whyYourFirmAssist"
   | "desiredClientAnalyze"
   | "desiredClientDaily"
-  | "desiredClientGlobal";
+  | "desiredClientGlobal"
+  | "desiredClientClarify"
+  | "desiredClientClarifyDaily";
 
 interface BucketConfig {
   limit: number;
@@ -209,6 +211,8 @@ const BUCKET_CONFIG: Record<RateLimitBucket, BucketConfig> = {
   desiredClientAnalyze: { limit: 20, windowSeconds: 600 },
   desiredClientDaily: { limit: 100, windowSeconds: 86400 },
   desiredClientGlobal: { limit: 2000, windowSeconds: 86400 },
+  desiredClientClarify: { limit: 8, windowSeconds: 600 },
+  desiredClientClarifyDaily: { limit: 40, windowSeconds: 86400 },
 };
 
 /**
@@ -224,7 +228,9 @@ function isDesiredClientBucket(bucket: RateLimitBucket): boolean {
   return (
     bucket === "desiredClientAnalyze" ||
     bucket === "desiredClientDaily" ||
-    bucket === "desiredClientGlobal"
+    bucket === "desiredClientGlobal" ||
+    bucket === "desiredClientClarify" ||
+    bucket === "desiredClientClarifyDaily"
   );
 }
 
@@ -366,6 +372,8 @@ const ALWAYS_FAIL_CLOSED_BUCKETS: ReadonlySet<RateLimitBucket> = new Set<RateLim
   "desiredClientAnalyze",
   "desiredClientDaily",
   "desiredClientGlobal",
+  "desiredClientClarify",
+  "desiredClientClarifyDaily",
 ]);
 
 function failClosedMode(): boolean {

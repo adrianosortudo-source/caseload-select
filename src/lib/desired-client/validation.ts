@@ -10,7 +10,7 @@ import type {
   WorkComparison,
 } from "./types";
 
-const ANSWER_KEYS = ["schema_version", "revision", "focus", "practice", "client_context", "situation", "client", "value", "delivery", "direction", "opportunity", "repeatability", "clarifications"] as const;
+const ANSWER_KEYS = ["schema_version", "revision", "interview", "focus", "practice", "client_context", "situation", "client", "value", "delivery", "direction", "opportunity", "repeatability", "clarifications"] as const;
 const CLARIFICATION_CODES: readonly ClarificationCode[] = [
   "CLIENT_MATTER_UNCLEAR", "VALUE_EFFORT_CONFLICT", "CAPACITY_CONFLICT", "REPEATABILITY_UNPROVEN", "OPPORTUNITY_UNSUPPORTED",
 ];
@@ -42,8 +42,13 @@ const ENUMS = {
   candidateTeam: ["proven", "stretch", "unknown"],
   candidateEvidence: ["repeated", "few", "none"],
   practiceDirection: ["grow_proven", "narrow_specialty", "explore_direction", "improve_delivery", "other", "unknown"],
+  practiceExperience: ["regular", "occasional", "adjacent", "new", "unknown"],
+  developmentNeeds: ["expertise", "support", "process", "capacity", "unknown"],
+  lessWorkReason: ["preference", "capacity", "effort", "financial", "model", "unknown"],
   opportunitySources: ["comparable_enquiries", "retained_matters", "professional_referrals", "repeat_clients", "website_search", "other_source", "no_evidence", "unknown"],
   successMeasure: ["retained_matters", "contribution_effort", "predictable_delivery", "practice_mix_reputation", "other", "unknown"],
+  clientChoicePriority: ["relevant_experience", "clear_options", "clear_fees", "communication", "availability", "approach", "language", "community", "other", "unknown"],
+  firmStrength: ["matter_experience", "specialist_knowledge", "clear_advice", "practical_approach", "responsive_service", "language_or_community", "other", "unknown"],
 } as const;
 
 type RecordValue = Record<string, unknown>;
@@ -61,8 +66,12 @@ function isEnum(value: unknown, choices: readonly string[], nullable = false): b
 }
 
 function isOptionalText(value: unknown): value is string {
-  return typeof value === "string" && value.length <= TEXT_MAX && !/[\r\n]/.test(value);
+  return isBoundedMultilineText(value, TEXT_MAX);
 }
+export function isBoundedMultilineText(value: unknown, max: number): value is string {
+  return typeof value === "string" && value.length <= max && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value) && value.split(/\r\n|\r|\n/).length <= 12;
+}
+function isTextLimit(value:unknown,max:number):value is string{return isBoundedMultilineText(value,max);}
 
 function isUniqueChoiceArray(value: unknown, choices: readonly string[], max: number, min = 0): value is string[] {
   return Array.isArray(value) && value.length >= min && value.length <= max &&
@@ -203,23 +212,24 @@ function validLegacyClarificationAnswer(code: typeof LEGACY_CLARIFICATION_CODES[
   }
 }
 
-function validateAnswers(value: unknown, answerRevision: number, requireComplete: boolean): value is DesiredClientAnswers {
-  if (!hasExactKeys(value, ANSWER_KEYS) && !hasExactKeys(value, [...ANSWER_KEYS, "write_ins"])) return false;
+function validateAnswers(value: unknown, answerRevision: number, requireComplete: boolean, version: "dcm-v3.0" | "dcm-v3.1" | "dcm-v3.2" = "dcm-v3.2"): value is DesiredClientAnswers {
+  const answerKeys = version === "dcm-v3.2" ? ANSWER_KEYS : ANSWER_KEYS.filter((key) => key !== "interview");
+  if (!hasExactKeys(value, answerKeys) && !hasExactKeys(value, [...answerKeys, "write_ins"])) return false;
   const a = value as RecordValue;
-  if (a.schema_version !== "dcm-v3.0" || a.revision !== answerRevision || !Number.isSafeInteger(a.revision) || a.revision < 0) return false;
+  if (a.schema_version !== version || a.revision !== answerRevision || !Number.isSafeInteger(a.revision) || a.revision < 0) return false;
   const wi = a.write_ins;
   if (wi !== undefined && (!isRecord(wi) || Object.keys(wi).some(k => !WRITE_IN_KEYS.includes(k as typeof WRITE_IN_KEYS[number]) || !isOptionalText(wi[k])))) return false;
   const own = (key: typeof WRITE_IN_KEYS[number]) => isRecord(wi) && typeof wi[key] === "string" && (wi[key] as string).trim().length > 0;
   const exactGroup = (name: string, keys: string[]) => hasExactKeys(a[name], keys);
 
   if (!exactGroup("focus", ["area", "work", "work_other", "service_area", "certainty", "route", "comparison"]) ||
-    !exactGroup("practice", ["direction", "firm_type", "capability", "enjoys"]) ||
-    !exactGroup("client_context", ["geography", "relevant_circumstances", "community_focus", "language_service_needs", "repeat_matter_pattern"]) ||
+    !exactGroup("practice", version === "dcm-v3.0" ? ["direction", "firm_type", "capability", "enjoys"] : version === "dcm-v3.2" ? ["direction", "firm_type", "capability", "enjoys", "experience", "development_needs", "client_strength", "client_strength_effect", "client_strength_support"] : ["direction", "firm_type", "capability", "enjoys", "experience", "development_needs"]) ||
+    !exactGroup("client_context", version === "dcm-v3.2" ? ["geography", "relevant_circumstances", "community_focus", "language_service_needs", "repeat_matter_pattern", "discovery_behaviour"] : ["geography", "relevant_circumstances", "community_focus", "language_service_needs", "repeat_matter_pattern"]) ||
     !exactGroup("situation", ["trigger", "timing", "role", "role_other", "contact"]) ||
-    !exactGroup("client", ["goals", "concerns", "decision_needs"]) ||
+    !exactGroup("client", version === "dcm-v3.2" ? ["goals", "goal_detail", "concerns", "decision_needs", "decision_context", "pathway_basis", "choice_priorities", "choice_detail", "choice_basis"] : ["goals", "concerns", "decision_needs"]) ||
     !exactGroup("value", ["reasons", "fee_effort", "collected_fee", "team_hours", "payment", "currency", "fee_amount", "direct_cost_amount", "amount_basis", "amount_scope"]) ||
     !exactGroup("delivery", ["conditions", "capacity", "limit", "fit_signals"]) ||
-    !exactGroup("direction", ["aim", "evidence", "less", "less_note"]) ||
+    !exactGroup("direction", version === "dcm-v3.0" ? ["aim", "evidence", "less", "less_note"] : ["aim", "evidence", "less", "less_reason", "less_note"]) ||
     !exactGroup("opportunity", ["sources", "data_basis", "source_detail", "period", "enquiry_count", "retained_count", "conversion", "acquisition_cost", "uncertainty"]) ||
     !exactGroup("repeatability", ["success_measure", "success_other", "target", "review_period", "additional_matters", "staffing_constraint"]) ||
     !hasExactKeys(a.clarifications, CLARIFICATION_CODES)) return false;
@@ -235,18 +245,52 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
   const opportunity = a.opportunity as RecordValue;
   const repeatability = a.repeatability as RecordValue;
   const clarifications = a.clarifications as RecordValue;
+  const interview = version === "dcm-v3.2" ? a.interview as RecordValue : null;
+  if (version === "dcm-v3.2") {
+    if (!hasExactKeys(interview, ["ai_clarification_consent", "clarification_count", "clarified_stages", "followups"]) || typeof interview.ai_clarification_consent !== "boolean" ||
+      !Number.isSafeInteger(interview.clarification_count) || (interview.clarification_count as number) < 0 || (interview.clarification_count as number) > 3 ||
+      !Array.isArray(interview.clarified_stages) || interview.clarified_stages.length !== interview.clarification_count || interview.clarified_stages.some((stage) => ![1,2,3,4,5,6].includes(stage as number)) || new Set(interview.clarified_stages).size !== interview.clarified_stages.length ||
+      !Array.isArray(interview.followups) || interview.followups.length > 3 || interview.followups.some((item) => !isRecord(item) || ![
+        ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "skipped"],
+        ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "choiceId", "skipped"],
+        ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "skipped", "reflection"],
+        ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "choiceId", "skipped", "reflection"],
+      ].some((keys) => hasExactKeys(item,keys)||hasExactKeys(item,[...keys,"source_answer_fingerprint"])) ||
+        typeof item.id !== "string" || item.id.length > 64 || !/^[a-z0-9_-]+$/i.test(item.id) || ![1,2,3,4,5,6].includes(item.stage as number) ||
+        !["client_matter_specificity","client_goal_detail","firm_desirability","client_choice_criteria","strength_and_support","decision_pathway_observation","discovery_evidence","economics_effort_conflict","capacity_conflict"].includes(String(item.purpose)) ||
+        !Array.isArray(item.source_answer_ids) || item.source_answer_ids.length < 1 || item.source_answer_ids.length > 8 || item.source_answer_ids.some((path) => typeof path !== "string") ||
+        typeof item.question !== "string" || item.question.length < 1 || item.question.length > 140 || /[\r\n]/.test(item.question) || !isBoundedMultilineText(item.answer,220) ||
+        item.source_answer_fingerprint !== undefined && (typeof item.source_answer_fingerprint !== "string" || !/^[0-9a-f]{16}$/.test(item.source_answer_fingerprint)) ||
+        typeof item.skipped !== "boolean" || item.skipped && item.answer !== "" || !item.skipped && item.answer.trim().length === 0 || item.choiceId !== undefined && (typeof item.choiceId !== "string" || item.choiceId.length > 48 || !/^[a-z0-9_-]+$/i.test(item.choiceId)) || item.reflection !== undefined && (typeof item.reflection !== "string" || item.reflection.length > 240)) ||
+      (interview.followups as RecordValue[]).some((item, index, all) => all.findIndex((other) => other.id === item.id) !== index || all.findIndex((other) => other.stage === item.stage) !== index || !(interview.clarified_stages as unknown[]).includes(item.stage))) return false;
+  }
 
-  for (const [field, max] of Object.entries({"practice.firm_type":180,"practice.capability":600,"practice.enjoys":600,
+  const textLimits: Record<string, number> = {"practice.firm_type":180,"practice.capability":180,"practice.enjoys":600,
     "client_context.geography":240,"client_context.relevant_circumstances":600,"client_context.community_focus":300,
     "client_context.language_service_needs":300,"client_context.repeat_matter_pattern":600,"value.currency":12,
     "value.fee_amount":80,"value.direct_cost_amount":80,"opportunity.source_detail":400,"opportunity.period":120,
     "opportunity.enquiry_count":80,"opportunity.retained_count":80,"opportunity.conversion":80,"opportunity.acquisition_cost":80,
     "opportunity.uncertainty":400,"repeatability.success_other":240,"repeatability.target":160,"repeatability.review_period":120,
-    "repeatability.additional_matters":120,"repeatability.staffing_constraint":300})) {
-    const [group, key] = field.split("."); const val = ({ practice, client_context: clientContext, value: valueGroup, opportunity, repeatability } as Record<string, RecordValue>)[group][key];
-    if (typeof val !== "string" || val.length > max || /[\r\n]/.test(val)) return false;
+    "repeatability.additional_matters":120,"repeatability.staffing_constraint":300};
+  if (version === "dcm-v3.2") Object.assign(textLimits, {"practice.client_strength_effect":240,"practice.client_strength_support":240,"client_context.discovery_behaviour":360,"client.goal_detail":240,"client.decision_context":240,"client.choice_detail":180});
+  for (const [field, max] of Object.entries(textLimits)) {
+    const [group, key] = field.split("."); const val = ({ practice, client_context: clientContext, client, value: valueGroup, opportunity, repeatability } as Record<string, RecordValue>)[group][key];
+    if (!isBoundedMultilineText(val, max)) return false;
   }
-  if (!isEnum(practice.direction, ENUMS.practiceDirection, true) || !isEnum(valueGroup.amount_basis, ["recorded","estimated","unknown"], true) ||
+  if (version === "dcm-v3.2") {
+    const goals = a.client as RecordValue;
+    if (!isTextLimit(goals.goal_detail,240) || !isTextLimit(goals.decision_context,240) || !isTextLimit(goals.choice_detail,180) ||
+      !isEnum(goals.pathway_basis,["client_feedback","firm_observation","firm_hypothesis","unknown"],true) || !isEnum(goals.choice_basis,["client_feedback","firm_observation","firm_hypothesis","unknown"],true) ||
+      !isUniqueChoiceArray(goals.choice_priorities, ENUMS.clientChoicePriority, 2) || !exclusive(goals.choice_priorities, "unknown") ||
+      !isEnum(practice.client_strength, ENUMS.firmStrength, true) ||
+      (goals.choice_priorities as string[]).includes("other") !== Boolean(String(goals.choice_detail).trim()) ||
+      (practice.client_strength === "unknown" && (String(practice.client_strength_effect).trim() || String(practice.client_strength_support).trim()))) return false;
+  }
+  if (!isEnum(practice.direction, ENUMS.practiceDirection, true) || ((version === "dcm-v3.1" || version === "dcm-v3.2") && (!isEnum(practice.experience, ENUMS.practiceExperience, true) || !isUniqueChoiceArray(practice.development_needs, ENUMS.developmentNeeds, 2) || !exclusive(practice.development_needs, "unknown") ||
+      (practice.experience !== "adjacent" && practice.experience !== "new" && (practice.development_needs as unknown[]).length > 0) ||
+      !isEnum(direction.less_reason, ENUMS.lessWorkReason, true) || (direction.less === null || direction.less === "none") && direction.less_reason !== null ||
+      (practice.experience === "regular" && focus.route !== "established") || (practice.experience === "occasional" && focus.route !== "established") ||
+      (practice.experience === "adjacent" && focus.route !== "exploring") || (practice.experience === "new" && focus.route !== "new") || (practice.experience === "unknown" && focus.route !== "exploring"))) || !isEnum(valueGroup.amount_basis, ["recorded","estimated","unknown"], true) ||
     !isEnum(opportunity.data_basis, ["recorded","estimated","unknown"], true) ||
     !isEnum(valueGroup.amount_scope, ["per_matter","range","other"], true) || !isEnum(repeatability.success_measure, ENUMS.successMeasure, true)) return false;
   if (!isUniqueChoiceArray(opportunity.sources, ENUMS.opportunitySources, 8) || !exclusive(opportunity.sources,"unknown") || !exclusive(opportunity.sources,"no_evidence")) return false;
@@ -257,18 +301,35 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
     schema_version: "dcm-v2.2", revision: a.revision, ...(wi ? {write_ins:wi} : {}), focus:{...focus,certainty:focus.certainty === "provisional" && !focus.comparison ? "chosen" : focus.certainty},
     situation, client,
     value:{reasons:valueGroup.reasons,fee_effort:valueGroup.fee_effort,collected_fee:valueGroup.collected_fee,team_hours:valueGroup.team_hours,payment:valueGroup.payment},
-    delivery,direction,
+    delivery,direction: version === "dcm-v3.0" ? direction : { aim: direction.aim, evidence: direction.evidence, less: direction.less, less_note: direction.less_note },
     clarifications:{FOCUS_UNCLEAR:null,CLIENT_GOAL_UNCLEAR:null,CURRENT_CAPACITY_CONFLICT:null,FEE_EFFORT_CONFLICT:null,EXPERIENCE_DIRECTION_CONFLICT:null},
   };
-  if (!validateLegacyV22Answers(legacyProjection, answerRevision, false)) return false;
+  const legacyClient = { goals: client.goals, concerns: client.concerns, decision_needs: client.decision_needs };
+  if (!validateLegacyV22Answers({ ...legacyProjection, client: legacyClient }, answerRevision, false)) return false;
   if (!requireComplete) return true;
-  return !!focus.area && focus.work !== null && focus.route !== null && practice.direction !== null &&
+  if (version === "dcm-v3.0") return !!focus.area && focus.work !== null && focus.route !== null && practice.direction !== null &&
     situation.trigger !== null && situation.timing !== null && situation.role !== null && (valueGroup.reasons as unknown[]).length > 0 &&
     delivery.capacity !== null && (delivery.fit_signals as unknown[]).length > 0 && (opportunity.sources as unknown[]).length > 0 && repeatability.success_measure !== null;
+  return !!focus.area && focus.work !== null && practice.experience !== null && practice.direction !== null &&
+    (practice.direction !== "other" || own("aim")) &&
+    (situation.trigger !== null || own("trigger")) && situation.timing !== null && situation.role !== null && (client.goals as unknown[]).length > 0 &&
+    ((valueGroup.reasons as unknown[]).length > 0 || own("reasons")) && valueGroup.fee_effort !== null &&
+    (client.choice_priorities as unknown[]).length > 0 && practice.client_strength !== null &&
+    ((delivery.fit_signals as unknown[]).length > 0 || own("fit_signals")) && (opportunity.sources as unknown[]).length > 0;
 }
 
 export function validateLegacyV22DraftAnswers(value: unknown): boolean {
   return isRecord(value) && value.schema_version === "dcm-v2.2" && validateLegacyV22Answers(value, value.revision as number, false);
+}
+
+export function validateLegacyV30DraftAnswers(value: unknown): boolean {
+  if (!isRecord(value) || value.schema_version !== "dcm-v3.0" || !Number.isSafeInteger(value.revision) || (value.revision as number) < 0) return false;
+  return validateAnswers(value, value.revision as number, false, "dcm-v3.0");
+}
+
+export function validateLegacyV31DraftAnswers(value: unknown): boolean {
+  if (!isRecord(value) || value.schema_version !== "dcm-v3.1" || !Number.isSafeInteger(value.revision) || (value.revision as number) < 0) return false;
+  return validateAnswers(value, value.revision as number, false, "dcm-v3.1");
 }
 
 /** Validates an incomplete saved draft without rejecting a normal mid-edit state. */
@@ -282,9 +343,12 @@ export type AnalysisRequestValidation =
   | { valid: false; reason: string };
 
 export function validateAnalysisRequest(input: unknown): AnalysisRequestValidation {
-  const keys = ["schemaVersion", "requestId", "answerRevision", "reviewRunId", "analysisIndex", "aiConsent", "answers", "clarifications"];
-  if (!hasExactKeys(input, keys)) return { valid: false, reason: "invalid envelope keys" };
-  if (input.schemaVersion !== 3 || input.aiConsent !== true || !Number.isSafeInteger(input.answerRevision) ||
+  const legacyKeys = ["schemaVersion", "requestId", "answerRevision", "reviewRunId", "analysisIndex", "aiConsent", "answers", "clarifications"];
+  const currentKeys = ["schemaVersion", "operation", "requestId", "answerRevision", "reviewRunId", "analysisIndex", "aiConsent", "answers", "clarifications"];
+  const legacy = hasExactKeys(input, legacyKeys) && input.schemaVersion === 3;
+  const current = hasExactKeys(input, currentKeys) && input.schemaVersion === 4 && input.operation === "generate";
+  if (!legacy && !current) return { valid: false, reason: "invalid envelope keys" };
+  if (input.aiConsent !== true || !Number.isSafeInteger(input.answerRevision) ||
       (input.answerRevision as number) < 0 || ![0, 1, 2].includes(input.analysisIndex as number)) {
     return { valid: false, reason: "invalid envelope values" };
   }
@@ -314,6 +378,6 @@ export function validateAnalysisRequest(input: unknown): AnalysisRequestValidati
   }
   if (input.analysisIndex === 0 && clarificationHistory.length !== 0) return { valid: false, reason: "initial request has history" };
 
-  const value = input as unknown as AnalysisRequestEnvelope;
+  const value = (legacy ? { ...input, schemaVersion: 4, operation: "generate" } : input) as unknown as AnalysisRequestEnvelope;
   return { valid: true, value };
 }

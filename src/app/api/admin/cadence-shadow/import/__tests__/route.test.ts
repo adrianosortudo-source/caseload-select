@@ -10,7 +10,7 @@ vi.mock('@/lib/portal-auth', () => ({ getOperatorSession: async () => operatorSe
 
 const insertMock = vi.fn();
 vi.mock('@/lib/supabase-admin', () => ({
-  supabaseAdmin: { from: (_table: string) => ({ insert: (rows: unknown[]) => insertMock(rows) }) },
+  supabaseAdmin: { from: (_table: string) => { void _table; return { insert: (rows: unknown[]) => insertMock(rows) }; } },
 }));
 
 function makeMultipartRequest(csv: string, firmId: string): NextRequest {

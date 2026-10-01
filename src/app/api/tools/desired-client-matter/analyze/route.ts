@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
-import { desiredClientModelId, eligibleDesiredClientClarifications, runDesiredClientAnalysis } from "@/lib/desired-client/analyze";
+import { desiredClientModelId, runDesiredClientAnalysis } from "@/lib/desired-client/analyze";
+import { runInterviewClarification, validateInterviewClarificationRequest } from "@/lib/desired-client/interview-clarification";
 import { validateAnalysisRequest } from "@/lib/desired-client/validation";
-import type { AnalysisFailureCode, AnalysisFailureEnvelope, AnalysisSuccessEnvelope } from "@/lib/desired-client/types";
+import type { AnalysisFailureCode, AnalysisFailureEnvelope, AnalysisSuccessEnvelope, InterviewClarificationSuccessEnvelope } from "@/lib/desired-client/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -53,7 +54,7 @@ async function readBodyWithinLimit(request: NextRequest): Promise<BodyReadResult
   catch { return { ok: false, reason: "INVALID_BODY" }; }
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse<AnalysisFailureEnvelope | AnalysisSuccessEnvelope>> {
+export async function POST(request: NextRequest): Promise<NextResponse<AnalysisFailureEnvelope | AnalysisSuccessEnvelope | InterviewClarificationSuccessEnvelope>> {
   const contentType = request.headers.get("content-type") ?? "";
   if (!/^application\/json(?:\s*;|\s*$)/i.test(contentType)) return fail(randomUUID(), "INVALID_REQUEST", 400);
 
@@ -77,6 +78,26 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
   let parsed: unknown;
   try { parsed = JSON.parse(body.text); } catch { return fail(randomUUID(), "INVALID_REQUEST", 400); }
   const requestId = requestIdFromBody(parsed);
+
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed) && (parsed as Record<string, unknown>).operation === "clarify") {
+    const validation = validateInterviewClarificationRequest(parsed);
+    if (!validation.valid) return fail(requestId, "INVALID_REQUEST", 400);
+    const value = validation.value;
+    const apiKey = process.env.GOOGLE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim();
+    if (process.env.DESIRED_CLIENT_AI_ENABLED !== "true" || !apiKey ||
+        !process.env.UPSTASH_REDIS_REST_URL?.trim() || !process.env.UPSTASH_REDIS_REST_TOKEN?.trim()) {
+      return fail(value.requestId, "AI_DISABLED", 503);
+    }
+    const ip = ipFromRequest(request);
+    for (const bucket of ["desiredClientClarify", "desiredClientClarifyDaily"] as const) {
+      const decision = await checkRateLimit(bucket, ip);
+      if (!decision.ok) return fail(value.requestId, "RATE_LIMITED", 429, rateLimitHeaders(decision));
+    }
+    const outcome = await runInterviewClarification(value);
+    if (outcome.mode !== "live") return fail(value.requestId, outcome.mode === "unavailable" ? "AI_UNAVAILABLE" : "INVALID_AI_OUTPUT", 502);
+    return NextResponse.json(outcome.response, { headers: NO_STORE });
+  }
+
   const validation = validateAnalysisRequest(parsed);
   if (!validation.valid) return fail(requestId, "INVALID_REQUEST", 400);
 
@@ -97,7 +118,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
     if (!decision.ok) return fail(validation.value.requestId, "RATE_LIMITED", 429, rateLimitHeaders(decision));
   }
 
-  const eligibleCodes = eligibleDesiredClientClarifications(validation.value);
+  // v4 creates the complete blueprint in one response. Follow-ups happen
+  // during discovery through the separate clarify operation, never afterward.
+  const eligibleCodes: [] = [];
   const outcome = await runDesiredClientAnalysis(validation.value, eligibleCodes);
   if (outcome.mode === "unavailable") return fail(validation.value.requestId, "AI_UNAVAILABLE", 502);
   if (outcome.mode === "invalid_output") return fail(validation.value.requestId, "INVALID_AI_OUTPUT", 502);

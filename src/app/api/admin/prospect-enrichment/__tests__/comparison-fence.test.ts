@@ -17,7 +17,7 @@ const actor = "prospect-research-agent";
 class FakeQuery {
   private filters: { kind: "eq" | "in"; column: string; value: unknown }[] = [];
   constructor(private readonly table: string, private readonly rowsFor: (table: string, filters: typeof this.filters) => Record<string, unknown>[]) {}
-  select(_columns: string) { return this; }
+  select(_columns: string) { void _columns; return this; }
   eq(column: string, value: unknown) { this.filters.push({ kind: "eq", column, value }); return this; }
   in(column: string, value: unknown[]) { this.filters.push({ kind: "in", column, value }); return this; }
   order() { return this; }

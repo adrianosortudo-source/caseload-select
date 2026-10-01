@@ -1,5 +1,5 @@
 import { emptyAnswers } from "./brief";
-import { validateDraftAnswers, validateLegacyV22DraftAnswers } from "./validation";
+import { validateDraftAnswers, validateLegacyV22DraftAnswers, validateLegacyV30DraftAnswers, validateLegacyV31DraftAnswers } from "./validation";
 import type { DesiredClientAnswers } from "./types";
 
 type RecordValue = Record<string, unknown>;
@@ -49,16 +49,17 @@ export function migrateV22Answers(value: unknown): DesiredClientAnswers | null {
   };
   const migrated: DesiredClientAnswers = {
     ...base,
-    schema_version: "dcm-v3.0",
+    schema_version: "dcm-v3.2",
     revision: Number(old.revision) + 1,
     ...(old.write_ins ? { write_ins: structuredClone(old.write_ins) as DesiredClientAnswers["write_ins"] } : {}),
     focus: structuredClone(focus) as unknown as DesiredClientAnswers["focus"],
-    practice: { direction: aimMap[String(direction.aim)] ?? null, firm_type: "", capability: "", enjoys: "" },
+    practice: { direction: aimMap[String(direction.aim)] ?? null, firm_type: "", capability: "", enjoys: "", experience: null, development_needs: [], client_strength: null, client_strength_effect: "", client_strength_support: "" },
     client_context: {
-      geography: String(focus.service_area ?? ""), relevant_circumstances: "", community_focus: "", language_service_needs: "", repeat_matter_pattern: "",
+      geography: String(focus.service_area ?? ""), relevant_circumstances: "", community_focus: "", language_service_needs: "", repeat_matter_pattern: "", discovery_behaviour: "",
     },
     situation: structuredClone(situation) as unknown as DesiredClientAnswers["situation"],
-    client: structuredClone(client) as unknown as DesiredClientAnswers["client"],
+    client: { ...(structuredClone(client) as unknown as { goals: DesiredClientAnswers["client"]["goals"]; concerns: DesiredClientAnswers["client"]["concerns"]; decision_needs: DesiredClientAnswers["client"]["decision_needs"] }), goal_detail: "", decision_context: "", pathway_basis: null, choice_priorities: [], choice_detail: "", choice_basis: null },
+    interview: base.interview,
     value: {
       reasons: structuredClone(valueGroup.reasons) as DesiredClientAnswers["value"]["reasons"],
       fee_effort: valueGroup.fee_effort as DesiredClientAnswers["value"]["fee_effort"],
@@ -68,10 +69,47 @@ export function migrateV22Answers(value: unknown): DesiredClientAnswers | null {
       currency: "", fee_amount: "", direct_cost_amount: "", amount_basis: null, amount_scope: null,
     },
     delivery: structuredClone(old.delivery) as unknown as DesiredClientAnswers["delivery"],
-    direction: structuredClone(direction) as unknown as DesiredClientAnswers["direction"],
+    direction: { ...(structuredClone(direction) as unknown as Omit<DesiredClientAnswers["direction"], "less_reason">), less_reason: null },
     opportunity: { sources: ["unknown"], data_basis: null, source_detail: "", period: "", enquiry_count: "", retained_count: "", conversion: "", acquisition_cost: "", uncertainty: "" },
     repeatability: { success_measure: null, success_other: "", target: "", review_period: "", additional_matters: "", staffing_constraint: "" },
     clarifications: { CLIENT_MATTER_UNCLEAR: null, VALUE_EFFORT_CONFLICT: null, CAPACITY_CONFLICT: null, REPEATABILITY_UNPROVEN: null, OPPORTUNITY_UNSUPPORTED: null },
+  };
+  return validateDraftAnswers(migrated) ? migrated : null;
+}
+
+/** Upgrade six-stage drafts while preserving every existing answer string. Experience is left unanswered so it is explicitly reconfirmed on resume. */
+export function migrateV30Answers(value: unknown): DesiredClientAnswers | null {
+  if (!validateLegacyV30DraftAnswers(value)) return null;
+  const old = structuredClone(value) as RecordValue;
+  const practice = old.practice as RecordValue;
+  const direction = old.direction as RecordValue;
+  const oldV31 = {
+    ...old,
+    schema_version: "dcm-v3.1" as const,
+    revision: Number(old.revision) + 1,
+    practice: { ...practice, experience: null, development_needs: [] },
+    direction: { ...direction, less_reason: null },
+  };
+  return migrateV31Answers(oldV31);
+}
+
+/** Add the new client-choice and clarification fields without inferring answers or extending draft expiry. */
+export function migrateV31Answers(value: unknown): DesiredClientAnswers | null {
+  if (!validateLegacyV31DraftAnswers(value)) return null;
+  const old = structuredClone(value) as RecordValue;
+  const base = emptyAnswers();
+  const practice = old.practice as RecordValue;
+  const client = old.client as RecordValue;
+  const context = old.client_context as RecordValue;
+  const migrated: DesiredClientAnswers = {
+    ...base,
+    ...old,
+    schema_version: "dcm-v3.2",
+    revision: Number(old.revision) + 1,
+    interview: base.interview,
+    practice: { ...(practice as unknown as DesiredClientAnswers["practice"]), client_strength: null, client_strength_effect: "", client_strength_support: "" },
+    client_context: { ...(context as unknown as DesiredClientAnswers["client_context"]), discovery_behaviour: "" },
+    client: { ...(client as unknown as { goals: DesiredClientAnswers["client"]["goals"]; concerns: DesiredClientAnswers["client"]["concerns"]; decision_needs: DesiredClientAnswers["client"]["decision_needs"] }), goal_detail: "", decision_context: "", pathway_basis: null, choice_priorities: [], choice_detail: "", choice_basis: null },
   };
   return validateDraftAnswers(migrated) ? migrated : null;
 }

@@ -18,7 +18,7 @@
 .dc-progress{width:100%;min-width:0}
 .dc-progress ol{display:flex;flex-wrap:wrap;gap:.5rem;margin:0;padding:0;list-style:none}
 .dc-progress li{min-width:0;flex:1 1 10rem}
-.dc-progress button{width:100%;min-height:2.75rem;padding:.5rem .75rem;border:1px solid var(--dc-border);border-radius:.375rem;background:var(--dc-white);color:var(--dc-navy);font:600 .8125rem/1.3 var(--font-dm-sans),sans-serif;text-align:left;overflow-wrap:anywhere;text-wrap:balance}
+.dc-progress button{width:100%;min-height:2.75rem;padding:.5rem .75rem;border:1px solid var(--dc-border);border-radius:.375rem;background:var(--dc-white);color:var(--dc-navy);font:600 .8125rem/1.3 var(--font-dm-sans),sans-serif;text-align:left;overflow-wrap:anywhere;text-wrap:wrap}
 .dc-progress button[aria-current=step]{border:2px solid var(--dc-navy);font-weight:700}
 .dc-progress button:disabled{opacity:.58}
 .dc-stage,.dc-comparison,.dc-clarification,.dc-review,.dc-brief,.dc-welcome{width:100%;min-width:0}
@@ -33,11 +33,12 @@
 .dc-option{display:flex;align-items:flex-start;gap:.625rem;width:100%;min-width:0;min-height:2.75rem;padding:1rem;border:1px solid var(--dc-border);border-radius:.375rem;background:var(--dc-white);cursor:pointer}
 .dc-option:has(.dc-option__input:checked){border:2px solid var(--dc-navy);padding:calc(1rem - 1px);background:#eef1f7}
 .dc-option__input{flex:0 0 1.25rem;width:1.25rem;height:1.25rem;margin:.125rem 0 0;accent-color:var(--dc-navy)}
-.dc-option__label{display:block;flex:1;width:100%;min-width:0;color:var(--dc-ink);line-height:1.45;text-wrap:balance}
+.dc-option__label{display:block;flex:1;width:100%;min-width:0;color:var(--dc-ink);line-height:1.45;text-wrap:wrap}
 .dc-option__input:focus-visible{outline:2px solid var(--dc-navy);outline-offset:3px}
 .dc-option__error{width:100%;margin-top:.5rem;color:#8b1e1e;font-size:.9375rem;font-weight:700}
 .dc-text-field{display:grid;gap:.5rem;width:100%;min-width:0;color:var(--dc-ink)}
 .dc-text-field>span:first-child{font-weight:700;text-wrap:balance}
+.dc-text-field>span[data-ui-copy="body"]{text-wrap:pretty}
 .dc-text-field input,.dc-text-field textarea,.dc-brief textarea,.dc-route select{width:100%;min-width:0;min-height:2.75rem;padding:.625rem .75rem;border:1px solid var(--dc-border);border-radius:.375rem;background:var(--dc-white);color:var(--dc-ink);font:400 1rem/1.5 var(--font-dm-sans),sans-serif}
 .dc-text-field input:focus-visible,.dc-text-field textarea:focus-visible,.dc-route select:focus-visible{border-color:var(--dc-navy)}
 .dc-optional{display:grid;gap:1rem;width:100%;min-width:0;padding:1rem;border:1px solid var(--dc-border);border-radius:.375rem;background:var(--dc-white)}
@@ -148,6 +149,14 @@
 .dc-report-definition{display:grid;gap:.45rem;width:100%;padding:1.1rem 1.25rem;border-left:4px solid #d6a25f;background:#f5f3ee}
 .dc-report-definition h2{margin:0;color:var(--dc-navy);font-family:var(--font-oxanium),sans-serif;font-size:.82rem;letter-spacing:.05em;text-transform:uppercase}
 .dc-report-definition p{width:100%;margin:0;color:var(--dc-ink);font-size:clamp(1rem,2.15vw,1.25rem);font-weight:600;line-height:1.5;text-wrap:pretty}
+.dc-report-decision-pathway{display:grid;gap:.7rem;width:100%;margin:.9rem 0 1rem;padding:.9rem 1rem;border-top:2px solid #d6a25f;background:#f5f3ee}
+.dc-report-decision-pathway__heading{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:.4rem 1rem}
+.dc-report-decision-pathway__heading h2{width:auto;margin:0;color:var(--dc-navy);font-size:1rem}
+.dc-report-decision-pathway__heading span{color:var(--dc-secondary);font-size:.8rem}
+.dc-report-decision-pathway__steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.55rem;width:100%;min-width:0}
+.dc-report-decision-pathway__step{display:grid;align-content:start;gap:.35rem;min-width:0;padding:.7rem;border:1px solid var(--dc-border);background:#fff}
+.dc-report-decision-pathway__step h3{width:100%;margin:0;color:var(--dc-navy);font-size:.82rem}
+.dc-report-decision-pathway__step p{width:100%;margin:0;line-height:1.45;text-wrap:pretty}
 .dc-report-cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem;width:100%;min-width:0}
 .dc-report-card{display:grid;align-content:start;gap:.65rem;min-width:0;padding:1rem;border:1px solid var(--dc-border);border-radius:.4rem;background:#fff}
 .dc-report-card h2{width:100%;margin:0;color:var(--dc-navy);font-size:1.1rem}
@@ -185,7 +194,7 @@
 .dc-brief--legacy .dc-report-card--wide{grid-column:1/-1}
 .dc-legacy-list{display:grid;gap:.5rem;width:100%}
 .dc-legacy-list p{width:100%;margin:0}
-@media(max-width:700px){.dc-report-cards{grid-template-columns:minmax(0,1fr)}.dc-report-status{align-items:flex-start;flex-direction:column}.dc-report-status span{padding-left:0;border-left:0}}
+@media(max-width:700px){.dc-report-cards{grid-template-columns:minmax(0,1fr)}.dc-report-status{align-items:flex-start;flex-direction:column}.dc-report-status span{padding-left:0;border-left:0}.dc-report-decision-pathway__steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media print{
  .dc-brief--blueprint,.dc-brief--legacy{display:block;width:100%;max-width:none;margin:0;padding:0;border:0;border-radius:0;background:#fff;box-shadow:none;color:#000}
  .dc-brief--blueprint>*+*,.dc-brief--legacy>*+*{margin-top:.55rem}
@@ -194,6 +203,11 @@
  .dc-report-meta,.dc-report-status,.dc-report-footnote,.dc-report-review__note{font-size:8pt}
  .dc-report-definition{margin:.55rem 0;padding:.6rem .8rem;background:#f5f3ee!important;print-color-adjust:exact;-webkit-print-color-adjust:exact}
  .dc-report-definition p{font-size:10pt;line-height:1.35}
+ .dc-report-decision-pathway{margin:.45rem 0;padding:.5rem;background:#f5f3ee!important;break-inside:avoid;print-color-adjust:exact;-webkit-print-color-adjust:exact}
+ .dc-report-decision-pathway__steps{grid-template-columns:repeat(4,minmax(0,1fr));gap:.35rem}
+ .dc-report-decision-pathway__step{gap:.2rem;padding:.4rem;break-inside:avoid}
+ .dc-report-decision-pathway__step h3{font-size:8.5pt}
+ .dc-report-decision-pathway__step p{font-size:8pt;line-height:1.25}
  .dc-report-cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:.45rem}
  .dc-report-card{gap:.35rem;padding:.55rem;break-inside:avoid;page-break-inside:avoid}
  .dc-report-card h2{font-size:9pt}

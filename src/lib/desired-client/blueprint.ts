@@ -2,7 +2,7 @@ import { AREA_CATALOG, getWorkLabel } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
 import { calculateContribution, type CalculatedContribution } from "./economics";
 import { getSourceDetails } from "./sources";
-import type { AnswerReferencePath, DesiredClientAnswers, DesiredClientBrief, EvidenceBasis, EvidenceCard, EvidenceLinkedStatement, SavedBrief } from "./types";
+import type { AnswerReferencePath, ClientDecisionPathway, DesiredClientAnswers, DesiredClientBrief, DesiredClientBriefV2, DesiredClientBriefV4, EvidenceBasis, EvidenceCard, EvidenceLinkedStatement, SavedBrief } from "./types";
 
 export type BlueprintMetadata = {
   mode: SavedBrief["mode"];
@@ -14,6 +14,9 @@ export type BlueprintMetadata = {
 export const EVIDENCE_BASIS_LABELS: Record<EvidenceBasis, string> = {
   firm_reported_recorded: "Firm-reported records",
   firm_reported_estimate: "Firm estimate",
+  firm_reported_experience: "Firm-reported experience",
+  firm_reported_observation: "Firm-reported observation",
+  client_reported: "Client-reported information",
   firm_preference: "Firm preference",
   source_observed: "Observed source",
   hypothesis: "To test",
@@ -21,7 +24,7 @@ export const EVIDENCE_BASIS_LABELS: Record<EvidenceBasis, string> = {
 };
 
 export type BlueprintCard = {
-  id: "practice" | "clientMatter" | "value" | "fit" | "opportunity" | "repeatability";
+  id: "practice" | "clientMatter" | "value" | "fit" | "opportunity" | "repeatability" | "clientGoals" | "whyWork" | "whyFirm" | "recognition" | "evidence";
   title: string;
   claims: EvidenceLinkedStatement[];
   sources: Array<{ statement: EvidenceLinkedStatement; path: AnswerReferencePath; question: string; answer: string | null }>;
@@ -37,8 +40,9 @@ export type BlueprintViewModel = {
   date: string;
   confirmed: boolean;
   definition: string;
-  definitionComponents: DesiredClientBrief["definition_components"];
+  definitionComponents: DesiredClientBrief["definition_components"] | DesiredClientBriefV4["definition_components"];
   cards: BlueprintCard[];
+  decisionPathway: ClientDecisionPathway | null;
   openQuestions: EvidenceLinkedStatement[];
   sourceDetails: Array<{ slot: string; statement: EvidenceLinkedStatement; answers: Array<{ path: AnswerReferencePath; question: string; answer: string | null }> }>;
   allAnswers: Array<{ question: string; answer: string }>;
@@ -58,22 +62,39 @@ const CARD_DEFINITIONS = [
   ["repeatability", "What repeatable progress means", "repeatability"],
 ] as const;
 
+const V4_CARD_DEFINITIONS = [
+  ["clientMatter", "Desired client and matter", "client_and_matter"],
+  ["clientGoals", "Client goals and needs", "client_goals_needs"],
+  ["whyWork", "Why the firm wants this work", "why_firm_wants_work"],
+  ["whyFirm", "Why clients choose the firm", "why_client_chooses_firm"],
+  ["recognition", "Recognizable circumstances", "recognizable_circumstances"],
+  ["evidence", "Evidence and open questions", "evidence_and_open_questions"],
+] as const;
+
 const ANSWER_PATHS: AnswerReferencePath[] = [
   "focus.area", "focus.work", "focus.work_other", "focus.service_area", "focus.certainty", "focus.route",
-  "practice.direction", "practice.firm_type", "practice.capability", "practice.enjoys",
+  "practice.direction", "practice.firm_type", "practice.capability", "practice.enjoys", "practice.experience", "practice.development_needs",
   "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus", "client_context.language_service_needs", "client_context.repeat_matter_pattern",
   "situation.trigger", "write_ins.trigger", "situation.timing", "situation.role", "situation.role_other", "situation.contact",
   "client.goals", "write_ins.goals", "client.concerns", "write_ins.concerns", "client.decision_needs", "write_ins.decision_needs",
   "value.reasons", "write_ins.reasons", "value.fee_effort", "write_ins.fee_effort", "value.collected_fee", "value.team_hours", "value.payment", "value.currency", "value.fee_amount", "value.direct_cost_amount", "value.amount_basis", "value.amount_scope",
   "delivery.conditions", "write_ins.conditions", "delivery.capacity", "write_ins.capacity", "delivery.limit", "write_ins.limit", "delivery.fit_signals", "write_ins.fit_signals",
-  "direction.aim", "write_ins.aim", "direction.evidence", "write_ins.evidence", "direction.less", "direction.less_note",
+  "direction.aim", "write_ins.aim", "direction.evidence", "write_ins.evidence", "direction.less", "direction.less_reason", "direction.less_note",
   "opportunity.sources", "opportunity.source_detail", "opportunity.period", "opportunity.enquiry_count", "opportunity.retained_count", "opportunity.conversion", "opportunity.acquisition_cost", "opportunity.uncertainty",
   "repeatability.success_measure", "repeatability.success_other", "repeatability.target", "repeatability.review_period", "repeatability.additional_matters", "repeatability.staffing_constraint",
 ];
 
-function evidenceStatus(brief: DesiredClientBrief): string {
-  const statements = [brief.practice_context, brief.desired_client_matter, brief.value_rationale, brief.relevance_signals, brief.opportunity_evidence, brief.repeatability]
-    .flatMap((card) => card.claims);
+function evidenceStatus(brief: DesiredClientBrief | DesiredClientBriefV2 | DesiredClientBriefV4): string {
+  const statements = brief.report_version === "dcm-blueprint-v4"
+    ? [...brief.client_and_matter.claims, ...brief.client_goals_needs.claims, ...brief.why_firm_wants_work.claims, ...brief.why_client_chooses_firm.claims, ...brief.recognizable_circumstances.claims, ...brief.evidence_and_open_questions.claims, ...Object.values(brief.decision_pathway)]
+    : [
+        ...(brief.report_version === "dcm-blueprint-v3" ? Object.values(brief.practice_context) : brief.practice_context.claims),
+        ...brief.desired_client_matter.claims,
+        ...brief.value_rationale.claims,
+        ...brief.relevance_signals.claims,
+        ...brief.opportunity_evidence.claims,
+        ...brief.repeatability.claims,
+      ];
   const bases = new Set(statements.map((statement) => statement.evidence_basis));
   if (bases.has("unknown") || bases.has("hypothesis")) return "Some parts of this direction still need evidence";
   if (bases.has("firm_reported_estimate")) return "Some commercial details are estimates";
@@ -81,11 +102,22 @@ function evidenceStatus(brief: DesiredClientBrief): string {
   return "Evidence is described by its source";
 }
 
-export function buildBlueprintViewModel(brief: DesiredClientBrief, answers: DesiredClientAnswers, meta: BlueprintMetadata): BlueprintViewModel {
-  const cards: BlueprintCard[] = CARD_DEFINITIONS.map(([id, title, key]) => {
-    const claims = (brief[key] as EvidenceCard).claims;
-    const contribution = id === "value" ? calculateContribution(answers) : null;
-    const opportunityHasResults = id === "opportunity" && Boolean(answers.opportunity.sources.length || answers.opportunity.source_detail.trim() || answers.opportunity.enquiry_count.trim() || answers.opportunity.retained_count.trim() || answers.opportunity.conversion.trim() || answers.opportunity.acquisition_cost.trim());
+export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClientBriefV2 | DesiredClientBriefV4, answers: DesiredClientAnswers, meta: BlueprintMetadata): BlueprintViewModel {
+  const definitions = brief.report_version === "dcm-blueprint-v4" ? V4_CARD_DEFINITIONS : CARD_DEFINITIONS;
+  const cards: BlueprintCard[] = definitions.map(([id, title, key]) => {
+    const rawClaims: EvidenceLinkedStatement[] = brief.report_version === "dcm-blueprint-v4"
+      ? (brief[key as keyof DesiredClientBriefV4] as EvidenceCard).claims
+      : key === "practice_context"
+        ? brief.report_version === "dcm-blueprint-v3" ? Object.values(brief.practice_context) : brief.practice_context.claims
+        : (brief[key as keyof DesiredClientBrief] as EvidenceCard).claims;
+    const practiceLabels = ["Current practice", "Work to grow", "Experience supporting this direction", "Development needs", "Marketing emphasis to reduce"];
+    const claims = key === "practice_context" && brief.report_version === "dcm-blueprint-v3"
+      ? rawClaims.map((claim, index) => ({ ...claim, text: `${practiceLabels[index]}: ${claim.text}` }))
+      : rawClaims;
+    // Economics is derived by the application and shown beside the firm's
+    // rationale. It must never depend on AI-authored arithmetic in a claim.
+    const contribution = (id === "value" || id === "whyWork") ? calculateContribution(answers) : null;
+    const opportunityHasResults = brief.report_version !== "dcm-blueprint-v4" && id === "opportunity" && Boolean(answers.opportunity.sources.length || answers.opportunity.source_detail.trim() || answers.opportunity.enquiry_count.trim() || answers.opportunity.retained_count.trim() || answers.opportunity.conversion.trim() || answers.opportunity.acquisition_cost.trim());
     const opportunityBasis = opportunityHasResults && answers.opportunity.data_basis
       ? answers.opportunity.data_basis === "recorded" ? "Firm-reported records" : answers.opportunity.data_basis === "estimated" ? "Firm estimate" : "Basis unknown"
       : undefined;
@@ -101,12 +133,14 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief, answers: Desi
   const detailStatements = [
     ...cards.flatMap((card) => card.claims.map((statement, index) => [`${card.title} · Claim ${index + 1}`, statement] as const)),
     ...Object.entries(brief.definition_components).map(([key, statement]) => [`Definition: ${key.replaceAll("_", " ")}`, statement] as const),
-    ...brief.open_questions.map((statement, index) => [`Point to resolve ${index + 1}`, statement] as const),
+    ...(brief.report_version === "dcm-blueprint-v4"
+      ? (Object.entries(brief.decision_pathway) as Array<[string, EvidenceLinkedStatement]>).map(([key, statement]) => [`Client decision pathway · ${key.replaceAll("_", " ")}`, statement] as const)
+      : brief.open_questions.map((statement, index) => [`Point to resolve ${index + 1}`, statement] as const)),
   ];
   const sourceDetails = detailStatements.map(([slot, statement]) => ({
     slot,
     statement,
-    answers: statement.source_answer_ids.map((path) => ({ ...getSourceDetails(path, answers), path })),
+    answers: statement.source_answer_ids.map((path: AnswerReferencePath) => ({ ...getSourceDetails(path, answers), path })),
   }));
   const allAnswers = ANSWER_PATHS.flatMap((path) => {
     const source = getSourceDetails(path, answers);
@@ -120,15 +154,16 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief, answers: Desi
   const confirmed = meta.wordingReviewed;
   return {
     title,
-    status: confirmed ? "Direction confirmed by the firm" : "Provisional direction",
+    status: confirmed ? "Wording reviewed" : "Draft wording",
     evidenceStatus: evidenceStatus(brief),
     modeLabel: meta.mode === "ai" ? "AI-assisted draft" : "Structured draft",
     date: formatDate(meta.generatedAt),
     confirmed,
-    definition: buildDefinitionSentence(brief, confirmed),
+    definition: brief.report_version === "dcm-blueprint-v4" || brief.report_version === "dcm-blueprint-v2" ? brief.definition_sentence : buildDefinitionSentence(brief, confirmed),
     definitionComponents: brief.definition_components,
     cards,
-    openQuestions: brief.open_questions,
+    decisionPathway: brief.report_version === "dcm-blueprint-v4" ? brief.decision_pathway : null,
+    openQuestions: brief.report_version === "dcm-blueprint-v4" ? [] : brief.open_questions,
     sourceDetails,
     allAnswers,
   };
