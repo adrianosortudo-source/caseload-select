@@ -7,7 +7,7 @@ export const WELCOME_COPY = {
   outcome: "A Desired Client Blueprint that defines the client, specific legal work and practical benefit; explains why the firm wants the work; keeps constraints and evidence gaps visible; and gives a separate progress measure, target and review period. Review and correct the draft before using it in marketing.",
   supporting: "One type of work at a time. No account or email required.",
   privacy: "Describe patterns of work, not individual clients. Do not enter names, identifying details or confidential information.",
-  aiDisclosure: "AI will draft a Desired Client Blueprint from the answers you provide. The result is a working draft for your review; reported experience, estimates and unknowns will remain distinct.",
+  aiDisclosure: "AI can turn your answers into a Desired Client Blueprint. If AI is unavailable, you can continue with a clearly labelled structured draft, and your answers remain saved.",
   legacyBriefReplaced: "Your answers are saved. Review them below to create your Desired Client Blueprint.",
   draftNotice: "Your draft is saved in this browser for seven days after your last change. You can clear it at any time.",
   startButton: "Define my desired client",

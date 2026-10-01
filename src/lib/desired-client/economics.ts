@@ -18,6 +18,13 @@ function amountInCents(value: string): number | null {
   return Number.isSafeInteger(cents) ? cents : null;
 }
 
+/** Read the sign from the source amounts, not from locale-formatted currency text. */
+export function hasNegativeContribution(answers: DesiredClientAnswers): boolean {
+  const fee = amountInCents(answers.value.fee_amount);
+  const cost = amountInCents(answers.value.direct_cost_amount);
+  return fee !== null && cost !== null && fee < cost;
+}
+
 /** Calculate only when the firm supplied comparable, single per-matter amounts. */
 export function calculateContribution(answers: DesiredClientAnswers): CalculatedContribution | null {
   const fee = amountInCents(answers.value.fee_amount);

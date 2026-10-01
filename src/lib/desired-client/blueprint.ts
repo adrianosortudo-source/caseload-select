@@ -1,6 +1,6 @@
 import { AREA_CATALOG, getAnswerLabel, getWorkLabel } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
-import { calculateContribution, type CalculatedContribution } from "./economics";
+import { calculateContribution, hasNegativeContribution, type CalculatedContribution } from "./economics";
 import { getSourceDetails } from "./sources";
 import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
 import type { AnswerReferencePath, ClientDecisionPathway, DesiredClientAnswers, DesiredClientBrief, DesiredClientBriefV2, DesiredClientBriefV4, EvidenceBasis, EvidenceCard, EvidenceLinkedStatement, SavedBrief } from "./types";
@@ -151,7 +151,7 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
   if (answers.delivery.capacity === "change") conditions.push("The team reported that growth depends on a delivery change.");
   if (answers.repeatability.staffing_constraint.trim()) conditions.push(`Before increasing volume, the firm identified this prerequisite: ${answers.repeatability.staffing_constraint.trim()}`);
   if (answers.repeatability.additional_matters.trim() && /^(0|none|no additional|zero)\b/i.test(answers.repeatability.additional_matters.trim())) conditions.push("The firm reported no additional matter capacity at present.");
-  if (contributionResult && contributionResult.amount.startsWith("-")) conditions.push(`The supplied fee and direct-cost figures calculate to a negative contribution of ${contributionResult.amount} before overhead and acquisition costs; resolve this conflict before treating the work as commercially attractive.`);
+  if (contributionResult && hasNegativeContribution(answers)) conditions.push(`The supplied fee and direct-cost figures calculate to a negative contribution of ${contributionResult.amount} before overhead and acquisition costs; resolve this conflict before treating the work as commercially attractive.`);
   else if ((answers.value.fee_amount.trim() || answers.value.direct_cost_amount.trim()) && !contributionResult) conditions.push("The supplied financial figures could not be compared on the same currency, scope and per-matter basis.");
   if (answers.opportunity.uncertainty.trim()) conditions.push(`Demand uncertainty reported by the firm: ${answers.opportunity.uncertainty.trim()}`);
   if (answers.opportunity.sources.includes("unknown") || answers.opportunity.sources.includes("no_evidence")) conditions.push("Demand and acquisition evidence still need to be established.");

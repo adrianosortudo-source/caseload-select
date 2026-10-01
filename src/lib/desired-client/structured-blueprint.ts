@@ -1,6 +1,6 @@
 import { getAnswerLabel, getWorkLabel, REASON_LABELS, resolveAnswerReference, TIMING_PHRASES } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
-import { calculateContribution } from "./economics";
+import { calculateContribution, hasNegativeContribution } from "./economics";
 import { isInterviewClarificationCurrent, type AnswerReferencePath, type DesiredClientAnswers, type DesiredClientBrief, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
 
 const clean = (value: string | null | undefined) => (value ?? "").trim().replace(/\s+/g, " ");
@@ -353,12 +353,13 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   if (!answers.value.reasons.includes("fees") && answers.value.fee_effort === "scoped") reasonFragments.push("value when scope is clear");
   const writeInReason = clean(answers.write_ins?.reasons ?? "");
   if (writeInReason && answers.value.reasons.includes("undecided")) reasonFragments.push(writeInReason);
-  const reasonSentence = contribution?.amount.startsWith("-")
+  const negativeContribution = hasNegativeContribution(answers);
+  const reasonSentence = contribution && negativeContribution
     ? "the firm's reported preference needs to be reconciled with the negative contribution indicated by its supplied fees and direct costs"
     : reasonFragments.length > 1
     ? `${reasonFragments.slice(0, -1).join(", ")} and ${reasonFragments.at(-1)}`
     : reasonFragments[0] ?? (reasonLabels.length ? reasonLabels.map((label) => label.replace(/^(It|The firm|We)\s+/i, "").replace(/^./, (first) => first.toLocaleLowerCase("en-CA"))).join(" and ") : "the firm's reasons are still to be confirmed");
-  const reasonsComponent=reasonPaths.length?linked(`the firm cites ${reasonSentence}`,contribution?.amount.startsWith("-")?"hypothesis":"firm_preference",contribution?.amount.startsWith("-")?unique([...reasonPaths,...economicsPaths]):reasonPaths):unknownClaim("the firm is still establishing why it prefers this work","value.reasons");
+  const reasonsComponent=reasonPaths.length?linked(`the firm cites ${reasonSentence}`,negativeContribution?"hypothesis":"firm_preference",negativeContribution?unique([...reasonPaths,...economicsPaths]):reasonPaths):unknownClaim("the firm is still establishing why it prefers this work","value.reasons");
 
   const brief:DesiredClientBriefV4 = {
     report_version:"dcm-blueprint-v4",definition_sentence:"",definition_components:{client:clientType,client_matter:sentenceMatter,reasons:reasonsComponent,outcome},
