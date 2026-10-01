@@ -239,7 +239,8 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(response.status).toBe(502);
-    expect(warn).toHaveBeenCalledWith("[desired-client] analysis output rejected", {
+    expect(JSON.parse(warn.mock.calls[0][0] as string)).toEqual({
+      event: "[desired-client] analysis output rejected",
       requestId: ENVELOPE.requestId,
       model: "gemini-2.5-flash",
       field: "client_and_matter",
