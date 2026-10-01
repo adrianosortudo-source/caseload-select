@@ -23,6 +23,7 @@ const numericTokens = (text: string) => [...text.matchAll(/[+-]?\s*(?:[$€£]\s
   const sign = raw.startsWith("-") ? "-" : raw.startsWith("+") ? "+" : "";
   return sign + raw.replace(/[^\d.%]/g, "");
 });
+export type AnalysisValidationFailure = { field: string; reason: string };
 
 function allowedPaths(slot: string): readonly string[] {
   if (slot === "practice_current_practice") return ["practice.firm_type"];
@@ -49,11 +50,12 @@ function allowedPaths(slot: string): readonly string[] {
   return [];
 }
 
-function validStatement(value: unknown, answers: DesiredClientAnswers, slot: string): value is EvidenceLinkedStatement {
+function validStatement(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string) => void): value is EvidenceLinkedStatement {
+  const reject = (reason: string) => { reportFailure?.(reason); return false; };
   const budget = BUDGETS[slot as keyof typeof BUDGETS] ?? BUDGETS.open;
-  if (!exact(value, ["text", "kind", "source_answer_ids", "evidence_basis"]) || typeof value.text !== "string" || typeof value.kind !== "string" || !KIND.includes(value.kind as typeof KIND[number]) || !Array.isArray(value.source_answer_ids) || typeof value.evidence_basis !== "string" || !BASIS.includes(value.evidence_basis as EvidenceBasis)) return false;
+  if (!exact(value, ["text", "kind", "source_answer_ids", "evidence_basis"]) || typeof value.text !== "string" || typeof value.kind !== "string" || !KIND.includes(value.kind as typeof KIND[number]) || !Array.isArray(value.source_answer_ids) || typeof value.evidence_basis !== "string" || !BASIS.includes(value.evidence_basis as EvidenceBasis)) return reject("statement_shape");
   const text = value.text.trim().replace(/\s+/g, " ");
-  if (!text || text.length > budget[1] || wordCount(text) > budget[0] || BANNED.test(text)) return false;
+  if (!text || text.length > budget[1] || wordCount(text) > budget[0] || BANNED.test(text)) return reject("statement_text_budget_or_format");
   const paths = value.source_answer_ids as unknown[];
   const prefixes = allowedPaths(slot);
   const followupStages: Record<string, number[]> = { client_and_matter:[1,2], client_goals_needs:[2], why_firm_wants_work:[3], why_client_chooses_firm:[4], recognizable_circumstances:[5,6], evidence_and_open_questions:[1,2,3,4,5,6], decision_pathway:[2,5,6], definition_client_type:[2], definition_client_matter:[2], definition_reasons:[3], definition_outcome:[6] };
@@ -62,50 +64,50 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
     const item = answers.interview.followups[Number(path.split(".")[2])];
     return !!item && !item.skipped && isInterviewClarificationCurrent(item,answers) && (followupStages[slot] ?? []).includes(item.stage);
   };
-  if (paths.length < 1 || paths.length > 8 || paths.some((path) => typeof path !== "string" || !SOURCE_PATHS.has(path) || !permitted(path)) || new Set(paths).size !== paths.length) return false;
+  if (paths.length < 1 || paths.length > 8 || paths.some((path) => typeof path !== "string" || !SOURCE_PATHS.has(path) || !permitted(path)) || new Set(paths).size !== paths.length) return reject("source_answer_paths");
   let hasUnknown = false;
   const supportedValues: string[] = [];
   for (const path of paths as AnswerReferencePath[]) {
     const resolved = resolveAnswerReference(path, answers);
-    if (!resolved.present || (resolved.value === null && value.evidence_basis !== "unknown")) return false;
+    if (!resolved.present || (resolved.value === null && value.evidence_basis !== "unknown")) return reject("source_answer_unavailable");
     if (resolved.unknown || resolved.value === null || resolved.value === "" || (path === "opportunity.sources" && answers.opportunity.sources.includes("no_evidence")) || (Array.isArray(resolved.value) && resolved.value.length === 0)) hasUnknown = true;
     else if (Array.isArray(resolved.value) && resolved.value.every((item) => typeof item === "string")) supportedValues.push(...resolved.value);
     else if (typeof resolved.value === "string") supportedValues.push(resolved.value);
-    else return false;
+    else return reject("unsupported_source_value_type");
   }
-  if (hasUnknown !== (value.evidence_basis === "unknown")) return false;
-  if (value.evidence_basis === "unknown" && value.kind !== "unknown") return false;
+  if (hasUnknown !== (value.evidence_basis === "unknown")) return reject("unknown_evidence_basis_mismatch");
+  if (value.evidence_basis === "unknown" && value.kind !== "unknown") return reject("unknown_evidence_kind_mismatch");
   const contributionCheck = slot === "why_firm_wants_work" ? calculateContribution(answers) : null;
-  if (contributionCheck && hasNegativeContribution(answers) && /\b(?:profitable|positive (?:contribution|margin)|fees? (?:are )?worthwhile|fees? support(?:s)? the effort|margin is positive)\b/i.test(text)) return false;
+  if (contributionCheck && hasNegativeContribution(answers) && /\b(?:profitable|positive (?:contribution|margin)|fees? (?:are )?worthwhile|fees? support(?:s)? the effort|margin is positive)\b/i.test(text)) return reject("negative_contribution_claim");
   if (value.evidence_basis === "firm_reported_recorded") {
     const valueFigure = paths.some((path) => typeof path === "string" && path.startsWith("value."));
     const opportunityFigure = paths.some((path) => typeof path === "string" && path.startsWith("opportunity."));
-    if (!(valueFigure && answers.value.amount_basis === "recorded") && !(opportunityFigure && answers.opportunity.data_basis === "recorded")) return false;
+    if (!(valueFigure && answers.value.amount_basis === "recorded") && !(opportunityFigure && answers.opportunity.data_basis === "recorded")) return reject("recorded_basis_mismatch");
   }
   if (value.evidence_basis === "firm_reported_estimate") {
     const valueFigure = paths.some((path) => typeof path === "string" && path.startsWith("value."));
     const opportunityFigure = paths.some((path) => typeof path === "string" && path.startsWith("opportunity."));
-    if (!(valueFigure && answers.value.amount_basis === "estimated") && !(opportunityFigure && answers.opportunity.data_basis === "estimated")) return false;
+    if (!(valueFigure && answers.value.amount_basis === "estimated") && !(opportunityFigure && answers.opportunity.data_basis === "estimated")) return reject("estimate_basis_mismatch");
   }
   if (value.evidence_basis === "firm_reported_experience" && (
     value.kind !== "experience" ||
     (slot === "practice_current_practice"
       ? paths.length !== 1 || paths[0] !== "practice.firm_type"
       : !paths.some((path) => path === "practice.experience" || path === "practice.capability" || path === "practice.client_strength_support"))
-  )) return false;
+  )) return reject("experience_basis_mismatch");
   if (value.evidence_basis === "client_reported" || value.evidence_basis === "firm_reported_observation") {
     const expected = value.evidence_basis === "client_reported" ? "client_feedback" : "firm_observation";
     const choice = paths.some(path => typeof path === "string" && path.startsWith("client.choice_"));
     const pathway = paths.some(path => typeof path === "string" && (path.startsWith("situation.") || ["client.goals","client.goal_detail","client.concerns","client.decision_needs","client.decision_context","client.pathway_basis"].includes(path)));
-    if ((!choice && !pathway) || (choice && (!paths.includes("client.choice_basis") || answers.client.choice_basis !== expected)) || (pathway && (!paths.includes("client.pathway_basis") || answers.client.pathway_basis !== expected))) return false;
+    if ((!choice && !pathway) || (choice && (!paths.includes("client.choice_basis") || answers.client.choice_basis !== expected)) || (pathway && (!paths.includes("client.pathway_basis") || answers.client.pathway_basis !== expected))) return reject("client_reported_basis_mismatch");
   }
-  if (value.evidence_basis === "source_observed" && !(paths.includes("opportunity.sources") && answers.opportunity.sources.some((source) => source !== "unknown" && source !== "no_evidence"))) return false;
-  if (["firm_reported_recorded", "firm_reported_estimate"].includes(value.evidence_basis as string) && value.kind !== "experience" && value.kind !== "hypothesis") return false;
-  if (value.evidence_basis === "firm_preference" && value.kind !== "preference") return false;
-  if (["firm_reported_observation","client_reported"].includes(value.evidence_basis) && value.kind !== "experience") return false;
-  if (["source_observed", "hypothesis"].includes(value.evidence_basis as string) && value.kind !== "experience" && value.kind !== "hypothesis" && value.kind !== "suggestion") return false;
-  if (slot === "open" && value.kind !== "unknown" && value.kind !== "suggestion") return false;
-  if (slot !== "open" && value.kind === "suggestion") return false;
+  if (value.evidence_basis === "source_observed" && !(paths.includes("opportunity.sources") && answers.opportunity.sources.some((source) => source !== "unknown" && source !== "no_evidence"))) return reject("source_observation_unavailable");
+  if (["firm_reported_recorded", "firm_reported_estimate"].includes(value.evidence_basis as string) && value.kind !== "experience" && value.kind !== "hypothesis") return reject("evidence_kind_mismatch");
+  if (value.evidence_basis === "firm_preference" && value.kind !== "preference") return reject("evidence_kind_mismatch");
+  if (["firm_reported_observation","client_reported"].includes(value.evidence_basis) && value.kind !== "experience") return reject("evidence_kind_mismatch");
+  if (["source_observed", "hypothesis"].includes(value.evidence_basis as string) && value.kind !== "experience" && value.kind !== "hypothesis" && value.kind !== "suggestion") return reject("evidence_kind_mismatch");
+  if (slot === "open" && value.kind !== "unknown" && value.kind !== "suggestion") return reject("open_item_kind_mismatch");
+  if (slot !== "open" && value.kind === "suggestion") return reject("non_open_suggestion");
   // Parse each answer independently so whitespace between two cited answers
   // cannot be mistaken for a thousands separator across the answer boundary.
   const supportedNumberTokens = supportedValues.flatMap((supportedValue) => numericTokens(supportedValue));
@@ -118,47 +120,54 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
     const economicsSources = ["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"];
     const hasAllSources = economicsSources.every((path) => paths.includes(path));
     const calculatedTokens = contribution ? numericTokens(contribution.amount) : [];
-    if (!contribution || !hasAllSources || !/\bcontribution\b/i.test(text) || unsupportedTokens.some((token) => !calculatedTokens.includes(token))) return false;
+    if (!contribution || !hasAllSources || !/\bcontribution\b/i.test(text) || unsupportedTokens.some((token) => !calculatedTokens.includes(token))) return reject("unsupported_numeric_claim");
   }
   return true;
 }
 
-function checkDefinitionPart(value: unknown, answers: DesiredClientAnswers, slot: string): value is EvidenceLinkedStatement {
-  return validStatement(value, answers, slot);
+function checkDefinitionPart(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string) => void): value is EvidenceLinkedStatement {
+  return validStatement(value, answers, slot, reportFailure);
 }
 
-function validCard(value: unknown, answers: DesiredClientAnswers, slot: string): value is { claims: EvidenceLinkedStatement[] } {
-  const valid = exact(value, ["claims"]) && Array.isArray(value.claims) && value.claims.length >= 1 && value.claims.length <= 6 &&
-    value.claims.every((claim) => validStatement(claim, answers, slot));
-  return valid;
+function validCard(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string) => void): value is { claims: EvidenceLinkedStatement[] } {
+  if (!exact(value, ["claims"]) || !Array.isArray(value.claims) || value.claims.length < 1 || value.claims.length > 6) {
+    reportFailure?.("card_shape_or_claim_count");
+    return false;
+  }
+  return value.claims.every((claim) => validStatement(claim, answers, slot, reportFailure));
 }
 
-export function validateAnalysisResult(value: unknown, answers: DesiredClientAnswers, _eligibleCodes: readonly ClarificationCode[]): AnalysisResult | null {
-  if (!exact(value, ["brief", "clarification_code"]) || value.clarification_code !== null) return null;
+export function validateAnalysisResult(value: unknown, answers: DesiredClientAnswers, _eligibleCodes: readonly ClarificationCode[], reportFailure?: (failure: AnalysisValidationFailure) => void): AnalysisResult | null {
+  const reject = (field: string, reason: string) => { reportFailure?.({ field, reason }); return null; };
+  if (!exact(value, ["brief", "clarification_code"])) return reject("report", "root_shape");
+  if (value.clarification_code !== null) return reject("report", "unexpected_clarification_code");
   const brief=value.brief;
   // A valid citation is not permission to invent a matter subtype. Guard the
   // hostile-takeover substitution found in the audit unless the firm actually
   // supplied that phrase in its answers.
   const suppliedText = JSON.stringify(answers).toLocaleLowerCase("en-CA");
-  if (JSON.stringify(brief).toLocaleLowerCase("en-CA").includes("hostile takeover") && !suppliedText.includes("hostile takeover")) return null;
+  if (JSON.stringify(brief).toLocaleLowerCase("en-CA").includes("hostile takeover") && !suppliedText.includes("hostile takeover")) return reject("report", "unsupported_hostile_takeover_detail");
   const cardNames=["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const;
-  if(!exact(brief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"])||brief.report_version!=="dcm-blueprint-v4"||typeof brief.definition_sentence!=="string")return null;
-  if(!exact(brief.definition_components,["client","client_matter","reasons","outcome"]))return null;
+  if(!exact(brief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"]))return reject("report", "brief_shape");
+  if(brief.report_version!=="dcm-blueprint-v4")return reject("report", "unsupported_report_version");
+  if(typeof brief.definition_sentence!=="string")return reject("definition_sentence", "sentence_not_text");
+  if(!exact(brief.definition_components,["client","client_matter","reasons","outcome"]))return reject("definition_components", "component_shape");
   const components=brief.definition_components;
-  if(!checkDefinitionPart(components.client,answers,"definition_client_type")||!checkDefinitionPart(components.client_matter,answers,"definition_client_matter")||!checkDefinitionPart(components.reasons,answers,"definition_reasons")||!checkDefinitionPart(components.outcome,answers,"definition_outcome"))return null;
-  for(const field of cardNames)if(!validCard(brief[field],answers,field))return null;
+  const definitionParts = [["client","definition_client_type"],["client_matter","definition_client_matter"],["reasons","definition_reasons"],["outcome","definition_outcome"]] as const;
+  for (const [field, slot] of definitionParts) if (!checkDefinitionPart(components[field],answers,slot,(reason)=>reportFailure?.({field:`definition_components.${field}`,reason}))) return null;
+  for(const field of cardNames)if(!validCard(brief[field],answers,field,(reason)=>reportFailure?.({field,reason})))return null;
   const pathway=brief.decision_pathway;
-  if(!exact(pathway,["trigger","first_contact","decision","desired_progress"]))return null;
+  if(!exact(pathway,["trigger","first_contact","decision","desired_progress"]))return reject("decision_pathway", "pathway_shape");
   const pathwayFields=["trigger","first_contact","decision","desired_progress"] as const;
-  for(const field of pathwayFields)if(!validStatement(pathway[field],answers,"decision_pathway"))return null;
+  for(const field of pathwayFields)if(!validStatement(pathway[field],answers,"decision_pathway",(reason)=>reportFailure?.({field:`decision_pathway.${field}`,reason})))return null;
   const typedBrief=brief as unknown as DesiredClientBriefV4;
   const expectedSentence=buildDefinitionSentence(typedBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
   // The definition is assembled from bounded, source-linked fields. A hard
   // 85-word ceiling rejected valid, specific client-and-matter definitions;
   // keep a generous abuse limit while preserving supported detail.
-  if(typedBrief.definition_sentence.length>1600||expectedSentence.length>1600)return null;
+  if(typedBrief.definition_sentence.length>1600||expectedSentence.length>1600)return reject("definition_sentence", "sentence_length");
   const reportWords=[...cardNames.flatMap(field=>typedBrief[field].claims.map(claim=>claim.text)),...pathwayFields.map(field=>typedBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
-  if(reportWords>800)return null;
+  if(reportWords>800)return reject("report", "word_limit");
   return { clarification_code: null, brief: { ...typedBrief, definition_sentence: expectedSentence } };
 }
 

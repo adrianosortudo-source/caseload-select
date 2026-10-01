@@ -232,6 +232,22 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     await expectNoStore(response);
   });
 
+  it("logs only the rejected field and rule code when blueprint validation fails", async () => {
+    const invalid = structuredClone(MODEL_RESULT);
+    invalid.brief.client_and_matter.claims[0].text = "x".repeat(701);
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(response.status).toBe(502);
+    expect(warn).toHaveBeenCalledWith("[desired-client] analysis output rejected", {
+      requestId: ENVELOPE.requestId,
+      model: "gemini-2.5-flash",
+      field: "client_and_matter",
+      reason: "statement_text_budget_or_format",
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("x".repeat(701));
+  });
+
   it("rejects a request without explicit AI consent", async () => {
     const invalid = { ...ENVELOPE, aiConsent: false };
     const response = await POST(makeRequest(JSON.stringify(invalid)));
