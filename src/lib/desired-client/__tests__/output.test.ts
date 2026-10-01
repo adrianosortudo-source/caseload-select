@@ -3,6 +3,7 @@ import { validateAnalysisResult } from "../output";
 import { completeAnswers, validBlueprint } from "./blueprint-helpers";
 import { evidence } from "./blueprint-helpers";
 import { calculateContribution } from "../economics";
+import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { interviewClarificationSourceFingerprint } from "../types";
 describe("AI Blueprint output contract", () => {
   it("accepts six grounded cards with distinct evidence labels", () => { const value = validBlueprint(); expect(validateAnalysisResult(value, completeAnswers(), [])).not.toBeNull(); expect(value.brief.evidence_and_open_questions.claims[0].evidence_basis).toBe("unknown"); expect(value.brief.why_firm_wants_work.claims[0].evidence_basis).toBe("firm_preference"); });
@@ -25,6 +26,16 @@ describe("AI Blueprint output contract", () => {
     expect(validateAnalysisResult(result, answers, [])).not.toBeNull();
     result.brief.why_firm_wants_work.claims[0].text = "Recorded contribution before overhead and acquisition costs: $4,200 per matter.";
     expect(validateAnalysisResult(result, answers, [])).toBeNull();
+  });
+  it("accepts the structured economics summary when its cited fee and cost are adjacent numbers", () => {
+    const answers = completeAnswers();
+    answers.value.fee_amount = "8000"; answers.value.direct_cost_amount = "4800";
+    answers.value.currency = "CAD"; answers.value.amount_basis = "estimated"; answers.value.amount_scope = "per_matter";
+    const brief = buildStructuredBlueprintV4(answers);
+    const economics = brief.why_firm_wants_work.claims.find((claim) => claim.text.startsWith("Matter economics supplied:"));
+    expect(economics?.text).toContain("fee amount: 8000; direct cost amount: 4800");
+    expect(economics?.text).toContain("estimated contribution before overhead and acquisition costs: $3,200.00");
+    expect(economics && validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
   });
   it("rejects the audit's unsupported hostile-takeover substitution", () => {
     const result=validBlueprint(), answers=completeAnswers();
