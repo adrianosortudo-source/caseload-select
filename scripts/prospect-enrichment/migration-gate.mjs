@@ -47,6 +47,7 @@ export const CANDIDATE_RELEASE_PATHS = Object.freeze([
   "supabase/migrations/20260925200000_gta_prospect_operator_database_firm_profile_link.sql",
 ]);
 export const CANDIDATE_READER_TIMEOUT_PATH = "supabase/migrations/20260930004100_prospect_candidate_reader_timeout_fix.sql";
+export const CANDIDATE_REGISTRATION_REPAIR_PATH = "supabase/migrations/20260924185000_prospect_enrichment_registration_rpc_reliability.sql";
 export const CANDIDATE_READER_REPAIR_PATH = "supabase/migrations/20260930050000_prospect_candidate_coverage_warning_index.sql";
 export const CANDIDATE_READER_REPAIR_PATHS = Object.freeze([
   CANDIDATE_READER_REPAIR_PATH,
@@ -256,13 +257,15 @@ export function fullLedgerQuery() {
 }
 
 export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePendingPaths) {
-  if (!Array.isArray(rows) || !["qualification-pending", "enrichment-pending", "complete", "candidate-pending", "candidate-reader-repair-pending"].includes(phase)) fail("invalid_full_ledger_input");
+  if (!Array.isArray(rows) || !["qualification-pending", "enrichment-pending", "complete", "candidate-pending", "candidate-reader-repair-pending", "candidate-registration-repair-pending"].includes(phase)) fail("invalid_full_ledger_input");
   if (phase === "candidate-pending") {
     if (!Array.isArray(candidatePendingPaths)) fail("invalid_candidate_pending_suffix");
     const prefixLength = CANDIDATE_RELEASE_PATHS.length - candidatePendingPaths.length;
     if (prefixLength < 0 || !same(candidatePendingPaths, CANDIDATE_RELEASE_PATHS.slice(prefixLength))) fail("invalid_candidate_pending_suffix");
   } else if (phase === "candidate-reader-repair-pending") {
     if (!same(candidatePendingPaths, CANDIDATE_READER_REPAIR_PATHS)) fail("invalid_candidate_reader_repair_pending_scope");
+  } else if (phase === "candidate-registration-repair-pending") {
+    if (!same(candidatePendingPaths, [CANDIDATE_REGISTRATION_REPAIR_PATH])) fail("invalid_candidate_registration_repair_pending_scope");
   } else if (candidatePendingPaths !== undefined) fail("invalid_full_ledger_input");
   const { migrations } = sourceMigrationInventory(sourceRoot, { requirePreviewSources: false });
   const localByVersion = new Map(migrations.filter(item => !PREVIEW_MIGRATION_PATHS.includes(item.path)).map(item => [item.version, item]));
@@ -282,7 +285,7 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
   const expected = phase === "qualification-pending"
     ? [...QUALIFICATION_HISTORY.map(item => item.path), ...MIGRATION_PATHS].sort()
     : phase === "enrichment-pending" ? [...MIGRATION_PATHS].sort()
-      : phase === "candidate-pending" || phase === "candidate-reader-repair-pending" ? [...candidatePendingPaths].sort() : [];
+      : ["candidate-pending", "candidate-reader-repair-pending", "candidate-registration-repair-pending"].includes(phase) ? [...candidatePendingPaths].sort() : [];
   if (phase === "candidate-reader-repair-pending") {
     const permittedSuffixes = CANDIDATE_READER_REPAIR_PATHS.map((_, index) => CANDIDATE_READER_REPAIR_PATHS.slice(index));
     if (!permittedSuffixes.some(suffix => same(pending, [...suffix].sort()))) fail("unexpected_full_history_delta");

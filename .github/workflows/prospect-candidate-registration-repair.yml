@@ -1,0 +1,189 @@
+name: Reviewed singleton prospect registration RPC repair
+
+'on':
+  workflow_dispatch:
+    inputs:
+      use_temporary_database_credential:
+        description: Request a protected short-lived database login for the exact singleton repair.
+        required: true
+        default: true
+        type: boolean
+      reviewed_source_sha:
+        description: Exact current main 40-character commit SHA; rechecked before every database stage.
+        required: true
+        type: string
+      reviewed_receipt_sha256:
+        description: Exact SHA-256 of scripts/prospect-enrichment/additive-release-review.json.
+        required: true
+        type: string
+      confirmation:
+        description: Enter APPLY-PROSPECT-REGISTRATION-RPC-REPAIR-V1 exactly.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: gta-prospect-migrations-production
+  cancel-in-progress: false
+
+env:
+  PROJECT_REF: ssxryjxifwiivghglqer
+  USE_TEMPORARY_DATABASE_CREDENTIAL: ${{ inputs.use_temporary_database_credential }}
+  REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+  REVIEWED_RECEIPT_SHA256: ${{ inputs.reviewed_receipt_sha256 }}
+  REPAIR_CONFIRMATION: ${{ inputs.confirmation }}
+
+jobs:
+  preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
+    name: Protected read-only singleton reconciliation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Production prospect migrations
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      manifest_sha256: ${{ steps.preflight.outputs.manifest_sha256 }}
+    steps:
+      - name: Check out exact current main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Verify reviewed source and source-bound receipt before credential access
+        run: node scripts/prospect-enrichment/candidate-registration-repair-gate.mjs source-authorization
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.117.0
+      - name: Acquire protected temporary credential for read-only preflight
+        env:
+          CREDENTIAL_GATE: candidate-registration-repair
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned database TLS trust
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Verify every prerequisite, complete coverage, current catalog and exact singleton dry-run
+        id: preflight
+        run: node scripts/prospect-enrichment/candidate-registration-repair-gate.mjs preflight "$RUNNER_TEMP/registration-repair-preflight"
+      - name: Upload immutable source-bound read-only evidence
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prospect-candidate-registration-repair-preflight
+          path: ${{ runner.temp }}/registration-repair-preflight
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish evidence for independent verification and second review
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+          MANIFEST_SHA256: ${{ steps.preflight.outputs.manifest_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '### Exact registration repair preflight\n\nArtifact %s, digest %s, manifest %s, run %s attempt %s, source %s, additive receipt %s.\n\nEvery candidate migration and the operator RPC prerequisite is applied with exact source statements except the single pending registration reliability migration. The full production ledger matches shared source, all 33 coverage tables are complete, and the reader/operator catalogs verify. The pinned CLI dry-run contains only `20260924185000_prospect_enrichment_registration_rpc_reliability.sql`, with no seeds or roles.\n\nThe next independent job verifies every raw-file hash and revalidates every proof without database credentials. Only then can the second protected review authorize the writer. Evidence expires after 24 hours. Any source change, additional history gap, catalog change, altered evidence, or uncertain writer blocks progress.\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$MANIFEST_SHA256" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve safe read-only diagnostics if a prerequisite fails
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prospect-candidate-registration-repair-preflight-failure
+          path: |
+            ${{ runner.temp }}/registration-repair/diagnostics
+            ${{ runner.temp }}/registration-repair/failure.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  verify_preflight:
+    name: Independently validate immutable evidence without secrets
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact_id }}
+      EXPECTED_ARTIFACT_DIGEST: ${{ needs.preflight.outputs.artifact_digest }}
+      EXPECTED_MANIFEST_SHA256: ${{ needs.preflight.outputs.manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Verify same-run immutable artifact identity and digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$EXPECTED_ARTIFACT_ID" > "$RUNNER_TEMP/registration-artifact-metadata.json"
+          node scripts/prospect-enrichment/candidate-registration-repair-gate.mjs verify-artifact "$RUNNER_TEMP/registration-artifact-metadata.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.preflight.outputs.artifact_id }}
+          path: ${{ runner.temp }}/registration-repair-preflight
+          merge-multiple: true
+      - name: Revalidate source, binding, expiry, hashes, full ledger, catalogs, coverage and singleton plan
+        run: node scripts/prospect-enrichment/candidate-registration-repair-gate.mjs verify-evidence "$RUNNER_TEMP/registration-repair-preflight"
+      - name: Publish independent result for second protected review
+        run: printf 'All raw-file hashes, same-run binding, current source, receipt, exact singleton ledger hole, prerequisite source statements, catalogs and 33 complete coverage tables independently verified. The second protected review authorizes only the registration RPC reliability migration.\n' >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    name: Second review and guarded singleton writer with complete read-back
+    needs: [preflight, verify_preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Production prospect migrations
+    env:
+      EXPECTED_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact_id }}
+      EXPECTED_ARTIFACT_DIGEST: ${{ needs.preflight.outputs.artifact_digest }}
+      EXPECTED_MANIFEST_SHA256: ${{ needs.preflight.outputs.manifest_sha256 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Verify artifact identity again after protected review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$EXPECTED_ARTIFACT_ID" > "$RUNNER_TEMP/registration-artifact-metadata.json"
+          node scripts/prospect-enrichment/candidate-registration-repair-gate.mjs verify-artifact "$RUNNER_TEMP/registration-artifact-metadata.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: ${{ needs.preflight.outputs.artifact_id }}
+          path: ${{ runner.temp }}/registration-repair-preflight
+          merge-multiple: true
+      - name: Verify complete bound evidence before writer credential acquisition
+        run: node scripts/prospect-enrichment/candidate-registration-repair-gate.mjs verify-evidence "$RUNNER_TEMP/registration-repair-preflight"
+      - uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520
+        with:
+          version: 2.117.0
+      - name: Acquire fresh protected credential for exact singleton writer and read-back
+        env:
+          CREDENTIAL_GATE: candidate-registration-repair
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned database TLS trust
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Recheck live evidence, apply only the singleton, verify full ledger, catalog and empty dry-run
+        run: node scripts/prospect-enrichment/candidate-registration-repair-gate.mjs apply "$RUNNER_TEMP/registration-repair-preflight"
+      - name: Preserve writer receipt and read-back even when write outcome is uncertain
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: prospect-candidate-registration-repair-receipts
+          path: |
+            ${{ runner.temp }}/registration-repair/writer-receipt.json
+            ${{ runner.temp }}/registration-repair/post-readback
+            ${{ runner.temp }}/registration-repair/diagnostics
+            ${{ runner.temp }}/registration-repair/failure.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Publish verified completion
+        run: printf 'The exact registration RPC reliability migration and complete post-write ledger, statements, catalogs, 33-table coverage and empty pending plan are verified. No research intake or backfill was performed by this workflow.\n' >> "$GITHUB_STEP_SUMMARY"

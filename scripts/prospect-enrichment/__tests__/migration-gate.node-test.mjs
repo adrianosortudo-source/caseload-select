@@ -8,13 +8,34 @@ import yaml from "js-yaml";
 import {
   CONFIRMATION, MIGRATION_PATHS, PROJECT_REF, RELEASE_PATH,
   PREVIEW_MIGRATION_PATHS, QUALIFICATION_HISTORY, QUALIFICATION_HISTORY_CONFIRMATION,
-  CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, CANDIDATE_READER_REPAIR_PATHS, HISTORICAL_LEDGER_NAME_ALIASES,
+  CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, CANDIDATE_READER_REPAIR_PATHS, CANDIDATE_REGISTRATION_REPAIR_PATH, HISTORICAL_LEDGER_NAME_ALIASES,
   compareQualificationCatalogs, stageProductionWorkdir, stagePrerequisiteWorkdir, verifyFullMigrationLedger, verifyQualificationRepairAuthorization,
   createReleaseManifest, findProjectEnvFiles, ledgerQuery, sha256, verifyConfirmation, verifyDirectDatabaseUrl, verifyExecutionGate,
   verifyLedgerStatements, verifyMigrationLedger, verifyMigrationPlan, verifyReleaseManifest,
 } from "../migration-gate.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+test("targeted registration repair admits only its one missing version after later migrations", t => {
+  const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "registration-ledger-test-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const dir = path.join(base, "supabase", "migrations");
+  fs.mkdirSync(dir, { recursive: true });
+  const files = ["supabase/migrations/20260413_legacy.sql", ...CANDIDATE_RELEASE_PATHS];
+  for (const relative of files) fs.writeFileSync(path.join(dir, path.basename(relative)), "SELECT 1;\n");
+  const rows = files.map(relative => {
+    const [, version, name] = /^(\d+)_(.+)\.sql$/.exec(path.basename(relative));
+    return { version, name };
+  }).sort((a,b) => a.version.localeCompare(b.version));
+  const pre = rows.filter(row => row.version !== "20260924185000");
+  const pending = [CANDIDATE_REGISTRATION_REPAIR_PATH];
+  assert.deepEqual(verifyFullMigrationLedger(pre, base, "candidate-registration-repair-pending", pending).pendingPaths, pending);
+  assert.equal(verifyFullMigrationLedger(rows, base, "complete").pendingPaths.length, 0);
+  assert.throws(() => verifyFullMigrationLedger(pre, base, "candidate-pending", pending), /invalid_candidate_pending_suffix/);
+  assert.throws(() => verifyFullMigrationLedger(pre, base, "candidate-registration-repair-pending", []), /invalid_candidate_registration_repair_pending_scope/);
+  assert.throws(() => verifyFullMigrationLedger(pre.slice(1), base, "candidate-registration-repair-pending", pending), /unexpected_full_history_delta/);
+  assert.throws(() => verifyFullMigrationLedger(rows, base, "candidate-registration-repair-pending", pending), /unexpected_full_history_delta/);
+  assert.throws(() => verifyFullMigrationLedger([...pre,{version:"20990101000000",name:"unknown"}], base, "candidate-registration-repair-pending", pending), /remote_migration_source_missing_or_mismatched/);
+});
 const source = Buffer.from("-- scope\nBEGIN;\nCREATE FUNCTION f() RETURNS text LANGUAGE sql AS $$ SELECT 'x;y'; $$;\nCOMMIT;\n");
 const statements = ["-- scope\nBEGIN", "CREATE FUNCTION f() RETURNS text LANGUAGE sql AS $$ SELECT 'x;y'; $$", "COMMIT"];
 const sources = Object.fromEntries(MIGRATION_PATHS.map((file, index) => [file, Buffer.concat([source, Buffer.from("-- file " + index + "\nSELECT " + index + ";\n")])]));
