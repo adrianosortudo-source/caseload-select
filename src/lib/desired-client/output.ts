@@ -79,8 +79,8 @@ export function allowedSourceAnswerPathsForAnswers(slot: string, answers: Desire
   return paths;
 }
 
-function validStatement(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string, sourcePath?: string) => void): value is EvidenceLinkedStatement {
-  const reject = (reason: string, sourcePath?: string) => { reportFailure?.(reason, sourcePath); return false; };
+function validStatement(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string, sourcePath?: SafeSourcePath) => void): value is EvidenceLinkedStatement {
+  const reject = (reason: string, sourcePath?: SafeSourcePath) => { reportFailure?.(reason, sourcePath); return false; };
   const budget = BUDGETS[slot as keyof typeof BUDGETS] ?? BUDGETS.open;
   if (!exact(value, ["text", "kind", "source_answer_ids", "evidence_basis"]) || typeof value.text !== "string" || typeof value.kind !== "string" || !KIND.includes(value.kind as typeof KIND[number]) || !Array.isArray(value.source_answer_ids) || typeof value.evidence_basis !== "string" || !BASIS.includes(value.evidence_basis as EvidenceBasis)) return reject("statement_shape");
   const text = value.text.trim().replace(/\s+/g, " ");
@@ -151,11 +151,11 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   return true;
 }
 
-function checkDefinitionPart(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string, sourcePath?: string) => void): value is EvidenceLinkedStatement {
+function checkDefinitionPart(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string, sourcePath?: SafeSourcePath) => void): value is EvidenceLinkedStatement {
   return validStatement(value, answers, slot, reportFailure);
 }
 
-function validCard(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string, sourcePath?: string) => void): value is { claims: EvidenceLinkedStatement[] } {
+function validCard(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string, sourcePath?: SafeSourcePath) => void): value is { claims: EvidenceLinkedStatement[] } {
   if (!exact(value, ["claims"]) || !Array.isArray(value.claims) || value.claims.length < 1 || value.claims.length > 6) {
     reportFailure?.("card_shape_or_claim_count");
     return false;
