@@ -1,6 +1,6 @@
 import { resolveAnswerReference } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
-import { calculateContribution } from "./economics";
+import { calculateContribution, hasNegativeContribution } from "./economics";
 import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
 import { isInterviewClarificationCurrent, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBrief, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
 
@@ -76,7 +76,7 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   if (hasUnknown !== (value.evidence_basis === "unknown")) return false;
   if (value.evidence_basis === "unknown" && value.kind !== "unknown") return false;
   const contributionCheck = slot === "why_firm_wants_work" ? calculateContribution(answers) : null;
-  if (contributionCheck?.amount.startsWith("-") && /\b(?:profitable|positive (?:contribution|margin)|fees? (?:are )?worthwhile|fees? support(?:s)? the effort|margin is positive)\b/i.test(text)) return false;
+  if (contributionCheck && hasNegativeContribution(answers) && /\b(?:profitable|positive (?:contribution|margin)|fees? (?:are )?worthwhile|fees? support(?:s)? the effort|margin is positive)\b/i.test(text)) return false;
   if (value.evidence_basis === "firm_reported_recorded") {
     const valueFigure = paths.some((path) => typeof path === "string" && path.startsWith("value."));
     const opportunityFigure = paths.some((path) => typeof path === "string" && path.startsWith("opportunity."));

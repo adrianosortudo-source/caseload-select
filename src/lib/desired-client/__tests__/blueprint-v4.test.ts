@@ -5,6 +5,7 @@ import { buildDefinitionSentence } from "../definition";
 import { buildDraftPreview } from "../brief";
 import { completeAnswers, evidence, validBlueprint } from "./blueprint-helpers";
 import { interviewClarificationSourceFingerprint } from "../types";
+import { buildBlueprintViewModel } from "../blueprint";
 
 describe("v4 provenance and client pathway", () => {
   it("keeps the law firm out of the desired-client identity and does not approve a target on wording review", () => {
@@ -92,12 +93,26 @@ describe("v4 provenance and client pathway", () => {
     expect(b.definition_sentence).toContain("so the client can understand the assets");
     expect(b.definition_sentence).not.toContain("retained matters");
   });
-  it("keeps the complete long matter answer in supporting detail while producing a valid bounded definition",()=>{
+  it("keeps the complete maximum-length matter answer in supporting detail while producing a valid bounded definition",()=>{
     const a=completeAnswers();
-    a.client_context.repeat_matter_pattern=`A buyer of an established operating business needs an asset purchase agreement drafted or reviewed before agreeing to final terms. ${"The buyer also needs advice on due diligence, excluded assets, assumed liabilities, payment mechanics, closing conditions and allocation of contractual risk. ".repeat(4)}`.slice(0,514);
+    a.client_context.repeat_matter_pattern=`A buyer of an established operating business needs an asset purchase agreement drafted or reviewed before agreeing to final terms. ${"The buyer also needs advice on due diligence, excluded assets, assumed liabilities, payment mechanics, closing conditions and allocation of contractual risk. ".repeat(5)}`.slice(0,600);
     const brief=buildStructuredBlueprintV4(a);
     expect(brief.definition_components.client_matter.text.length).toBeLessThanOrEqual(600);
+    expect(brief.client_and_matter.claims[0].text.length).toBeLessThanOrEqual(700);
+    expect(buildBlueprintViewModel(brief,a,{mode:"structured",generatedAt:"2026-10-01T12:00:00.000Z",wordingReviewed:false}).allAnswers.some(row=>row.answer===a.client_context.repeat_matter_pattern)).toBe(true);
     expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
+  });
+  it("keeps negative contribution prominent and prevents a positive-value claim from overriding it",()=>{
+    const a=completeAnswers();
+    a.value.fee_amount="4800"; a.value.direct_cost_amount="8000"; a.value.currency="CAD"; a.value.amount_scope="per_matter"; a.value.amount_basis="estimated";
+    const brief=buildStructuredBlueprintV4(a);
+    expect(brief.definition_components.reasons.text).toContain("negative contribution");
+    const view=buildBlueprintViewModel(brief,a,{mode:"structured",generatedAt:"2026-10-01T12:00:00.000Z",wordingReviewed:false});
+    expect(view.conditions.some(condition=>condition.includes("negative contribution of"))).toBe(true);
+    const unsupported=validBlueprint();
+    unsupported.brief.why_firm_wants_work.claims[0].text="These fees are worthwhile and support a positive contribution.";
+    unsupported.brief.why_firm_wants_work.claims[0].source_answer_ids=["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"];
+    expect(validateAnalysisResult(unsupported,a,[])).toBeNull();
   });
   it("labels clarification answers by the kind of information they contribute", () => {
     const a=completeAnswers();

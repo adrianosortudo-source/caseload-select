@@ -175,7 +175,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(mocks.GoogleGenerativeAI).toHaveBeenCalledWith("test-provider-key");
     const [modelOptions, requestOptions] = mocks.getGenerativeModel.mock.calls[0];
     expect(modelOptions).toMatchObject({ model: "gemini-2.5-flash", generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 512 } } });
-    expect(requestOptions).toEqual({ timeout: 12_000 });
+    expect(requestOptions).toEqual({ timeout: 24_000 });
     const prompt = mocks.generateContent.mock.calls[0][0] as string;
     expect(prompt).toContain("Desired Client Blueprint");
     expect(prompt).toContain('"eligible_codes":[]');

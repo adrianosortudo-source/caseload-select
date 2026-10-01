@@ -53,7 +53,10 @@ export function editAnswers(s:ToolState, edit:(answers:DesiredClientAnswers)=>De
     answers.delivery = { ...answers.delivery, conditions: [], capacity: null, limit: null, fit_signals: [] };
     answers.opportunity = { sources: [], source_detail: "", period: "", enquiry_count: "", retained_count: "", conversion: "", acquisition_cost: "", uncertainty: "", data_basis: null };
     answers.repeatability = { success_measure: null, success_other: "", target: "", review_period: "", additional_matters: "", staffing_constraint: "" };
-    answers.direction = { aim: null, evidence: [], less: null, less_reason: null, less_note: "" };
+    // Stage 1 records the firm's practice direction and marketing trade-offs.
+    // Those preferences still apply when the user chooses or changes a
+    // specific matter in Stage 2, so keep them while clearing matter-specific
+    // downstream answers.
     answers.practice.experience = null;
     answers.practice.development_needs = [];
     answers.practice.capability = "";

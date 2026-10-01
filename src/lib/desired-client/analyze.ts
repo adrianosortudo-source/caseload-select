@@ -7,10 +7,11 @@ import {
   DESIRED_CLIENT_RESPONSE_SCHEMA,
 } from "./prompt";
 import { validateAnalysisResult } from "./output";
+import { safeProviderFailureMetadata } from "./provider-diagnostics";
 import type { AnalysisRequestEnvelope, AnalysisResult, ClarificationCode } from "./types";
 
 const MODEL = "gemini-2.5-flash";
-const REQUEST_TIMEOUT_MS = 12_000;
+const REQUEST_TIMEOUT_MS = 24_000;
 
 export type DesiredClientAnalysisOutcome =
   | { mode: "live"; result: AnalysisResult }
@@ -44,8 +45,13 @@ export async function runDesiredClientAnalysis(
     catch { return { mode: "invalid_output" }; }
     const result = validateAnalysisResult(parsed, request.answers, eligibleCodes);
     return result ? { mode: "live", result } : { mode: "invalid_output" };
-  } catch {
+  } catch (error) {
     // Provider exceptions can contain submitted text. Never log their messages.
+    console.warn("[desired-client] analysis provider request failed", {
+      requestId: request.requestId,
+      model: MODEL,
+      ...safeProviderFailureMetadata(error),
+    });
     return { mode: "unavailable" };
   }
 }
