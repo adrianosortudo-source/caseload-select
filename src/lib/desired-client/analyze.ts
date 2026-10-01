@@ -5,7 +5,7 @@ import {
   buildDesiredClientSystemPrompt,
   buildDesiredClientUserPrompt,
 } from "./prompt";
-import { validateAnalysisResult } from "./output";
+import { isSafeSourcePath, validateAnalysisResult, type AnalysisValidationFailure } from "./output";
 import { safeProviderFailureMetadata } from "./provider-diagnostics";
 import type { AnalysisRequestEnvelope, AnalysisResult, ClarificationCode } from "./types";
 
@@ -21,7 +21,7 @@ export function desiredClientModelId(): string { return MODEL; }
 
 function logRejectedOutput(
   requestId: string,
-  failure: { field: string; reason: string },
+  failure: AnalysisValidationFailure,
 ): void {
   // Keep diagnostics in one message: Vercel's runtime log view drops extra
   // console arguments, which hid the bounded details when passed separately.
@@ -31,6 +31,7 @@ function logRejectedOutput(
     model: MODEL,
     field: failure.field.slice(0, 80),
     reason: failure.reason.slice(0, 80),
+    ...(failure.sourcePath && isSafeSourcePath(failure.sourcePath) ? { sourcePath: failure.sourcePath } : {}),
   }));
 }
 
