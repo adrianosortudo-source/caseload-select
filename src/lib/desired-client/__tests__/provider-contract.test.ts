@@ -43,7 +43,19 @@ describe("provider output contract", () => {
     blueprint.brief.definition_components.client.evidence_basis = "firm_reported_recorded";
     provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(blueprint) } });
     expect((await runDesiredClientAnalysis(request(), [])).mode).toBe("invalid_output");
-    expect(warning).toHaveBeenCalledWith(expect.stringContaining('"reason":"recorded_basis_mismatch"'));
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('"field":"definition_components.client"'));
     warning.mockRestore();
+  });
+  it("repairs only the rejected card and revalidates the complete result", async () => {
+    const original = validBlueprint();
+    const invalid = structuredClone(original);
+    invalid.brief.client_and_matter.claims[0].text = "The business owner wants advice within 987 days.";
+    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(invalid) } })
+      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(original.brief.client_and_matter) } });
+    const outcome = await runDesiredClientAnalysis(request(), []);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(2);
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("unsupported_numeric_claim");
+    if (outcome.mode === "live") expect(outcome.result.brief.client_goals_needs).toEqual(original.brief.client_goals_needs);
   });
 });

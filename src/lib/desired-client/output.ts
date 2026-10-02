@@ -96,7 +96,7 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   for (const path of paths as AnswerReferencePath[]) {
     const resolved = resolveAnswerReference(path, answers);
     if (!resolved.present || (resolved.value === null && value.evidence_basis !== "unknown")) return reject("source_answer_unavailable");
-    if (resolved.unknown || resolved.value === null || resolved.value === "" || (path === "opportunity.sources" && answers.opportunity.sources.includes("no_evidence")) || (Array.isArray(resolved.value) && resolved.value.length === 0)) hasUnknown = true;
+    if (resolved.unknown || resolved.value === null || resolved.value === "" || path === "opportunity.uncertainty" || (path === "opportunity.sources" && answers.opportunity.sources.includes("no_evidence")) || (Array.isArray(resolved.value) && resolved.value.length === 0)) hasUnknown = true;
     else if (Array.isArray(resolved.value) && resolved.value.every((item) => typeof item === "string")) supportedValues.push(...resolved.value);
     else if (typeof resolved.value === "string") supportedValues.push(resolved.value);
     else return reject("unsupported_source_value_type");

@@ -27,11 +27,14 @@ export function decodeProviderSources(value: unknown, aliases: Record<string, st
   // independently by the model. Full provenance validation still follows.
   const kinds: Record<string,string> = { firm_reported_recorded:"experience",firm_reported_estimate:"hypothesis",firm_reported_experience:"experience",firm_reported_observation:"experience",client_reported:"experience",firm_preference:"preference",source_observed:"experience",hypothesis:"hypothesis",unknown:"unknown" };
   if (typeof decoded.evidence_basis === "string" && Object.hasOwn(kinds, decoded.evidence_basis)) decoded.kind = kinds[decoded.evidence_basis];
+  if (Object.hasOwn(decoded, "brief") && !Object.hasOwn(decoded, "clarification_code")) decoded.clarification_code = null;
   return decoded;
 }
 
 export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown {
   const schema = providerStructureSchema(BLUEPRINT_RESPONSE_SCHEMA) as typeof BLUEPRINT_RESPONSE_SCHEMA;
+  delete (schema.properties as {clarification_code?:unknown}).clarification_code;
+  (schema as {required:readonly string[]}).required = ["brief"];
   const aliases = providerSourceAliases(answers);
   const sections = schema.properties.brief.properties;
   const setPaths = (statement: unknown, slot: string) => {
