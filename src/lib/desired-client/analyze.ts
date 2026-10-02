@@ -102,7 +102,7 @@ export async function runDesiredClientAnalysis(
       result = validate();
     }
     if (!result) {
-      logRejectedOutput(request.requestId, firstFailure ?? validationFailure ?? { field: "report", reason: "unclassified_validation_failure" });
+      logRejectedOutput(request.requestId, validationFailure ?? firstFailure ?? { field: "report", reason: "unclassified_validation_failure" });
     }
     return result ? { mode: "live", result } : { mode: "invalid_output" };
   } catch (error) {
