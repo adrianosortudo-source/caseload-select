@@ -82,7 +82,10 @@ export async function runDesiredClientAnalysis(
         parts[0] === "decision_pathway" && ["trigger", "first_contact", "decision", "desired_progress"].includes(parts[1]) && parts.length === 2;
       const remaining = REQUEST_TIMEOUT_MS - (Date.now() - startedAt);
       if (!repairable || remaining < 3000) break;
-      const repairGuidance = failure.reason === "unknown_evidence_basis_mismatch"
+      const firstContactUnanswered = parts[0] === "decision_pathway" && parts[1] === "first_contact" && !request.answers.situation.contact && !request.answers.write_ins?.contact?.trim();
+      const repairGuidance = firstContactUnanswered
+        ? " The submitted answers do not establish who initiates first contact or how the client reaches the firm. State that gap plainly, cite only situation.contact, and use evidence_basis unknown. Do not infer contact behaviour from the client's role, timing or decision context, and do not label the gap client_reported or firm_reported_observation."
+        : failure.reason === "unknown_evidence_basis_mismatch"
         ? " Separate each known statement from any unanswered or unknown finding. A known claim cites only known sources and its supported evidence basis; a gap claim cites only unknown or empty sources and uses evidence_basis unknown (the application derives kind unknown). Never combine a known fact with a gap in one claim."
         : failure.reason === "client_reported_basis_mismatch"
         ? " Separate client-choice details from pathway details when their selected bases differ. Cite only the sources supporting each claim, including its matching basis answer. Decision-pathway fields use pathway sources only."

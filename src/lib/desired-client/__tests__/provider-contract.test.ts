@@ -64,6 +64,20 @@ describe("provider output contract", () => {
     expect(pathway.evidence_basis.enum).not.toContain("client_reported");
     expect(pathway.evidence_basis.description).toContain("Do not use client-choice details in this statement.");
   });
+  it("allows an unanswered first-contact source only to support an explicit unknown", () => {
+    const answers = completeAnswers();
+    answers.client.pathway_basis = "firm_observation";
+    answers.client.decision_context = "The owner decides, with an accountant involved.";
+    answers.situation.contact = null;
+    const aliases = providerSourceAliases(answers);
+    const schema = providerBlueprintSchema(answers) as {properties:{brief:{properties:{decision_pathway:{properties:{first_contact:{properties:{text:{description:string};source_answer_ids:{items:{enum:string[]}};evidence_basis:{enum:string[]}}}}}}}}};
+    const firstContact = schema.properties.brief.properties.decision_pathway.properties.first_contact.properties;
+    const paths = firstContact.source_answer_ids.items.enum.map(id => aliases[id]);
+    expect(paths).toContain("situation.contact");
+    expect(firstContact.text.description).toContain("State that gap plainly");
+    expect(firstContact.text.description).toContain("use evidence_basis unknown");
+    expect(firstContact.evidence_basis.enum).not.toContain("client_reported");
+  });
   it("still rejects a malformed root rather than accepting misplaced cards", async () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify({ ...validBlueprint(), client_and_matter: { claims: [] } }) } });
@@ -114,6 +128,46 @@ describe("provider output contract", () => {
     if (outcome.mode === "live") {
       expect(outcome.result.brief.client_goals_needs.claims).toHaveLength(2);
       expect(outcome.result.brief.client_goals_needs.claims[1].evidence_basis).toBe("unknown");
+    }
+  });
+  it("repairs an unsupported first-contact claim as an explicit evidence gap", async () => {
+    const input = request();
+    input.answers.client.pathway_basis = "firm_observation";
+    input.answers.client.decision_context = "The owner decides, with an accountant involved.";
+    const invalid = validBlueprint();
+    invalid.brief.decision_pathway.trigger = {
+      text: "The firm observes that a planned business purchase prompts the need for legal advice.",
+      source_answer_ids: ["situation.trigger", "client.pathway_basis"],
+      evidence_basis: "firm_reported_observation",
+      kind: "experience",
+    };
+    invalid.brief.decision_pathway.decision = {
+      text: "The firm observes that the owner decides, with an accountant involved.",
+      source_answer_ids: ["client.decision_context", "client.pathway_basis"],
+      evidence_basis: "firm_reported_observation",
+      kind: "experience",
+    };
+    invalid.brief.decision_pathway.first_contact = {
+      text: "The buyer initiates contact during the planning stage.",
+      source_answer_ids: ["situation.timing", "client.pathway_basis"],
+      evidence_basis: "client_reported",
+      kind: "experience",
+    };
+    const repaired = {
+      text: "Who initiates first contact and how the buyer reaches the firm are not established.",
+      source_answer_ids: ["situation.contact"],
+      evidence_basis: "unknown",
+      kind: "unknown",
+    };
+    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(invalid) } })
+      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(repaired) } });
+    const outcome = await runDesiredClientAnalysis(input, []);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(2);
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("Do not infer contact behaviour from the client's role, timing or decision context");
+    if (outcome.mode === "live") {
+      expect(outcome.result.brief.decision_pathway.first_contact.evidence_basis).toBe("unknown");
+      expect(outcome.result.brief.decision_pathway.first_contact.source_answer_ids).toEqual(["situation.contact"]);
     }
   });
   it("repairs a claim that mixes client feedback and a differently based firm observation", async () => {

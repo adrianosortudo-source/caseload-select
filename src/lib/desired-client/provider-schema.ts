@@ -52,7 +52,11 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     const allowed: string[] = allowedSourceAnswerPathsForAnswers(slot, answers).filter(path => {
       try {
         const source = resolveAnswerReference(path as AnswerReferencePath, answers);
-        return source.present && source.value !== null && source.value !== "" && (!Array.isArray(source.value) || source.value.length > 0);
+        // Unknown or unanswered answers are valid citations for an explicit
+        // evidence gap. The validator accepts them only with evidence_basis
+        // "unknown"; omitting them here makes the provider unable to support
+        // gaps such as an unrecorded first-contact pattern.
+        return source.present && ((slot === "decision_pathway" && source.unknown) || (source.value !== null && source.value !== "" && (!Array.isArray(source.value) || source.value.length > 0)));
       } catch { return false; }
     });
     node.properties.source_answer_ids.items.enum = Object.entries(aliases).filter(([,path]) => allowed.includes(path)).map(([alias]) => alias);
@@ -94,7 +98,12 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     setPaths(sections.definition_components.properties[key as keyof typeof sections.definition_components.properties], slot);
   }
   for (const slot of ["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const) setPaths(sections[slot].properties.claims.items, slot);
-  for (const statement of Object.values(sections.decision_pathway.properties)) setPaths(statement, "decision_pathway");
+  for (const [field, statement] of Object.entries(sections.decision_pathway.properties)) {
+    setPaths(statement, "decision_pathway");
+    if (field === "first_contact" && !answers.situation.contact && !answers.write_ins?.contact?.trim()) {
+      (statement.properties.text as {description?:string}).description = "The answers do not establish who initiates first contact or how the client reaches the firm. State that gap plainly. Cite only the unanswered situation.contact answer and use evidence_basis unknown. Do not infer a contact behaviour from the client's role, timing or decision context.";
+    }
+  }
   if (!answers.client.decision_context.trim() && (!answers.client.pathway_basis || answers.client.pathway_basis === "unknown")) {
     const contextId = Object.keys(aliases).find(id => aliases[id] === "client.decision_context")!;
     for (const key of ["first_contact", "decision"] as const) {
