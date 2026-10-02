@@ -41,8 +41,12 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     const node = statement as { required:string[]; properties: { kind?:unknown; text:{description?:string}; source_answer_ids: { items: { enum?: string[] }; minItems?:number; maxItems?:number }; evidence_basis: { enum: string[]; description?:string } } };
     delete node.properties.kind;
     node.required = node.required.filter(key => key !== "kind");
-    node.properties.text.description = slot.startsWith("definition_")
-      ? "A concise fragment, at most 15 words and 180 characters. Put supporting details in the cards, not this fragment. Do not start reasons with 'because'."
+    node.properties.text.description = slot === "definition_client_matter"
+      ? "At most 75 words and 600 characters. Preserve the specific legal work or agreement, represented side, situation and timing supplied by the firm. Do not reduce the engagement to a broad transaction category."
+      : slot === "definition_reasons"
+      ? "A grammatical clause with its own subject, such as 'the work fits the firm's experience'. At most 35 words and 300 characters. Do not start with 'because' or a subjectless verb such as 'uses'."
+      : slot.startsWith("definition_")
+      ? "A concise fragment, at most 25 words and 240 characters. Put supporting details in the cards."
       : slot === "decision_pathway" ? "One concise statement, at most 30 words and 240 characters."
       : "One grounded claim, at most 50 words and 400 characters. Preserve additional detail in separate claims.";
     const allowed: string[] = allowedSourceAnswerPathsForAnswers(slot, answers).filter(path => {
