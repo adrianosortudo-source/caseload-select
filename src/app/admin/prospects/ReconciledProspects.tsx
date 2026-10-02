@@ -9,7 +9,6 @@ import {
   type LawyerCountBand,
   type EvidenceAvailability,
   type OwnerContactFilter,
-  type PublicProspectContact,
   type ReconciledGtaProspect,
 } from "@/lib/gta-prospect-records";
 import type { DowntownGeographyStatus } from "@/lib/downtown-toronto-cohort";
@@ -31,6 +30,7 @@ import {
   type ReconciledProspectSource,
   type ReconciledProspectSourceCounts,
 } from "./reconciled-prospects-source";
+import { ProspectContactEvidence, selectOperationalProspectContact } from "./prospect-contact-evidence";
 import {
   filterUnifiedProspectState,
   isDowntownOneToTenProspect,
@@ -135,10 +135,6 @@ function EvidenceLink({ availability, href, label }: { availability: EvidenceAva
   return <a href={href} target="_blank" rel="noreferrer" className="text-navy underline underline-offset-2">{content}</a>;
 }
 
-function ownerRoleLabel(role: NonNullable<ReconciledGtaProspect["ownerContact"]>["ownerRole"]): string {
-  return titleCase(role);
-}
-
 function SelectField({ label, value, onChange, children }: { label: string; value: string; onChange: (value: string) => void; children: React.ReactNode }) {
   return (
     <label className="text-xs font-semibold text-field-label">
@@ -148,10 +144,6 @@ function SelectField({ label, value, onChange, children }: { label: string; valu
       </select>
     </label>
   );
-}
-
-function contactRoleLabel(relationship: PublicProspectContact["relationship"]): string {
-  return ({ owner: "Owner", founder: "Founder", principal: "Principal", named_lawyer: "Named lawyer", firm_inbox: "Firm inbox" })[relationship];
 }
 
 export default function ReconciledProspects({ initialData }: { initialData?: RecordsResponse } = {}) {
@@ -276,10 +268,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const displayedPage = Math.min(page, pageCount - 1);
   const visibleRecords = useMemo(() => filtered.slice(displayedPage * PAGE_SIZE, (displayedPage + 1) * PAGE_SIZE), [displayedPage, filtered]);
-  const selectedOperationalContact = selectedContact?.publicContacts?.find((contact) => (
-    (contact.relationship === "owner" || contact.relationship === "founder" || contact.relationship === "principal")
-    && Boolean(contact.name)
-  )) ?? null;
+  const selectedOperationalContact = selectOperationalProspectContact(selectedContact?.publicContacts);
 
   useEffect(() => {
     const refresh = () => setProspectDataRefreshToken((current) => current + 1);
@@ -413,13 +402,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
                 <td className="px-3 py-3 font-semibold text-navy">{record.websiteUrl ? <a href={record.websiteUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">{record.firmName}</a> : record.firmName}<span className="mt-1 block text-xs font-normal text-black/55">{record.city}</span>{record.canonicalDomain && <span className="mt-1 block text-xs font-normal text-black/55">{record.canonicalDomain}</span>}</td>
                 <td className="px-3 py-3"><div className="flex flex-wrap gap-1">{prospectSources(record).map((item) => <span key={item} className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(item)}`}>{sourceLabels[item]}</span>)}<span className={`inline-flex rounded-full border px-2 py-1 text-xs font-semibold ${badgeClass(identityState)}`}>{identityLabels[identityState]}</span></div>{supplemental?.identity && <span className="mt-2 block text-xs leading-5 text-black/60">Identity evidence: {supplemental.identity.source === "stable_identity_registry" ? "stable registry" : "supplemental observation"} · observed {supplemental.identity.observedOn}</span>}{record.downtownGeography && <span className="mt-2 block text-xs leading-5 text-black/60">{downtownGeographyLabels[record.downtownGeography.status]} · {titleCase(record.downtownGeography.confidence)} confidence · observed {record.downtownGeography.observedOn}</span>}{record.legacyCrosswalk && <span className="mt-2 block text-xs leading-5 text-black/60">{record.legacyCrosswalk}</span>}{record.reconciliationNote && <span className="mt-1 block text-xs leading-5 text-black/50">{record.reconciliationNote}</span>}</td>
                 <td className="px-3 py-3"><span className="font-medium text-black/80">{observedLawyerCountLabel(record)}</span>{dossier && <><span className="mt-1 block text-xs text-black/55">{titleCase(dossier.lawyerCount.confidence)} confidence</span><span className="mt-1 block text-xs text-black/55">Observed {dossier.lawyerCount.observedAt.slice(0, 10)}</span></>}</td>
-                <td className="px-3 py-3 text-xs leading-5 text-black/70">{(() => {
-                  if (record.ownerContact) return <><span className="block font-semibold text-navy">{record.ownerContact.ownerName}</span><span className="block text-black/55">{ownerRoleLabel(record.ownerContact.ownerRole)}{record.ownerContact.ownershipConfidence === "leadership_only" ? " (leadership only)" : ""}</span>{record.ownerContact.emailAvailability === "direct_owner_email" && record.ownerContact.emailAddress ? <a href={`mailto:${record.ownerContact.emailAddress}`} className="mt-1 block text-navy underline underline-offset-2">{record.ownerContact.emailAddress}</a> : <span className="mt-1 block text-black/55">{record.ownerContact.emailAvailability === "firm_general_email" ? "Firm general email only" : "Direct email not available"}</span>}</>;
-                  const contacts = record.publicContacts ?? [];
-                  const owners = contacts.filter((contact) => contact.relationship === "owner" || contact.relationship === "founder");
-                  const emails = contacts.filter((contact) => contact.email);
-                  return <><span className="block font-semibold text-black/75">{owners.length > 0 ? owners.map((contact) => contact.name).filter(Boolean).join(", ") : "Owner not identified"}</span>{owners.map((contact, index) => <span key={`${contact.name}-${index}`} className="block text-black/55">{contactRoleLabel(contact.relationship)} · observed {contact.observedAt}</span>)}{emails.length > 0 ? emails.map((contact, index) => <span key={`${contact.email}-${index}`} className="mt-1 block break-all"><a href={`mailto:${contact.email ?? ""}`} className="text-navy underline underline-offset-2">{contact.email}</a><span className="ml-1 text-black/55">{contact.emailKind === "owner" ? "owner email" : contact.emailKind === "named_person" ? "named-person email" : "firm email"}</span>{contact.sourceUrl && <a href={contact.sourceUrl} target="_blank" rel="noreferrer" className="ml-1 text-navy underline underline-offset-2">source</a>}<span className="ml-1 text-black/55">observed {contact.observedAt}</span></span>) : <span className="mt-1 block text-black/55">Email not found</span>}</>;
-                })()}</td>
+                <td className="px-3 py-3 text-xs leading-5 text-black/70"><ProspectContactEvidence publicContacts={record.publicContacts} ownerContact={record.ownerContact} /></td>
                 <td className="px-3 py-3"><ProspectContactStatus state={contactState} loading={contactStateLoading} error={contactStateError} sourceRecordKey={record.id} onOpenHistory={() => setSelectedContact(record)} /></td>
                 <td className="px-3 py-3 text-black/75">{dossier ? <><span className="font-medium">GBP: {gbpOpportunityLabels[dossier.gbpOpportunity.type] ?? titleCase(dossier.gbpOpportunity.type)}</span><span className="mt-1 block text-xs text-black/55">Website: {dossier.websiteAndIntake.opportunityTypes.map((value) => websiteOpportunityLabels[value] ?? titleCase(value)).join(", ")}</span></> : supplemental?.qualification ? <><span className="font-medium">GBP: {getLegacyCriterion(supplemental.qualification.criteria, "gbpEvidence") === true ? "Supported evidence" : getLegacyCriterion(supplemental.qualification.criteria, "gbpEvidence") === false ? "Needs evidence" : "Not assessed"}</span><span className="mt-1 block text-xs text-black/55">Qualification: {titleCase(supplemental.qualification.state)}</span></> : <span className="text-black/50">Not assessed</span>}</td>
                 <td className="px-3 py-3 text-xs leading-5 text-black/70"><ReconciledIntakeEvidence record={record} /></td>
@@ -436,7 +419,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
         sourceRecordKey={selectedContact.id}
         firmName={selectedContact.firmName}
         contactName={selectedOperationalContact?.name ?? null}
-        contactEmail={selectedContact.publicContacts?.find((contact) => contact.email)?.email ?? null}
+        contactEmail={selectedOperationalContact?.email ?? null}
         provisionedPersonEmail={selectedOperationalContact?.email ?? null}
         sourceUrl={selectedContact.websiteUrl ?? selectedContact.rosterSourceUrl}
         sourcePayload={{ source_record_key: selectedContact.id, firm_name: selectedContact.firmName, city: selectedContact.city, canonical_domain: selectedContact.canonicalDomain }}
