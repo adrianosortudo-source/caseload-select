@@ -92,6 +92,30 @@ describe("provider output contract", () => {
     expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("unsupported_numeric_claim");
     if (outcome.mode === "live") expect(outcome.result.brief.client_goals_needs).toEqual(original.brief.client_goals_needs);
   });
+  it("repairs a claim that combines known goals with an unknown choice factor", async () => {
+    const input = request();
+    const invalid = validBlueprint();
+    invalid.brief.client_goals_needs.claims[0] = {
+      text: "The client wants to understand options, but their choice factors are not established.",
+      source_answer_ids: ["client.goals", "client.choice_priorities"],
+      evidence_basis: "hypothesis",
+      kind: "hypothesis",
+    };
+    const repaired = {claims:[
+      {text:"The client wants to understand the available options.",source_answer_ids:["client.goals"],evidence_basis:"hypothesis",kind:"hypothesis"},
+      {text:"The client's choice factors have not been established.",source_answer_ids:["client.choice_priorities"],evidence_basis:"unknown",kind:"unknown"},
+    ]};
+    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(invalid) } })
+      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(repaired) } });
+    const outcome = await runDesiredClientAnalysis(input, []);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(2);
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("Separate each known statement from any unanswered or unknown finding");
+    if (outcome.mode === "live") {
+      expect(outcome.result.brief.client_goals_needs.claims).toHaveLength(2);
+      expect(outcome.result.brief.client_goals_needs.claims[1].evidence_basis).toBe("unknown");
+    }
+  });
   it("repairs a claim that mixes client feedback and a differently based firm observation", async () => {
     const input = request();
     input.answers.client.choice_basis = "client_feedback";
