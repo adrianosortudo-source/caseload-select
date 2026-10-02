@@ -13,10 +13,19 @@ describe("AI Blueprint output contract", () => {
     value.brief.definition_components.reasons.text = "The firm wants this work because it fits the team's transaction experience";
     const sentence = buildDefinitionSentence(value.brief, false);
     expect(sentence).toContain("attract and serve an Ontario business owner");
-    expect(sentence).toContain("because it fits the team's transaction experience");
+    expect(sentence).toContain("because the work fits the team's transaction experience");
     expect(sentence).not.toContain("because The firm wants");
     value.brief.definition_components.reasons.text = "The work fits the team's transaction experience";
     expect(buildDefinitionSentence(value.brief, false)).toContain("because the work fits");
+  });
+  it("joins a complete client-matter clause grammatically", () => {
+    const value = validBlueprint();
+    value.brief.definition_components.client_matter.text = "The client is evaluating an operating business and needs an asset purchase agreement drafted or reviewed before final terms are agreed";
+    value.brief.definition_components.reasons.text = "It makes a useful difference and fits the firm's experience";
+    const sentence = buildDefinitionSentence(value.brief, false, completeAnswers().client.goal_detail);
+    expect(sentence).toContain("in a situation where the client is evaluating");
+    expect(sentence).toContain("because the work makes a useful difference");
+    expect(sentence).not.toContain("in situations such as the client is");
   });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
@@ -80,7 +89,7 @@ describe("AI Blueprint output contract", () => {
     result.brief.definition_components.client_matter.text = Array(45).fill("deal").join(" ");
     result.brief.definition_components.reasons.text = Array(35).fill("fit").join(" ");
     result.brief.definition_components.outcome.text = Array(25).fill("matters").join(" ");
-    result.brief.definition_sentence = `The firm wants to attract and serve ${result.brief.definition_components.client.text} for matters such as ${result.brief.definition_components.client_matter.text}, because ${result.brief.definition_components.reasons.text}, and progress will be assessed against ${result.brief.definition_components.outcome.text}.`;
+    result.brief.definition_sentence = buildDefinitionSentence(result.brief, false, answers.client.goal_detail);
     expect(result.brief.definition_sentence.split(/\s+/).length).toBeGreaterThan(85);
     expect(validateAnalysisResult(result, answers, [])).not.toBeNull();
   });

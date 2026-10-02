@@ -42,7 +42,7 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     delete node.properties.kind;
     node.required = node.required.filter(key => key !== "kind");
     node.properties.text.description = slot === "definition_client_matter"
-      ? "At most 75 words and 600 characters. Preserve the specific legal work or agreement, represented side, situation and timing supplied by the firm. Do not reduce the engagement to a broad transaction category."
+      ? "At most 75 words and 600 characters. Return one complete, grammatical clause with a subject and verb describing the client's situation and specific legal engagement, for example 'the client is evaluating an operating business and needs an asset purchase agreement drafted or reviewed before final terms are agreed'. The application introduces it with 'in a situation where'. Preserve the represented side, specific legal work or agreement, and timing supplied by the firm. Do not return a noun phrase, a second sentence, or reduce the engagement to a broad transaction category."
       : slot === "definition_reasons"
       ? "A grammatical clause with its own subject, such as 'the work fits the firm's experience'. At most 35 words and 300 characters. Do not start with 'because' or a subjectless verb such as 'uses'."
       : slot.startsWith("definition_")

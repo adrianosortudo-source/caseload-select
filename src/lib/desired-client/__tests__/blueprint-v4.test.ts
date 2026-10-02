@@ -11,7 +11,7 @@ describe("v4 provenance and client pathway", () => {
   it("keeps the law firm out of the desired-client identity and does not approve a target on wording review", () => {
     const result=validBlueprint();
     expect(result.brief.definition_components).not.toHaveProperty("firm");
-    expect(result.brief.definition_sentence).toMatch(/^The firm wants to attract and serve business owners for matters such as/);
+    expect(result.brief.definition_sentence).toMatch(/^The firm wants to attract and serve business owners in a situation where/);
     expect(buildDefinitionSentence(result.brief,true,completeAnswers().client.goal_detail)).toBe(buildDefinitionSentence(result.brief,false,completeAnswers().client.goal_detail));
     expect(result.brief.definition_sentence).toContain("so the client can understand the assets, liabilities and closing obligations");
     expect(result.brief.definition_sentence).not.toContain("progress will be assessed");
@@ -91,7 +91,7 @@ describe("v4 provenance and client pathway", () => {
     const b=buildStructuredBlueprintV4(a);
     expect(validateAnalysisResult({brief:b,clarification_code:null},a,[])).not.toBeNull();
     expect(b.definition_sentence.split(/\s+/).length).toBeLessThanOrEqual(85);
-    expect(b.definition_sentence).toContain("for matters such as a business buyer");
+    expect(b.definition_sentence).toContain("in a situation where a business buyer");
     expect(b.definition_sentence).toContain("because the firm cites");
     expect(b.definition_sentence).toContain("so the client can understand the assets");
     expect(b.definition_sentence).not.toContain("retained matters");
