@@ -36,7 +36,7 @@ function allowedPaths(slot: string): readonly string[] {
   if (slot === "practice_experience_supporting") return ["practice.experience", "practice.capability"];
   if (slot === "practice_development_needs") return ["practice.experience", "practice.development_needs"];
   if (slot === "practice_marketing_emphasis") return ["direction.less", "direction.less_note", "direction.less_reason"];
-  if (slot === "definition_client_type") return ["situation.role", "situation.role_other", "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus"];
+  if (slot === "definition_client_type") return ["situation.role", "situation.role_other", "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus", "focus.service_area"];
   if (slot === "definition_client_matter") return ["focus.area", "focus.work", "focus.work_other", "situation.trigger", "situation.role", "situation.role_other", "situation.timing", "client_context.geography", "client_context.relevant_circumstances", "client_context.repeat_matter_pattern", "write_ins.trigger"];
   if (slot === "practice_context") return ["practice.", "focus.", "direction."];
   if (slot === "client_and_matter") return ["focus.","situation.","client_context.geography","client_context.relevant_circumstances","client_context.repeat_matter_pattern","write_ins.trigger"];
