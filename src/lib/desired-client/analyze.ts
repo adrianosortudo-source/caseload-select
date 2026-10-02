@@ -7,6 +7,7 @@ import {
 } from "./prompt";
 import { isSafeSourcePath, validateAnalysisResult, type AnalysisValidationFailure } from "./output";
 import { safeProviderFailureMetadata } from "./provider-diagnostics";
+import { decodeProviderSources, providerBlueprintSchema, providerSourceAliases } from "./provider-schema";
 import type { AnalysisRequestEnvelope, AnalysisResult, ClarificationCode } from "./types";
 
 const MODEL = "gemini-2.5-flash";
@@ -45,15 +46,18 @@ export async function runDesiredClientAnalysis(
     const client = new GoogleGenerativeAI(apiKey);
     const model = client.getGenerativeModel({
       model: MODEL,
-      systemInstruction: buildDesiredClientSystemPrompt(),
+      systemInstruction: buildDesiredClientSystemPrompt() + " In source_answer_ids, return the compact IDs from provider_source_aliases instead of full answer paths. The application decodes each ID to its original evidence path before validation. Use only the IDs allowed by the schema for each section. Omit kind; the application derives it from evidence_basis. Follow the provider schema's fields exactly.",
       generationConfig: {
         temperature: 0.2,
         maxOutputTokens: 4096,
         responseMimeType: "application/json",
+        responseSchema: providerBlueprintSchema(request.answers) as never,
         thinkingConfig: { thinkingBudget: 512 },
       } as GenerationConfig & { thinkingConfig: { thinkingBudget: number } },
     }, { timeout: REQUEST_TIMEOUT_MS });
-    const response = await model.generateContent(buildDesiredClientUserPrompt(request, eligibleCodes));
+    const aliases = providerSourceAliases(request.answers);
+    const userPrompt = JSON.parse(buildDesiredClientUserPrompt(request, eligibleCodes));
+    const response = await model.generateContent(JSON.stringify({ ...userPrompt, provider_source_aliases: aliases }));
     let parsed: unknown;
     try { parsed = JSON.parse(response.response.text()); }
     catch {
@@ -61,7 +65,7 @@ export async function runDesiredClientAnalysis(
       return { mode: "invalid_output" };
     }
     let validationFailure: { field: string; reason: string } | null = null;
-    const result = validateAnalysisResult(parsed, request.answers, eligibleCodes, (failure) => { validationFailure ??= failure; });
+    const result = validateAnalysisResult(decodeProviderSources(parsed, aliases), request.answers, eligibleCodes, (failure) => { validationFailure ??= failure; });
     if (!result) {
       logRejectedOutput(request.requestId, validationFailure ?? { field: "report", reason: "unclassified_validation_failure" });
     }
