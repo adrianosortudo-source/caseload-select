@@ -7,6 +7,15 @@ import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { buildDefinitionSentence } from "../definition";
 import { interviewClarificationSourceFingerprint } from "../types";
 describe("AI Blueprint output contract", () => {
+  it("joins model fragments without repeating because or capitalizing a mid-sentence article", () => {
+    const value = validBlueprint();
+    value.brief.definition_components.client.text = "An Ontario business owner";
+    value.brief.definition_components.reasons.text = "The firm wants this work because it fits the team's transaction experience";
+    const sentence = buildDefinitionSentence(value.brief, false);
+    expect(sentence).toContain("attract and serve an Ontario business owner");
+    expect(sentence).toContain("because it fits the team's transaction experience");
+    expect(sentence).not.toContain("because The firm wants");
+  });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
     const value = validBlueprint();
