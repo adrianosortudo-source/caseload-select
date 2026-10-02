@@ -41,8 +41,12 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     const node = statement as { required:string[]; properties: { kind?:unknown; text:{description?:string}; source_answer_ids: { items: { enum?: string[] }; minItems?:number; maxItems?:number }; evidence_basis: { enum: string[]; description?:string } } };
     delete node.properties.kind;
     node.required = node.required.filter(key => key !== "kind");
-    node.properties.text.description = slot.startsWith("definition_")
-      ? "A concise fragment, at most 15 words and 180 characters. Put supporting details in the cards, not this fragment. Do not start reasons with 'because'."
+    node.properties.text.description = slot === "definition_client_matter"
+      ? "At most 75 words and 600 characters. Preserve the specific legal work or agreement, represented side, situation and timing supplied by the firm. Do not reduce the engagement to a broad transaction category."
+      : slot === "definition_reasons"
+      ? "A grammatical clause with its own subject, such as 'the work fits the firm's experience'. At most 35 words and 300 characters. Do not start with 'because' or a subjectless verb such as 'uses'."
+      : slot.startsWith("definition_")
+      ? "A concise fragment, at most 25 words and 240 characters. Put supporting details in the cards."
       : slot === "decision_pathway" ? "One concise statement, at most 30 words and 240 characters."
       : "One grounded claim, at most 50 words and 400 characters. Preserve additional detail in separate claims.";
     const allowed: string[] = allowedSourceAnswerPathsForAnswers(slot, answers).filter(path => {
@@ -53,7 +57,9 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     });
     node.properties.source_answer_ids.items.enum = Object.entries(aliases).filter(([,path]) => allowed.includes(path)).map(([alias]) => alias);
     node.properties.source_answer_ids.minItems = 1;
-    node.properties.source_answer_ids.maxItems = 4;
+    // Contribution validation needs all five economics sources. The provider
+    // must be able to cite that complete set if it returns such a statement.
+    node.properties.source_answer_ids.maxItems = slot === "why_firm_wants_work" ? 6 : 4;
     const bases = ["firm_preference", "hypothesis", "unknown"];
     if (["practice.experience", "practice.capability", "practice.client_strength_support"].some(path => allowed.includes(path))) bases.push("firm_reported_experience");
     for (const [prefix, basis] of [["value.", answers.value.amount_basis], ["opportunity.", answers.opportunity.data_basis]] as const) {
@@ -67,7 +73,11 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     if (allowed.includes("opportunity.sources") && answers.opportunity.sources.some(source => source !== "unknown" && source !== "no_evidence")) bases.push("source_observed");
     node.properties.evidence_basis.enum = slot.startsWith("definition_") ? ["firm_preference", "hypothesis", "unknown"] : [...new Set(bases)];
     const experienceIds = Object.entries(aliases).filter(([,path]) => allowed.includes(path) && ["practice.experience", "practice.capability", "practice.client_strength_support"].includes(path)).map(([id]) => id);
-    node.properties.evidence_basis.description = `For firm_reported_experience you MUST cite at least one of ${experienceIds.join(", ") || "none (do not use this basis)"}. For unknown, cite only unknown/empty answers and state the gap. For any statement with a known source and no supporting record, estimate or observation, use firm_preference or hypothesis. Never select a basis supported only by some other claim in the report.`;
+    const financialEvidenceIds = (basis: "recorded" | "estimated") => Object.entries(aliases).filter(([, path]) => allowed.includes(path) && (
+      path.startsWith("value.") && answers.value.amount_basis === basis ||
+      path.startsWith("opportunity.") && answers.opportunity.data_basis === basis
+    )).map(([id]) => id).join(", ") || "none (do not use this basis)";
+    node.properties.evidence_basis.description = `For firm_reported_recorded you MUST cite at least one of ${financialEvidenceIds("recorded")}. For firm_reported_estimate you MUST cite at least one of ${financialEvidenceIds("estimated")}; a qualitative preference or capability alone is not an estimate. For firm_reported_experience you MUST cite at least one of ${experienceIds.join(", ") || "none (do not use this basis)"}. For unknown, cite only unknown/empty answers and state the gap. For any statement with a known source and no supporting record, estimate or observation, use firm_preference or hypothesis. Never select a basis supported only by some other claim in the report.`;
   };
   for (const [key, slot] of Object.entries({client:"definition_client_type",client_matter:"definition_client_matter",reasons:"definition_reasons",outcome:"definition_outcome"})) {
     setPaths(sections.definition_components.properties[key as keyof typeof sections.definition_components.properties], slot);
