@@ -62,6 +62,11 @@ const FIRM_STRENGTH_OPTIONS: ChoiceGroupOption[] = [
   { id: "other", label: "Another strength" },
   { id: "unknown", label: "Not established yet" },
 ];
+const MULTI_CHOICE_WRITE_INS: Partial<Record<string, WriteInKey>> = {
+  "dc-decision-needs": "decision_needs",
+  "dc-reasons": "reasons",
+  "dc-fit-signals": "fit_signals",
+};
 
 export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,error,notice,preview}:{
   stage:StageId; answers:DesiredClientAnswers; onEdit:Change; onBack:()=>void; onNext:()=>void;
@@ -85,14 +90,21 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
         onChange={v=>onEdit(a=>{const next=structuredClone(a);onChange(next,String(v));return next;})}/>
     </div>
   );
-  const multi=(id:string,legend:string,options:ChoiceGroupOption[],value:string[],onChange:(a:DesiredClientAnswers,v:string[])=>void,maximum:number,exclusive:string[]=[],help?:string,required=true)=>(
-    <div className="dc-question-block" data-ui-component-content="desired-client-question">
+  const multi=(id:string,legend:string,options:ChoiceGroupOption[],value:string[],onChange:(a:DesiredClientAnswers,v:string[])=>void,maximum:number,exclusive:string[]=[],help?:string,required=true)=>{
+    const writeInKey=MULTI_CHOICE_WRITE_INS[id];
+    const additionalSelectionCount=writeInKey&&answers.write_ins?.[writeInKey]?.trim()?1:0;
+    const exceedsMaximum=value.length+additionalSelectionCount>maximum;
+    return <div className="dc-question-block" data-ui-component-content="desired-client-question">
       <ChoiceGroup idPrefix={id} name={id} legend={legend} options={options} type="checkbox" value={value} maximum={maximum}
-        exclusiveOptions={exclusive} required={required} hideLegend={legend===STAGE_DEFINITIONS[stage-1].heading} help={help}
+        additionalSelectionCount={additionalSelectionCount} exclusiveOptions={exclusive} required={required}
+        hideLegend={legend===STAGE_DEFINITIONS[stage-1].heading} help={help}
         error={error&&required&&value.length===0?COMMON_COPY.requiredMulti:undefined}
         onChange={v=>onEdit(a=>{const next=structuredClone(a);onChange(next,v as string[]);return next;})}/>
-    </div>
-  );
+      {exceedsMaximum&&<p className="dc-option__error" role="alert" data-ui-copy="supporting">
+        Your written answer counts as one of {maximum} choices. Keep {maximum-1} or fewer listed choices, or clear your written answer to continue.
+      </p>}
+    </div>;
+  };
   const areaOptions=AREA_ORDER.map(id=>({id,label:getAreaLabel(id)}));
   const currentWorkOptions=area?getWorkOptions(area):[];
   const triggerOptions=area?[...TRIGGER_OPTIONS[area],{id:"unknown",label:"Not sure yet"}]:[];
@@ -164,7 +176,7 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
           {radio("dc-goal","What progress does this client want?",[{id:"understand",label:"Understand options and decide what to do"},{id:"complete",label:"Complete a planned transaction or process"},{id:"resolve",label:"Resolve a disagreement"},{id:"protect",label:"Protect something important"},{id:"prepare",label:"Prepare for a future change"},{id:"respond",label:"Meet an obligation or respond to a process"},{id:"unknown",label:"Not sure yet"}],answers.client.goals.includes("unknown")?"unknown":answers.client.goals[0]??null,(a,v)=>{a.client.goals=[v as typeof a.client.goals[number]];},"Choose the broad goal. A follow-up may help you make it concrete.")}
           {text("What practical result can this legal work help the client achieve?",answers.client.goal_detail,(a,v)=>{a.client.goal_detail=v;},"Required unless you selected “Not sure yet” above. Describe the decision, transaction or problem the legal work helps the client move forward. Keep it general and confidential details out.",240,true)}
           {text("Who is involved in deciding or paying for the legal help? (optional)",answers.client.decision_context,(a,v)=>{a.client.decision_context=v;},"Describe roles only, such as an owner deciding with a co-owner or adviser. Do not assume a single decision maker.",240)}
-          <section className="dc-optional"><h3>What matters to the client when choosing a lawyer? (optional)</h3>{multi("dc-decision-needs","Which needs or concerns have you heard or would expect them to raise?",[{id:"scope_cost",label:"Scope and cost"},{id:"options",label:"Understanding the options"},{id:"relevant_experience",label:"Relevant experience"},{id:"process",label:"What happens next"},{id:"response",label:"A timely response"},{id:"heard",label:"Being heard and understood"},{id:"unknown",label:"Not sure yet"}],answers.client.decision_needs,(a,v)=>{a.client.decision_needs=v as typeof a.client.decision_needs;},2,["unknown"],"Choose what is known or reasonably expected; the report will keep observation separate from hypothesis.",false)}</section>
+          <section className="dc-optional"><h3>What matters to the client when choosing a lawyer? (optional)</h3>{multi("dc-decision-needs","Which needs or concerns have you heard or would expect them to raise?",[{id:"scope_cost",label:"Scope and cost"},{id:"options",label:"Understanding the options"},{id:"relevant_experience",label:"Relevant experience"},{id:"process",label:"What happens next"},{id:"response",label:"A timely response"},{id:"heard",label:"Being heard and understood"},{id:"unknown",label:"Not sure yet"}],answers.client.decision_needs,(a,v)=>{a.client.decision_needs=v as typeof a.client.decision_needs;if(v.includes("unknown"))clearWriteIn(a,"decision_needs");},2,["unknown"],"Choose what is known or reasonably expected; the report will keep observation separate from hypothesis.",false)}</section>
           {radio("dc-pathway-basis","What is the basis for your view of this client pathway?",[{id:"client_feedback",label:"Clients have told us"},{id:"firm_observation",label:"We have observed this"},{id:"firm_hypothesis",label:"This is our current hypothesis"},{id:"unknown",label:"Not established"}],answers.client.pathway_basis,(a,v)=>{a.client.pathway_basis=v as typeof a.client.pathway_basis;},"This applies to your description of how the client reaches a decision. Leave it open if the basis varies.",false)}
         </section>
       </>}
@@ -199,7 +211,7 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
         </>}
       </>}
       {stage===5&&<>
-        {multi("dc-fit-signals","Which early signs would make this matter worth a closer look?",FIT_SIGNAL_OPTIONS,answers.delivery.fit_signals,(a,v)=>{a.delivery.fit_signals=v as typeof a.delivery.fit_signals;clearWriteIn(a,"fit_signals");},3,["unknown"],"Choose up to three observable facts to establish. If you do not know yet, choose “Not sure yet.”",!answers.write_ins?.fit_signals?.trim())}
+        {multi("dc-fit-signals","Which early signs would make this matter worth a closer look?",FIT_SIGNAL_OPTIONS,answers.delivery.fit_signals,(a,v)=>{a.delivery.fit_signals=v as typeof a.delivery.fit_signals;if(v.includes("unknown"))clearWriteIn(a,"fit_signals");},3,["unknown"],"Choose up to three observable facts to establish. If you do not know yet, choose “Not sure yet.”",!answers.write_ins?.fit_signals?.trim())}
         {text("Another fit signal (optional)",answers.write_ins?.fit_signals??"",(a,v)=>{a.write_ins={...a.write_ins,fit_signals:v};if(v.trim())a.delivery.fit_signals=a.delivery.fit_signals.filter(signal=>signal!=="unknown");},"Describe an observable fact to ask about. Do not use this as an automatic rejection rule.",180)}
         <section className="dc-optional"><h2>Delivery conditions and limits (optional)</h2>
           {multi("dc-conditions","What helps the team deliver this work well?",entries(CONDITION_LABELS),answers.delivery.conditions,(a,v)=>{a.delivery.conditions=v as typeof a.delivery.conditions;},3,["unknown"],"These are service conditions, not client worthiness criteria.",false)}

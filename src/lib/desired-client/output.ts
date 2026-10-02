@@ -23,11 +23,33 @@ const BANNED = /\u2014|<\/?[a-z][^>]*>|https?:\/\/|\bwww\.|\b[A-Z0-9._%+-]+@[A-Z
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const exact = (value: unknown, keys: readonly string[]): value is Record<string, unknown> => record(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 const wordCount = (text: string) => text.trim().split(/\s+/u).filter(Boolean).length;
-const numericTokens = (text: string) => [...text.matchAll(/[+-]?\s*(?:[$€£]\s*)?\d+(?:[\s,]\d{3})*(?:\.\d+)?\s*%?/gu)].map((match) => {
+const NUMBERS_UNDER_TWENTY: Record<string, number> = { zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19 };
+const NUMBER_TENS: Record<string, number> = { twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90 };
+const NUMBER_UNIT_CONTEXT = /\b(?:matters?|clients?|cases?|deals?|transactions?|quarters?|months?|weeks?|days?|years?|hours?|fees?|costs?|dollars?|percent(?:age)?s?|points?|inquiries|enquiries|referrals?|leads?)\b/i;
+
+/** Match common written-out counts only when a nearby quantity word makes the
+ * numeric meaning clear. This keeps “two matters” equivalent to “2 matters”
+ * without treating every prose use of “one” or “first” as a figure. */
+const spelledNumericTokens = (text: string): string[] => {
+  const tokens: string[] = [];
+  const numberPattern = /\b(?:(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[- ](one|two|three|four|five|six|seven|eight|nine))?|(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen))\b/giu;
+  for (const match of text.matchAll(numberPattern)) {
+    const after = text.slice((match.index ?? 0) + match[0].length).split(/[.!?;,]/u, 1)[0] ?? "";
+    if (!/^(?:\s+[\p{L}'-]+){0,5}\s+\p{L}/u.test(after) || !NUMBER_UNIT_CONTEXT.test(after)) continue;
+    const tens = match[1]?.toLocaleLowerCase("en-CA");
+    const unit = match[2]?.toLocaleLowerCase("en-CA");
+    const small = match[3]?.toLocaleLowerCase("en-CA");
+    const value = tens ? NUMBER_TENS[tens] + (unit ? NUMBERS_UNDER_TWENTY[unit] : 0) : NUMBERS_UNDER_TWENTY[small ?? ""];
+    if (Number.isFinite(value)) tokens.push(String(value));
+  }
+  return tokens;
+};
+
+const numericTokens = (text: string) => [ ...[...text.matchAll(/[+-]?\s*(?:[$€£]\s*)?\d+(?:[\s,]\d{3})*(?:\.\d+)?\s*%?/gu)].map((match) => {
   const raw = match[0].replace(/\s/g, "");
   const sign = raw.startsWith("-") ? "-" : raw.startsWith("+") ? "+" : "";
   return sign + raw.replace(/[^\d.%]/g, "");
-});
+}), ...spelledNumericTokens(text) ];
 export type AnalysisValidationFailure = { field: string; reason: string; sourcePath?: AnswerReferencePath | `interview.followups.${number}` };
 
 function allowedPaths(slot: string): readonly string[] {
@@ -43,7 +65,7 @@ function allowedPaths(slot: string): readonly string[] {
   if (slot === "client_goals_needs") return ["client.","situation.","client_context.","write_ins.goals","write_ins.concerns","write_ins.decision_needs"];
   if (slot === "why_firm_wants_work") return ["practice.","value.","delivery.","direction.","repeatability.staffing_constraint","repeatability.additional_matters","write_ins.reasons","write_ins.fee_effort","write_ins.conditions","write_ins.capacity","write_ins.limit"];
   if (slot === "why_client_chooses_firm") return ["client.choice_","practice.client_strength","practice.capability","practice.experience"];
-  if (slot === "decision_pathway") return ["situation.","client.","write_ins.trigger","write_ins.timing","write_ins.contact","write_ins.goals","write_ins.decision_needs"];
+  if (slot === "decision_pathway") return ["situation.","client.goals","client.goal_detail","client.concerns","client.decision_needs","client.decision_context","client.pathway_basis","write_ins.trigger","write_ins.timing","write_ins.contact","write_ins.goals","write_ins.decision_needs"];
   if (slot === "recognizable_circumstances") return ["client_context.","delivery.fit_signals","delivery.conditions","delivery.limit","situation.trigger","write_ins.fit_signals","write_ins.conditions","write_ins.limit"];
   if (slot === "evidence_and_open_questions") return [...SOURCE_PATHS].map((path)=>path.slice(0,path.lastIndexOf(".")+1));
   if (slot === "desired_client_matter") return ["focus.", "situation.", "client.", "client_context.", "write_ins.trigger"];
@@ -156,10 +178,11 @@ function checkDefinitionPart(value: unknown, answers: DesiredClientAnswers, slot
 }
 
 function validCard(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string, sourcePath?: SafeSourcePath) => void): value is { claims: EvidenceLinkedStatement[] } {
-  if (!exact(value, ["claims"]) || !Array.isArray(value.claims) || value.claims.length < 1 || value.claims.length > 6) {
-    reportFailure?.("card_shape_or_claim_count");
-    return false;
-  }
+  if (!record(value)) { reportFailure?.("card_not_object"); return false; }
+  if (!exact(value, ["claims"])) { reportFailure?.("card_shape"); return false; }
+  if (!Array.isArray(value.claims)) { reportFailure?.("claims_not_array"); return false; }
+  if (value.claims.length < 1) { reportFailure?.("card_claims_empty"); return false; }
+  if (value.claims.length > 6) { reportFailure?.("card_claim_limit_exceeded"); return false; }
   return value.claims.every((claim) => validStatement(claim, answers, slot, reportFailure));
 }
 

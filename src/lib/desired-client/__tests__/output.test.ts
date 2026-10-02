@@ -13,10 +13,40 @@ describe("AI Blueprint output contract", () => {
     value.brief.definition_components.reasons.text = "The firm wants this work because it fits the team's transaction experience";
     const sentence = buildDefinitionSentence(value.brief, false);
     expect(sentence).toContain("attract and serve an Ontario business owner");
-    expect(sentence).toContain("because it fits the team's transaction experience");
+    expect(sentence).toContain("because the work fits the team's transaction experience");
     expect(sentence).not.toContain("because The firm wants");
     value.brief.definition_components.reasons.text = "The work fits the team's transaction experience";
     expect(buildDefinitionSentence(value.brief, false)).toContain("because the work fits");
+  });
+  it("adds an article when a client type starts with a singular role", () => {
+    const value = validBlueprint();
+    value.brief.definition_components.client.text = "Owner or founder of an Ontario owner-managed company";
+    expect(buildDefinitionSentence(value.brief, false)).toContain("serve an owner or founder of an Ontario owner-managed company");
+  });
+  it("joins a complete client-matter clause grammatically", () => {
+    const value = validBlueprint();
+    value.brief.definition_components.client_matter.text = "The client is evaluating an operating business and needs an asset purchase agreement drafted or reviewed before final terms are agreed";
+    value.brief.definition_components.reasons.text = "It makes a useful difference and fits the firm's experience";
+    const sentence = buildDefinitionSentence(value.brief, false, completeAnswers().client.goal_detail);
+    expect(sentence).toContain("in a situation where the client is evaluating");
+    expect(sentence).toContain("because the work makes a useful difference");
+    expect(sentence).not.toContain("in situations such as the client is");
+  });
+  it("does not repeat the same decision endpoint in the appended practical benefit", () => {
+    const value = validBlueprint();
+    value.brief.definition_components.client_matter.text = "The client has identified an operating business and needs an asset purchase agreement drafted or reviewed, due diligence advised, and transaction terms negotiated before deciding whether to proceed";
+    const sentence = buildDefinitionSentence(value.brief, false, "Understand which assets and liabilities are included, clarify payment and closing obligations, and negotiate how contractual risks are allocated before deciding whether to proceed");
+    expect(sentence.match(/\bbefore\b[^.!?]*\bdecid\w*\b[^.!?]*\bproceed\b/gi)).toHaveLength(1);
+    expect(sentence).toContain("negotiate how contractual risks are allocated");
+  });
+  it("accepts a digit rendering of a cited written-out count but rejects a changed value", () => {
+    const answers = completeAnswers();
+    answers.repeatability.target = "Proposed target: two additional retained buyer-side acquisition matters per quarter.";
+    const value = validBlueprint();
+    value.brief.evidence_and_open_questions.claims = [evidence("The proposed target of 2 additional retained buyer-side acquisition matters per quarter needs firm approval.", "firm_preference", "repeatability.target")];
+    expect(validateAnalysisResult(value, answers, [])).not.toBeNull();
+    value.brief.evidence_and_open_questions.claims[0] = evidence("The proposed target of 3 additional retained buyer-side acquisition matters per quarter needs firm approval.", "firm_preference", "repeatability.target");
+    expect(validateAnalysisResult(value, answers, [])).toBeNull();
   });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
@@ -25,6 +55,26 @@ describe("AI Blueprint output contract", () => {
     expect(validateAnalysisResult(value, answers, [])).not.toBeNull();
     value.brief.evidence_and_open_questions.claims[0] = evidence("Demand for this agreement engagement is established.", "firm_preference", "opportunity.uncertainty");
     expect(validateAnalysisResult(value, answers, [])).toBeNull();
+  });
+  it("distinguishes malformed evidence cards from empty and over-limit claim lists", () => {
+    const answers = completeAnswers();
+    const empty = validBlueprint();
+    empty.brief.evidence_and_open_questions.claims = [];
+    const emptyFailures: Array<{field:string;reason:string}> = [];
+    expect(validateAnalysisResult(empty, answers, [], failure => emptyFailures.push(failure))).toBeNull();
+    expect(emptyFailures[0]).toEqual({field:"evidence_and_open_questions",reason:"card_claims_empty"});
+
+    const excessive = validBlueprint();
+    excessive.brief.evidence_and_open_questions.claims = Array.from({length:7}, () => structuredClone(excessive.brief.evidence_and_open_questions.claims[0]));
+    const excessiveFailures: Array<{field:string;reason:string}> = [];
+    expect(validateAnalysisResult(excessive, answers, [], failure => excessiveFailures.push(failure))).toBeNull();
+    expect(excessiveFailures[0]).toEqual({field:"evidence_and_open_questions",reason:"card_claim_limit_exceeded"});
+
+    const malformed = validBlueprint();
+    Object.assign(malformed.brief.evidence_and_open_questions, {summary:"unrecognized field"});
+    const malformedFailures: Array<{field:string;reason:string}> = [];
+    expect(validateAnalysisResult(malformed, answers, [], failure => malformedFailures.push(failure))).toBeNull();
+    expect(malformedFailures[0]).toEqual({field:"evidence_and_open_questions",reason:"card_shape"});
   });
   it("accepts six grounded cards with distinct evidence labels", () => { const value = validBlueprint(); expect(validateAnalysisResult(value, completeAnswers(), [])).not.toBeNull(); expect(value.brief.evidence_and_open_questions.claims[0].evidence_basis).toBe("unknown"); expect(value.brief.why_firm_wants_work.claims[0].evidence_basis).toBe("firm_preference"); });
   it("allows the firm-selected service area to inform target client geography", () => { const answers=completeAnswers(), value=validBlueprint(); value.brief.definition_components.client.text="Ontario business owners"; value.brief.definition_components.client.source_answer_ids=["situation.role","focus.service_area"]; expect(validateAnalysisResult(value,answers,[])).not.toBeNull(); });
@@ -80,7 +130,7 @@ describe("AI Blueprint output contract", () => {
     result.brief.definition_components.client_matter.text = Array(45).fill("deal").join(" ");
     result.brief.definition_components.reasons.text = Array(35).fill("fit").join(" ");
     result.brief.definition_components.outcome.text = Array(25).fill("matters").join(" ");
-    result.brief.definition_sentence = `The firm wants to attract and serve ${result.brief.definition_components.client.text} for matters such as ${result.brief.definition_components.client_matter.text}, because ${result.brief.definition_components.reasons.text}, and progress will be assessed against ${result.brief.definition_components.outcome.text}.`;
+    result.brief.definition_sentence = buildDefinitionSentence(result.brief, false, answers.client.goal_detail);
     expect(result.brief.definition_sentence.split(/\s+/).length).toBeGreaterThan(85);
     expect(validateAnalysisResult(result, answers, [])).not.toBeNull();
   });

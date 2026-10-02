@@ -41,18 +41,25 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     const node = statement as { required:string[]; properties: { kind?:unknown; text:{description?:string}; source_answer_ids: { items: { enum?: string[] }; minItems?:number; maxItems?:number }; evidence_basis: { enum: string[]; description?:string } } };
     delete node.properties.kind;
     node.required = node.required.filter(key => key !== "kind");
-    node.properties.text.description = slot === "definition_client_matter"
-      ? "At most 75 words and 600 characters. Preserve the specific legal work or agreement, represented side, situation and timing supplied by the firm. Do not reduce the engagement to a broad transaction category."
+    const textDescription = slot === "definition_client_type"
+      ? "A concise, specific noun phrase for the desired client. Prefer a plural group such as 'Ontario business owners'; for one person, use a grammatically complete phrase such as 'an owner or founder of an Ontario owner-managed company'. Do not capitalize a common role label or describe the law firm as its own client."
+      : slot === "definition_client_matter"
+      ? "At most 75 words and 600 characters. Return one complete, grammatical clause with a subject and verb describing the client's situation, specific legal engagement and when the lawyer is involved, for example 'the client is evaluating an operating business and needs an asset purchase agreement drafted or reviewed before final terms are agreed'. The application introduces it with 'in a situation where'. Preserve the represented side, specific legal work or agreement, and timing supplied by the firm. Keep this clause focused on the legal engagement and stage; do not repeat the supplied practical benefit or the same decision endpoint. Do not return a noun phrase, a second sentence, or reduce the engagement to a broad transaction category."
       : slot === "definition_reasons"
       ? "A grammatical clause with its own subject, such as 'the work fits the firm's experience'. At most 35 words and 300 characters. Do not start with 'because' or a subjectless verb such as 'uses'."
       : slot.startsWith("definition_")
       ? "A concise fragment, at most 25 words and 240 characters. Put supporting details in the cards."
       : slot === "decision_pathway" ? "One concise statement, at most 30 words and 240 characters."
       : "One grounded claim, at most 50 words and 400 characters. Preserve additional detail in separate claims.";
+    node.properties.text.description = `${textDescription} A simple count written as a word or digits is equivalent only for the same value (for example, “two matters” and “2 matters”). Keep its unit, currency, range and period faithful to the cited answer; never calculate, round or invent a figure.`;
     const allowed: string[] = allowedSourceAnswerPathsForAnswers(slot, answers).filter(path => {
       try {
         const source = resolveAnswerReference(path as AnswerReferencePath, answers);
-        return source.present && source.value !== null && source.value !== "" && (!Array.isArray(source.value) || source.value.length > 0);
+        // Unknown or unanswered answers are valid citations for an explicit
+        // evidence gap. The validator accepts them only with evidence_basis
+        // "unknown"; omitting them here makes the provider unable to support
+        // gaps such as an unrecorded first-contact pattern.
+        return source.present && ((slot === "decision_pathway" && source.unknown) || (source.value !== null && source.value !== "" && (!Array.isArray(source.value) || source.value.length > 0)));
       } catch { return false; }
     });
     node.properties.source_answer_ids.items.enum = Object.entries(aliases).filter(([,path]) => allowed.includes(path)).map(([alias]) => alias);
@@ -77,13 +84,29 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
       path.startsWith("value.") && answers.value.amount_basis === basis ||
       path.startsWith("opportunity.") && answers.opportunity.data_basis === basis
     )).map(([id]) => id).join(", ") || "none (do not use this basis)";
-    node.properties.evidence_basis.description = `For firm_reported_recorded you MUST cite at least one of ${financialEvidenceIds("recorded")}. For firm_reported_estimate you MUST cite at least one of ${financialEvidenceIds("estimated")}; a qualitative preference or capability alone is not an estimate. For firm_reported_experience you MUST cite at least one of ${experienceIds.join(", ") || "none (do not use this basis)"}. For unknown, cite only unknown/empty answers and state the gap. For any statement with a known source and no supporting record, estimate or observation, use firm_preference or hypothesis. Never select a basis supported only by some other claim in the report.`;
+    const feedbackIds = Object.entries(aliases).filter(([, path]) => allowed.includes(path) && path.startsWith("client.choice_") && path !== "client.choice_basis").map(([id]) => id).join(", ") || "none (do not use client_reported)";
+    const observedPathwayIds = Object.entries(aliases).filter(([, path]) => allowed.includes(path) && (
+      path.startsWith("situation.") || ["client.goals", "client.goal_detail", "client.concerns", "client.decision_needs", "client.decision_context"].includes(path)
+    )).map(([id]) => id).join(", ") || "none (do not use firm_reported_observation)";
+    const hasChoiceSources = feedbackIds !== "none (do not use client_reported)";
+    const hasPathwaySources = observedPathwayIds !== "none (do not use firm_reported_observation)";
+    const clientEvidenceGuidance = [
+      hasChoiceSources ? `For client-choice details, client_reported requires client.choice_basis=client_feedback and firm_reported_observation requires client.choice_basis=firm_observation; cite only relevant details from ${feedbackIds}.` : "Do not use client-choice details in this statement.",
+      hasPathwaySources ? `For pathway or situation details, client_reported requires client.pathway_basis=client_feedback and firm_reported_observation requires client.pathway_basis=firm_observation; cite only relevant details from ${observedPathwayIds}.` : "Do not use pathway or situation details in this statement.",
+      hasChoiceSources && hasPathwaySources ? "If a statement cites both source groups, cite both basis answers and use the evidence basis only when both selections match; otherwise keep the claims separate." : "Do not add a second source group to this statement.",
+    ].join(" ");
+    node.properties.evidence_basis.description = `${clientEvidenceGuidance} For firm_reported_recorded you MUST cite at least one of ${financialEvidenceIds("recorded")}. For firm_reported_estimate you MUST cite at least one of ${financialEvidenceIds("estimated")}; a qualitative preference or capability alone is not an estimate. For firm_reported_experience you MUST cite at least one of ${experienceIds.join(", ") || "none (do not use this basis)"}. For unknown, cite only unknown/empty answers and state the gap. For any statement with a known source and no supporting record, estimate or observation, use firm_preference or hypothesis. Never select a basis supported only by some other claim in the report.`;
   };
   for (const [key, slot] of Object.entries({client:"definition_client_type",client_matter:"definition_client_matter",reasons:"definition_reasons",outcome:"definition_outcome"})) {
     setPaths(sections.definition_components.properties[key as keyof typeof sections.definition_components.properties], slot);
   }
   for (const slot of ["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const) setPaths(sections[slot].properties.claims.items, slot);
-  for (const statement of Object.values(sections.decision_pathway.properties)) setPaths(statement, "decision_pathway");
+  for (const [field, statement] of Object.entries(sections.decision_pathway.properties)) {
+    setPaths(statement, "decision_pathway");
+    if (field === "first_contact" && !answers.situation.contact && !answers.write_ins?.contact?.trim()) {
+      (statement.properties.text as {description?:string}).description = "The answers do not establish who initiates first contact or how the client reaches the firm. State that gap plainly. Cite only the unanswered situation.contact answer and use evidence_basis unknown. Do not infer a contact behaviour from the client's role, timing or decision context.";
+    }
+  }
   if (!answers.client.decision_context.trim() && (!answers.client.pathway_basis || answers.client.pathway_basis === "unknown")) {
     const contextId = Object.keys(aliases).find(id => aliases[id] === "client.decision_context")!;
     for (const key of ["first_contact", "decision"] as const) {

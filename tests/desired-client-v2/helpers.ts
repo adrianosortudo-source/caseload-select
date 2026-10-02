@@ -20,9 +20,9 @@ export async function capture(page: Page, name: string) {
   await fs.mkdir(EVIDENCE, { recursive: true });
   await page.screenshot({ path: path.join(EVIDENCE, name + '.png'), fullPage: true });
 }
-export async function layoutFailures(page: Page | Frame) {
+export async function layoutFailures(page: Page | Frame, copySelector = '[data-ui-copy]') {
   await settled(page);
-  const failures = await page.evaluate(() => {
+  const failures = await page.evaluate((selector) => {
     const out: string[] = [];
     if (document.documentElement.scrollWidth > innerWidth + 1) out.push('Page overflows horizontally');
     const isVisible = (el: Element) => {
@@ -31,7 +31,7 @@ export async function layoutFailures(page: Page | Frame) {
       if (closedDetails && !closedDetails.querySelector(':scope > summary')?.contains(el)) return false;
       return el.getClientRects().length > 0 && el.checkVisibility({ checkVisibilityCSS: true, checkOpacity: true });
     };
-    for (const el of document.querySelectorAll<HTMLElement>('[data-ui-copy]')) {
+    for (const el of document.querySelectorAll<HTMLElement>(selector)) {
       if (!isVisible(el) || el.dataset.uiCopyException) continue;
       const text = el.textContent?.trim() ?? '';
       if (text.includes('\u2014')) out.push('Em dash: ' + text);
@@ -85,11 +85,11 @@ export async function layoutFailures(page: Page | Frame) {
       }
     }
     return out;
-  });
+  }, copySelector);
   return failures;
 }
-export async function layout(page: Page | Frame) {
-  expect.soft(await layoutFailures(page)).toEqual([]);
+export async function layout(page: Page | Frame, copySelector?: string) {
+  expect.soft(await layoutFailures(page, copySelector)).toEqual([]);
 }
 export async function establishedToReview(page: Page, screenshotPrefix?: string) {
   await choose(page, 'Business & commercial');

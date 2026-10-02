@@ -49,7 +49,7 @@ export function ChoiceGroup({
   const selectedValues = Array.isArray(value) ? value : value === null ? [] : [value];
   const selectionKey = selectedValues.join("\u001f");
   const localLimitError = maximum !== undefined && limitExceededFor === selectionKey
-    ? additionalSelectionCount ? "You can choose " + maximum + " answers in total." : COMMON_COPY.maxSelection(maximum)
+    ? additionalSelectionCount ? "You can choose " + maximum + " options, including your written answer." : COMMON_COPY.maxSelection(maximum)
     : undefined;
   const visibleError = error || localLimitError;
   const describedBy = [help ? `${idPrefix}-help` : null, visibleError ? `${idPrefix}-error` : null]

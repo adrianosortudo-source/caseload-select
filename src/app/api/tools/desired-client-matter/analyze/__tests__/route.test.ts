@@ -232,7 +232,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     await expectNoStore(response);
   });
 
-  it("logs only the rejected field and rule code when blueprint validation fails", async () => {
+  it("logs safe rejection details when blueprint validation fails", async () => {
     const invalid = structuredClone(MODEL_RESULT);
     invalid.brief.client_and_matter.claims[0].text = "x".repeat(701);
     mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
@@ -245,6 +245,9 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
       model: "gemini-2.5-flash",
       field: "client_and_matter",
       reason: "statement_text_budget_or_format",
+      finalField: "client_and_matter",
+      finalReason: "card_shape",
+      repairAttempts: 2,
     });
     expect(JSON.stringify(warn.mock.calls)).not.toContain("x".repeat(701));
   });
@@ -263,6 +266,9 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
       field: "definition_components.client",
       reason: "source_answer_path_not_allowed_for_slot",
       sourcePath: "practice.firm_type",
+      finalField: "definition_components.client",
+      finalReason: "statement_shape",
+      repairAttempts: 2,
     });
     expect(JSON.stringify(warn.mock.calls)).not.toContain(JSON.stringify(ENVELOPE.answers));
     expect(JSON.stringify(warn.mock.calls)).not.toContain(invalid.brief.definition_components.client.text);

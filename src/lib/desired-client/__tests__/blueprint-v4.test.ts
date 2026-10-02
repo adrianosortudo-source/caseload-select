@@ -11,7 +11,7 @@ describe("v4 provenance and client pathway", () => {
   it("keeps the law firm out of the desired-client identity and does not approve a target on wording review", () => {
     const result=validBlueprint();
     expect(result.brief.definition_components).not.toHaveProperty("firm");
-    expect(result.brief.definition_sentence).toMatch(/^The firm wants to attract and serve business owners for matters such as/);
+    expect(result.brief.definition_sentence).toMatch(/^The firm wants to attract and serve business owners in a situation where/);
     expect(buildDefinitionSentence(result.brief,true,completeAnswers().client.goal_detail)).toBe(buildDefinitionSentence(result.brief,false,completeAnswers().client.goal_detail));
     expect(result.brief.definition_sentence).toContain("so the client can understand the assets, liabilities and closing obligations");
     expect(result.brief.definition_sentence).not.toContain("progress will be assessed");
@@ -30,6 +30,9 @@ describe("v4 provenance and client pathway", () => {
     a.client.pathway_basis="client_feedback";
     result.brief.decision_pathway.trigger.source_answer_ids=["situation.trigger","client.pathway_basis"];
     expect(validateAnalysisResult(result,a,[])).not.toBeNull();
+    a.client.choice_priorities=["clear_fees"];
+    result.brief.decision_pathway.trigger=evidence("Clients report a planned purchase and clear fees matter to them.","client_reported","situation.trigger","client.pathway_basis","client.choice_priorities","client.choice_basis");
+    expect(validateAnalysisResult(result,a,[])).toBeNull();
   });
   it("does not let pathway observations certify client-choice factors", () => {
     const a=completeAnswers(); a.client.pathway_basis="firm_observation";
@@ -88,7 +91,7 @@ describe("v4 provenance and client pathway", () => {
     const b=buildStructuredBlueprintV4(a);
     expect(validateAnalysisResult({brief:b,clarification_code:null},a,[])).not.toBeNull();
     expect(b.definition_sentence.split(/\s+/).length).toBeLessThanOrEqual(85);
-    expect(b.definition_sentence).toContain("for matters such as a business buyer");
+    expect(b.definition_sentence).toContain("in a situation where a business buyer");
     expect(b.definition_sentence).toContain("because the firm cites");
     expect(b.definition_sentence).toContain("so the client can understand the assets");
     expect(b.definition_sentence).not.toContain("retained matters");

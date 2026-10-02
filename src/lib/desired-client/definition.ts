@@ -1,6 +1,12 @@
 import type { DesiredClientBrief, DesiredClientBriefV2, DesiredClientBriefV4 } from "./types";
 
 const clean = (value: string) => value.trim().replace(/\s+/g, " ").replace(/[.\s]+$/, "");
+const hasDecisionEndpoint = (value: string) => /\b(?:before|prior to)\b[^.!?,;]{0,70}\b(?:decid\w*|decision)\b[^.!?,;]{0,50}\bproceed\b/i.test(value);
+
+function removeRepeatedDecisionEndpoint(benefit: string, matter: string): string {
+  if (!hasDecisionEndpoint(benefit) || !hasDecisionEndpoint(matter)) return benefit;
+  return benefit.replace(/(?:,\s*|\s+)(?:before|prior to)\s+[^.!?,;]{0,70}\b(?:decid\w*|decision)\b[^.!?,;]{0,50}\bproceed\b(?:\s+with\s+[^,.!?]+)?$/i, "").trim();
+}
 
 /** Build the required opening sentence from the four source-linked components. */
 export function buildDefinitionSentence(brief: Pick<DesiredClientBrief | DesiredClientBriefV2, "definition_components"> | Pick<DesiredClientBriefV4,"definition_components">, _confirmed: boolean, clientBenefit = "", benefitUnknown = false): string {
@@ -9,11 +15,16 @@ export function buildDefinitionSentence(brief: Pick<DesiredClientBrief | Desired
   const reasonText = clean(reasons.text) || "the firm's reasons are still being established";
   const outcomeText = clean(outcome.text);
   if ("client" in brief.definition_components) {
-    const clientType = (clean(brief.definition_components.client.text) || "the desired client type is still to be defined").replace(/^(A|An|The)\b/, article => article.toLowerCase());
-    const definitionReason = reasonText.replace(/^(?:the firm (?:wants|prefers) this work )?because\s+/i, "").replace(/^(A|An|The)\b/, article => article.toLowerCase());
-    const matterText = clientText || "the client's situation and matter are still to be defined";
-    const clientMatter = `for matters such as ${matterText[0].toLocaleLowerCase("en-CA") + matterText.slice(1)}`;
-    const practicalBenefit = clean(clientBenefit);
+    const rawClientType = clean(brief.definition_components.client.text) || "the desired client type is still to be defined";
+    const clientTypeWithArticle = rawClientType.replace(/^(A|An|The)\b/, article => article.toLowerCase());
+    const singularRole = /^(owner or founder|owner|founder|buyer|seller|business owner|company owner|individual|entrepreneur|executive|shareholder|principal)\b/i.exec(rawClientType);
+    const clientType = singularRole && !/^(a|an|the)\b/i.test(rawClientType)
+      ? `${/^(owner or founder|owner|individual|entrepreneur|executive)\b/i.test(rawClientType) ? "an" : "a"} ${rawClientType[0].toLocaleLowerCase("en-CA") + rawClientType.slice(1)}`
+      : clientTypeWithArticle;
+    const definitionReason = reasonText.replace(/^(?:the firm (?:wants|prefers) this work )?because\s+/i, "").replace(/^(A|An|The)\b/, article => article.toLowerCase()).replace(/^it\b/i, "the work");
+    const matterText = clean(client_matter.text) || "the specific matter details remain to be defined";
+    const clientMatter = `in a situation where ${matterText[0].toLocaleLowerCase("en-CA") + matterText.slice(1)}`;
+    const practicalBenefit = removeRepeatedDecisionEndpoint(clean(clientBenefit), matterText);
     const alreadyIncluded = practicalBenefit && clientMatter.toLocaleLowerCase("en-CA").includes(practicalBenefit.toLocaleLowerCase("en-CA"));
     const benefitClause = practicalBenefit
       ? alreadyIncluded ? "" : `, so the client can ${practicalBenefit[0].toLocaleLowerCase("en-CA") + practicalBenefit.slice(1)}`
