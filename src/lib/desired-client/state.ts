@@ -11,7 +11,7 @@ export interface ToolState {
   savedBrief: SavedBrief|null; briefNeedsUpdate:boolean; reviewed: boolean; aiConsent: boolean; reviewRunId: string|null; requestCount: number;
   askedClarifications: ClarificationCode[]; activeClarification: ClarificationCode|null; dismissedCode: ClarificationCode|null;
   interviewRunId:string|null; interviewPrompt:Extract<InterviewClarificationPrompt,{outcome:"ask"}>|null; clarificationLoading:boolean;
-  loading: boolean; retryAllowed:boolean; error: ""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged"|"clarificationUnavailable"; storageMessage: ""|"saved"|"unavailable"|"expired"|"invalid"; copyFailed: boolean;
+  loading: boolean; retryAllowed:boolean; error: ""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged"|"clarificationUnavailable"|"clarificationLimitReached"; storageMessage: ""|"saved"|"unavailable"|"expired"|"invalid"; copyFailed: boolean;
   legacyBriefReplaced:boolean;
 }
 const emptyMap = () => ({ CLIENT_MATTER_UNCLEAR:null, VALUE_EFFORT_CONFLICT:null, CAPACITY_CONFLICT:null, REPEATABILITY_UNPROVEN:null, OPPORTUNITY_UNSUPPORTED:null });

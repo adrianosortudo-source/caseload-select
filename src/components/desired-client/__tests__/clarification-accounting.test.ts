@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { completeAnswers } from "@/lib/desired-client/__tests__/blueprint-helpers";
 import { initialToolState } from "@/lib/desired-client/state";
-import { advanceWithoutClarification, reserveClarificationRequest, showValidClarificationPrompt } from "../DesiredClientTool";
+import { advanceWithoutClarification, clarificationNoticeFor, reserveClarificationRequest, showValidClarificationPrompt } from "../DesiredClientTool";
 
 const prompt = {
   outcome: "ask",
@@ -51,7 +51,7 @@ describe("clarification question allowance", () => {
     expect(continued.answers.interview.clarification_count).toBe(0);
     expect(continued.answers.interview.clarified_stages).toEqual([]);
 
-    const unavailable = advanceWithoutClarification(base, "ed4758bb-8155-4b73-99dd-d7ed30b16078", true);
+    const unavailable = advanceWithoutClarification(base, "ed4758bb-8155-4b73-99dd-d7ed30b16078", "unavailable");
     expect(unavailable.stage).toBe(2);
     expect(unavailable.error).toBe("clarificationUnavailable");
     expect(unavailable.answers.interview.clarification_count).toBe(0);
@@ -66,5 +66,16 @@ describe("clarification question allowance", () => {
     const secondRun = "346c5073-8bcb-41fa-a73d-bf81797d44f0";
     expect(reserveClarificationRequest(budget, secondRun)).toBe(true);
     expect(budget).toEqual({ runId: secondRun, count: 1 });
+  });
+
+  it("explains when the local request budget ends follow-ups without misreporting provider availability", () => {
+    const base = { ...initialToolState(), answers: completeAnswers(), stage: 4 as const, view: "questions" as const };
+    const limited = advanceWithoutClarification(base, "ed4758bb-8155-4b73-99dd-d7ed30b16078", "limit");
+    expect(limited.stage).toBe(5);
+    expect(limited.error).toBe("clarificationLimitReached");
+    expect(limited.answers).toEqual(base.answers);
+    expect(clarificationNoticeFor(limited.error)).toContain("reached its limit");
+    expect(clarificationNoticeFor("clarificationUnavailable")).toContain("could not complete");
+    expect(clarificationNoticeFor("clarificationUnavailable")).not.toContain("limit");
   });
 });
