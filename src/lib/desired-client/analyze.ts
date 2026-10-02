@@ -83,8 +83,16 @@ export async function runDesiredClientAnalysis(
       const remaining = REQUEST_TIMEOUT_MS - (Date.now() - startedAt);
       if (!repairable || remaining < 3000) break;
       const firstContactUnanswered = parts[0] === "decision_pathway" && parts[1] === "first_contact" && !request.answers.situation.contact && !request.answers.write_ins?.contact?.trim();
+      const pathwayBasisMismatch = parts[0] === "decision_pathway" && failure.reason === "client_reported_basis_mismatch";
+      const pathwayBasisGuidance = pathwayBasisMismatch && request.answers.client.pathway_basis === "firm_observation"
+        ? " The selected client.pathway_basis is firm_observation. For this known pathway claim, use evidence_basis firm_reported_observation and cite the relevant observed answer plus client.pathway_basis. client_reported is incorrect because the firm has not supplied client feedback for this pathway. If the field is not established, return only a gap using evidence_basis unknown and an unanswered relevant source."
+        : pathwayBasisMismatch && request.answers.client.pathway_basis === "client_feedback"
+        ? " The selected client.pathway_basis is client_feedback. For this known pathway claim, use evidence_basis client_reported and cite the relevant client-pathway answer plus client.pathway_basis. firm_reported_observation is incorrect because this item is based on client feedback. If the field is not established, return only a gap using evidence_basis unknown and an unanswered relevant source."
+        : "";
       const repairGuidance = firstContactUnanswered
         ? " The submitted answers do not establish who initiates first contact or how the client reaches the firm. State that gap plainly, cite only situation.contact, and use evidence_basis unknown. Do not infer contact behaviour from the client's role, timing or decision context, and do not label the gap client_reported or firm_reported_observation."
+        : pathwayBasisGuidance
+        ? pathwayBasisGuidance
         : failure.reason === "unknown_evidence_basis_mismatch"
         ? " Separate each known statement from any unanswered or unknown finding. A known claim cites only known sources and its supported evidence basis; a gap claim cites only unknown or empty sources and uses evidence_basis unknown (the application derives kind unknown). Never combine a known fact with a gap in one claim."
         : failure.reason === "client_reported_basis_mismatch"

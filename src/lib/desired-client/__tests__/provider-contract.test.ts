@@ -170,6 +170,31 @@ describe("provider output contract", () => {
       expect(outcome.result.brief.decision_pathway.first_contact.source_answer_ids).toEqual(["situation.contact"]);
     }
   });
+  it("repairs a pathway basis to match the firm's selected observation source", async () => {
+    const input = request();
+    input.answers.client.pathway_basis = "firm_observation";
+    const invalid = validBlueprint();
+    invalid.brief.decision_pathway.trigger = {
+      text: "The client reports that a planned purchase prompts them to seek legal advice.",
+      source_answer_ids: ["situation.trigger", "client.pathway_basis"],
+      evidence_basis: "client_reported",
+      kind: "experience",
+    };
+    const repaired = {
+      text: "The firm observes that a planned business purchase can prompt a need for legal advice.",
+      source_answer_ids: ["situation.trigger", "client.pathway_basis"],
+      evidence_basis: "firm_reported_observation",
+      kind: "experience",
+    };
+    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(invalid) } })
+      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(repaired) } });
+    const outcome = await runDesiredClientAnalysis(input, []);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(2);
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("client.pathway_basis is firm_observation");
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("client_reported is incorrect");
+    if (outcome.mode === "live") expect(outcome.result.brief.decision_pathway.trigger.evidence_basis).toBe("firm_reported_observation");
+  });
   it("repairs a claim that mixes client feedback and a differently based firm observation", async () => {
     const input = request();
     input.answers.client.choice_basis = "client_feedback";
