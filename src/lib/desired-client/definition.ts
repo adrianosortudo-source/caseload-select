@@ -10,7 +10,7 @@ export function buildDefinitionSentence(brief: Pick<DesiredClientBrief | Desired
   const outcomeText = clean(outcome.text);
   if ("client" in brief.definition_components) {
     const clientType = (clean(brief.definition_components.client.text) || "the desired client type is still to be defined").replace(/^(A|An|The)\b/, article => article.toLowerCase());
-    const definitionReason = reasonText.replace(/^(?:the firm (?:wants|prefers) this work )?because\s+/i, "").replace(/^The firm\b/, "the firm");
+    const definitionReason = reasonText.replace(/^(?:the firm (?:wants|prefers) this work )?because\s+/i, "").replace(/^(A|An|The)\b/, article => article.toLowerCase());
     const matterText = clientText || "the client's situation and matter are still to be defined";
     const clientMatter = `for matters such as ${matterText[0].toLocaleLowerCase("en-CA") + matterText.slice(1)}`;
     const practicalBenefit = clean(clientBenefit);

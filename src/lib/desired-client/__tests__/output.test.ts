@@ -15,6 +15,8 @@ describe("AI Blueprint output contract", () => {
     expect(sentence).toContain("attract and serve an Ontario business owner");
     expect(sentence).toContain("because it fits the team's transaction experience");
     expect(sentence).not.toContain("because The firm wants");
+    value.brief.definition_components.reasons.text = "The work fits the team's transaction experience";
+    expect(buildDefinitionSentence(value.brief, false)).toContain("because the work fits");
   });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
