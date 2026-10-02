@@ -30,6 +30,19 @@ describe("provider output contract", () => {
     expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).not.toContain("firm_reported_experience");
     expect(sourceIds.map((id: string) => aliases[id])).not.toContain("client_context.geography");
   });
+  it("permits the complete five-source set required to ground a contribution claim", () => {
+    const answers = completeAnswers();
+    Object.assign(answers.value, { fee_amount:"8000", direct_cost_amount:"4800", currency:"CAD", amount_basis:"estimated", amount_scope:"per_matter" });
+    const schema = providerBlueprintSchema(answers) as ReturnType<typeof providerBlueprintSchema> & {properties:{brief:{properties:{why_firm_wants_work:{properties:{claims:{items:{properties:{source_answer_ids:{maxItems:number;items:{enum:string[]}};evidence_basis:{description:string}}}}}}}}}};
+    const sources = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.source_answer_ids;
+    const aliases = providerSourceAliases(answers);
+    expect(sources.maxItems).toBeGreaterThanOrEqual(5);
+    const evidenceDescription = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_basis.description;
+    const feeAlias = Object.keys(aliases).find(id => aliases[id] === "value.fee_amount");
+    expect(evidenceDescription).toContain("For firm_reported_estimate you MUST cite at least one of");
+    expect(evidenceDescription).toContain(feeAlias);
+    expect(sources.items.enum.map(id => aliases[id])).toEqual(expect.arrayContaining(["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"]));
+  });
   it("still rejects a malformed root rather than accepting misplaced cards", async () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify({ ...validBlueprint(), client_and_matter: { claims: [] } }) } });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { completeAnswers } from "./blueprint-helpers";
-import { validateInterviewClarificationRequest } from "../interview-clarification";
+import { buildInterviewClarificationResponseSchema, buildInterviewClarificationUserPrompt, validateInterviewClarificationRequest } from "../interview-clarification";
 import { interviewClarificationSourceFingerprint } from "../types";
 import type { InterviewClarificationRequestEnvelope } from "../types";
 
@@ -36,6 +36,28 @@ function nextStageRequest(): InterviewClarificationRequestEnvelope {
 }
 
 describe("adaptive interview clarification validation", () => {
+  it("limits model purposes and sources to the current completed stage", () => {
+    const request = nextStageRequest();
+    request.stage = 3;
+    const schema = buildInterviewClarificationResponseSchema(request);
+    expect(schema.properties.purpose.enum).toContain("economics_effort_conflict");
+    expect(schema.properties.purpose.enum).not.toContain("client_choice_criteria");
+    expect(schema.properties.source_answer_ids.items.enum).toContain("value.fee_effort");
+    expect(schema.properties.source_answer_ids.items.enum).not.toContain("focus.work");
+    expect(schema.properties.source_answer_ids.items.enum).not.toContain("value.fee_amount");
+  });
+  it("sends display labels instead of internal fee and effort codes to the model", () => {
+    const request = nextStageRequest();
+    request.stage = 3;
+    request.answers.value.collected_fee = "5to15";
+    request.answers.value.team_hours = "16to40";
+    request.answers.value.fee_effort = "scoped";
+    const payload = JSON.parse(buildInterviewClarificationUserPrompt(request));
+    expect(payload.completed_stage_answers).toContain("value.collected_fee: C$5,000 to under C$15,000");
+    expect(payload.completed_stage_answers).toContain("value.team_hours: More than 15, up to 40 hours");
+    expect(payload.completed_stage_answers).toContain("value.fee_effort: Worthwhile when the scope is clear");
+    expect(payload.completed_stage_answers).not.toContain("value.collected_fee: 5to15");
+  });
   it("accepts prior answered clarification history containing its stored reflection", () => {
     expect(validateInterviewClarificationRequest(nextStageRequest()).valid).toBe(true);
   });
