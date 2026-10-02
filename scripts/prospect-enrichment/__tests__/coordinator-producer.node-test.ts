@@ -145,3 +145,73 @@ test("receipt reference hash mismatch and absent required hash remain distinct h
   assert.ok(result.expected.entries.some(e=>e.errorCodes.includes("reference_hash_mismatch")&&e.clientPackageId===null));
   assert.ok(result.expected.entries.some(e=>e.errorCodes.includes("reference_expected_hash_invalid")&&e.clientPackageId===null));
 });
+
+function freshProvenanceFixture() {
+  const state=coordinatorFixture();state.candidates=state.candidates.slice(0,1);
+  const raw=state.candidates[0].results[0] as unknown as Record<string,unknown>;
+  const source:Record<string,unknown>={sourceId:"fresh-source",url:"https://synthetic.example/services",requestedUrl:"https://synthetic.example/services",finalUrl:"https://synthetic.example/services",policyState:"public-source",publicationLabel:"2026",publicationPrecision:"unknown",publisher:"Synthetic firm",observedAt:producerDate,observedOn:null,retrievedAt:producerDate,retrievalMethod:"public-https-get",retrievalOutcome:"success-content-verified",httpStatus:200,bodySha256:"b".repeat(64),excerpt:"Synthetic service statement",missingProvenanceReason:null};
+  const observation:Record<string,unknown>={observationId:"fresh-fact",name:"Synthetic service",matterFit:"unknown",observedAt:producerDate,sourceIds:["fresh-source"],missingProvenanceReason:null};
+  raw.evidence=[source];raw.researchFailures=[];raw.record={canonicalDomain:"synthetic-0.example",firmName:"Synthetic firm",services:[observation]};
+  return {state,source,observation};
+}
+
+test("fresh provenance preserves explicit source and observation holds, all source metadata and raw evidence",()=>{
+  const {state,source,observation}=freshProvenanceFixture();
+  source.missingProvenanceReason="content-not-verified";observation.missingProvenanceReason="fact-content-not-verified";
+  const before=canonicalJson(state),a=compile(state),b=compile(state),envelope=a.compiled.packages[0].envelope;
+  assert.equal(canonicalJson(state),before);assert.equal(canonicalJson(a.exported.sourceInventory.state),before);
+  assert.equal(envelope.sources.length,1);assert.equal(envelope.observations.length,1);
+  const {sourceId,...mapped}=envelope.sources[0],{sourceId:originalSourceId,...original}=source;
+  assert.deepEqual(mapped,original);assert.notEqual(sourceId,originalSourceId);
+  assert.deepEqual(envelope.observations[0].sourceIds,[sourceId]);
+  assert.equal(envelope.observations[0].missingProvenanceReason,"fact-content-not-verified");
+  assert.equal(envelope.subject.identityState,"unresolved");
+  assert.deepEqual(a.compiled.packages.map(p=>items(p.envelope)),b.compiled.packages.map(p=>items(p.envelope)));
+  assert.equal(protocolHash(a.exported),protocolHash(b.exported));
+  assert.ok(canonicalJson(envelope.originalResearch.content).includes("content-not-verified"));
+  assert.ok(canonicalJson(envelope.originalResearch.content).includes("fact-content-not-verified"));
+});
+
+test("explicit publication precision is authoritative; only absent precision uses legacy inference",()=>{
+  for(const precision of ["unknown","year","exact_date"]){
+    const {state,source}=freshProvenanceFixture();source.publicationPrecision=precision;
+    if(precision==="exact_date")source.publicationLabel="2026-09-23";
+    const envelope=compile(state).compiled.packages[0].envelope;
+    assert.equal(envelope.sources[0].publicationPrecision,precision);assert.equal(envelope.sources[0].missingProvenanceReason,null);
+  }
+  for(const [label,precision] of [["2026","year"],["2026-09-23","exact_date"],["Copyright 2026","unknown"]]){
+    const {state,source}=freshProvenanceFixture();delete source.publicationPrecision;source.publicationLabel=label;
+    assert.equal(compile(state).compiled.packages[0].envelope.sources[0].publicationPrecision,precision);
+  }
+  for(const invalid of ["month",null,2026,["year"]]){
+    const {state,source}=freshProvenanceFixture();source.publicationPrecision=invalid;
+    const before=canonicalJson(state),result=compile(state),mapped=result.compiled.packages[0].envelope.sources[0];
+    assert.equal(mapped.publicationPrecision,"unknown");assert.equal(mapped.missingProvenanceReason,"source_publication_precision_not_supported");
+    assert.equal(canonicalJson(state),before);assert.equal(canonicalJson(result.exported.sourceInventory.state),before);
+  }
+});
+
+test("explicit provenance holds cannot hide any derived date, URL or source-reference gap",()=>{
+  const {state,source,observation}=freshProvenanceFixture();
+  source.missingProvenanceReason="source-content-not-verified";source.observedAt="2026";source.url="file:///private-source";
+  observation.missingProvenanceReason="fact-content-not-verified";observation.observedAt="2026";observation.sourceIds=[];
+  const result=compile(state),mappedSource=result.compiled.packages.flatMap(p=>p.envelope.sources)[0],mappedObservation=result.compiled.packages.flatMap(p=>p.envelope.observations)[0];
+  assert.equal(mappedSource.missingProvenanceReason,"source-content-not-verified; source_date_not_supported_at_recorded_precision; source_url_not_recorded");
+  assert.equal(mappedObservation.missingProvenanceReason,"fact-content-not-verified; source_date_not_supported_at_recorded_precision; source_reference_not_recorded");
+  assert.equal(mappedSource.url,null);assert.equal(mappedSource.observedAt,null);assert.equal(mappedObservation.observedAt,null);
+  assert.ok(result.compiled.packages.every(p=>canonicalJson(p.envelope.originalResearch.content).includes("file:///private-source")));
+});
+
+test("blank holds preserve derived failures and oversized combined reasons fail closed without truncation",()=>{
+  const {state,source,observation}=freshProvenanceFixture();
+  source.missingProvenanceReason="   ";source.observedAt=null;
+  observation.missingProvenanceReason="";observation.observedAt=null;observation.sourceIds=[];
+  const result=compile(state),mappedSource=result.compiled.packages.flatMap(p=>p.envelope.sources)[0],mappedObservation=result.compiled.packages.flatMap(p=>p.envelope.observations)[0];
+  assert.equal(mappedSource.missingProvenanceReason,"not_recorded_in_source");
+  assert.equal(mappedObservation.missingProvenanceReason,"not_recorded_in_source; source_reference_not_recorded");
+  source.missingProvenanceReason="x".repeat(2000);observation.sourceIds=["fresh-source"];
+  const before=canonicalJson(state),held=compile(state);
+  assert.equal(held.compiled.packages.length,0);assert.ok(held.compiled.expected.entries.every(entry=>entry.clientPackageId===null));
+  assert.ok(held.issues.some(issue=>issue.code==="producer_envelope_schema_invalid"));
+  assert.equal(canonicalJson(state),before);assert.equal(canonicalJson(held.exported.sourceInventory.state),before);
+});

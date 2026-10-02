@@ -5,6 +5,7 @@ import { parseProspectEnrichmentEnvelope, type ProspectEnrichmentEnvelope } from
 import { prospectEnrichmentIdempotencyKey } from "../../src/lib/prospect-enrichment-hash";
 import { canonicalJson, object, protocolHash, sha256 } from "./model";
 import { profileConfig, wholeFirmRunId, type EnrichmentProfile } from "./profiles";
+import type { ComparisonSnapshot } from "./reconciliation";
 
 export const PRODUCTION_ORIGIN = "https://admin.caseloadselect.ca";
 export type OutboxEntry = { schemaVersion: "prospect-enrichment-outbox/v1"; key: string; payloadSha256: string; rawBodySha256: string; body: string; envelope: ProspectEnrichmentEnvelope; createdAt: string };
@@ -106,6 +107,67 @@ export async function submitOne(options: { outbox: string; key: string; approval
     } else if ([429, 502, 503, 504].includes(response.status)) { state.nextAttemptAt = retryTime(state.attempts, now, response.headers.get("Retry-After")); state.state = state.nextAttemptAt ? "retry_pending" : "retry_exhausted"; state.lastError = `http_${response.status}`; }
     else { state.state = "manual_review"; state.nextAttemptAt = null; state.lastError = `http_${response.status}`; }
     await atomicJson(statePath(options.outbox, entry.key), state); return state;
+  } finally {
+    const current = JSON.parse(await fs.readFile(lockFile, "utf8"));
+    if (current.owner === owner) await fs.unlink(lockFile);
+  }
+}
+
+/**
+ * One-shot proof that the server recognizes the exact already-received request as a replay.
+ * It never changes delivery state or receipt, and an ambiguous attempt is never retried.
+ */
+export async function verifyIdenticalReplay(options: { outbox: string; key: string; approval: DeliveryApproval; profile?: EnrichmentProfile; confirmation: string; token: string; comparison: ComparisonSnapshot; now?: string; fetcher?: typeof fetch; beforeNetwork?: () => void }): Promise<{ verified: boolean; networkRequests: number; httpStatus: number | null; serverPackageId: string; clientPackageId: string; payloadSha256: string; packageState: string; reason: string | null }> {
+  if (options.confirmation !== "VERIFY-IDENTICAL-PROSPECT-REPLAY") throw Error("explicit_replay_verification_confirmation_required");
+  if (!options.token.trim()) throw Error("missing_agent_token");
+  const entry = await readEntry(options.outbox, options.key), profile = options.profile ?? "legacy-backfill";
+  checkApproval(entry, options.approval, profile);
+  const state = await readState(options.outbox, entry.key);
+  if (state.state !== "received" || !state.serverPackageId || !/^[0-9a-f-]{36}$/i.test(state.serverPackageId)) throw Error("replay_requires_received_package");
+  const receiptPath = path.join(options.outbox, "receipts", `${entry.key}.json`);
+  const receipt = JSON.parse(await fs.readFile(receiptPath, "utf8"));
+  if (!object(receipt) || receipt.packageId !== state.serverPackageId || receipt.clientPackageId !== entry.envelope.packageId || receipt.payloadSha256 !== entry.payloadSha256) throw Error("replay_receipt_binding_mismatch");
+
+  const matches = options.comparison.packages.filter(p => p.clientPackageId === entry.envelope.packageId);
+  const identities = options.comparison.identities.filter(i => i.researchKey === entry.envelope.subject.researchKey);
+  const packageState = matches[0]?.state;
+  if (matches.length !== 1 || matches[0].payloadSha256 !== entry.payloadSha256 || matches[0].serverPackageId !== state.serverPackageId || typeof packageState !== "string" || !["received", "identity_hold", "evidence_hold", "ready_for_review", "applied", "rejected", "superseded"].includes(packageState) || matches[0].visible !== true ||
+      identities.length !== 1 || identities[0].databaseFirmId !== entry.envelope.subject.databaseFirmId || entry.envelope.subject.databaseFirmId === null) throw Error("replay_comparison_binding_mismatch");
+
+  const replayRoot = path.join(options.outbox, "replay-verifications"), markerPath = path.join(replayRoot, `${entry.key}.attempt.json`), resultPath = path.join(replayRoot, `${entry.key}.result.json`);
+  try {
+    const previous = JSON.parse(await fs.readFile(resultPath, "utf8"));
+    if (previous.verified === true && previous.key === entry.key && previous.clientPackageId === entry.envelope.packageId && previous.serverPackageId === state.serverPackageId && previous.payloadSha256 === entry.payloadSha256 && previous.rawBodySha256 === entry.rawBodySha256 && previous.comparisonSnapshotSha256 === options.comparison.snapshotSha256 && previous.packageState === packageState && previous.httpStatus === 200 && previous.reason === null) return { verified: true, networkRequests: 0, httpStatus: 200, serverPackageId: state.serverPackageId, clientPackageId: entry.envelope.packageId, payloadSha256: entry.payloadSha256, packageState, reason: null };
+    throw Error("replay_verification_already_attempted");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+  }
+
+  const lockFile = path.join(options.outbox, "submission.lock");
+  await fs.mkdir(options.outbox, { recursive: true });
+  let lock;
+  try { lock = await fs.open(lockFile, "wx"); } catch { throw Error("outbox_submission_locked"); }
+  const owner = randomUUID(), now = options.now ?? new Date().toISOString();
+  await lock.writeFile(JSON.stringify({ owner, processId: process.pid, key: entry.key, startedAt: now, operation: "verify-replay" })); await lock.close();
+  try {
+    // O_EXCL makes this a strict one-shot. A crash after this point requires manual review.
+    await fs.mkdir(replayRoot, { recursive: true });
+    const marker = await fs.open(markerPath, "wx");
+    await marker.writeFile(`${JSON.stringify({ key: entry.key, clientPackageId: entry.envelope.packageId, serverPackageId: state.serverPackageId, payloadSha256: entry.payloadSha256, rawBodySha256: entry.rawBodySha256, comparisonSnapshotSha256: options.comparison.snapshotSha256, startedAt: now })}\n`, "utf8");
+    await marker.sync(); await marker.close();
+    const finish = async (verified: boolean, httpStatus: number | null, reason: string | null) => {
+      await atomicJson(resultPath, { key: entry.key, clientPackageId: entry.envelope.packageId, serverPackageId: state.serverPackageId, payloadSha256: entry.payloadSha256, rawBodySha256: entry.rawBodySha256, comparisonSnapshotSha256: options.comparison.snapshotSha256, packageState, verified, httpStatus, reason, completedAt: new Date().toISOString() });
+      return { verified, networkRequests: 1, httpStatus, serverPackageId: state.serverPackageId!, clientPackageId: entry.envelope.packageId, payloadSha256: entry.payloadSha256, packageState, reason };
+    };
+    try { options.beforeNetwork?.(); } catch (error) { await fs.unlink(markerPath).catch(() => undefined); throw error; }
+    let response: Response;
+    try {
+      response = await (options.fetcher ?? fetch)(`${PRODUCTION_ORIGIN}/api/internal/prospect-enrichment/drafts`, { method: "POST", headers: { Authorization: `Bearer ${options.token.trim()}`, "Content-Type": "application/json", "Idempotency-Key": entry.key }, body: entry.body, redirect: "error", signal: AbortSignal.timeout(20_000) });
+    } catch { return finish(false, null, "network_or_timeout_uncertain"); }
+    if (response.status !== 200) return finish(false, response.status, "server_did_not_confirm_replay");
+    let echoed: unknown; try { echoed = await response.json(); } catch { echoed = null; }
+    if (!object(echoed) || echoed.packageId !== state.serverPackageId || echoed.clientPackageId !== entry.envelope.packageId || echoed.payloadSha256 !== entry.payloadSha256 || echoed.runId !== entry.envelope.runId || echoed.state !== packageState || echoed.receivedAt !== receipt.receivedAt || typeof echoed.receivedAt !== "string" || !Number.isFinite(Date.parse(echoed.receivedAt))) return finish(false, 200, "replay_response_binding_mismatch");
+    return finish(true, 200, null);
   } finally {
     const current = JSON.parse(await fs.readFile(lockFile, "utf8"));
     if (current.owner === owner) await fs.unlink(lockFile);
