@@ -6,6 +6,10 @@ import { isInterviewClarificationCurrent, type AnalysisResult, type AnswerRefere
 
 const SOURCE_PATHS = new Set<string>(DESIRED_CLIENT_ANSWER_PATHS);
 const FOLLOWUP_STAGES: Record<string, number[]> = { client_and_matter:[1,2], client_goals_needs:[2], why_firm_wants_work:[3], why_client_chooses_firm:[4], recognizable_circumstances:[5,6], evidence_and_open_questions:[1,2,3,4,5,6], decision_pathway:[2,5,6], definition_client_type:[2], definition_client_matter:[2], definition_reasons:[3], definition_outcome:[6] };
+type SafeSourcePath = AnswerReferencePath | `interview.followups.${number}`;
+export function isSafeSourcePath(path: string): path is SafeSourcePath {
+  return SOURCE_PATHS.has(path) || /^interview\.followups\.\d+$/.test(path);
+}
 const BASIS: readonly EvidenceBasis[] = ["firm_reported_recorded", "firm_reported_estimate", "firm_reported_experience", "firm_reported_observation", "client_reported", "firm_preference", "source_observed", "hypothesis", "unknown"];
 const KIND = ["experience", "preference", "hypothesis", "unknown", "suggestion"] as const;
 const BUDGETS = {
@@ -24,7 +28,7 @@ const numericTokens = (text: string) => [...text.matchAll(/[+-]?\s*(?:[$€£]\s
   const sign = raw.startsWith("-") ? "-" : raw.startsWith("+") ? "+" : "";
   return sign + raw.replace(/[^\d.%]/g, "");
 });
-export type AnalysisValidationFailure = { field: string; reason: string };
+export type AnalysisValidationFailure = { field: string; reason: string; sourcePath?: AnswerReferencePath | `interview.followups.${number}` };
 
 function allowedPaths(slot: string): readonly string[] {
   if (slot === "practice_current_practice") return ["practice.firm_type"];
@@ -75,8 +79,8 @@ export function allowedSourceAnswerPathsForAnswers(slot: string, answers: Desire
   return paths;
 }
 
-function validStatement(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string) => void): value is EvidenceLinkedStatement {
-  const reject = (reason: string) => { reportFailure?.(reason); return false; };
+function validStatement(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string, sourcePath?: SafeSourcePath) => void): value is EvidenceLinkedStatement {
+  const reject = (reason: string, sourcePath?: SafeSourcePath) => { reportFailure?.(reason, sourcePath); return false; };
   const budget = BUDGETS[slot as keyof typeof BUDGETS] ?? BUDGETS.open;
   if (!exact(value, ["text", "kind", "source_answer_ids", "evidence_basis"]) || typeof value.text !== "string" || typeof value.kind !== "string" || !KIND.includes(value.kind as typeof KIND[number]) || !Array.isArray(value.source_answer_ids) || typeof value.evidence_basis !== "string" || !BASIS.includes(value.evidence_basis as EvidenceBasis)) return reject("statement_shape");
   const text = value.text.trim().replace(/\s+/g, " ");
@@ -84,8 +88,9 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   const paths = value.source_answer_ids as unknown[];
   if (paths.length < 1 || paths.length > 8) return reject("source_answer_path_count");
   if (new Set(paths).size !== paths.length) return reject("source_answer_path_duplicate");
-  if (paths.some((path) => typeof path !== "string" || !(SOURCE_PATHS.has(path) || /^interview\.followups\.\d+$/.test(path)))) return reject("source_answer_path_unrecognized");
-  if (paths.some((path) => !permittedSourceAnswerPath(path as string, answers, slot))) return reject("source_answer_path_not_allowed_for_slot");
+  if (paths.some((path) => typeof path !== "string" || !isSafeSourcePath(path))) return reject("source_answer_path_unrecognized");
+  const disallowedPath = paths.find((path) => typeof path === "string" && !permittedSourceAnswerPath(path, answers, slot));
+  if (typeof disallowedPath === "string" && isSafeSourcePath(disallowedPath)) return reject("source_answer_path_not_allowed_for_slot", disallowedPath);
   let hasUnknown = false;
   const supportedValues: string[] = [];
   for (const path of paths as AnswerReferencePath[]) {
@@ -146,11 +151,11 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   return true;
 }
 
-function checkDefinitionPart(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string) => void): value is EvidenceLinkedStatement {
+function checkDefinitionPart(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string, sourcePath?: SafeSourcePath) => void): value is EvidenceLinkedStatement {
   return validStatement(value, answers, slot, reportFailure);
 }
 
-function validCard(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string) => void): value is { claims: EvidenceLinkedStatement[] } {
+function validCard(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string, sourcePath?: SafeSourcePath) => void): value is { claims: EvidenceLinkedStatement[] } {
   if (!exact(value, ["claims"]) || !Array.isArray(value.claims) || value.claims.length < 1 || value.claims.length > 6) {
     reportFailure?.("card_shape_or_claim_count");
     return false;
@@ -175,12 +180,12 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   if(!exact(brief.definition_components,["client","client_matter","reasons","outcome"]))return reject("definition_components", "component_shape");
   const components=brief.definition_components;
   const definitionParts = [["client","definition_client_type"],["client_matter","definition_client_matter"],["reasons","definition_reasons"],["outcome","definition_outcome"]] as const;
-  for (const [field, slot] of definitionParts) if (!checkDefinitionPart(components[field],answers,slot,(reason)=>reportFailure?.({field:`definition_components.${field}`,reason}))) return null;
-  for(const field of cardNames)if(!validCard(brief[field],answers,field,(reason)=>reportFailure?.({field,reason})))return null;
+  for (const [field, slot] of definitionParts) if (!checkDefinitionPart(components[field],answers,slot,(reason,sourcePath)=>reportFailure?.({field:`definition_components.${field}`,reason,...(sourcePath?{sourcePath}:{})}))) return null;
+  for(const field of cardNames)if(!validCard(brief[field],answers,field,(reason,sourcePath)=>reportFailure?.({field,reason,...(sourcePath?{sourcePath}:{})})))return null;
   const pathway=brief.decision_pathway;
   if(!exact(pathway,["trigger","first_contact","decision","desired_progress"]))return reject("decision_pathway", "pathway_shape");
   const pathwayFields=["trigger","first_contact","decision","desired_progress"] as const;
-  for(const field of pathwayFields)if(!validStatement(pathway[field],answers,"decision_pathway",(reason)=>reportFailure?.({field:`decision_pathway.${field}`,reason})))return null;
+  for(const field of pathwayFields)if(!validStatement(pathway[field],answers,"decision_pathway",(reason,sourcePath)=>reportFailure?.({field:`decision_pathway.${field}`,reason,...(sourcePath?{sourcePath}:{})})))return null;
   const typedBrief=brief as unknown as DesiredClientBriefV4;
   const expectedSentence=buildDefinitionSentence(typedBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
   // The definition is assembled from bounded, source-linked fields. A hard

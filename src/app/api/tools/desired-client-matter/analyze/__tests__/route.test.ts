@@ -249,6 +249,25 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain("x".repeat(701));
   });
 
+  it("logs a registered disallowed source path without logging answer or model text", async () => {
+    const invalid = structuredClone(MODEL_RESULT);
+    invalid.brief.definition_components.client.source_answer_ids = ["practice.firm_type"];
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(response.status).toBe(502);
+    expect(JSON.parse(warn.mock.calls[0][0] as string)).toEqual({
+      event: "[desired-client] analysis output rejected",
+      requestId: ENVELOPE.requestId,
+      model: "gemini-2.5-flash",
+      field: "definition_components.client",
+      reason: "source_answer_path_not_allowed_for_slot",
+      sourcePath: "practice.firm_type",
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(JSON.stringify(ENVELOPE.answers));
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(invalid.brief.definition_components.client.text);
+  });
+
   it("rejects a request without explicit AI consent", async () => {
     const invalid = { ...ENVELOPE, aiConsent: false };
     const response = await POST(makeRequest(JSON.stringify(invalid)));
