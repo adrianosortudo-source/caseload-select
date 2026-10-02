@@ -1,6 +1,12 @@
 import type { DesiredClientBrief, DesiredClientBriefV2, DesiredClientBriefV4 } from "./types";
 
 const clean = (value: string) => value.trim().replace(/\s+/g, " ").replace(/[.\s]+$/, "");
+const hasDecisionEndpoint = (value: string) => /\b(?:before|prior to)\b[^.!?,;]{0,70}\b(?:decid\w*|decision)\b[^.!?,;]{0,50}\bproceed\b/i.test(value);
+
+function removeRepeatedDecisionEndpoint(benefit: string, matter: string): string {
+  if (!hasDecisionEndpoint(benefit) || !hasDecisionEndpoint(matter)) return benefit;
+  return benefit.replace(/(?:,\s*|\s+)(?:before|prior to)\s+[^.!?,;]{0,70}\b(?:decid\w*|decision)\b[^.!?,;]{0,50}\bproceed\b(?:\s+with\s+[^,.!?]+)?$/i, "").trim();
+}
 
 /** Build the required opening sentence from the four source-linked components. */
 export function buildDefinitionSentence(brief: Pick<DesiredClientBrief | DesiredClientBriefV2, "definition_components"> | Pick<DesiredClientBriefV4,"definition_components">, _confirmed: boolean, clientBenefit = "", benefitUnknown = false): string {
@@ -18,7 +24,7 @@ export function buildDefinitionSentence(brief: Pick<DesiredClientBrief | Desired
     const definitionReason = reasonText.replace(/^(?:the firm (?:wants|prefers) this work )?because\s+/i, "").replace(/^(A|An|The)\b/, article => article.toLowerCase()).replace(/^it\b/i, "the work");
     const matterText = clean(client_matter.text) || "the specific matter details remain to be defined";
     const clientMatter = `in a situation where ${matterText[0].toLocaleLowerCase("en-CA") + matterText.slice(1)}`;
-    const practicalBenefit = clean(clientBenefit);
+    const practicalBenefit = removeRepeatedDecisionEndpoint(clean(clientBenefit), matterText);
     const alreadyIncluded = practicalBenefit && clientMatter.toLocaleLowerCase("en-CA").includes(practicalBenefit.toLocaleLowerCase("en-CA"));
     const benefitClause = practicalBenefit
       ? alreadyIncluded ? "" : `, so the client can ${practicalBenefit[0].toLocaleLowerCase("en-CA") + practicalBenefit.slice(1)}`

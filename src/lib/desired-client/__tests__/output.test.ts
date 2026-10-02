@@ -32,6 +32,13 @@ describe("AI Blueprint output contract", () => {
     expect(sentence).toContain("because the work makes a useful difference");
     expect(sentence).not.toContain("in situations such as the client is");
   });
+  it("does not repeat the same decision endpoint in the appended practical benefit", () => {
+    const value = validBlueprint();
+    value.brief.definition_components.client_matter.text = "The client has identified an operating business and needs an asset purchase agreement drafted or reviewed, due diligence advised, and transaction terms negotiated before deciding whether to proceed";
+    const sentence = buildDefinitionSentence(value.brief, false, "Understand which assets and liabilities are included, clarify payment and closing obligations, and negotiate how contractual risks are allocated before deciding whether to proceed");
+    expect(sentence.match(/\bbefore\b[^.!?]*\bdecid\w*\b[^.!?]*\bproceed\b/gi)).toHaveLength(1);
+    expect(sentence).toContain("negotiate how contractual risks are allocated");
+  });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
     const value = validBlueprint();
