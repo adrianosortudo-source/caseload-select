@@ -66,8 +66,16 @@ export function buildDesiredClientUserPrompt(request: AnalysisRequestEnvelope, e
   const unknownSourcePaths = Object.entries(resolved).filter(([, value]) => value.unknown).map(([path]) => path);
   // The model reflection is UI guidance, not user evidence. Keep it out of the
   // serialized answer snapshot as well as excluding it from source resolution.
+  // Keep the model snapshot and citation registry on the same display labels.
+  // Internal option IDs can otherwise be mistaken for different numeric bounds.
+  const displaySnapshot = (value: unknown, path = ""): unknown => {
+    if (!path.startsWith("interview.") && Object.hasOwn(resolved, path)) return resolved[path].text;
+    if (Array.isArray(value)) return value.map((item, index) => displaySnapshot(item, `${path}.${index}`));
+    if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, displaySnapshot(item, path ? `${path}.${key}` : key)]));
+    return value;
+  };
   const answersForModel = {
-    ...request.answers,
+    ...(displaySnapshot(request.answers) as Record<string, unknown>),
     interview: {
       ...request.answers.interview,
       followups: request.answers.interview.followups.map((answer) => {
