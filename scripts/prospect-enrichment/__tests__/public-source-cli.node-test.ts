@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { capturePublicSource } from "../public-source-capture";
+import type { PublicSourceCaptureReceipt } from "../public-source-capture";
 import { preparePublicVerification, runPublicSourceCommand } from "../public-source-cli";
 import { compileWholeFirmSnapshot } from "../whole-firm";
 import { sha256 } from "../model";
@@ -16,15 +16,22 @@ async function fixture(t: { after: (fn: () => Promise<void>) => void }) {
     await fs.rm(root, { recursive: true, force: true });
   });
   const body = Buffer.from("<h1>Employment law</h1>");
-  const captured = await capturePublicSource({
-    request: { schemaVersion: "prospect-public-source-request/v1", requestedUrl: "https://synthetic.example/services", allowedOrigins: ["https://synthetic.example"] },
-    outputRoot: path.join(root, "public-source"),
-    dependencies: { now: () => new Date("2026-10-02T12:00:00.000Z"), transport: async () => ({
-      httpStatus: 200, headers: { "content-type": "text/html" }, body: (async function* () { yield body; })(), cancel() {},
-    }) },
-  });
-  assert.equal(captured.ok, true);
-  if (!captured.ok) throw Error("fixture_capture_failed");
+  // Capture has its own network-bound suite. Construct exact saved bytes here
+  // so slow local filesystem setup cannot consume a mock HTTP deadline.
+  const captureRoot = path.join(root, "public-source");
+  const bodySha256 = sha256(body);
+  const receipt: PublicSourceCaptureReceipt = {
+    schemaVersion: "prospect-public-source-capture/v1", requestedUrl: "https://synthetic.example/services", finalUrl: "https://synthetic.example/services",
+    startedAt: "2026-10-02T12:00:00.000Z", retrievedAt: "2026-10-02T12:00:01.000Z", httpStatus: 200, contentType: "text/html", bytes: body.length,
+    bodySha256, bodyFile: "bodies/" + bodySha256 + ".body", method: "public-https-get", observationsVerified: false,
+  };
+  await fs.mkdir(path.join(captureRoot, "bodies"), { recursive: true });
+  await fs.mkdir(path.join(captureRoot, "receipts"));
+  await fs.writeFile(path.join(captureRoot, receipt.bodyFile), body);
+  const receiptBytes = Buffer.from(JSON.stringify(receipt, null, 2) + "\n"), receiptSha256 = sha256(receiptBytes);
+  const receiptPath = path.join(captureRoot, "receipts", receiptSha256 + ".json");
+  await fs.writeFile(receiptPath, receiptBytes);
+  const captured = { receipt, receiptPath, receiptSha256 };
   const facts = {
     schemaVersion: "prospect-public-facts/v1", researchKey: "domain:synthetic.example", displayName: "Synthetic firm", canonicalDomain: "synthetic.example",
     originalLinks: [], facts: [{ kind: "service", data: { name: "Employment law", matterFit: "unknown" }, disposition: "supported", reason: null,
@@ -66,7 +73,7 @@ test("capture default is network-free; capture and verification require their di
   assert.equal(calls, 0);
 });
 
-test("tampered receipt, body, export or checkpoint cannot be replayed as success", async t => {
+test("tampered receipt, export or checkpoint cannot be replayed as success", async t => {
   const f = await fixture(t), prepared = await preparePublicVerification(f.options);
   const originalExport = await fs.readFile(prepared.exportPath);
   await fs.appendFile(prepared.exportPath, " ");
