@@ -53,7 +53,9 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     });
     node.properties.source_answer_ids.items.enum = Object.entries(aliases).filter(([,path]) => allowed.includes(path)).map(([alias]) => alias);
     node.properties.source_answer_ids.minItems = 1;
-    node.properties.source_answer_ids.maxItems = 4;
+    // Contribution validation needs all five economics sources. The provider
+    // must be able to cite that complete set if it returns such a statement.
+    node.properties.source_answer_ids.maxItems = slot === "why_firm_wants_work" ? 6 : 4;
     const bases = ["firm_preference", "hypothesis", "unknown"];
     if (["practice.experience", "practice.capability", "practice.client_strength_support"].some(path => allowed.includes(path))) bases.push("firm_reported_experience");
     for (const [prefix, basis] of [["value.", answers.value.amount_basis], ["opportunity.", answers.opportunity.data_basis]] as const) {

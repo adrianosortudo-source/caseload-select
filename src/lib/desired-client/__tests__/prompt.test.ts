@@ -5,6 +5,16 @@ import type { AnalysisRequestEnvelope } from "../types";
 import { interviewClarificationSourceFingerprint } from "../types";
 const request = (): AnalysisRequestEnvelope => { const answers = completeAnswers(); answers.situation.trigger = null; answers.write_ins = { trigger: "A planned acquisition is under consideration" }; return { schemaVersion: 4, operation:"generate", requestId: "11111111-1111-4111-8111-111111111111", answerRevision: answers.revision, reviewRunId: "22222222-2222-4222-8222-222222222222", analysisIndex: 0, aiConsent: true, answers, clarifications: [] }; };
 describe("Desired Client Blueprint model prompt", () => {
+  it("uses the displayed time and fee bounds in every model answer representation", () => {
+    const input = request();
+    input.answers.value.team_hours = "16to40";
+    input.answers.value.collected_fee = "5to15";
+    const payload = JSON.parse(buildDesiredClientUserPrompt(input, []));
+    expect(payload.answers.value.team_hours).toBe("More than 15, up to 40 hours");
+    expect(payload.answers.value.collected_fee).toBe("C$5,000 to under C$15,000");
+    expect(payload.answers.value.team_hours).toBe(payload.resolved_answers["value.team_hours"].text);
+    expect(input.answers.value.team_hours).toBe("16to40");
+  });
   it("requires grounded synthesis, evidence distinctions, and the deterministic definition", () => { const p = buildDesiredClientSystemPrompt(); expect(p).toContain("Produce a useful synthesis, not a list of answers"); expect(p).toContain("specific kind of client"); expect(p).toContain("evidence_basis"); expect(p).toContain("Do not create marketing copy"); expect(p).toContain("Do not provide legal advice"); });
   it("requires six client-profile cards, four definition components and a separate pathway", () => {
    const brief=DESIRED_CLIENT_RESPONSE_SCHEMA.properties.brief;
