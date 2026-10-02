@@ -7,7 +7,27 @@ import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { buildDefinitionSentence } from "../definition";
 import { interviewClarificationSourceFingerprint } from "../types";
 describe("AI Blueprint output contract", () => {
+  it("joins model fragments without repeating because or capitalizing a mid-sentence article", () => {
+    const value = validBlueprint();
+    value.brief.definition_components.client.text = "An Ontario business owner";
+    value.brief.definition_components.reasons.text = "The firm wants this work because it fits the team's transaction experience";
+    const sentence = buildDefinitionSentence(value.brief, false);
+    expect(sentence).toContain("attract and serve an Ontario business owner");
+    expect(sentence).toContain("because it fits the team's transaction experience");
+    expect(sentence).not.toContain("because The firm wants");
+    value.brief.definition_components.reasons.text = "The work fits the team's transaction experience";
+    expect(buildDefinitionSentence(value.brief, false)).toContain("because the work fits");
+  });
+  it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
+    const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
+    const value = validBlueprint();
+    value.brief.evidence_and_open_questions.claims = [evidence(answers.opportunity.uncertainty, "unknown", "opportunity.uncertainty")];
+    expect(validateAnalysisResult(value, answers, [])).not.toBeNull();
+    value.brief.evidence_and_open_questions.claims[0] = evidence("Demand for this agreement engagement is established.", "firm_preference", "opportunity.uncertainty");
+    expect(validateAnalysisResult(value, answers, [])).toBeNull();
+  });
   it("accepts six grounded cards with distinct evidence labels", () => { const value = validBlueprint(); expect(validateAnalysisResult(value, completeAnswers(), [])).not.toBeNull(); expect(value.brief.evidence_and_open_questions.claims[0].evidence_basis).toBe("unknown"); expect(value.brief.why_firm_wants_work.claims[0].evidence_basis).toBe("firm_preference"); });
+  it("allows the firm-selected service area to inform target client geography", () => { const answers=completeAnswers(), value=validBlueprint(); value.brief.definition_components.client.text="Ontario business owners"; value.brief.definition_components.client.source_answer_ids=["situation.role","focus.service_area"]; expect(validateAnalysisResult(value,answers,[])).not.toBeNull(); });
   it("reports only a safe field and rule when rejecting model output", () => { const failures: Array<{field:string;reason:string}> = []; const value = validBlueprint(); value.brief.client_and_matter.claims[0].text = "x".repeat(701); expect(validateAnalysisResult(value,completeAnswers(),[],failure=>failures.push(failure))).toBeNull(); expect(failures).toEqual([{field:"client_and_matter",reason:"statement_text_budget_or_format"}]); expect(JSON.stringify(failures)).not.toContain("x".repeat(701)); });
   it("reports recognized disallowed citation paths while keeping unknown paths and answer text out of diagnostics", () => { const answers=completeAnswers(), unknown=validBlueprint(), disallowed=validBlueprint(); unknown.brief.definition_components.client.source_answer_ids=["client.identity" as never]; disallowed.brief.definition_components.client.source_answer_ids=["practice.firm_type"]; const failures:Array<{field:string;reason:string;sourcePath?:string}>=[]; expect(validateAnalysisResult(unknown,answers,[],failure=>failures.push(failure))).toBeNull(); expect(failures.at(-1)).toEqual({field:"definition_components.client",reason:"source_answer_path_unrecognized"}); expect(validateAnalysisResult(disallowed,answers,[],failure=>failures.push(failure))).toBeNull(); expect(failures.at(-1)).toEqual({field:"definition_components.client",reason:"source_answer_path_not_allowed_for_slot",sourcePath:"practice.firm_type"}); expect(JSON.stringify(failures)).not.toContain("client.identity"); expect(JSON.stringify(failures)).not.toContain(answers.practice.firm_type); });
   it("rejects legacy answer-list schemas, extra keys, and wrong versions", () => { const good = validBlueprint(), answers = completeAnswers(); expect(validateAnalysisResult({ brief: { definition: {}, client_goals: [], firm_reasons: [], marketing: {} }, clarification_code: null }, answers, [])).toBeNull(); expect(validateAnalysisResult({ ...good, unexpected: true }, answers, [])).toBeNull(); expect(validateAnalysisResult({ ...good, brief: { ...good.brief, report_version: "dcm-blueprint-v1" } }, answers, [])).toBeNull(); });

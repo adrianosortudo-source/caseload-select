@@ -157,7 +157,8 @@ export async function runInterviewClarification(request: InterviewClarificationR
   try {
     const client = new GoogleGenerativeAI(apiKey);
     const model = client.getGenerativeModel({ model: MODEL, systemInstruction: SYSTEM_PROMPT, generationConfig: {
-      temperature: 0.2, maxOutputTokens: 700, responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA as never,
+      temperature: 0.2, maxOutputTokens: 2048, responseMimeType: "application/json", responseSchema: RESPONSE_SCHEMA as never,
+      thinkingConfig: { thinkingBudget: 512 },
     } as GenerationConfig }, { timeout: TIMEOUT_MS });
     const response = await model.generateContent(userPrompt(request));
     let raw: unknown;

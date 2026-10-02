@@ -9,7 +9,8 @@ export function buildDefinitionSentence(brief: Pick<DesiredClientBrief | Desired
   const reasonText = clean(reasons.text) || "the firm's reasons are still being established";
   const outcomeText = clean(outcome.text);
   if ("client" in brief.definition_components) {
-    const clientType = clean(brief.definition_components.client.text) || "the desired client type is still to be defined";
+    const clientType = (clean(brief.definition_components.client.text) || "the desired client type is still to be defined").replace(/^(A|An|The)\b/, article => article.toLowerCase());
+    const definitionReason = reasonText.replace(/^(?:the firm (?:wants|prefers) this work )?because\s+/i, "").replace(/^(A|An|The)\b/, article => article.toLowerCase());
     const matterText = clientText || "the client's situation and matter are still to be defined";
     const clientMatter = `for matters such as ${matterText[0].toLocaleLowerCase("en-CA") + matterText.slice(1)}`;
     const practicalBenefit = clean(clientBenefit);
@@ -17,7 +18,7 @@ export function buildDefinitionSentence(brief: Pick<DesiredClientBrief | Desired
     const benefitClause = practicalBenefit
       ? alreadyIncluded ? "" : `, so the client can ${practicalBenefit[0].toLocaleLowerCase("en-CA") + practicalBenefit.slice(1)}`
       : benefitUnknown ? ", with the practical benefit still to be established" : "";
-    return `The firm wants to attract and serve ${clientType} ${clientMatter}${benefitClause}, because ${reasonText}.`;
+    return `The firm wants to attract and serve ${clientType} ${clientMatter}${benefitClause}, because ${definitionReason}.`;
   }
   const sentenceOutcome = outcomeText ? outcomeText[0].toLocaleLowerCase("en-CA") + outcomeText.slice(1) : "";
   const opening = brief.definition_components && "firm" in brief.definition_components

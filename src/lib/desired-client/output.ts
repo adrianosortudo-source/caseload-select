@@ -36,7 +36,7 @@ function allowedPaths(slot: string): readonly string[] {
   if (slot === "practice_experience_supporting") return ["practice.experience", "practice.capability"];
   if (slot === "practice_development_needs") return ["practice.experience", "practice.development_needs"];
   if (slot === "practice_marketing_emphasis") return ["direction.less", "direction.less_note", "direction.less_reason"];
-  if (slot === "definition_client_type") return ["situation.role", "situation.role_other", "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus"];
+  if (slot === "definition_client_type") return ["situation.role", "situation.role_other", "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus", "focus.service_area"];
   if (slot === "definition_client_matter") return ["focus.area", "focus.work", "focus.work_other", "situation.trigger", "situation.role", "situation.role_other", "situation.timing", "client_context.geography", "client_context.relevant_circumstances", "client_context.repeat_matter_pattern", "write_ins.trigger"];
   if (slot === "practice_context") return ["practice.", "focus.", "direction."];
   if (slot === "client_and_matter") return ["focus.","situation.","client_context.geography","client_context.relevant_circumstances","client_context.repeat_matter_pattern","write_ins.trigger"];
@@ -96,7 +96,7 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   for (const path of paths as AnswerReferencePath[]) {
     const resolved = resolveAnswerReference(path, answers);
     if (!resolved.present || (resolved.value === null && value.evidence_basis !== "unknown")) return reject("source_answer_unavailable");
-    if (resolved.unknown || resolved.value === null || resolved.value === "" || (path === "opportunity.sources" && answers.opportunity.sources.includes("no_evidence")) || (Array.isArray(resolved.value) && resolved.value.length === 0)) hasUnknown = true;
+    if (resolved.unknown || resolved.value === null || resolved.value === "" || path === "opportunity.uncertainty" || (path === "opportunity.sources" && answers.opportunity.sources.includes("no_evidence")) || (Array.isArray(resolved.value) && resolved.value.length === 0)) hasUnknown = true;
     else if (Array.isArray(resolved.value) && resolved.value.every((item) => typeof item === "string")) supportedValues.push(...resolved.value);
     else if (typeof resolved.value === "string") supportedValues.push(resolved.value);
     else return reject("unsupported_source_value_type");
