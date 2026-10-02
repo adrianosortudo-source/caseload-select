@@ -107,11 +107,20 @@ test("a spent local follow-up budget is explained accurately and wraps at every 
   await continueToNext(7);
   expect(clarificationRequests).toBe(6);
 
+  // The practice-area and matter choices intentionally start a fresh
+  // clarification run, so the first stage's earlier failed request is not
+  // part of this run's six-request budget. Revisit Focus once to spend the
+  // sixth request, then revisit it again to verify the local cap.
+  await page.getByRole("button", { name: STAGE_DEFINITIONS[0].label }).click();
+  await page.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
+  expect(clarificationRequests).toBe(7);
+
   await page.getByRole("button", { name: STAGE_DEFINITIONS[0].label }).click();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   const notice = page.locator(".dc-stage > .dc-alert");
   await expect(notice).toHaveText("This draft has reached its limit for AI follow-up checks. Your answers are saved, and you can continue without another AI follow-up.");
-  expect(clarificationRequests).toBe(6);
+  expect(clarificationRequests).toBe(7);
 
   for (const width of [1440, 1024, 768, 640, 375, 320]) {
     await page.setViewportSize({ width, height: 1000 });
