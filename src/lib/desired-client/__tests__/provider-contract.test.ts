@@ -43,6 +43,12 @@ describe("provider output contract", () => {
     expect(evidenceDescription).toContain(feeAlias);
     expect(sources.items.enum.map(id => aliases[id])).toEqual(expect.arrayContaining(["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"]));
   });
+  it("asks the model to format a specific client type as a grammatically complete noun phrase", () => {
+    const schema = providerBlueprintSchema(completeAnswers()) as {properties:{brief:{properties:{definition_components:{properties:{client:{properties:{text:{description:string}}}}}}}}};
+    const guidance = schema.properties.brief.properties.definition_components.properties.client.properties.text.description;
+    expect(guidance).toContain("plural group");
+    expect(guidance).toContain("an owner or founder");
+  });
   it("separates client feedback from firm-observed decision evidence when their bases differ", () => {
     const answers = completeAnswers();
     answers.client.choice_basis = "client_feedback";

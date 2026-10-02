@@ -9,7 +9,12 @@ export function buildDefinitionSentence(brief: Pick<DesiredClientBrief | Desired
   const reasonText = clean(reasons.text) || "the firm's reasons are still being established";
   const outcomeText = clean(outcome.text);
   if ("client" in brief.definition_components) {
-    const clientType = (clean(brief.definition_components.client.text) || "the desired client type is still to be defined").replace(/^(A|An|The)\b/, article => article.toLowerCase());
+    const rawClientType = clean(brief.definition_components.client.text) || "the desired client type is still to be defined";
+    const clientTypeWithArticle = rawClientType.replace(/^(A|An|The)\b/, article => article.toLowerCase());
+    const singularRole = /^(owner or founder|owner|founder|buyer|seller|business owner|company owner|individual|entrepreneur|executive|shareholder|principal)\b/i.exec(rawClientType);
+    const clientType = singularRole && !/^(a|an|the)\b/i.test(rawClientType)
+      ? `${/^(owner or founder|owner|individual|entrepreneur|executive)\b/i.test(rawClientType) ? "an" : "a"} ${rawClientType[0].toLocaleLowerCase("en-CA") + rawClientType.slice(1)}`
+      : clientTypeWithArticle;
     const definitionReason = reasonText.replace(/^(?:the firm (?:wants|prefers) this work )?because\s+/i, "").replace(/^(A|An|The)\b/, article => article.toLowerCase()).replace(/^it\b/i, "the work");
     const matterText = clean(client_matter.text) || "the specific matter details remain to be defined";
     const clientMatter = `in a situation where ${matterText[0].toLocaleLowerCase("en-CA") + matterText.slice(1)}`;

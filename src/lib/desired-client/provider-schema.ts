@@ -41,7 +41,9 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     const node = statement as { required:string[]; properties: { kind?:unknown; text:{description?:string}; source_answer_ids: { items: { enum?: string[] }; minItems?:number; maxItems?:number }; evidence_basis: { enum: string[]; description?:string } } };
     delete node.properties.kind;
     node.required = node.required.filter(key => key !== "kind");
-    node.properties.text.description = slot === "definition_client_matter"
+    node.properties.text.description = slot === "definition_client_type"
+      ? "A concise, specific noun phrase for the desired client. Prefer a plural group such as 'Ontario business owners'; for one person, use a grammatically complete phrase such as 'an owner or founder of an Ontario owner-managed company'. Do not capitalize a common role label or describe the law firm as its own client."
+      : slot === "definition_client_matter"
       ? "At most 75 words and 600 characters. Return one complete, grammatical clause with a subject and verb describing the client's situation and specific legal engagement, for example 'the client is evaluating an operating business and needs an asset purchase agreement drafted or reviewed before final terms are agreed'. The application introduces it with 'in a situation where'. Preserve the represented side, specific legal work or agreement, and timing supplied by the firm. Do not return a noun phrase, a second sentence, or reduce the engagement to a broad transaction category."
       : slot === "definition_reasons"
       ? "A grammatical clause with its own subject, such as 'the work fits the firm's experience'. At most 35 words and 300 characters. Do not start with 'because' or a subjectless verb such as 'uses'."

@@ -18,6 +18,11 @@ describe("AI Blueprint output contract", () => {
     value.brief.definition_components.reasons.text = "The work fits the team's transaction experience";
     expect(buildDefinitionSentence(value.brief, false)).toContain("because the work fits");
   });
+  it("adds an article when a client type starts with a singular role", () => {
+    const value = validBlueprint();
+    value.brief.definition_components.client.text = "Owner or founder of an Ontario owner-managed company";
+    expect(buildDefinitionSentence(value.brief, false)).toContain("serve an owner or founder of an Ontario owner-managed company");
+  });
   it("joins a complete client-matter clause grammatically", () => {
     const value = validBlueprint();
     value.brief.definition_components.client_matter.text = "The client is evaluating an operating business and needs an asset purchase agreement drafted or reviewed before final terms are agreed";
