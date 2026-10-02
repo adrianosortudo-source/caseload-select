@@ -48,13 +48,21 @@ describe("provider output contract", () => {
     answers.client.choice_basis = "client_feedback";
     answers.client.pathway_basis = "firm_observation";
     const aliases = providerSourceAliases(answers);
-    const schema = providerBlueprintSchema(answers) as {properties:{brief:{properties:{client_goals_needs:{properties:{claims:{items:{properties:{evidence_basis:{description:string};source_answer_ids:{items:{enum:string[]}}}}}}}}}}};
+    const schema = providerBlueprintSchema(answers) as {properties:{brief:{properties:{client_goals_needs:{properties:{claims:{items:{properties:{evidence_basis:{description:string};source_answer_ids:{items:{enum:string[]}}}}}}};decision_pathway:{properties:{trigger:{properties:{evidence_basis:{description:string;enum:string[]};source_answer_ids:{items:{enum:string[]}}}}}}}}}};
     const claim = schema.properties.brief.properties.client_goals_needs.properties.claims.items.properties;
     const evidenceDescription = claim.evidence_basis.description;
-    expect(evidenceDescription).toContain("Keep claims separate when client.choice_basis and client.pathway_basis differ");
-    expect(evidenceDescription).toContain("client.choice_basis");
-    expect(evidenceDescription).toContain("client.pathway_basis");
+    expect(evidenceDescription).toContain("otherwise keep the claims separate");
+    expect(evidenceDescription).toContain("client.choice_basis=client_feedback");
+    expect(evidenceDescription).toContain("client.pathway_basis=firm_observation");
     expect(claim.source_answer_ids.items.enum.map(id => aliases[id])).toContain("client.choice_priorities");
+    const pathway = schema.properties.brief.properties.decision_pathway.properties.trigger.properties;
+    const pathwayPaths = pathway.source_answer_ids.items.enum.map(id => aliases[id]);
+    expect(pathwayPaths).toContain("client.pathway_basis");
+    expect(pathwayPaths).not.toContain("client.choice_basis");
+    expect(pathwayPaths).not.toContain("client.choice_priorities");
+    expect(pathway.evidence_basis.enum).toContain("firm_reported_observation");
+    expect(pathway.evidence_basis.enum).not.toContain("client_reported");
+    expect(pathway.evidence_basis.description).toContain("Do not use client-choice details in this statement.");
   });
   it("still rejects a malformed root rather than accepting misplaced cards", async () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -98,7 +106,7 @@ describe("provider output contract", () => {
       kind: "experience",
     };
     invalid.brief.decision_pathway = {
-      trigger: {text:"A business purchase may prompt the buyer to seek advice.",source_answer_ids:["situation.trigger"],evidence_basis:"hypothesis",kind:"hypothesis"},
+      trigger: {text:"Clients say the purchase prompts them to seek advice, while the firm observes that the owner decides with accountant input.",source_answer_ids:["situation.trigger","client.choice_basis","client.pathway_basis","client.decision_context"],evidence_basis:"client_reported",kind:"experience"},
       first_contact: {text:"The buyer may begin by asking what advice the agreement requires.",source_answer_ids:["client.goal_detail"],evidence_basis:"hypothesis",kind:"hypothesis"},
       decision: {text:"The firm observes that the owner decides, with accountant input.",source_answer_ids:["client.decision_context","client.pathway_basis"],evidence_basis:"firm_reported_observation",kind:"experience"},
       desired_progress: {text:"The buyer wants to understand the available options.",source_answer_ids:["client.goals"],evidence_basis:"hypothesis",kind:"hypothesis"},
@@ -113,12 +121,18 @@ describe("provider output contract", () => {
       {text:"Clients identify clear fees as relevant.",source_answer_ids:["client.choice_priorities","client.choice_basis"],evidence_basis:"client_reported",kind:"experience"},
       {text:"The firm observes that the owner decides with accountant input.",source_answer_ids:["client.decision_context","client.pathway_basis"],evidence_basis:"firm_reported_observation",kind:"experience"},
     ]};
+    const repairedTrigger = {text:"A planned business purchase may prompt a buyer to seek advice.",source_answer_ids:["situation.trigger"],evidence_basis:"hypothesis",kind:"hypothesis"};
     provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(invalid) } })
-      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(repaired) } });
+      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(repaired) } })
+      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(repairedTrigger) } });
     const outcome = await runDesiredClientAnalysis(input, []);
     expect(outcome.mode).toBe("live");
-    expect(provider.generate).toHaveBeenCalledTimes(2);
-    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("When those bases differ, write separate claims");
-    if (outcome.mode === "live") expect(outcome.result.brief.client_goals_needs.claims).toHaveLength(2);
+    expect(provider.generate).toHaveBeenCalledTimes(3);
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("If a statement cites both source groups, cite both basis answers");
+    expect(provider.configure.mock.calls[2][0].systemInstruction).toContain("source_answer_path_not_allowed_for_slot");
+    if (outcome.mode === "live") {
+      expect(outcome.result.brief.client_goals_needs.claims).toHaveLength(2);
+      expect(outcome.result.brief.decision_pathway.trigger.evidence_basis).toBe("hypothesis");
+    }
   });
 });

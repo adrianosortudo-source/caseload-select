@@ -30,6 +30,9 @@ describe("v4 provenance and client pathway", () => {
     a.client.pathway_basis="client_feedback";
     result.brief.decision_pathway.trigger.source_answer_ids=["situation.trigger","client.pathway_basis"];
     expect(validateAnalysisResult(result,a,[])).not.toBeNull();
+    a.client.choice_priorities=["clear_fees"];
+    result.brief.decision_pathway.trigger=evidence("Clients report a planned purchase and clear fees matter to them.","client_reported","situation.trigger","client.pathway_basis","client.choice_priorities","client.choice_basis");
+    expect(validateAnalysisResult(result,a,[])).toBeNull();
   });
   it("does not let pathway observations certify client-choice factors", () => {
     const a=completeAnswers(); a.client.pathway_basis="firm_observation";

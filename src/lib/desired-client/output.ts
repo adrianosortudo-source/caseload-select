@@ -43,7 +43,7 @@ function allowedPaths(slot: string): readonly string[] {
   if (slot === "client_goals_needs") return ["client.","situation.","client_context.","write_ins.goals","write_ins.concerns","write_ins.decision_needs"];
   if (slot === "why_firm_wants_work") return ["practice.","value.","delivery.","direction.","repeatability.staffing_constraint","repeatability.additional_matters","write_ins.reasons","write_ins.fee_effort","write_ins.conditions","write_ins.capacity","write_ins.limit"];
   if (slot === "why_client_chooses_firm") return ["client.choice_","practice.client_strength","practice.capability","practice.experience"];
-  if (slot === "decision_pathway") return ["situation.","client.","write_ins.trigger","write_ins.timing","write_ins.contact","write_ins.goals","write_ins.decision_needs"];
+  if (slot === "decision_pathway") return ["situation.","client.goals","client.goal_detail","client.concerns","client.decision_needs","client.decision_context","client.pathway_basis","write_ins.trigger","write_ins.timing","write_ins.contact","write_ins.goals","write_ins.decision_needs"];
   if (slot === "recognizable_circumstances") return ["client_context.","delivery.fit_signals","delivery.conditions","delivery.limit","situation.trigger","write_ins.fit_signals","write_ins.conditions","write_ins.limit"];
   if (slot === "evidence_and_open_questions") return [...SOURCE_PATHS].map((path)=>path.slice(0,path.lastIndexOf(".")+1));
   if (slot === "desired_client_matter") return ["focus.", "situation.", "client.", "client_context.", "write_ins.trigger"];
