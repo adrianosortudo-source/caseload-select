@@ -42,7 +42,7 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
       ? "A concise fragment, at most 15 words and 180 characters. Put supporting details in the cards, not this fragment. Do not start reasons with 'because'."
       : slot === "decision_pathway" ? "One concise statement, at most 30 words and 240 characters."
       : "One grounded claim, at most 50 words and 400 characters. Preserve additional detail in separate claims.";
-    const allowed = allowedSourceAnswerPathsForAnswers(slot, answers).filter(path => {
+    const allowed: string[] = allowedSourceAnswerPathsForAnswers(slot, answers).filter(path => {
       try {
         const source = resolveAnswerReference(path, answers);
         return source.present && source.value !== null && source.value !== "" && (!Array.isArray(source.value) || source.value.length > 0);
