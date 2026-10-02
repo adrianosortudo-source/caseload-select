@@ -1,6 +1,6 @@
 import { allowedSourceAnswerPathsForAnswers, BLUEPRINT_RESPONSE_SCHEMA } from "./output";
 import { resolveAnswerReference } from "./catalog";
-import type { DesiredClientAnswers } from "./types";
+import type { AnswerReferencePath, DesiredClientAnswers } from "./types";
 
 /** Keep provider constraints small; the full validator enforces semantic rules. */
 export function providerStructureSchema(schema: unknown): unknown {
@@ -44,7 +44,7 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
       : "One grounded claim, at most 50 words and 400 characters. Preserve additional detail in separate claims.";
     const allowed: string[] = allowedSourceAnswerPathsForAnswers(slot, answers).filter(path => {
       try {
-        const source = resolveAnswerReference(path, answers);
+        const source = resolveAnswerReference(path as AnswerReferencePath, answers);
         return source.present && source.value !== null && source.value !== "" && (!Array.isArray(source.value) || source.value.length > 0);
       } catch { return false; }
     });
