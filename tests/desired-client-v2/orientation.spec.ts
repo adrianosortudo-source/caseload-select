@@ -84,10 +84,10 @@ test("a spent local follow-up budget is explained accurately and wraps at every 
   };
 
   await chooseLast("What do you want this profile to help your firm do?");
+  await continueToNext(2);
   await page.getByLabel("Practice area for the work list").selectOption({ label: "Business & commercial" });
   await chooseLast("Which type of legal work should we focus on?");
   await chooseLast("How much experience does the firm have with this type of work?");
-  await continueToNext(2);
   await chooseLast("Who is the client in this situation?");
   await chooseLast("What event or situation creates the need for legal help?");
   await chooseLast("At what stage does the client usually contact a lawyer?");
