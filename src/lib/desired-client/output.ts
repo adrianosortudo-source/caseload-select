@@ -23,11 +23,33 @@ const BANNED = /\u2014|<\/?[a-z][^>]*>|https?:\/\/|\bwww\.|\b[A-Z0-9._%+-]+@[A-Z
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
 const exact = (value: unknown, keys: readonly string[]): value is Record<string, unknown> => record(value) && Object.keys(value).length === keys.length && keys.every((key) => Object.hasOwn(value, key));
 const wordCount = (text: string) => text.trim().split(/\s+/u).filter(Boolean).length;
-const numericTokens = (text: string) => [...text.matchAll(/[+-]?\s*(?:[$€£]\s*)?\d+(?:[\s,]\d{3})*(?:\.\d+)?\s*%?/gu)].map((match) => {
+const NUMBERS_UNDER_TWENTY: Record<string, number> = { zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19 };
+const NUMBER_TENS: Record<string, number> = { twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90 };
+const NUMBER_UNIT_CONTEXT = /\b(?:matters?|clients?|cases?|deals?|transactions?|quarters?|months?|weeks?|days?|years?|hours?|fees?|costs?|dollars?|percent(?:age)?s?|points?|inquiries|enquiries|referrals?|leads?)\b/i;
+
+/** Match common written-out counts only when a nearby quantity word makes the
+ * numeric meaning clear. This keeps “two matters” equivalent to “2 matters”
+ * without treating every prose use of “one” or “first” as a figure. */
+const spelledNumericTokens = (text: string): string[] => {
+  const tokens: string[] = [];
+  const numberPattern = /\b(?:(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[- ](one|two|three|four|five|six|seven|eight|nine))?|(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen))\b/giu;
+  for (const match of text.matchAll(numberPattern)) {
+    const after = text.slice((match.index ?? 0) + match[0].length).split(/[.!?;,]/u, 1)[0] ?? "";
+    if (!/^(?:\s+[\p{L}'-]+){0,5}\s+\p{L}/u.test(after) || !NUMBER_UNIT_CONTEXT.test(after)) continue;
+    const tens = match[1]?.toLocaleLowerCase("en-CA");
+    const unit = match[2]?.toLocaleLowerCase("en-CA");
+    const small = match[3]?.toLocaleLowerCase("en-CA");
+    const value = tens ? NUMBER_TENS[tens] + (unit ? NUMBERS_UNDER_TWENTY[unit] : 0) : NUMBERS_UNDER_TWENTY[small ?? ""];
+    if (Number.isFinite(value)) tokens.push(String(value));
+  }
+  return tokens;
+};
+
+const numericTokens = (text: string) => [ ...[...text.matchAll(/[+-]?\s*(?:[$€£]\s*)?\d+(?:[\s,]\d{3})*(?:\.\d+)?\s*%?/gu)].map((match) => {
   const raw = match[0].replace(/\s/g, "");
   const sign = raw.startsWith("-") ? "-" : raw.startsWith("+") ? "+" : "";
   return sign + raw.replace(/[^\d.%]/g, "");
-});
+}), ...spelledNumericTokens(text) ];
 export type AnalysisValidationFailure = { field: string; reason: string; sourcePath?: AnswerReferencePath | `interview.followups.${number}` };
 
 function allowedPaths(slot: string): readonly string[] {

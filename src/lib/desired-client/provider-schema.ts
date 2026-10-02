@@ -41,7 +41,7 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     const node = statement as { required:string[]; properties: { kind?:unknown; text:{description?:string}; source_answer_ids: { items: { enum?: string[] }; minItems?:number; maxItems?:number }; evidence_basis: { enum: string[]; description?:string } } };
     delete node.properties.kind;
     node.required = node.required.filter(key => key !== "kind");
-    node.properties.text.description = slot === "definition_client_type"
+    const textDescription = slot === "definition_client_type"
       ? "A concise, specific noun phrase for the desired client. Prefer a plural group such as 'Ontario business owners'; for one person, use a grammatically complete phrase such as 'an owner or founder of an Ontario owner-managed company'. Do not capitalize a common role label or describe the law firm as its own client."
       : slot === "definition_client_matter"
       ? "At most 75 words and 600 characters. Return one complete, grammatical clause with a subject and verb describing the client's situation, specific legal engagement and when the lawyer is involved, for example 'the client is evaluating an operating business and needs an asset purchase agreement drafted or reviewed before final terms are agreed'. The application introduces it with 'in a situation where'. Preserve the represented side, specific legal work or agreement, and timing supplied by the firm. Keep this clause focused on the legal engagement and stage; do not repeat the supplied practical benefit or the same decision endpoint. Do not return a noun phrase, a second sentence, or reduce the engagement to a broad transaction category."
@@ -51,6 +51,7 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
       ? "A concise fragment, at most 25 words and 240 characters. Put supporting details in the cards."
       : slot === "decision_pathway" ? "One concise statement, at most 30 words and 240 characters."
       : "One grounded claim, at most 50 words and 400 characters. Preserve additional detail in separate claims.";
+    node.properties.text.description = `${textDescription} A simple count written as a word or digits is equivalent only for the same value (for example, “two matters” and “2 matters”). Keep its unit, currency, range and period faithful to the cited answer; never calculate, round or invent a figure.`;
     const allowed: string[] = allowedSourceAnswerPathsForAnswers(slot, answers).filter(path => {
       try {
         const source = resolveAnswerReference(path as AnswerReferencePath, answers);

@@ -17,6 +17,7 @@ describe("provider output contract", () => {
     provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(validBlueprint()) } });
     expect((await runDesiredClientAnalysis(request(), [])).mode).toBe("live");
     const config = provider.configure.mock.calls[0][0];
+    expect(config.systemInstruction).toContain("“two matters” and “2 matters”");
     expect(config.generationConfig.responseSchema).toEqual(providerBlueprintSchema(request().answers));
     const aliases = providerSourceAliases(request().answers);
     const sourceIds = config.generationConfig.responseSchema.properties.brief.properties.client_and_matter.properties.claims.items.properties.source_answer_ids.items.enum;
@@ -29,6 +30,7 @@ describe("provider output contract", () => {
     expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).toContain("hypothesis");
     expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).not.toContain("firm_reported_experience");
     expect(sourceIds.map((id: string) => aliases[id])).not.toContain("client_context.geography");
+    expect(config.generationConfig.responseSchema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.text.description).toContain("“two matters” and “2 matters”");
   });
   it("permits the complete five-source set required to ground a contribution claim", () => {
     const answers = completeAnswers();

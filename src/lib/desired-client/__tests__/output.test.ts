@@ -39,6 +39,15 @@ describe("AI Blueprint output contract", () => {
     expect(sentence.match(/\bbefore\b[^.!?]*\bdecid\w*\b[^.!?]*\bproceed\b/gi)).toHaveLength(1);
     expect(sentence).toContain("negotiate how contractual risks are allocated");
   });
+  it("accepts a digit rendering of a cited written-out count but rejects a changed value", () => {
+    const answers = completeAnswers();
+    answers.repeatability.target = "Proposed target: two additional retained buyer-side acquisition matters per quarter.";
+    const value = validBlueprint();
+    value.brief.evidence_and_open_questions.claims = [evidence("The proposed target of 2 additional retained buyer-side acquisition matters per quarter needs firm approval.", "firm_preference", "repeatability.target")];
+    expect(validateAnalysisResult(value, answers, [])).not.toBeNull();
+    value.brief.evidence_and_open_questions.claims[0] = evidence("The proposed target of 3 additional retained buyer-side acquisition matters per quarter needs firm approval.", "firm_preference", "repeatability.target");
+    expect(validateAnalysisResult(value, answers, [])).toBeNull();
+  });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
     const value = validBlueprint();
