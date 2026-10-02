@@ -114,6 +114,20 @@ describe("provider output contract", () => {
     expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("unsupported_numeric_claim");
     if (outcome.mode === "live") expect(outcome.result.brief.client_goals_needs).toEqual(original.brief.client_goals_needs);
   });
+  it("repairs an over-limit evidence card with focused shape and claim-count guidance", async () => {
+    const original = validBlueprint();
+    const invalid = structuredClone(original);
+    invalid.brief.evidence_and_open_questions.claims = Array.from({length:7}, () => structuredClone(original.brief.evidence_and_open_questions.claims[0]));
+    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(invalid) } })
+      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(original.brief.evidence_and_open_questions) } });
+    const outcome = await runDesiredClientAnalysis(request(), []);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(2);
+    const repairInstruction = provider.configure.mock.calls[1][0].systemInstruction;
+    expect(repairInstruction).toContain("Return exactly one card object with only a claims array and one to six grounded claims");
+    expect(repairInstruction).toContain("preserve consequential demand gaps, estimates, capacity prerequisites, and the proposed measure and review period");
+    if (outcome.mode === "live") expect(outcome.result.brief.evidence_and_open_questions).toEqual(original.brief.evidence_and_open_questions);
+  });
   it("repairs a claim that combines known goals with an unknown choice factor", async () => {
     const input = request();
     const invalid = validBlueprint();

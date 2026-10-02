@@ -178,10 +178,11 @@ function checkDefinitionPart(value: unknown, answers: DesiredClientAnswers, slot
 }
 
 function validCard(value: unknown, answers: DesiredClientAnswers, slot: string, reportFailure?: (reason: string, sourcePath?: SafeSourcePath) => void): value is { claims: EvidenceLinkedStatement[] } {
-  if (!exact(value, ["claims"]) || !Array.isArray(value.claims) || value.claims.length < 1 || value.claims.length > 6) {
-    reportFailure?.("card_shape_or_claim_count");
-    return false;
-  }
+  if (!record(value)) { reportFailure?.("card_not_object"); return false; }
+  if (!exact(value, ["claims"])) { reportFailure?.("card_shape"); return false; }
+  if (!Array.isArray(value.claims)) { reportFailure?.("claims_not_array"); return false; }
+  if (value.claims.length < 1) { reportFailure?.("card_claims_empty"); return false; }
+  if (value.claims.length > 6) { reportFailure?.("card_claim_limit_exceeded"); return false; }
   return value.claims.every((claim) => validStatement(claim, answers, slot, reportFailure));
 }
 
