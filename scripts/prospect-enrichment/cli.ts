@@ -14,7 +14,7 @@ import { prepareManifestRequests, submitManifestChunks, assertManifestPackage, c
 import { buildExpectedRunManifest, buildHeldCandidateEvidence, chunkExpectedRunManifest } from "./run-manifest";
 import { archivedDocuments, extractCandidates, inventory, type SourceManifest } from "./inventory";
 import { DEFAULT_OUTPUT, DEFAULT_ROOTS, object, protocolHash, sha256, within } from "./model";
-import { checkApproval, enqueue, readEntry, readState, receiptStatus, submitOne, type DeliveryApproval } from "./outbox";
+import { checkApproval, enqueue, readEntry, readState, receiptStatus, submitOne, verifyIdenticalReplay, type DeliveryApproval } from "./outbox";
 import { assertFreshComparison, bindReconciledPackages, reconcilePackage, researchClaimsAccepted, selectPilot, validateComparisonSnapshot, type ComparisonSnapshot, type ReconciledAction } from "./reconciliation";
 
 const HELP = `Prospect enrichment local tools (dry-run by default)
@@ -36,6 +36,8 @@ const HELP = `Prospect enrichment local tools (dry-run by default)
          --approval FILE --approval-sha256 HASH --token-file FILE
          --execute --confirm SUBMIT-APPROVED-PROSPECT-RESEARCH
   receipt --key KEY --outbox DIR --token-file FILE --execute
+  verify-replay --key KEY --outbox DIR --manifest-chunks FILE --held-evidence FILE --packages FILE --snapshot FILE
+         --approval FILE --approval-sha256 HASH --token-file FILE --execute --confirm VERIFY-IDENTICAL-PROSPECT-REPLAY
 Whole-firm commands require --profile whole-firm and use a separate private D: output root.
 Whole-firm submit additionally requires --manifest SOURCE_MANIFEST and a finalized-run comparison.
 register-manifest accepts a fresh signed bootstrap/resume comparison, or a finalized-run comparison for exact finalization-receipt recovery. It registers inventory and held bodies only; it never submits packages.
@@ -231,35 +233,36 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     return { key: result.entry.key, payloadSha256: result.entry.payloadSha256, state: result.state.state, replay: result.replay, networkRequests: 0 };
   }
   if (command === "status") return readState(privateOutput(required(options, "outbox")), required(options, "key"));
-  if (command === "submit" || command === "receipt") {
+  if (command === "submit" || command === "receipt" || command === "verify-replay") {
     const outbox = privateOutput(required(options, "outbox"));
     const manifestOnly = options["manifest-only"] === true;
     if (manifestOnly && (command !== "submit" || profile !== "whole-firm" || options.key !== undefined)) throw Error("manifest_only_scope_invalid");
     const key = manifestOnly ? null : required(options, "key");
-    const comparison = command === "submit" ? await json<unknown>(required(options, "snapshot")) : null;
-    const manifestChunks = command === "submit" ? await jsonl<unknown>(required(options, "manifest-chunks")) : null;
-    const heldEvidence = command === "submit" && typeof options["held-evidence"] === "string" ? await jsonl<unknown>(options["held-evidence"]) : [];
-    const prepared = command === "submit" ? prepareManifestRequests(manifestChunks, profile, heldEvidence) : null;
+    const comparison = command !== "receipt" ? await json<unknown>(required(options, "snapshot")) : null;
+    const manifestChunks = command !== "receipt" ? await jsonl<unknown>(required(options, "manifest-chunks")) : null;
+    const heldEvidence = command !== "receipt" && typeof options["held-evidence"] === "string" ? await jsonl<unknown>(options["held-evidence"]) : [];
+    const prepared = command !== "receipt" ? prepareManifestRequests(manifestChunks, profile, heldEvidence) : null;
     if (manifestOnly && prepared!.chunks[0].expectedPackageCount !== 0) throw Error("manifest_only_requires_zero_packages");
-    const finalRequestSha256 = command === "submit"
+    const finalRequestSha256 = command !== "receipt"
       ? protocolHash(serializeComparisonRequest(manifestFromChunks(prepared!.chunks), await json<unknown>(required(options, "packages")), profile).request)
       : null;
     const assertFinalizedBinding = () => {
       assertFreshComparison(comparison);
       assertFinalizedComparisonReader(comparison, finalRequestSha256!);
     };
-    if (command === "submit") assertFinalizedBinding();
-    const queued = command === "submit" && key ? await readEntry(outbox, key) : null;
+    if (command !== "receipt") assertFinalizedBinding();
+    const queued = command !== "receipt" && key ? await readEntry(outbox, key) : null;
     if (queued) assertEnvelopeProfile(queued.envelope, profile);
     if (prepared && queued) assertManifestPackage(prepared.chunks, queued);
     if (command === "submit" && profile === "whole-firm") assertWholeFirmManifestCoverage(await json<WholeFirmSourceManifest>(required(options, "manifest")), prepared!.chunks);
-    if (options.execute !== true) return { dryRun: true, command, key, manifestRequests: prepared?.requests.length ?? 0, networkRequests: 0, requiredConfirmation: command === "submit" ? "SUBMIT-APPROVED-PROSPECT-RESEARCH" : null };
+    if (options.execute !== true) return { dryRun: true, command, key, manifestRequests: command === "submit" ? prepared?.requests.length ?? 0 : 0, networkRequests: 0, requiredConfirmation: command === "submit" ? "SUBMIT-APPROVED-PROSPECT-RESEARCH" : command === "verify-replay" ? "VERIFY-IDENTICAL-PROSPECT-REPLAY" : null };
     let approval: DeliveryApproval | null = null;
-    if (command === "submit") {
+    if (command !== "receipt") {
       const bytes = await fs.readFile(required(options, "approval"));
       if (sha256(bytes) !== required(options, "approval-sha256")) throw Error("approval_file_hash_mismatch");
       approval = JSON.parse(bytes.toString("utf8"));
-      if (required(options, "confirm") !== "SUBMIT-APPROVED-PROSPECT-RESEARCH") throw Error("explicit_submission_confirmation_required");
+      const expectedConfirmation = command === "submit" ? "SUBMIT-APPROVED-PROSPECT-RESEARCH" : "VERIFY-IDENTICAL-PROSPECT-REPLAY";
+      if (required(options, "confirm") !== expectedConfirmation) throw Error(command === "submit" ? "explicit_submission_confirmation_required" : "explicit_replay_verification_confirmation_required");
       if (queued) checkApproval(queued, approval!, profile);
     }
     const token = (await fs.readFile(required(options, "token-file"), "utf8")).trim();
@@ -270,6 +273,10 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
       assertFinalizedBinding();
       const delivery = await submitOne({ outbox, key: key!, profile, approval: approval!, confirmation: required(options, "confirm"), token, beforeNetwork: assertFinalizedBinding });
       return { phase: "package_delivery", manifest: registration, delivery };
+    }
+    if (command === "verify-replay") {
+      assertFinalizedBinding();
+      return verifyIdenticalReplay({ outbox, key: key!, profile, approval: approval!, confirmation: required(options, "confirm"), token, comparison: comparison as ComparisonSnapshot, beforeNetwork: assertFinalizedBinding });
     }
     return receiptStatus({ outbox, key: key!, token });
   }

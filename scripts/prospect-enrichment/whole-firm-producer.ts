@@ -14,6 +14,11 @@ const sha = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{64}
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const stable = /^FIRM-[0-9A-HJKMNP-TV-Z]{26}$/;
 const sourceKey = /^[a-z0-9][a-z0-9-]{1,159}$/;
+/** Preserve explicit holds and every derived gap; an oversized reason remains a schema hold. */
+function provenanceReasons(...reasons: (string | null)[]): string | null {
+  const retained = unique(reasons.filter((reason): reason is string => typeof reason === "string" && reason.trim().length > 0));
+  return retained.length ? retained.join("; ") : null;
+}
 /** Whole-firm event IDs use the whole-firm adapter namespace, never the legacy adapter constant. */
 function eventId(prefix: string, key: string, kind: string, semantic: unknown, originalId?: unknown): string {
   return prefix + "-" + protocolHash(text(originalId)
@@ -57,7 +62,10 @@ export function produceWholeFirmExport(input: unknown, provenance: CoordinatorSo
         const url = publicUrl(value.sourceUrl ?? value.url ?? value.pageUrl), date = recordedDate(value.observedAt ?? value.observedOn);
         if (!url && !Object.hasOwn(value, "sourceId") && !Object.hasOwn(value, "requestedUrl")) return;
         const publication = text(value.publicationLabel) ?? text(value.publicationDate);
-        const semantic = { url, requestedUrl: publicUrl(value.requestedUrl), finalUrl: publicUrl(value.finalUrl), policyState: pick(value.policyState, ["public-source", "policy-blocked", "legacy-unknown"], "legacy-unknown"), publicationLabel: publication, publicationPrecision: publication && /^\d{4}$/.test(publication) ? "year" : publication && /^\d{4}-\d{2}-\d{2}$/.test(publication) ? "exact_date" : "unknown", publisher: text(value.publisher), observedAt: date.observedAt, observedOn: date.observedOn, retrievedAt: recordedDate(value.retrievedAt).observedAt, retrievalMethod: text(value.retrievalMethod) ?? "legacy-unknown", retrievalOutcome: text(value.retrievalOutcome) ?? "legacy-unknown", httpStatus: Number.isInteger(value.httpStatus) ? value.httpStatus : null, bodySha256: sha(value.bodySha256 ?? value.captureSha256) ? value.bodySha256 ?? value.captureSha256 : null, excerpt: text(value.excerpt) ?? text(value.configurationEvidence), missingProvenanceReason: date.missingProvenanceReason ?? (!url ? "source_url_not_recorded" : null) };
+        const explicitPrecision = Object.hasOwn(value, "publicationPrecision");
+        const supportedPrecision = ["year", "exact_date", "unknown"].includes(value.publicationPrecision as string);
+        const publicationPrecision = explicitPrecision ? supportedPrecision ? value.publicationPrecision : "unknown" : publication && /^\d{4}$/.test(publication) ? "year" : publication && /^\d{4}-\d{2}-\d{2}$/.test(publication) ? "exact_date" : "unknown";
+        const semantic = { url, requestedUrl: publicUrl(value.requestedUrl), finalUrl: publicUrl(value.finalUrl), policyState: pick(value.policyState, ["public-source", "policy-blocked", "legacy-unknown"], "legacy-unknown"), publicationLabel: publication, publicationPrecision, publisher: text(value.publisher), observedAt: date.observedAt, observedOn: date.observedOn, retrievedAt: recordedDate(value.retrievedAt).observedAt, retrievalMethod: text(value.retrievalMethod) ?? "legacy-unknown", retrievalOutcome: text(value.retrievalOutcome) ?? "legacy-unknown", httpStatus: Number.isInteger(value.httpStatus) ? value.httpStatus : null, bodySha256: sha(value.bodySha256 ?? value.captureSha256) ? value.bodySha256 ?? value.captureSha256 : null, excerpt: text(value.excerpt) ?? text(value.configurationEvidence), missingProvenanceReason: provenanceReasons(text(value.missingProvenanceReason), date.missingProvenanceReason, !url ? "source_url_not_recorded" : null, explicitPrecision && !supportedPrecision ? "source_publication_precision_not_supported" : null) };
         const id = eventId("src", researchKey, "source", semantic, value.sourceId), source = { sourceId: id, ...semantic } as ProspectEnrichmentSource;
         const prior = sources.find(s => s.sourceId === id);
         if (prior && protocolHash(prior) !== protocolHash(source)) addIssue("source_event_conflict", "/result" + pointer);
@@ -75,7 +83,7 @@ export function produceWholeFirmExport(input: unknown, provenance: CoordinatorSo
         if (retracted && !reason) { addIssue("retraction_reason_not_recorded", "/result" + p); return; }
         const retractionSourceIds = retracted ? unique(strings(v.retractionSourceIds).flatMap(id => aliases.get(id) ?? [])) : [];
         for (const id of retractionSourceIds) if (!sourceIds.includes(id)) sourceIds.push(id);
-        const semantic = { evidenceState: retracted ? "retracted" : "asserted", retractionReason: reason, retractionSourceIds, missingProvenanceReason: date.missingProvenanceReason ?? (retracted && !retractionSourceIds.length ? "retraction_source_not_recorded" : !sourceIds.length ? "source_reference_not_recorded" : null), kind, observedAt: date.observedAt, observedOn: date.observedOn, sourceIds, data };
+        const semantic = { evidenceState: retracted ? "retracted" : "asserted", retractionReason: reason, retractionSourceIds, missingProvenanceReason: provenanceReasons(text(v.missingProvenanceReason), date.missingProvenanceReason, retracted && !retractionSourceIds.length ? "retraction_source_not_recorded" : null, !sourceIds.length ? "source_reference_not_recorded" : null), kind, observedAt: date.observedAt, observedOn: date.observedOn, sourceIds, data };
         const id = eventId("obs", researchKey, kind, semantic, v.observationId ?? v.findingId);
         const item = { observationId: id, ...semantic, existingRecord: null } as ProspectEnrichmentObservation;
         const prior = findings.find(f => f.item.observationId === id);
