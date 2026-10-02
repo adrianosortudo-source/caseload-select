@@ -1,6 +1,6 @@
 # Public source evidence for future Luna runs
 
-These tools implement the capture and additive verification parts of the future-run provenance contract. They produce private, immutable whole-firm exports for the existing enrichment compiler. They do not assign canonical firm IDs, change qualification, submit research to Admin, or establish that research is visible in Admin.
+These tools implement public capture, additive verification and the offline compiler handoff for the future-run provenance contract. They produce private, immutable whole-firm exports and standard delivery artifacts using the existing enrichment compiler. They do not assign canonical firm IDs, change qualification, submit research to Admin, or establish that research is visible in Admin.
 
 The active coordinator in the C: OneDrive tree has **not** been cut over to these tools. Do not add absolute D: artifact paths to that coordinator's relative `evidenceArtifacts`. Use the standalone commands below for separately governed additive verification runs. Producer cutover needs its own governed D: source and execution wiring.
 
@@ -105,24 +105,46 @@ Only verified supported facts generate standard observations and full source obj
 
 The pure builder API accepts the trusted result of `loadPublicCapture` plus the exact fact-file digest. Its digest authenticity depends on the loader/file CLI, which verifies actual immutable file bytes; it cannot reconstruct a raw file's formatting hash from parsed JSON. It independently rehashes the captured body and checks receipt schema, safe same-origin URLs, capture limits, verification times and quote bytes.
 
-## 4. Compile with the existing whole-firm tools
+## 4. Publish the offline handoff
 
-Use the exact `sourceManifestPath` returned by preparation. Derive `$publicRunDir` as its parent; preparation already froze the source, so inventory does not need to be repeated. Compilation is local and must run once in a fresh compiler output directory because its artifact writes are exclusive:
+After verifying the facts, use `handoff` to prepare the export and publish all standard compiler artifacts together. It also accepts the same exact receipt and fact inputs previously used by `prepare`, reusing that preparation's recorded snapshot time. This command makes zero network requests and needs no Supabase access:
 
 ```powershell
-$publicManifestPath = '<actual sourceManifestPath from preparation>'
-$publicRunDir = Split-Path -Parent $publicManifestPath
-node --import tsx scripts/prospect-enrichment/cli.ts compile --profile whole-firm --manifest $publicManifestPath --run-dir $publicRunDir
-node --import tsx scripts/prospect-enrichment/cli.ts comparison-request --profile whole-firm --manifest (Join-Path $publicRunDir 'expected-run-manifest.json') --packages (Join-Path $publicRunDir 'comparison-packages.json') --output (Join-Path $publicRunDir 'comparison-request.json')
+node --import tsx scripts/prospect-enrichment/public-source-cli.ts handoff --receipt 'D:\PRIVATE\receipts\<actual-receipt-sha256>.json' --receipt-sha256 '<actual-receipt-sha256>' --facts 'D:\PRIVATE\verified-facts.json' --confirm VERIFIED-PUBLIC-FACTS
 ```
 
-Read `coverage-report.json`, `validation-errors.jsonl`, `candidate-index.jsonl`, `normalized-packages.jsonl`, `held-candidate-evidence.jsonl`, `expected-run-manifest-chunks.jsonl` and `delivery-index.jsonl`. Every declared revision must be accounted for, including package-less holds. Verify the exact hashes before continuing. `supportedFactCount` counts accepted fact-verification records; identical typed observations may be deduplicated, so it is not a count of firms or destination imports.
+`handoff` refuses `--execute` and `--request`; it never captures another page or contacts Admin automatically. The required `VERIFIED-PUBLIC-FACTS` confirmation declares actual researcher verification of the saved facts, and grants no import approval.
 
-Preserve the returned preparation/source manifest and its compiler directory together; do not mix artifacts with another inventory or preparation.
+On success, save `handoffDir`, `checkpointPath`, `checkpointSha256`, `preparationPath`, `preparationSha256`, `sourceManifestPath`, `sourceManifestSha256`, `sourceManifestFileSha256`, `snapshotAt`, `runId`, `runManifestSha256`, `artifacts` and `counts`. The checkpoint has schema `prospect-public-source-handoff/v1` and state `prepared-pending-admin`. Its `networkRequests`, `submitted`, `applied` and `visibleVerified` values are all zero. Supported evidence may still need identity review; an all-held fact revision remains a valid prepared handoff containing its complete package-less evidence.
+
+The separate directory `handoffs/<preparationSha256>` contains:
+
+- `source-manifest.json`, copied byte for byte from the frozen preparation.
+- `expected-run-manifest.json` and `expected-run-manifest-chunks.jsonl`.
+- `candidate-index.jsonl` and `held-candidate-evidence.jsonl`.
+- `normalized-packages.jsonl`, `comparison-packages.json` and immutable `packages/<packageId>.json` files.
+- `delivery-index.jsonl`, `validation-errors.jsonl` and `coverage-report.json`.
+- `comparison-request.json`, built by the existing whole-firm comparison serializer, including zero-package runs.
+- `checkpoint.json`, written last after every declared artifact and original input has been checked.
+
+The checkpoint records each artifact's exact relative and absolute path, file-byte SHA-256 and byte count. It separately binds the preparation file, source-manifest semantic and file hashes, and run-manifest hash. `counts` records declared/accounted revisions, packages, package-less holds, retained held-candidate bodies, supported/held facts and validation issues. Read the coverage and evidence artifacts before continuing; `supportedFactCount` counts accepted fact-verification records, and identical typed observations may be deduplicated. It does not count destination imports or qualified firms.
+
+Replay the identical handoff command to validate the exact checkpoint and complete file set. A successful replay preserves every file's bytes and modification time and reuses the original `snapshotAt`; it does not refresh observation dates. Missing files, changed bytes, altered checkpoints, undeclared files, or redirected directories and files cannot produce a successful replay. Original captures, facts, exports and frozen manifests are retained unchanged. A genuinely new input revision receives a separate preparation and handoff directory.
+
+If the result is `held:true` with state `technical-hold`, preserve `reason`, `holdPath`, `holdSha256` and the partial artifact directory. The executable exits with a nonzero code. The immutable hold is kept separately beneath `handoff-holds/<preparationSha256>` and contains a safe technical code, never arbitrary error messages or source contents. An existing partial directory without its completed checkpoint is not regenerated or overwritten. A durable technical hold remains held on later invocations even if someone edits the artifacts afterward. Do not delete a hold or replace its evidence to force success; continue the next independent authorized candidate and resolve that preparation through an explicit repair procedure. Invalid receipt, fact or preparation inputs retain their existing loader failures and cannot be claimed as a trusted handoff.
+
+For the protected next stage, set `$publicRunDir` to the successful `handoffDir` and `$publicManifestPath` to its exact source-manifest copy:
+
+```powershell
+$publicRunDir = '<actual handoffDir from successful handoff>'
+$publicManifestPath = Join-Path $publicRunDir 'source-manifest.json'
+```
+
+Keep the returned preparation, its original source manifest, checkpoint and handoff directory together. Do not compile again into the completed handoff directory or mix artifacts from another preparation. The existing `compile` and `comparison-request` commands remain available for separately governed manual workflows; the handoff already performs those steps with the same compiler and serializers.
 
 ## 5. Resume protected delivery after Admin recovery
 
-The new tool does not bypass the existing signed comparisons, real task authorization, registration, review or destination read-back. During a Supabase outage, retain the local export and checkpoint and stop only its dependent Admin action. Continue independent authorized preparation.
+The new tool does not bypass the existing signed comparisons, real task authorization, registration, review or destination read-back. During a Supabase outage, retain each successful `prepared-pending-admin` handoff and stop only its dependent Admin action. Continue independent authorized preparation. This standalone D: companion does not edit or run the active C: coordinator.
 
 After recovery, follow the current whole-firm runbook with the exact prepared request:
 
@@ -155,3 +177,5 @@ submit --profile whole-firm --key <immutable-enqueued-key> --outbox <private-out
 Those commands default to dry-run. Their guarded execution adds `--execute --confirm SUBMIT-APPROVED-PROSPECT-RESEARCH` only after the current runbook's required evidence passes. Preserve actual receipts and keep credentials out of output. Do not use the preparation confirmation as an Admin import approval.
 
 Continue the finite expected inventory after each minor milestone until every revision has a verified destination result or a reconciled explicit hold. Public capture, local compilation and a received import receipt are distinct checkpoints; none alone completes the enrichment goal.
+
+Future-run acceptance still requires two genuine subsequent research deltas using their actual capture and verification inputs, followed by protected intake, receipts, and destination profile/search/filter read-backs. Offline handoff tests and local checkpoints establish preparation behavior; they do not replace those live acceptance runs.
