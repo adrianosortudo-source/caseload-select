@@ -73,7 +73,11 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     if (allowed.includes("opportunity.sources") && answers.opportunity.sources.some(source => source !== "unknown" && source !== "no_evidence")) bases.push("source_observed");
     node.properties.evidence_basis.enum = slot.startsWith("definition_") ? ["firm_preference", "hypothesis", "unknown"] : [...new Set(bases)];
     const experienceIds = Object.entries(aliases).filter(([,path]) => allowed.includes(path) && ["practice.experience", "practice.capability", "practice.client_strength_support"].includes(path)).map(([id]) => id);
-    node.properties.evidence_basis.description = `For firm_reported_experience you MUST cite at least one of ${experienceIds.join(", ") || "none (do not use this basis)"}. For unknown, cite only unknown/empty answers and state the gap. For any statement with a known source and no supporting record, estimate or observation, use firm_preference or hypothesis. Never select a basis supported only by some other claim in the report.`;
+    const financialEvidenceIds = (basis: "recorded" | "estimated") => Object.entries(aliases).filter(([, path]) => allowed.includes(path) && (
+      path.startsWith("value.") && answers.value.amount_basis === basis ||
+      path.startsWith("opportunity.") && answers.opportunity.data_basis === basis
+    )).map(([id]) => id).join(", ") || "none (do not use this basis)";
+    node.properties.evidence_basis.description = `For firm_reported_recorded you MUST cite at least one of ${financialEvidenceIds("recorded")}. For firm_reported_estimate you MUST cite at least one of ${financialEvidenceIds("estimated")}; a qualitative preference or capability alone is not an estimate. For firm_reported_experience you MUST cite at least one of ${experienceIds.join(", ") || "none (do not use this basis)"}. For unknown, cite only unknown/empty answers and state the gap. For any statement with a known source and no supporting record, estimate or observation, use firm_preference or hypothesis. Never select a basis supported only by some other claim in the report.`;
   };
   for (const [key, slot] of Object.entries({client:"definition_client_type",client_matter:"definition_client_matter",reasons:"definition_reasons",outcome:"definition_outcome"})) {
     setPaths(sections.definition_components.properties[key as keyof typeof sections.definition_components.properties], slot);
