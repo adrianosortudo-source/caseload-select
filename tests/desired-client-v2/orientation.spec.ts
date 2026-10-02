@@ -109,14 +109,14 @@ test("a spent local follow-up budget is explained accurately and wraps at every 
 
   await page.getByRole("button", { name: STAGE_DEFINITIONS[0].label }).click();
   await page.getByRole("button", { name: "Continue", exact: true }).click();
-  const notice = page.locator(".dc-alert");
+  const notice = page.locator(".dc-stage > .dc-alert");
   await expect(notice).toHaveText("This draft has reached its limit for AI follow-up checks. Your answers are saved, and you can continue without another AI follow-up.");
   expect(clarificationRequests).toBe(6);
 
   for (const width of [1440, 1024, 768, 640, 375, 320]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect(notice).toBeVisible();
-    await layout(page, ".dc-alert");
+    await layout(page, ".dc-stage > .dc-alert");
     if (width === 1440 || width === 320) await page.screenshot({ path: testInfo.outputPath(`follow-up-limit-${width}.png`), fullPage: true });
   }
 });
