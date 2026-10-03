@@ -7,7 +7,8 @@ import { compileCandidate, type CompiledPackage } from "./compiler";
 import { assertNoExclusionTokens, compileExclusionScoped, loadPrivateExclusions } from "./private-exclusions";
 import { assertEnvelopeProfile, parseProfile, profileConfig, type EnrichmentProfile } from "./profiles";
 import { assertWholeFirmManifestCoverage, compileWholeFirmSnapshot, freezeWholeFirmExport, type WholeFirmSourceManifest } from "./whole-firm";
-import { snapshotCoordinatorState } from "./whole-firm-coordinator-export";
+import { assertCoordinatorOutputPath, assertCoordinatorOutputRoot, snapshotCoordinatorState } from "./whole-firm-coordinator-export";
+import { runWholeFirmOfflineHandoff } from "./offline-handoff";
 import { assertManifestRegistrationBinding, assertFinalizedComparisonReader, verifyAndSerializeComparisonExport } from "./comparison-export";
 import { serializeComparisonRequest, writeComparisonRequest } from "./comparison-request";
 import { prepareManifestRequests, submitManifestChunks, assertManifestPackage, checkManifestApproval, validateManifestChunks } from "./manifest-delivery";
@@ -21,6 +22,7 @@ const HELP = `Prospect enrichment local tools (dry-run by default)
   inventory [--profile legacy-backfill]
   inventory --profile whole-firm --file IMMUTABLE_COORDINATOR_EXPORT
   inventory --profile whole-firm --coordinator-state PATH
+  handoff --profile whole-firm --coordinator-state PATH [--execute-offline]
   compile --manifest FILE --run-dir DIR [--actions FILE] [--exclusions PRIVATE_FILE]
   comparison-request --manifest FILE --packages FILE --output FILE [--gzip]
   register-manifest --profile whole-firm --manifest SOURCE_MANIFEST --manifest-chunks FILE --held-evidence FILE
@@ -49,7 +51,7 @@ function args(argv: string[]) {
   const [command = "help", ...rest] = argv, options: Record<string, string | boolean> = {};
   for (let i = 0; i < rest.length; i++) {
     const flag = rest[i];
-    if (flag === "--execute" || flag === "--export-comparison" || flag === "--manifest-only" || flag === "--gzip") { const name = flag.slice(2); if (name in options) throw Error("duplicate_cli_argument"); options[name] = true; continue; }
+    if (flag === "--execute" || flag === "--execute-offline" || flag === "--export-comparison" || flag === "--manifest-only" || flag === "--gzip") { const name = flag.slice(2); if (name in options) throw Error("duplicate_cli_argument"); options[name] = true; continue; }
     if (!flag.startsWith("--") || !valueFlags.has(flag.slice(2)) || !rest[i + 1] || rest[i + 1].startsWith("--")) throw Error("invalid_cli_arguments");
     const name = flag.slice(2); if (name in options) throw Error("duplicate_cli_argument"); options[name] = rest[++i];
   }
@@ -73,8 +75,10 @@ function profileOutput(file: string, profile: EnrichmentProfile): string {
   if (!within(profileConfig(profile).outputRoot, file) || DEFAULT_ROOTS.some(r => within(r.path, file))) throw Error("output_must_be_in_profile_private_root");
   return path.resolve(file);
 }
-async function writeExactBytes(file: string, bytes: Buffer) {
+async function writeExactBytes(file: string, bytes: Buffer, outputRoot: string) {
+  await assertCoordinatorOutputPath(outputRoot, file, "file");
   await fs.mkdir(path.dirname(file), { recursive: true });
+  await assertCoordinatorOutputPath(outputRoot, file, "file");
   try { await fs.writeFile(file, bytes, { flag: "wx" }); } catch (error) { if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error; if (!(await fs.readFile(file)).equals(bytes)) throw Error("immutable_snapshot_bytes_conflict"); }
 }
 async function writeNew(file: string, content: string) { await fs.mkdir(path.dirname(file), { recursive: true }); await fs.writeFile(file, content, { flag: "wx" }); }
@@ -86,17 +90,24 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
   const privateOutput = (file: string) => profileOutput(file, profile);
   if (command === "help" || command === "--help") return HELP;
   if (options.exclusions !== undefined && (command !== "compile" || profile !== "legacy-backfill")) throw Error("exclusions_cli_scope_invalid");
-  if (options["coordinator-state"] !== undefined && (command !== "inventory" || profile !== "whole-firm")) throw Error("coordinator_state_input_scope_invalid");
+  if (options["execute-offline"] === true && command !== "handoff") throw Error("execute_offline_cli_scope_invalid");
+  if (options["coordinator-state"] !== undefined && (!(["inventory", "handoff"].includes(command)) || profile !== "whole-firm")) throw Error("coordinator_state_input_scope_invalid");
+  if (command === "handoff") {
+    const allowed = new Set(["profile", "coordinator-state", "execute-offline"]);
+    if (profile !== "whole-firm" || Object.keys(options).some(key => !allowed.has(key))) throw Error("offline_handoff_scope_invalid");
+    return runWholeFirmOfflineHandoff({ statePath: required(options, "coordinator-state"), outputRoot: privateOutput(config.outputRoot), executeOffline: options["execute-offline"] === true });
+  }
   if (command === "inventory" && profile === "whole-firm") {
     if (options.file !== undefined && options["coordinator-state"] !== undefined) throw Error("whole_firm_inventory_inputs_mutually_exclusive");
+    await assertCoordinatorOutputRoot(config.outputRoot);
     if (typeof options["coordinator-state"] === "string") return snapshotCoordinatorState({ statePath: options["coordinator-state"], outputRoot: privateOutput(config.outputRoot) });
     const file = required(options, "file"), bytes = await fs.readFile(file), exportSha = sha256(bytes);
     const archive = privateOutput(path.join(config.outputRoot, "exports", exportSha + ".json"));
-    await writeExactBytes(archive, bytes);
+    await writeExactBytes(archive, bytes, config.outputRoot);
     if (sha256(await fs.readFile(file)) !== exportSha) throw Error("source_changed_during_snapshot");
     const source = freezeWholeFirmExport(JSON.parse(bytes.toString("utf8")), exportSha);
     const runDir = privateOutput(path.join(config.outputRoot, "runs", source.manifestSha256));
-    await writeExactBytes(path.join(runDir, "source-manifest.json"), Buffer.from(JSON.stringify(source, null, 2) + "\n"));
+    await writeExactBytes(path.join(runDir, "source-manifest.json"), Buffer.from(JSON.stringify(source, null, 2) + "\n"), config.outputRoot);
     return { profile, runDir, sourceManifestSha256: source.manifestSha256, expectedRevisionCount: source.expectedRevisionCount, sourceExportArchive: archive, networkRequests: 0 };
   }
   if (command === "inventory") {
