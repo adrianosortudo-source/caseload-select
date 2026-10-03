@@ -97,7 +97,7 @@ function questionLabel(path: AnswerReferencePath, answers: DesiredClientAnswers)
     "repeatability.success_other": "Describe another firm-approved outcome",
     "repeatability.target": "Desired target",
     "repeatability.review_period": "Period for reviewing progress",
-    "repeatability.additional_matters": "Additional matter capacity per month",
+    "repeatability.additional_matters": "Additional matters the firm could support",
     "repeatability.staffing_constraint": "Staffing or process constraint",
   };
   return labels[path] ?? "Answer";
