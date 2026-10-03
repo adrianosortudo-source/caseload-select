@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
 import { completeAnswers, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
+import { validateAnalysisResult } from "../../src/lib/desired-client/output";
 
 const route = "**/api/tools/desired-client-matter/analyze";
 const storageKey = "cls-desired-client-v2";
 const answers = completeAnswers();
-const result = validBlueprint();
+const result = validateAnalysisResult(validBlueprint(), answers, [])!;
 
 test("a reviewed six-section draft becomes a synthesized blueprint and HTML report", async ({ page }) => {
   let analysisCalls = 0;
@@ -49,7 +50,7 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   await expect(blueprintTitle).toBeVisible();
   await expect(blueprintTitle).toContainText("Business & commercial");
   await expect(page.getByText(result.brief.definition_sentence, { exact: true })).toBeVisible();
-  await expect(page.getByText("Our desired-client definition", { exact: true })).toBeVisible();
+  await expect(page.getByText("Client definition", { exact: true })).toBeVisible();
   await expect(page.getByText("Client decision pathway", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download HTML report", exact: true })).toBeVisible();
   expect(analysisCalls).toBe(1);
@@ -61,7 +62,7 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   const path = await download.path();
   const html = await import("node:fs/promises").then(fs => fs.readFile(path!, "utf8"));
   expect(html).toContain("Desired Client Blueprint");
-  const exportedDefinition = html.match(/<section class="definition"><h2>Our desired-client definition<\/h2><p>([\s\S]*?)<\/p><\/section>/)?.[1];
+  const exportedDefinition = html.match(/<section class="definition"><h2>Client definition<\/h2><p>([\s\S]*?)<\/p><\/section>/)?.[1];
   expect(exportedDefinition).toBeDefined();
   const plainDefinition = exportedDefinition!
     .replace(/<[^>]*>/g, "")
@@ -71,4 +72,40 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'");
   expect(plainDefinition).toBe(result.brief.definition_sentence);
+
+  for (const width of [1440, 1024, 768, 640, 375, 320]) {
+    await page.setViewportSize({ width, height: 1000 });
+    const layout = await page.evaluate(() => {
+      const failures: string[] = [];
+      for (const element of Array.from(document.querySelectorAll<HTMLElement>(".dc-brief [data-ui-copy]"))) {
+        if (element.dataset.uiCopyException || !element.getClientRects().length) continue;
+        if (!element.matches("h1,h2,h3,h4,p,li")) continue;
+        const lines: Array<{ top: number; wordCount: number }> = [];
+        const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+        let node: Node | null;
+        while ((node = walker.nextNode())) {
+          for (const match of (node.textContent ?? "").matchAll(/\S+/g)) {
+            const range = document.createRange();
+            range.setStart(node, match.index!);
+            range.setEnd(node, match.index! + match[0].length);
+            const rect = range.getBoundingClientRect();
+            if (!rect.width || !rect.height) continue;
+            const line = lines.find((item) => Math.abs(item.top - rect.top) < 1.5);
+            if (line) line.wordCount += 1;
+            else lines.push({ top: rect.top, wordCount: 1 });
+          }
+        }
+        lines.sort((a, b) => a.top - b.top);
+        if (lines.length > 1 && lines.at(-1)?.wordCount === 1) failures.push(element.textContent?.trim() ?? "unknown copy");
+      }
+      return { viewport: innerWidth, scrollWidth: document.documentElement.scrollWidth, failures };
+    });
+    expect(layout.scrollWidth, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(width);
+    expect(layout.failures, `single-word final lines at ${width}px`).toEqual([]);
+  }
+
+  await page.getByRole("button", { name: "Edit opportunity and progress", exact: true }).click();
+  await expect(page.getByText("How do clients find or approach the firm for this work? (optional)", { exact: true })).toBeVisible();
+  await expect(page.getByText("What evidence has the firm seen for this type of work?", { exact: true })).toBeVisible();
+  await expect(page.getByText("What would the firm want to review over time? (optional)", { exact: true })).toBeVisible();
 });

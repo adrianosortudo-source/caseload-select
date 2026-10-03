@@ -30,11 +30,11 @@ export function validBlueprint(): AnalysisResult {
  why_firm_wants_work:{claims:[evidence("The firm values this work's fit with its skills.","firm_preference","value.reasons")]},
  why_client_chooses_firm:{claims:[evidence("Client choice criteria are not yet established.","unknown","client.choice_priorities")]},
  recognizable_circumstances:{claims:[evidence("Scope information is useful for lawyer review.","hypothesis","delivery.fit_signals")]},
- evidence_and_open_questions:{claims:[evidence("Demand and acquisition cost have not been established.","unknown","opportunity.sources")]},
+ evidence_and_open_questions:{claims:[evidence("Neither demand nor acquisition cost is established.","unknown","opportunity.sources")]},
  decision_pathway:{
  trigger:evidence("The prompting situation has not been observed.","unknown","client.decision_context"),
  first_contact:evidence("The first-contact pattern has not been observed.","unknown","client.decision_context"),
- decision:evidence("Decision participants and sequence remain open.","unknown","client.decision_context"),
+ decision:evidence("Who decides and in what order remains open.","unknown","client.decision_context"),
  desired_progress:evidence("The client's progress is a hypothesis to validate.","hypothesis","client.goals")}
  };
  brief.definition_sentence=buildDefinitionSentence(brief,false,completeAnswers().client.goal_detail,completeAnswers().client.goals.includes("unknown"));

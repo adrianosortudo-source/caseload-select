@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildDefinitionSentence } from "../definition";
 import { validateAnalysisResult } from "../output";
+import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { completeAnswers, validBlueprint } from "./blueprint-helpers";
 describe("Desired Client Blueprint v4 contract", () => {
   it("accepts a grounded six-card profile with its deterministic one-sentence definition", () => {
@@ -19,7 +20,9 @@ describe("Desired Client Blueprint v4 contract", () => {
   it("rejects mismatched definitions, unsupported sources, and evidence-basis mismatches", () => {
     const answers = completeAnswers(), candidate = validBlueprint();
     const mismatched = validateAnalysisResult({ ...candidate, brief: { ...candidate.brief, definition_sentence: "A different sentence." } }, answers, []);
-    expect(mismatched?.brief.definition_sentence).toBe(buildDefinitionSentence(candidate.brief, false, answers.client.goal_detail, answers.client.goals.includes("unknown")));
+    const grounded = buildStructuredBlueprintV4(answers);
+    const groundedBrief = { ...candidate.brief, definition_components: { ...candidate.brief.definition_components, client: grounded.definition_components.client, client_matter: grounded.definition_components.client_matter } };
+    expect(mismatched?.brief.definition_sentence).toBe(buildDefinitionSentence(groundedBrief, false, answers.client.goal_detail, answers.client.goals.includes("unknown")));
     const fabricated = structuredClone(candidate); fabricated.brief.why_firm_wants_work.claims[0].source_answer_ids = ["focus.industry" as never];
     expect(validateAnalysisResult(fabricated, answers, [])).toBeNull();
     const mismatch = structuredClone(candidate); mismatch.brief.why_firm_wants_work.claims[0].evidence_basis = "firm_reported_recorded";

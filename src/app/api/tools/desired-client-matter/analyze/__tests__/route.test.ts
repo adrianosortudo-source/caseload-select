@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import type { AnalysisRequestEnvelope, DesiredClientAnswers } from "@/lib/desired-client/types";
 import { completeAnswers, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
+import { validateAnalysisResult } from "@/lib/desired-client/output";
 
 const mocks = vi.hoisted(() => ({
   GoogleGenerativeAI: vi.fn(),
@@ -39,6 +40,7 @@ const ENVELOPE: AnalysisRequestEnvelope = {
   clarifications: [],
 };
 const MODEL_RESULT = validBlueprint();
+const EXPECTED_RESULT = validateAnalysisResult(MODEL_RESULT, B0, []);
 const ORIGINAL_ENV = new Map<string, string | undefined>();
 const ENV_KEYS = ["DESIRED_CLIENT_AI_ENABLED", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"];
 
@@ -160,7 +162,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body).toMatchObject({ ok: true, requestId: ENVELOPE.requestId, answerRevision: 1, reviewRunId: ENVELOPE.reviewRunId, result: MODEL_RESULT });
+    expect(body).toMatchObject({ ok: true, requestId: ENVELOPE.requestId, answerRevision: 1, reviewRunId: ENVELOPE.reviewRunId, result: EXPECTED_RESULT });
     expect(body.result.brief.report_version).toBe("dcm-blueprint-v4");
     expect(body.result.brief.definition_sentence).toContain("The firm wants to attract and serve");
     expect(Object.keys(body.result.brief)).toEqual([

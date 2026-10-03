@@ -5,13 +5,13 @@ import { buildDefinitionSentence } from "../definition";
 import { buildDraftPreview } from "../brief";
 import { completeAnswers, evidence, validBlueprint } from "./blueprint-helpers";
 import { interviewClarificationSourceFingerprint } from "../types";
-import { buildBlueprintViewModel } from "../blueprint";
+import { buildBlueprintViewModel, REPORT_EDIT_LINKS } from "../blueprint";
 
 describe("v4 provenance and client pathway", () => {
   it("keeps the law firm out of the desired-client identity and does not approve a target on wording review", () => {
     const result=validBlueprint();
     expect(result.brief.definition_components).not.toHaveProperty("firm");
-    expect(result.brief.definition_sentence).toMatch(/^The firm wants to attract and serve business owners in a situation where/);
+    expect(result.brief.definition_sentence).toMatch(/^The firm wants to attract and serve business owners for matters described as/);
     expect(buildDefinitionSentence(result.brief,true,completeAnswers().client.goal_detail)).toBe(buildDefinitionSentence(result.brief,false,completeAnswers().client.goal_detail));
     expect(result.brief.definition_sentence).toContain("so the client can understand the assets, liabilities and closing obligations");
     expect(result.brief.definition_sentence).not.toContain("progress will be assessed");
@@ -21,6 +21,36 @@ describe("v4 provenance and client pathway", () => {
     const broken=structuredClone(result) as unknown as {brief:{decision_pathway:Record<string,unknown>}};
     delete broken.brief.decision_pathway.first_contact;
     expect(validateAnalysisResult(broken,completeAnswers(),[])).toBeNull();
+  });
+  it("maps report edit links to their matching interview stages", () => {
+    expect(REPORT_EDIT_LINKS).toEqual([
+      [1, "Edit practice"],
+      [2, "Edit client and matter"],
+      [3, "Edit value"],
+      [4, "Edit firm fit"],
+      [5, "Edit matter signals"],
+      [6, "Edit opportunity and progress"],
+    ]);
+    expect(REPORT_EDIT_LINKS.find(([, label]) => label === "Edit opportunity and progress")?.[0]).toBe(6);
+  });
+  it("states negative unit economics as a condition without breaking the definition sentence", () => {
+    const answers=completeAnswers();
+    Object.assign(answers.value,{fee_amount:"4800",direct_cost_amount:"8000",currency:"CAD",amount_basis:"recorded",amount_scope:"per_matter"});
+    const brief=buildStructuredBlueprintV4(answers);
+    expect(brief.definition_sentence).toContain("because the firm's reported preference needs to be reconciled with the negative contribution");
+    expect(brief.definition_sentence).not.toContain("the firm cites the firm's");
+  });
+  it("uses concise card headings while retaining the original report sections", () => {
+    const answers=completeAnswers(), brief=buildStructuredBlueprintV4(answers);
+    const view=buildBlueprintViewModel(brief,answers,{mode:"structured",generatedAt:"2026-10-01T12:00:00.000Z",wordingReviewed:false});
+    expect(view.cards.map(card=>card.title)).toEqual([
+      "Desired client and matter",
+      "Client goals and needs",
+      "Why this work",
+      "Why clients choose the firm",
+      "Matter signals",
+      "Evidence & open questions",
+    ]);
   });
   it("does not let client-choice feedback certify the decision pathway", () => {
     const a=completeAnswers(); a.client.choice_basis="client_feedback";
@@ -91,7 +121,7 @@ describe("v4 provenance and client pathway", () => {
     const b=buildStructuredBlueprintV4(a);
     expect(validateAnalysisResult({brief:b,clarification_code:null},a,[])).not.toBeNull();
     expect(b.definition_sentence.split(/\s+/).length).toBeLessThanOrEqual(85);
-    expect(b.definition_sentence).toContain("in a situation where a business buyer");
+    expect(b.definition_sentence).toContain("for matters described as “A business buyer");
     expect(b.definition_sentence).toContain("because the firm cites");
     expect(b.definition_sentence).toContain("so the client can understand the assets");
     expect(b.definition_sentence).not.toContain("retained matters");

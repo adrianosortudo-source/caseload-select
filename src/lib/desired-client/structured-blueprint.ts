@@ -244,7 +244,7 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
 
   const reasonPaths=knownPaths(answers,["value.reasons","write_ins.reasons","practice.enjoys","value.fee_effort","write_ins.fee_effort"]).filter((path)=>path!=="value.reasons"||!answers.value.reasons.includes("undecided"));
   const reasonLabels=reasonPaths.map(path=>text(answers,path)).filter(Boolean);
-  const firmRationale=reasonPaths.length?linked(`The firm wants this work for the following reported reasons and conditions: ${reasonLabels.join("; ")||text(answers,"value.reasons")}.`,"firm_preference",reasonPaths):unknownClaim("The firm's reasons for wanting more of this work are not yet established.","value.reasons");
+  const firmRationale=reasonPaths.length?linked(`Reasons reported by the firm: ${reasonLabels.join("; ")||text(answers,"value.reasons")}.`,"firm_preference",reasonPaths):unknownClaim("The firm's reasons for wanting more of this work are not yet established.","value.reasons");
   const economicsPaths=knownPaths(answers,["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]);
   const contribution=calculateContribution(answers);
   const economicsText=economicsPaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")+(contribution?`; ${contribution.basis==="firm_reported_estimate"?"estimated":"firm-record-based"} contribution before overhead and acquisition costs: ${contribution.amount} per matter, calculated as collected fee less direct delivery cost`:"");
@@ -359,7 +359,8 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
     : reasonFragments.length > 1
     ? `${reasonFragments.slice(0, -1).join(", ")} and ${reasonFragments.at(-1)}`
     : reasonFragments[0] ?? (reasonLabels.length ? reasonLabels.map((label) => label.replace(/^(It|The firm|We)\s+/i, "").replace(/^./, (first) => first.toLocaleLowerCase("en-CA"))).join(" and ") : "the firm's reasons are still to be confirmed");
-  const reasonsComponent=reasonPaths.length?linked(`the firm cites ${reasonSentence}`,negativeContribution?"hypothesis":"firm_preference",negativeContribution?unique([...reasonPaths,...economicsPaths]):reasonPaths):unknownClaim("the firm is still establishing why it prefers this work","value.reasons");
+  const definitionReason = negativeContribution ? reasonSentence : `the firm cites ${reasonSentence}`;
+  const reasonsComponent=reasonPaths.length?linked(definitionReason,negativeContribution?"hypothesis":"firm_preference",negativeContribution?unique([...reasonPaths,...economicsPaths]):reasonPaths):unknownClaim("the firm is still establishing why it prefers this work","value.reasons");
 
   const brief:DesiredClientBriefV4 = {
     report_version:"dcm-blueprint-v4",definition_sentence:"",definition_components:{client:clientType,client_matter:sentenceMatter,reasons:reasonsComponent,outcome},
