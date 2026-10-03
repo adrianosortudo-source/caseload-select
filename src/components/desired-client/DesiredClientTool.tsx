@@ -8,8 +8,8 @@ import { getEligibleClarificationCodes } from "@/lib/desired-client/clarificatio
 import { clearDraft, loadDraft, saveDraft, type DraftLoadResult } from "@/lib/desired-client/storage";
 import { advanceStage, answerClarification, answerInterviewClarification, applyAnalysis, applyStructuredFallback, beginAiRun, canEnterStage, commitComparison, editAnswers, enterTool, failAnalysis, initialToolState, markReviewed, moveToStage, recordAiAttempt, recordClarificationAttempt, showInterviewClarification, type ToolState } from "@/lib/desired-client/state";
 import { STAGE_DEFINITIONS, type StageId } from "@/lib/desired-client/screens";
-import { resolveAnswerReference } from "@/lib/desired-client/catalog";
-import type { AnalysisFailureEnvelope, AnalysisRequestEnvelope, AnalysisSuccessEnvelope, AnswerReferencePath, DesiredClientAnswers, InterviewClarificationPrompt, InterviewClarificationPurpose, InterviewClarificationRequestEnvelope, InterviewClarificationSuccessEnvelope, InterviewStage, PendingWorkComparison, SavedDraft } from "@/lib/desired-client/types";
+import { isInterviewClarificationAskPrompt, normalizeInterviewClarificationContinuePrompt } from "@/lib/desired-client/interview-clarification-contract";
+import type { AnalysisFailureEnvelope, AnalysisRequestEnvelope, AnalysisSuccessEnvelope, DesiredClientAnswers, InterviewClarificationRequestEnvelope, InterviewClarificationSuccessEnvelope, InterviewStage, PendingWorkComparison, SavedDraft } from "@/lib/desired-client/types";
 import { WelcomeScreen } from "./WelcomeScreen";
 import { ResumePanel } from "./ResumePanel";
 import { GuidedQuestionStage } from "./GuidedQuestionStage";
@@ -24,51 +24,14 @@ import { InterviewClarificationStep } from "./InterviewClarificationStep";
 import "./desired-client.css";
 
 function noticeFor(status:DraftLoadResult["status"],migrated=false):string { if(migrated)return STORAGE_COPY.migrated;if(status==="expired")return STORAGE_COPY.expired;if(status==="corrupt")return STORAGE_COPY.invalid;if(status==="unavailable")return STORAGE_COPY.unavailable;return ""; }
-const PROMPT_PURPOSES:Record<InterviewStage,readonly InterviewClarificationPurpose[]>={
-  1:["firm_desirability","strength_and_support"],
-  2:["client_matter_specificity","client_goal_detail","client_choice_criteria","strength_and_support","decision_pathway_observation"],
-  3:["firm_desirability","economics_effort_conflict","capacity_conflict"],
-  4:["client_choice_criteria","strength_and_support"],
-  5:["client_matter_specificity","decision_pathway_observation"],
-  6:["discovery_evidence","economics_effort_conflict","capacity_conflict","decision_pathway_observation"],
-};
-const PROMPT_SOURCE_PREFIXES:Record<InterviewStage,readonly string[]>={
-  1:["practice.direction","practice.firm_type","practice.client_strength","practice.enjoys","direction."],
-  2:["focus.","situation.","client.","client_context.","practice.experience","practice.capability","practice.development_needs","write_ins.trigger"],
-  3:["value.","practice.enjoys","delivery.conditions","delivery.capacity","write_ins.reasons","write_ins.fee_effort"],
-  4:["client.choice_priorities","client.choice_detail","practice.client_strength","practice.client_strength_effect","practice.client_strength_support"],
-  5:["delivery.fit_signals","client_context.","situation.","write_ins.fit_signals"],
-  6:["opportunity.","repeatability.","delivery.capacity","direction."],
-};
-const PROMPT_UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 export interface ClarificationRequestBudget { runId:string|null; count:number; }
 export function reserveClarificationRequest(budget:ClarificationRequestBudget,runId:string):boolean {
   if(budget.runId!==runId){budget.runId=runId;budget.count=0;}
   if(budget.count>=6)return false;
   budget.count+=1;return true;
 }
-function isClarificationPrompt(value:unknown,stage:InterviewStage,answers:DesiredClientAnswers):value is Extract<InterviewClarificationPrompt,{outcome:"ask"}> {
-  if(!value||typeof value!=="object"||Array.isArray(value))return false;
-  const prompt=value as Record<string,unknown>,expected=["outcome","id","stage","purpose","source_answer_ids","question","choices","reflection"];
-  if(Object.keys(prompt).length!==expected.length||expected.some(key=>!Object.hasOwn(prompt,key))||prompt.outcome!=="ask"||prompt.stage!==stage||typeof prompt.id!=="string"||!PROMPT_UUID.test(prompt.id)||
-    !PROMPT_PURPOSES[stage].includes(prompt.purpose as InterviewClarificationPurpose)||typeof prompt.question!=="string"||!prompt.question.trim()||prompt.question.length>140||/[\r\n]/.test(prompt.question)||
-    typeof prompt.reflection!=="string"||prompt.reflection.length>240||prompt.reflection.trim().split(/\s+/).filter(Boolean).length>35||!Array.isArray(prompt.source_answer_ids)||prompt.source_answer_ids.length<1||prompt.source_answer_ids.length>4||
-    !Array.isArray(prompt.choices)||prompt.choices.length<2||prompt.choices.length>4)return false;
-  const sources=prompt.source_answer_ids as unknown[];
-  if(new Set(sources).size!==sources.length||!sources.every(source=>{
-    if(typeof source!=="string"||!PROMPT_SOURCE_PREFIXES[stage].some(prefix=>prefix.endsWith(".")?source.startsWith(prefix):source===prefix))return false;
-    try{const resolved=resolveAnswerReference(source as AnswerReferencePath,answers),value=resolved.value;return resolved.present&&typeof value==="string"&&value.trim().length>0;}catch{return false;}
-  }))return false;
-  const choiceIds=new Set<string>();
-  return prompt.choices.every(choice=>{
-    if(!choice||typeof choice!=="object"||Array.isArray(choice))return false;
-    const item=choice as Record<string,unknown>;
-    if(Object.keys(item).length!==2||!Object.hasOwn(item,"id")||!Object.hasOwn(item,"label")||typeof item.id!=="string"||!/^[a-z0-9_-]{1,48}$/.test(item.id)||choiceIds.has(item.id)||typeof item.label!=="string"||!item.label.trim()||item.label.length>100||/[\r\n]/.test(item.label))return false;
-    choiceIds.add(item.id);return true;
-  });
-}
 export function showValidClarificationPrompt(state:ToolState,stage:InterviewStage,runId:string,prompt:unknown):ToolState|null {
-  if(!isClarificationPrompt(prompt,stage,state.answers)||state.answers.interview.clarification_count>=3||state.answers.interview.clarified_stages.includes(stage))return null;
+  if(!isInterviewClarificationAskPrompt(prompt,stage,state.answers)||state.answers.interview.clarification_count>=3||state.answers.interview.clarified_stages.includes(stage))return null;
   const counted=recordClarificationAttempt(state,stage,runId);
   return counted.answers.interview.clarification_count===state.answers.interview.clarification_count+1?showInterviewClarification(counted,prompt):null;
 }
@@ -82,11 +45,7 @@ export function clarificationNoticeFor(error:ToolState["error"]):string {
   if(error==="clarificationUnavailable")return "AI could not complete a follow-up this time. Your answers are saved, and you can continue.";
   return "";
 }
-function isClarificationContinue(value:unknown):value is {outcome:"continue";reason:string} {
-  if(!value||typeof value!=="object"||Array.isArray(value))return false;
-  const result=value as Record<string,unknown>;
-  return Object.keys(result).length===2&&Object.hasOwn(result,"outcome")&&Object.hasOwn(result,"reason")&&result.outcome==="continue"&&typeof result.reason==="string"&&!!result.reason.trim()&&result.reason.length<=180&&!/[\r\n]/.test(result.reason);
-}
+function isClarificationContinue(value:unknown):boolean { return normalizeInterviewClarificationContinuePrompt(value)!==null; }
 export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) {
  const [state,setState]=useState<ToolState>(initialToolState),[savedDraft,setSavedDraft]=useState<SavedDraft|null>(null),[notice,setNotice]=useState(""),[replacePrompt,setReplacePrompt]=useState(false),[clearPrompt,setClearPrompt]=useState(false);
  const [aiAvailable,setAiAvailable]=useState<boolean|null>(null);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { completeAnswers } from "./blueprint-helpers";
 import { buildInterviewClarificationResponseSchema, buildInterviewClarificationUserPrompt, validateInterviewClarificationRequest } from "../interview-clarification";
+import { isInterviewClarificationAskPrompt, isInterviewClarificationSourceForStage, normalizeInterviewClarificationContinuePrompt, normalizeInterviewClarificationModelPrompt } from "../interview-clarification-contract";
 import { interviewClarificationSourceFingerprint } from "../types";
 import type { InterviewClarificationRequestEnvelope } from "../types";
 
@@ -45,6 +46,48 @@ describe("adaptive interview clarification validation", () => {
     expect(schema.properties.source_answer_ids.items.enum).toContain("value.fee_effort");
     expect(schema.properties.source_answer_ids.items.enum).not.toContain("focus.work");
     expect(schema.properties.source_answer_ids.items.enum).not.toContain("value.fee_amount");
+  });
+  it("shares stage-five delivery source rules with the browser and accepts list-valued answers", () => {
+    const answers = completeAnswers();
+    answers.delivery.conditions = ["scope", "information"];
+    answers.delivery.limit = "scope";
+    answers.delivery.capacity = "room";
+    const request = nextStageRequest();
+    request.stage = 5;
+    request.answers = answers;
+    const allowed = buildInterviewClarificationResponseSchema(request).properties.source_answer_ids.items.enum;
+    expect(allowed).toEqual(expect.arrayContaining(["delivery.conditions", "delivery.limit", "delivery.capacity"]));
+    for (const path of ["delivery.conditions", "delivery.limit", "delivery.capacity"] as const) {
+      const prompt = {
+        outcome: "ask", id: "33333333-3333-4333-8333-333333333333", stage: 5,
+        purpose: "client_matter_specificity", source_answer_ids: [path],
+        question: "What does the client need resolved before proceeding?",
+        choices: [{ id: "scope", label: "Scope" }, { id: "timing", label: "Timing" }],
+        reflection: "This detail can help distinguish relevant enquiries.",
+      };
+      expect(isInterviewClarificationAskPrompt(prompt, 5, answers)).toBe(true);
+      expect(isInterviewClarificationSourceForStage(path, 5)).toBe(true);
+      const { id: _ignoredModelId, ...modelPrompt } = prompt;
+      const normalized = normalizeInterviewClarificationModelPrompt(modelPrompt, 5, answers, () => prompt.id);
+      expect(normalized).toMatchObject(prompt);
+      expect(isInterviewClarificationAskPrompt(normalized, 5, answers)).toBe(true);
+    }
+    expect(isInterviewClarificationSourceForStage("delivery.capacity", 3)).toBe(false);
+    expect(isInterviewClarificationAskPrompt({
+      outcome: "ask", id: "33333333-3333-4333-8333-333333333333", stage: 3,
+      purpose: "economics_effort_conflict", source_answer_ids: ["delivery.capacity"],
+      question: "What limits the work?", choices: [{ id: "one", label: "One" }, { id: "two", label: "Two" }],
+      reflection: "This helps frame delivery.",
+    }, 3, answers)).toBe(false);
+  });
+  it("normalizes a multiline continuation consistently before the browser sees it", () => {
+    const answers = completeAnswers();
+    const raw = { outcome: "continue", reason: "No material ambiguity remains.\nContinue to the next section." };
+    const expected = { outcome: "continue", reason: "No material ambiguity remains. Continue to the next section." };
+    expect(normalizeInterviewClarificationContinuePrompt(raw)).toEqual(expected);
+    expect(normalizeInterviewClarificationModelPrompt(raw, 5, answers, () => "unused-id")).toEqual(expected);
+    expect(normalizeInterviewClarificationContinuePrompt({ ...raw, extra: true })).toBeNull();
+    expect(normalizeInterviewClarificationContinuePrompt({ outcome: "continue", reason: "x".repeat(181) })).toBeNull();
   });
   it("sends display labels instead of internal fee and effort codes to the model", () => {
     const request = nextStageRequest();
