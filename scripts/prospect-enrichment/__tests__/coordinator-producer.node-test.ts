@@ -55,6 +55,19 @@ test("full candidate history, malformed results and no-result candidates remain 
   assert.equal(canonicalJson(result.exported.sourceInventory.state),canonicalJson(state));
   assert.equal(result.compiled.expected.entries.length,result.revisionCount);
 });
+test("missing result completedAt is preserved as an explicit technical hold while independent results compile",()=>{
+  const state=coordinatorFixture();
+  delete (state.candidates[1].results[0] as unknown as Record<string,unknown>).completedAt;
+  const result=compile(state),held=result.compiled.expected.entries.filter(e=>e.researchKey==="domain:synthetic-1.example");
+  assert.ok(held.length>0);
+  assert.ok(held.every(e=>e.clientPackageId===null&&e.errorCodes.includes("result_completed_at_not_recorded")));
+  assert.ok(result.compiled.packages.some(p=>p.envelope.subject.researchKey==="domain:synthetic-0.example"));
+  assert.ok(result.compiled.packages.some(p=>p.envelope.subject.researchKey==="domain:synthetic-2.example"));
+  const original=result.compiled.candidates.find(c=>c.researchKey==="domain:synthetic-1.example")?.original;
+  assert.ok(canonicalJson(original).includes("result_completed_at_not_recorded"));
+  assert.ok(canonicalJson(original).includes("Synthetic rationale"));
+});
+
 test("identity aliases stay raw and invalid source keys never get rewritten into valid keys",()=>{
   const state=coordinatorFixture();
   state.candidates[0].results[0].record.sourceRecordKey="official:synthetic" as never;

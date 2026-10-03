@@ -111,13 +111,59 @@ test("accepted historic assessment links derived criteria evidence without creat
   assert.equal(action.envelope.assessment!.existingRecord!.table, "gta_prospect_qualification_assessments");
   assert.equal(action.retained[0].reason, "already_preserved_in_linked_legacy_assessment");
 });
-test("pilot chooses two exact ordinal keys per category and refuses category substitution", () => {
+test("pilot selects exact keys in every partition and excludes package-less schema holds", async () => {
   const packages = ["qualified", "held", "rejected", "incomplete", "held"].flatMap((status, partition) => [0, 1].map(i => {
     const compiled = compileCandidate(candidate({ workKey: "synthetic-" + partition + "-" + i, firmName: "Synthetic", status }), snapshot).packages[0];
     return { ...compiled, envelope: { ...compiled.envelope, subject: { ...compiled.envelope.subject, identityState: partition === 4 ? "unresolved" as const : "resolved" as const } } };
   }));
-  const pilot = selectPilot(packages); assert.equal(pilot.ready, true); assert.equal(pilot.selected.length, 10);
-  const short = selectPilot(packages.slice(1)); assert.equal(short.ready, false); assert.ok(short.issues.some(i => i.code === "pilot_partition_shortfall"));
+  const pilot = selectPilot(packages);
+  assert.equal(pilot.ready, true);
+  assert.deepEqual(pilot.selected.map(({ partition, researchKey }) => ({ partition, researchKey })), [
+    { partition: "Identity", researchKey: "synthetic-4-0" },
+    { partition: "Identity", researchKey: "synthetic-4-1" },
+    { partition: "Qualified", researchKey: "synthetic-0-0" },
+    { partition: "Qualified", researchKey: "synthetic-0-1" },
+    { partition: "Held", researchKey: "synthetic-1-0" },
+    { partition: "Held", researchKey: "synthetic-1-1" },
+    { partition: "Rejected", researchKey: "synthetic-2-0" },
+    { partition: "Rejected", researchKey: "synthetic-2-1" },
+    { partition: "Incomplete", researchKey: "synthetic-3-0" },
+    { partition: "Incomplete", researchKey: "synthetic-3-1" },
+  ]);
+
+  const short = selectPilot(packages.slice(1));
+  assert.equal(short.ready, false);
+  assert.ok(short.issues.some(i => i.code === "pilot_partition_shortfall" && i.path === "Qualified"));
+  const substituted = selectPilot(packages.map((p, index) => index === 0 ? { ...p, displayCategory: "Held" } : p));
+  assert.equal(substituted.ready, false);
+  assert.ok(substituted.issues.some(i => i.code === "pilot_partition_shortfall" && i.path === "Qualified"));
+
+  const { buildExpectedRunManifest, buildHeldCandidateEvidence, heldEvidenceDigest } = await import("../run-manifest");
+  const sourceBase = { schemaVersion: "prospect-backfill-manifest/v1" as const, snapshotAt: snapshot.snapshotAt, roots: [], artifacts: [], issues: [] };
+  const source = { ...sourceBase, manifestSha256: protocolHash(sourceBase) };
+  const coverage: import("../run-manifest").CandidateCoverage[] = packages.map(p => ({
+    researchKey: p.envelope.subject.researchKey, sourceRoot: "root-a", relativePath: "data/" + p.envelope.subject.researchKey + ".json",
+    sourcePointer: "", sourceSha256: "d".repeat(64), packageIds: [p.envelope.packageId], issues: [],
+  }));
+  const packageLessResearchKey = "synthetic-schema-held-revision";
+  coverage.push({
+    researchKey: packageLessResearchKey, sourceRoot: "root-a", relativePath: "data/schema-held-revision.json",
+    sourcePointer: "/qualificationAssessments/1", sourceSha256: "e".repeat(64), packageIds: [],
+    issues: [{ code: "hold_schema", path: "/qualificationAssessments/1", reason: "Synthetic revision could not be safely compiled." }],
+    original: { workKey: packageLessResearchKey, qualificationAssessments: [{ assessmentId: "revision-1", result: { unexpectedShape: true } }] },
+  });
+  const manifest = buildExpectedRunManifest(source, packages, coverage, []);
+  assert.equal(manifest.expectedPackageCount, 10);
+  assert.equal(manifest.entries.length, 11);
+  const schemaHeld = manifest.entries.find(entry => entry.clientPackageId === null && entry.researchKey === packageLessResearchKey);
+  assert.ok(schemaHeld);
+  assert.equal(schemaHeld.initialDisposition, "hold_schema");
+  assert.ok(schemaHeld.errorCodes.includes("hold_schema"));
+  const heldEvidence = buildHeldCandidateEvidence(manifest, coverage);
+  assert.equal(heldEvidence.length, 1);
+  assert.equal(heldEvidence[0].researchKey, packageLessResearchKey);
+  assert.equal(heldEvidenceDigest(schemaHeld), heldEvidence[0].evidenceSha256);
+  assert.equal(pilot.selected.some(item => item.researchKey === packageLessResearchKey), false);
 });
 test("immutable outbox replays exact bytes after timeout and rejects changed approvals or payloads", async t => {
   const temp = await workspace(t);

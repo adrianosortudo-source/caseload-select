@@ -9,10 +9,53 @@ const stateRelative = runner + "/control/whole_firm_state.json";
 const allowedReferences = [runner + "/workers", runner + "/control/evidence", "data/qualification"];
 const extension = /\.(jsonl?|html?|txt|md|csv|pdf|png|jpe?g|webp)$/i;
 const hash = (v: unknown): v is string => typeof v === "string" && /^[a-f0-9]{64}$/.test(v);
-async function immutable(file: string, bytes: Buffer) {
+async function immutable(file: string, bytes: Buffer, outputRoot: string) {
+  await assertCoordinatorOutputPath(outputRoot, file, "file");
   await fs.mkdir(path.dirname(file), { recursive: true });
+  await assertCoordinatorOutputPath(outputRoot, file, "file");
   try { await fs.writeFile(file, bytes, { flag: "wx" }); }
   catch (e) { if ((e as NodeJS.ErrnoException).code !== "EEXIST") throw e; if (!(await fs.readFile(file)).equals(bytes)) throw Error("coordinator_archive_conflict"); }
+}
+function samePath(one: string, two: string): boolean {
+  return path.relative(path.resolve(one), path.resolve(two)) === "" && path.relative(path.resolve(two), path.resolve(one)) === "";
+}
+/** Refuse output roots whose existing lexical path or any parent resolves through a link. */
+export async function assertCoordinatorOutputRoot(outputRoot: string): Promise<void> {
+  const absolute = path.resolve(outputRoot), parsed = path.parse(absolute);
+  let current = parsed.root;
+  for (const segment of absolute.slice(parsed.root.length).split(path.sep).filter(Boolean)) {
+    current = path.join(current, segment);
+    let stat: Awaited<ReturnType<typeof fs.lstat>>;
+    try { stat = await fs.lstat(current); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+    if (stat.isSymbolicLink() || !stat.isDirectory()) throw Error("coordinator_output_path_redirected");
+    if (!samePath(current, await fs.realpath(current))) throw Error("coordinator_output_path_redirected");
+  }
+}
+export async function assertCoordinatorOutputPath(outputRoot: string, targetPath: string, targetKind: "file" | "directory" = "file"): Promise<void> {
+  const root = path.resolve(outputRoot), target = path.resolve(targetPath), relative = path.relative(root, target);
+  if (relative === ".." || relative.startsWith(`..${path.sep}`) || path.isAbsolute(relative)) throw Error("coordinator_output_path_redirected");
+  await assertCoordinatorOutputRoot(root);
+  let current = root;
+  const segments = relative ? relative.split(path.sep).filter(Boolean) : [];
+  for (const [index, segment] of segments.entries()) {
+    current = path.join(current, segment);
+    let stat: Awaited<ReturnType<typeof fs.lstat>>;
+    try { stat = await fs.lstat(current); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ENOENT") return; throw error; }
+    if (stat.isSymbolicLink() || !samePath(current, await fs.realpath(current))) throw Error("coordinator_output_path_redirected");
+    const leaf = index === segments.length - 1;
+    if (!leaf && !stat.isDirectory()) throw Error("coordinator_output_path_redirected");
+    if (leaf && !(targetKind === "directory" ? stat.isDirectory() : stat.isFile())) throw Error("coordinator_output_path_redirected");
+  }
+}
+/** Coordinator state must be the regular file named by the supplied lexical path. */
+export async function assertCoordinatorStateFile(statePath: string): Promise<string> {
+  const absolute = path.resolve(statePath), stat = await fs.lstat(absolute);
+  if (stat.isSymbolicLink() || !stat.isFile()) throw Error("coordinator_state_path_invalid");
+  const real = await fs.realpath(absolute);
+  if (!samePath(absolute, real)) throw Error("coordinator_state_path_invalid");
+  return real;
 }
 export function coordinatorReferences(state: unknown): {pointer:string;value:unknown;expectedSha256:string|null;hashRequired:boolean}[] {
   const result: {pointer:string;value:unknown;expectedSha256:string|null;hashRequired:boolean}[] = [];
@@ -38,12 +81,13 @@ export async function snapshotCoordinatorState(options: {statePath:string;output
   const statePath = path.resolve(options.statePath), sourceRoot = path.resolve(path.dirname(statePath),"../../.."), outputRoot = path.resolve(options.outputRoot);
   if (path.relative(sourceRoot,statePath).replace(/\\/g,"/") !== stateRelative) throw Error("coordinator_state_path_invalid");
   if (within(sourceRoot,outputRoot) || within(outputRoot,sourceRoot)) throw Error("coordinator_output_overlaps_source");
-  const rootReal = await fs.realpath(sourceRoot), realState = await fs.realpath(statePath);
+  await assertCoordinatorOutputRoot(outputRoot);
+  const rootReal = await fs.realpath(sourceRoot), realState = await assertCoordinatorStateFile(statePath);
   if (!within(rootReal,realState)) throw Error("coordinator_state_path_out_of_scope");
   const snapshotAt = options.snapshotAt ?? new Date().toISOString();
   if (!/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d+)?Z$/.test(snapshotAt) || !Number.isFinite(Date.parse(snapshotAt))) throw Error("coordinator_snapshot_time_invalid");
   const bytes = await fs.readFile(realState), sourceSha256 = sha256(bytes);
-  const archive = async (body:Buffer) => { const digest=sha256(body), file=path.join(outputRoot,"coordinator-artifacts","sha256",digest.slice(0,2),digest+".bin"); await immutable(file,body); return file; };
+  const archive = async (body:Buffer) => { const digest=sha256(body), file=path.join(outputRoot,"coordinator-artifacts","sha256",digest.slice(0,2),digest+".bin"); await immutable(file,body,outputRoot); return file; };
   const stateArchive = await archive(bytes);
   let state: unknown;
   try { state=JSON.parse(bytes.toString("utf8").replace(/^\uFEFF/,"")); } catch { throw Error("coordinator_state_json_invalid"); }
@@ -79,10 +123,10 @@ export async function snapshotCoordinatorState(options: {statePath:string;output
   const produced=produceWholeFirmExport(state,{sourcePath:statePath,sourceSha256,references},snapshotAt);
   const exportBytes=Buffer.from(canonicalJson(produced.exported)+"\n"), exportSha256=sha256(exportBytes);
   const exportFile=path.join(outputRoot,"exports",exportSha256+".json");
-  await immutable(exportFile,exportBytes);
+  await immutable(exportFile,exportBytes,outputRoot);
   const source=freezeWholeFirmExport(produced.exported,exportSha256);
   const runDir=path.join(outputRoot,"runs",source.manifestSha256);
-  await immutable(path.join(runDir,"source-manifest.json"),Buffer.from(JSON.stringify(source,null,2)+"\n"));
-  await immutable(path.join(runDir,"coordinator-inventory.json"),Buffer.from(canonicalJson({schemaVersion:"prospect-whole-firm-coordinator-inventory/v1",sourcePath:statePath,sourceSha256,stateArchive,snapshotAt,candidateCount:produced.candidateCount,revisionCount:produced.revisionCount,references,issues:produced.issues,exportSha256,sourceManifestSha256:source.manifestSha256,inventorySha256:protocolHash({sourceSha256,references})})+"\n"));
+  await immutable(path.join(runDir,"source-manifest.json"),Buffer.from(JSON.stringify(source,null,2)+"\n"),outputRoot);
+  await immutable(path.join(runDir,"coordinator-inventory.json"),Buffer.from(canonicalJson({schemaVersion:"prospect-whole-firm-coordinator-inventory/v1",sourcePath:statePath,sourceSha256,stateArchive,snapshotAt,candidateCount:produced.candidateCount,revisionCount:produced.revisionCount,references,issues:produced.issues,exportSha256,sourceManifestSha256:source.manifestSha256,inventorySha256:protocolHash({sourceSha256,references})})+"\n"),outputRoot);
   return {profile:"whole-firm",runDir,sourceManifestSha256:source.manifestSha256,expectedRevisionCount:source.expectedRevisionCount,sourceExportArchive:exportFile,stateArchive,candidateCount:produced.candidateCount,issues:produced.issues.length,networkRequests:0};
 }

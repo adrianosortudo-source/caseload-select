@@ -48,6 +48,13 @@ export function produceWholeFirmExport(input: unknown, provenance: CoordinatorSo
       const base = { schemaVersion: "whole-firm-producer-revision/v1", disposition: raw?.disposition ?? candidate.status ?? null, candidateContext: json(!object(candidateValue) ? candidateValue : !Array.isArray(candidate.results) ? candidate : context), result: json(storedValue), split: { assessmentPointer: null as string | null, unassigned: true } };
       const revisionIssues: Issue[] = [];
       const addIssue = (code: string, pointer: string, reason = code) => revisionIssues.push({ code, path: pointer, reason });
+      if (hasResults && raw) {
+        const completion = recordedDate(raw.completedAt);
+        if (completion.missingProvenanceReason === "not_recorded_in_source")
+          addIssue("result_completed_at_not_recorded", rp + "/completedAt", "The result has no recorded completion timestamp; preserve it as a technical hold.");
+        else if (completion.missingProvenanceReason)
+          addIssue("result_completed_at_invalid", rp + "/completedAt", "The recorded completion timestamp is not in a supported date format; preserve it as a technical hold.");
+      }
       if (!key) addIssue("research_key_missing", rp);
       if (!object(candidateValue) || !Array.isArray(candidate.results)) addIssue("coordinator_candidate_schema_invalid", cp);
       if (hasResults && (!raw || !text(raw.resultId) || !text(raw.workKey) || !["complete", "held", "rejected"].includes(String(raw.disposition)) || !Array.isArray(raw.evidence) || !Array.isArray(raw.missingGates) || !Array.isArray(raw.researchFailures) || !object(raw.record) || (["held", "rejected"].includes(String(raw.disposition)) && !text(raw.reason)))) addIssue("coordinator_result_schema_invalid", rp);
@@ -177,7 +184,7 @@ export function produceWholeFirmExport(input: unknown, provenance: CoordinatorSo
         const unmapped = unique([...leafPointers(original).filter(p=>![...covered].some(c=>p===c||p.startsWith(c+"/"))),...revisionIssues.map(i=>i.path).filter(p=>p.startsWith("/result"))]).sort(ordinal);
         const envelope = {schemaVersion:"prospect-enrichment/v1",runId:"run-prepared",packageId:"pe-prepared",supersedesPackageId:null,sourceSystem:WHOLE_FIRM_PROFILE.sourceSystem,sourceName:WHOLE_FIRM_PROFILE.sourceName,generatedAt:snapshotAt,mode:"propose",subject,sources:sources.filter(s=>group.sourceIds.includes(s.sourceId)),observations:group.observations,assessment:group.assessment,originalResearch:{sourcePath:provenance.sourcePath,sourceSha256:provenance.sourceSha256,sourcePointer:rp,contentSha256:protocolHash(original),content:original,unmappedPaths:unmapped},controls:{contactFormsSubmitted:false,chatSessionsStarted:false,outreachSent:false}};
         const parsed = parseProspectEnrichmentEnvelope(envelope);
-        const fatal = revisionIssues.some(i=>["source_event_conflict","observation_event_conflict","assessment_schema_invalid","retraction_reason_not_recorded"].includes(i.code));
+        const fatal = revisionIssues.some(i=>["source_event_conflict","observation_event_conflict","assessment_schema_invalid","retraction_reason_not_recorded","result_completed_at_not_recorded","result_completed_at_invalid"].includes(i.code));
         const finalIssues = [...revisionIssues,...(!parsed.ok ? parsed.issues.map(i=>({code:"producer_envelope_schema_invalid",path:rp,reason:i.path+": "+i.message})) : [])];
         push(researchKey,rp+":"+(group.selector??"unassigned"),original,parsed.ok&&!fatal?parsed.envelope:null,finalIssues,group.projections);
       }

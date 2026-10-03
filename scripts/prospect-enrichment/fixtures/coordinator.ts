@@ -2,7 +2,7 @@ export const producerDate = "2026-09-23T12:00:00.000Z";
 export function coordinatorFixture() {
   const source={sourceUrl:"https://synthetic.example/team",observedAt:"2026-09-22"};
   const result=(i:number,disposition:string)=>({
-    resultId:"synthetic-result-"+i,workKey:"domain:synthetic-"+i+".example",claimId:"synthetic-claim-"+i,worker:"synthetic-worker-"+i,disposition,
+    resultId:"synthetic-result-"+i,workKey:"domain:synthetic-"+i+".example",claimId:"synthetic-claim-"+i,worker:"synthetic-worker-"+i,disposition,completedAt:producerDate,
     reason:"Synthetic recorded rationale",researchKey:{canonicalDomain:"synthetic-"+i+".example",databaseUuid:null,sourceRecordKey:null,stableFirmId:null,identityStatus:"unresolved"},
     evidence:[{...source,supports:"Synthetic original support",result:"Keep this exact text"}],
     researchFailures:[{code:"synthetic-unavailable",sourceUrl:"https://synthetic.example/failure",observedAt:"2026-09-22",failure:"Synthetic failure; unknown result"}],

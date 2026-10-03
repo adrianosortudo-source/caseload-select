@@ -1,7 +1,7 @@
 import { parseProspectEnrichmentEnvelope, type ProspectEnrichmentEnvelope, type JsonValue } from "../../src/lib/prospect-enrichment-contract";
 import type { CompiledPackage } from "./compiler";
 import { validateLegacyAssessmentProjectionClaims, type LegacyAssessmentProjectionClaim } from "./legacy-projections";
-import { canonicalJson, displayCategory, object, ordinal, protocolHash, sha256, type Issue } from "./model";
+import { canonicalJson, displayCategory, object, ordinal, protocolHash, recordedDate, sha256, type Issue } from "./model";
 import { retainedWholeFirmStableClaim, validWholeFirmIdentityClaimPolicy, type WholeFirmIdentityClaimPolicy } from "./whole-firm-identity-claims";
 import { buildExpectedRunManifest, type CandidateCoverage, type ExpectedRunManifest } from "./run-manifest";
 import { bindReconciledPackages, type ReconciledAction } from "./reconciliation";
@@ -62,6 +62,17 @@ export function compileWholeFirmSnapshot(source: WholeFirmSourceManifest, action
     if (!object(original) || original.revisionId !== expected.revisionId || !Object.hasOwn(original, "originalRevision") || original.originalRevision === null) { hold("whole_firm_revision_incomplete", "Declared revision is missing/malformed; preserve the complete raw snapshot and do not fabricate evidence."); continue; }
     const revision = original.originalRevision;
     coverage.originalStatus = object(revision) ? revision.disposition ?? revision.status ?? null : null;
+    const recordedResult = object(revision) && object(revision.result) ? revision.result : null;
+    if (recordedResult) {
+      const completion = recordedDate(recordedResult.completedAt);
+      const timestampIssue = completion.missingProvenanceReason === "not_recorded_in_source"
+        ? "result_completed_at_not_recorded"
+        : completion.missingProvenanceReason ? "result_completed_at_invalid" : null;
+      if (timestampIssue) {
+        if (!coverage.issues.some(issue => issue.code === timestampIssue)) hold(timestampIssue, "A persisted result without a supported recorded completedAt stays a package-less technical hold; no timestamp is inferred.");
+        continue;
+      }
+    }
     if (!object(original.standardEnvelope)) { hold("whole_firm_standard_envelope_missing", "The coordinator must provide one explicit standard envelope for this immutable revision."); continue; }
     const subject = object(original.standardEnvelope.subject) ? { ...original.standardEnvelope.subject, identityState: original.standardEnvelope.subject.identityState === "conflict" ? "conflict" : "unresolved" } : original.standardEnvelope.subject;
     const proposed = { ...original.standardEnvelope, subject, schemaVersion: "prospect-enrichment/v1", runId, packageId: wholeFirmPackageId(runId, expected.researchKey, revision), sourceSystem: WHOLE_FIRM_PROFILE.sourceSystem, sourceName: WHOLE_FIRM_PROFILE.sourceName, generatedAt: source.snapshotAt };

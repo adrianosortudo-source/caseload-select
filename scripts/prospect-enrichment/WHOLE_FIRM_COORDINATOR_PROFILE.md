@@ -163,3 +163,19 @@ The snapshot input must end with operations/luna_continuous_v1/control/whole_fir
 Exact state/capture bytes are stored below coordinator-artifacts/sha256; standard export bytes are stored under exports; source-manifest.json and coordinator-inventory.json are in runs/SOURCE_MANIFEST_SHA. The latter records source SHA/archive path, candidate/revision counts, every declared reference and issue, export hash and source-manifest hash. No failed input is repaired in place. Resume via the completed saved export/manifest, not by creating another state snapshot with a new timestamp.
 
 Every comparison event now includes required primaryTarget, equal to exactly one targets member or null. Null is preserved when no deterministic primary proof exists. Neither target array ordering nor an auxiliary capture/audit row can supply typed existingRecord. Accepted evidence with visible=null or visible=false is receipt_unverified; the reasons distinguish an unknown/read failure from a known omission. The guard also clears stale linkage metadata and runs before reusing an applied package receipt. A comparison file alone cannot manufacture authenticated visibility.
+
+## Offline Luna handoff
+
+Use the `handoff` command when a whole-firm coordinator run is ready for local enrichment preparation. From the feature repository root, run:
+
+~~~sh
+node --import tsx scripts/prospect-enrichment/cli.ts handoff --profile whole-firm --coordinator-state "PATH_TO_PROSPECT_ROOT/operations/luna_continuous_v1/control/whole_firm_state.json"
+~~~
+
+This is a dry-run by default. It reads and hashes the exact state bytes, validates any matching saved coordinator inventory checkpoint, then reuses its original `snapshotAt`; changed state bytes create a distinct lineage. It may persist only the immutable state/evidence archives, source export, source manifest and coordinator inventory checkpoint needed to anchor replay. It does not write compiled package files, an outbox entry, or an Admin Prospects record. The summary must show `preparedCount`, `submitted`, `applied`, and `visibleVerified` as zero, with `networkRequests: 0`.
+
+Only add `--execute-offline` after reviewing the dry-run summary when the local compiled handoff is required. This writes the existing whole-firm compiler outputs under the snapshot run's `prepared-handoff` directory, validates file hashes and complete revision coverage, and writes `checkpoint.json` last. A successful checkpoint has state `prepared-pending-admin`; package identities and bytes remain immutable on replay. A missing, partial, altered, or corrupt checkpoint/artifact is a technical hold. Preserve it for diagnosis; never delete or regenerate it in place. Do not use `--execute`, credentials, delivery, comparison, identity-resolution, or submission flags with `handoff`.
+
+Every persisted result needs a supported, explicitly recorded `completedAt` value. A missing or malformed completion time produces a package-less technical hold while independent valid revisions continue; the exact raw revision and issue remain in the coverage and held-evidence outputs. `snapshotAt`, `submittedAt`, file modification time, and current time must never be substituted for result completion time.
+
+`prepared-pending-admin` is not synced, imported, or visible in Admin Prospects. This offline command makes no Admin request and receives no import receipt. The protected Admin intake, its exact import receipt, and a successful read-back/search verification remain separate required steps before marking any firm synced. This command does not activate, pause, rewrite, or otherwise operate Luna's coordinator queue.
