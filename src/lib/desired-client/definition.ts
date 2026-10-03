@@ -23,11 +23,10 @@ export function buildDefinitionSentence(brief: Pick<DesiredClientBrief | Desired
       : clientTypeWithArticle;
     const definitionReason = reasonText.replace(/^(?:the firm (?:wants|prefers) this work )?because\s+/i, "").replace(/^(A|An|The)\b/, article => article.toLowerCase()).replace(/^it\b/i, "the work");
     const matterText = clean(client_matter.text) || "the specific matter details remain to be defined";
-    // Treat this as a concise description supplied by the firm. Quoting the
-    // matter description avoids forcing an incomplete phrase into a "where"
-    // clause, while also remaining grammatical when the answer is a full
-    // clause or sentence.
-    const clientMatter = `for matters described as “${matterText}”`;
+    // Keep the firm's wording as a labelled description. It may be a noun
+    // phrase or a complete clause, so do not insert it into an unfinished
+    // "where" construction.
+    const clientMatter = `on matters matching the firm's description: “${matterText}”`;
     const practicalBenefit = removeRepeatedDecisionEndpoint(clean(clientBenefit), matterText);
     const alreadyIncluded = practicalBenefit && clientMatter.toLocaleLowerCase("en-CA").includes(practicalBenefit.toLocaleLowerCase("en-CA"));
     const benefitClause = practicalBenefit

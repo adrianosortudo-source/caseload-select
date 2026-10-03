@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { completeAnswers, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResult } from "../../src/lib/desired-client/output";
+import { REPORT_EDIT_LINKS } from "../../src/lib/desired-client/blueprint";
+import { STAGE_DEFINITIONS } from "../../src/lib/desired-client/screens";
 
 const route = "**/api/tools/desired-client-matter/analyze";
 const storageKey = "cls-desired-client-v2";
@@ -77,9 +79,9 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
     await page.setViewportSize({ width, height: 1000 });
     const layout = await page.evaluate(() => {
       const failures: string[] = [];
-      for (const element of Array.from(document.querySelectorAll<HTMLElement>(".dc-brief [data-ui-copy]"))) {
-        if (element.dataset.uiCopyException || !element.getClientRects().length) continue;
-        if (!element.matches("h1,h2,h3,h4,p,li")) continue;
+      for (const element of Array.from(document.querySelectorAll<HTMLElement>(".dc-brief :is(h1,h2,h3,h4,p,li)"))) {
+        if (element.dataset.uiCopyException || !element.getClientRects().length || element.closest("details:not([open])")) continue;
+        if (element.scrollWidth > element.clientWidth + 1) failures.push(`overflow: ${element.textContent?.trim() ?? "unknown copy"}`);
         const lines: Array<{ top: number; wordCount: number }> = [];
         const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
         let node: Node | null;
@@ -96,7 +98,7 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
           }
         }
         lines.sort((a, b) => a.top - b.top);
-        if (lines.length > 1 && lines.at(-1)?.wordCount === 1) failures.push(element.textContent?.trim() ?? "unknown copy");
+        if (lines.length > 1 && lines.at(-1)?.wordCount === 1) failures.push(`${element.tagName.toLocaleLowerCase()}${element.className ? `.${String(element.className).replace(/\s+/g, ".")}` : ""} (${element.clientWidth}px): ${element.textContent?.trim() ?? "unknown copy"}`);
       }
       return { viewport: innerWidth, scrollWidth: document.documentElement.scrollWidth, failures };
     });
@@ -104,8 +106,26 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
     expect(layout.failures, `single-word final lines at ${width}px`).toEqual([]);
   }
 
-  await page.getByRole("button", { name: "Edit opportunity and progress", exact: true }).click();
-  await expect(page.getByText("How do clients find or approach the firm for this work? (optional)", { exact: true })).toBeVisible();
-  await expect(page.getByText("What evidence has the firm seen for this type of work?", { exact: true })).toBeVisible();
-  await expect(page.getByText("What would the firm want to review over time? (optional)", { exact: true })).toBeVisible();
+  const expectedEditDestinations = [
+    [1, "Edit practice", "What work does the firm want to build around?"],
+    [2, "Edit client and matter", "Which client situation and specific matter do you want more of?"],
+    [3, "Edit value", "Why would the firm welcome this work again?"],
+    [4, "Edit firm fit", "Why might this client choose your firm?"],
+    [5, "Edit matter signals", "What would help you recognize this matter?"],
+    [6, "Edit opportunity and progress", "Where have these clients come from, and what do you know?"],
+  ] as const;
+  expect(REPORT_EDIT_LINKS).toEqual(expectedEditDestinations.map(([stage, label]) => [stage, label]));
+  for (const [stage, label, heading] of expectedEditDestinations) {
+    await page.getByRole("button", { name: label, exact: true }).click();
+    await expect(page.getByRole("heading", { level: 1, name: heading, exact: true }), `${label} should open interview stage ${stage}`).toBeVisible();
+    if (stage === 6) {
+      await expect(page.getByText("How do clients find or approach the firm for this work? (optional)", { exact: true })).toBeVisible();
+      await expect(page.getByText("What evidence has the firm seen for this type of work?", { exact: true })).toBeVisible();
+      await expect(page.getByText("What would the firm want to review over time? (optional)", { exact: true })).toBeVisible();
+    }
+    await page.getByRole("button", { name: STAGE_DEFINITIONS[6].label, exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Review your direction", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Create my Desired Client Blueprint", exact: true }).click();
+    await expect(blueprintTitle).toBeVisible();
+  }
 });
