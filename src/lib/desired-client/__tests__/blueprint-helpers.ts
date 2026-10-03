@@ -1,5 +1,6 @@
 import { emptyAnswers } from "../brief";
 import { buildDefinitionSentence } from "../definition";
+import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import type { AnalysisResult, DesiredClientAnswers, DesiredClientBriefV4, EvidenceBasis, EvidenceLinkedStatement } from "../types";
 export function completeAnswers(): DesiredClientAnswers {
   const a = emptyAnswers(); a.revision = 3;
@@ -17,7 +18,7 @@ export function completeAnswers(): DesiredClientAnswers {
 }
 const kindFor: Record<EvidenceBasis, EvidenceLinkedStatement["kind"]> = { firm_reported_recorded: "experience", firm_reported_estimate: "hypothesis", firm_reported_experience:"experience", firm_reported_observation:"experience", client_reported:"experience", firm_preference: "preference", source_observed: "experience", hypothesis: "hypothesis", unknown: "unknown" };
 export const evidence = (text: string, basis: EvidenceBasis, ...source_answer_ids: EvidenceLinkedStatement["source_answer_ids"]): EvidenceLinkedStatement => ({ text, kind: kindFor[basis], evidence_basis: basis, source_answer_ids });
-export function validBlueprint(): AnalysisResult {
+export function validBlueprint(answers: DesiredClientAnswers = completeAnswers()): AnalysisResult {
  const brief: DesiredClientBriefV4 = {
  report_version:"dcm-blueprint-v4", definition_sentence:"",
  definition_components:{
@@ -37,6 +38,11 @@ export function validBlueprint(): AnalysisResult {
  decision:evidence("Who decides and in what order remains open.","unknown","client.decision_context"),
  desired_progress:evidence("The client's progress is a hypothesis to validate.","hypothesis","client.goals")}
  };
- brief.definition_sentence=buildDefinitionSentence(brief,false,completeAnswers().client.goal_detail,completeAnswers().client.goals.includes("unknown"));
+ const grounded = buildStructuredBlueprintV4(answers);
+ brief.definition_components.client = grounded.definition_components.client;
+ brief.definition_components.client_matter = grounded.definition_components.client_matter;
+ brief.definition_components.reasons = grounded.definition_components.reasons;
+ brief.client_and_matter.claims[0] = grounded.client_and_matter.claims[0];
+ brief.definition_sentence=buildDefinitionSentence(brief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
  return {brief,clarification_code:null};
 }

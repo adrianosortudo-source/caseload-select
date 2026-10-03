@@ -59,7 +59,7 @@ function allowedPaths(slot: string): readonly string[] {
   if (slot === "practice_experience_supporting") return ["practice.experience", "practice.capability"];
   if (slot === "practice_development_needs") return ["practice.experience", "practice.development_needs"];
   if (slot === "practice_marketing_emphasis") return ["direction.less", "direction.less_note", "direction.less_reason"];
-  if (slot === "definition_client_type") return ["situation.role", "situation.role_other", "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus", "focus.service_area"];
+  if (slot === "definition_client_type") return ["situation.role", "situation.role_other", "client_context.geography", "client_context.community_focus"];
   if (slot === "definition_client_matter") return ["focus.area", "focus.work", "focus.work_other", "situation.trigger", "situation.role", "situation.role_other", "situation.timing", "client_context.geography", "client_context.relevant_circumstances", "client_context.repeat_matter_pattern", "write_ins.trigger"];
   if (slot === "practice_context") return ["practice.", "focus.", "direction."];
   if (slot === "client_and_matter") return ["focus.","situation.","client_context.geography","client_context.relevant_circumstances","client_context.repeat_matter_pattern","write_ins.trigger"];
@@ -192,11 +192,6 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   if (!exact(value, ["brief", "clarification_code"])) return reject("report", "root_shape");
   if (value.clarification_code !== null) return reject("report", "unexpected_clarification_code");
   const brief=value.brief;
-  // A valid citation is not permission to invent a matter subtype. Guard the
-  // hostile-takeover substitution found in the audit unless the firm actually
-  // supplied that phrase in its answers.
-  const suppliedText = JSON.stringify(answers).toLocaleLowerCase("en-CA");
-  if (JSON.stringify(brief).toLocaleLowerCase("en-CA").includes("hostile takeover") && !suppliedText.includes("hostile takeover")) return reject("report", "unsupported_hostile_takeover_detail");
   const cardNames=["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const;
   if(!exact(brief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"]))return reject("report", "brief_shape");
   if(brief.report_version!=="dcm-blueprint-v4")return reject("report", "unsupported_report_version");
@@ -211,28 +206,36 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   const pathwayFields=["trigger","first_contact","decision","desired_progress"] as const;
   for(const field of pathwayFields)if(!validStatement(pathway[field],answers,"decision_pathway",(reason,sourcePath)=>reportFailure?.({field:`decision_pathway.${field}`,reason,...(sourcePath?{sourcePath}:{})})))return null;
   const typedBrief=brief as unknown as DesiredClientBriefV4;
-  // The target client and legal matter must come from the firm's answers, not
-  // from a model's interpretation of a broad practice-area selection. Rebuild
-  // these definition fields deterministically so an unconfirmed target cannot
-  // enter the profile through otherwise-valid citations.
+  // A broad practice-area citation cannot support an invented client segment
+  // or engagement. Require the model's target fields to match the specific
+  // client and matter rebuilt from the firm's answers, including provenance.
   const groundedTarget = buildStructuredBlueprintV4(answers);
-  const groundedBrief: DesiredClientBriefV4 = {
-    ...typedBrief,
-    definition_components: {
-      ...typedBrief.definition_components,
-      client: groundedTarget.definition_components.client,
-      client_matter: groundedTarget.definition_components.client_matter,
-    },
-    client_and_matter: groundedTarget.client_and_matter,
-  };
-  const expectedSentence=buildDefinitionSentence(groundedBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
+  const sameGroundedStatement = (actual: EvidenceLinkedStatement, expected: EvidenceLinkedStatement) =>
+    actual.text.trim().replace(/\s+/g, " ") === expected.text.trim().replace(/\s+/g, " ") &&
+    actual.kind === expected.kind && actual.evidence_basis === expected.evidence_basis &&
+    actual.source_answer_ids.length === expected.source_answer_ids.length &&
+    expected.source_answer_ids.every((path) => actual.source_answer_ids.includes(path));
+  if (
+    !sameGroundedStatement(typedBrief.definition_components.client, groundedTarget.definition_components.client) ||
+    !sameGroundedStatement(typedBrief.definition_components.client_matter, groundedTarget.definition_components.client_matter) ||
+    !sameGroundedStatement(typedBrief.definition_components.reasons, groundedTarget.definition_components.reasons)
+  ) return reject("definition_components", "target_not_grounded_in_confirmed_answers");
+  const targetClaims = groundedTarget.client_and_matter.claims;
+  if (typedBrief.client_and_matter.claims.length !== targetClaims.length ||
+    typedBrief.client_and_matter.claims.some((claim, index) => {
+      const expected = targetClaims[index];
+      return !expected || !sameGroundedStatement(claim, expected);
+    })) {
+    return reject("client_and_matter", "target_card_not_grounded_in_confirmed_answers");
+  }
+  const expectedSentence=buildDefinitionSentence(typedBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
   // The definition is assembled from bounded, source-linked fields. A hard
   // 85-word ceiling rejected valid, specific client-and-matter definitions;
   // keep a generous abuse limit while preserving supported detail.
   if(typedBrief.definition_sentence.length>1600||expectedSentence.length>1600)return reject("definition_sentence", "sentence_length");
-  const reportWords=[...cardNames.flatMap(field=>(field === "client_and_matter" ? groundedBrief[field] : typedBrief[field]).claims.map(claim=>claim.text)),...pathwayFields.map(field=>typedBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
+  const reportWords=[...cardNames.flatMap(field=>typedBrief[field].claims.map(claim=>claim.text)),...pathwayFields.map(field=>typedBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
   if(reportWords>800)return reject("report", "word_limit");
-  return { clarification_code: null, brief: { ...groundedBrief, definition_sentence: expectedSentence } };
+  return { clarification_code: null, brief: { ...typedBrief, definition_sentence: expectedSentence } };
 }
 
 const LINKED_STATEMENT_SCHEMA = { type: "object", properties: { text: { type: "string" }, kind: { type: "string", enum: KIND }, source_answer_ids: { type: "array", minItems: 1, maxItems: 8, items: { type: "string" } }, evidence_basis: { type: "string", enum: BASIS } }, required: ["text", "kind", "source_answer_ids", "evidence_basis"] } as const;
