@@ -1,19 +1,10 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { buildBlueprintViewModel, EVIDENCE_BASIS_LABELS } from "@/lib/desired-client/blueprint";
+import { buildBlueprintViewModel, EVIDENCE_BASIS_LABELS, REPORT_EDIT_LINKS } from "@/lib/desired-client/blueprint";
 import { createHtmlDownload, createProfileDownload } from "@/lib/desired-client/export";
 import type { ClarificationCode, DesiredClientAnswers, DesiredClientBrief, DesiredClientBriefV4, SavedBrief } from "@/lib/desired-client/types";
 import { ConfirmationDialog } from "./ConfirmationDialog";
-
-const EDIT_LINKS = [
-  [1, "Edit practice"],
-  [2, "Edit client and matter"],
-  [3, "Edit value"],
-  [4, "Edit fit"],
-  [5, "Edit opportunity"],
-  [6, "Edit repeatability"],
-] as const;
 
 function definitionSegments(sentence: string, components: DesiredClientBrief["definition_components"] | DesiredClientBriefV4["definition_components"]) {
   const matches = Object.entries(components)
@@ -143,11 +134,11 @@ export function BriefView({
       {saved.sourceAnswersSnapshot && <details className="dc-report-supporting dc-screen-only"><summary>Original answer sources</summary><ul>{sourceSnapshotRows(saved, report).map((row) => <li key={row.path}><strong>{row.path.replaceAll(".", " · ").replaceAll("_", " ")}:</strong> {row.answer}</li>)}</ul></details>}
     </> : model && <>
       <section className="dc-report-definition" data-ui-component-content="desired-client-definition">
-        <h2 data-ui-copy="supporting">Our desired-client definition</h2>
+        <h2 data-ui-copy="supporting">Client definition</h2>
         <p data-ui-copy="body">{definitionSegments(model.definition, model.definitionComponents)}</p>
       </section>
       <section className="dc-report-conditions" aria-labelledby="dc-conditions-title" data-ui-component-content="desired-client-conditions">
-        <h2 id="dc-conditions-title" data-ui-copy="heading">Conditions and unresolved questions</h2>
+        <h2 id="dc-conditions-title" data-ui-copy="heading">Conditions to resolve</h2>
         <p data-ui-copy="supporting">Resolve these constraints or evidence gaps before treating this direction as ready to grow.</p>
         {model.conditions.length ? <ul>{model.conditions.map((condition, index) => <li key={`${index}-${condition}`} data-ui-copy="body">{condition}</li>)}</ul> : <p data-ui-copy="supporting">No material constraint or uncertainty was recorded in these answers.</p>}
       </section>
@@ -213,7 +204,7 @@ export function BriefView({
       <button className="dc-button dc-button--secondary" onClick={copyProfile}>Copy profile</button>
       <button className="dc-button dc-button--secondary" onClick={() => window.print()}>Print blueprint</button>
     </div>
-    {!legacy && <div className="dc-actions dc-report-edit-links dc-screen-only" aria-label="Edit blueprint answers">{EDIT_LINKS.map(([stage, label]) => <button key={stage} className="dc-button dc-button--secondary" onClick={() => onEdit(stage)}>{label}</button>)}</div>}
+    {!legacy && <div className="dc-actions dc-report-edit-links dc-screen-only" aria-label="Edit blueprint answers">{REPORT_EDIT_LINKS.map(([stage, label]) => <button key={stage} className="dc-button dc-button--secondary" onClick={() => onEdit(stage)}>{label}</button>)}</div>}
     <div className="dc-actions dc-screen-only"><button className="dc-button dc-button--secondary" onClick={() => setConfirm("another")}>Start another</button><button className="dc-button dc-button--secondary" onClick={() => setConfirm("clear")}>Clear draft</button></div>
     {confirm && <ConfirmationDialog open onClose={() => setConfirm(null)} labelledBy="dc-confirm-title"><h2 id="dc-confirm-title">{confirm === "another" ? "Replace the draft saved in this browser?" : "Clear the draft and blueprint saved in this browser?"}</h2>{confirm === "another" && <p>Download your blueprint first if you want to keep a copy.</p>}<button className="dc-button dc-button--primary" onClick={() => { confirm === "another" ? onAnother() : onClear(); setConfirm(null); }}>{confirm === "another" ? "Replace draft" : "Clear draft"}</button><button className="dc-button dc-button--secondary" onClick={() => setConfirm(null)}>Keep draft</button></ConfirmationDialog>}
   </article>;

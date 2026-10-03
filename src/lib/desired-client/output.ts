@@ -1,5 +1,6 @@
 import { resolveAnswerReference } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
+import { buildStructuredBlueprintV4 } from "./structured-blueprint";
 import { calculateContribution, hasNegativeContribution } from "./economics";
 import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
 import { isInterviewClarificationCurrent, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
@@ -210,14 +211,28 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   const pathwayFields=["trigger","first_contact","decision","desired_progress"] as const;
   for(const field of pathwayFields)if(!validStatement(pathway[field],answers,"decision_pathway",(reason,sourcePath)=>reportFailure?.({field:`decision_pathway.${field}`,reason,...(sourcePath?{sourcePath}:{})})))return null;
   const typedBrief=brief as unknown as DesiredClientBriefV4;
-  const expectedSentence=buildDefinitionSentence(typedBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
+  // The target client and legal matter must come from the firm's answers, not
+  // from a model's interpretation of a broad practice-area selection. Rebuild
+  // these definition fields deterministically so an unconfirmed target cannot
+  // enter the profile through otherwise-valid citations.
+  const groundedTarget = buildStructuredBlueprintV4(answers);
+  const groundedBrief: DesiredClientBriefV4 = {
+    ...typedBrief,
+    definition_components: {
+      ...typedBrief.definition_components,
+      client: groundedTarget.definition_components.client,
+      client_matter: groundedTarget.definition_components.client_matter,
+    },
+    client_and_matter: groundedTarget.client_and_matter,
+  };
+  const expectedSentence=buildDefinitionSentence(groundedBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
   // The definition is assembled from bounded, source-linked fields. A hard
   // 85-word ceiling rejected valid, specific client-and-matter definitions;
   // keep a generous abuse limit while preserving supported detail.
   if(typedBrief.definition_sentence.length>1600||expectedSentence.length>1600)return reject("definition_sentence", "sentence_length");
-  const reportWords=[...cardNames.flatMap(field=>typedBrief[field].claims.map(claim=>claim.text)),...pathwayFields.map(field=>typedBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
+  const reportWords=[...cardNames.flatMap(field=>(field === "client_and_matter" ? groundedBrief[field] : typedBrief[field]).claims.map(claim=>claim.text)),...pathwayFields.map(field=>typedBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
   if(reportWords>800)return reject("report", "word_limit");
-  return { clarification_code: null, brief: { ...typedBrief, definition_sentence: expectedSentence } };
+  return { clarification_code: null, brief: { ...groundedBrief, definition_sentence: expectedSentence } };
 }
 
 const LINKED_STATEMENT_SCHEMA = { type: "object", properties: { text: { type: "string" }, kind: { type: "string", enum: KIND }, source_answer_ids: { type: "array", minItems: 1, maxItems: 8, items: { type: "string" } }, evidence_basis: { type: "string", enum: BASIS } }, required: ["text", "kind", "source_answer_ids", "evidence_basis"] } as const;

@@ -16,6 +16,7 @@ describe("Desired Client Blueprint model prompt", () => {
     expect(input.answers.value.team_hours).toBe("16to40");
   });
   it("requires grounded synthesis, evidence distinctions, and the deterministic definition", () => { const p = buildDesiredClientSystemPrompt(); expect(p).toContain("Produce a useful synthesis, not a list of answers"); expect(p).toContain("specific kind of client"); expect(p).toContain("evidence_basis"); expect(p).toContain("Decision-pathway fields describe the client pathway only and must not cite client-choice criteria"); expect(p).toContain("Do not create marketing copy"); expect(p).toContain("Do not provide legal advice"); });
+  it("requires the generated target to stay grounded in firm-supplied answers", () => { const p=buildDesiredClientSystemPrompt(); expect(p).toContain("model-proposed target cannot enter the definition without confirmation"); expect(p).toContain("The application rebuilds client type and matter directly from the firm's answers"); expect(p).not.toContain("The application introduces client_matter with"); });
   it("requires six client-profile cards, four definition components and a separate pathway", () => {
    const brief=DESIRED_CLIENT_RESPONSE_SCHEMA.properties.brief;
    const cards=["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const;

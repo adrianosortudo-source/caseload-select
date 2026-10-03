@@ -68,10 +68,20 @@ const CARD_DEFINITIONS = [
 const V4_CARD_DEFINITIONS = [
   ["clientMatter", "Desired client and matter", "client_and_matter"],
   ["clientGoals", "Client goals and needs", "client_goals_needs"],
-  ["whyWork", "Why the firm wants this work", "why_firm_wants_work"],
+  ["whyWork", "Why this work", "why_firm_wants_work"],
   ["whyFirm", "Why clients choose the firm", "why_client_chooses_firm"],
-  ["recognition", "Recognizable circumstances", "recognizable_circumstances"],
-  ["evidence", "Evidence and open questions", "evidence_and_open_questions"],
+  ["recognition", "Matter signals", "recognizable_circumstances"],
+  ["evidence", "Evidence & open questions", "evidence_and_open_questions"],
+] as const;
+
+/** Report edit actions mapped to the interview stage that contains those answers. */
+export const REPORT_EDIT_LINKS = [
+  [1, "Edit practice"],
+  [2, "Edit client and matter"],
+  [3, "Edit value"],
+  [4, "Edit firm fit"],
+  [5, "Edit matter signals"],
+  [6, "Edit opportunity and progress"],
 ] as const;
 
 function evidenceStatus(brief: DesiredClientBrief | DesiredClientBriefV2 | DesiredClientBriefV4): string {

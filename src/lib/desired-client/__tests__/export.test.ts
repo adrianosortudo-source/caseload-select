@@ -6,8 +6,8 @@ import { completeAnswers, validBlueprint } from "./blueprint-helpers";
 import type { LegacyDesiredClientBriefV1, SavedBrief } from "../types";
 describe("Blueprint exports", () => {
   const setup = () => { const answers = completeAnswers(), saved: SavedBrief = { brief: buildStructuredBlueprintV4(answers), sourceAnswersSnapshot: answers, sourceAnswersVersion: "dcm-v3.2", sourceBriefRevision: answers.revision, generatedAt: "2026-09-26T12:00:00.000Z", wordingReviewed: false, mode: "structured" }; return { answers, saved }; };
-  it("exports the synthesis and evidence cards, not an answer inventory", () => { const { answers, saved } = setup(), text = formatBriefText(saved, answers); expect(text).toContain((saved.brief as ReturnType<typeof buildStructuredBlueprintV4>).definition_sentence); expect(text).toContain("WHY THE FIRM WANTS THIS WORK"); expect(text).toContain("DESIRED CLIENT AND MATTER"); expect(text).toContain("EVIDENCE AND OPEN QUESTIONS"); expect(text).not.toContain("What would you like the lawyer to help you with?"); });
-  it("provides a print-ready HTML download with six cards and no PDF route", () => { const { answers, saved } = setup(), html = formatBriefHtml(saved, answers); expect(html).toContain("@media print"); expect(html).toContain("Evidence and open questions"); expect(html).not.toContain("Download PDF"); expect(html).not.toContain("application/pdf"); const download = createHtmlDownload(saved, answers, new Date(2026, 8, 26)); expect(download.filename).toBe("desired-client-blueprint-2026-09-26.html"); expect(download.content).toBe(html); });
+  it("exports the synthesis and evidence cards, not an answer inventory", () => { const { answers, saved } = setup(), text = formatBriefText(saved, answers); expect(text).toContain((saved.brief as ReturnType<typeof buildStructuredBlueprintV4>).definition_sentence); expect(text).toContain("WHY THIS WORK"); expect(text).toContain("DESIRED CLIENT AND MATTER"); expect(text).toContain("EVIDENCE & OPEN QUESTIONS"); expect(text).not.toContain("What would you like the lawyer to help you with?"); });
+  it("provides a print-ready HTML download with six cards and no PDF route", () => { const { answers, saved } = setup(), html = formatBriefHtml(saved, answers); expect(html).toContain("@media print"); expect(html).toContain("Evidence &amp; open questions"); expect(html).not.toContain("Download PDF"); expect(html).not.toContain("application/pdf"); const download = createHtmlDownload(saved, answers, new Date(2026, 8, 26)); expect(download.filename).toBe("desired-client-blueprint-2026-09-26.html"); expect(download.content).toBe(html); });
   it("keeps the client and matter distinct and the decision pathway separate in v4 outputs", () => {
     const { answers, saved } = setup();
     const html = formatBriefHtml(saved, answers);
@@ -17,10 +17,10 @@ describe("Blueprint exports", () => {
     expect([...html.matchAll(/<section class="card"><h2>(.*?)<\/h2>/g)].map((match) => match[1])).toEqual([
       "Desired client and matter",
       "Client goals and needs",
-      "Why the firm wants this work",
+      "Why this work",
       "Why clients choose the firm",
-      "Recognizable circumstances",
-      "Evidence and open questions",
+      "Matter signals",
+      "Evidence &amp; open questions",
     ]);
     expect(html).toContain('<strong data-definition-part="client">');
     expect(html).toContain('<strong data-definition-part="client_matter">');

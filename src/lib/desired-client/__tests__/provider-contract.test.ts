@@ -51,6 +51,13 @@ describe("provider output contract", () => {
     expect(guidance).toContain("plural group");
     expect(guidance).toContain("an owner or founder");
   });
+  it("aligns matter guidance with the quoted description used by the formatter", () => {
+    const schema=providerBlueprintSchema(completeAnswers());
+    const serialized=JSON.stringify(schema);
+    expect(serialized).toContain("quoted matter description");
+    expect(serialized).toContain("rebuilds the final client type and matter definition directly from the firm's answers");
+    expect(serialized).not.toContain("in a situation where");
+  });
   it("separates client feedback from firm-observed decision evidence when their bases differ", () => {
     const answers = completeAnswers();
     answers.client.choice_basis = "client_feedback";

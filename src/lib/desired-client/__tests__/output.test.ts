@@ -28,7 +28,7 @@ describe("AI Blueprint output contract", () => {
     value.brief.definition_components.client_matter.text = "The client is evaluating an operating business and needs an asset purchase agreement drafted or reviewed before final terms are agreed";
     value.brief.definition_components.reasons.text = "It makes a useful difference and fits the firm's experience";
     const sentence = buildDefinitionSentence(value.brief, false, completeAnswers().client.goal_detail);
-    expect(sentence).toContain("in a situation where the client is evaluating");
+    expect(sentence).toContain("for matters described as “The client is evaluating");
     expect(sentence).toContain("because the work makes a useful difference");
     expect(sentence).not.toContain("in situations such as the client is");
   });
@@ -81,7 +81,7 @@ describe("AI Blueprint output contract", () => {
   it("reports only a safe field and rule when rejecting model output", () => { const failures: Array<{field:string;reason:string}> = []; const value = validBlueprint(); value.brief.client_and_matter.claims[0].text = "x".repeat(701); expect(validateAnalysisResult(value,completeAnswers(),[],failure=>failures.push(failure))).toBeNull(); expect(failures).toEqual([{field:"client_and_matter",reason:"statement_text_budget_or_format"}]); expect(JSON.stringify(failures)).not.toContain("x".repeat(701)); });
   it("reports recognized disallowed citation paths while keeping unknown paths and answer text out of diagnostics", () => { const answers=completeAnswers(), unknown=validBlueprint(), disallowed=validBlueprint(); unknown.brief.definition_components.client.source_answer_ids=["client.identity" as never]; disallowed.brief.definition_components.client.source_answer_ids=["practice.firm_type"]; const failures:Array<{field:string;reason:string;sourcePath?:string}>=[]; expect(validateAnalysisResult(unknown,answers,[],failure=>failures.push(failure))).toBeNull(); expect(failures.at(-1)).toEqual({field:"definition_components.client",reason:"source_answer_path_unrecognized"}); expect(validateAnalysisResult(disallowed,answers,[],failure=>failures.push(failure))).toBeNull(); expect(failures.at(-1)).toEqual({field:"definition_components.client",reason:"source_answer_path_not_allowed_for_slot",sourcePath:"practice.firm_type"}); expect(JSON.stringify(failures)).not.toContain("client.identity"); expect(JSON.stringify(failures)).not.toContain(answers.practice.firm_type); });
   it("rejects legacy answer-list schemas, extra keys, and wrong versions", () => { const good = validBlueprint(), answers = completeAnswers(); expect(validateAnalysisResult({ brief: { definition: {}, client_goals: [], firm_reasons: [], marketing: {} }, clarification_code: null }, answers, [])).toBeNull(); expect(validateAnalysisResult({ ...good, unexpected: true }, answers, [])).toBeNull(); expect(validateAnalysisResult({ ...good, brief: { ...good.brief, report_version: "dcm-blueprint-v1" } }, answers, [])).toBeNull(); });
-  it("rejects unsupported citations and slot overflow, and replaces model sentence wording with the application formatter", () => { const answers = completeAnswers(), good = validBlueprint(); const fabricated = structuredClone(good); fabricated.brief.why_firm_wants_work.claims[0].source_answer_ids = ["focus.industry" as never]; expect(validateAnalysisResult(fabricated, answers, [])).toBeNull(); const sentence = structuredClone(good); sentence.brief.definition_sentence = "A conflicting sentence written by the model."; const checked=validateAnalysisResult(sentence, answers, []); expect(checked?.brief.definition_sentence).toBe(buildDefinitionSentence(sentence.brief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"))); expect(checked?.brief.definition_sentence).not.toContain("progress will be assessed"); const long = structuredClone(good); long.brief.client_and_matter.claims[0].text = "x ".repeat(101); expect(validateAnalysisResult(long, answers, [])).toBeNull(); });
+  it("rejects unsupported citations and slot overflow, and replaces model sentence wording with the application formatter", () => { const answers = completeAnswers(), good = validBlueprint(); const fabricated = structuredClone(good); fabricated.brief.why_firm_wants_work.claims[0].source_answer_ids = ["focus.industry" as never]; expect(validateAnalysisResult(fabricated, answers, [])).toBeNull(); const sentence = structuredClone(good); sentence.brief.definition_sentence = "A conflicting sentence written by the model."; const checked=validateAnalysisResult(sentence, answers, []); expect(checked?.brief.definition_sentence).toContain("for matters described as “A business buyer"); expect(checked?.brief.definition_sentence).toContain("because the work fits the team's experience and preferences"); expect(checked?.brief.definition_sentence).not.toContain("progress will be assessed"); const long = structuredClone(good); long.brief.client_and_matter.claims[0].text = "x ".repeat(101); expect(validateAnalysisResult(long, answers, [])).toBeNull(); });
   it("rejects an unknown claim cited only to known information and an incorrect evidence basis", () => { const answers = completeAnswers(), good = validBlueprint(); answers.opportunity.source_detail = "Monthly enquiry log"; const wrongUnknown = structuredClone(good); wrongUnknown.brief.evidence_and_open_questions.claims[0].source_answer_ids = ["opportunity.source_detail"]; expect(validateAnalysisResult(wrongUnknown, answers, [])).toBeNull(); const mismatch = structuredClone(good); mismatch.brief.why_firm_wants_work.claims[0].evidence_basis = "firm_reported_recorded"; expect(validateAnalysisResult(mismatch, answers, [])).toBeNull(); });
   it("rejects AI citations to a follow-up after its cited answers have changed",()=>{const answers=completeAnswers(),paths=["value.reasons"] as const;answers.interview.clarification_count=1;answers.interview.clarified_stages=[3];answers.interview.followups=[{id:"11111111-1111-4111-8111-111111111111",stage:3,purpose:"firm_desirability",source_answer_ids:[...paths],source_answer_fingerprint:interviewClarificationSourceFingerprint(answers,paths),question:"Why does the firm want this work?",answer:"The work lets us use our transaction experience.",skipped:false}];const fresh=validBlueprint();fresh.brief.why_firm_wants_work.claims=[evidence("The work lets us use our transaction experience.","firm_preference","interview.followups.0")];expect(validateAnalysisResult(fresh,answers,[])).not.toBeNull();answers.value.reasons=["client_benefit"];expect(validateAnalysisResult(fresh,answers,[])).toBeNull();});
   it("accepts only an application-calculated contribution with all five economics sources", () => {
@@ -119,10 +119,23 @@ describe("AI Blueprint output contract", () => {
     result.brief.why_firm_wants_work.claims=[evidence("The contribution is $3,200.00 per matter.","firm_reported_recorded","value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope")];
     expect(validateAnalysisResult(result,answers,[])).toBeNull();
   });
-  it("rejects the audit's unsupported hostile-takeover substitution", () => {
+  it("keeps a model-proposed target out of the definition until the firm supplies it", () => {
     const result=validBlueprint(), answers=completeAnswers();
-    result.brief.client_and_matter.claims[0].text="The client is considering a hostile takeover and needs advice.";
-    expect(validateAnalysisResult(result,answers,[])).toBeNull();
+    result.brief.client_and_matter.claims[0].text="Canadian billionaires seek leveraged buyout advice.";
+    result.brief.client_and_matter.claims[0].source_answer_ids=["focus.work"];
+    result.brief.definition_components.client_matter.text="Canadian billionaires seek leveraged buyout advice.";
+    result.brief.definition_components.client_matter.source_answer_ids=["focus.work"];
+    const validated=validateAnalysisResult(result,answers,[]);
+    expect(validated).not.toBeNull();
+    expect(JSON.stringify(validated?.brief.client_and_matter)).not.toMatch(/Canadian billionaires|leveraged buyout/i);
+    expect(validated?.brief.definition_sentence).not.toMatch(/Canadian billionaires|leveraged buyout/i);
+    expect(validated?.brief.definition_sentence).toContain("asset purchase agreement");
+  });
+  it("allows a specific matter term when the firm supplies it", () => {
+    const answers=completeAnswers();
+    answers.client_context.repeat_matter_pattern="Ontario owners buying a family-owned manufacturer through an asset purchase agreement.";
+    const validated=validateAnalysisResult(validBlueprint(),answers,[]);
+    expect(validated?.brief.definition_sentence).toContain("Ontario owners buying a family-owned manufacturer through an asset purchase agreement");
   });
   it("does not reject a supported definition solely because it exceeds the former 85-word ceiling", () => {
     const answers = completeAnswers(), result = validBlueprint();
