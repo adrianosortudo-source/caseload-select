@@ -86,7 +86,7 @@ describe("clarification question allowance", () => {
     expect(clarificationNoticeFor(limited.error)).toContain("reached its limit");
     expect(clarificationNoticeFor("clarificationUnavailable")).toContain("could not complete");
     expect(clarificationNoticeFor("clarificationUnavailable")).not.toContain("limit");
-    expect(clarificationNoticeFor("clarificationUnavailable", false)).toContain("unavailable right now");
+    expect(clarificationNoticeFor("clarificationUnavailable", false)).toContain("AI follow-ups are unavailable");
     expect(clarificationNoticeFor("clarificationUnavailable", null)).toContain("could not complete");
   });
 });

@@ -72,7 +72,7 @@ test("known-disabled AI hides follow-up consent and continues without a request"
 
   await page.goto("/tools/desired-client-matter");
   await page.getByRole("button",{name:"Define my desired client"}).click();
-  await expect(page.getByRole("status").filter({hasText:"AI follow-up questions are unavailable right now"})).toBeVisible();
+  await expect(page.getByRole("status").filter({hasText:"AI follow-ups are unavailable"})).toBeVisible();
   await expect(page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toHaveCount(0);
   await page.getByRole("group",{name:"What do you want this profile to help your firm do?"}).getByRole("radio").last().check();
   await page.getByRole("button",{name:"Continue",exact:true}).click();
@@ -97,11 +97,11 @@ test("an explicit AI_DISABLED follow-up response updates availability without sp
   await page.getByRole("group",{name:"What do you want this profile to help your firm do?"}).getByRole("radio").last().check();
   await page.getByRole("button",{name:"Continue",exact:true}).click();
   await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
-  await expect(page.locator(".dc-stage > .dc-alert")).toContainText("AI follow-up questions are unavailable right now");
+  await expect(page.locator(".dc-stage > .dc-alert")).toContainText("AI follow-ups are unavailable");
   expect(postRequests).toBe(1);
 
   await page.getByRole("button",{name:STAGE_DEFINITIONS[0].label}).click();
-  await expect(page.getByRole("status").filter({hasText:"AI follow-up questions are unavailable right now"})).toBeVisible();
+  await expect(page.getByRole("status").filter({hasText:"AI follow-ups are unavailable"})).toBeVisible();
   await expect(page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toHaveCount(0);
   await page.getByRole("button",{name:"Continue",exact:true}).click();
   await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
