@@ -27,6 +27,13 @@ function FitSignalStage() {
   });
 }
 
+function FocusStage({aiAvailable}:{aiAvailable:boolean|null}) {
+  const [answers,setAnswers]=useState<DesiredClientAnswers>(()=>emptyAnswers());
+  return createElement(GuidedQuestionStage,{
+    stage:1,answers,onEdit:(edit)=>setAnswers(edit),onBack:()=>undefined,onNext:()=>undefined,onCompare:()=>undefined,error:false,aiAvailable,
+  });
+}
+
 describe("GuidedQuestionStage write-in choice limits", () => {
   it("keeps a custom fit signal and explains how it shares the three-choice limit", () => {
     render(createElement(FitSignalStage));
@@ -47,5 +54,21 @@ describe("GuidedQuestionStage write-in choice limits", () => {
 
     expect(screen.getByRole("alert").textContent).toContain("including your written answer");
     expect((screen.getByLabelText("Another fit signal (optional)") as HTMLInputElement).value).toBe(writtenAnswer);
+  });
+});
+
+describe("GuidedQuestionStage AI availability",()=>{
+  it("replaces consent with a clear status when AI is known to be disabled",()=>{
+    render(createElement(FocusStage,{aiAvailable:false}));
+
+    expect(screen.getByRole("status").textContent).toContain("AI follow-up questions are unavailable right now");
+    expect(screen.queryByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toBeNull();
+  });
+
+  it("keeps the consent choice available while AI availability is unknown",()=>{
+    render(createElement(FocusStage,{aiAvailable:null}));
+
+    expect(screen.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toBeTruthy();
+    expect(screen.queryByRole("status")).toBeNull();
   });
 });
