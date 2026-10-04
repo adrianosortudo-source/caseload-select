@@ -29,10 +29,12 @@ export function buildDefinitionSentence(brief: Pick<DesiredClientBrief | Desired
     const clientMatter = `on matters matching the firm's description: “${matterText}”`;
     const practicalBenefit = removeRepeatedDecisionEndpoint(clean(clientBenefit), matterText);
     const alreadyIncluded = practicalBenefit && clientMatter.toLocaleLowerCase("en-CA").includes(practicalBenefit.toLocaleLowerCase("en-CA"));
-    const benefitClause = practicalBenefit
-      ? alreadyIncluded ? "" : `, so the client can ${practicalBenefit[0].toLocaleLowerCase("en-CA") + practicalBenefit.slice(1)}`
-      : benefitUnknown ? ", with the practical benefit still to be established" : "";
-    return `The firm wants to attract and serve ${clientType} ${clientMatter}${benefitClause}, because ${definitionReason}.`;
+    const benefitClause = practicalBenefit && !alreadyIncluded
+      ? ", with the intended client benefit described as “" + practicalBenefit + "”"
+      : benefitUnknown ? ", with the practical client benefit still to be established" : "";
+    return "The firm wants to attract and serve " + clientType + " " + clientMatter + benefitClause + "; the firm prioritizes this work because " + definitionReason + ".";
+
+
   }
   const sentenceOutcome = outcomeText ? outcomeText[0].toLocaleLowerCase("en-CA") + outcomeText.slice(1) : "";
   const opening = brief.definition_components && "firm" in brief.definition_components

@@ -287,6 +287,7 @@ export interface SavedBrief {
   generatedAt: string;
   wordingReviewed: boolean;
   mode: "ai" | "structured";
+  refreshedFrom?: { generatedAt: string; wordingReviewed: boolean; mode: "ai" | "structured" };
   openClarificationCode?: ClarificationCode;
 }
 export interface SavedDraft {
@@ -296,6 +297,7 @@ export interface SavedDraft {
   lastEditedAt: string;
   expiresAt: string;
   savedBrief?: SavedBrief;
+  reportNeedsRegeneration?: boolean;
 }
 
 export interface ScreenProposalQuestion {

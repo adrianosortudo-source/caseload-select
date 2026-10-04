@@ -1,6 +1,6 @@
 "use client";
 
-import { REVIEW_COPY, COMMON_COPY, WELCOME_COPY } from "@/lib/desired-client/copy";
+import { REVIEW_COPY, COMMON_COPY, WELCOME_COPY, STORAGE_COPY } from "@/lib/desired-client/copy";
 import { AREA_CATALOG, CAPACITY_LABELS, COLLECTED_FEE_LABELS, CONDITION_LABELS, DECISION_NEED_LABELS, DEVELOPMENT_NEED_LABELS, FIT_SIGNAL_LABELS, GOAL_LABELS, LESS_WORK_REASON_LABELS, LIMIT_LABELS, PAYMENT_LABELS, PRACTICE_EXPERIENCE_LABELS, PRACTICE_DIRECTION_LABELS, REASON_LABELS, TEAM_HOURS_LABELS, TIMING_LABELS, TRIGGER_LABELS, getFeeEffortLabel, getRoleLabel, getWorkLabel } from "@/lib/desired-client/catalog";
 import { STAGE_DEFINITIONS, getMissingFieldsForStage } from "@/lib/desired-client/screens";
 import { createAnswersDownload } from "@/lib/desired-client/export";
@@ -14,9 +14,9 @@ const CLIENT_CHOICE:Record<string,string>={relevant_experience:"Experience with 
 const FIRM_STRENGTH:Record<string,string>={matter_experience:"Relevant experience with this matter",specialist_knowledge:"Specific knowledge the matter calls for",clear_advice:"Clear explanation of options and consequences",practical_approach:"A practical approach to the client's goal",responsive_service:"A service approach that fits the client's needs",language_or_community:"Language or community-informed service",other:"Another strength",unknown:"Not established yet"};
 const filled=(...values:Array<string|null|undefined>)=>values.filter((value):value is string=>Boolean(value?.trim()));
 const valueLabel=(value:string|null|undefined,labels:Record<string,string>)=>value?labels[value]??value:"";
-export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,briefNeedsUpdate,loading,error,retryAllowed,legacyBriefReplaced=false,aiAvailable=true}:{
+export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,briefNeedsUpdate,loading,error,retryAllowed,legacyBriefReplaced=false,aiAvailable=true,reportNeedsRegeneration=false}:{
   answers:DesiredClientAnswers; onCreate:()=>void; onRetry:()=>void; onEdit:(stage:Stage)=>void; onCreateStructured?:()=>void;
-  briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged";retryAllowed:boolean;legacyBriefReplaced?:boolean;aiAvailable?:boolean;
+  briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged";retryAllowed:boolean;legacyBriefReplaced?:boolean;aiAvailable?:boolean;reportNeedsRegeneration?:boolean;
 }) {
   const area=answers.focus.area;
   const work=answers.focus.work==="other"?answers.focus.work_other:area&&answers.focus.work?getWorkLabel(area,answers.focus.work):"";
@@ -64,6 +64,7 @@ export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,b
   }
   return <section className="dc-review" data-ui-component-content="desired-client-review" aria-busy={loading}>
     <h1 data-ui-copy="heading">{REVIEW_COPY.heading}</h1>
+    {reportNeedsRegeneration&&<p className="dc-alert" role="status" data-ui-copy="supporting">{STORAGE_COPY.briefNeedsRefresh}</p>}
     <p data-ui-copy="body">{REVIEW_COPY.note}</p>
     {briefNeedsUpdate&&<p className="dc-alert" data-ui-copy="body">{COMMON_COPY.briefChanged}</p>}
     {legacyBriefReplaced&&<p className="dc-alert" data-ui-copy="body">{WELCOME_COPY.legacyBriefReplaced}</p>}

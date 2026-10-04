@@ -13,7 +13,7 @@ describe("v4 provenance and client pathway", () => {
     expect(result.brief.definition_components).not.toHaveProperty("firm");
     expect(result.brief.definition_sentence).toMatch(/^The firm wants to attract and serve an owner or founder on matters matching the firm's description:/);
     expect(buildDefinitionSentence(result.brief,true,completeAnswers().client.goal_detail)).toBe(buildDefinitionSentence(result.brief,false,completeAnswers().client.goal_detail));
-    expect(result.brief.definition_sentence).toContain("so the client can understand the assets, liabilities and closing obligations");
+    expect(result.brief.definition_sentence).toContain("with the intended client benefit described as “Understand the assets, liabilities and closing obligations before deciding whether to proceed”");
     expect(result.brief.definition_sentence).not.toContain("progress will be assessed");
   });
   it("requires the separate pathway and rejects an omitted stage", () => {
@@ -123,7 +123,7 @@ describe("v4 provenance and client pathway", () => {
     expect(b.definition_sentence.split(/\s+/).length).toBeLessThanOrEqual(85);
     expect(b.definition_sentence).toContain("on matters matching the firm's description: “A business buyer");
     expect(b.definition_sentence).toContain("because the firm cites");
-    expect(b.definition_sentence).toContain("so the client can understand the assets");
+    expect(b.definition_sentence).toContain("with the intended client benefit described as “Understand the assets, liabilities and closing obligations before deciding whether to proceed”");
     expect(b.definition_sentence).not.toContain("retained matters");
   });
   it("keeps the complete maximum-length matter answer in supporting detail while producing a valid bounded definition",()=>{
