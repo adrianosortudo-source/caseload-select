@@ -116,6 +116,31 @@ describe("v4 provenance and client pathway", () => {
     expect(brief.recognizable_circumstances.claims[0].text).toContain(a.client_context.relevant_circumstances);
     expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
   });
+  it("keeps a long accepted geography in recognition detail without breaking the client identity",()=>{
+    const a=completeAnswers();
+    a.client_context.geography="All of Ontario, including Toronto, Ottawa, London, Hamilton, Windsor, Kingston, Kitchener, Waterloo, Guelph, Cambridge, Brampton, Mississauga, Burlington, Oakville, Barrie and surrounding rural communities";
+    const brief=buildStructuredBlueprintV4(a);
+    expect(brief.definition_components.client.text.split(/\s+/u).length).toBeLessThanOrEqual(25);
+    expect(brief.definition_components.client.text).toBe("an owner or founder");
+    expect(brief.recognizable_circumstances.claims[0].text).toContain(a.client_context.geography);
+    expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
+  });
+  it("uses community focus to describe whom the firm serves",()=>{
+    const a=completeAnswers();
+    a.client_context.community_focus="Brazilian entrepreneurs";
+    const brief=buildStructuredBlueprintV4(a);
+    expect(brief.definition_components.client.text).toBe("an owner or founder from the Brazilian entrepreneurs community");
+    expect(brief.definition_components.client.text).not.toContain("serving the Brazilian entrepreneurs community");
+    expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
+  });
+  it("keeps an unknown client role explicit and grammatically complete",()=>{
+    const a=completeAnswers();
+    a.situation.role="unknown";
+    const brief=buildStructuredBlueprintV4(a);
+    expect(brief.definition_sentence).toContain("attract and serve a client group the firm has not yet defined on matters matching");
+    expect(brief.definition_sentence).not.toContain("the specific kind of client the firm wants to attract has not yet been defined on matters");
+    expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
+  });
   it("keeps the generated opening definition concise and separates the progress measure", () => {
     const a=completeAnswers();
     const b=buildStructuredBlueprintV4(a);

@@ -43,7 +43,7 @@ function validateHistory(value: unknown, answers: DesiredClientAnswers): value i
       !isBoundedMultilineText(item.answer, 220) ||
       typeof item.skipped !== "boolean" || (item.skipped ? item.answer !== "" : !item.answer.trim()) ||
       (item.choiceId !== undefined && (typeof item.choiceId !== "string" || !/^[a-z0-9_-]{1,48}$/.test(item.choiceId))) ||
-      (item.reflection !== undefined && (typeof item.reflection !== "string" || item.reflection.length > 240 || /[\r\n]/.test(item.reflection) || item.reflection.trim().split(/\s+/).filter(Boolean).length > 35))) return false;
+      (item.reflection !== undefined && (typeof item.reflection !== "string" || item.reflection.length > 240 || item.reflection.trim().split(/\s+/).filter(Boolean).length > 35))) return false;
     ids.add(item.id); stages.add(Number(item.stage));
   }
   const attempted = answers.interview.clarified_stages;

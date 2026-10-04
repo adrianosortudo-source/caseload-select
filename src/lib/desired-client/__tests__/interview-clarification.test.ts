@@ -117,6 +117,24 @@ describe("adaptive interview clarification validation", () => {
     followup.source_answer_fingerprint=interviewClarificationSourceFingerprint(request.answers,followup.source_answer_ids);
     expect(validateInterviewClarificationRequest(request).valid).toBe(true);
   });
+  it("accepts the multiline reflection produced by its own prompt normalizer in later history",()=>{
+    const answers=completeAnswers();
+    const prompt=normalizeInterviewClarificationModelPrompt({
+      outcome:"ask",stage:1,purpose:"firm_desirability",source_answer_ids:["practice.direction"],
+      question:"What makes this work appealing?",choices:[{id:"fit",label:"It fits"},{id:"other",label:"Something else"}],
+      reflection:"The direction is clear.\nThe reason would sharpen the profile.",
+    },1,answers,()=>"33333333-3333-4333-8333-333333333333");
+    expect(prompt?.outcome).toBe("ask");
+    if(prompt?.outcome!=="ask")return;
+    answers.interview={ai_clarification_consent:true,clarification_count:1,clarified_stages:[1],followups:[{
+      id:prompt.id,stage:prompt.stage,purpose:prompt.purpose,source_answer_ids:prompt.source_answer_ids,
+      source_answer_fingerprint:interviewClarificationSourceFingerprint(answers,prompt.source_answer_ids),
+      question:prompt.question,answer:"It fits",choiceId:"fit",skipped:false,reflection:prompt.reflection,
+    }]};
+    const request=nextStageRequest();
+    request.answers=answers;request.answerRevision=answers.revision;request.clarificationIndex=1;
+    expect(validateInterviewClarificationRequest(request).valid).toBe(true);
+  });
   it("keeps an old follow-up in the answer history without treating its changed source as current", () => {
     const request=nextStageRequest();
     const followup=request.answers.interview.followups[0];

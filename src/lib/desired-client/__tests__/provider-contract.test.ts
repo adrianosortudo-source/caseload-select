@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { completeAnswers, validBlueprint } from "./blueprint-helpers";
+import { completeAnswers, evidence, validBlueprint } from "./blueprint-helpers";
 import { decodeProviderSources, providerBlueprintSchema, providerSourceAliases } from "../provider-schema";
 import { runDesiredClientAnalysis } from "../analyze";
+import { validateAnalysisResult } from "../output";
 import type { AnalysisRequestEnvelope } from "../types";
 
 const provider = vi.hoisted(() => ({ configure: vi.fn(), generate: vi.fn() }));
@@ -92,6 +93,17 @@ describe("provider output contract", () => {
     expect(firstContact.text.description).toContain("State that gap plainly");
     expect(firstContact.text.description).toContain("use evidence_basis unknown");
     expect(firstContact.evidence_basis.enum).not.toContain("client_reported");
+  });
+  it("allows a relevant unanswered circumstance as a citation for an unknown claim", () => {
+    const answers=completeAnswers();
+    answers.client_context.relevant_circumstances="";
+    const aliases=providerSourceAliases(answers);
+    const schema=JSON.parse(JSON.stringify(providerBlueprintSchema(answers))) as {properties:{brief:{properties:{recognizable_circumstances:{properties:{claims:{items:{properties:{source_answer_ids:{items:{enum:string[]}}}}}}}}}}};
+    const permitted=schema.properties.brief.properties.recognizable_circumstances.properties.claims.items.properties.source_answer_ids.items.enum.map(id=>aliases[id]);
+    expect(permitted).toContain("client_context.relevant_circumstances");
+    const result=validBlueprint(answers);
+    result.brief.recognizable_circumstances.claims=[evidence("The relevant circumstances have not yet been established.","unknown","client_context.relevant_circumstances")];
+    expect(validateAnalysisResult(result,answers,[])).not.toBeNull();
   });
   it("still rejects a malformed root rather than accepting misplaced cards", async () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});

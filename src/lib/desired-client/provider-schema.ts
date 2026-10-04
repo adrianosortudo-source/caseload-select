@@ -59,7 +59,13 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
         // evidence gap. The validator accepts them only with evidence_basis
         // "unknown"; omitting them here makes the provider unable to support
         // gaps such as an unrecorded first-contact pattern.
-        return source.present && ((slot === "decision_pathway" && source.unknown) || (source.value !== null && source.value !== "" && (!Array.isArray(source.value) || source.value.length > 0)));
+        // The registered source path determines which answers are relevant to
+        // this claim. The two evidence-gap cards may cite an unanswered value;
+        // output.ts then requires evidence_basis "unknown". Other cards retain
+        // their populated-source contract so empty fields do not dilute claims.
+        const empty=source.value===null||source.value===""||(Array.isArray(source.value)&&source.value.length===0);
+        const supportsGaps=slot==="recognizable_circumstances"||slot==="evidence_and_open_questions";
+        return source.present&&(supportsGaps||(slot==="decision_pathway"&&source.unknown)||!empty);
       } catch { return false; }
     });
     node.properties.source_answer_ids.items.enum = Object.entries(aliases).filter(([,path]) => allowed.includes(path)).map(([alias]) => alias);
