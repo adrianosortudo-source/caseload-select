@@ -11,6 +11,17 @@ describe("Desired Client Blueprint v4 contract", () => {
     expect([result.brief.why_client_chooses_firm, result.brief.client_and_matter, result.brief.why_firm_wants_work, result.brief.recognizable_circumstances, result.brief.evidence_and_open_questions, result.brief.client_goals_needs]).toHaveLength(6);
     expect(validateAnalysisResult(result, completeAnswers(), [])).not.toBeNull();
   });
+  it("frames client benefits as quoted content for noun phrases and complete sentences", () => {
+    const brief = validBlueprint().brief;
+    const nounPhrase = buildDefinitionSentence(brief, false, "Clarity about the assets, liabilities, payment and closing obligations.");
+    expect(nounPhrase).toContain('with the intended client benefit described as “Clarity about the assets, liabilities, payment and closing obligations”');
+    expect(nounPhrase).not.toContain("can clarity");
+    const completeSentence = buildDefinitionSentence(brief, false, "The buyer understands what they will receive and which obligations they will assume.");
+    expect(completeSentence).toContain("The buyer understands what they will receive and which obligations they will assume");
+    expect(completeSentence).not.toContain("can The buyer");
+    const unknown = buildDefinitionSentence(brief, false, "", true);
+    expect(unknown).toContain("with the practical client benefit still to be established");
+  });
   it("rejects legacy answer-list schemas, extra keys, and v1 reports as AI output", () => {
     const candidate = validBlueprint(), answers = completeAnswers();
     expect(validateAnalysisResult({ brief: { definition: {}, client_goals: [], firm_reasons: [], delivery_conditions: [], evidence: [], open_questions: [], marketing: {}, work_to_promote_less: [] }, clarification_code: null }, answers, [])).toBeNull();

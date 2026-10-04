@@ -11,7 +11,12 @@ export const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export type DraftLoadResult = { status: "empty" } | { status: "expired" } | { status: "corrupt" } | { status: "unavailable" } | { status: "ready"; draft: SavedDraft; migrated?: boolean };
 export type DraftSaveResult = { status: "saved"; draft: SavedDraft } | { status: "invalid" } | { status: "unavailable" };
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === "object" && value !== null && !Array.isArray(value);
-const sameJson = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(",")}]`;
+  if (isRecord(value)) return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableJson(value[key])}`).join(",")}}`;
+  return JSON.stringify(value) ?? "undefined";
+}
+const sameJson = (a: unknown, b: unknown) => stableJson(a) === stableJson(b);
 
 function validDraftEnvelope(value: unknown, now: number): value is Record<string, unknown> {
   if (!isRecord(value) || value.schemaVersion !== 2 || !Number.isInteger(value.currentStage) || Number(value.currentStage) < 1 || Number(value.currentStage) > 7 ||
@@ -38,7 +43,7 @@ function migratedLegacyDraft(value: unknown, now: number): SavedDraft | null {
       : value.savedBrief;
     savedBrief = restoreSavedBrief(savedValue, answers);
   }
-  return { schemaVersion: 2, answers, currentStage: stage, lastEditedAt: new Date(edited).toISOString(), expiresAt: new Date(expires).toISOString(), ...(savedBrief ? { savedBrief: savedBrief as SavedBrief } : {}) };
+  return { schemaVersion: 2, answers, currentStage: stage, lastEditedAt: new Date(edited).toISOString(), expiresAt: new Date(expires).toISOString(), ...(savedBrief ? { savedBrief: savedBrief as SavedBrief } : {}), ...(isRecord(value.savedBrief) && !savedBrief ? { reportNeedsRegeneration: true } : {}) };
 }
 
 function legacyTimestampsForSameMigration(value: unknown, answers: DesiredClientAnswers): { edited: number; expires: number } | null {
@@ -54,6 +59,9 @@ function restoreSavedBrief(value: unknown, answers: DesiredClientAnswers): Saved
   if (!isRecord(value) || !Number.isSafeInteger(value.sourceBriefRevision) || typeof value.generatedAt !== "string" || !Number.isFinite(Date.parse(value.generatedAt)) || typeof value.wordingReviewed !== "boolean"
     || (value.mode !== "ai" && value.mode !== "structured")) return undefined;
   const openClarificationCode = value.openClarificationCode;
+  const priorRefresh = value.refreshedFrom;
+  if (priorRefresh !== undefined && (!isRecord(priorRefresh) || !["generatedAt|wordingReviewed", "generatedAt|mode|wordingReviewed"].includes(Object.keys(priorRefresh).sort().join("|")) || typeof priorRefresh.generatedAt !== "string" || !Number.isFinite(Date.parse(priorRefresh.generatedAt)) || typeof priorRefresh.wordingReviewed !== "boolean" || (priorRefresh.mode !== undefined && priorRefresh.mode !== "ai" && priorRefresh.mode !== "structured"))) return undefined;
+  const refreshedFrom: SavedBrief["refreshedFrom"] = isRecord(priorRefresh) ? { generatedAt: new Date(Date.parse(priorRefresh.generatedAt as string)).toISOString(), wordingReviewed: priorRefresh.wordingReviewed as boolean, mode: priorRefresh.mode === "ai" || priorRefresh.mode === "structured" ? priorRefresh.mode : value.mode as SavedBrief["mode"] } : undefined;
   const isLegacyV1 = isRecord(value.brief) && value.brief.report_version === "dcm-blueprint-v1";
   if (!isLegacyV1 && openClarificationCode !== undefined && (typeof openClarificationCode !== "string" || !getEligibleClarificationCodes(answers).includes(openClarificationCode as ClarificationCode))) return undefined;
   const brief = value.brief;
@@ -76,10 +84,18 @@ function restoreSavedBrief(value: unknown, answers: DesiredClientAnswers): Saved
   if (value.sourceBriefRevision !== answers.revision) return undefined;
   if (value.mode === "structured") {
     const rebuilt = buildStructuredBrief(answers);
-  return sameJson(brief, rebuilt) ? { brief: rebuilt, sourceAnswersVersion: "dcm-v3.2", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "structured", ...(openClarificationCode?{openClarificationCode:openClarificationCode as ClarificationCode}:{}) } : undefined;
+    const hasCurrentReportMarker = isRecord(brief) && brief.report_version === "dcm-blueprint-v4";
+    const exactAnswerSnapshot = value.sourceAnswersVersion === "dcm-v3.2" && isRecord(value.sourceAnswersSnapshot) && value.sourceAnswersSnapshot.schema_version === "dcm-v3.2" && value.sourceAnswersSnapshot.revision === answers.revision && validateDraftAnswers(value.sourceAnswersSnapshot) && sameJson(value.sourceAnswersSnapshot, answers);
+    const reportMatchesCurrentBuilder = sameJson(brief, rebuilt);
+    if (!hasCurrentReportMarker || (!reportMatchesCurrentBuilder && !exactAnswerSnapshot)) return undefined;
+    const refreshRecord = reportMatchesCurrentBuilder ? refreshedFrom : (refreshedFrom ?? { generatedAt: new Date(Date.parse(value.generatedAt as string)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "structured" as const });
+    return { brief: rebuilt, sourceAnswersVersion: "dcm-v3.2", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: reportMatchesCurrentBuilder ? new Date(Date.parse(value.generatedAt as string)).toISOString() : new Date().toISOString(), wordingReviewed: reportMatchesCurrentBuilder ? value.wordingReviewed : false, mode: "structured", ...(refreshRecord ? { refreshedFrom: refreshRecord } : {}), ...(openClarificationCode ? { openClarificationCode: openClarificationCode as ClarificationCode } : {}) };
   }
   const result = validateAnalysisResult({ brief, clarification_code: null }, answers, []);
-  return result ? { brief: result.brief, sourceAnswersVersion: "dcm-v3.2", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "ai", ...(openClarificationCode?{openClarificationCode:openClarificationCode as ClarificationCode}:{}) } : undefined;
+  if (!result) return undefined;
+  const wordingChanged = !sameJson(brief, result.brief);
+  const refreshRecord = wordingChanged ? (refreshedFrom ?? { generatedAt: new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "ai" as const }) : refreshedFrom;
+  return { brief: result.brief, sourceAnswersVersion: "dcm-v3.2", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: wordingChanged ? new Date().toISOString() : new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: wordingChanged ? false : value.wordingReviewed, mode: "ai", ...(refreshRecord ? { refreshedFrom: refreshRecord } : {}), ...(openClarificationCode ? { openClarificationCode: openClarificationCode as ClarificationCode } : {}) };
 }
 
 function validateLegacyAnswerSnapshot(value: unknown): boolean {
@@ -120,7 +136,8 @@ export function validateSavedDraft(value: unknown): SavedDraft | null {
   if (!Number.isFinite(edited) || !Number.isFinite(expires) || expires <= edited || expires - edited > DRAFT_TTL_MS + 1000) return null;
   const answers = hydrateLegacyFollowupFingerprints(value.answers);
   const savedBrief = value.savedBrief === undefined ? undefined : restoreSavedBrief(value.savedBrief, answers);
-  return { schemaVersion: 2, answers, currentStage: Number(value.currentStage), lastEditedAt: new Date(edited).toISOString(), expiresAt: new Date(expires).toISOString(), ...(savedBrief ? { savedBrief } : {}) };
+  const reportNeedsRegeneration = value.reportNeedsRegeneration === true || (value.savedBrief !== undefined && value.savedBrief !== null && !savedBrief);
+  return { schemaVersion: 2, answers, currentStage: Number(value.currentStage), lastEditedAt: new Date(edited).toISOString(), expiresAt: new Date(expires).toISOString(), ...(savedBrief ? { savedBrief } : {}), ...(reportNeedsRegeneration ? { reportNeedsRegeneration: true } : {}) };
 }
 
 export function loadDraft(storage: Storage, now = Date.now()): DraftLoadResult {
@@ -139,19 +156,26 @@ export function loadDraft(storage: Storage, now = Date.now()): DraftLoadResult {
     return { status: "ready", draft: migrated, migrated: true };
   }
   const draft = validateSavedDraft(parsed);
-  return draft ? { status: "ready", draft } : { status: "corrupt" };
+  if (!draft) return { status: "corrupt" };
+  const structuredRefresh = !!draft.savedBrief?.refreshedFrom && isRecord(parsed) && isRecord(parsed.savedBrief) && !sameJson(parsed.savedBrief, draft.savedBrief);
+  if (structuredRefresh) {
+    try { storage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft)); } catch { /* keep the recovered report available in memory */ }
+  }
+  return { status: "ready", draft, ...(structuredRefresh ? { migrated: true } : {}) };
 }
 
 export function saveDraft(storage: Storage, answers: DesiredClientAnswers, currentStage: number, savedBrief?: SavedBrief, now = Date.now()): DraftSaveResult {
   if (!validateDraftAnswers(answers) || !Number.isInteger(currentStage) || currentStage < 1 || currentStage > 7) return { status: "invalid" };
   let editedAt = now;
   let expiresAt = now + DRAFT_TTL_MS;
+  let reportNeedsRegeneration = false;
   let old: string | null;
   try { old = storage.getItem(DRAFT_STORAGE_KEY); } catch { return { status: "unavailable" }; }
   try {
     if (old) {
       const parsed = JSON.parse(old) as unknown;
       const previous = validateSavedDraft(parsed);
+      if (previous) reportNeedsRegeneration = previous.reportNeedsRegeneration === true;
       if (previous && previous.answers.revision === answers.revision) { editedAt = Date.parse(previous.lastEditedAt); expiresAt = Date.parse(previous.expiresAt); }
       else if (answers.schema_version === "dcm-v3.2" || answers.schema_version === "dcm-v3.1") {
         const legacy = legacyTimestampsForSameMigration(parsed, answers);
@@ -161,8 +185,9 @@ export function saveDraft(storage: Storage, answers: DesiredClientAnswers, curre
   } catch { /* continue in memory and report a storage failure below */ }
   const timestamp = new Date(editedAt).toISOString();
   const safeBrief = savedBrief ? restoreSavedBrief(savedBrief, answers) : undefined;
+  if (safeBrief) reportNeedsRegeneration = false;
   const draft: SavedDraft = { schemaVersion: 2, answers, currentStage, lastEditedAt: timestamp,
-    expiresAt: new Date(expiresAt).toISOString(), ...(safeBrief ? { savedBrief: safeBrief } : {}) };
+    expiresAt: new Date(expiresAt).toISOString(), ...(safeBrief ? { savedBrief: safeBrief } : {}), ...(reportNeedsRegeneration ? { reportNeedsRegeneration: true } : {}) };
   try { storage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft)); return { status: "saved", draft }; } catch { return { status: "unavailable" }; }
 }
 

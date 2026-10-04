@@ -17,6 +17,7 @@ export const STORAGE_COPY = {
   unavailable: "This browser could not save your progress. You can still finish and download your answers.",
   expired: "Your saved draft expired after seven days without changes. Start a new draft to continue.",
   invalid: "Your saved draft could not be restored. Start a new draft to continue.",
+  briefNeedsRefresh: "A previous blueprint could not be reopened after a version update. Your answers are still saved. Create a new blueprint from them, then review it before use.",
   resume: "Continue my saved draft",
   new: "Start a new draft",
   clearSaved: "Clear saved draft",
