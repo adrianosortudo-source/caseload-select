@@ -84,6 +84,7 @@ export const BRIEF_COPY = {
   preparedStructured: "Basic structured draft from your answers",
   unresolved: "Still to check",
 } as const;
+export const REPORT_FOOTNOTE_COPY = "Evidence labels show source and certainty. Firm-reported details are not independently audited; the firm decides which matters to accept.";
 export const STAGE_SUMMARY_LABELS = [
   "Practice", "Client and matter", "Value", "Fit", "Opportunity", "Repeatability",
 ] as const;

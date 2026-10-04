@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { buildBlueprintViewModel, EVIDENCE_BASIS_LABELS, REPORT_EDIT_LINKS } from "@/lib/desired-client/blueprint";
 import { createHtmlDownload, createProfileDownload } from "@/lib/desired-client/export";
+import { REPORT_FOOTNOTE_COPY } from "@/lib/desired-client/copy";
 import type { ClarificationCode, DesiredClientAnswers, DesiredClientBrief, DesiredClientBriefV4, SavedBrief } from "@/lib/desired-client/types";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 
@@ -180,7 +181,7 @@ export function BriefView({
         <h2 data-ui-copy="heading">Points still to resolve</h2>
         {model.openQuestions.length ? <ul>{model.openQuestions.map((item, index) => <li key={`${index}-${item.text}`} data-ui-copy="body"><span>{item.text}</span><span className="dc-evidence-label">{EVIDENCE_BASIS_LABELS[item.evidence_basis]}</span></li>)}</ul> : <p data-ui-copy="body">No specific open question was recorded.</p>}
       </section>}
-      <p className="dc-report-footnote" data-ui-copy="supporting">Evidence labels describe the source and certainty of the information. Firm-reported information has not been independently audited. The firm decides which matters to accept.</p>
+      <p className="dc-report-footnote" data-ui-copy="supporting">{REPORT_FOOTNOTE_COPY}</p>
       <details className="dc-report-supporting dc-screen-only">
         <summary>Supporting answers and sources</summary>
         <div className="dc-report-source-list">{model.sourceDetails.map((slot, slotIndex) => <section key={`${slotIndex}-${slot.slot}`}>
