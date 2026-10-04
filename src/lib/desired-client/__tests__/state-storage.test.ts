@@ -1,12 +1,14 @@
 import {describe,expect,it} from "vitest";
 import {createElement} from "react";
 import {renderToStaticMarkup} from "react-dom/server";
-import {completeAnswers} from "./blueprint-helpers";
+import {completeAnswers,validBlueprint} from "./blueprint-helpers";
 import {buildStructuredBrief} from "../brief";
-import {answerInterviewClarification,applyAnalysis,applyStructuredFallback,editAnswers,enterTool,failAnalysis,initialToolState,recordClarificationAttempt,showInterviewClarification} from "../state";
+import {answerInterviewClarification,applyAnalysis,applyStructuredFallback,editAnswers,enterTool,failAnalysis,initialToolState,markReviewed,recordClarificationAttempt,showInterviewClarification} from "../state";
 import {interviewClarificationSourceFingerprint} from "../types";
 import {DRAFT_STORAGE_KEY,loadDraft,saveDraft} from "../storage";
 import {ReviewStep} from "@/components/desired-client/ReviewStep";
+import {BriefView} from "@/components/desired-client/BriefView";
+import {ResumePanel} from "@/components/desired-client/ResumePanel";
 function memory(){const values=new Map<string,string>();return {values,storage:{getItem:(k:string)=>values.get(k)??null,setItem:(k:string,v:string)=>{values.set(k,v);},removeItem:(k:string)=>{values.delete(k);}} as unknown as Storage};}
 function legacyV22(a=completeAnswers()):Record<string,unknown>{return {schema_version:"dcm-v2.2",revision:a.revision,focus:a.focus,situation:a.situation,client:{goals:a.client.goals,concerns:a.client.concerns,decision_needs:a.client.decision_needs},value:{reasons:a.value.reasons,fee_effort:a.value.fee_effort,collected_fee:a.value.collected_fee,team_hours:a.value.team_hours,payment:a.value.payment},delivery:a.delivery,direction:{aim:a.direction.aim,evidence:a.direction.evidence,less:a.direction.less,less_note:a.direction.less_note},clarifications:{FOCUS_UNCLEAR:null,CLIENT_GOAL_UNCLEAR:null,CURRENT_CAPACITY_CONFLICT:null,FEE_EFFORT_CONFLICT:null,EXPERIENCE_DIRECTION_CONFLICT:null}};}
 function legacyV1Brief(){const s=(text:string)=>({text,kind:"preference",source_answer_ids:["focus.work","situation.role","situation.trigger"]});return {report_version:"dcm-blueprint-v1",portrait:s("The firm wants to grow business acquisitions for business owners facing a planned transaction."),client_need:s("The owner wants to understand the transaction and decide what to do."),firm_value:s("The work fits the firm's skills and preferred direction."),marketing:{message:s("Understand the transaction before deciding."),content:s("What buyers should clarify before binding terms."),next_step:s("Discuss the planned acquisition.")},open_questions:[]};}
@@ -21,8 +23,88 @@ describe("draft lifecycle and migration",()=>{
  it("preserves the last valid draft when storage fails or input is invalid",()=>{const {storage,values}=memory(),a=completeAnswers();const first=saveDraft(storage,a,6);expect(first.status).toBe("saved");const previous=values.get(DRAFT_STORAGE_KEY);const broken={...storage,setItem:()=>{throw new DOMException("quota","QuotaExceededError");}} as unknown as Storage;const failed=saveDraft(broken,{...a,revision:a.revision+1},6);expect(failed.status).toBe("unavailable");expect(values.get(DRAFT_STORAGE_KEY)).toBe(previous);const unreadable={...storage,getItem:()=>{throw new DOMException("blocked","SecurityError");},setItem:()=>{throw new Error("must not overwrite without reading the previous value");}} as unknown as Storage;expect(saveDraft(unreadable,{...a,revision:a.revision+1},6).status).toBe("unavailable");expect(values.get(DRAFT_STORAGE_KEY)).toBe(previous);const invalid=saveDraft(storage,{...a,revision:-1},6);expect(invalid.status).toBe("invalid");const tooManyLines=structuredClone(a);tooManyLines.practice.firm_type=Array.from({length:13},()=>"line").join("\n");expect(saveDraft(storage,tooManyLines,6).status).toBe("invalid");expect(values.get(DRAFT_STORAGE_KEY)).toBe(previous);});
  it("restores a valid structured report directly into the report view",()=>{const {storage}=memory(),answers=completeAnswers(),state=applyStructuredFallback({...initialToolState(),view:"review" as const,stage:7 as const,answers});expect(state.savedBrief).toBeTruthy();const saved=saveDraft(storage,state.answers,7,state.savedBrief??undefined);expect(saved.status).toBe("saved");const loaded=loadDraft(storage);expect(loaded.status).toBe("ready");if(loaded.status==="ready"){const entered=enterTool({answers:loaded.draft.answers,stage:loaded.draft.currentStage as 7,savedBrief:loaded.draft.savedBrief});expect(entered.view).toBe("brief");expect(entered.mode).toBe("structured");expect(entered.savedBrief?.brief.report_version).toBe("dcm-blueprint-v4");expect(entered.legacyBriefReplaced).toBe(false);}});
  it("saves and resumes AI reports with the exact answer snapshot they were generated from",()=>{const {storage}=memory(),answers=completeAnswers(),result={brief:buildStructuredBrief(answers),clarification_code:null},state=applyAnalysis({...initialToolState(),view:"review" as const,stage:7 as const,answers},result);expect(state.savedBrief?.sourceAnswersVersion).toBe("dcm-v3.2");expect(state.savedBrief?.sourceAnswersSnapshot).toEqual(answers);const saved=saveDraft(storage,state.answers,7,state.savedBrief??undefined);expect(saved.status).toBe("saved");const loaded=loadDraft(storage);expect(loaded.status).toBe("ready");if(loaded.status==="ready"){const entered=enterTool({answers:loaded.draft.answers,stage:loaded.draft.currentStage as 7,savedBrief:loaded.draft.savedBrief});expect(entered.view).toBe("brief");expect(entered.mode).toBe("ai");expect(entered.savedBrief?.brief.report_version).toBe("dcm-blueprint-v4");expect(entered.savedBrief?.sourceAnswersSnapshot).toEqual(answers);}});
+ it("refreshes a previous structured report only from the exact saved answers and prompts a new review",()=>{
+   const {storage,values}=memory(),answers=completeAnswers(),oldDate="2026-09-29T14:00:00.000Z",current=buildStructuredBrief(answers);
+  const prior={brief:{...current,definition_sentence:"Earlier structured definition."},sourceAnswersVersion:"dcm-v3.2" as const,sourceAnswersSnapshot:structuredClone(answers),sourceBriefRevision:answers.revision,generatedAt:oldDate,wordingReviewed:true,mode:"structured" as const};
+  const now=Date.now();
+  storage.setItem(DRAFT_STORAGE_KEY,JSON.stringify({schemaVersion:2,answers,currentStage:7,lastEditedAt:new Date(now-1000).toISOString(),expiresAt:new Date(now+100000).toISOString(),savedBrief:prior}));
+  const loaded=loadDraft(storage,now);
+  expect(loaded.status).toBe("ready");
+  if(loaded.status==="ready"){
+   expect(loaded.migrated).toBe(true);
+   expect(loaded.draft.answers).toEqual(answers);
+   expect(loaded.draft.savedBrief?.brief).toEqual(current);
+   expect(loaded.draft.savedBrief?.wordingReviewed).toBe(false);
+    expect(loaded.draft.savedBrief?.refreshedFrom).toEqual({generatedAt:oldDate,wordingReviewed:true,mode:"structured"});
+    expect(JSON.parse(values.get(DRAFT_STORAGE_KEY)!).savedBrief.refreshedFrom.generatedAt).toBe(oldDate);
+   const html=renderToStaticMarkup(createElement(BriefView,{saved:loaded.draft.savedBrief!,answers:loaded.draft.answers,dismissedCode:null,reviewed:false,onReview:()=>{},onEdit:()=>{},onAnother:()=>{},onClear:()=>{},storageWarning:false}));
+    expect(html).toContain("No AI generation was used.");
+    expect(html).toContain("Review this refreshed wording before using it in marketing.");
+    expect(html).toContain("This saved structured blueprint was rebuilt from its saved answers");
+   }
+  });
+  it("revalidates changed AI wording, resets its approval, and preserves the earlier report provenance",()=>{
+   const {storage}=memory(),answers=completeAnswers(),oldDate="2026-09-29T14:00:00.000Z",current=validBlueprint(answers).brief;
+   const previousDefinition=current.definition_sentence.replace("with the intended client benefit described as “Understand the assets, liabilities and closing obligations before deciding whether to proceed”; the firm prioritizes this work because","so the client can understand the assets, liabilities and closing obligations before deciding whether to proceed, because");
+   expect(previousDefinition).not.toBe(current.definition_sentence);
+   const prior={brief:{...current,definition_sentence:previousDefinition},sourceAnswersVersion:"dcm-v3.2" as const,sourceAnswersSnapshot:structuredClone(answers),sourceBriefRevision:answers.revision,generatedAt:oldDate,wordingReviewed:true,mode:"ai" as const};
+   const now=Date.now();
+   storage.setItem(DRAFT_STORAGE_KEY,JSON.stringify({schemaVersion:2,answers,currentStage:7,lastEditedAt:new Date(now-1000).toISOString(),expiresAt:new Date(now+100000).toISOString(),savedBrief:prior}));
+   const loaded=loadDraft(storage,now);
+   expect(loaded.status).toBe("ready");
+   if(loaded.status==="ready"){
+    const refreshed=loaded.draft.savedBrief!;
+    expect(refreshed.brief).toEqual(current);
+    expect(refreshed.wordingReviewed).toBe(false);
+    expect(refreshed.generatedAt).not.toBe(oldDate);
+    expect(refreshed.refreshedFrom).toEqual({generatedAt:oldDate,wordingReviewed:true,mode:"ai"});
+    const html=renderToStaticMarkup(createElement(BriefView,{saved:refreshed,answers:loaded.draft.answers,dismissedCode:null,reviewed:false,onReview:()=>{},onEdit:()=>{},onAnother:()=>{},onClear:()=>{},storageWarning:false}));
+    expect(html).toContain("This saved AI blueprint was revalidated from its saved answers");
+    expect(html).toContain("No new AI request was made.");
+    expect(html).toContain("The wording changed during the refresh, so review it again.");
+    expect(html).toContain("The earlier version was marked as reviewed.");
+    expect(html).toContain("Review this refreshed wording before using it in marketing.");
+   }
+  });
+  it("retains approval for unchanged AI report wording",()=>{
+   const {storage}=memory(),answers=completeAnswers(),oldDate="2026-09-29T14:00:00.000Z",brief=validBlueprint(answers).brief,prior={brief,sourceAnswersVersion:"dcm-v3.2" as const,sourceAnswersSnapshot:structuredClone(answers),sourceBriefRevision:answers.revision,generatedAt:oldDate,wordingReviewed:true,mode:"ai" as const},now=Date.now();
+   storage.setItem(DRAFT_STORAGE_KEY,JSON.stringify({schemaVersion:2,answers,currentStage:7,lastEditedAt:new Date(now-1000).toISOString(),expiresAt:new Date(now+100000).toISOString(),savedBrief:prior}));
+   const loaded=loadDraft(storage,now);
+   expect(loaded.status).toBe("ready");
+   if(loaded.status==="ready"){expect(loaded.draft.savedBrief?.wordingReviewed).toBe(true);expect(loaded.draft.savedBrief?.generatedAt).toBe(oldDate);expect(loaded.draft.savedBrief?.refreshedFrom).toBeUndefined();}
+  });
+  it("clears the regeneration notice after replacing a report and keeps it clear through review and editing",()=>{
+   const answers=completeAnswers(),resumed=enterTool({answers,stage:7,reportNeedsRegeneration:true});
+   const warning=renderToStaticMarkup(createElement(ReviewStep,{answers,onCreate:()=>{},onRetry:()=>{},onEdit:()=>{},onCreateStructured:()=>{},briefNeedsUpdate:false,loading:false,error:"",retryAllowed:false,reportNeedsRegeneration:resumed.reportNeedsRegeneration}));
+   expect(warning).toContain("A previous blueprint could not be reopened after a version update.");
+   const replaced=applyStructuredFallback(resumed);
+   expect(replaced.reportNeedsRegeneration).toBe(false);
+   const reviewed=markReviewed(replaced,true);
+   expect(reviewed.reportNeedsRegeneration).toBe(false);
+   const edited=editAnswers(reviewed,a=>({...a,client:{...a.client,goal_detail:"Clarify the buyer's obligations before signing."}}));
+   expect(edited.savedBrief).toBeNull();
+   expect(edited.reportNeedsRegeneration).toBe(false);
+   const after=renderToStaticMarkup(createElement(ReviewStep,{answers:edited.answers,onCreate:()=>{},onRetry:()=>{},onEdit:()=>{},onCreateStructured:()=>{},briefNeedsUpdate:false,loading:false,error:"",retryAllowed:false,reportNeedsRegeneration:edited.reportNeedsRegeneration}));
+   expect(after).not.toContain("A previous blueprint could not be reopened after a version update.");
+  });
+  it("clears the regeneration notice after valid AI output replaces a previous report",()=>{
+   const answers=completeAnswers(),resumed=enterTool({answers,stage:7,reportNeedsRegeneration:true}),generated=applyAnalysis(resumed,validBlueprint(answers));
+   expect(generated.savedBrief?.mode).toBe("ai");
+   expect(generated.reportNeedsRegeneration).toBe(false);
+  });
+ it("does not restore an out-of-context structured report when its saved answers differ",()=>{
+  const {storage}=memory(),answers=completeAnswers(),snapshot=structuredClone(answers);
+  snapshot.client.goal_detail="A different client goal that remains valid.";
+  const prior={brief:{...buildStructuredBrief(answers),definition_sentence:"A report from a different answer context."},sourceAnswersVersion:"dcm-v3.2" as const,sourceAnswersSnapshot:snapshot,sourceBriefRevision:answers.revision,generatedAt:"2026-09-29T14:00:00.000Z",wordingReviewed:true,mode:"structured" as const};
+  const now=Date.now();
+  storage.setItem(DRAFT_STORAGE_KEY,JSON.stringify({schemaVersion:2,answers,currentStage:7,lastEditedAt:new Date(now-1000).toISOString(),expiresAt:new Date(now+100000).toISOString(),savedBrief:prior}));
+  const loaded=loadDraft(storage,now);
+  expect(loaded.status).toBe("ready");
+  if(loaded.status==="ready"){expect(loaded.draft.answers).toEqual(answers);expect(loaded.draft.savedBrief).toBeUndefined();}
+ });
  it("keeps answers on Review when AI generation fails instead of manufacturing a fallback profile",()=>{const answers=completeAnswers(),state={...initialToolState(),view:"review" as const,stage:7 as const,answers,reviewRunId:"run",requestCount:1,loading:true};const failed=failAnalysis(state,"unavailable",true);expect(failed.view).toBe("review");expect(failed.savedBrief).toBeNull();expect(failed.answers).toEqual(answers);expect(failed.retryAllowed).toBe(true);expect(failed.error).toBe("unavailable");});
  it("creates a clearly structured, source-linked blueprint only after the user chooses the fallback",()=>{const answers=completeAnswers(),state={...initialToolState(),view:"review" as const,stage:7 as const,answers,error:"unavailable" as const};const result=applyStructuredFallback(state);expect(result.view).toBe("brief");expect(result.mode).toBe("structured");expect(result.savedBrief?.mode).toBe("structured");expect(result.savedBrief?.brief.report_version).toBe("dcm-blueprint-v4");expect(result.savedBrief?.sourceAnswersSnapshot).toEqual(answers);});
  it("shows a specific recovery message after structured-draft assembly fails",()=>{const answers=completeAnswers();const html=renderToStaticMarkup(createElement(ReviewStep,{answers,onCreate:()=>{},onRetry:()=>{},onEdit:()=>{},onCreateStructured:()=>{},briefNeedsUpdate:false,loading:false,error:"structuredInvalid",retryAllowed:false}));expect(html).toContain("The structured blueprint could not be assembled from these answers.");expect(html).toContain("Continue with a structured draft");});
  it("keeps review answers in the section that asked them and routes open gaps to that section",()=>{const answers=completeAnswers();answers.practice.enjoys="Practice-stage enjoyment marker";answers.client.choice_detail="Firm-fit detail marker";answers.practice.client_strength_support="Firm-fit support marker";answers.delivery.fit_signals=["service"];answers.opportunity.sources=["website_search"];answers.repeatability.target="Evidence-stage target marker";answers.delivery.capacity="unknown";const html=renderToStaticMarkup(createElement(ReviewStep,{answers,onCreate:()=>{},onRetry:()=>{},onEdit:()=>{},onCreateStructured:()=>{},briefNeedsUpdate:false,loading:false,error:"",retryAllowed:false}));const rows=html.split('data-ui-component-content="review-summary-row"').slice(1);const row=(index:number)=>rows[index].split('data-ui-component-content="review-summary-row"')[0];expect(row(0)).toContain("Practice-stage enjoyment marker");expect(row(2)).not.toContain("Practice-stage enjoyment marker");expect(row(3)).toContain("Firm-fit detail marker");expect(row(3)).toContain("Firm-fit support marker");expect(row(3)).not.toContain("They are seeking the kind of work we have chosen");expect(row(4)).toContain("They are seeking the kind of work we have chosen");expect(row(4)).not.toContain("Website or search enquiries");expect(row(5)).toContain("Website or search enquiries");expect(row(5)).toContain("Evidence-stage target marker");const open=html.split('data-ui-component-content="desired-client-review-open-items"')[1];expect(open).toContain("Capacity for more of this work remains unknown");expect(open).toContain("Edit Work value");});
 });
+it("preserves answers and explains when a previous report cannot be reopened",()=>{const {storage}=memory(),answers=completeAnswers(),brief=buildStructuredBrief(answers);brief.why_firm_wants_work.claims[0].source_answer_ids=["answers.not_a_real_source" as never];const prior={brief,sourceAnswersVersion:"dcm-v3.2" as const,sourceAnswersSnapshot:structuredClone(answers),sourceBriefRevision:answers.revision,generatedAt:"2026-09-29T14:00:00.000Z",wordingReviewed:true,mode:"ai" as const};const now=Date.now();storage.setItem(DRAFT_STORAGE_KEY,JSON.stringify({schemaVersion:2,answers,currentStage:7,lastEditedAt:new Date(now-1000).toISOString(),expiresAt:new Date(now+100000).toISOString(),savedBrief:prior}));const loaded=loadDraft(storage,now);expect(loaded.status).toBe("ready");if(loaded.status==="ready"){expect(loaded.draft.answers).toEqual(answers);expect(loaded.draft.savedBrief).toBeUndefined();expect(loaded.draft.reportNeedsRegeneration).toBe(true);const saved=saveDraft(storage,answers,7,undefined,now+1000);expect(saved.status).toBe("saved");const resumed=loadDraft(storage,now+1001);expect(resumed.status).toBe("ready");if(resumed.status==="ready"){expect(resumed.draft.reportNeedsRegeneration).toBe(true);const html=renderToStaticMarkup(createElement(ResumePanel,{draft:resumed.draft,onResume:()=>{},onNew:()=>{},onClear:()=>{},notice:"",onNoticeDismiss:()=>{}}));expect(html).toContain("A previous blueprint could not be reopened after a version update.");expect(html).toContain("Your answers are still saved.");}}});

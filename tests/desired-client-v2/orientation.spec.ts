@@ -59,6 +59,55 @@ test("the six sections explain their purpose and allow explicit unknowns", async
   await capture(page, "orientation-768-review");
 });
 
+test("known-disabled AI hides follow-up consent and continues without a request",async({page})=>{
+  let postRequests=0;
+  await page.route("**/api/tools/desired-client-matter/analyze",async apiRoute=>{
+    if(apiRoute.request().method()==="GET"){
+      await apiRoute.fulfill({status:200,contentType:"application/json",body:JSON.stringify({enabled:false})});
+      return;
+    }
+    postRequests+=1;
+    await apiRoute.fulfill({status:503,contentType:"application/json",body:JSON.stringify({ok:false,error:{code:"AI_DISABLED"}})});
+  });
+
+  await page.goto("/tools/desired-client-matter");
+  await page.getByRole("button",{name:"Define my desired client"}).click();
+  await expect(page.getByRole("status").filter({hasText:"AI follow-ups are unavailable"})).toBeVisible();
+  await expect(page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toHaveCount(0);
+  await page.getByRole("group",{name:"What do you want this profile to help your firm do?"}).getByRole("radio").last().check();
+  await page.getByRole("button",{name:"Continue",exact:true}).click();
+  await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
+  expect(postRequests).toBe(0);
+});
+
+test("an explicit AI_DISABLED follow-up response updates availability without spending a question",async({page})=>{
+  let postRequests=0;
+  await page.route("**/api/tools/desired-client-matter/analyze",async apiRoute=>{
+    if(apiRoute.request().method()==="GET"){
+      await apiRoute.fulfill({status:200,contentType:"application/json",body:JSON.stringify({enabled:true})});
+      return;
+    }
+    postRequests+=1;
+    await apiRoute.fulfill({status:503,contentType:"application/json",body:JSON.stringify({ok:false,error:{code:"AI_DISABLED"}})});
+  });
+
+  await page.goto("/tools/desired-client-matter");
+  await page.getByRole("button",{name:"Define my desired client"}).click();
+  await page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/}).check();
+  await page.getByRole("group",{name:"What do you want this profile to help your firm do?"}).getByRole("radio").last().check();
+  await page.getByRole("button",{name:"Continue",exact:true}).click();
+  await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
+  await expect(page.locator(".dc-stage > .dc-alert")).toContainText("AI follow-ups are unavailable");
+  expect(postRequests).toBe(1);
+
+  await page.getByRole("button",{name:STAGE_DEFINITIONS[0].label}).click();
+  await expect(page.getByRole("status").filter({hasText:"AI follow-ups are unavailable"})).toBeVisible();
+  await expect(page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toHaveCount(0);
+  await page.getByRole("button",{name:"Continue",exact:true}).click();
+  await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
+  expect(postRequests).toBe(1);
+});
+
 test("a spent local follow-up budget is explained accurately and wraps at every supported width", async ({ page }, testInfo) => {
   let clarificationRequests = 0;
   await page.route("**/api/tools/desired-client-matter/analyze", async apiRoute => {

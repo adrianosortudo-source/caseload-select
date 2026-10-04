@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { completeAnswers, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResult } from "../../src/lib/desired-client/output";
 import { REPORT_EDIT_LINKS } from "../../src/lib/desired-client/blueprint";
+import { REPORT_FOOTNOTE_COPY } from "../../src/lib/desired-client/copy";
 import { STAGE_DEFINITIONS } from "../../src/lib/desired-client/screens";
 
 const route = "**/api/tools/desired-client-matter/analyze";
@@ -9,7 +10,7 @@ const storageKey = "cls-desired-client-v2";
 const answers = completeAnswers();
 const result = validateAnalysisResult(validBlueprint(), answers, [])!;
 
-test("a reviewed six-section draft becomes a synthesized blueprint and HTML report", async ({ page }) => {
+test("a reviewed six-section draft becomes a synthesized blueprint and HTML report", async ({ page }, testInfo) => {
   let analysisCalls = 0;
   await page.addInitScript(({ key, savedAnswers }) => {
     const now = Date.now();
@@ -64,6 +65,7 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   const path = await download.path();
   const html = await import("node:fs/promises").then(fs => fs.readFile(path!, "utf8"));
   expect(html).toContain("Desired Client Blueprint");
+  expect(html).toContain(REPORT_FOOTNOTE_COPY);
   const exportedDefinition = html.match(/<section class="definition"><h2>Client definition<\/h2><p>([\s\S]*?)<\/p><\/section>/)?.[1];
   expect(exportedDefinition).toBeDefined();
   const plainDefinition = exportedDefinition!
@@ -104,6 +106,9 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
     });
     expect(layout.scrollWidth, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(width);
     expect(layout.failures, `single-word final lines at ${width}px`).toEqual([]);
+    if (width === 1440 || width === 375) {
+      await page.screenshot({ path: testInfo.outputPath(`blueprint-report-${width}.png`), fullPage: true });
+    }
   }
 
   const expectedEditDestinations = [

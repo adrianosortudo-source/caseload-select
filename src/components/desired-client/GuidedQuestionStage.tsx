@@ -68,9 +68,9 @@ const MULTI_CHOICE_WRITE_INS: Partial<Record<string, WriteInKey>> = {
   "dc-fit-signals": "fit_signals",
 };
 
-export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,error,notice,preview}:{
+export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompare,error,notice,aiAvailable,preview}:{
   stage:StageId; answers:DesiredClientAnswers; onEdit:Change; onBack:()=>void; onNext:()=>void;
-  onCompare:()=>void; error:boolean; notice?:string; preview?:ReactNode;
+  onCompare:()=>void; error:boolean; notice?:string; aiAvailable?:boolean|null; preview?:ReactNode;
 }) {
   const area=answers.focus.area;
   const route=answers.focus.route;
@@ -133,7 +133,7 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
             {radio("dc-less-reason","Why should it receive less marketing attention?",[{id:"preference",label:"The firm prefers other work"},{id:"capacity",label:"Capacity is limited"},{id:"effort",label:"The effort is hard to support"},{id:"financial",label:"The financial return does not justify the effort"},{id:"model",label:"It does not fit the firm's service model"},{id:"unknown",label:"Not sure yet"}],answers.direction.less_reason,(a,v)=>{a.direction.less_reason=v as typeof a.direction.less_reason;},undefined,false)}
           </>}
         </section>
-        <section className="dc-optional" data-ui-component-content="desired-client-ai-follow-up"><h2>AI follow-up (optional)</h2><label className="dc-option"><input className="dc-option__input" type="checkbox" checked={answers.interview.ai_clarification_consent} onChange={event=>onEdit(a=>({...a,interview:{...a.interview,ai_clarification_consent:event.currentTarget.checked}}))}/><span className="dc-option__label" data-ui-copy="body">Allow up to three short AI follow-up questions during this interview. Your original answers stay intact, and you can skip any follow-up.</span></label><p data-ui-copy="supporting">AI follow-ups are optional. Skip them to keep going.</p></section>
+        <section className="dc-optional" data-ui-component-content="desired-client-ai-follow-up"><h2>AI follow-up (optional)</h2>{aiAvailable===false?<p className="dc-alert" role="status" data-ui-copy="supporting">AI follow-ups are unavailable. Your answers are saved. Continue below.</p>:<><label className="dc-option"><input className="dc-option__input" type="checkbox" checked={answers.interview.ai_clarification_consent} onChange={event=>onEdit(a=>({...a,interview:{...a.interview,ai_clarification_consent:event.currentTarget.checked}}))}/><span className="dc-option__label" data-ui-copy="body">Allow up to three short AI follow-up questions during this interview. Your original answers stay intact, and you can skip any follow-up.</span></label><p data-ui-copy="supporting">AI follow-ups are optional. Skip them to keep going.</p></>}</section>
       </>}
       {stage===2&&<>
         <label className="dc-text-field" data-ui-component-content="desired-client-practice-area-control">

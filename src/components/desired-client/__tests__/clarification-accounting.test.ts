@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { completeAnswers } from "@/lib/desired-client/__tests__/blueprint-helpers";
 import { initialToolState } from "@/lib/desired-client/state";
-import { advanceWithoutClarification, clarificationNoticeFor, reserveClarificationRequest, showValidClarificationPrompt } from "../DesiredClientTool";
+import { advanceWithoutClarification, aiAvailabilityFromProbe, clarificationNoticeFor, reserveClarificationRequest, showValidClarificationPrompt } from "../DesiredClientTool";
 
 const prompt = {
   outcome: "ask",
@@ -15,6 +15,15 @@ const prompt = {
 } as const;
 
 describe("clarification question allowance", () => {
+  it("treats only a successful probe with a boolean enabled field as known availability", () => {
+    expect(aiAvailabilityFromProbe(true, { enabled: true })).toBe(true);
+    expect(aiAvailabilityFromProbe(true, { enabled: false })).toBe(false);
+    expect(aiAvailabilityFromProbe(false, { enabled: false })).toBeNull();
+    expect(aiAvailabilityFromProbe(true, { enabled: "false" })).toBeNull();
+    expect(aiAvailabilityFromProbe(true, {})).toBeNull();
+    expect(aiAvailabilityFromProbe(true, null)).toBeNull();
+  });
+
   it("counts only a valid prompt that is shown", () => {
     const state = { ...initialToolState(), answers: completeAnswers(), stage: 1 as const, view: "questions" as const };
     const shown = showValidClarificationPrompt(state, 1, "ed4758bb-8155-4b73-99dd-d7ed30b16078", prompt);
@@ -77,5 +86,7 @@ describe("clarification question allowance", () => {
     expect(clarificationNoticeFor(limited.error)).toContain("reached its limit");
     expect(clarificationNoticeFor("clarificationUnavailable")).toContain("could not complete");
     expect(clarificationNoticeFor("clarificationUnavailable")).not.toContain("limit");
+    expect(clarificationNoticeFor("clarificationUnavailable", false)).toContain("AI follow-ups are unavailable");
+    expect(clarificationNoticeFor("clarificationUnavailable", null)).toContain("could not complete");
   });
 });
