@@ -63,6 +63,7 @@ export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,b
     link.href=url;link.download=file.filename;link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
   }
   return <section className="dc-review" data-ui-component-content="desired-client-review" aria-busy={loading}>
+    <h1 data-ui-copy="heading">{REVIEW_COPY.heading}</h1>
     {reportNeedsRegeneration&&<p className="dc-alert" role="status" data-ui-copy="supporting">{STORAGE_COPY.briefNeedsRefresh}</p>}
     <p data-ui-copy="body">{REVIEW_COPY.note}</p>
     {briefNeedsUpdate&&<p className="dc-alert" data-ui-copy="body">{COMMON_COPY.briefChanged}</p>}
