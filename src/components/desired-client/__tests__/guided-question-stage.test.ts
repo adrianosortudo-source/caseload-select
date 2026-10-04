@@ -61,7 +61,7 @@ describe("GuidedQuestionStage AI availability",()=>{
   it("replaces consent with a clear status when AI is known to be disabled",()=>{
     render(createElement(FocusStage,{aiAvailable:false}));
 
-    expect(screen.getByRole("status").textContent).toContain("AI follow-up questions are unavailable right now");
+    expect(screen.getByRole("status").textContent).toContain("AI follow-ups are unavailable");
     expect(screen.queryByRole("checkbox",{name:/Allow up to three short AI follow-up questions/})).toBeNull();
   });
 

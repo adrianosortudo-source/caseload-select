@@ -46,7 +46,7 @@ export function advanceWithoutClarification(state:ToolState,runId:string,failure
 export function clarificationNoticeFor(error:ToolState["error"],aiAvailable?:boolean|null):string {
   if(error==="focusChanged")return COMMON_COPY.workChanged;
   if(error==="clarificationLimitReached")return "This draft has reached its limit for AI follow-up checks. Your answers are saved, and you can continue without another AI follow-up.";
-  if(error==="clarificationUnavailable"&&aiAvailable===false)return "AI follow-ups are unavailable. Continue with your saved answers.";
+  if(error==="clarificationUnavailable"&&aiAvailable===false)return "AI follow-ups are unavailable. Your answers are saved. Continue below.";
   if(error==="clarificationUnavailable")return "AI could not complete a follow-up this time. Your answers are saved, and you can continue.";
   return "";
 }
