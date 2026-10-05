@@ -63,9 +63,7 @@ export function formatBriefText(saved: SavedBrief, answers: DesiredClientAnswers
     "",
     "OUR DESIRED-CLIENT DEFINITION",
     view.definition,
-    "",
-    "CONDITIONS AND UNRESOLVED QUESTIONS",
-    ...(view.conditions.length ? view.conditions.map((condition) => `- ${condition}`) : ["No material constraint or uncertainty was recorded in these answers."]),
+    ...(view.conditions.length ? ["", "CONDITIONS AND UNRESOLVED QUESTIONS", ...view.conditions.map((condition) => `- ${condition}`)] : []),
     "",
     "PROGRESS REVIEW",
     `Measure: ${view.progressReview.metric}`,
@@ -113,10 +111,7 @@ export function formatBriefMarkdown(saved: SavedBrief, answers: DesiredClientAns
     "## Client definition",
     "",
     emphasizedMarkdown(view.definition, view.definitionComponents),
-    "",
-    "## Conditions and unresolved questions",
-    "",
-    ...(view.conditions.length ? view.conditions.map((condition) => `- ${condition}`) : ["No material constraint or uncertainty was recorded in these answers."]),
+    ...(view.conditions.length ? ["", "## Conditions and unresolved questions", "", ...view.conditions.map((condition) => `- ${condition}`)] : []),
     "",
     "## Progress review",
     "",
@@ -211,7 +206,7 @@ export function formatBriefHtml(saved: SavedBrief, answers: DesiredClientAnswers
     const cards = view.cards.map((card) => `<section class="card"><h2>${escapeHtml(card.title)}</h2>${card.claims.map((claim) => `<div class="claim"><span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[claim.evidence_basis])}</span><p>${escapeHtml(claim.text)}</p></div>`).join("")}${card.contribution ? `<div class="calculated"><strong>${escapeHtml(card.contribution.label)}:</strong> ${escapeHtml(card.contribution.amount)} <span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[card.contribution.basis])}</span><small>Per matter</small></div>` : ""}${card.opportunityBasis ? `<p class="opportunity-basis">Numeric and source results: <span class="evidence">${escapeHtml(card.opportunityBasis)}</span></p>` : ""}</section>`).join("");
     const decisionPathway = view.decisionPathway ? `<section class="decision-pathway" aria-labelledby="decision-pathway-title"><div class="decision-pathway-heading"><h2 id="decision-pathway-title">Client decision pathway</h2><span>Working interpretation · review with the firm</span></div><div class="decision-pathway-steps">${decisionPathwayEntries(view).map(([label, statement]) => `<article><h3>${escapeHtml(label)}</h3><p>${escapeHtml(statement.text)}</p><span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[statement.evidence_basis])}</span></article>`).join("")}</div></section>` : "";
     const questions = !view.decisionPathway && view.openQuestions.length ? `<section class="open-questions"><h2>Points still to resolve</h2><ul>${view.openQuestions.map((item) => `<li>${escapeHtml(item.text)} <span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[item.evidence_basis])}</span></li>`).join("")}</ul></section>` : "";
-    const conditions = `<section class="conditions"><h2>Conditions and unresolved questions</h2>${view.conditions.length ? `<ul>${view.conditions.map((condition) => `<li>${escapeHtml(condition)}</li>`).join("")}</ul>` : "<p>No material constraint or uncertainty was recorded in these answers.</p>"}</section>`;
+    const conditions = view.conditions.length ? `<section class="conditions"><h2>Conditions and unresolved questions</h2><ul>${view.conditions.map((condition) => `<li>${escapeHtml(condition)}</li>`).join("")}</ul></section>` : "";
     const progress = `<section class="progress"><h2>Progress review</h2><dl>${[["Measure",view.progressReview.metric],["Target",view.progressReview.target],["Review period",view.progressReview.reviewPeriod],["Status",view.progressReview.status]].map(([label,value])=>`<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl></section>`;
     return `<header><p class="eyebrow">CASELOAD SELECT · DESIRED CLIENT &amp; MATTER BLUEPRINT</p><h1>${escapeHtml(view.title)}</h1><p class="meta">${escapeHtml(view.modeLabel)} · Created ${escapeHtml(view.date)}</p><p class="status"><strong>${escapeHtml(view.status)}</strong><span>${escapeHtml(view.evidenceStatus)}</span></p></header><main><section class="definition"><h2>Client definition</h2><p>${emphasizedSentence(view.definition, view.definitionComponents)}</p></section>${conditions}${progress}${decisionPathway}<div class="cards">${cards}</div>${questions}<p class="footnote">${escapeHtml(REPORT_FOOTNOTE_COPY)}</p><details class="supporting"><summary>Supporting answers and sources</summary>${sourceMarkup(saved, answers)}</details></main>`;
   })();

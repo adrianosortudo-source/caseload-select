@@ -75,6 +75,29 @@ describe("AI Blueprint output contract", () => {
     value.brief.evidence_and_open_questions.claims[0] = evidence("The proposed target of 3 additional retained buyer-side acquisition matters per quarter needs firm approval.", "firm_preference", "repeatability.target");
     expect(validateAnalysisResult(value, answers, [])).toBeNull();
   });
+  it("preserves payment answers as an observation, a testable hypothesis, or an unknown", () => {
+    const answers=completeAnswers();
+    answers.value.payment="predictable";
+    const ai=validBlueprint(answers);
+    ai.brief.why_firm_wants_work.claims.push(evidence("Payment records prove all clients pay on time.","firm_reported_recorded","value.payment"));
+    const result=validateAnalysisResult(ai,answers,[]);
+    expect(result).not.toBeNull();
+    const recorded=result!.brief.why_firm_wants_work.claims.find((claim)=>claim.source_answer_ids.includes("value.payment"));
+    expect(recorded?.evidence_basis).toBe("firm_reported_observation");
+    expect(recorded?.text).toContain("Basis not specified.");
+    expect(recorded?.text).not.toContain("records prove");
+
+    answers.focus.route="new";
+    const newWork=validateAnalysisResult(validBlueprint(answers),answers,[]);
+    const hypothesis=newWork!.brief.why_firm_wants_work.claims.find((claim)=>claim.source_answer_ids.includes("value.payment"));
+    expect(hypothesis?.evidence_basis).toBe("hypothesis");
+    expect(hypothesis?.text).toContain("Working assumption to test");
+
+    answers.value.payment="unknown";
+    const unknown=validateAnalysisResult(validBlueprint(answers),answers,[]);
+    const unresolved=unknown!.brief.why_firm_wants_work.claims.find((claim)=>claim.source_answer_ids.includes("value.payment"));
+    expect(unresolved?.evidence_basis).toBe("unknown");
+  });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
     const value = validBlueprint();

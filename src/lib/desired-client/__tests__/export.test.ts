@@ -23,6 +23,23 @@ describe("Blueprint exports", () => {
   });
   it("exports the synthesis and evidence cards, not an answer inventory", () => { const { answers, saved } = setup(), text = formatBriefText(saved, answers); expect(text).toContain((saved.brief as ReturnType<typeof buildStructuredBlueprintV4>).definition_sentence); expect(text).toContain("WHY THIS WORK"); expect(text).toContain("DESIRED CLIENT AND MATTER"); expect(text).toContain("EVIDENCE & OPEN QUESTIONS"); expect(text).not.toContain("What would you like the lawyer to help you with?"); });
   it("provides a print-ready HTML download with six cards and no PDF route", () => { const { answers, saved } = setup(), html = formatBriefHtml(saved, answers); expect(html).toContain("@media print"); expect(html).toContain("Evidence &amp; open questions"); expect(html).not.toContain("Download PDF"); expect(html).not.toContain("application/pdf"); const download = createHtmlDownload(saved, answers, new Date(2026, 8, 26)); expect(download.filename).toBe("desired-client-blueprint-2026-09-26.html"); expect(download.content).toBe(html); });
+  it("exports material conditions after the definition and omits the section when there are none", () => {
+    const {answers,saved}=setup();
+    answers.opportunity.uncertainty="Demand beyond existing referrals is not yet known.";
+    saved.brief=buildStructuredBlueprintV4(answers);
+    const html=formatBriefHtml(saved,answers), text=formatBriefText(saved,answers), markdown=formatBriefMarkdown(saved,answers);
+    expect(html.indexOf("class=\"definition\"")).toBeLessThan(html.indexOf("class=\"conditions\""));
+    expect(html).toContain("Demand beyond existing referrals is not yet known.");
+    expect(text).toContain("CONDITIONS AND UNRESOLVED QUESTIONS");
+    expect(markdown).toContain("## Conditions and unresolved questions");
+
+    answers.opportunity.uncertainty="";
+    answers.opportunity.sources=[];
+    saved.brief=buildStructuredBlueprintV4(answers);
+    expect(formatBriefHtml(saved,answers)).not.toContain("class=\"conditions\"");
+    expect(formatBriefText(saved,answers)).not.toContain("CONDITIONS AND UNRESOLVED QUESTIONS");
+    expect(formatBriefMarkdown(saved,answers)).not.toContain("## Conditions and unresolved questions");
+  });
   it("keeps the client and matter distinct and the decision pathway separate in v4 outputs", () => {
     const { answers, saved } = setup();
     const html = formatBriefHtml(saved, answers);

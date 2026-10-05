@@ -1,6 +1,6 @@
 import { resolveAnswerReference } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
-import { buildStructuredBlueprintV4 } from "./structured-blueprint";
+import { buildStructuredBlueprintV4, paymentEvidenceClaim } from "./structured-blueprint";
 import { calculateContribution, hasNegativeContribution } from "./economics";
 import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
 import { isInterviewClarificationCurrent, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
@@ -138,6 +138,11 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   if (paths.some((path) => typeof path !== "string" || !isSafeSourcePath(path))) return reject("source_answer_path_unrecognized");
   const disallowedPath = paths.find((path) => typeof path === "string" && !permittedSourceAnswerPath(path, answers, slot));
   if (typeof disallowedPath === "string" && isSafeSourcePath(disallowedPath)) return reject("source_answer_path_not_allowed_for_slot", disallowedPath);
+  if (paths.includes("value.payment") && (paths.length !== 1 || !answers.value.payment)) return reject("payment_source_must_be_isolated");
+  if (paths.length === 1 && paths[0] === "value.payment") {
+    const expectedPayment = paymentEvidenceClaim(answers);
+    if (!expectedPayment || value.kind !== expectedPayment.kind || value.evidence_basis !== expectedPayment.evidence_basis) return reject("payment_evidence_status_mismatch", "value.payment");
+  }
   let hasUnknown = false;
   let unresolvedPath: SafeSourcePath | undefined;
   const supportedValues: string[] = [];
@@ -171,9 +176,10 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   )) return reject("experience_basis_mismatch", paths[0] as SafeSourcePath);
   if (value.evidence_basis === "client_reported" || value.evidence_basis === "firm_reported_observation") {
     const expected = value.evidence_basis === "client_reported" ? "client_feedback" : "firm_observation";
+    const paymentObservation = value.evidence_basis === "firm_reported_observation" && paths.length === 1 && paths[0] === "value.payment" && answers.focus.route === "established";
     const choice = paths.some(path => typeof path === "string" && path.startsWith("client.choice_"));
     const pathway = paths.some(path => typeof path === "string" && (path.startsWith("situation.") || ["client.goals","client.goal_detail","client.concerns","client.decision_needs","client.decision_context","client.pathway_basis"].includes(path)));
-    if ((!choice && !pathway) || (choice && (!paths.includes("client.choice_basis") || answers.client.choice_basis !== expected)) || (pathway && (!paths.includes("client.pathway_basis") || answers.client.pathway_basis !== expected))) return reject("client_reported_basis_mismatch");
+    if (!paymentObservation && ((!choice && !pathway) || (choice && (!paths.includes("client.choice_basis") || answers.client.choice_basis !== expected)) || (pathway && (!paths.includes("client.pathway_basis") || answers.client.pathway_basis !== expected)))) return reject("client_reported_basis_mismatch");
   }
   if (value.evidence_basis === "source_observed" && !(paths.includes("opportunity.sources") && answers.opportunity.sources.some((source) => source !== "unknown" && source !== "no_evidence"))) return reject("source_observation_unavailable");
   if (["firm_reported_recorded", "firm_reported_estimate"].includes(value.evidence_basis as string) && value.kind !== "experience" && value.kind !== "hypothesis") return reject("evidence_kind_mismatch");
@@ -212,13 +218,38 @@ function validCard(value: unknown, answers: DesiredClientAnswers, slot: string, 
   return value.claims.every((claim) => validStatement(claim, answers, slot, reportFailure));
 }
 
+function normalizePaymentEvidence(brief: Record<string, unknown>, answers: DesiredClientAnswers): { brief: Record<string, unknown>; blocked: boolean } {
+  const payment = paymentEvidenceClaim(answers);
+  const card = brief.why_firm_wants_work;
+  if (!payment || !record(card) || !Array.isArray(card.claims)) return { brief, blocked: false };
+  const claims = card.claims as unknown[];
+  const citesPayment = (claim: unknown) => record(claim) && Array.isArray(claim.source_answer_ids) && claim.source_answer_ids.includes("value.payment");
+  const firstPaymentIndex = claims.findIndex(citesPayment);
+  let nextClaims: unknown[];
+  if (firstPaymentIndex >= 0) {
+    nextClaims = [];
+    claims.forEach((claim, index) => {
+      if (index === firstPaymentIndex) nextClaims.push(payment);
+      else if (!citesPayment(claim)) nextClaims.push(claim);
+    });
+  } else if (claims.length < 6) {
+    nextClaims = [...claims, payment];
+  } else {
+    return { brief, blocked: true };
+  }
+  return { brief: { ...brief, why_firm_wants_work: { ...card, claims: nextClaims } }, blocked: false };
+}
+
 export function validateAnalysisResult(value: unknown, answers: DesiredClientAnswers, _eligibleCodes: readonly ClarificationCode[], reportFailure?: (failure: AnalysisValidationFailure) => void): AnalysisResult | null {
   const reject = (field: string, reason: string) => { reportFailure?.({ field, reason }); return null; };
   if (!exact(value, ["brief", "clarification_code"])) return reject("report", "root_shape");
   if (value.clarification_code !== null) return reject("report", "unexpected_clarification_code");
-  const brief=value.brief;
+  const sourceBrief=value.brief;
   const cardNames=["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const;
-  if(!exact(brief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"]))return reject("report", "brief_shape");
+  if(!exact(sourceBrief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"]))return reject("report", "brief_shape");
+  const normalizedPayment = normalizePaymentEvidence(sourceBrief, answers);
+  if (normalizedPayment.blocked) return reject("why_firm_wants_work", "payment_claim_cannot_fit_without_dropping_other_claims");
+  const brief = normalizedPayment.brief;
   if(brief.report_version!=="dcm-blueprint-v4")return reject("report", "unsupported_report_version");
   if(typeof brief.definition_sentence!=="string")return reject("definition_sentence", "sentence_not_text");
   if(!exact(brief.definition_components,["client","client_matter","reasons","outcome"]))return reject("definition_components", "component_shape");

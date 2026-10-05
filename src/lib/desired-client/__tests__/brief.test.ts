@@ -29,4 +29,26 @@ describe("Desired Client Blueprint synthesis", () => {
     expect(model.definition).toBe(brief.definition_sentence);
     expect(model.confirmed).toBe(false);
   });
+  it("surfaces negative economics and a proposed target that exceeds stated capacity", () => {
+    const answers=completeAnswers();
+    answers.value.fee_amount="8000";
+    answers.value.direct_cost_amount="8500";
+    answers.value.currency="CAD";
+    answers.value.amount_scope="per_matter";
+    answers.value.amount_basis="recorded";
+    answers.repeatability.additional_matters="1 additional matter per quarter";
+    answers.repeatability.target="2 retained matters per quarter";
+    const brief=buildStructuredBlueprintV4(answers);
+    const model=buildBlueprintViewModel(brief,answers,{mode:"structured",generatedAt:"2026-10-05T12:00:00Z",wordingReviewed:false});
+    expect(model.conditions.some((condition)=>condition.includes("negative contribution of")&&condition.includes("before overhead and acquisition costs"))).toBe(true);
+    expect(model.conditions).toContain("The proposed target of 2 matters per quarter exceeds the stated additional capacity of 1 matter per quarter; resolve the mismatch before treating the target as available volume.");
+    expect(model.progressReview.target).toBe("2 retained matters per quarter");
+  });
+  it("does not compare capacity and target across different periods", () => {
+    const answers=completeAnswers();
+    answers.repeatability.additional_matters="1 additional matter per quarter";
+    answers.repeatability.target="2 retained matters per year";
+    const model=buildBlueprintViewModel(buildStructuredBlueprintV4(answers),answers,{mode:"structured",generatedAt:"2026-10-05T12:00:00Z",wordingReviewed:false});
+    expect(model.conditions.some((condition)=>condition.includes("exceeds the stated additional capacity"))).toBe(false);
+  });
 });
