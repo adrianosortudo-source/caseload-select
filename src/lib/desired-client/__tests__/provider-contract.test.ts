@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { completeAnswers, evidence, validBlueprint } from "./blueprint-helpers";
-import { decodeProviderSources, providerBlueprintSchema, providerSourceAliases } from "../provider-schema";
+import { decodeProviderSources, encodeProviderSources, providerBlueprintSchema, providerSourceAliases } from "../provider-schema";
 import { runDesiredClientAnalysis } from "../analyze";
 import { validateAnalysisResult } from "../output";
 import type { AnalysisRequestEnvelope } from "../types";
@@ -28,7 +28,7 @@ describe("provider output contract", () => {
     expect(decodeProviderSources({source_answer_ids:[roleAlias,roleAlias,"invalid"]},aliases)).toEqual({source_answer_ids:["situation.role","invalid"]});
     expect(config.generationConfig.responseSchema.properties.brief.required).toContain("client_and_matter");
     expect(config.generationConfig.responseSchema.properties.brief.properties.client_and_matter.properties.claims.maxItems).toBeUndefined();
-    expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).toContain("hypothesis");
+    expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).toEqual(["firm_preference"]);
     expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).not.toContain("firm_reported_experience");
     expect(sourceIds.map((id: string) => aliases[id])).not.toContain("client_context.geography");
     expect(config.generationConfig.responseSchema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.text.description).toContain("“two matters” and “2 matters”");
@@ -93,6 +93,63 @@ describe("provider output contract", () => {
     expect(firstContact.text.description).toContain("State that gap plainly");
     expect(firstContact.text.description).toContain("use evidence_basis unknown");
     expect(firstContact.evidence_basis.enum).not.toContain("client_reported");
+  });
+  it("allows all sources required by the exact negative-contribution target", async () => {
+    const input = request();
+    Object.assign(input.answers.value, { fee_amount:"8000", direct_cost_amount:"10000", currency:"CAD", amount_basis:"estimated", amount_scope:"per_matter" });
+    const original = validBlueprint(input.answers);
+    const aliases = providerSourceAliases(input.answers);
+    const compact = encodeProviderSources(original, aliases);
+    provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(compact) } });
+    const outcome = await runDesiredClientAnalysis(input, []);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(1);
+    const config = provider.configure.mock.calls[0][0];
+    const reason = config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.reasons.properties;
+    const expected = original.brief.definition_components.reasons;
+    expect(expected.source_answer_ids).toHaveLength(8);
+    expect(reason.text.enum).toEqual([expected.text]);
+    expect(reason.evidence_basis.enum).toEqual([expected.evidence_basis]);
+    expect(reason.source_answer_ids.maxItems).toBe(8);
+    expect(reason.source_answer_ids.items.enum.map((id: string) => aliases[id])).toEqual(expect.arrayContaining(expected.source_answer_ids));
+    const prompt = JSON.parse(provider.generate.mock.calls[0][0]);
+    expect(prompt.grounded_target.reasons).not.toHaveProperty("kind");
+    expect(decodeProviderSources(prompt.grounded_target.reasons, aliases)).toEqual(expected);
+    expect(prompt.grounded_target.reasons.source_answer_ids.every((id: string) => Object.hasOwn(aliases, id))).toBe(true);
+    expect(prompt.grounded_target.primary_client_and_matter_claim).not.toHaveProperty("kind");
+    expect(prompt.instruction).toContain("already use compact source IDs");
+  });
+  it("does not silently replace an invented target with the confirmed target", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const invalid = validBlueprint();
+    invalid.brief.definition_components.client.text = "Canadian billionaires";
+    provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(invalid) } });
+    expect((await runDesiredClientAnalysis(request(), [])).mode).toBe("invalid_output");
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('"reason":"target_not_grounded_in_confirmed_answers"'));
+    warning.mockRestore();
+  });
+  it("records a truncated response's safe finish reason without its text", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    provider.generate.mockResolvedValue({ response: { text: () => '{"submitted":"private example', candidates:[{finishReason:"MAX_TOKENS"}] } });
+    expect((await runDesiredClientAnalysis(request(), [])).mode).toBe("invalid_output");
+    expect(warning).toHaveBeenCalledTimes(1);
+    const metadata = JSON.parse(warning.mock.calls[0][0]);
+    expect(metadata.reason).toBe("invalid_json");
+    expect(metadata.finishReason).toBe("MAX_TOKENS");
+    expect(JSON.stringify(metadata)).not.toContain("private example");
+    warning.mockRestore();
+  });
+  it("keeps provider exception diagnostics in one safe log message", async () => {
+    const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+    provider.generate.mockRejectedValue(Object.assign(new Error("private provider response"), {name:"GoogleGenerativeAIFetchError",status:429}));
+    expect((await runDesiredClientAnalysis(request(), [])).mode).toBe("unavailable");
+    expect(warning).toHaveBeenCalledTimes(1);
+    expect(warning.mock.calls[0]).toHaveLength(1);
+    const metadata = JSON.parse(warning.mock.calls[0][0]);
+    expect(metadata.providerStatus).toBe(429);
+    expect(metadata.providerError).toBe("GoogleGenerativeAIFetchError");
+    expect(JSON.stringify(metadata)).not.toContain("private provider response");
+    warning.mockRestore();
   });
   it("allows a relevant unanswered circumstance as a citation for an unknown claim", () => {
     const answers=completeAnswers();

@@ -1,5 +1,6 @@
 import { allowedSourceAnswerPathsForAnswers, BLUEPRINT_RESPONSE_SCHEMA } from "./output";
 import { resolveAnswerReference } from "./catalog";
+import { buildStructuredBlueprintV4 } from "./structured-blueprint";
 import type { AnswerReferencePath, DesiredClientAnswers } from "./types";
 
 /** Keep provider constraints small; the full validator enforces semantic rules. */
@@ -15,6 +16,23 @@ export function providerSourceAliases(answers: DesiredClientAnswers): Record<str
   const slots = ["definition_client_type", "definition_client_matter", "definition_reasons", "definition_outcome", "client_and_matter", "client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions", "decision_pathway"];
   const paths = [...new Set(slots.flatMap(slot => allowedSourceAnswerPathsForAnswers(slot, answers)))];
   return Object.fromEntries(paths.map((path, index) => [`s${index}`, path]));
+}
+
+/** Present confirmed statements in the same compact form the provider returns.
+ * Display kind is derived on decoding, so it is never an extra model decision. */
+export function encodeProviderSources(value: unknown, aliases: Record<string, string>): unknown {
+  const ids = Object.fromEntries(Object.entries(aliases).map(([id, path]) => [path, id]));
+  const encode = (item: unknown): unknown => {
+    if (Array.isArray(item)) return item.map(encode);
+    if (!item || typeof item !== "object") return item;
+    const statement = Object.hasOwn(item, "evidence_basis");
+    return Object.fromEntries(Object.entries(item).filter(([key]) => !statement || key !== "kind").map(([key, child]) => [
+      key, key === "source_answer_ids" && Array.isArray(child)
+        ? child.map(path => typeof path === "string" && Object.hasOwn(ids, path) ? ids[path] : path)
+        : encode(child),
+    ]));
+  };
+  return encode(value);
 }
 
 export function decodeProviderSources(value: unknown, aliases: Record<string, string>): unknown {
@@ -49,6 +67,7 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
       ? "A grammatical clause with its own subject, such as 'the work fits the firm's experience'. At most 35 words and 300 characters. Do not start with 'because' or a subjectless verb such as 'uses'."
       : slot.startsWith("definition_")
       ? "A concise fragment, at most 25 words and 240 characters. Put supporting details in the cards."
+      : slot === "client_and_matter" ? "Copy the confirmed grounded_target claims exactly. Each may contain up to 95 words and 650 characters; do not shorten or paraphrase the supplied legal engagement."
       : slot === "decision_pathway" ? "One concise statement, at most 30 words and 240 characters."
       : "One grounded claim, at most 50 words and 400 characters. Preserve additional detail in separate claims.";
     node.properties.text.description = `${textDescription} A simple count written as a word or digits is equivalent only for the same value (for example, “two matters” and “2 matters”). Keep its unit, currency, range and period faithful to the cited answer; never calculate, round or invent a figure.`;
@@ -70,9 +89,9 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     });
     node.properties.source_answer_ids.items.enum = Object.entries(aliases).filter(([,path]) => allowed.includes(path)).map(([alias]) => alias);
     node.properties.source_answer_ids.minItems = 1;
-    // Contribution validation needs all five economics sources. The provider
-    // must be able to cite that complete set if it returns such a statement.
-    node.properties.source_answer_ids.maxItems = slot === "why_firm_wants_work" ? 6 : 4;
+    // Match the application contract, including a confirmed negative-economics
+    // rationale that cites both preference and the five economics sources.
+    node.properties.source_answer_ids.maxItems = 8;
     const bases = ["firm_preference", "hypothesis", "unknown"];
     if (["practice.experience", "practice.capability", "practice.client_strength_support"].some(path => allowed.includes(path))) bases.push("firm_reported_experience");
     for (const [prefix, basis] of [["value.", answers.value.amount_basis], ["opportunity.", answers.opportunity.data_basis]] as const) {
@@ -105,6 +124,20 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
   };
   for (const [key, slot] of Object.entries({client:"definition_client_type",client_matter:"definition_client_matter",reasons:"definition_reasons",outcome:"definition_outcome"})) {
     setPaths(sections.definition_components.properties[key as keyof typeof sections.definition_components.properties], slot);
+  }
+  // These components are already determined from the firm's answers. A single
+  // enum value prevents the provider's prose instructions from paraphrasing a
+  // target that the unchanged grounding validator must reject.
+  const grounded = buildStructuredBlueprintV4(answers).definition_components;
+  for (const key of ["client", "client_matter", "reasons"] as const) {
+    const node = sections.definition_components.properties[key];
+    (node.properties.text as {enum?: string[]}).enum = [grounded[key].text];
+    (node.properties.evidence_basis as {enum: string[]}).enum = [grounded[key].evidence_basis];
+    (node.properties.source_answer_ids.items as {enum?: string[]}).enum = Object.entries(aliases)
+      .filter(([, path]) => grounded[key].source_answer_ids.includes(path as AnswerReferencePath)).map(([id]) => id);
+    const sourceCount = node.properties.source_answer_ids as {minItems: number; maxItems: number};
+    sourceCount.minItems = grounded[key].source_answer_ids.length;
+    sourceCount.maxItems = grounded[key].source_answer_ids.length;
   }
   for (const slot of ["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const) setPaths(sections[slot].properties.claims.items, slot);
   for (const [field, statement] of Object.entries(sections.decision_pathway.properties)) {

@@ -7,7 +7,7 @@ import {
 } from "./prompt";
 import { isSafeSourcePath, validateAnalysisResult, type AnalysisValidationFailure } from "./output";
 import { safeProviderFailureMetadata } from "./provider-diagnostics";
-import { decodeProviderSources, providerBlueprintSchema, providerSourceAliases } from "./provider-schema";
+import { decodeProviderSources, encodeProviderSources, providerBlueprintSchema, providerSourceAliases } from "./provider-schema";
 import type { AnalysisRequestEnvelope, AnalysisResult, ClarificationCode } from "./types";
 
 const MODEL = "gemini-2.5-flash";
@@ -26,6 +26,7 @@ function logRejectedOutput(
   failure: AnalysisValidationFailure,
   finalFailure: AnalysisValidationFailure = failure,
   repairAttempts = 0,
+  finishReason?: string,
 ): void {
   // Keep diagnostics in one message: Vercel's runtime log view drops extra
   // console arguments, which hid the bounded details when passed separately.
@@ -38,6 +39,7 @@ function logRejectedOutput(
     finalField: finalFailure.field.slice(0, 80),
     finalReason: finalFailure.reason.slice(0, 80),
     repairAttempts,
+    ...(finishReason && /^[A-Z_]{1,40}$/.test(finishReason) ? { finishReason } : {}),
     ...(failure.sourcePath && isSafeSourcePath(failure.sourcePath) ? { sourcePath: failure.sourcePath } : {}),
   }));
 }
@@ -65,11 +67,14 @@ export async function runDesiredClientAnalysis(
     const aliases = providerSourceAliases(request.answers);
     const userPrompt = JSON.parse(buildDesiredClientUserPrompt(request, eligibleCodes));
     delete userPrompt.schema;
+    userPrompt.grounded_target = encodeProviderSources(userPrompt.grounded_target, aliases);
+    userPrompt.instruction += " The confirmed grounded_target statements already use compact source IDs and omit kind. Copy text, evidence_basis and source_answer_ids exactly; omit kind in every returned statement because the application derives it.";
     const response = await model.generateContent(JSON.stringify({ ...userPrompt, provider_source_aliases: aliases }));
+    const finishReason = response.response.candidates?.[0]?.finishReason;
     let parsed: unknown;
     try { parsed = JSON.parse(response.response.text()); }
     catch {
-      logRejectedOutput(request.requestId, { field: "report", reason: "invalid_json" });
+      logRejectedOutput(request.requestId, { field: "report", reason: "invalid_json" }, undefined, 0, finishReason);
       return { mode: "invalid_output" };
     }
     let validationFailure: AnalysisValidationFailure | null = null;
@@ -135,16 +140,18 @@ export async function runDesiredClientAnalysis(
         firstFailure ?? finalFailure ?? { field: "report", reason: "unclassified_validation_failure" },
         finalFailure ?? firstFailure ?? { field: "report", reason: "unclassified_validation_failure" },
         repairAttempts,
+        finishReason,
       );
     }
     return result ? { mode: "live", result } : { mode: "invalid_output" };
   } catch (error) {
     // Provider exceptions can contain submitted text. Never log their messages.
-    console.warn("[desired-client] analysis provider request failed", {
+    console.warn(JSON.stringify({
+      event: "[desired-client] analysis provider request failed",
       requestId: request.requestId,
       model: MODEL,
       ...safeProviderFailureMetadata(error),
-    });
+    }));
     return { mode: "unavailable" };
   }
 }
