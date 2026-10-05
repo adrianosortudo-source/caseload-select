@@ -114,7 +114,9 @@ describe("v4 provenance and client pathway", () => {
     a.client_context.repeat_matter_pattern="A buyer needs an asset purchase agreement drafted or reviewed before final terms are agreed, including advice on included assets and liabilities, payment and closing obligations, and allocation of contractual risks.";
     const brief=buildStructuredBlueprintV4(a);
     expect(brief.definition_components.client.text).toBe("an owner or founder in Ontario");
-    expect(brief.recognizable_circumstances.claims[0].text).toContain(a.client_context.relevant_circumstances);
+    // The fallback normalizes terminal punctuation when combining facts;
+    // the complete circumstance must still appear without that final stop.
+    expect(brief.recognizable_circumstances.claims[0].text).toContain(a.client_context.relevant_circumstances.replace(/[.!?]+$/u, ""));
     expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
   });
   it("renders labelled fallback facts without joining full answers into broken sentences",()=>{
