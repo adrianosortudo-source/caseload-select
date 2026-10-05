@@ -41,7 +41,7 @@ function validateHistory(value: unknown, answers: DesiredClientAnswers): value i
       !item.source_answer_ids.every((p) => isInterviewClarificationSourceForStage(p, item.stage as InterviewStage)) ||
       (item.source_answer_fingerprint !== undefined && (typeof item.source_answer_fingerprint !== "string" || !/^[0-9a-f]{16}$/i.test(item.source_answer_fingerprint))) ||
       typeof item.question !== "string" || !item.question.trim() || item.question.length > 140 || /[\r\n]/.test(item.question) ||
-      !isBoundedMultilineText(item.answer, INTERVIEW_CLARIFICATION_LIMITS.answerCharacters, INTERVIEW_CLARIFICATION_LIMITS.answerLines) ||
+      !isBoundedMultilineText(item.answer, INTERVIEW_CLARIFICATION_LIMITS.answerCharacters) ||
       typeof item.skipped !== "boolean" || (item.skipped ? item.answer !== "" : !item.answer.trim()) ||
       (item.choiceId !== undefined && (typeof item.choiceId !== "string" || !/^[a-z0-9_-]{1,48}$/.test(item.choiceId))) ||
       (item.reflection !== undefined && (typeof item.reflection !== "string" || item.reflection.length > INTERVIEW_CLARIFICATION_LIMITS.reflectionCharacters || item.reflection.trim().split(/\s+/).filter(Boolean).length > INTERVIEW_CLARIFICATION_LIMITS.reflectionWords))) return false;
