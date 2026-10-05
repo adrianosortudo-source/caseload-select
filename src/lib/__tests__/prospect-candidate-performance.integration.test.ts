@@ -41,7 +41,7 @@ suite("candidate reads above the observed Admin inventory", () => {
       await db.query("SET LOCAL statement_timeout = '60s'");
       for (let first = 1; first <= 6000; first += auditSetupBatchSize) {
         await db.query(`INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record)
-          SELECT $1,f.source_record_key,$2,'accepted','created',f.id,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name)
+          SELECT $1,f.source_record_key,$2,'accepted','created',f.id,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name,'originalStatus',CASE WHEN n%100=0 THEN 'rejected' ELSE 'selected' END)
           FROM public.gta_prospect_firms f JOIN generate_series($4::integer,$5::integer) n ON f.source_record_key=$3||'-'||n`, [batchId, "a".repeat(64), prefix, first, first + auditSetupBatchSize - 1]);
         for (const table of ["gta_prospect_import_audit", "prospect_research_candidate_coverage", "prospect_research_candidate_history"]) {
           await db.query("ANALYZE public." + table);
@@ -54,7 +54,7 @@ suite("candidate reads above the observed Admin inventory", () => {
       const targetFirm = (await db.query<{ id: string }>("SELECT id FROM public.gta_prospect_firms WHERE source_record_key=$1", [targetSourceKey])).rows[0].id;
       // The firm and its audit candidate share this exact source key. Linking the audit
       // candidate to the canonical firm gives the exact firm+field page two real matches.
-      await db.query("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) SELECT $1,f.source_record_key,$2,'accepted','created',$3,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name) FROM public.gta_prospect_firms f WHERE f.source_record_key=$4",
+      await db.query("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) SELECT $1,f.source_record_key,$2,'accepted','created',$3,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name,'originalStatus','rejected') FROM public.gta_prospect_firms f WHERE f.source_record_key=$4",
         [batchId, "c".repeat(64), targetFirm, targetSourceKey]);
       const counts = (await db.query<{ candidates: number; histories: number; fields: number; sources: number; identityLinks: number }>(`SELECT
         (SELECT count(*)::integer FROM public.prospect_research_candidates) candidates,
@@ -85,6 +85,12 @@ suite("candidate reads above the observed Admin inventory", () => {
       inspectPlan(explanation);
       expect(indexes).toContain("gta_prospect_import_audit_firm_id_idx");
       console.info("candidate-firm-index-plan", JSON.stringify({ indexes }));
+      const statusExplanation = (await db.query<{ "QUERY PLAN": unknown }>(
+        "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT candidate_id FROM public.prospect_research_candidate_history WHERE original_status IS NOT NULL AND md5(original_status)=md5($1) AND original_status=$1 AND coverage_revision<=9223372036854775807", ["rejected"])).rows[0]["QUERY PLAN"];
+      indexes.length = 0;
+      inspectPlan(statusExplanation);
+      expect(indexes).toContain("prospect_candidate_original_status_exact");
+      console.info("candidate-status-index-plan", JSON.stringify({ indexes }));
       const timings: { label: string; milliseconds: number }[] = [];
       const read = async (label: string, filters: Record<string, unknown>, limit = 25, afterId: string | null = null, coverageRevision: number | null = null) => {
         console.info("candidate-read-start", label);
@@ -121,6 +127,19 @@ suite("candidate reads above the observed Admin inventory", () => {
       const wrongExactValue = await read("indexed-firm-field-exact-value", { ...firmFieldFilters, fieldValue: targetSourceKey.toUpperCase() });
       expect(wrongExactValue.filteredCount).toBe(0);
       expect(wrongExactValue.items).toEqual([]);
+      const statusFilters = { originalStatus: "rejected" };
+      const statusPage = await read("indexed-original-status", statusFilters);
+      expect(statusPage.filteredCount).toBeGreaterThanOrEqual(122);
+      expect(statusPage.items).toHaveLength(25);
+      expect(statusPage.nextAfterId).not.toBeNull();
+      const nextStatusPage = await read("indexed-original-status-next-page", statusFilters, 25, statusPage.nextAfterId, statusPage.coverageRevision);
+      expect(nextStatusPage.coverageRevision).toBe(statusPage.coverageRevision);
+      expect(nextStatusPage.filteredCount).toBe(statusPage.filteredCount);
+      expect(nextStatusPage.items).toHaveLength(25);
+      expect(nextStatusPage.items[0].id > statusPage.items[statusPage.items.length - 1].id).toBe(true);
+      const wrongStatus = await read("indexed-original-status-exact-value", { originalStatus: "Rejected" });
+      expect(wrongStatus.filteredCount).toBe(0);
+      expect(wrongStatus.items).toEqual([]);
       const profileStart = performance.now();
       const profile = (await db.query<{ data: { candidate: { id: string }; coverageRevision: number } }>(
         "SELECT public.get_prospect_research_candidate_v1($1,$2) data", [first.items[0].id, first.coverageRevision])).rows[0].data;
@@ -129,6 +148,7 @@ suite("candidate reads above the observed Admin inventory", () => {
       const ordered = timings.map(item => item.milliseconds).sort((a, b) => a - b);
       const p95 = ordered[Math.ceil(ordered.length * 0.95) - 1];
       expect(timings.find(item => item.label === "indexed-text")!.milliseconds).toBeLessThan(4500);
+      expect(timings.find(item => item.label === "indexed-original-status")!.milliseconds).toBeLessThan(4500);
       console.info("candidate-read-performance", JSON.stringify({ counts, timings, p95Milliseconds: p95, statementTimeoutMilliseconds: 5000 }));
       expect(p95).toBeLessThan(5000);
     } finally { await db.query("ROLLBACK"); db.release(); }
