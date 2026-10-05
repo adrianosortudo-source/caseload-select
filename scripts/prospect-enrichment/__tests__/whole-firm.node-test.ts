@@ -12,9 +12,10 @@ import { canonicalJson, protocolHash, sha256, within } from "../model";
 import { items, assertFreshComparison } from "../reconciliation";
 import { checkApproval, enqueue, submitOne, type ApprovalManifest } from "../outbox";
 import { checkManifestApproval, prepareManifestRequests, submitManifestChunks, validateManifestChunks } from "../manifest-delivery";
-import { buildHeldCandidateEvidence, chunkExpectedRunManifest } from "../run-manifest";
+import { buildExpectedRunManifest, buildHeldCandidateEvidence, chunkExpectedRunManifest } from "../run-manifest";
 import { serializeSyntheticComparisonExport as serializeComparisonExport } from "../fixtures/comparison-signing";
 import { serializeComparisonRequest } from "../comparison-request";
+import { assertFrozenWholeFirmPackageMissing, assertFrozenWholeFirmRunCompatibility, CHILD5_FROZEN_COMPATIBILITY, type FrozenWholeFirmCompatibilityContract } from "../frozen-whole-firm-compatibility";
 
 async function workspace(t: { after: (fn: () => Promise<void>) => void }) {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), ".tmp");
@@ -23,6 +24,120 @@ async function workspace(t: { after: (fn: () => Promise<void>) => void }) {
   t.after(async () => { const real = await fs.realpath(temp); assert.ok(within(root, real) && path.basename(real).startsWith("pe-lane3-synthetic-")); await fs.rm(real, { recursive: true, force: true }); });
   return temp;
 }
+test("frozen whole-firm compatibility accepts only exact pre-guard evidence and preserves raw revision bytes", () => {
+  const base = wholeFirmFixture(), exported = structuredClone(base.exported);
+  const original = exported.revisions[0] as { originalRevision: Record<string, unknown> };
+  original.originalRevision = { ...original.originalRevision, result: { state: "recorded-without-completion-date" } };
+  const source = freezeWholeFirmExport(exported, sha256(canonicalJson(exported)));
+  const current = compileWholeFirmSnapshot(source);
+  assert.equal(current.packages.length, 3, "current compiler keeps the undated result on hold");
+
+  const runId = wholeFirmRunId(source.manifestSha256), revision = original.originalRevision;
+  const previousPackage = base.compiled.packages[0];
+  const envelope = {
+    ...previousPackage.envelope,
+    runId,
+    packageId: wholeFirmPackageId(runId, source.originalExport.expectedRevisions[0].researchKey, revision),
+    generatedAt: source.snapshotAt,
+    originalResearch: { ...previousPackage.envelope.originalResearch, content: revision as typeof previousPackage.envelope.originalResearch.content, contentSha256: protocolHash(revision) },
+  };
+  const restoredPackage = { ...previousPackage, envelope, payloadSha256: protocolHash(envelope) };
+  const packages = [restoredPackage, ...current.packages];
+  const candidates = current.candidates.map(value => ({ ...value, packageIds: [...value.packageIds], issues: [...value.issues] }));
+  candidates[0].packageIds = [restoredPackage.envelope.packageId];
+  const provisional = buildExpectedRunManifest({ schemaVersion: "prospect-backfill-manifest/v1", snapshotAt: source.snapshotAt,
+    manifestSha256: source.manifestSha256, roots: [], artifacts: [], issues: [] }, packages, candidates, [], runId);
+  const expectedContent = { schemaVersion: provisional.schemaVersion, runId, sourceSystem: WHOLE_FIRM_PROFILE.sourceSystem,
+    sourceName: WHOLE_FIRM_PROFILE.sourceName, sourceManifestSha256: source.manifestSha256, generatedAt: source.snapshotAt,
+    expectedPackageCount: provisional.expectedPackageCount, entries: provisional.entries };
+  const expected = { ...expectedContent, manifestSha256: protocolHash(expectedContent) };
+  const chunks = validateManifestChunks(chunkExpectedRunManifest(expected, 2, 1_048_576, "whole-firm"), "whole-firm");
+  const heldEvidence = buildHeldCandidateEvidence(expected, candidates);
+  const packageValues = packages.map(value => ({ envelope: value.envelope, payloadSha256: value.payloadSha256,
+    legacyAssessmentProjectionClaims: value.legacyAssessmentProjectionClaims ?? [] }));
+  const approval = {
+    schemaVersion: "prospect-whole-firm-delivery-approval/v1", scope: "whole-firm-run", targetOrigin: "https://admin.caseloadselect.ca",
+    projectId: "ssxryjxifwiivghglqer", runId, sourceManifestSha256: source.manifestSha256,
+    runManifestSha256: expected.manifestSha256, expectedRevisionCount: source.expectedRevisionCount,
+    approvalReference: "synthetic-frozen-whole-firm-test-only",
+    packages: packages.map(value => ({ clientPackageId: value.envelope.packageId, payloadSha256: value.payloadSha256 })),
+  } as const;
+  const sourceFileBytes = Buffer.from(JSON.stringify(source, null, 2) + "\n");
+  const manifestChunksFileBytes = Buffer.from(chunks.map(value => JSON.stringify(value)).join("\n") + "\n");
+  const heldEvidenceFileBytes = Buffer.from(heldEvidence.map(value => JSON.stringify(value)).join("\n") + (heldEvidence.length ? "\n" : ""));
+  const packagesFileBytes = Buffer.from(JSON.stringify(packageValues));
+  const approvalFileBytes = Buffer.from(JSON.stringify(approval));
+  const contract: FrozenWholeFirmCompatibilityContract = {
+    sourceFileSha256: sha256(sourceFileBytes), sourceManifestSha256: source.manifestSha256, sourceExportSha256: source.sourceExportSha256,
+    runId, runManifestSha256: expected.manifestSha256,
+    requestSha256: protocolHash(serializeComparisonRequest({ ...expected }, packageValues, "whole-firm").request),
+    manifestChunksFileSha256: sha256(manifestChunksFileBytes), heldEvidenceFileSha256: sha256(heldEvidenceFileBytes),
+    packagesFileSha256: sha256(packagesFileBytes), approvalFileSha256: sha256(approvalFileBytes),
+    expectedRevisionCount: 4, expectedPackageCount: 4, expectedHeldCount: 0,
+  };
+  const inputs = { contract, sourceFileBytes, source, manifestChunksFileBytes, chunks, heldEvidenceFileBytes, heldEvidence,
+    packagesFileBytes, packages: packageValues, approvalFileBytes, approvalSha256Argument: contract.approvalFileSha256 };
+  assert.throws(() => assertWholeFirmManifestCoverage(source, chunks), /revision_coverage_mismatch/);
+  assert.equal(assertFrozenWholeFirmRunCompatibility(inputs).requestSha256, contract.requestSha256);
+  assert.throws(() => assertFrozenWholeFirmRunCompatibility({ ...inputs,
+    manifestChunksFileBytes: Buffer.concat([manifestChunksFileBytes, Buffer.from(" ")]) }), /chunks_bytes_mismatch/);
+  assert.throws(() => assertFrozenWholeFirmRunCompatibility({ ...inputs,
+    sourceFileBytes: Buffer.concat([sourceFileBytes, Buffer.from(" ")]) }), /source_bytes_mismatch/);
+  assert.throws(() => assertFrozenWholeFirmRunCompatibility({ ...inputs,
+    approvalFileBytes: Buffer.concat([approvalFileBytes, Buffer.from(" ")]) }), /approval_bytes_mismatch/);
+  const expectedComparisonRows = [{ clientPackageId: "p", payloadSha256: "a".repeat(64) }];
+  assert.doesNotThrow(() => assertFrozenWholeFirmPackageMissing({ packages: [{ clientPackageId: "p", payloadSha256: "a".repeat(64), state: "missing", serverPackageId: null, visible: null }] }, "p", "a".repeat(64), expectedComparisonRows));
+  assert.throws(() => assertFrozenWholeFirmPackageMissing({ packages: [{ clientPackageId: "p", payloadSha256: "a".repeat(64), state: "received", serverPackageId: "server", visible: true }] }, "p", "a".repeat(64), expectedComparisonRows), /package_not_missing/);
+  assert.throws(() => assertFrozenWholeFirmPackageMissing({ packages: [{ clientPackageId: "p", payloadSha256: "a".repeat(64), state: "identity_hold", serverPackageId: "server", visible: true }] }, "p", "a".repeat(64), expectedComparisonRows), /package_not_missing/);
+  assert.throws(() => assertFrozenWholeFirmPackageMissing({ packages: [] }, "p", "a".repeat(64), expectedComparisonRows), /package_comparison_mismatch/);
+});
+
+test("submit routes the pinned source hash through frozen validation and makes no network request", async t => {
+  const dir = await workspace(t), base = wholeFirmFixture(), now = new Date().toISOString();
+  const packageValues = base.compiled.packages.map(pkg => ({ envelope: pkg.envelope, payloadSha256: pkg.payloadSha256, legacyAssessmentProjectionClaims: pkg.legacyAssessmentProjectionClaims ?? [] }));
+  const request = serializeComparisonRequest(base.compiled.expected, packageValues, "whole-firm");
+  const snapshot = serializeComparisonExport({ schemaVersion: "prospect-enrichment-comparison/v1", projectId: "ssxryjxifwiivghglqer",
+    capturedAt: now, provenance: { reader: "admin-prospect-enrichment-comparison/v1", sourceArtifactSha256: protocolHash(request.request), operatorAuthenticated: true },
+    identities: [], packages: base.compiled.expected.entries.filter(entry => entry.clientPackageId !== null).map(entry => ({
+      clientPackageId: entry.clientPackageId!, payloadSha256: entry.expectedPayloadSha256!, state: "missing", serverPackageId: null, visible: null,
+    })), events: [] }, now).snapshot;
+  const source = { ...base.source, manifestSha256: CHILD5_FROZEN_COMPATIBILITY.sourceManifestSha256 };
+  const files = {
+    source: path.join(dir, "source.json"), chunks: path.join(dir, "chunks.jsonl"), held: path.join(dir, "held.jsonl"),
+    packages: path.join(dir, "packages.json"), comparison: path.join(dir, "comparison.json"), approval: path.join(dir, "approval.json"),
+  };
+  const sourceBytes = Buffer.from(JSON.stringify(source));
+  const approvalBytes = Buffer.from(JSON.stringify(base.approval));
+  await fs.writeFile(files.source, sourceBytes);
+  await fs.writeFile(files.chunks, base.chunks.map(chunk => JSON.stringify(chunk)).join("\n") + "\n");
+  await fs.writeFile(files.held, buildHeldCandidateEvidence(base.compiled.expected, base.compiled.candidates).map(row => JSON.stringify(row)).join("\n") + "\n");
+  await fs.writeFile(files.packages, JSON.stringify(packageValues));
+  await fs.writeFile(files.comparison, JSON.stringify(snapshot));
+  await fs.writeFile(files.approval, approvalBytes);
+
+  const outboxRoot = WHOLE_FIRM_PROFILE.outputRoot;
+  const outbox = path.join(outboxRoot, ".synthetic-cli-frozen-" + process.pid + "-" + Date.now());
+  await fs.mkdir(outbox, { recursive: true });
+  t.after(async () => {
+    const real = await fs.realpath(outbox);
+    assert.ok(within(outboxRoot, real) && path.basename(real).startsWith(".synthetic-cli-frozen-"));
+    await fs.rm(real, { recursive: true, force: true });
+  });
+  const queued = await enqueue(outbox, base.compiled.packages[0].envelope, now);
+  const args = ["submit", "--profile", "whole-firm", "--key", queued.entry.key, "--manifest", files.source,
+    "--manifest-chunks", files.chunks, "--held-evidence", files.held, "--packages", files.packages, "--snapshot", files.comparison,
+    "--approval", files.approval, "--approval-sha256", sha256(approvalBytes), "--outbox", outbox];
+  const originalFetch = globalThis.fetch;
+  let networkRequests = 0;
+  globalThis.fetch = (async () => { networkRequests++; throw Error("network_forbidden_in_test"); }) as typeof fetch;
+  try {
+    await assert.rejects(main(args), /frozen_whole_firm_source_bytes_mismatch/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  assert.equal(networkRequests, 0);
+});
+
 test("whole-firm snapshot preserves every declared status and all exact client items", () => {
   const { source, compiled, chunks } = wholeFirmFixture();
   assert.equal(compiled.expected.entries.length, 4);

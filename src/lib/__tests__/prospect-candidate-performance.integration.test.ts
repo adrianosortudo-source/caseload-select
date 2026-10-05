@@ -13,7 +13,7 @@ if (enabled) {
   }
 }
 const suite = enabled ? describe : describe.skip;
-type Page = { inventoryCount: number; filteredCount: number; coverageRevision: number; items: { id: string; verifiedFirmId: string | null }[] };
+type Page = { inventoryCount: number; filteredCount: number; coverageRevision: number; nextAfterId: string | null; items: { id: string; verifiedFirmId: string | null }[] };
 
 suite("candidate reads above the observed Admin inventory", () => {
   const pool = enabled ? new Pool({ connectionString: rawUrl, max: 1 }) : null;
@@ -50,7 +50,12 @@ suite("candidate reads above the observed Admin inventory", () => {
         console.info("candidate-setup-progress", JSON.stringify({ appliedAuditRows: first + auditSetupBatchSize - 1, milliseconds: elapsed }));
         expect(elapsed).toBeLessThan(600_000);
       }
-      const targetFirm = (await db.query<{ id: string }>("SELECT id FROM public.gta_prospect_firms WHERE source_record_key=$1", [prefix + "-1"])).rows[0].id;
+      const targetSourceKey = prefix + "-6500";
+      const targetFirm = (await db.query<{ id: string }>("SELECT id FROM public.gta_prospect_firms WHERE source_record_key=$1", [targetSourceKey])).rows[0].id;
+      // The firm and its audit candidate share this exact source key. Linking the audit
+      // candidate to the canonical firm gives the exact firm+field page two real matches.
+      await db.query("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) SELECT $1,f.source_record_key,$2,'accepted','created',$3,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name) FROM public.gta_prospect_firms f WHERE f.source_record_key=$4",
+        [batchId, "c".repeat(64), targetFirm, targetSourceKey]);
       const counts = (await db.query<{ candidates: number; histories: number; fields: number; sources: number; identityLinks: number }>(`SELECT
         (SELECT count(*)::integer FROM public.prospect_research_candidates) candidates,
         (SELECT count(*)::integer FROM public.prospect_research_candidate_history) histories,
@@ -81,10 +86,11 @@ suite("candidate reads above the observed Admin inventory", () => {
       expect(indexes).toContain("gta_prospect_import_audit_firm_id_idx");
       console.info("candidate-firm-index-plan", JSON.stringify({ indexes }));
       const timings: { label: string; milliseconds: number }[] = [];
-      const read = async (label: string, filters: Record<string, unknown>) => {
+      const read = async (label: string, filters: Record<string, unknown>, limit = 25, afterId: string | null = null, coverageRevision: number | null = null) => {
         console.info("candidate-read-start", label);
         const start = performance.now();
-        const page = (await db.query<{ data: Page }>("SELECT public.list_prospect_research_candidates_v1($1::jsonb,25,NULL,NULL) data", [JSON.stringify(filters)])).rows[0].data;
+        const page = (await db.query<{ data: Page }>("SELECT public.list_prospect_research_candidates_v1($1::jsonb,$2::integer,$3::uuid,$4::bigint) data",
+          [JSON.stringify(filters), limit, afterId, coverageRevision])).rows[0].data;
         timings.push({ label, milliseconds: performance.now() - start });
         console.info("candidate-read-duration", JSON.stringify(timings[timings.length - 1]));
         expect(page.inventoryCount).toBe(counts.candidates);
@@ -100,6 +106,21 @@ suite("candidate reads above the observed Admin inventory", () => {
       const linked = await read("verified-firm", { firmId: targetFirm });
       expect(linked.filteredCount).toBeGreaterThanOrEqual(2);
       expect(linked.items.every(item => item.verifiedFirmId === targetFirm)).toBe(true);
+      const firmFieldFilters = { firmId: targetFirm, fieldPointer: "/source_record_key", fieldValue: targetSourceKey };
+      const firmField = await read("indexed-firm-field", firmFieldFilters, 1);
+      expect(firmField.filteredCount).toBeGreaterThanOrEqual(2);
+      expect(firmField.items).toHaveLength(1);
+      expect(firmField.items[0].verifiedFirmId).toBe(targetFirm);
+      expect(firmField.nextAfterId).toBe(firmField.items[0].id);
+      const nextFirmField = await read("indexed-firm-field-next-page", firmFieldFilters, 1, firmField.nextAfterId, firmField.coverageRevision);
+      expect(nextFirmField.coverageRevision).toBe(firmField.coverageRevision);
+      expect(nextFirmField.filteredCount).toBe(firmField.filteredCount);
+      expect(nextFirmField.items).toHaveLength(1);
+      expect(nextFirmField.items[0].id > firmField.items[0].id).toBe(true);
+      expect(nextFirmField.items[0].verifiedFirmId).toBe(targetFirm);
+      const wrongExactValue = await read("indexed-firm-field-exact-value", { ...firmFieldFilters, fieldValue: targetSourceKey.toUpperCase() });
+      expect(wrongExactValue.filteredCount).toBe(0);
+      expect(wrongExactValue.items).toEqual([]);
       const profileStart = performance.now();
       const profile = (await db.query<{ data: { candidate: { id: string }; coverageRevision: number } }>(
         "SELECT public.get_prospect_research_candidate_v1($1,$2) data", [first.items[0].id, first.coverageRevision])).rows[0].data;
