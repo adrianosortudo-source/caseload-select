@@ -233,11 +233,42 @@ function normalizePaymentEvidence(brief: Record<string, unknown>, answers: Desir
   const firstPaymentIndex = claims.findIndex(citesPayment);
   let nextClaims: unknown[];
   if (firstPaymentIndex >= 0) {
-    nextClaims = [];
-    claims.forEach((claim, index) => {
-      if (index === firstPaymentIndex) nextClaims.push(payment);
-      else if (!citesPayment(claim)) nextClaims.push(claim);
-    });
+    const paymentClaims = claims.filter(citesPayment);
+    const mixedSourcePaths = new Set(paymentClaims.flatMap((claim) =>
+      record(claim) && Array.isArray(claim.source_answer_ids)
+        ? claim.source_answer_ids.filter((path): path is string => typeof path === "string" && path !== "value.payment")
+        : [],
+    ));
+    if (mixedSourcePaths.size) {
+      // The application owns payment wording and evidence status. If a model
+      // merges payment with another fact, recover that fact from the existing
+      // grounded firm-value claims, preserving its own evidence category.
+      const structuredClaims = buildStructuredBlueprintV4(answers).why_firm_wants_work.claims;
+      const recoveredFacts = structuredClaims.filter((claim) => claim.source_answer_ids.some((path) => mixedSourcePaths.has(path)));
+      const representedPaths = new Set(recoveredFacts.flatMap((claim) => claim.source_answer_ids));
+      if ([...mixedSourcePaths].some((path) => !representedPaths.has(path))) return { brief, blocked: true };
+      const overlapsMixedPaths = (claim: unknown) => record(claim) && Array.isArray(claim.source_answer_ids) && claim.source_answer_ids.some((path) => mixedSourcePaths.has(path));
+      const overlappingClaims = claims.filter((claim) => !citesPayment(claim) && overlapsMixedPaths(claim));
+      if (overlappingClaims.some((claim) => record(claim) && Array.isArray(claim.source_answer_ids) && claim.source_answer_ids.some((path) => typeof path === "string" && !representedPaths.has(path)))) {
+        return { brief, blocked: true };
+      }
+      const retainedClaims = claims.filter((claim) => !citesPayment(claim) && !overlapsMixedPaths(claim));
+      nextClaims = [...retainedClaims, payment, ...recoveredFacts];
+      if (nextClaims.length > 6) {
+        // The whole existing structured card is the bounded fallback; use it
+        // only when it still represents every source from the mixed statement.
+        const coversAllMixedSources = structuredClaims.some((claim) => claim.source_answer_ids.includes("value.payment")) &&
+          [...mixedSourcePaths].every((path) => structuredClaims.some((claim) => claim.source_answer_ids.includes(path)));
+        if (!coversAllMixedSources) return { brief, blocked: true };
+        nextClaims = structuredClaims;
+      }
+    } else {
+      nextClaims = [];
+      claims.forEach((claim, index) => {
+        if (index === firstPaymentIndex) nextClaims.push(payment);
+        else if (!citesPayment(claim)) nextClaims.push(claim);
+      });
+    }
   } else if (claims.length < 6) {
     nextClaims = [...claims, payment];
   } else {

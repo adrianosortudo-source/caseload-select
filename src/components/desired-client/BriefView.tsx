@@ -180,7 +180,11 @@ export function BriefView({
               <p data-ui-copy="body">{claim.text}</p>
               <span className="dc-evidence-label" data-ui-copy="supporting">{EVIDENCE_BASIS_LABELS[claim.evidence_basis]}</span>
             </div>)}
-            {card.contribution && <div className="dc-calculated-metric"><strong>{card.contribution.label}</strong><span>{card.contribution.amount}</span><small>{EVIDENCE_BASIS_LABELS[card.contribution.basis]} · {card.contribution.scope}</small></div>}
+            {card.contribution && <div className="dc-calculated-metric">
+              <strong>{card.contribution.label}</strong><span>{card.contribution.amount}</span>
+              {card.contribution.margin ? <div className="dc-calculated-metric__margin"><strong>{card.contribution.margin.label}</strong><span>{card.contribution.margin.amount}</span></div> : <small>Contribution margin not calculated because collected fees are zero.</small>}
+              <small>{EVIDENCE_BASIS_LABELS[card.contribution.basis]} · {card.contribution.scope}. Calculated as collected fees less direct delivery costs; overhead and acquisition costs are excluded. This is not net profit.</small>
+            </div>}
             {card.opportunityBasis && <span className="dc-evidence-label dc-opportunity-basis">Numeric and source results: {card.opportunityBasis}</span>}
           </div>
         </section>)}

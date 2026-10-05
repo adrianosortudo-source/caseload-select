@@ -98,6 +98,29 @@ describe("AI Blueprint output contract", () => {
     const unresolved=unknown!.brief.why_firm_wants_work.claims.find((claim)=>claim.source_answer_ids.includes("value.payment"));
     expect(unresolved?.evidence_basis).toBe("unknown");
   });
+  it("recovers mixed payment and experience claims as separate statements with their own evidence categories", () => {
+    const answers = completeAnswers();
+    answers.value.payment = "predictable";
+    const result = validBlueprint(answers);
+    result.brief.why_firm_wants_work.claims = [evidence(
+      "The firm reports payment is usually predictable and handles this work regularly.",
+      "firm_reported_observation",
+      "value.payment",
+      "practice.experience",
+    ), evidence("The firm handles this work regularly.", "firm_reported_experience", "practice.experience")];
+    const validated = validateAnalysisResult(result, answers, []);
+    expect(validated).not.toBeNull();
+    const recovered = validated!.brief.why_firm_wants_work.claims;
+    const payment = recovered.find(claim => claim.source_answer_ids.includes("value.payment"));
+    const experience = recovered.find(claim => claim.source_answer_ids.includes("practice.experience"));
+    expect(payment).toMatchObject({ evidence_basis: "firm_reported_observation", source_answer_ids: ["value.payment"] });
+    expect(payment?.text).toContain("payment is usually predictable");
+    expect(experience).toMatchObject({ evidence_basis: "firm_reported_experience" });
+    expect(experience?.source_answer_ids).toContain("practice.experience");
+    expect(experience?.source_answer_ids).not.toContain("value.payment");
+    expect(recovered.some(claim => claim.source_answer_ids.includes("value.payment") && claim.source_answer_ids.includes("practice.experience"))).toBe(false);
+    expect(recovered.filter(claim => claim.source_answer_ids.includes("practice.experience"))).toHaveLength(1);
+  });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
     const value = validBlueprint();
@@ -157,7 +180,7 @@ describe("AI Blueprint output contract", () => {
     const brief = buildStructuredBlueprintV4(answers);
     const economics = brief.why_firm_wants_work.claims.find((claim) => claim.text.startsWith("Matter economics supplied:"));
     expect(economics?.text).toContain("fee amount: 8000; direct cost amount: 4800");
-    expect(economics?.text).toContain("estimated contribution before overhead and acquisition costs: $3,200.00");
+    expect(economics?.text).toContain("estimated contribution before overhead and acquisition costs: C$3,200.00");
     expect(economics && validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
   });
   it("does not allow a positive contribution claim when the calculated result is negative",()=>{

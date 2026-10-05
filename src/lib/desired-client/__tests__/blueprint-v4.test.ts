@@ -205,7 +205,7 @@ describe("v4 provenance and client pathway", () => {
     a.value.fee_amount="8000"; a.value.direct_cost_amount="8500"; a.value.currency="CAD"; a.value.amount_scope="per_matter"; a.value.amount_basis="recorded";
     const brief=buildStructuredBlueprintV4(a);
     const view=buildBlueprintViewModel(brief,a,{mode:"structured",generatedAt:"2026-10-01T12:00:00.000Z",wordingReviewed:false});
-    expect(view.conditions.some(condition=>condition.includes("selected fee sustainability as a reason")&&condition.includes("negative contribution of -$500.00"))).toBe(true);
+    expect(view.conditions.some(condition=>condition.includes("selected fee sustainability as a reason")&&condition.includes("negative contribution of −C$500.00"))).toBe(true);
     expect(view.definition).toContain("preference needs to be reconciled with the negative contribution");
   });
   it("labels clarification answers by the kind of information they contribute", () => {

@@ -22,6 +22,19 @@ describe("Blueprint exports", () => {
     expect(formatBriefText(saved,answers)).not.toContain("C$10,000");
   });
   it("exports the synthesis and evidence cards, not an answer inventory", () => { const { answers, saved } = setup(), text = formatBriefText(saved, answers); expect(text).toContain((saved.brief as ReturnType<typeof buildStructuredBlueprintV4>).definition_sentence); expect(text).toContain("WHY THIS WORK"); expect(text).toContain("DESIRED CLIENT AND MATTER"); expect(text).toContain("EVIDENCE & OPEN QUESTIONS"); expect(text).not.toContain("What would you like the lawyer to help you with?"); });
+  it("exports the calculated contribution margin with its limits and profit caveat", () => {
+    const { answers, saved } = setup();
+    Object.assign(answers.value, { fee_amount: "8000", direct_cost_amount: "4800", currency: "CAD", amount_basis: "recorded", amount_scope: "per_matter" });
+    saved.brief = buildStructuredBlueprintV4(answers);
+    const outputs = [formatBriefText(saved, answers), formatBriefMarkdown(saved, answers), formatBriefHtml(saved, answers)];
+    for (const output of outputs) {
+      expect(output).toContain("C$3,200.00");
+      expect(output).toContain("Contribution margin on collected fees");
+      expect(output).toContain("40.00%");
+      expect(output).toContain("overhead and acquisition costs are excluded");
+      expect(output).toContain("This is not net profit");
+    }
+  });
   it("provides a print-ready HTML download with six cards and no PDF route", () => { const { answers, saved } = setup(), html = formatBriefHtml(saved, answers); expect(html).toContain("@media print"); expect(html).toContain("Evidence &amp; open questions"); expect(html).not.toContain("Download PDF"); expect(html).not.toContain("application/pdf"); const download = createHtmlDownload(saved, answers, new Date(2026, 8, 26)); expect(download.filename).toBe("desired-client-blueprint-2026-09-26.html"); expect(download.content).toBe(html); });
   it("exports material conditions after the definition and omits the section when there are none", () => {
     const {answers,saved}=setup();
