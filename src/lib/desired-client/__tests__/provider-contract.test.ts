@@ -120,6 +120,25 @@ describe("provider output contract", () => {
     expect(prompt.grounded_target.primary_client_and_matter_claim).not.toHaveProperty("kind");
     expect(prompt.instruction).toContain("already use compact source IDs");
   });
+  it("repairs a positive economic claim against negative contribution without merging evidence bases", async () => {
+    const input=request();
+    Object.assign(input.answers.value,{fee_amount:"4800",direct_cost_amount:"8000",currency:"CAD",amount_basis:"estimated",amount_scope:"per_matter"});
+    const invalid=validBlueprint(input.answers);
+    invalid.brief.why_firm_wants_work.claims[0]=evidence("These fees support the effort and make the work profitable.","firm_preference","value.reasons","value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope");
+    const repaired={claims:[
+      evidence("The firm prefers this work because it fits its selected skills.","firm_preference","value.reasons"),
+      evidence("The estimated comparable fee is below direct delivery cost; resolve this conflict before increasing volume.","firm_reported_estimate","value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"),
+    ]};
+    provider.generate.mockResolvedValueOnce({response:{text:()=>JSON.stringify(invalid)}})
+      .mockResolvedValueOnce({response:{text:()=>JSON.stringify(repaired)}});
+    const outcome=await runDesiredClientAnalysis(input,[]);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(2);
+    const repairInstruction=provider.configure.mock.calls[1][0].systemInstruction;
+    expect(repairInstruction).toContain("The application calculated negative contribution");
+    expect(repairInstruction).toContain("State the firm's reported preference separately");
+    if(outcome.mode==="live")expect(outcome.result.brief.why_firm_wants_work.claims).toEqual(repaired.claims);
+  });
   it("does not silently replace an invented target with the confirmed target", async () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     const invalid = validBlueprint();

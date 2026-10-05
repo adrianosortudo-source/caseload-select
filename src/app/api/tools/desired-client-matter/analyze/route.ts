@@ -25,8 +25,9 @@ export async function GET(): Promise<NextResponse<{ enabled: boolean }>> {
   return NextResponse.json({ enabled: desiredClientAiEnabled() }, { headers: NO_STORE });
 }
 
-function fail(requestId: string, code: AnalysisFailureCode, status: number, extraHeaders: Record<string, string> = {}): NextResponse<AnalysisFailureEnvelope> {
-  return NextResponse.json({ ok: false, requestId, error: { code } }, { status, headers: { ...NO_STORE, ...extraHeaders } });
+function fail(requestId: string, code: AnalysisFailureCode, status: number, extraHeaders: Record<string, string> = {}, diagnostic?: { field: string; reason: string }): NextResponse<AnalysisFailureEnvelope> {
+  const safeDiagnostic = diagnostic && /^[a-z0-9_.]{1,80}$/.test(diagnostic.field) && /^[a-z0-9_]{1,80}$/.test(diagnostic.reason) ? diagnostic : undefined;
+  return NextResponse.json({ ok: false, requestId, error: { code, ...(safeDiagnostic ? { diagnostic: safeDiagnostic } : {}) } }, { status, headers: { ...NO_STORE, ...extraHeaders } });
 }
 
 function requestIdFromBody(value: unknown): string {
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
   const eligibleCodes: [] = [];
   const outcome = await runDesiredClientAnalysis(validation.value, eligibleCodes);
   if (outcome.mode === "unavailable") return fail(validation.value.requestId, "AI_UNAVAILABLE", 502);
-  if (outcome.mode === "invalid_output") return fail(validation.value.requestId, "INVALID_AI_OUTPUT", 502);
+  if (outcome.mode === "invalid_output") return fail(validation.value.requestId, "INVALID_AI_OUTPUT", 502, {}, outcome.diagnostic);
 
   const response: AnalysisSuccessEnvelope = {
     ok: true,

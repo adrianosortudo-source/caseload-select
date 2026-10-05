@@ -27,6 +27,21 @@ const wordCount = (text: string) => text.trim().split(/\s+/u).filter(Boolean).le
 const NUMBERS_UNDER_TWENTY: Record<string, number> = { zero:0, one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10, eleven:11, twelve:12, thirteen:13, fourteen:14, fifteen:15, sixteen:16, seventeen:17, eighteen:18, nineteen:19 };
 const NUMBER_TENS: Record<string, number> = { twenty:20, thirty:30, forty:40, fifty:50, sixty:60, seventy:70, eighty:80, ninety:90 };
 const NUMBER_UNIT_CONTEXT = /\b(?:matters?|clients?|cases?|deals?|transactions?|quarters?|months?|weeks?|days?|years?|hours?|fees?|costs?|dollars?|percent(?:age)?s?|points?|inquiries|enquiries|referrals?|leads?)\b/i;
+const POSITIVE_ECONOMICS = /\b(?:profitable|positive (?:contribution|margin)|fees? (?:are )?worthwhile|fees? support(?:s)? the effort|margin is positive)\b/giu;
+
+/** Reject a claim of current positive economics, while allowing the model to
+ * describe a negative result or a condition the firm still needs to meet. */
+function assertsPositiveEconomics(text: string): boolean {
+  for (const match of text.matchAll(POSITIVE_ECONOMICS)) {
+    const preceding = text.slice(0, match.index).split(/[.!?;,]/u).at(-1)?.trim() ?? "";
+    const following = text.slice((match.index ?? 0) + match[0].length).split(/[.!?;,]/u, 1)[0] ?? "";
+    const negated = /\b(?:not|never|cannot|can't|no longer)\b(?:\s+\w+){0,5}\s*$/iu.test(preceding);
+    const prerequisite = /\b(?:needs? to|must|should)\s+(?:\w+\s+){0,4}(?:establish|verify|achieve|confirm|reach|show|become)\s*$/iu.test(preceding);
+    const unverified = /^\s+(?:remains? to be|still needs? to be)\s+(?:established|verified|confirmed)\b/iu.test(following);
+    if (!negated && !prerequisite && !unverified) return true;
+  }
+  return false;
+}
 
 /** Match common written-out counts only when a nearby quantity word makes the
  * numeric meaning clear. This keeps “two matters” equivalent to “2 matters”
@@ -137,7 +152,7 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   if (hasUnknown !== (value.evidence_basis === "unknown")) return reject("unknown_evidence_basis_mismatch", unresolvedPath ?? paths[0] as SafeSourcePath);
   if (value.evidence_basis === "unknown" && value.kind !== "unknown") return reject("unknown_evidence_kind_mismatch");
   const contributionCheck = slot === "why_firm_wants_work" ? calculateContribution(answers) : null;
-  if (contributionCheck && hasNegativeContribution(answers) && /\b(?:profitable|positive (?:contribution|margin)|fees? (?:are )?worthwhile|fees? support(?:s)? the effort|margin is positive)\b/i.test(text)) return reject("negative_contribution_claim");
+  if (contributionCheck && hasNegativeContribution(answers) && assertsPositiveEconomics(text)) return reject("negative_contribution_claim");
   if (value.evidence_basis === "firm_reported_recorded") {
     const valueFigure = paths.some((path) => typeof path === "string" && path.startsWith("value."));
     const opportunityFigure = paths.some((path) => typeof path === "string" && path.startsWith("opportunity."));

@@ -351,6 +351,11 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(response.status).toBe(502);
+    const failure = await response.json();
+    expect(failure).toEqual({
+      ok: false, requestId: ENVELOPE.requestId,
+      error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "client_and_matter", reason: "card_shape" } },
+    });
     expect(JSON.parse(warn.mock.calls[0][0] as string)).toEqual({
       event: "[desired-client] analysis output rejected",
       requestId: ENVELOPE.requestId,
@@ -362,6 +367,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
       repairAttempts: 2,
     });
     expect(JSON.stringify(warn.mock.calls)).not.toContain("x".repeat(701));
+    expect(JSON.stringify(failure)).not.toContain("x".repeat(701));
   });
 
   it("logs a registered disallowed source path without logging answer or model text", async () => {

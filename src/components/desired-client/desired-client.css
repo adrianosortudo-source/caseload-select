@@ -111,6 +111,7 @@
 .dc-preview-inline{display:grid;grid-template-columns:minmax(0,1fr);gap:.5rem;width:100%;min-width:0}
 .dc-preview-inline>strong,.dc-preview-inline>span,.dc-preview-inline>p{display:block;width:100%;min-width:0;margin:0;text-wrap:pretty}
 .dc-review [data-ui-copy],.dc-brief [data-ui-copy]{text-wrap:pretty}
+.dc-analysis-reference{width:100%;overflow-wrap:anywhere}
 .dc-reviewed>span{display:block;flex:1;min-width:0;text-wrap:pretty}
 .dc-reviewed input{flex:0 0 1.25rem;width:1.25rem;height:1.25rem}
 @media(max-width:767px){.dc-brief__header h1{font-size:1.5rem}}
@@ -206,7 +207,7 @@
 .dc-legacy-list p{width:100%;margin:0}
 @media(max-width:900px){.dc-report-decision-pathway__steps{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.dc-report-cards{grid-template-columns:minmax(0,1fr)}.dc-report-status{align-items:flex-start;flex-direction:column}.dc-report-status span{padding-left:0;border-left:0}.dc-report-decision-pathway__steps{grid-template-columns:minmax(0,1fr)}.dc-report-decision-pathway__step{grid-template-columns:minmax(0,1fr)}.dc-report-progress dl{grid-template-columns:minmax(0,1fr)}.dc-report-conditions,.dc-report-progress{min-width:0}}
-@media(max-width:380px){.dc-app{padding-inline:.5rem}.dc-brief--blueprint{width:calc(100% + .5rem);margin-inline:-.25rem;padding:.5rem}.dc-report-definition,.dc-report-conditions,.dc-report-progress,.dc-report-decision-pathway{padding:.625rem}.dc-report-card{padding:.625rem}.dc-report-conditions ul,.dc-report-open-questions ul{padding-left:.75rem}}
+@media(max-width:380px){.dc-app{padding-inline:.5rem}.dc-brief--blueprint{width:calc(100% + .5rem);margin-inline:-.25rem;padding:.5rem}.dc-brief--blueprint .dc-brief__header h1{font-size:1.2rem;line-height:1.3;text-wrap:wrap}.dc-report-definition,.dc-report-conditions,.dc-report-progress,.dc-report-decision-pathway{padding:.625rem}.dc-report-card{padding:.625rem}.dc-report-conditions ul,.dc-report-open-questions ul{padding-left:.75rem}}
 @media print{
  .dc-brief--blueprint,.dc-brief--legacy{display:block;width:100%;max-width:none;margin:0;padding:0;border:0;border-radius:0;background:#fff;box-shadow:none;color:#000}
  .dc-brief--blueprint>*+*,.dc-brief--legacy>*+*{margin-top:.55rem}

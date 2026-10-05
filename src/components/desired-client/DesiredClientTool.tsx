@@ -53,7 +53,8 @@ export function clarificationNoticeFor(error:ToolState["error"],aiAvailable?:boo
 function isClarificationContinue(value:unknown):boolean { return normalizeInterviewClarificationContinuePrompt(value)!==null; }
 export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) {
  const [state,setState]=useState<ToolState>(initialToolState),[savedDraft,setSavedDraft]=useState<SavedDraft|null>(null),[notice,setNotice]=useState(""),[replacePrompt,setReplacePrompt]=useState(false),[clearPrompt,setClearPrompt]=useState(false);
- const [aiAvailable,setAiAvailable]=useState<boolean|null>(null);
+  const [aiAvailable,setAiAvailable]=useState<boolean|null>(null);
+  const [analysisReference,setAnalysisReference]=useState<string|null>(null);
  const stateRef=useRef(state),abortRef=useRef<AbortController|null>(null),initialized=useRef(false),embedBridge=useRef<ReturnType<typeof createDesiredClientEmbedBridge>>(null);
  const interviewRequestBudget=useRef<{runId:string|null;count:number}>({runId:null,count:0});
  const commit=useCallback((next:ToolState)=>{stateRef.current=next;setState(next);},[]);
@@ -67,7 +68,12 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
  const updateAnswers=(edit:(a:import("@/lib/desired-client/types").DesiredClientAnswers)=>import("@/lib/desired-client/types").DesiredClientAnswers)=>{abortRef.current?.abort();commit(editAnswers(stateRef.current,edit));};
  const sendAnalysis=useCallback(async(snapshot:ToolState)=>{
    if(!snapshot.reviewRunId||snapshot.requestCount<1||snapshot.requestCount>3||!snapshot.loading)return;
-   const requestId=crypto.randomUUID(),controller=new AbortController();abortRef.current=controller;
+    const requestId=crypto.randomUUID(),controller=new AbortController();abortRef.current=controller;setAnalysisReference(null);
+    const reportFailure=(phase:string,status?:number,diagnostic?:{field:string;reason:string},code?:unknown)=>{
+      setAnalysisReference(requestId);
+      const safeDiagnostic=diagnostic&&/^[a-z0-9_.]{1,80}$/.test(diagnostic.field)&&/^[a-z0-9_]{1,80}$/.test(diagnostic.reason)?diagnostic:undefined;
+      console.warn(JSON.stringify({event:"[desired-client] analysis request failed",requestId,stage:snapshot.stage,phase,...(typeof status==="number"?{status}:{}),...(typeof code==="string"&&/^[A-Z_]{1,40}$/.test(code)?{code}:{}),...(safeDiagnostic??{})}));
+    };
    let timedOut=false;
    const timeout=window.setTimeout(()=>{timedOut=true;controller.abort();},27000);
    const request:AnalysisRequestEnvelope={schemaVersion:4,operation:"generate",requestId,answerRevision:snapshot.answers.revision,reviewRunId:snapshot.reviewRunId,analysisIndex:(snapshot.requestCount-1) as 0|1|2,aiConsent:true,answers:snapshot.answers,clarifications:[]};
@@ -78,22 +84,24 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
      try{payload=await response.json();}catch{payload=null;}
      const current=stateRef.current;
      if(controller.signal.aborted||!sameRequest(current))return;
-     if(!payload||typeof payload!=="object"||!("ok" in payload)) { commit(failAnalysis(current,"invalid"));return; }
+      if(!payload||typeof payload!=="object"||!("ok" in payload)) { reportFailure("response_shape",response.status);commit(failAnalysis(current,"invalid"));return; }
      if(!response.ok||payload.ok!==true){
-       const failure=payload as Partial<AnalysisFailureEnvelope>;
-       const code=failure.error?.code;
+        const failure=payload as Partial<AnalysisFailureEnvelope>;
+        const code=failure.error?.code;
+        reportFailure("api_error",response.status,failure.error?.diagnostic,code);
        if(code==="AI_DISABLED")setAiAvailable(false);
        const retry=(code==="AI_UNAVAILABLE"||code==="INVALID_AI_OUTPUT")&&current.requestCount<3;
        commit(failAnalysis(current,code==="INVALID_AI_OUTPUT"?"invalid":"unavailable",retry));return;
      }
      const success=payload as AnalysisSuccessEnvelope;
-     if(success.requestId!==requestId||success.answerRevision!==request.answerRevision||success.reviewRunId!==request.reviewRunId){commit(failAnalysis(current,"invalid",current.requestCount<3));return;}
-     const result=validateAnalysisResult(success.result,current.answers,getEligibleClarificationCodes(current.answers,current.askedClarifications).slice(0,1));
-     if(!result){commit(failAnalysis(current,"invalid",current.requestCount<3));return;}
+      if(success.requestId!==requestId||success.answerRevision!==request.answerRevision||success.reviewRunId!==request.reviewRunId){reportFailure("response_identity",response.status);commit(failAnalysis(current,"invalid",current.requestCount<3));return;}
+      let validationFailure:{field:string;reason:string}|undefined;
+      const result=validateAnalysisResult(success.result,current.answers,getEligibleClarificationCodes(current.answers,current.askedClarifications).slice(0,1),failure=>{validationFailure??={field:failure.field,reason:failure.reason};});
+      if(!result){reportFailure("client_validation",response.status,validationFailure);commit(failAnalysis(current,"invalid",current.requestCount<3));return;}
      commit(applyAnalysis(current,result));
    }catch{
      const current=stateRef.current;
-     if(sameRequest(current)&&(timedOut||!controller.signal.aborted))commit(failAnalysis(current,"unavailable",current.requestCount<3));
+      if(sameRequest(current)&&(timedOut||!controller.signal.aborted)){reportFailure(timedOut?"timeout":"network");commit(failAnalysis(current,"unavailable",current.requestCount<3));}
    }finally{window.clearTimeout(timeout);if(abortRef.current===controller)abortRef.current=null;}
  },[commit]);
  const requestStageClarification=useCallback(async()=>{
@@ -163,9 +171,9 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
     {state.view==="interviewClarification"&&state.interviewPrompt&&<InterviewClarificationStep prompt={state.interviewPrompt} onAnswer={onInterviewAnswer} onSkip={onInterviewSkip}/>}
     {state.view==="comparison"&&state.answers.focus.area&&<ComparisonStep area={state.answers.focus.area} draft={state.comparisonDraft} step={state.comparisonStep} onDraft={comparisonDraft} onStep={step=>commit({...stateRef.current,comparisonStep:step})} onBack={abandonComparison} onCommit={onCompareCommit}/>}
     {state.view==="clarification"&&state.activeClarification&&<ClarificationStep code={state.activeClarification} onAnswer={onAnswerClarification}/>}
-    {state.view==="review"&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration}/>}
+     {state.view==="review"&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration} failureReference={analysisReference}/>}
     {state.view==="brief"&&state.savedBrief&&<BriefView saved={state.savedBrief} answers={state.answers} dismissedCode={state.dismissedCode} reviewed={state.reviewed} onReview={value=>commit(markReviewed(stateRef.current,value))} onEdit={editStage} onAnother={createAnother} onClear={clearStored} storageWarning={state.storageMessage==="unavailable"}/>}
-    {state.view==="brief"&&!state.savedBrief&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration}/>}
+     {state.view==="brief"&&!state.savedBrief&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration} failureReference={analysisReference}/>}
    </div>
    {embedded&&<a className="dc-open-window" href="/tools/desired-client-matter" target="_blank" rel="noreferrer">Open the tool in its own window</a>}
  </div>;
