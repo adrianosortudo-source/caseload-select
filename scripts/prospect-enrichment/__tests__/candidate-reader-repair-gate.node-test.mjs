@@ -20,6 +20,7 @@ test("reader repair receipt binds the exact ordered migration sources", () => {
     "20260930050000_prospect_candidate_coverage_warning_index.sql",
     "20260930130000_prospect_candidate_reader_defer_legacy_audit.sql",
     "20260930225510_prospect_enrichment_apply_refresh_gate.sql",
+    "20261004120000_prospect_candidate_firm_field_fastpath.sql",
   ]);
   assert.equal(verified.productionApplicationApproved, false);
   assert.throws(() => verifyReaderRepairReceipt({ ...receipt, migrations: receipt.migrations.map((item, index) => index === 1 ? { ...item, sha256: "0".repeat(64) } : item) }, root), /reader_repair_receipt_source_mismatch/);
@@ -29,25 +30,31 @@ test("reader repair preflight allows only its exact ordered suffix and post-read
   const earlier = "20260930050000_prospect_candidate_coverage_warning_index.sql";
   const later = "20260930130000_prospect_candidate_reader_defer_legacy_audit.sql";
   const refreshGate = "20260930225510_prospect_enrichment_apply_refresh_gate.sql";
+  const firmFieldFastpath = "20261004120000_prospect_candidate_firm_field_fastpath.sql";
   const pending = paths => ({ phase: "candidate-reader-repair-pending", pendingPaths: paths.map(file => "supabase/migrations/" + file) });
   assert.deepEqual(verifyReaderRepairPlan(
-    { dryRun: true, upToDate: false, migrations: [earlier, later, refreshGate], seeds: [], roles: [] },
-    pending([earlier, later, refreshGate]),
+    { dryRun: true, upToDate: false, migrations: [earlier, later, refreshGate, firmFieldFastpath], seeds: [], roles: [] },
+    pending([earlier, later, refreshGate, firmFieldFastpath]),
     "pre",
-  ), { phase: "pre", migrations: [earlier, later, refreshGate], dryRun: true, upToDate: false, exactScope: true });
+  ), { phase: "pre", migrations: [earlier, later, refreshGate, firmFieldFastpath], dryRun: true, upToDate: false, exactScope: true });
   assert.deepEqual(verifyReaderRepairPlan(
-    { dryRun: true, upToDate: false, migrations: [refreshGate], seeds: [], roles: [] },
-    pending([refreshGate]),
+    { dryRun: true, upToDate: false, migrations: [refreshGate, firmFieldFastpath], seeds: [], roles: [] },
+    pending([refreshGate, firmFieldFastpath]),
     "pre",
-  ), { phase: "pre", migrations: [refreshGate], dryRun: true, upToDate: false, exactScope: true });
+  ), { phase: "pre", migrations: [refreshGate, firmFieldFastpath], dryRun: true, upToDate: false, exactScope: true });
   assert.deepEqual(verifyReaderRepairPlan(
-    { dryRun: true, upToDate: false, migrations: [later, refreshGate], seeds: [], roles: [] },
-    pending([later, refreshGate]),
+    { dryRun: true, upToDate: false, migrations: [later, refreshGate, firmFieldFastpath], seeds: [], roles: [] },
+    pending([later, refreshGate, firmFieldFastpath]),
     "pre",
-  ), { phase: "pre", migrations: [later, refreshGate], dryRun: true, upToDate: false, exactScope: true });
+  ), { phase: "pre", migrations: [later, refreshGate, firmFieldFastpath], dryRun: true, upToDate: false, exactScope: true });
   assert.throws(() => verifyReaderRepairPlan(
     { dryRun: true, upToDate: false, migrations: [earlier, refreshGate], seeds: [], roles: [] },
     pending([earlier, refreshGate]),
+    "pre",
+  ), /unexpected_reader_repair_plan/);
+  assert.throws(() => verifyReaderRepairPlan(
+    { dryRun: true, upToDate: false, migrations: [earlier, later, firmFieldFastpath], seeds: [], roles: [] },
+    pending([earlier, later, firmFieldFastpath]),
     "pre",
   ), /unexpected_reader_repair_plan/);
   assert.deepEqual(verifyReaderRepairPlan(
