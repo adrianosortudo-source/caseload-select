@@ -97,6 +97,18 @@ describe("AI Blueprint output contract", () => {
     const unknown=validateAnalysisResult(validBlueprint(answers),answers,[]);
     const unresolved=unknown!.brief.why_firm_wants_work.claims.find((claim)=>claim.source_answer_ids.includes("value.payment"));
     expect(unresolved?.evidence_basis).toBe("unknown");
+    expect(unresolved?.text).toContain("Not established.");
+  });
+  it("distinguishes an omitted payment-context basis from an explicit unknown basis",()=>{
+    const answers=completeAnswers();
+    answers.value.payment_context="The client paid the initial retainer promptly.";
+    answers.value.payment_context_basis=null;
+    const unspecified=buildStructuredBlueprintV4(answers).why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.payment_context"));
+    expect(unspecified?.text).toContain("Basis not specified.");
+    answers.value.payment_context_basis="unknown";
+    const unknown=buildStructuredBlueprintV4(answers).why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.payment_context"));
+    expect(unknown?.text).toContain("Not established.");
+    expect(unknown?.text).not.toContain("Basis not specified.");
   });
   it("recovers mixed payment and experience claims as separate statements with their own evidence categories", () => {
     const answers = completeAnswers();
@@ -120,6 +132,85 @@ describe("AI Blueprint output contract", () => {
     expect(experience?.source_answer_ids).not.toContain("value.payment");
     expect(recovered.some(claim => claim.source_answer_ids.includes("value.payment") && claim.source_answer_ids.includes("practice.experience"))).toBe(false);
     expect(recovered.filter(claim => claim.source_answer_ids.includes("practice.experience"))).toHaveLength(1);
+  });
+  it("fits all supplied commercial and capacity facts into the six-claim limit without losing provenance",()=>{
+    const answers=completeAnswers();
+    answers.value.reasons=["client_benefit","fees","skills"];
+    Object.assign(answers.value,{fee_effort:"worthwhile",collected_fee:"15to50",team_hours:"16to40",payment:"predictable",payment_context:"Most buyers paid the first invoice within 15 days.",payment_context_basis:"firm_observation",currency:"CAD",fee_amount:"25000",direct_cost_amount:"12000",amount_basis:"recorded",amount_scope:"per_matter"});
+    Object.assign(answers.delivery,{capacity:"room"});
+    Object.assign(answers.repeatability,{target:"2 additional retained matters per quarter",review_period:"quarterly",additional_matters:"2",staffing_constraint:"One associate has room for two more matters."});
+    const built=buildStructuredBlueprintV4(answers);
+    expect(built.why_firm_wants_work.claims).toHaveLength(6);
+    const payment=built.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.payment"));
+    expect(payment?.source_answer_ids).toEqual(["value.payment","value.payment_context","value.payment_context_basis"]);
+    expect(payment?.text).toContain("Most buyers paid the first invoice within 15 days.");
+    expect(payment?.text).toContain("Usually predictable");
+    const validated=validateAnalysisResult(validBlueprint(answers),answers,[]);
+    expect(validated).not.toBeNull();
+    const all=JSON.stringify(validated);
+    for(const source of ["value.payment","value.payment_context","value.payment_context_basis","value.fee_amount","value.direct_cost_amount","value.collected_fee","value.team_hours","delivery.capacity","repeatability.target","repeatability.staffing_constraint"]){expect(all).toContain(source);}
+  });
+  it("keeps a full commercial fixture valid when payment context has a different evidence basis",()=>{
+    for(const basis of [null,"unknown","client_feedback","firm_hypothesis"] as const){
+      const answers=completeAnswers();
+      answers.value.reasons=["client_benefit","fees","skills"];
+      Object.assign(answers.value,{fee_effort:"worthwhile",collected_fee:"15to50",team_hours:"16to40",payment:"predictable",payment_context:"In our last ten comparable engagements, payment was usually received on schedule.",payment_context_basis:basis,currency:"CAD",fee_amount:"8000",direct_cost_amount:"8500",amount_basis:"recorded",amount_scope:"per_matter"});
+      answers.practice.experience="regular";
+      Object.assign(answers.delivery,{capacity:"room"});
+      Object.assign(answers.repeatability,{target:"2 additional retained matters per quarter",review_period:"quarterly",additional_matters:"2",staffing_constraint:"One associate has room for two more matters."});
+      const built=buildStructuredBlueprintV4(answers);
+      expect(built.why_firm_wants_work.claims).toHaveLength(7);
+      expect(validateAnalysisResult({brief:built,clarification_code:null},answers,[])).not.toBeNull();
+      const serialized=JSON.stringify(built);
+      for(const source of ["value.payment","value.payment_context","value.payment_context_basis","value.fee_amount","value.direct_cost_amount","value.collected_fee","value.team_hours","delivery.capacity","repeatability.target"]){expect(serialized).toContain(source);}
+      expect(serialized).toContain("In our last ten comparable engagements, payment was usually received on schedule.");
+    }
+  });
+  it("accepts seven firm-value claims but rejects an eighth",()=>{
+    const answers=completeAnswers();
+    answers.value.reasons=["client_benefit","fees","skills"];
+    Object.assign(answers.value,{fee_effort:"worthwhile",collected_fee:"15to50",team_hours:"16to40",payment:"predictable",payment_context:"Payment was usually received on schedule.",payment_context_basis:null,currency:"CAD",fee_amount:"8000",direct_cost_amount:"8500",amount_basis:"recorded",amount_scope:"per_matter"});
+    answers.practice.experience="regular";
+    Object.assign(answers.delivery,{capacity:"room"});
+    Object.assign(answers.repeatability,{target:"2 additional retained matters per quarter",review_period:"quarterly",additional_matters:"2",staffing_constraint:"One associate has room for two more matters."});
+    const built=buildStructuredBlueprintV4(answers);
+    expect(built.why_firm_wants_work.claims).toHaveLength(7);
+    expect(validateAnalysisResult({brief:built,clarification_code:null},answers,[])).not.toBeNull();
+    const excessive=structuredClone(built);
+    excessive.why_firm_wants_work.claims.push(structuredClone(excessive.why_firm_wants_work.claims[0]));
+    const failures: Array<{field:string;reason:string}> = [];
+    expect(validateAnalysisResult({brief:excessive,clarification_code:null},answers,[],failure=>failures.push(failure))).toBeNull();
+    expect(failures).toContainEqual({field:"why_firm_wants_work",reason:"payment_claim_cannot_fit_without_dropping_other_claims"});
+  });
+  it("preserves optional payment context and recovers a mixed experience claim without duplication", () => {
+    const answers = completeAnswers();
+    answers.value.payment = "predictable";
+    answers.value.payment_context = "The firm observed that 8 of 10 buyers paid the first invoice within 15 days.";
+    answers.value.payment_context_basis = "firm_observation";
+    const result = validBlueprint(answers);
+    result.brief.why_firm_wants_work.claims = [evidence(
+      "The firm reports payment is usually predictable, observed that 8 of 10 buyers paid within 15 days, and handles this work regularly.",
+      "firm_reported_observation",
+      "value.payment",
+      "value.payment_context",
+      "value.payment_context_basis",
+      "practice.experience",
+    ), evidence("The firm handles this work regularly.", "firm_reported_experience", "practice.experience")];
+
+    const validated = validateAnalysisResult(result, answers, []);
+    expect(validated).not.toBeNull();
+    const claims = validated!.brief.why_firm_wants_work.claims;
+    const context = claims.find(claim => claim.source_answer_ids.includes("value.payment_context"));
+    const experience = claims.filter(claim => claim.source_answer_ids.includes("practice.experience"));
+    expect(context?.text).toContain("payment is usually predictable");
+    expect(context?.text).toContain("Firm observation: “The firm observed that 8 of 10 buyers paid the first invoice within 15 days.”");
+    expect(context).toMatchObject({
+      evidence_basis: "firm_reported_observation",
+      source_answer_ids: ["value.payment", "value.payment_context", "value.payment_context_basis"],
+    });
+    expect(experience).toHaveLength(1);
+    expect(experience[0].evidence_basis).toBe("firm_reported_experience");
+    expect(claims.some(claim => claim.source_answer_ids.includes("value.payment_context") && claim.source_answer_ids.includes("practice.experience"))).toBe(false);
   });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";

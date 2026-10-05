@@ -213,8 +213,9 @@ function validLegacyClarificationAnswer(code: typeof LEGACY_CLARIFICATION_CODES[
   }
 }
 
-function validateAnswers(value: unknown, answerRevision: number, requireComplete: boolean, version: "dcm-v3.0" | "dcm-v3.1" | "dcm-v3.2" = "dcm-v3.2"): value is DesiredClientAnswers {
-  const answerKeys = version === "dcm-v3.2" ? ANSWER_KEYS : ANSWER_KEYS.filter((key) => key !== "interview");
+function validateAnswers(value: unknown, answerRevision: number, requireComplete: boolean, version: "dcm-v3.0" | "dcm-v3.1" | "dcm-v3.2" | "dcm-v3.3" = "dcm-v3.3"): value is DesiredClientAnswers {
+  const hasInterview = version === "dcm-v3.2" || version === "dcm-v3.3";
+  const answerKeys = hasInterview ? ANSWER_KEYS : ANSWER_KEYS.filter((key) => key !== "interview");
   if (!hasExactKeys(value, answerKeys) && !hasExactKeys(value, [...answerKeys, "write_ins"])) return false;
   const a = value as RecordValue;
   if (a.schema_version !== version || a.revision !== answerRevision || !Number.isSafeInteger(a.revision) || a.revision < 0) return false;
@@ -224,11 +225,11 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
   const exactGroup = (name: string, keys: string[]) => hasExactKeys(a[name], keys);
 
   if (!exactGroup("focus", ["area", "work", "work_other", "service_area", "certainty", "route", "comparison"]) ||
-    !exactGroup("practice", version === "dcm-v3.0" ? ["direction", "firm_type", "capability", "enjoys"] : version === "dcm-v3.2" ? ["direction", "firm_type", "capability", "enjoys", "experience", "development_needs", "client_strength", "client_strength_effect", "client_strength_support"] : ["direction", "firm_type", "capability", "enjoys", "experience", "development_needs"]) ||
-    !exactGroup("client_context", version === "dcm-v3.2" ? ["geography", "relevant_circumstances", "community_focus", "language_service_needs", "repeat_matter_pattern", "discovery_behaviour"] : ["geography", "relevant_circumstances", "community_focus", "language_service_needs", "repeat_matter_pattern"]) ||
+    !exactGroup("practice", version === "dcm-v3.0" ? ["direction", "firm_type", "capability", "enjoys"] : hasInterview ? ["direction", "firm_type", "capability", "enjoys", "experience", "development_needs", "client_strength", "client_strength_effect", "client_strength_support"] : ["direction", "firm_type", "capability", "enjoys", "experience", "development_needs"]) ||
+    !exactGroup("client_context", hasInterview ? ["geography", "relevant_circumstances", "community_focus", "language_service_needs", "repeat_matter_pattern", "discovery_behaviour"] : ["geography", "relevant_circumstances", "community_focus", "language_service_needs", "repeat_matter_pattern"]) ||
     !exactGroup("situation", ["trigger", "timing", "role", "role_other", "contact"]) ||
-    !exactGroup("client", version === "dcm-v3.2" ? ["goals", "goal_detail", "concerns", "decision_needs", "decision_context", "pathway_basis", "choice_priorities", "choice_detail", "choice_basis"] : ["goals", "concerns", "decision_needs"]) ||
-    !exactGroup("value", ["reasons", "fee_effort", "collected_fee", "team_hours", "payment", "currency", "fee_amount", "direct_cost_amount", "amount_basis", "amount_scope"]) ||
+    !exactGroup("client", hasInterview ? ["goals", "goal_detail", "concerns", "decision_needs", "decision_context", "pathway_basis", "choice_priorities", "choice_detail", "choice_basis"] : ["goals", "concerns", "decision_needs"]) ||
+    !exactGroup("value", version === "dcm-v3.3" ? ["reasons", "fee_effort", "collected_fee", "team_hours", "payment", "payment_context", "payment_context_basis", "currency", "fee_amount", "direct_cost_amount", "amount_basis", "amount_scope"] : ["reasons", "fee_effort", "collected_fee", "team_hours", "payment", "currency", "fee_amount", "direct_cost_amount", "amount_basis", "amount_scope"]) ||
     !exactGroup("delivery", ["conditions", "capacity", "limit", "fit_signals"]) ||
     !exactGroup("direction", version === "dcm-v3.0" ? ["aim", "evidence", "less", "less_note"] : ["aim", "evidence", "less", "less_reason", "less_note"]) ||
     !exactGroup("opportunity", ["sources", "data_basis", "source_detail", "period", "enquiry_count", "retained_count", "conversion", "acquisition_cost", "uncertainty"]) ||
@@ -246,8 +247,8 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
   const opportunity = a.opportunity as RecordValue;
   const repeatability = a.repeatability as RecordValue;
   const clarifications = a.clarifications as RecordValue;
-  const interview = version === "dcm-v3.2" ? a.interview as RecordValue : null;
-  if (version === "dcm-v3.2") {
+  const interview = hasInterview ? a.interview as RecordValue : null;
+  if (hasInterview) {
     if (!hasExactKeys(interview, ["ai_clarification_consent", "clarification_count", "clarified_stages", "followups"]) || typeof interview.ai_clarification_consent !== "boolean" ||
       !Number.isSafeInteger(interview.clarification_count) || (interview.clarification_count as number) < 0 || (interview.clarification_count as number) > 3 ||
       !Array.isArray(interview.clarified_stages) || interview.clarified_stages.length !== interview.clarification_count || interview.clarified_stages.some((stage) => ![1,2,3,4,5,6].includes(stage as number)) || new Set(interview.clarified_stages).size !== interview.clarified_stages.length ||
@@ -273,13 +274,18 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
     "opportunity.enquiry_count":80,"opportunity.retained_count":80,"opportunity.conversion":80,"opportunity.acquisition_cost":80,
     "opportunity.uncertainty":400,"repeatability.success_other":240,"repeatability.target":160,"repeatability.review_period":120,
     "repeatability.additional_matters":120,"repeatability.staffing_constraint":300};
-  if (version === "dcm-v3.2") Object.assign(textLimits, {"practice.client_strength_effect":240,"practice.client_strength_support":240,"client_context.discovery_behaviour":360,"client.goal_detail":240,"client.decision_context":240,"client.choice_detail":180});
+  if (hasInterview) Object.assign(textLimits, {"practice.client_strength_effect":240,"practice.client_strength_support":240,"client_context.discovery_behaviour":360,"client.goal_detail":240,"client.decision_context":240,"client.choice_detail":180});
+  if (version === "dcm-v3.3") textLimits["value.payment_context"] = 400;
   for (const [field, max] of Object.entries(textLimits)) {
     const [group, key] = field.split("."); const val = ({ practice, client_context: clientContext, client, value: valueGroup, opportunity, repeatability } as Record<string, RecordValue>)[group][key];
     if (!isBoundedMultilineText(val, max)) return false;
   }
   if (requireComplete && (!String(clientContext.repeat_matter_pattern).trim() || (!String(client.goal_detail).trim() && !(client.goals as GoalId[]).includes("unknown")))) return false;
-  if (version === "dcm-v3.2") {
+  if (version === "dcm-v3.3") {
+    if (!isEnum(valueGroup.payment_context_basis, ["client_feedback", "firm_observation", "firm_hypothesis", "unknown"], true) ||
+      (!String(valueGroup.payment_context).trim() && valueGroup.payment_context_basis !== null)) return false;
+  }
+  if (hasInterview) {
     const goals = a.client as RecordValue;
     if (!isTextLimit(goals.goal_detail,240) || !isTextLimit(goals.decision_context,240) || !isTextLimit(goals.choice_detail,180) ||
       !isEnum(goals.pathway_basis,["client_feedback","firm_observation","firm_hypothesis","unknown"],true) || !isEnum(goals.choice_basis,["client_feedback","firm_observation","firm_hypothesis","unknown"],true) ||
@@ -288,7 +294,7 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
       (goals.choice_priorities as string[]).includes("other") !== Boolean(String(goals.choice_detail).trim()) ||
       (practice.client_strength === "unknown" && (String(practice.client_strength_effect).trim() || String(practice.client_strength_support).trim()))) return false;
   }
-  if (!isEnum(practice.direction, ENUMS.practiceDirection, true) || ((version === "dcm-v3.1" || version === "dcm-v3.2") && (!isEnum(practice.experience, ENUMS.practiceExperience, true) || !isUniqueChoiceArray(practice.development_needs, ENUMS.developmentNeeds, 2) || !exclusive(practice.development_needs, "unknown") ||
+  if (!isEnum(practice.direction, ENUMS.practiceDirection, true) || ((version === "dcm-v3.1" || hasInterview) && (!isEnum(practice.experience, ENUMS.practiceExperience, true) || !isUniqueChoiceArray(practice.development_needs, ENUMS.developmentNeeds, 2) || !exclusive(practice.development_needs, "unknown") ||
       (practice.experience !== "adjacent" && practice.experience !== "new" && (practice.development_needs as unknown[]).length > 0) ||
       !isEnum(direction.less_reason, ENUMS.lessWorkReason, true) || (direction.less === null || direction.less === "none") && direction.less_reason !== null ||
       (practice.experience === "regular" && focus.route !== "established") || (practice.experience === "occasional" && focus.route !== "established") ||
@@ -332,6 +338,12 @@ export function validateLegacyV30DraftAnswers(value: unknown): boolean {
 export function validateLegacyV31DraftAnswers(value: unknown): boolean {
   if (!isRecord(value) || value.schema_version !== "dcm-v3.1" || !Number.isSafeInteger(value.revision) || (value.revision as number) < 0) return false;
   return validateAnswers(value, value.revision as number, false, "dcm-v3.1");
+}
+
+/** Strictly validates the exact v3.2 answer shape before adding the optional payment-context defaults. */
+export function validateLegacyV32DraftAnswers(value: unknown): boolean {
+  if (!isRecord(value) || value.schema_version !== "dcm-v3.2" || !Number.isSafeInteger(value.revision) || (value.revision as number) < 0) return false;
+  return validateAnswers(value, value.revision as number, false, "dcm-v3.2");
 }
 
 /** Validates an incomplete saved draft without rejecting a normal mid-edit state. */

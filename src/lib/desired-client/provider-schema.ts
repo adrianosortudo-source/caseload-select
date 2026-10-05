@@ -91,6 +91,7 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
       : slot.startsWith("definition_")
       ? "A concise fragment, at most 25 words and 240 characters. Put supporting details in the cards."
       : slot === "client_and_matter" ? "Copy the confirmed grounded_target claims exactly. Each may contain up to 95 words and 650 characters; do not shorten or paraphrase the supplied legal engagement."
+      : slot === "why_firm_wants_work" ? "One grounded claim, at most 50 words and 400 characters. Preserve separate payment and payment-context claims when their evidence bases differ; this card may contain up to seven claims so no commercial or capacity fact is dropped."
       : slot === "decision_pathway" ? "One concise statement, at most 30 words and 240 characters."
       : "One grounded claim, at most 50 words and 400 characters. Preserve additional detail in separate claims.";
     node.properties.text.description = `${textDescription} A simple count written as a word or digits is equivalent only for the same value (for example, “two matters” and “2 matters”). Keep its unit, currency, range and period faithful to the cited answer; never calculate, round or invent a figure.`;

@@ -236,6 +236,25 @@ export function paymentEvidenceClaim(answers:DesiredClientAnswers):EvidenceLinke
   if(answers.focus.route==="new"||answers.focus.route==="exploring")return linked(`Working assumption to test: ${description}. Basis not specified.`,"hypothesis",["value.payment"]);
   return unknownClaim("Payment predictability and its basis have not been established.","value.payment");
 }
+export function paymentContextEvidenceClaim(answers:DesiredClientAnswers):EvidenceLinkedStatement|null {
+  const note=answers.value.payment_context;
+  if(!note.trim())return null;
+  const paths:AnswerReferencePath[]=["value.payment_context","value.payment_context_basis"];
+  switch(answers.value.payment_context_basis){
+    case "client_feedback":return linked(`Client feedback reported by the firm: “${note}”` ,"client_reported",paths);
+    case "firm_observation":return linked(`Firm observation: “${note}”`,"firm_reported_observation",paths);
+    case "firm_hypothesis":return linked(`Firm hypothesis to test: “${note}”`,"hypothesis",paths);
+    case "unknown":return linked(`Payment context supplied by the firm: “${note}”. Not established.`,"unknown",paths);
+    default:return linked(`Payment context supplied by the firm: “${note}”. Basis not specified.`,"unknown",paths);
+  }
+}
+export function paymentEvidenceClaims(answers:DesiredClientAnswers):EvidenceLinkedStatement[] {
+  const payment=paymentEvidenceClaim(answers), context=paymentContextEvidenceClaim(answers);
+  if(payment&&context&&payment.kind===context.kind&&payment.evidence_basis===context.evidence_basis){
+    return [linked(`${payment.text} ${context.text}`,payment.evidence_basis,[...payment.source_answer_ids,...context.source_answer_ids])];
+  }
+  return [payment,context].filter((claim):claim is EvidenceLinkedStatement=>claim!==null);
+}
 function interviewClaims(answers:DesiredClientAnswers, stages:number[], prefix:string):EvidenceLinkedStatement[] {
   return answers.interview.followups.flatMap((item,index)=>{
     if(item.skipped||!stages.includes(item.stage)||!isInterviewClarificationCurrent(item,answers))return [];
@@ -274,12 +293,17 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const experiencePaths=knownPaths(answers,["practice.experience","practice.capability","practice.development_needs"]);
   const deliveryPaths=knownPaths(answers,["delivery.capacity","write_ins.capacity","repeatability.staffing_constraint","repeatability.additional_matters","direction.less_note","direction.less_reason"]);
   const rangePaths=knownPaths(answers,["value.collected_fee","value.team_hours"]);
-  const paymentClaim=paymentEvidenceClaim(answers);
+  const paymentClaims=paymentEvidenceClaims(answers);
+  const economicsClaim=economicsPaths.length?linked(`Matter economics supplied: ${economicsText}. ${answers.value.amount_basis==="recorded"||answers.value.amount_basis==="estimated"?"":"The evidence basis remains unconfirmed. "}These details do not establish net profit.`,answers.value.amount_basis==="recorded"?"firm_reported_recorded":answers.value.amount_basis==="estimated"?"firm_reported_estimate":"hypothesis",economicsPaths):null;
+  const rangeClaim=rangePaths.length?linked(`${answers.focus.route==="established"?"The firm reports":"Working assumption to test"}: fee range or team time: ${rangePaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")}. Basis not specified.`,answers.focus.route==="established"?"firm_reported_observation":"hypothesis",rangePaths):null;
+  // Payment and its context remain separate when their evidence bases differ.
+  // The firm-value card has a seven-claim allowance for this bounded case, so
+  // each statement keeps its own evidence basis and source citations.
+  const commercialClaims=[economicsClaim,rangeClaim].filter((claim):claim is EvidenceLinkedStatement=>claim!==null);
   const whyFirmClaims=[firmRationale,
     ...(experiencePaths.length?[linked(`Experience and development reported by the firm: ${facts(answers,experiencePaths)}.`,["regular","occasional","adjacent"].includes(answers.practice.experience??"")?"firm_reported_experience":"firm_preference",experiencePaths)]:[]),
-    ...(economicsPaths.length?[linked(`Matter economics supplied: ${economicsText}. ${answers.value.amount_basis==="recorded"||answers.value.amount_basis==="estimated"?"":"The evidence basis remains unconfirmed. "}These details do not establish net profit.`,answers.value.amount_basis==="recorded"?"firm_reported_recorded":answers.value.amount_basis==="estimated"?"firm_reported_estimate":"hypothesis",economicsPaths)]:[]),
-    ...(rangePaths.length?[linked(`${answers.focus.route==="established"?"The firm reports":"Working assumption to test"}: fee range or team time: ${rangePaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")}. Basis not specified.`,answers.focus.route==="established"?"firm_reported_observation":"hypothesis",rangePaths)]:[]),
-    ...(paymentClaim?[paymentClaim]:[]),
+    ...commercialClaims,
+    ...paymentClaims,
     ...(deliveryPaths.length?[linked(`Capacity, constraints and marketing trade-offs supplied: ${facts(answers,deliveryPaths)}.`,"firm_preference",deliveryPaths)]:[]),
     ...interviewClaims(answers,[3],"Clarification: ")];
 

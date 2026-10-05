@@ -99,7 +99,7 @@ export interface PendingWorkComparison {
   selected: "a" | "b";
 }
 export interface DesiredClientAnswers {
-  schema_version: "dcm-v3.2";
+  schema_version: "dcm-v3.3";
   revision: number;
   interview: { ai_clarification_consent: boolean; clarification_count: number; clarified_stages: InterviewStage[]; followups: InterviewClarificationAnswer[] };
   /** Optional for drafts saved before write-in answers were introduced. */
@@ -129,6 +129,8 @@ export interface DesiredClientAnswers {
     collected_fee: CollectedFeeId | null;
     team_hours: TeamHoursId | null;
     payment: PaymentId | null;
+    payment_context: string;
+    payment_context_basis: ClientInsightBasis | null;
     currency: string;
     fee_amount: string;
     direct_cost_amount: string;
@@ -150,7 +152,7 @@ export type AnswerReferencePath =
   | "client_context.geography" | "client_context.relevant_circumstances" | "client_context.community_focus" | "client_context.language_service_needs" | "client_context.repeat_matter_pattern"
   | "situation.trigger" | "situation.timing" | "situation.role" | "situation.role_other" | "situation.contact"
   | "client.goals" | "client.concerns" | "client.decision_needs" | "value.reasons" | "value.fee_effort" | "value.collected_fee"
-  | "value.team_hours" | "value.payment" | "value.currency" | "value.fee_amount" | "value.direct_cost_amount" | "value.amount_basis" | "value.amount_scope"
+  | "value.team_hours" | "value.payment" | "value.payment_context" | "value.payment_context_basis" | "value.currency" | "value.fee_amount" | "value.direct_cost_amount" | "value.amount_basis" | "value.amount_scope"
   | "delivery.conditions" | "delivery.capacity" | "delivery.limit" | "delivery.fit_signals"
   | "direction.aim" | "direction.evidence" | "direction.less" | "direction.less_reason" | "direction.less_note"
   | "opportunity.sources" | "opportunity.data_basis" | "opportunity.source_detail" | "opportunity.period" | "opportunity.enquiry_count" | "opportunity.retained_count" | "opportunity.conversion" | "opportunity.acquisition_cost" | "opportunity.uncertainty"
@@ -281,7 +283,7 @@ export interface AnalysisFailureEnvelope {
 }
 export interface SavedBrief {
   brief: SavedBriefContent;
-  sourceAnswersVersion?: "dcm-v2.2" | "dcm-v3.0" | "dcm-v3.1" | "dcm-v3.2";
+  sourceAnswersVersion?: "dcm-v2.2" | "dcm-v3.0" | "dcm-v3.1" | "dcm-v3.2" | "dcm-v3.3";
   sourceAnswersSnapshot?: unknown;
   sourceBriefRevision: number;
   generatedAt: string;

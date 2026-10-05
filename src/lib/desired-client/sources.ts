@@ -71,6 +71,8 @@ function questionLabel(path: AnswerReferencePath, answers: DesiredClientAnswers)
     "value.collected_fee": route === "established" ? "Typical collected fee, excluding disbursements" : "Fee range you are considering, excluding disbursements",
     "value.team_hours": "Typical total team time",
     "value.payment": "How predictable is payment?",
+    "value.payment_context": "Payment context supplied",
+    "value.payment_context_basis": "Source of payment context",
     "value.currency": "Currency for the supplied amounts",
     "value.fee_amount": "Fee amount or range",
     "value.direct_cost_amount": "Direct delivery cost amount or range",

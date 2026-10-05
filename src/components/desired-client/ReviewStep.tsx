@@ -1,7 +1,7 @@
 "use client";
 
 import { REVIEW_COPY, COMMON_COPY, WELCOME_COPY, STORAGE_COPY } from "@/lib/desired-client/copy";
-import { AREA_CATALOG, CAPACITY_LABELS, COLLECTED_FEE_LABELS, CONDITION_LABELS, DECISION_NEED_LABELS, DEVELOPMENT_NEED_LABELS, FIT_SIGNAL_LABELS, GOAL_LABELS, LESS_WORK_REASON_LABELS, LIMIT_LABELS, PAYMENT_LABELS, PRACTICE_EXPERIENCE_LABELS, PRACTICE_DIRECTION_LABELS, REASON_LABELS, TEAM_HOURS_LABELS, TIMING_LABELS, TRIGGER_LABELS, getFeeEffortLabel, getRoleLabel, getWorkLabel } from "@/lib/desired-client/catalog";
+import { AREA_CATALOG, CAPACITY_LABELS, CLIENT_INSIGHT_BASIS_LABELS, COLLECTED_FEE_LABELS, CONDITION_LABELS, DECISION_NEED_LABELS, DEVELOPMENT_NEED_LABELS, FIT_SIGNAL_LABELS, GOAL_LABELS, LESS_WORK_REASON_LABELS, LIMIT_LABELS, PAYMENT_LABELS, PRACTICE_EXPERIENCE_LABELS, PRACTICE_DIRECTION_LABELS, REASON_LABELS, TEAM_HOURS_LABELS, TIMING_LABELS, TRIGGER_LABELS, getFeeEffortLabel, getRoleLabel, getWorkLabel } from "@/lib/desired-client/catalog";
 import { STAGE_DEFINITIONS, getMissingFieldsForStage } from "@/lib/desired-client/screens";
 import { createAnswersDownload } from "@/lib/desired-client/export";
 import { calculateContribution } from "@/lib/desired-client/economics";
@@ -28,6 +28,8 @@ export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,b
     answers.value.collected_fee?COLLECTED_FEE_LABELS[answers.value.collected_fee]:"",
     answers.value.team_hours?TEAM_HOURS_LABELS[answers.value.team_hours]:"",
     answers.value.payment?PAYMENT_LABELS[answers.value.payment]:"",
+    answers.value.payment_context.trim()?`Payment context: ${answers.value.payment_context}`:"",
+    answers.value.payment_context.trim()?`Payment context source: ${answers.value.payment_context_basis?CLIENT_INSIGHT_BASIS_LABELS[answers.value.payment_context_basis]:"Basis not specified"}`:"",
     answers.value.fee_amount?(answers.value.currency?answers.value.currency+" ":"")+answers.value.fee_amount+" ("+valueLabel(answers.value.amount_basis,{"recorded":"recorded","estimated":"estimated","unknown":"basis unknown"})+")":"",
     answers.value.direct_cost_amount?"Direct cost: "+(answers.value.currency?answers.value.currency+" ":"")+answers.value.direct_cost_amount:"",
     valueLabel(answers.value.amount_scope,{per_matter:"Amounts are per matter",range:"Amounts are ranges across matters",other:"Amount basis described by the firm"}),

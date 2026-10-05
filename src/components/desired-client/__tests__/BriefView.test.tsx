@@ -8,7 +8,7 @@ import type { SavedBrief } from "@/lib/desired-client/types";
 
 function fixture() {
   const answers=completeAnswers();
-  const saved:SavedBrief={brief:buildStructuredBlueprintV4(answers),sourceAnswersVersion:"dcm-v3.2",sourceAnswersSnapshot:structuredClone(answers),sourceBriefRevision:answers.revision,generatedAt:"2026-10-05T12:00:00.000Z",wordingReviewed:false,mode:"structured"};
+  const saved:SavedBrief={brief:buildStructuredBlueprintV4(answers),sourceAnswersVersion:"dcm-v3.3",sourceAnswersSnapshot:structuredClone(answers),sourceBriefRevision:answers.revision,generatedAt:"2026-10-05T12:00:00.000Z",wordingReviewed:false,mode:"structured"};
   return {answers,saved};
 }
 
@@ -35,5 +35,19 @@ describe("Desired Client Blueprint definition review",()=>{
     saved.brief=buildStructuredBlueprintV4(answers);
     const {container}=render(<BriefView saved={saved} answers={answers} dismissedCode={null} reviewed={false} onReview={vi.fn()} onEdit={vi.fn()} onAnother={vi.fn()} onClear={vi.fn()} storageWarning={false}/>);
     expect(container.querySelector('[data-ui-component-content="desired-client-conditions"]')).toBeNull();
+  });
+
+  it("renders payment context and its exact source in the supporting answers",()=>{
+    const {answers,saved}=fixture();
+    const note="The firm observed that 8 of 10 buyers paid the first invoice within 15 days.";
+    answers.value.payment_context=note;
+    answers.value.payment_context_basis="firm_observation";
+    saved.brief=buildStructuredBlueprintV4(answers);
+    const {container}=render(<BriefView saved={saved} answers={answers} dismissedCode={null} reviewed={false} onReview={vi.fn()} onEdit={vi.fn()} onAnother={vi.fn()} onClear={vi.fn()} storageWarning={false}/>);
+    expect(container.textContent).toContain(note);
+    expect(container.textContent).toContain("Firm observation:");
+    expect(container.textContent).toContain("Payment context supplied");
+    expect(container.textContent).toContain("Source of payment context");
+    expect(container.textContent).toContain("The firm has observed this");
   });
 });

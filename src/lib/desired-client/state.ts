@@ -54,7 +54,7 @@ export function editAnswers(s:ToolState, edit:(answers:DesiredClientAnswers)=>De
     answers.situation.contact = null;
     answers.client = { ...answers.client, goals: [], goal_detail: "", concerns: [], decision_needs: [], decision_context: "", pathway_basis: null, choice_priorities: [], choice_detail: "", choice_basis: null };
     answers.client_context = { ...answers.client_context, geography: "", relevant_circumstances: "", community_focus: "", language_service_needs: "", repeat_matter_pattern: "", discovery_behaviour: "" };
-    answers.value = { ...answers.value, reasons: [], fee_effort: null, collected_fee: null, team_hours: null, payment: null, currency: "", fee_amount: "", direct_cost_amount: "", amount_basis: null, amount_scope: null };
+    answers.value = { ...answers.value, reasons: [], fee_effort: null, collected_fee: null, team_hours: null, payment: null, payment_context: "", payment_context_basis: null, currency: "", fee_amount: "", direct_cost_amount: "", amount_basis: null, amount_scope: null };
     answers.delivery = { ...answers.delivery, conditions: [], capacity: null, limit: null, fit_signals: [] };
     answers.opportunity = { sources: [], source_detail: "", period: "", enquiry_count: "", retained_count: "", conversion: "", acquisition_cost: "", uncertainty: "", data_basis: null };
     answers.repeatability = { success_measure: null, success_other: "", target: "", review_period: "", additional_matters: "", staffing_constraint: "" };
@@ -136,7 +136,7 @@ export function recordAiAttempt(s:ToolState):ToolState { if(!s.reviewRunId||s.lo
 export function failAnalysis(s:ToolState, error:"unavailable"|"invalid",retryAllowed=false):ToolState { return { ...s,view:"review",mode:"ai",savedBrief:null,briefNeedsUpdate:false,reviewed:false,activeClarification:null,loading:false,retryAllowed,error }; }
 export function applyAnalysis(s:ToolState, result:AnalysisResult):ToolState {
   if(result.clarification_code && (s.requestCount>=3 || !getEligibleClarificationCodes(s.answers,s.askedClarifications).includes(result.clarification_code))) return failAnalysis(s,"invalid");
-  const savedBrief:SavedBrief={brief:result.brief,sourceAnswersVersion:"dcm-v3.2",sourceAnswersSnapshot:structuredClone(s.answers),sourceBriefRevision:s.answers.revision,generatedAt:new Date().toISOString(),wordingReviewed:false,mode:"ai",...(result.clarification_code?{openClarificationCode:result.clarification_code}:{})};
+  const savedBrief:SavedBrief={brief:result.brief,sourceAnswersVersion:"dcm-v3.3",sourceAnswersSnapshot:structuredClone(s.answers),sourceBriefRevision:s.answers.revision,generatedAt:new Date().toISOString(),wordingReviewed:false,mode:"ai",...(result.clarification_code?{openClarificationCode:result.clarification_code}:{})};
   return { ...s,view:result.clarification_code?"clarification":"brief",savedBrief,briefNeedsUpdate:false,reviewed:false,reportNeedsRegeneration:false,activeClarification:result.clarification_code,loading:false,error:"",legacyBriefReplaced:false };
 }
 export function applyStructuredFallback(s:ToolState):ToolState {
@@ -144,7 +144,7 @@ export function applyStructuredFallback(s:ToolState):ToolState {
   const result = validateAnalysisResult({ brief: buildStructuredBlueprintV4(s.answers), clarification_code: null }, s.answers, []);
   if (!result) return { ...s, loading: false, retryAllowed: false, error: "structuredInvalid" };
   const savedBrief: SavedBrief = {
-    brief: result.brief, sourceAnswersVersion: "dcm-v3.2", sourceAnswersSnapshot: structuredClone(s.answers),
+    brief: result.brief, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: structuredClone(s.answers),
     sourceBriefRevision: s.answers.revision, generatedAt: new Date().toISOString(), wordingReviewed: false, mode: "structured",
   };
   return { ...s, view: "brief", mode: "structured", savedBrief, briefNeedsUpdate: false, reviewed: false, reportNeedsRegeneration: false, loading: false, retryAllowed: false, error: "", legacyBriefReplaced: false };
