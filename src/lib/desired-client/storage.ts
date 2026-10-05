@@ -87,7 +87,11 @@ function restoreSavedBrief(value: unknown, answers: DesiredClientAnswers): Saved
   if (value.mode === "structured") {
     const rebuilt = buildStructuredBrief(answers);
     const hasCurrentReportMarker = isRecord(brief) && brief.report_version === "dcm-blueprint-v4";
-    const exactAnswerSnapshot = value.sourceAnswersVersion === "dcm-v3.3" && isRecord(value.sourceAnswersSnapshot) && value.sourceAnswersSnapshot.schema_version === "dcm-v3.3" && value.sourceAnswersSnapshot.revision === answers.revision && validateDraftAnswers(value.sourceAnswersSnapshot) && sameJson(value.sourceAnswersSnapshot, answers);
+    const currentAnswerSnapshot = isRecord(value.sourceAnswersSnapshot) && value.sourceAnswersSnapshot.schema_version === "dcm-v3.3" && value.sourceAnswersSnapshot.revision === answers.revision && validateDraftAnswers(value.sourceAnswersSnapshot) && sameJson(value.sourceAnswersSnapshot, answers);
+    // A prior release could preserve the v3.2 label while already storing a v3.3
+    // snapshot. Treat that combination as an exact current-answer snapshot so a
+    // saved report can be refreshed once, while still rejecting mismatched data.
+    const exactAnswerSnapshot = (value.sourceAnswersVersion === "dcm-v3.3" || value.sourceAnswersVersion === "dcm-v3.2") && currentAnswerSnapshot;
     const reportMatchesCurrentBuilder = sameJson(brief, rebuilt);
     if (!hasCurrentReportMarker || (!reportMatchesCurrentBuilder && !exactAnswerSnapshot)) return undefined;
     const refreshRecord = reportMatchesCurrentBuilder ? refreshedFrom : (refreshedFrom ?? { generatedAt: new Date(Date.parse(value.generatedAt as string)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "structured" as const });

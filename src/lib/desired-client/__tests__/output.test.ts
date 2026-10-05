@@ -97,7 +97,7 @@ describe("AI Blueprint output contract", () => {
     const unknown=validateAnalysisResult(validBlueprint(answers),answers,[]);
     const unresolved=unknown!.brief.why_firm_wants_work.claims.find((claim)=>claim.source_answer_ids.includes("value.payment"));
     expect(unresolved?.evidence_basis).toBe("unknown");
-    expect(unresolved?.text).toContain("Not established.");
+    expect(unresolved?.text).toContain("Basis not specified.");
   });
   it("distinguishes an omitted payment-context basis from an explicit unknown basis",()=>{
     const answers=completeAnswers();
@@ -144,7 +144,7 @@ describe("AI Blueprint output contract", () => {
     const payment=built.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.payment"));
     expect(payment?.source_answer_ids).toEqual(["value.payment","value.payment_context","value.payment_context_basis"]);
     expect(payment?.text).toContain("Most buyers paid the first invoice within 15 days.");
-    expect(payment?.text).toContain("Usually predictable");
+    expect(payment?.text).toContain("payment is usually predictable");
     const validated=validateAnalysisResult(validBlueprint(answers),answers,[]);
     expect(validated).not.toBeNull();
     const all=JSON.stringify(validated);
