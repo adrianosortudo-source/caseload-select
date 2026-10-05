@@ -49,6 +49,29 @@ export function decodeProviderSources(value: unknown, aliases: Record<string, st
   return decoded;
 }
 
+/** The target is already confirmed. Select it by reference instead of asking
+ * the provider to reproduce long text/citation combinations in its schema. */
+export function providerTargetClaimIds(answers: DesiredClientAnswers): string[] {
+  return buildStructuredBlueprintV4(answers).client_and_matter.claims.map((_, index) => `target_claim_${index + 1}`);
+}
+
+export function decodeProviderTargetCard(value: unknown, answers: DesiredClientAnswers): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const root = value as Record<string, unknown>;
+  if (!root.brief || typeof root.brief !== "object" || Array.isArray(root.brief)) return value;
+  const brief = root.brief as Record<string, unknown>;
+  const card = brief.client_and_matter;
+  if (!card || typeof card !== "object" || Array.isArray(card)) return value;
+  const selection = card as Record<string, unknown>;
+  const expectedIds = providerTargetClaimIds(answers);
+  // Never replace arbitrary model prose or accept partial, reordered, duplicate
+  // or expanded selections. Invalid cards proceed to the independent validator.
+  if (Object.keys(selection).length !== 1 || !Array.isArray(selection.claim_ids) ||
+    selection.claim_ids.length !== expectedIds.length ||
+    !selection.claim_ids.every((id, index) => id === expectedIds[index])) return value;
+  return { ...root, brief: { ...brief, client_and_matter: buildStructuredBlueprintV4(answers).client_and_matter } };
+}
+
 export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown {
   const schema = providerStructureSchema(BLUEPRINT_RESPONSE_SCHEMA) as typeof BLUEPRINT_RESPONSE_SCHEMA;
   delete (schema.properties as {clarification_code?:unknown}).clarification_code;
@@ -145,18 +168,16 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
   for (const slot of ["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const) setPaths(sections[slot].properties.claims.items, slot);
   // The confirmed card can contain a current stage-two clarification as well
   // as the primary matter. Both are required by the grounding validator.
-  const targetClaims = groundedProfile.client_and_matter.claims;
-  const targetArray = sections.client_and_matter.properties.claims as unknown as {
-    minItems: number; maxItems: number; description: string;
-    items: { properties: { text: { enum?: string[] }; evidence_basis: { enum: readonly string[] }; source_answer_ids: { items: { enum?: string[] } } } };
+  const targetIds = providerTargetClaimIds(answers);
+  (sections as unknown as Record<string, unknown>).client_and_matter = {
+    type: "object",
+    properties: { claim_ids: {
+      type: "array", items: { type: "string", enum: targetIds },
+      minItems: targetIds.length, maxItems: targetIds.length,
+      description: "Copy grounded_target_claim_ids exactly in their supplied order, including the current clarification. The application resolves these references to the confirmed text, evidence status and citations before independently validating the report.",
+    } },
+    required: ["claim_ids"],
   };
-  targetArray.minItems = targetClaims.length;
-  targetArray.maxItems = targetClaims.length;
-  targetArray.description = "Copy every grounded_target.client_and_matter_claims statement exactly in its supplied order, including current clarification claims. Do not omit a clarification, add a claim, paraphrase its text, or change its evidence status.";
-  (targetArray.items.properties.text as {enum?: string[]}).enum = targetClaims.map(claim => claim.text);
-  (targetArray.items.properties.evidence_basis as {enum: readonly string[]}).enum = [...new Set(targetClaims.map(claim => claim.evidence_basis))];
-  (targetArray.items.properties.source_answer_ids.items as {enum?: string[]}).enum = Object.entries(aliases)
-    .filter(([, path]) => targetClaims.some(claim => claim.source_answer_ids.includes(path as AnswerReferencePath))).map(([id]) => id);
   for (const [field, statement] of Object.entries(sections.decision_pathway.properties)) {
     setPaths(statement, "decision_pathway");
     if (field === "first_contact" && !answers.situation.contact && !answers.write_ins?.contact?.trim()) {

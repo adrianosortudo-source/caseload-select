@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { completeAnswers, evidence, validBlueprint } from "./blueprint-helpers";
-import { decodeProviderSources, encodeProviderSources, providerBlueprintSchema, providerSourceAliases } from "../provider-schema";
+import { decodeProviderSources, decodeProviderTargetCard, encodeProviderSources, providerBlueprintSchema, providerSourceAliases, providerTargetClaimIds } from "../provider-schema";
 import { runDesiredClientAnalysis } from "../analyze";
 import { validateAnalysisResult } from "../output";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
@@ -23,16 +23,15 @@ describe("provider output contract", () => {
     expect(config.systemInstruction).toContain("“two matters” and “2 matters”");
     expect(config.generationConfig.responseSchema).toEqual(providerBlueprintSchema(request().answers));
     const aliases = providerSourceAliases(request().answers);
-    const sourceIds = config.generationConfig.responseSchema.properties.brief.properties.client_and_matter.properties.claims.items.properties.source_answer_ids.items.enum;
-    expect(sourceIds.map((id: string) => aliases[id])).not.toContain("practice.direction");
-    expect(sourceIds.map((id: string) => aliases[id])).toContain("client_context.repeat_matter_pattern");
+    const targetSelection = config.generationConfig.responseSchema.properties.brief.properties.client_and_matter;
+    expect(targetSelection.required).toEqual(["claim_ids"]);
+    expect(targetSelection.properties.claim_ids.items.enum).toEqual(["target_claim_1"]);
     const roleAlias = Object.keys(aliases).find(id => aliases[id] === "situation.role")!;
     expect(decodeProviderSources({source_answer_ids:[roleAlias,roleAlias,"invalid"]},aliases)).toEqual({source_answer_ids:["situation.role","invalid"]});
     expect(config.generationConfig.responseSchema.properties.brief.required).toContain("client_and_matter");
-    expect(config.generationConfig.responseSchema.properties.brief.properties.client_and_matter.properties.claims.maxItems).toBe(1);
+    expect(targetSelection.properties.claim_ids.maxItems).toBe(1);
     expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).toEqual(["firm_preference"]);
     expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).not.toContain("firm_reported_experience");
-    expect(sourceIds.map((id: string) => aliases[id])).not.toContain("client_context.geography");
     expect(config.generationConfig.responseSchema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.text.description).toContain("“two matters” and “2 matters”");
   });
   it("permits the complete five-source set required to ground a contribution claim", () => {
@@ -140,19 +139,50 @@ describe("provider output contract", () => {
     }] };
     const target = buildStructuredBlueprintV4(input.answers).client_and_matter;
     expect(target.claims).toHaveLength(2);
+    const reordered={brief:{client_and_matter:{claim_ids:["target_claim_2","target_claim_1"]}}};
+    expect(decodeProviderTargetCard(reordered,input.answers)).toBe(reordered);
     const aliases = providerSourceAliases(input.answers);
     const invalid = validBlueprint(input.answers);
     provider.generate.mockResolvedValueOnce({response:{text:()=>JSON.stringify(encodeProviderSources(invalid,aliases))}})
-      .mockResolvedValueOnce({response:{text:()=>JSON.stringify(encodeProviderSources(target,aliases))}});
+      .mockResolvedValueOnce({response:{text:()=>JSON.stringify({claim_ids:providerTargetClaimIds(input.answers)})}});
     const outcome = await runDesiredClientAnalysis(input,[]);
     expect(outcome.mode).toBe("live");
     expect(provider.generate).toHaveBeenCalledTimes(2);
-    const card = provider.configure.mock.calls[0][0].generationConfig.responseSchema.properties.brief.properties.client_and_matter.properties.claims;
+    const card = provider.configure.mock.calls[0][0].generationConfig.responseSchema.properties.brief.properties.client_and_matter.properties.claim_ids;
     expect(card.minItems).toBe(2); expect(card.maxItems).toBe(2);
-    expect(card.items.properties.text.enum).toEqual(target.claims.map(claim=>claim.text));
+    expect(card.items.enum).toEqual(["target_claim_1","target_claim_2"]);
     expect(JSON.parse(provider.generate.mock.calls[0][0]).grounded_target.client_and_matter_claims).toEqual(encodeProviderSources(target.claims,aliases));
     expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("including a current stage-two clarification");
     if(outcome.mode==="live") expect(outcome.result.brief.client_and_matter).toEqual(target);
+  });
+  it("resolves an explicit confirmed target reference without replacing other AI claims", async () => {
+    const input=request();
+    const original=validBlueprint(input.answers);
+    const compact=encodeProviderSources(original,providerSourceAliases(input.answers)) as {brief:Record<string,unknown>};
+    compact.brief.client_and_matter={claim_ids:providerTargetClaimIds(input.answers)};
+    provider.generate.mockResolvedValue({response:{text:()=>JSON.stringify(compact)}});
+    const outcome=await runDesiredClientAnalysis(input,[]);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(1);
+    const prompt=JSON.parse(provider.generate.mock.calls[0][0]);
+    expect(prompt.grounded_target_claim_ids).toEqual(["target_claim_1"]);
+    expect(prompt.instruction).toContain("all other cards remain AI-written grounded analysis");
+    if(outcome.mode==="live") {
+      expect(outcome.result.brief.client_and_matter).toEqual(buildStructuredBlueprintV4(input.answers).client_and_matter);
+      expect(outcome.result.brief.client_goals_needs).toEqual(original.brief.client_goals_needs);
+    }
+  });
+  it.each([
+    {claim_ids:[]},
+    {claim_ids:["target_claim_99"]},
+    {claim_ids:["target_claim_1","target_claim_1"]},
+    {claim_ids:["target_claim_1"],text:"Canadian billionaires"},
+  ])("never resolves a missing, invented, duplicate or expanded target selection: %j", card => {
+    const original={brief:{client_and_matter:card}};
+    expect(decodeProviderTargetCard(original,completeAnswers())).toBe(original);
+    const result=validBlueprint();
+    (result.brief as unknown as Record<string,unknown>).client_and_matter=card;
+    expect(validateAnalysisResult(decodeProviderTargetCard(result,completeAnswers()),completeAnswers(),[])).toBeNull();
   });
   it("rejects an invented target card even when the confirmed definition components are intact", async () => {
     const warning = vi.spyOn(console,"warn").mockImplementation(()=>{});
