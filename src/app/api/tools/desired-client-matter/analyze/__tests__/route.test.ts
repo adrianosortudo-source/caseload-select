@@ -287,8 +287,11 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const response = await POST(makeRequest(JSON.stringify(request)));
     expect(response.status).toBe(502);
     expect((await response.json()).error.code).toBe("INVALID_AI_OUTPUT");
-    expect(warn).toHaveBeenCalledWith("[desired-client] clarification output rejected", {
-      requestId: request.requestId, stage: request.stage, reason: "prompt_contract", validationCode: "purpose",
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]).toHaveLength(1);
+    expect(JSON.parse(warn.mock.calls[0][0] as string)).toEqual({
+      event: "desired_client_clarification_rejected", requestId: request.requestId,
+      stage: request.stage, reason: "prompt_contract", validationCode: "purpose", repairAttempts: 0,
     });
     expect(JSON.stringify(warn.mock.calls)).not.toContain(secretModelText);
     expect(JSON.stringify(warn.mock.calls)).not.toContain(JSON.stringify(request.answers));
