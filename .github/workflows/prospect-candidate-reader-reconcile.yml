@@ -1,0 +1,140 @@
+name: Read-only prospect candidate reader reconciliation
+
+'on':
+  workflow_dispatch:
+    inputs:
+      reviewed_source_sha:
+        description: Exact reviewed 40-character current main commit SHA.
+        required: true
+        type: string
+      use_temporary_database_credential:
+        description: Use the protected short-lived Supabase login for read-only queries and dry-run only.
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gta-prospect-migrations-production
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
+    name: Read-only reader-repair post-apply reconciliation
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: Production prospect migrations
+    env:
+      PROJECT_REF: ssxryjxifwiivghglqer
+      REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+      USE_TEMPORARY_DATABASE_CREDENTIAL: ${{ inputs.use_temporary_database_credential }}
+      CREDENTIAL_GATE: candidate-reader-repair
+    steps:
+      - name: Check out the exact reviewed main commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.reviewed_source_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact current main source and committed receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$REVIEWED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$REVIEWED_SOURCE_SHA" = "$(git rev-parse HEAD)"
+          test "$REVIEWED_SOURCE_SHA" = "$GITHUB_SHA"
+          git fetch --no-tags origin main
+          test "$REVIEWED_SOURCE_SHA" = "$(git rev-parse origin/main)"
+          node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs source > "$RUNNER_TEMP/reader-source-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs receipt > "$RUNNER_TEMP/additive-receipt-check.json"
+
+      - name: Load protected static database connection
+        if: ${{ !inputs.use_temporary_database_credential }}
+        env:
+          STATIC_MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$STATIC_MIGRATION_DATABASE_URL"
+          [[ "$STATIC_MIGRATION_DATABASE_URL" != *$'\n'* && "$STATIC_MIGRATION_DATABASE_URL" != *$'\r'* ]]
+          printf 'MIGRATION_DATABASE_URL=%s\n' "$STATIC_MIGRATION_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Request protected short-lived database authentication
+        if: inputs.use_temporary_database_credential
+        env:
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        shell: bash
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+
+      - name: Configure pinned database TLS
+        shell: bash
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.117.0
+
+      - name: Verify connection and exact reader migration sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(supabase --version)" = "2.117.0"
+          node scripts/prospect-enrichment/migration-gate.mjs connection > "$RUNNER_TEMP/connection-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" > "$RUNNER_TEMP/staged-inventory.json"
+          node scripts/prospect-enrichment/migration-gate.mjs verify-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" "$RUNNER_TEMP/staged-inventory.json" > "$RUNNER_TEMP/stage-check.json"
+
+      - name: Read full migration ledger and prove all source files are applied
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/full-ledger.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/full-ledger.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger.json" "$RUNNER_TEMP/reader-migrations" complete > "$RUNNER_TEMP/full-ledger-check.json"
+
+      - name: Verify all five exact reader-repair statements and catalog contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs target-ledger-query > "$RUNNER_TEMP/target-ledger.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/target-ledger.sql" --output json --agent no > "$RUNNER_TEMP/target-ledger.json"
+          node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs target-ledger "$RUNNER_TEMP/target-ledger.json" > "$RUNNER_TEMP/target-ledger-check.json"
+          node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs catalog-query > "$RUNNER_TEMP/reader-catalog.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/reader-catalog.sql" --output json --agent no > "$RUNNER_TEMP/reader-catalog.json"
+          node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs catalog "$RUNNER_TEMP/reader-catalog.json" > "$RUNNER_TEMP/reader-catalog-check.json"
+
+      - name: Require an empty read-only migration dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd "$RUNNER_TEMP/reader-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/post-plan.json"
+          PLAN_PHASE=post node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs plan "$RUNNER_TEMP/post-plan.json" "$RUNNER_TEMP/full-ledger-check.json" > "$RUNNER_TEMP/post-plan-check.json"
+
+      - name: Bind redacted reconciliation evidence to source and run
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e 'const fs=require("node:fs");const c=require("node:crypto");const r=JSON.parse(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json","utf8"));const hash=f=>c.createHash("sha256").update(fs.readFileSync(f)).digest("hex");fs.writeFileSync(process.env.RUNNER_TEMP+"/reconciliation-binding.json",JSON.stringify({runId:process.env.GITHUB_RUN_ID,sourceSha:process.env.REVIEWED_SOURCE_SHA,readerReceiptSha256:hash("scripts/prospect-enrichment/candidate-reader-repair-review.json"),additiveReceiptSha256:hash("scripts/prospect-enrichment/additive-release-review.json"),migrationCount:r.migrations.length,databaseWrites:0,writerCommands:0})+"\n");'
+
+      - name: Upload redacted read-only reconciliation evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prospect-reader-reconciliation-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/reader-source-check.json
+            ${{ runner.temp }}/additive-receipt-check.json
+            ${{ runner.temp }}/connection-check.json
+            ${{ runner.temp }}/staged-inventory.json
+            ${{ runner.temp }}/stage-check.json
+            ${{ runner.temp }}/full-ledger-check.json
+            ${{ runner.temp }}/target-ledger-check.json
+            ${{ runner.temp }}/reader-catalog-check.json
+            ${{ runner.temp }}/post-plan-check.json
+            ${{ runner.temp }}/reconciliation-binding.json
+          if-no-files-found: ignore
+          retention-days: 30

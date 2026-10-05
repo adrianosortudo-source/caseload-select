@@ -8,6 +8,8 @@ import {
   verifyReaderCatalog,
   verifyReaderRepairPlan,
   verifyReaderRepairReceipt,
+  targetLedgerQuery,
+  verifyTargetLedgerStatements,
 } from "../candidate-reader-repair-gate.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -80,4 +82,28 @@ test("reader catalog readback requires indexes, privileges and the refresh-trigg
     "apply_refresh_own_core_audit_excluded", "apply_refresh_current_identity_excluded"]) {
     assert.throws(() => verifyReaderCatalog([{ reader_contract: { ...catalogExpectations, [key]: false } }]), /reader_catalog_contract_mismatch/);
   }
+});
+
+test("target ledger query includes every reviewed reader-repair migration and rejects an incomplete read-back", () => {
+  const receipt = JSON.parse(fs.readFileSync(path.join(root, "scripts/prospect-enrichment/candidate-reader-repair-review.json"), "utf8"));
+  const versions = receipt.migrations.map(item => item.version);
+  const expectedQuery = `SELECT version,name,statements FROM supabase_migrations.schema_migrations WHERE version IN (${versions.map(version => `'${version}'`).join(",")}) ORDER BY version;\n`;
+  assert.equal(targetLedgerQuery(), expectedQuery);
+  assert.equal((targetLedgerQuery().match(/'\d{14}'/g) ?? []).length, 5);
+
+  const rows = receipt.migrations.map(({ version, name }) => ({ version, name, statements: ["SELECT 1"] }));
+  assert.throws(() => verifyTargetLedgerStatements(rows.slice(0, 4), root), /reader_repair_target_ledger_invalid/);
+});
+
+test("read-only reader reconciliation is protected and contains no database writer", () => {
+  const workflow = fs.readFileSync(path.join(root, ".github/workflows/prospect-candidate-reader-reconcile.yml"), "utf8");
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /environment:\s*\n\s+name: Production prospect migrations/);
+  assert.match(workflow, /candidate-reader-repair-gate\.mjs target-ledger-query/);
+  assert.match(workflow, /candidate-reader-repair-gate\.mjs target-ledger/);
+  assert.match(workflow, /candidate-reader-repair-gate\.mjs catalog/);
+  assert.match(workflow, /--dry-run/);
+  assert.doesNotMatch(workflow, /--yes/);
+  assert.equal((workflow.match(/supabase\s+db\s+push/g) ?? []).length, 1);
+  assert.match(workflow, /supabase db push[^\n]*--dry-run[^\n]*--include-all/);
 });

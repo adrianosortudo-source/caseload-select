@@ -210,7 +210,7 @@ jobs:
           node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/post-full-ledger.sql"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/post-full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/post-full-ledger.json"
           node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/post-full-ledger.json" "$RUNNER_TEMP/reader-migrations-immediate" complete > "$RUNNER_TEMP/post-full-ledger-check.json"
-          printf "SELECT version,name,statements FROM supabase_migrations.schema_migrations WHERE version IN ('20260930050000','20260930130000','20260930225510','20261004120000') ORDER BY version;\n" > "$RUNNER_TEMP/target-ledger.sql"
+          node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs target-ledger-query > "$RUNNER_TEMP/target-ledger.sql"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/target-ledger.sql" --output json --agent no > "$RUNNER_TEMP/target-ledger.json"
           node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs target-ledger "$RUNNER_TEMP/target-ledger.json" > "$RUNNER_TEMP/target-ledger-check.json"
           node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs catalog-query > "$RUNNER_TEMP/reader-catalog.sql"
