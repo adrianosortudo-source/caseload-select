@@ -250,6 +250,23 @@ describe("provider output contract", () => {
     expect(guidance).toContain("including a populated description of demand uncertainty");
     expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("The offending citation is opportunity.uncertainty");
   });
+  it("repairs a selected strength wrongly labelled as experience without upgrading its evidence", async () => {
+    const input = request();
+    input.answers.practice.client_strength = "matter_experience";
+    input.answers.practice.client_strength_effect = "Connect diligence findings to purchase agreement terms.";
+    const invalid = validBlueprint(input.answers);
+    invalid.brief.why_client_chooses_firm.claims = [evidence("The firm identifies relevant matter experience as a strength for this engagement.", "firm_reported_experience", "practice.client_strength")];
+    const repaired = {claims:[evidence("The firm identifies relevant matter experience as a strength for this engagement.", "firm_preference", "practice.client_strength")]};
+    provider.generate.mockResolvedValueOnce({response:{text:()=>JSON.stringify(invalid)}})
+      .mockResolvedValueOnce({response:{text:()=>JSON.stringify(repaired)}});
+    const outcome = await runDesiredClientAnalysis(input, []);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(2);
+    const instruction = provider.configure.mock.calls[1][0].systemInstruction;
+    expect(instruction).toContain("A chosen strength or its proposed benefit is a firm preference");
+    expect(instruction).toContain("Do not add an unrelated experience citation to upgrade a selected strength");
+    if (outcome.mode === "live") expect(outcome.result.brief.why_client_chooses_firm.claims[0].evidence_basis).toBe("firm_preference");
+  });
   it("repairs an unsupported first-contact claim as an explicit evidence gap", async () => {
     const input = request();
     input.answers.client.pathway_basis = "firm_observation";

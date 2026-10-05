@@ -153,7 +153,7 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
     (slot === "practice_current_practice"
       ? paths.length !== 1 || paths[0] !== "practice.firm_type"
       : !paths.some((path) => path === "practice.experience" || path === "practice.capability" || path === "practice.client_strength_support"))
-  )) return reject("experience_basis_mismatch");
+  )) return reject("experience_basis_mismatch", paths[0] as SafeSourcePath);
   if (value.evidence_basis === "client_reported" || value.evidence_basis === "firm_reported_observation") {
     const expected = value.evidence_basis === "client_reported" ? "client_feedback" : "firm_observation";
     const choice = paths.some(path => typeof path === "string" && path.startsWith("client.choice_"));
