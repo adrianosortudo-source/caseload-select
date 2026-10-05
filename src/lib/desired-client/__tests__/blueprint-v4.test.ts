@@ -6,6 +6,7 @@ import { buildDraftPreview } from "../brief";
 import { completeAnswers, evidence, validBlueprint } from "./blueprint-helpers";
 import { interviewClarificationSourceFingerprint } from "../types";
 import { buildBlueprintViewModel, REPORT_EDIT_LINKS } from "../blueprint";
+import { createHtmlDownload } from "../export";
 
 describe("v4 provenance and client pathway", () => {
   it("keeps the law firm out of the desired-client identity and does not approve a target on wording review", () => {
@@ -115,6 +116,30 @@ describe("v4 provenance and client pathway", () => {
     expect(brief.definition_components.client.text).toBe("an owner or founder in Ontario");
     expect(brief.recognizable_circumstances.claims[0].text).toContain(a.client_context.relevant_circumstances);
     expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
+  });
+  it("renders labelled fallback facts without joining full answers into broken sentences",()=>{
+    const a=completeAnswers();
+    a.client.goals=["complete"];
+    a.client.goal_detail="Understand included assets and liabilities, payment terms and closing obligations.";
+    a.client.decision_context="The owner decides and pays, with accountant input.";
+    a.client.pathway_basis="firm_observation";
+    a.practice.client_strength="matter_experience";
+    a.practice.client_strength_effect="Explain included assets and liabilities. Clarify payment and closing obligations.";
+    a.practice.client_strength_support="12 comparable matters in the last year.";
+    Object.assign(a.opportunity,{period:"Last 12 months",enquiry_count:"20",retained_count:"12",conversion:"60%",data_basis:"recorded",source_detail:"Comparable acquisitions."});
+    const brief=buildStructuredBlueprintV4(a);
+    const prose=JSON.stringify(brief);
+    expect(prose).toContain("Client goal: Complete a planned transaction or process. Practical benefit sought: Understand included assets and liabilities, payment terms and closing obligations.");
+    expect(prose).toContain("Firm-selected strength: Relevant matter experience. Practical effect described by the firm: Explain included assets and liabilities. Clarify payment and closing obligations.");
+    expect(prose).toContain("Comparable enquiries: 20; Retained matters: 12; Reported conversion: 60%");
+    expect(prose).not.toContain("obligations..");
+    expect(prose).not.toContain("input..");
+    expect(prose).not.toContain("The client is seeking Complete");
+    expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
+    const saved={brief,sourceAnswersVersion:"dcm-v3.2" as const,sourceAnswersSnapshot:structuredClone(a),sourceBriefRevision:a.revision,generatedAt:"2026-10-05T12:00:00.000Z",wordingReviewed:false,mode:"structured" as const};
+    const html=createHtmlDownload(saved,a,new Date(2026,9,5)).content;
+    expect(html).toContain("Comparable enquiries: 20; Retained matters: 12; Reported conversion: 60%");
+    expect(html).not.toContain("obligations..");
   });
   it("keeps a long accepted geography in recognition detail without breaking the client identity",()=>{
     const a=completeAnswers();

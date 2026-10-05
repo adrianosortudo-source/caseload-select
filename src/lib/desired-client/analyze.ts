@@ -16,7 +16,7 @@ const REPAIRABLE_CARDS = ["client_and_matter", "client_goals_needs", "why_firm_w
 
 export type DesiredClientAnalysisOutcome =
   | { mode: "live"; result: AnalysisResult }
-  | { mode: "invalid_output" }
+  | { mode: "invalid_output"; diagnostic: { field: string; reason: string } }
   | { mode: "unavailable" };
 
 export function desiredClientModelId(): string { return MODEL; }
@@ -77,7 +77,7 @@ export async function runDesiredClientAnalysis(
     try { parsed = JSON.parse(response.response.text()); }
     catch {
       logRejectedOutput(request.requestId, { field: "report", reason: "invalid_json" }, undefined, 0, finishReason);
-      return { mode: "invalid_output" };
+      return { mode: "invalid_output", diagnostic: { field: "report", reason: "invalid_json" } };
     }
     let validationFailure: AnalysisValidationFailure | null = null;
     const validate = () => {
@@ -108,6 +108,8 @@ export async function runDesiredClientAnalysis(
         ? pathwayBasisGuidance
         : failure.reason === "target_card_not_grounded_in_confirmed_answers"
         ? " Return exactly the claims array from grounded_target.client_and_matter_claims, in its supplied order. Copy every statement's text, evidence_basis and source_answer_ids unchanged, including a current stage-two clarification if present. Do not replace that clarification with an interpretation, omit it, or merge it into the primary matter. Do not add new client or engagement claims. Omit only the derived kind field."
+        : failure.reason === "negative_contribution_claim"
+        ? " The application calculated negative contribution from the supplied comparable fee and direct cost. Do not call this work profitable, worthwhile on fee grounds, or able to support the effort. State the firm's reported preference separately from the negative calculation, identify the contradiction, and describe what must be verified or changed before increasing volume. Do not invent a future fee, cost, margin or recovery plan."
         : failure.reason === "unknown_evidence_basis_mismatch"
         ? ` Separate each known statement from any unanswered or unknown finding. A known claim cites only known sources and its supported evidence basis; a gap claim cites only evidence_gap_source_ids and uses evidence_basis unknown (the application derives kind unknown). Populated descriptions of demand uncertainty and 'No evidence yet' are evidence gaps, not known demand.${failure.sourcePath ? ` The offending citation is ${failure.sourcePath}.` : ""} Never combine a known fact with a gap in one claim.`
         : failure.reason === "client_reported_basis_mismatch"
@@ -149,7 +151,12 @@ export async function runDesiredClientAnalysis(
         finishReason,
       );
     }
-    return result ? { mode: "live", result } : { mode: "invalid_output" };
+    if (result) return { mode: "live", result };
+    const finalFailure = validationFailure as AnalysisValidationFailure | null;
+    return { mode: "invalid_output", diagnostic: {
+      field: (finalFailure?.field ?? firstFailure?.field ?? "report").slice(0, 80),
+      reason: (finalFailure?.reason ?? firstFailure?.reason ?? "unclassified_validation_failure").slice(0, 80),
+    } };
   } catch (error) {
     // Provider exceptions can contain submitted text. Never log their messages.
     console.warn(JSON.stringify({

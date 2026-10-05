@@ -4,6 +4,8 @@ import { calculateContribution, hasNegativeContribution } from "./economics";
 import { isInterviewClarificationCurrent, type AnswerReferencePath, type DesiredClientAnswers, type DesiredClientBrief, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
 
 const clean = (value: string | null | undefined) => (value ?? "").trim().replace(/\s+/g, " ");
+const fragment = (value: string | null | undefined) => clean(value).replace(/[.;:]+$/u, "");
+const facts = (answers: DesiredClientAnswers, paths: AnswerReferencePath[]) => paths.map(path => fragment(text(answers, path))).filter(Boolean).join("; ");
 const bounded = (value: string, max=540, words=72) => {
   const clipped = value.length > max ? `${value.slice(0,max).replace(/\s+\S*$/u, "")}…` : value;
   const parts = clipped.split(/\s+/u);
@@ -238,12 +240,13 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
     :knownPaths(answers,["focus.work","focus.work_other","situation.trigger","write_ins.trigger","situation.timing"]);
   const clientMatter = matterPaths.length ? linked(matter,"hypothesis",matterPaths) : unknownClaim("The specific client role, situation and matter are still to be defined.","focus.work");
   const progressPaths=knownPaths(answers,["client.goals","client.goal_detail"]);
-  const progress=progressPaths.length ? linked(`The client is seeking ${[text(answers,"client.goals"),clean(answers.client.goal_detail)].filter(Boolean).join(": ")}.`,"hypothesis",progressPaths) : unknownClaim("The client's desired progress has not been established.","client.goals");
+  const progressParts=[progressPaths.includes("client.goals")?`Client goal: ${fragment(text(answers,"client.goals"))}`:"",progressPaths.includes("client.goal_detail")?`Practical benefit sought: ${fragment(answers.client.goal_detail)}`:""].filter(Boolean);
+  const progress=progressPaths.length ? linked(`${progressParts.join(". ")}.`,"hypothesis",progressPaths) : unknownClaim("The client's desired progress has not been established.","client.goals");
   const needPaths=knownPaths(answers,["client.concerns","client.decision_needs","client.decision_context","client_context.language_service_needs","client_context.community_focus"]);
-  const goalsClaims=[progress,...(needPaths.length?[linked(`Needs, concerns or decision participants noted by the firm: ${needPaths.map(path=>text(answers,path)).filter(Boolean).join("; ")}.`,"hypothesis",needPaths)]:[]),...interviewClaims(answers,[2],"Additional context supplied: ")].slice(0,6);
+  const goalsClaims=[progress,...(needPaths.length?[linked(`Needs, concerns or decision participants noted by the firm: ${facts(answers,needPaths)}.`,"hypothesis",needPaths)]:[]),...interviewClaims(answers,[2],"Additional context supplied: ")].slice(0,6);
 
   const reasonPaths=knownPaths(answers,["value.reasons","write_ins.reasons","practice.enjoys","value.fee_effort","write_ins.fee_effort"]).filter((path)=>path!=="value.reasons"||!answers.value.reasons.includes("undecided"));
-  const reasonLabels=reasonPaths.map(path=>text(answers,path)).filter(Boolean);
+  const reasonLabels=reasonPaths.map(path=>fragment(text(answers,path))).filter(Boolean);
   const firmRationale=reasonPaths.length?linked(`Reasons reported by the firm: ${reasonLabels.join("; ")||text(answers,"value.reasons")}.`,"firm_preference",reasonPaths):unknownClaim("The firm's reasons for wanting more of this work are not yet established.","value.reasons");
   const economicsPaths=knownPaths(answers,["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]);
   const contribution=calculateContribution(answers);
@@ -252,21 +255,21 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const deliveryPaths=knownPaths(answers,["delivery.capacity","write_ins.capacity","repeatability.staffing_constraint","repeatability.additional_matters","direction.less_note","direction.less_reason"]);
   const rangePaths=knownPaths(answers,["value.collected_fee","value.team_hours","value.payment"]);
   const whyFirmClaims=[firmRationale,
-    ...(experiencePaths.length?[linked(`Experience and development reported by the firm: ${experiencePaths.map(path=>text(answers,path)).join("; ")}.`,["regular","occasional","adjacent"].includes(answers.practice.experience??"")?"firm_reported_experience":"firm_preference",experiencePaths)]:[]),
+    ...(experiencePaths.length?[linked(`Experience and development reported by the firm: ${facts(answers,experiencePaths)}.`,["regular","occasional","adjacent"].includes(answers.practice.experience??"")?"firm_reported_experience":"firm_preference",experiencePaths)]:[]),
     ...(economicsPaths.length?[linked(`Matter economics supplied: ${economicsText}. ${answers.value.amount_basis==="recorded"||answers.value.amount_basis==="estimated"?"":"The evidence basis remains unconfirmed. "}These details do not establish net profit.`,answers.value.amount_basis==="recorded"?"firm_reported_recorded":answers.value.amount_basis==="estimated"?"firm_reported_estimate":"hypothesis",economicsPaths)]:[]),
     ...(rangePaths.length?[linked(`Fee range, effort or payment pattern supplied: ${rangePaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")}.`,"hypothesis",rangePaths)]:[]),
-    ...(deliveryPaths.length?[linked(`Capacity, constraints and marketing trade-offs supplied: ${deliveryPaths.map(path=>text(answers,path)).join("; ")}.`,"firm_preference",deliveryPaths)]:[]),
+    ...(deliveryPaths.length?[linked(`Capacity, constraints and marketing trade-offs supplied: ${facts(answers,deliveryPaths)}.`,"firm_preference",deliveryPaths)]:[]),
     ...interviewClaims(answers,[3],"Clarification: ")];
 
   const choiceBasis=insightBasis(answers.client.choice_basis);
   const choicePaths=knownPaths(answers,["client.choice_priorities","client.choice_detail","client.choice_basis"]);
-  const clientChoice=choicePaths.length&&choiceBasis!=="unknown"?linked(`Client choice factors ${answers.client.choice_basis==="client_feedback"?"reported by clients":answers.client.choice_basis==="firm_observation"?"observed by the firm":"treated as a hypothesis"}: ${choicePaths.map(path=>text(answers,path)).filter(Boolean).join("; ")}.`,choiceBasis,choicePaths):unknownClaim("Why this client would choose this firm is not yet established.","client.choice_basis");
+  const clientChoice=choicePaths.length&&choiceBasis!=="unknown"?linked(`Client choice factors ${answers.client.choice_basis==="client_feedback"?"reported by clients":answers.client.choice_basis==="firm_observation"?"observed by the firm":"treated as a hypothesis"}: ${facts(answers,choicePaths)}.`,choiceBasis,choicePaths):unknownClaim("Why this client would choose this firm is not yet established.","client.choice_basis");
   const strengthPaths=knownPaths(answers,["practice.client_strength","practice.client_strength_effect"]);
   const strength=answers.practice.client_strength&&answers.practice.client_strength!=="unknown"&&strengthPaths.length
-    ?linked(`The firm identifies ${getAnswerLabel("practice.client_strength",answers)} as relevant because ${clean(answers.practice.client_strength_effect)||"its effect on this matter still needs to be described"}.`,"firm_preference",strengthPaths)
+    ?linked(`Firm-selected strength: ${fragment(getAnswerLabel("practice.client_strength",answers))}. ${clean(answers.practice.client_strength_effect)?`Practical effect described by the firm: ${fragment(answers.practice.client_strength_effect)}.`:"Its effect on this matter still needs to be described."}`,"firm_preference",strengthPaths)
     :unknownClaim("A relevant firm strength has not yet been identified.","practice.client_strength");
   const supportPaths=knownPaths(answers,["practice.client_strength_support","practice.capability","practice.experience"]);
-  const strengthSupport=clean(answers.practice.client_strength_support)||clean(answers.practice.capability)?linked(`Support reported by the firm: ${supportPaths.map(path=>text(answers,path)).filter(Boolean).join("; ")}. This is not independent verification or a comparative claim.`,"firm_reported_experience",supportPaths):unknownClaim("Supporting experience or evidence for the stated strength was not supplied.","practice.client_strength_support");
+  const strengthSupport=clean(answers.practice.client_strength_support)||clean(answers.practice.capability)?linked(`Support reported by the firm: ${facts(answers,supportPaths)}. This is not independent verification or a comparative claim.`,"firm_reported_experience",supportPaths):unknownClaim("Supporting experience or evidence for the stated strength was not supplied.","practice.client_strength_support");
   const whyClientClaims=[clientChoice,strength,strengthSupport,...interviewClaims(answers,[4],"Clarification: ")].slice(0,6);
 
   const pathwayBasis=insightBasis(answers.client.pathway_basis);
@@ -274,7 +277,8 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
     const available=knownPaths(answers,paths);
     if(pathwayBasis==="unknown")return unknownClaim(`${missing} The basis for the supplied pathway information is still open.`,"client.pathway_basis");
     if(!available.length)return unknownClaim(missing,paths[0]??"client.pathway_basis");
-    const fact=available.map(path=>text(answers,path)).filter(Boolean).join("; ");
+    const pathwayLabels:Partial<Record<AnswerReferencePath,string>>={"situation.trigger":"Trigger","write_ins.trigger":"Additional trigger","situation.timing":"Stage","situation.contact":"First contact","situation.role":"Client role","client.decision_context":"Decision context","client.decision_needs":"Information needed","client.goals":"Client goal","client.goal_detail":"Practical benefit"};
+    const fact=available.map(path=>`${pathwayLabels[path]??"Context"}: ${fragment(text(answers,path))}`).join("; ");
     return linked(`${label}: ${fact}.`,pathwayBasis,unique([...available,"client.pathway_basis"]));
   };
   const decisionPathway={
@@ -285,15 +289,16 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   };
 
   const signalPaths=knownPaths(answers,["client_context.relevant_circumstances","client_context.geography","client_context.community_focus","client_context.language_service_needs","delivery.fit_signals","delivery.conditions"]);
-  const recognizability=signalPaths.length?linked(`Circumstances and early signs to recognize or confirm: ${signalPaths.map(path=>text(answers,path)).filter(Boolean).join("; ")}.`,"hypothesis",signalPaths):unknownClaim("Observable circumstances that distinguish this matter have not been supplied.","client_context.relevant_circumstances");
-  const recognizabilityClaims=[recognizability,...(answers.client_context.discovery_behaviour.trim()?[linked(`Discovery behaviour supplied by the firm, to confirm: ${clean(answers.client_context.discovery_behaviour)}.`,"hypothesis",["client_context.discovery_behaviour"])]:[]),...interviewClaims(answers,[5],"Clarification: ")].slice(0,6);
+  const recognizability=signalPaths.length?linked(`Circumstances and early signs to recognize or confirm: ${facts(answers,signalPaths)}.`,"hypothesis",signalPaths):unknownClaim("Observable circumstances that distinguish this matter have not been supplied.","client_context.relevant_circumstances");
+  const recognizabilityClaims=[recognizability,...(answers.client_context.discovery_behaviour.trim()?[linked(`Discovery behaviour supplied by the firm, to confirm: ${fragment(answers.client_context.discovery_behaviour)}.`,"hypothesis",["client_context.discovery_behaviour"])]:[]),...interviewClaims(answers,[5],"Clarification: ")].slice(0,6);
 
   const opportunityPaths=knownPaths(answers,["opportunity.source_detail","opportunity.period","opportunity.enquiry_count","opportunity.retained_count","opportunity.conversion","opportunity.data_basis","opportunity.acquisition_cost"]);
   const sources=answers.opportunity.sources.filter(source=>source!=="unknown").map(opportunityLabel);
   const evidenceClaim=sources.length&&!answers.opportunity.sources.includes("no_evidence")
     ?linked(`Sources the firm reports seeing: ${sources.join("; ")}. This does not by itself establish demand or acquisition cost.`,"source_observed",["opportunity.sources"])
     :unknownClaim("Evidence of access to and repeat demand from these clients has not been established.","opportunity.sources");
-  const detail=opportunityPaths.map(path=>text(answers,path)).filter(Boolean).join("; ");
+  const opportunityLabels:Partial<Record<AnswerReferencePath,string>>={"opportunity.source_detail":"Supporting detail","opportunity.period":"Review period","opportunity.enquiry_count":"Comparable enquiries","opportunity.retained_count":"Retained matters","opportunity.conversion":"Reported conversion","opportunity.data_basis":"Evidence basis","opportunity.acquisition_cost":"Acquisition cost"};
+  const detail=opportunityPaths.map(path=>`${opportunityLabels[path]??"Detail"}: ${fragment(text(answers,path))}`).join("; ");
   const evidenceClaims=[evidenceClaim,...(opportunityPaths.length?[linked(`Additional evidence or discovery behaviour supplied: ${detail}.`,answers.opportunity.data_basis==="recorded"?"firm_reported_recorded":answers.opportunity.data_basis==="estimated"?"firm_reported_estimate":"hypothesis",opportunityPaths)]:[]),...interviewClaims(answers,[6],"Clarification: ")].slice(0,6);
   const gaps:EvidenceLinkedStatement[]=[];
   if(answers.client.choice_basis==="unknown"||!answers.client.choice_basis)gaps.push(unknownClaim("Client choice criteria still need confirmation with client feedback or observed evidence.","client.choice_basis"));
