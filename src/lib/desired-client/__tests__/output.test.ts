@@ -169,6 +169,16 @@ describe("AI Blueprint output contract", () => {
     result.brief.why_firm_wants_work.claims=[evidence("The contribution is $3,200.00 per matter.","firm_reported_recorded","value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope")];
     expect(validateAnalysisResult(result,answers,[])).toBeNull();
   });
+  it("preserves a selected fee preference without claiming positive economics when the figures are negative",()=>{
+    const answers=completeAnswers();
+    answers.value.reasons=["client_benefit","fees","skills"];
+    Object.assign(answers.value,{fee_amount:"8000",direct_cost_amount:"8500",currency:"CAD",amount_basis:"recorded",amount_scope:"per_matter"});
+    const brief=buildStructuredBlueprintV4(answers);
+    const rationale=brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.reasons"));
+    expect(rationale?.text).toContain("fee sustainability as a firm preference");
+    expect(rationale?.text).not.toMatch(/\bfees? (?:are )?worthwhile\b|\bfees? support(?:s)? the effort\b/i);
+    expect(validateAnalysisResult({brief,clarification_code:null},answers,[])).not.toBeNull();
+  });
   it("accepts an accurate negative result and a growth prerequisite without blessing positive economics",()=>{
     const answers=completeAnswers();
     Object.assign(answers.value,{fee_amount:"8000",direct_cost_amount:"10000",currency:"CAD",amount_basis:"estimated",amount_scope:"per_matter"});

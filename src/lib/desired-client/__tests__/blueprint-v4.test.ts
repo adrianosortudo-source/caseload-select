@@ -199,6 +199,15 @@ describe("v4 provenance and client pathway", () => {
     unsupported.brief.why_firm_wants_work.claims[0].source_answer_ids=["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"];
     expect(validateAnalysisResult(unsupported,a,[])).toBeNull();
   });
+  it("explains when the firm's fee-support preference conflicts with negative contribution",()=>{
+    const a=completeAnswers();
+    a.value.reasons=["client_benefit","fees","skills"];
+    a.value.fee_amount="8000"; a.value.direct_cost_amount="8500"; a.value.currency="CAD"; a.value.amount_scope="per_matter"; a.value.amount_basis="recorded";
+    const brief=buildStructuredBlueprintV4(a);
+    const view=buildBlueprintViewModel(brief,a,{mode:"structured",generatedAt:"2026-10-01T12:00:00.000Z",wordingReviewed:false});
+    expect(view.conditions.some(condition=>condition.includes("selected fee sustainability as a reason")&&condition.includes("negative contribution of -$500.00"))).toBe(true);
+    expect(view.definition).toContain("preference needs to be reconciled with the negative contribution");
+  });
   it("labels clarification answers by the kind of information they contribute", () => {
     const a=completeAnswers();
     a.interview.followups=[
