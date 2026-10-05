@@ -130,7 +130,8 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
   // These components are already determined from the firm's answers. A single
   // enum value prevents the provider's prose instructions from paraphrasing a
   // target that the unchanged grounding validator must reject.
-  const grounded = buildStructuredBlueprintV4(answers).definition_components;
+  const groundedProfile = buildStructuredBlueprintV4(answers);
+  const grounded = groundedProfile.definition_components;
   for (const key of ["client", "client_matter", "reasons"] as const) {
     const node = sections.definition_components.properties[key];
     (node.properties.text as {enum?: string[]}).enum = [grounded[key].text];
@@ -142,6 +143,17 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     sourceCount.maxItems = grounded[key].source_answer_ids.length;
   }
   for (const slot of ["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const) setPaths(sections[slot].properties.claims.items, slot);
+  // The confirmed card can contain a current stage-two clarification as well
+  // as the primary matter. Both are required by the grounding validator.
+  const targetClaims = groundedProfile.client_and_matter.claims;
+  const targetArray = sections.client_and_matter.properties.claims as typeof sections.client_and_matter.properties.claims & { minItems: number; maxItems: number; description: string };
+  targetArray.minItems = targetClaims.length;
+  targetArray.maxItems = targetClaims.length;
+  targetArray.description = "Copy every grounded_target.client_and_matter_claims statement exactly in its supplied order, including current clarification claims. Do not omit a clarification, add a claim, paraphrase its text, or change its evidence status.";
+  (targetArray.items.properties.text as {enum?: string[]}).enum = targetClaims.map(claim => claim.text);
+  (targetArray.items.properties.evidence_basis as {enum: readonly string[]}).enum = [...new Set(targetClaims.map(claim => claim.evidence_basis))];
+  (targetArray.items.properties.source_answer_ids.items as {enum?: string[]}).enum = Object.entries(aliases)
+    .filter(([, path]) => targetClaims.some(claim => claim.source_answer_ids.includes(path as AnswerReferencePath))).map(([id]) => id);
   for (const [field, statement] of Object.entries(sections.decision_pathway.properties)) {
     setPaths(statement, "decision_pathway");
     if (field === "first_contact" && !answers.situation.contact && !answers.write_ins?.contact?.trim()) {

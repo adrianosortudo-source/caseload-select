@@ -3,6 +3,8 @@ import { completeAnswers, evidence, validBlueprint } from "./blueprint-helpers";
 import { decodeProviderSources, encodeProviderSources, providerBlueprintSchema, providerSourceAliases } from "../provider-schema";
 import { runDesiredClientAnalysis } from "../analyze";
 import { validateAnalysisResult } from "../output";
+import { buildStructuredBlueprintV4 } from "../structured-blueprint";
+import { interviewClarificationSourceFingerprint } from "../types";
 import type { AnalysisRequestEnvelope } from "../types";
 
 const provider = vi.hoisted(() => ({ configure: vi.fn(), generate: vi.fn() }));
@@ -23,11 +25,11 @@ describe("provider output contract", () => {
     const aliases = providerSourceAliases(request().answers);
     const sourceIds = config.generationConfig.responseSchema.properties.brief.properties.client_and_matter.properties.claims.items.properties.source_answer_ids.items.enum;
     expect(sourceIds.map((id: string) => aliases[id])).not.toContain("practice.direction");
-    expect(sourceIds.map((id: string) => aliases[id])).toContain("focus.work");
+    expect(sourceIds.map((id: string) => aliases[id])).toContain("client_context.repeat_matter_pattern");
     const roleAlias = Object.keys(aliases).find(id => aliases[id] === "situation.role")!;
     expect(decodeProviderSources({source_answer_ids:[roleAlias,roleAlias,"invalid"]},aliases)).toEqual({source_answer_ids:["situation.role","invalid"]});
     expect(config.generationConfig.responseSchema.properties.brief.required).toContain("client_and_matter");
-    expect(config.generationConfig.responseSchema.properties.brief.properties.client_and_matter.properties.claims.maxItems).toBeUndefined();
+    expect(config.generationConfig.responseSchema.properties.brief.properties.client_and_matter.properties.claims.maxItems).toBe(1);
     expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).toEqual(["firm_preference"]);
     expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).not.toContain("firm_reported_experience");
     expect(sourceIds.map((id: string) => aliases[id])).not.toContain("client_context.geography");
@@ -126,6 +128,39 @@ describe("provider output contract", () => {
     provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(invalid) } });
     expect((await runDesiredClientAnalysis(request(), [])).mode).toBe("invalid_output");
     expect(warning).toHaveBeenCalledWith(expect.stringContaining('"reason":"target_not_grounded_in_confirmed_answers"'));
+    warning.mockRestore();
+  });
+  it("requires all confirmed target claims and repairs an omitted current clarification", async () => {
+    const input = request();
+    const paths = ["client_context.repeat_matter_pattern"] as const;
+    input.answers.interview = { ai_clarification_consent:true, clarification_count:1, clarified_stages:[2], followups:[{
+      id:"33333333-3333-4333-8333-333333333333", stage:2, purpose:"client_matter_specificity",
+      source_answer_ids:[...paths], source_answer_fingerprint:interviewClarificationSourceFingerprint(input.answers,[...paths]),
+      question:"Which part of this engagement should remain the focus?", answer:"Buyer-side asset purchase agreement review before terms are agreed.", skipped:false,
+    }] };
+    const target = buildStructuredBlueprintV4(input.answers).client_and_matter;
+    expect(target.claims).toHaveLength(2);
+    const aliases = providerSourceAliases(input.answers);
+    const invalid = validBlueprint(input.answers);
+    provider.generate.mockResolvedValueOnce({response:{text:()=>JSON.stringify(encodeProviderSources(invalid,aliases))}})
+      .mockResolvedValueOnce({response:{text:()=>JSON.stringify(encodeProviderSources(target,aliases))}});
+    const outcome = await runDesiredClientAnalysis(input,[]);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(2);
+    const card = provider.configure.mock.calls[0][0].generationConfig.responseSchema.properties.brief.properties.client_and_matter.properties.claims;
+    expect(card.minItems).toBe(2); expect(card.maxItems).toBe(2);
+    expect(card.items.properties.text.enum).toEqual(target.claims.map(claim=>claim.text));
+    expect(JSON.parse(provider.generate.mock.calls[0][0]).grounded_target.client_and_matter_claims).toEqual(encodeProviderSources(target.claims,aliases));
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("including a current stage-two clarification");
+    if(outcome.mode==="live") expect(outcome.result.brief.client_and_matter).toEqual(target);
+  });
+  it("rejects an invented target card even when the confirmed definition components are intact", async () => {
+    const warning = vi.spyOn(console,"warn").mockImplementation(()=>{});
+    const invalid = validBlueprint();
+    invalid.brief.client_and_matter.claims=[evidence("Canadian billionaires seek leveraged buyout advice.","hypothesis","focus.work")];
+    provider.generate.mockResolvedValue({response:{text:()=>JSON.stringify(invalid)}});
+    expect((await runDesiredClientAnalysis(request(),[])).mode).toBe("invalid_output");
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('"reason":"target_card_not_grounded_in_confirmed_answers"'));
     warning.mockRestore();
   });
   it("records a truncated response's safe finish reason without its text", async () => {

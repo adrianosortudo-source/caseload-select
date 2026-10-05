@@ -105,6 +105,8 @@ export async function runDesiredClientAnalysis(
         ? " The submitted answers do not establish who initiates first contact or how the client reaches the firm. State that gap plainly, cite only situation.contact, and use evidence_basis unknown. Do not infer contact behaviour from the client's role, timing or decision context, and do not label the gap client_reported or firm_reported_observation."
         : pathwayBasisGuidance
         ? pathwayBasisGuidance
+        : failure.reason === "target_card_not_grounded_in_confirmed_answers"
+        ? " Return exactly the claims array from grounded_target.client_and_matter_claims, in its supplied order. Copy every statement's text, evidence_basis and source_answer_ids unchanged, including a current stage-two clarification if present. Do not replace that clarification with an interpretation, omit it, or merge it into the primary matter. Do not add new client or engagement claims. Omit only the derived kind field."
         : failure.reason === "unknown_evidence_basis_mismatch"
         ? ` Separate each known statement from any unanswered or unknown finding. A known claim cites only known sources and its supported evidence basis; a gap claim cites only evidence_gap_source_ids and uses evidence_basis unknown (the application derives kind unknown). Populated descriptions of demand uncertainty and 'No evidence yet' are evidence gaps, not known demand.${failure.sourcePath ? ` The offending citation is ${failure.sourcePath}.` : ""} Never combine a known fact with a gap in one claim.`
         : failure.reason === "client_reported_basis_mismatch"
