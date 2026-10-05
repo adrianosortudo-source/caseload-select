@@ -3,9 +3,24 @@ import { createAnswersDownload, createHtmlDownload, createProfileDownload, forma
 import { getSourceDetails } from "../sources";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { completeAnswers, validBlueprint } from "./blueprint-helpers";
-import type { LegacyDesiredClientBriefV1, SavedBrief } from "../types";
+import { interviewClarificationSourceFingerprint, type LegacyDesiredClientBriefV1, type SavedBrief } from "../types";
 describe("Blueprint exports", () => {
   const setup = () => { const answers = completeAnswers(), saved: SavedBrief = { brief: buildStructuredBlueprintV4(answers), sourceAnswersSnapshot: answers, sourceAnswersVersion: "dcm-v3.2", sourceBriefRevision: answers.revision, generatedAt: "2026-09-26T12:00:00.000Z", wordingReviewed: false, mode: "structured" }; return { answers, saved }; };
+  it("preserves older clarification history with a reconfirmation label after its source changes", () => {
+    const {answers,saved}=setup();
+    Object.assign(answers.value,{fee_amount:"8000",direct_cost_amount:"10000",currency:"CAD",amount_basis:"estimated",amount_scope:"per_matter"});
+    const paths=["value.fee_amount","value.direct_cost_amount"] as const;
+    answers.interview.followups=[{id:"11111111-1111-4111-8111-111111111111",stage:3,purpose:"economics_effort_conflict",source_answer_ids:[...paths],source_answer_fingerprint:interviewClarificationSourceFingerprint(answers,paths),question:"Does the C$10,000 cost cover the same scope?",answer:"These are estimates for the same scope.",skipped:false}];
+    expect(getSourceDetails("interview.followups.0",answers).question).toBe("Does the C$10,000 cost cover the same scope?");
+    answers.value.direct_cost_amount="4800";
+    saved.brief=buildStructuredBlueprintV4(answers);
+    const question=getSourceDetails("interview.followups.0",answers).question;
+    expect(question).toBe("Earlier clarification (reconfirm before use): Does the C$10,000 cost cover the same scope?");
+    expect(formatBriefHtml(saved,answers)).toContain(question);
+    expect(formatBriefMarkdown(saved,answers)).toContain(question);
+    expect(createAnswersDownload(answers,new Date(2026,8,26)).content).toContain(question);
+    expect(formatBriefText(saved,answers)).not.toContain("C$10,000");
+  });
   it("exports the synthesis and evidence cards, not an answer inventory", () => { const { answers, saved } = setup(), text = formatBriefText(saved, answers); expect(text).toContain((saved.brief as ReturnType<typeof buildStructuredBlueprintV4>).definition_sentence); expect(text).toContain("WHY THIS WORK"); expect(text).toContain("DESIRED CLIENT AND MATTER"); expect(text).toContain("EVIDENCE & OPEN QUESTIONS"); expect(text).not.toContain("What would you like the lawyer to help you with?"); });
   it("provides a print-ready HTML download with six cards and no PDF route", () => { const { answers, saved } = setup(), html = formatBriefHtml(saved, answers); expect(html).toContain("@media print"); expect(html).toContain("Evidence &amp; open questions"); expect(html).not.toContain("Download PDF"); expect(html).not.toContain("application/pdf"); const download = createHtmlDownload(saved, answers, new Date(2026, 8, 26)); expect(download.filename).toBe("desired-client-blueprint-2026-09-26.html"); expect(download.content).toBe(html); });
   it("keeps the client and matter distinct and the decision pathway separate in v4 outputs", () => {
