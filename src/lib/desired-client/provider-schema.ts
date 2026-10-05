@@ -132,7 +132,7 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
   for (const key of ["client", "client_matter", "reasons"] as const) {
     const node = sections.definition_components.properties[key];
     (node.properties.text as {enum?: string[]}).enum = [grounded[key].text];
-    (node.properties.evidence_basis as {enum: string[]}).enum = [grounded[key].evidence_basis];
+    (node.properties.evidence_basis as {enum: readonly string[]}).enum = [grounded[key].evidence_basis];
     (node.properties.source_answer_ids.items as {enum?: string[]}).enum = Object.entries(aliases)
       .filter(([, path]) => grounded[key].source_answer_ids.includes(path as AnswerReferencePath)).map(([id]) => id);
     const sourceCount = node.properties.source_answer_ids as {minItems: number; maxItems: number};
