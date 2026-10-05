@@ -12,7 +12,10 @@ const mocks = vi.hoisted(() => ({
   ipFromRequest: vi.fn(() => "203.0.113.42"),
   rateLimitHeaders: vi.fn(() => ({ "Retry-After": "60", "X-RateLimit-Limit": "20" })),
 }));
-vi.mock("@google/generative-ai", () => ({ GoogleGenerativeAI: mocks.GoogleGenerativeAI }));
+vi.mock("@google/generative-ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@google/generative-ai")>();
+  return { ...actual, GoogleGenerativeAI: mocks.GoogleGenerativeAI };
+});
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: mocks.checkRateLimit,
   ipFromRequest: mocks.ipFromRequest,

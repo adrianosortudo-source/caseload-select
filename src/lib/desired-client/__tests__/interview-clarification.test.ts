@@ -204,7 +204,7 @@ describe("provider follow-up response contract", () => {
     ["unpopulated source", askResponse({ source_answer_ids: ["value.fee_amount"] }), "sources"],
     ["duplicate source", askResponse({ source_answer_ids: ["practice.direction", "practice.direction"] }), "sources"],
     ["overlong question", askResponse({ question: "x".repeat(INTERVIEW_CLARIFICATION_LIMITS.questionCharacters + 1) }), "question"],
-    ["newline in question", askResponse({ question: "First line\\nsecond line" }), "question"],
+    ["newline in question", askResponse({ question: "First line\nsecond line" }), "question"],
     ["one choice", askResponse({ choices: [{ label: "Only one" }] }), "choices"],
     ["choice ID supplied by model", askResponse({ choices: [{ id: "model-id", label: "One" }, { label: "Two" }] }), "choices"],
     ["overlong choice label", askResponse({ choices: [{ label: "x".repeat(INTERVIEW_CLARIFICATION_LIMITS.choiceLabelCharacters + 1) }, { label: "Other" }] }), "choices"],
