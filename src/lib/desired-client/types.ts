@@ -277,7 +277,7 @@ export interface AnalysisSuccessEnvelope {
 export interface AnalysisFailureEnvelope {
   ok: false;
   requestId: string;
-  error: { code: AnalysisFailureCode };
+  error: { code: AnalysisFailureCode; diagnostic?: { field: string; reason: string } };
 }
 export interface SavedBrief {
   brief: SavedBriefContent;

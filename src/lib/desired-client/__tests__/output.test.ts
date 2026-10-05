@@ -146,6 +146,24 @@ describe("AI Blueprint output contract", () => {
     result.brief.why_firm_wants_work.claims=[evidence("The contribution is $3,200.00 per matter.","firm_reported_recorded","value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope")];
     expect(validateAnalysisResult(result,answers,[])).toBeNull();
   });
+  it("accepts an accurate negative result and a growth prerequisite without blessing positive economics",()=>{
+    const answers=completeAnswers();
+    Object.assign(answers.value,{fee_amount:"8000",direct_cost_amount:"10000",currency:"CAD",amount_basis:"estimated",amount_scope:"per_matter"});
+    const result=validBlueprint(answers);
+    const original=result.brief.why_firm_wants_work.claims;
+    const economics=["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"] as const;
+    result.brief.why_firm_wants_work.claims=[evidence("The work is not profitable at the supplied fee and direct cost.","firm_reported_estimate",...economics)];
+    expect(validateAnalysisResult(result,answers,[])).not.toBeNull();
+    result.brief.why_firm_wants_work.claims=[evidence("Before growing this work, the firm needs to establish positive contribution.","firm_preference","value.reasons","delivery.capacity")];
+    expect(validateAnalysisResult(result,answers,[])).not.toBeNull();
+    result.brief.why_firm_wants_work.claims=[evidence("Positive contribution remains to be verified.","firm_reported_estimate",...economics)];
+    expect(validateAnalysisResult(result,answers,[])).not.toBeNull();
+    result.brief.why_firm_wants_work.claims=[evidence("The work is not profitable, but fees are worthwhile.","firm_reported_estimate",...economics)];
+    expect(validateAnalysisResult(result,answers,[])).toBeNull();
+    result.brief.why_firm_wants_work.claims=[evidence("The work is profitable at the supplied fee and direct cost.","firm_reported_estimate",...economics)];
+    expect(validateAnalysisResult(result,answers,[])).toBeNull();
+    result.brief.why_firm_wants_work.claims=original;
+  });
   it("allows a specific matter term when the firm supplies it", () => {
     const answers=completeAnswers();
     answers.client_context.repeat_matter_pattern="Ontario owners buying a family-owned manufacturer through an asset purchase agreement.";

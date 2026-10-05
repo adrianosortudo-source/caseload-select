@@ -23,7 +23,9 @@ export function enterTool(restored?:{answers:DesiredClientAnswers;stage:StageId;
   const savedBrief=restored?.savedBrief;
   const stage=restored?.stage??1;
   return { ...initialToolState(), view:savedBrief?"brief":stage===7?"review":"questions", mode:savedBrief?.mode??"ai", answers:restored?.answers??emptyAnswers(), stage,
-    visitedStages:restored?[1,2,3,4,5,6,7].filter(n=>n<stage) as StageId[]:[], savedBrief:savedBrief??null, reviewed:savedBrief?.wordingReviewed??false, reportNeedsRegeneration:restored?.reportNeedsRegeneration===true, dismissedCode:savedBrief?.openClarificationCode??null,legacyBriefReplaced:false };
+    // A saved report proves the interview reached review. Its persisted stage
+    // may be an earlier section opened for editing just before a reload.
+    visitedStages:(savedBrief?[1,2,3,4,5,6,7]:restored?[1,2,3,4,5,6,7].filter(n=>n<stage):[]) as StageId[], savedBrief:savedBrief??null, reviewed:savedBrief?.wordingReviewed??false, reportNeedsRegeneration:restored?.reportNeedsRegeneration===true, dismissedCode:savedBrief?.openClarificationCode??null,legacyBriefReplaced:false };
 }
 export function canEnterStage(s:ToolState, stage:StageId):boolean {
   if(stage===7) return [1,2,3,4,5,6].every(n=>getMissingFieldsForStage(n as StageId,s.answers).length===0) && s.stagesToRevisit.length===0;

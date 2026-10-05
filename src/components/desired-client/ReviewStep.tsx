@@ -14,9 +14,9 @@ const CLIENT_CHOICE:Record<string,string>={relevant_experience:"Experience with 
 const FIRM_STRENGTH:Record<string,string>={matter_experience:"Relevant experience with this matter",specialist_knowledge:"Specific knowledge the matter calls for",clear_advice:"Clear explanation of options and consequences",practical_approach:"A practical approach to the client's goal",responsive_service:"A service approach that fits the client's needs",language_or_community:"Language or community-informed service",other:"Another strength",unknown:"Not established yet"};
 const filled=(...values:Array<string|null|undefined>)=>values.filter((value):value is string=>Boolean(value?.trim()));
 const valueLabel=(value:string|null|undefined,labels:Record<string,string>)=>value?labels[value]??value:"";
-export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,briefNeedsUpdate,loading,error,retryAllowed,legacyBriefReplaced=false,aiAvailable=true,reportNeedsRegeneration=false}:{
+export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,briefNeedsUpdate,loading,error,retryAllowed,legacyBriefReplaced=false,aiAvailable=true,reportNeedsRegeneration=false,failureReference=null}:{
   answers:DesiredClientAnswers; onCreate:()=>void; onRetry:()=>void; onEdit:(stage:Stage)=>void; onCreateStructured?:()=>void;
-  briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged";retryAllowed:boolean;legacyBriefReplaced?:boolean;aiAvailable?:boolean;reportNeedsRegeneration?:boolean;
+  briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged";retryAllowed:boolean;legacyBriefReplaced?:boolean;aiAvailable?:boolean;reportNeedsRegeneration?:boolean;failureReference?:string|null;
 }) {
   const area=answers.focus.area;
   const work=answers.focus.work==="other"?answers.focus.work_other:area&&answers.focus.work?getWorkLabel(area,answers.focus.work):"";
@@ -70,6 +70,7 @@ export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,b
     {legacyBriefReplaced&&<p className="dc-alert" data-ui-copy="body">{WELCOME_COPY.legacyBriefReplaced}</p>}
     {error==="unavailable"&&<p className="dc-alert" role="alert" data-ui-copy="body">{COMMON_COPY.aiUnavailable}</p>}
     {error==="invalid"&&<p className="dc-alert" role="alert" data-ui-copy="body">{COMMON_COPY.aiInvalid}</p>}
+    {(error==="unavailable"||error==="invalid")&&failureReference&&<p className="dc-analysis-reference" data-ui-copy="supporting">If you contact us about this, include reference <code>{failureReference}</code>.</p>}
     {error==="structuredInvalid"&&<p className="dc-alert" role="alert" data-ui-copy="body">{COMMON_COPY.structuredInvalid}</p>}
     <section className="dc-review__definition-check" aria-label="Practice direction confirmation summary">
       <h2 data-ui-copy="heading">Check the practice direction before creating a draft</h2>
