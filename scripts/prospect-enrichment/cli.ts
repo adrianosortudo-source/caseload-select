@@ -11,6 +11,7 @@ import { assertCoordinatorOutputPath, assertCoordinatorOutputRoot, snapshotCoord
 import { runWholeFirmOfflineHandoff } from "./offline-handoff";
 import { assertManifestRegistrationBinding, assertFinalizedComparisonReader, verifyAndSerializeComparisonExport } from "./comparison-export";
 import { serializeComparisonRequest, writeComparisonRequest } from "./comparison-request";
+import { assertFrozenWholeFirmPackageMissing, assertFrozenWholeFirmRunCompatibility, CHILD5_FROZEN_COMPATIBILITY } from "./frozen-whole-firm-compatibility";
 import { prepareManifestRequests, submitManifestChunks, assertManifestPackage, checkManifestApproval, validateManifestChunks } from "./manifest-delivery";
 import { buildExpectedRunManifest, buildHeldCandidateEvidence, chunkExpectedRunManifest } from "./run-manifest";
 import { archivedDocuments, extractCandidates, inventory, type SourceManifest } from "./inventory";
@@ -60,6 +61,7 @@ function args(argv: string[]) {
 const required = (options: Record<string, string | boolean>, key: string): string => { const value = options[key]; if (typeof value !== "string" || !value) throw Error(`missing_${key}`); return value; };
 const json = async <T>(file: string): Promise<T> => JSON.parse(await fs.readFile(file, "utf8"));
 async function jsonl<T>(file: string): Promise<T[]> { return (await fs.readFile(file, "utf8")).split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line)); }
+function jsonlBytes<T>(bytes: Uint8Array): T[] { return Buffer.from(bytes).toString("utf8").split(/\r?\n/).filter(Boolean).map(line => JSON.parse(line)); }
 function manifestFromChunks(chunks: ReturnType<typeof validateManifestChunks>) {
   const first = chunks[0];
   if (!first) throw Error("manifest_chunks_missing");
@@ -250,12 +252,16 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     if (manifestOnly && (command !== "submit" || profile !== "whole-firm" || options.key !== undefined)) throw Error("manifest_only_scope_invalid");
     const key = manifestOnly ? null : required(options, "key");
     const comparison = command !== "receipt" ? await json<unknown>(required(options, "snapshot")) : null;
-    const manifestChunks = command !== "receipt" ? await jsonl<unknown>(required(options, "manifest-chunks")) : null;
-    const heldEvidence = command !== "receipt" && typeof options["held-evidence"] === "string" ? await jsonl<unknown>(options["held-evidence"]) : [];
+    const manifestChunksFileBytes = command !== "receipt" ? await fs.readFile(required(options, "manifest-chunks")) : null;
+    const manifestChunks = manifestChunksFileBytes ? jsonlBytes<unknown>(manifestChunksFileBytes) : null;
+    const heldEvidenceFileBytes = command !== "receipt" && typeof options["held-evidence"] === "string" ? await fs.readFile(options["held-evidence"]) : Buffer.alloc(0);
+    const heldEvidence = command !== "receipt" && typeof options["held-evidence"] === "string" ? jsonlBytes<unknown>(heldEvidenceFileBytes) : [];
     const prepared = command !== "receipt" ? prepareManifestRequests(manifestChunks, profile, heldEvidence) : null;
     if (manifestOnly && prepared!.chunks[0].expectedPackageCount !== 0) throw Error("manifest_only_requires_zero_packages");
+    const packagesFileBytes = command !== "receipt" ? await fs.readFile(required(options, "packages")) : null;
+    const packageValues = packagesFileBytes ? JSON.parse(packagesFileBytes.toString("utf8")) as unknown : null;
     const finalRequestSha256 = command !== "receipt"
-      ? protocolHash(serializeComparisonRequest(manifestFromChunks(prepared!.chunks), await json<unknown>(required(options, "packages")), profile).request)
+      ? protocolHash(serializeComparisonRequest(manifestFromChunks(prepared!.chunks), packageValues, profile).request)
       : null;
     const assertFinalizedBinding = () => {
       assertFreshComparison(comparison);
@@ -265,11 +271,41 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     const queued = command !== "receipt" && key ? await readEntry(outbox, key) : null;
     if (queued) assertEnvelopeProfile(queued.envelope, profile);
     if (prepared && queued) assertManifestPackage(prepared.chunks, queued);
-    if (command === "submit" && profile === "whole-firm") assertWholeFirmManifestCoverage(await json<WholeFirmSourceManifest>(required(options, "manifest")), prepared!.chunks);
-    if (options.execute !== true) return { dryRun: true, command, key, manifestRequests: command === "submit" ? prepared?.requests.length ?? 0 : 0, networkRequests: 0, requiredConfirmation: command === "submit" ? "SUBMIT-APPROVED-PROSPECT-RESEARCH" : command === "verify-replay" ? "VERIFY-IDENTICAL-PROSPECT-REPLAY" : null };
+    let frozenApprovalBytes: Buffer | null = null;
+    let child5Compatibility = false;
+    if (command === "submit" && profile === "whole-firm") {
+      const manifestBytes = await fs.readFile(required(options, "manifest"));
+      const source = JSON.parse(manifestBytes.toString("utf8")) as WholeFirmSourceManifest;
+      if (source.manifestSha256 === CHILD5_FROZEN_COMPATIBILITY.sourceManifestSha256) {
+        frozenApprovalBytes = await fs.readFile(required(options, "approval"));
+        const verified = assertFrozenWholeFirmRunCompatibility({
+          contract: CHILD5_FROZEN_COMPATIBILITY,
+          sourceFileBytes: manifestBytes,
+          source,
+          manifestChunksFileBytes: manifestChunksFileBytes!,
+          chunks: manifestChunks,
+          heldEvidenceFileBytes,
+          heldEvidence,
+          packagesFileBytes: packagesFileBytes!,
+          packages: packageValues,
+          approvalFileBytes: frozenApprovalBytes,
+          approvalSha256Argument: required(options, "approval-sha256"),
+        });
+        if (verified.requestSha256 !== finalRequestSha256) throw Error("frozen_whole_firm_request_binding_changed");
+        if (!queued) throw Error("frozen_whole_firm_package_entry_required");
+        assertFrozenWholeFirmPackageMissing(comparison, queued.envelope.packageId, queued.payloadSha256,
+          verified.packages.map(value => ({ clientPackageId: value.envelope.packageId, payloadSha256: value.payloadSha256 })));
+        child5Compatibility = true;
+      } else {
+        assertWholeFirmManifestCoverage(source, prepared!.chunks);
+      }
+    }
+    if (options.execute !== true) return { dryRun: true, command, key, manifestRequests: command === "submit" ? prepared?.requests.length ?? 0 : 0, networkRequests: 0,
+      ...(child5Compatibility ? { compatibilityPath: "child5-exact-frozen-hash-bound/v1" } : {}),
+      requiredConfirmation: command === "submit" ? "SUBMIT-APPROVED-PROSPECT-RESEARCH" : command === "verify-replay" ? "VERIFY-IDENTICAL-PROSPECT-REPLAY" : null };
     let approval: DeliveryApproval | null = null;
     if (command !== "receipt") {
-      const bytes = await fs.readFile(required(options, "approval"));
+      const bytes = frozenApprovalBytes ?? await fs.readFile(required(options, "approval"));
       if (sha256(bytes) !== required(options, "approval-sha256")) throw Error("approval_file_hash_mismatch");
       approval = JSON.parse(bytes.toString("utf8"));
       const expectedConfirmation = command === "submit" ? "SUBMIT-APPROVED-PROSPECT-RESEARCH" : "VERIFY-IDENTICAL-PROSPECT-REPLAY";

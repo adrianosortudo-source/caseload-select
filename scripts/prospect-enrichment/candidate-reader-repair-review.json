@@ -27,6 +27,14 @@
       "name": "prospect_enrichment_apply_refresh_gate",
       "bytes": 1886,
       "sha256": "bf9a315e050b03c25f6ff258534dcee2f632bf5a0484d0e225d8c54fe9587875"
+    },
+    {
+      "path": "supabase/migrations/20261004120000_prospect_candidate_firm_field_fastpath.sql",
+      "filename": "20261004120000_prospect_candidate_firm_field_fastpath.sql",
+      "version": "20261004120000",
+      "name": "prospect_candidate_firm_field_fastpath",
+      "bytes": 17580,
+      "sha256": "28a2f20f6852475733b497bd6add3ce10eec6949bb4e2eeb194eb2936155624c"
     }
   ],
   "exclusions": [
