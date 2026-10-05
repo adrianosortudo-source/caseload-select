@@ -50,11 +50,12 @@ suite("candidate reads above the observed Admin inventory", () => {
         console.info("candidate-setup-progress", JSON.stringify({ appliedAuditRows: first + auditSetupBatchSize - 1, milliseconds: elapsed }));
         expect(elapsed).toBeLessThan(600_000);
       }
-      const targetFirm = (await db.query<{ id: string }>("SELECT id FROM public.gta_prospect_firms WHERE source_record_key=$1", [prefix + "-1"])).rows[0].id;
-      // Link a second imported source row to the same canonical firm so exact firm+field pagination
-      // always has two matches and exercises the pinned continuation contract.
+      const targetSourceKey = prefix + "-6500";
+      const targetFirm = (await db.query<{ id: string }>("SELECT id FROM public.gta_prospect_firms WHERE source_record_key=$1", [targetSourceKey])).rows[0].id;
+      // The firm and its audit candidate share this exact source key. Linking the audit
+      // candidate to the canonical firm gives the exact firm+field page two real matches.
       await db.query("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) SELECT $1,f.source_record_key,$2,'accepted','created',$3,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name) FROM public.gta_prospect_firms f WHERE f.source_record_key=$4",
-        [batchId, "c".repeat(64), targetFirm, prefix + "-6500"]);
+        [batchId, "c".repeat(64), targetFirm, targetSourceKey]);
       const counts = (await db.query<{ candidates: number; histories: number; fields: number; sources: number; identityLinks: number }>(`SELECT
         (SELECT count(*)::integer FROM public.prospect_research_candidates) candidates,
         (SELECT count(*)::integer FROM public.prospect_research_candidate_history) histories,
@@ -105,7 +106,7 @@ suite("candidate reads above the observed Admin inventory", () => {
       const linked = await read("verified-firm", { firmId: targetFirm });
       expect(linked.filteredCount).toBeGreaterThanOrEqual(2);
       expect(linked.items.every(item => item.verifiedFirmId === targetFirm)).toBe(true);
-      const firmFieldFilters = { firmId: targetFirm, fieldPointer: "/reconciliation_status", fieldValue: "provisional_new" };
+      const firmFieldFilters = { firmId: targetFirm, fieldPointer: "/source_record_key", fieldValue: targetSourceKey };
       const firmField = await read("indexed-firm-field", firmFieldFilters, 1);
       expect(firmField.filteredCount).toBeGreaterThanOrEqual(2);
       expect(firmField.items).toHaveLength(1);
@@ -117,7 +118,7 @@ suite("candidate reads above the observed Admin inventory", () => {
       expect(nextFirmField.items).toHaveLength(1);
       expect(nextFirmField.items[0].id > firmField.items[0].id).toBe(true);
       expect(nextFirmField.items[0].verifiedFirmId).toBe(targetFirm);
-      const wrongExactValue = await read("indexed-firm-field-exact-value", { ...firmFieldFilters, fieldValue: "Provisional_New" });
+      const wrongExactValue = await read("indexed-firm-field-exact-value", { ...firmFieldFilters, fieldValue: targetSourceKey.toUpperCase() });
       expect(wrongExactValue.filteredCount).toBe(0);
       expect(wrongExactValue.items).toEqual([]);
       const profileStart = performance.now();
