@@ -261,11 +261,11 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const goalsClaims=[progress,...(needPaths.length?[linked(`Needs, concerns or decision participants noted by the firm: ${facts(answers,needPaths)}.`,"hypothesis",needPaths)]:[]),...interviewClaims(answers,[2],"Additional context supplied: ")].slice(0,6);
 
   const reasonPaths=knownPaths(answers,["value.reasons","write_ins.reasons","practice.enjoys","value.fee_effort","write_ins.fee_effort"]).filter((path)=>path!=="value.reasons"||!answers.value.reasons.includes("undecided"));
-  const negativeContribution=hasNegativeContribution(answers);
+  const negativeEconomics=hasNegativeContribution(answers);
   // Preserve the firm's fee preference as a preference; do not restate it as
   // a positive financial result when the comparable figures calculate negative.
   const reasonLabels=reasonPaths.flatMap(path=>path==="value.reasons"
-    ?answers.value.reasons.filter(id=>id!=="undecided").map(id=>negativeContribution&&id==="fees"?"fee sustainability as a firm preference":getReasonLabel(id,answers.focus.route))
+    ?answers.value.reasons.filter(id=>id!=="undecided").map(id=>negativeEconomics&&id==="fees"?"fee sustainability as a firm preference":getReasonLabel(id,answers.focus.route))
     :[fragment(text(answers,path))]).filter(Boolean);
   const firmRationale=reasonPaths.length?linked(`Reasons reported by the firm: ${reasonLabels.join("; ")||text(answers,"value.reasons")}.`,"firm_preference",reasonPaths):unknownClaim("The firm's reasons for wanting more of this work are not yet established.","value.reasons");
   const economicsPaths=knownPaths(answers,["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]);
