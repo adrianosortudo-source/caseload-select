@@ -310,12 +310,14 @@ function normalizeGroundedFirmValueClaims(brief: Record<string, unknown>, answer
   const missing = groundedClaims.filter((claim) => claim.source_answer_ids.some((path) => !representedPaths.has(path)));
   if (!missing.length) return { brief, blocked: false };
 
-  const hasAllSources = (candidate: unknown, expected: EvidenceLinkedStatement) =>
-    record(candidate) && Array.isArray(candidate.source_answer_ids) &&
-    expected.source_answer_ids.every((path) => candidate.source_answer_ids.includes(path));
-  const overlaps = (candidate: unknown, expected: EvidenceLinkedStatement) =>
-    record(candidate) && Array.isArray(candidate.source_answer_ids) &&
-    candidate.source_answer_ids.some((path) => expected.source_answer_ids.includes(path as AnswerReferencePath));
+  const hasAllSources = (candidate: unknown, expected: EvidenceLinkedStatement) => {
+    if (!record(candidate) || !Array.isArray(candidate.source_answer_ids)) return false;
+    return expected.source_answer_ids.every((path) => candidate.source_answer_ids.includes(path));
+  };
+  const overlaps = (candidate: unknown, expected: EvidenceLinkedStatement) => {
+    if (!record(candidate) || !Array.isArray(candidate.source_answer_ids)) return false;
+    return candidate.source_answer_ids.some((path) => expected.source_answer_ids.includes(path as AnswerReferencePath));
+  };
   const nextClaims = [...claims];
   for (let pass = 0; pass <= groundedClaims.length; pass += 1) {
     const toRecover = groundedClaims.filter((claim) => !nextClaims.some((existing) => hasAllSources(existing, claim)));
