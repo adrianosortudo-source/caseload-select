@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { completeAnswers } from "./blueprint-helpers";
 import { buildInterviewClarificationResponseSchema, buildInterviewClarificationUserPrompt, validateInterviewClarificationRequest } from "../interview-clarification";
-import { isInterviewClarificationAskPrompt, isInterviewClarificationSourceForStage, normalizeInterviewClarificationContinuePrompt, normalizeInterviewClarificationModelPrompt } from "../interview-clarification-contract";
+import { INTERVIEW_CLARIFICATION_LIMITS, isInterviewClarificationAskPrompt, isInterviewClarificationSourceForStage, normalizeInterviewClarificationContinuePrompt, normalizeInterviewClarificationModelPrompt, parseInterviewClarificationModelOutput } from "../interview-clarification-contract";
+import { SchemaType, type ObjectSchema } from "@google/generative-ai";
 import { interviewClarificationSourceFingerprint } from "../types";
 import type { InterviewClarificationRequestEnvelope } from "../types";
 
@@ -36,16 +37,42 @@ function nextStageRequest(): InterviewClarificationRequestEnvelope {
   };
 }
 
+function askResponse(overrides: Record<string, unknown> = {}) {
+  return {
+    outcome: "ask",
+    prompt: {
+      purpose: "firm_desirability",
+      source_answer_ids: ["practice.direction"],
+      question: "What makes this work appealing to the firm?",
+      choices: [{ label: "It fits the team's experience" }, { label: "Something else matters more" }],
+      reflection: "A sharper reason may clarify the firm's preference.",
+      ...overrides,
+    },
+    reason: null,
+  };
+}
+
+function continueResponse(reason = "The existing answers are specific enough to continue.") {
+  return { outcome: "continue", prompt: null, reason };
+}
+
 describe("adaptive interview clarification validation", () => {
   it("limits model purposes and sources to the current completed stage", () => {
     const request = nextStageRequest();
     request.stage = 3;
-    const schema = buildInterviewClarificationResponseSchema(request);
-    expect(schema.properties.purpose.enum).toContain("economics_effort_conflict");
-    expect(schema.properties.purpose.enum).not.toContain("client_choice_criteria");
-    expect(schema.properties.source_answer_ids.items.enum).toContain("value.fee_effort");
-    expect(schema.properties.source_answer_ids.items.enum).not.toContain("focus.work");
-    expect(schema.properties.source_answer_ids.items.enum).not.toContain("value.fee_amount");
+    const schema = buildInterviewClarificationResponseSchema(request) as ObjectSchema;
+    const prompt = schema.properties.prompt as ObjectSchema;
+    expect(schema.required).toEqual(["outcome", "prompt", "reason"]);
+    expect(schema.properties.prompt.nullable).toBe(true);
+    expect(schema.properties.reason.nullable).toBe(true);
+    expect((prompt.properties.purpose as { enum?: string[] }).enum).toContain("economics_effort_conflict");
+    expect((prompt.properties.purpose as { enum?: string[] }).enum).not.toContain("client_choice_criteria");
+    expect((prompt.properties.source_answer_ids as { items?: { enum?: string[] }; minItems?: number; maxItems?: number }).items?.enum).toContain("value.fee_effort");
+    expect((prompt.properties.source_answer_ids as { items?: { enum?: string[] } }).items?.enum).not.toContain("focus.work");
+    expect((prompt.properties.source_answer_ids as { items?: { enum?: string[] } }).items?.enum).not.toContain("value.fee_amount");
+    expect((prompt.properties.choices as { minItems?: number; maxItems?: number }).minItems).toBe(INTERVIEW_CLARIFICATION_LIMITS.minimumChoices);
+    expect((prompt.properties.choices as { minItems?: number; maxItems?: number }).maxItems).toBe(INTERVIEW_CLARIFICATION_LIMITS.maximumChoices);
+    expect(schema.type).toBe(SchemaType.OBJECT);
   });
   it("shares stage-five delivery source rules with the browser and accepts list-valued answers", () => {
     const answers = completeAnswers();
@@ -55,19 +82,20 @@ describe("adaptive interview clarification validation", () => {
     const request = nextStageRequest();
     request.stage = 5;
     request.answers = answers;
-    const allowed = buildInterviewClarificationResponseSchema(request).properties.source_answer_ids.items.enum;
-    expect(allowed).toEqual(expect.arrayContaining(["delivery.conditions", "delivery.limit", "delivery.capacity"]));
+    const schema = buildInterviewClarificationResponseSchema(request) as ObjectSchema;
+    const allowed = (schema.properties.prompt as ObjectSchema).properties.source_answer_ids as { items?: { enum?: string[] } };
+    expect(allowed.items?.enum).toEqual(expect.arrayContaining(["delivery.conditions", "delivery.limit", "delivery.capacity"]));
     for (const path of ["delivery.conditions", "delivery.limit", "delivery.capacity"] as const) {
       const prompt = {
         outcome: "ask", id: "33333333-3333-4333-8333-333333333333", stage: 5,
         purpose: "client_matter_specificity", source_answer_ids: [path],
         question: "What does the client need resolved before proceeding?",
-        choices: [{ id: "scope", label: "Scope" }, { id: "timing", label: "Timing" }],
+        choices: [{ id: "choice_1", label: "The scope" }, { id: "choice_2", label: "The timing" }],
         reflection: "This detail can help distinguish relevant enquiries.",
       };
       expect(isInterviewClarificationAskPrompt(prompt, 5, answers)).toBe(true);
       expect(isInterviewClarificationSourceForStage(path, 5)).toBe(true);
-      const { id: _ignoredModelId, ...modelPrompt } = prompt;
+      const modelPrompt = askResponse({ purpose: prompt.purpose, source_answer_ids: prompt.source_answer_ids, question: prompt.question, choices: [{ label: "The scope" }, { label: "The timing" }], reflection: prompt.reflection });
       const normalized = normalizeInterviewClarificationModelPrompt(modelPrompt, 5, answers, () => prompt.id);
       expect(normalized).toMatchObject(prompt);
       expect(isInterviewClarificationAskPrompt(normalized, 5, answers)).toBe(true);
@@ -85,7 +113,7 @@ describe("adaptive interview clarification validation", () => {
     const raw = { outcome: "continue", reason: "No material ambiguity remains.\nContinue to the next section." };
     const expected = { outcome: "continue", reason: "No material ambiguity remains. Continue to the next section." };
     expect(normalizeInterviewClarificationContinuePrompt(raw)).toEqual(expected);
-    expect(normalizeInterviewClarificationModelPrompt(raw, 5, answers, () => "unused-id")).toEqual(expected);
+    expect(normalizeInterviewClarificationModelPrompt({ outcome: "continue", prompt: null, reason: raw.reason }, 5, answers, () => "unused-id")).toEqual(expected);
     expect(normalizeInterviewClarificationContinuePrompt({ ...raw, extra: true })).toBeNull();
     expect(normalizeInterviewClarificationContinuePrompt({ outcome: "continue", reason: "x".repeat(181) })).toBeNull();
   });
@@ -119,11 +147,11 @@ describe("adaptive interview clarification validation", () => {
   });
   it("accepts the multiline reflection produced by its own prompt normalizer in later history",()=>{
     const answers=completeAnswers();
-    const prompt=normalizeInterviewClarificationModelPrompt({
-      outcome:"ask",stage:1,purpose:"firm_desirability",source_answer_ids:["practice.direction"],
-      question:"What makes this work appealing?",choices:[{id:"fit",label:"It fits"},{id:"other",label:"Something else"}],
+    const prompt=normalizeInterviewClarificationModelPrompt(askResponse({
+      purpose:"firm_desirability",source_answer_ids:["practice.direction"],
+      question:"What makes this work appealing?",choices:[{label:"It fits"},{label:"Something else"}],
       reflection:"The direction is clear.\nThe reason would sharpen the profile.",
-    },1,answers,()=>"33333333-3333-4333-8333-333333333333");
+    }),1,answers,()=>"33333333-3333-4333-8333-333333333333");
     expect(prompt?.outcome).toBe("ask");
     if(prompt?.outcome!=="ask")return;
     answers.interview={ai_clarification_consent:true,clarification_count:1,clarified_stages:[1],followups:[{
@@ -141,5 +169,49 @@ describe("adaptive interview clarification validation", () => {
     followup.source_answer_fingerprint=interviewClarificationSourceFingerprint(request.answers,followup.source_answer_ids);
     request.answers.practice.direction="explore_direction";
     expect(validateInterviewClarificationRequest(request).valid).toBe(true);
+  });
+});
+
+describe("provider follow-up response contract", () => {
+  const answers = completeAnswers();
+  const createId = () => "33333333-3333-4333-8333-333333333333";
+
+  it("normalizes an ask with server-owned identity and choice IDs", () => {
+    const parsed = parseInterviewClarificationModelOutput(askResponse(), 1, answers, createId);
+    expect(parsed).toEqual({ ok: true, prompt: {
+      outcome: "ask", id: createId(), stage: 1, purpose: "firm_desirability", source_answer_ids: ["practice.direction"],
+      question: "What makes this work appealing to the firm?",
+      choices: [{ id: "choice_1", label: "It fits the team's experience" }, { id: "choice_2", label: "Something else matters more" }],
+      reflection: "A sharper reason may clarify the firm's preference.",
+    } });
+    if (parsed.ok) expect(isInterviewClarificationAskPrompt(parsed.prompt, 1, answers)).toBe(true);
+  });
+
+  it("normalizes a continuation into the existing browser response shape", () => {
+    expect(parseInterviewClarificationModelOutput(continueResponse(), 1, answers, createId)).toEqual({
+      ok: true, prompt: { outcome: "continue", reason: "The existing answers are specific enough to continue." },
+    });
+  });
+
+  it.each([
+    ["missing root fields", { outcome: "ask", prompt: null }, "shape"],
+    ["unknown root field", { ...continueResponse(), extra: "private sentinel" }, "shape"],
+    ["unsupported outcome", { ...continueResponse(), outcome: "maybe" }, "outcome"],
+    ["ask with continue reason", { ...askResponse(), reason: "unexpected" }, "outcome"],
+    ["continue with ask object", { ...continueResponse(), prompt: {} }, "outcome"],
+    ["missing prompt field", { outcome: "ask", prompt: { purpose: "firm_desirability", source_answer_ids: ["practice.direction"], choices: [{ label: "One" }, { label: "Two" }], reflection: "A concise reflection." }, reason: null }, "payload"],
+    ["out of stage purpose", askResponse({ purpose: "client_choice_criteria" }), "purpose"],
+    ["unpopulated source", askResponse({ source_answer_ids: ["value.fee_amount"] }), "sources"],
+    ["duplicate source", askResponse({ source_answer_ids: ["practice.direction", "practice.direction"] }), "sources"],
+    ["overlong question", askResponse({ question: "x".repeat(INTERVIEW_CLARIFICATION_LIMITS.questionCharacters + 1) }), "question"],
+    ["newline in question", askResponse({ question: "First line\\nsecond line" }), "question"],
+    ["one choice", askResponse({ choices: [{ label: "Only one" }] }), "choices"],
+    ["choice ID supplied by model", askResponse({ choices: [{ id: "model-id", label: "One" }, { label: "Two" }] }), "choices"],
+    ["overlong choice label", askResponse({ choices: [{ label: "x".repeat(INTERVIEW_CLARIFICATION_LIMITS.choiceLabelCharacters + 1) }, { label: "Other" }] }), "choices"],
+    ["overlong reflection", askResponse({ reflection: "x".repeat(INTERVIEW_CLARIFICATION_LIMITS.reflectionCharacters + 1) }), "reflection"],
+    ["too many reflection words", askResponse({ reflection: Array(INTERVIEW_CLARIFICATION_LIMITS.reflectionWords + 1).fill("word").join(" ") }), "reflection"],
+    ["continue reason too long", continueResponse("x".repeat(INTERVIEW_CLARIFICATION_LIMITS.continueReasonCharacters + 1)), "reason"],
+  ] as const)("rejects %s with a safe category", (_label, input, code) => {
+    expect(parseInterviewClarificationModelOutput(input, 1, answers, createId)).toEqual({ ok: false, code });
   });
 });

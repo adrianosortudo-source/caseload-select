@@ -1,4 +1,5 @@
 import { CONTACT_ROLE_IDS, AREA_CATALOG, WRITE_IN_KEYS, isKnownArea, isKnownTrigger, isKnownWork } from "./catalog";
+import { INTERVIEW_CLARIFICATION_LIMITS } from "./interview-clarification-contract";
 import type {
   AnalysisRequestEnvelope,
   AreaId,
@@ -69,7 +70,7 @@ function isOptionalText(value: unknown): value is string {
   return isBoundedMultilineText(value, TEXT_MAX);
 }
 export function isBoundedMultilineText(value: unknown, max: number): value is string {
-  return typeof value === "string" && value.length <= max && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value) && value.split(/\r\n|\r|\n/).length <= 12;
+  return typeof value === "string" && value.length <= max && !/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/.test(value) && value.split(/\r\n|\r|\n/).length <= INTERVIEW_CLARIFICATION_LIMITS.answerLines;
 }
 function isTextLimit(value:unknown,max:number):value is string{return isBoundedMultilineText(value,max);}
 
@@ -90,7 +91,7 @@ function validCandidate(value: unknown, area: AreaId): value is ComparisonCandid
 }
 
 function validClarificationAnswer(code: ClarificationCode, answer: unknown): answer is ClarificationAnswer {
-  if (typeof answer === "string" && answer.trim().length > 0 && answer.length <= 220 && !/[\r\n]/.test(answer)) return true;
+  if (typeof answer === "string" && answer.trim().length > 0 && answer.length <= INTERVIEW_CLARIFICATION_LIMITS.answerCharacters && !/[\r\n]/.test(answer)) return true;
   switch (code) {
     case "CLIENT_MATTER_UNCLEAR": return answer === "choose_specific" || answer === "keep_broad";
     case "VALUE_EFFORT_CONFLICT": return answer === "improve_model" || answer === "reconsider_work";
@@ -250,7 +251,7 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
     if (!hasExactKeys(interview, ["ai_clarification_consent", "clarification_count", "clarified_stages", "followups"]) || typeof interview.ai_clarification_consent !== "boolean" ||
       !Number.isSafeInteger(interview.clarification_count) || (interview.clarification_count as number) < 0 || (interview.clarification_count as number) > 3 ||
       !Array.isArray(interview.clarified_stages) || interview.clarified_stages.length !== interview.clarification_count || interview.clarified_stages.some((stage) => ![1,2,3,4,5,6].includes(stage as number)) || new Set(interview.clarified_stages).size !== interview.clarified_stages.length ||
-      !Array.isArray(interview.followups) || interview.followups.length > 3 || interview.followups.some((item) => !isRecord(item) || ![
+      !Array.isArray(interview.followups) || interview.followups.length > INTERVIEW_CLARIFICATION_LIMITS.maximumFollowups || interview.followups.some((item) => !isRecord(item) || ![
         ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "skipped"],
         ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "choiceId", "skipped"],
         ["id", "stage", "purpose", "source_answer_ids", "question", "answer", "skipped", "reflection"],
@@ -259,9 +260,9 @@ function validateAnswers(value: unknown, answerRevision: number, requireComplete
         typeof item.id !== "string" || item.id.length > 64 || !/^[a-z0-9_-]+$/i.test(item.id) || ![1,2,3,4,5,6].includes(item.stage as number) ||
         !["client_matter_specificity","client_goal_detail","firm_desirability","client_choice_criteria","strength_and_support","decision_pathway_observation","discovery_evidence","economics_effort_conflict","capacity_conflict"].includes(String(item.purpose)) ||
         !Array.isArray(item.source_answer_ids) || item.source_answer_ids.length < 1 || item.source_answer_ids.length > 8 || item.source_answer_ids.some((path) => typeof path !== "string") ||
-        typeof item.question !== "string" || item.question.length < 1 || item.question.length > 140 || /[\r\n]/.test(item.question) || !isBoundedMultilineText(item.answer,220) ||
+        typeof item.question !== "string" || item.question.length < 1 || item.question.length > INTERVIEW_CLARIFICATION_LIMITS.questionCharacters || /[\r\n]/.test(item.question) || !isBoundedMultilineText(item.answer,INTERVIEW_CLARIFICATION_LIMITS.answerCharacters) ||
         item.source_answer_fingerprint !== undefined && (typeof item.source_answer_fingerprint !== "string" || !/^[0-9a-f]{16}$/.test(item.source_answer_fingerprint)) ||
-        typeof item.skipped !== "boolean" || item.skipped && item.answer !== "" || !item.skipped && item.answer.trim().length === 0 || item.choiceId !== undefined && (typeof item.choiceId !== "string" || item.choiceId.length > 48 || !/^[a-z0-9_-]+$/i.test(item.choiceId)) || item.reflection !== undefined && (typeof item.reflection !== "string" || item.reflection.length > 240)) ||
+        typeof item.skipped !== "boolean" || item.skipped && item.answer !== "" || !item.skipped && item.answer.trim().length === 0 || item.choiceId !== undefined && (typeof item.choiceId !== "string" || item.choiceId.length > 48 || !/^[a-z0-9_-]+$/i.test(item.choiceId)) || item.reflection !== undefined && (typeof item.reflection !== "string" || item.reflection.length > INTERVIEW_CLARIFICATION_LIMITS.reflectionCharacters || item.reflection.trim().split(/\s+/).filter(Boolean).length > INTERVIEW_CLARIFICATION_LIMITS.reflectionWords)) ||
       (interview.followups as RecordValue[]).some((item, index, all) => all.findIndex((other) => other.id === item.id) !== index || all.findIndex((other) => other.stage === item.stage) !== index || !(interview.clarified_stages as unknown[]).includes(item.stage))) return false;
   }
 
