@@ -1,6 +1,6 @@
 import { getAnswerLabel, getWorkLabel, resolveAnswerReference, WRITE_IN_QUESTIONS } from "./catalog";
 import { CLARIFICATION_BANK } from "./clarifications";
-import type { AnswerReferencePath, DesiredClientAnswers, StatementKind } from "./types";
+import { isInterviewClarificationCurrent, type AnswerReferencePath, type DesiredClientAnswers, type StatementKind } from "./types";
 
 export const STATEMENT_KIND_LABELS: Record<StatementKind, string> = {
   experience: "Based on your reported experience",
@@ -13,7 +13,8 @@ export const STATEMENT_KIND_LABELS: Record<StatementKind, string> = {
 function questionLabel(path: AnswerReferencePath, answers: DesiredClientAnswers): string {
   if (path.startsWith("interview.followups.")) {
     const item = answers.interview.followups[Number(path.slice("interview.followups.".length))];
-    return item?.question ?? "Interview clarification";
+    if (!item) return "Interview clarification";
+    return isInterviewClarificationCurrent(item, answers) ? item.question : `Earlier clarification (reconfirm before use): ${item.question}`;
   }
   if (path.startsWith("write_ins.")) return `Other answer to: ${WRITE_IN_QUESTIONS[path.slice("write_ins.".length) as keyof typeof WRITE_IN_QUESTIONS]}`;
   if (path.startsWith("clarifications.")) {

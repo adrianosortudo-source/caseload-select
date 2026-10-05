@@ -1,5 +1,6 @@
-import { allowedSourceAnswerPathsForAnswers, BLUEPRINT_RESPONSE_SCHEMA } from "./output";
+import { allowedSourceAnswerPathsForAnswers, BLUEPRINT_RESPONSE_SCHEMA, isUnresolvedEvidenceSource } from "./output";
 import { resolveAnswerReference } from "./catalog";
+import { buildStructuredBlueprintV4 } from "./structured-blueprint";
 import type { AnswerReferencePath, DesiredClientAnswers } from "./types";
 
 /** Keep provider constraints small; the full validator enforces semantic rules. */
@@ -17,6 +18,23 @@ export function providerSourceAliases(answers: DesiredClientAnswers): Record<str
   return Object.fromEntries(paths.map((path, index) => [`s${index}`, path]));
 }
 
+/** Present confirmed statements in the same compact form the provider returns.
+ * Display kind is derived on decoding, so it is never an extra model decision. */
+export function encodeProviderSources(value: unknown, aliases: Record<string, string>): unknown {
+  const ids = Object.fromEntries(Object.entries(aliases).map(([id, path]) => [path, id]));
+  const encode = (item: unknown): unknown => {
+    if (Array.isArray(item)) return item.map(encode);
+    if (!item || typeof item !== "object") return item;
+    const statement = Object.hasOwn(item, "evidence_basis");
+    return Object.fromEntries(Object.entries(item).filter(([key]) => !statement || key !== "kind").map(([key, child]) => [
+      key, key === "source_answer_ids" && Array.isArray(child)
+        ? child.map(path => typeof path === "string" && Object.hasOwn(ids, path) ? ids[path] : path)
+        : encode(child),
+    ]));
+  };
+  return encode(value);
+}
+
 export function decodeProviderSources(value: unknown, aliases: Record<string, string>): unknown {
   if (Array.isArray(value)) return value.map(item => decodeProviderSources(item, aliases));
   if (!value || typeof value !== "object") return value;
@@ -29,6 +47,29 @@ export function decodeProviderSources(value: unknown, aliases: Record<string, st
   if (typeof decoded.evidence_basis === "string" && Object.hasOwn(kinds, decoded.evidence_basis)) decoded.kind = kinds[decoded.evidence_basis];
   if (Object.hasOwn(decoded, "brief") && !Object.hasOwn(decoded, "clarification_code")) decoded.clarification_code = null;
   return decoded;
+}
+
+/** The target is already confirmed. Select it by reference instead of asking
+ * the provider to reproduce long text/citation combinations in its schema. */
+export function providerTargetClaimIds(answers: DesiredClientAnswers): string[] {
+  return buildStructuredBlueprintV4(answers).client_and_matter.claims.map((_, index) => `target_claim_${index + 1}`);
+}
+
+export function decodeProviderTargetCard(value: unknown, answers: DesiredClientAnswers): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const root = value as Record<string, unknown>;
+  if (!root.brief || typeof root.brief !== "object" || Array.isArray(root.brief)) return value;
+  const brief = root.brief as Record<string, unknown>;
+  const card = brief.client_and_matter;
+  if (!card || typeof card !== "object" || Array.isArray(card)) return value;
+  const selection = card as Record<string, unknown>;
+  const expectedIds = providerTargetClaimIds(answers);
+  // Never replace arbitrary model prose or accept partial, reordered, duplicate
+  // or expanded selections. Invalid cards proceed to the independent validator.
+  if (Object.keys(selection).length !== 1 || !Array.isArray(selection.claim_ids) ||
+    selection.claim_ids.length !== expectedIds.length ||
+    !selection.claim_ids.every((id, index) => id === expectedIds[index])) return value;
+  return { ...root, brief: { ...brief, client_and_matter: buildStructuredBlueprintV4(answers).client_and_matter } };
 }
 
 export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown {
@@ -49,6 +90,7 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
       ? "A grammatical clause with its own subject, such as 'the work fits the firm's experience'. At most 35 words and 300 characters. Do not start with 'because' or a subjectless verb such as 'uses'."
       : slot.startsWith("definition_")
       ? "A concise fragment, at most 25 words and 240 characters. Put supporting details in the cards."
+      : slot === "client_and_matter" ? "Copy the confirmed grounded_target claims exactly. Each may contain up to 95 words and 650 characters; do not shorten or paraphrase the supplied legal engagement."
       : slot === "decision_pathway" ? "One concise statement, at most 30 words and 240 characters."
       : "One grounded claim, at most 50 words and 400 characters. Preserve additional detail in separate claims.";
     node.properties.text.description = `${textDescription} A simple count written as a word or digits is equivalent only for the same value (for example, “two matters” and “2 matters”). Keep its unit, currency, range and period faithful to the cited answer; never calculate, round or invent a figure.`;
@@ -59,14 +101,20 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
         // evidence gap. The validator accepts them only with evidence_basis
         // "unknown"; omitting them here makes the provider unable to support
         // gaps such as an unrecorded first-contact pattern.
-        return source.present && ((slot === "decision_pathway" && source.unknown) || (source.value !== null && source.value !== "" && (!Array.isArray(source.value) || source.value.length > 0)));
+        // The registered source path determines which answers are relevant to
+        // this claim. The two evidence-gap cards may cite an unanswered value;
+        // output.ts then requires evidence_basis "unknown". Other cards retain
+        // their populated-source contract so empty fields do not dilute claims.
+        const empty=source.value===null||source.value===""||(Array.isArray(source.value)&&source.value.length===0);
+        const supportsGaps=slot==="recognizable_circumstances"||slot==="evidence_and_open_questions";
+        return source.present&&(supportsGaps||(slot==="decision_pathway"&&source.unknown)||!empty);
       } catch { return false; }
     });
     node.properties.source_answer_ids.items.enum = Object.entries(aliases).filter(([,path]) => allowed.includes(path)).map(([alias]) => alias);
     node.properties.source_answer_ids.minItems = 1;
-    // Contribution validation needs all five economics sources. The provider
-    // must be able to cite that complete set if it returns such a statement.
-    node.properties.source_answer_ids.maxItems = slot === "why_firm_wants_work" ? 6 : 4;
+    // Match the application contract, including a confirmed negative-economics
+    // rationale that cites both preference and the five economics sources.
+    node.properties.source_answer_ids.maxItems = 8;
     const bases = ["firm_preference", "hypothesis", "unknown"];
     if (["practice.experience", "practice.capability", "practice.client_strength_support"].some(path => allowed.includes(path))) bases.push("firm_reported_experience");
     for (const [prefix, basis] of [["value.", answers.value.amount_basis], ["opportunity.", answers.opportunity.data_basis]] as const) {
@@ -95,12 +143,41 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
       hasPathwaySources ? `For pathway or situation details, client_reported requires client.pathway_basis=client_feedback and firm_reported_observation requires client.pathway_basis=firm_observation; cite only relevant details from ${observedPathwayIds}.` : "Do not use pathway or situation details in this statement.",
       hasChoiceSources && hasPathwaySources ? "If a statement cites both source groups, cite both basis answers and use the evidence basis only when both selections match; otherwise keep the claims separate." : "Do not add a second source group to this statement.",
     ].join(" ");
-    node.properties.evidence_basis.description = `${clientEvidenceGuidance} For firm_reported_recorded you MUST cite at least one of ${financialEvidenceIds("recorded")}. For firm_reported_estimate you MUST cite at least one of ${financialEvidenceIds("estimated")}; a qualitative preference or capability alone is not an estimate. For firm_reported_experience you MUST cite at least one of ${experienceIds.join(", ") || "none (do not use this basis)"}. For unknown, cite only unknown/empty answers and state the gap. For any statement with a known source and no supporting record, estimate or observation, use firm_preference or hypothesis. Never select a basis supported only by some other claim in the report.`;
+    const gapIds = Object.entries(aliases).filter(([, path]) => allowed.includes(path) && isUnresolvedEvidenceSource(path, answers)).map(([id]) => id);
+    node.properties.evidence_basis.description = `${clientEvidenceGuidance} For firm_reported_recorded you MUST cite at least one of ${financialEvidenceIds("recorded")}. For firm_reported_estimate you MUST cite at least one of ${financialEvidenceIds("estimated")}; a qualitative preference or capability alone is not an estimate. For firm_reported_experience you MUST cite at least one of ${experienceIds.join(", ") || "none (do not use this basis)"}. For unknown, cite only these evidence-gap IDs: ${gapIds.join(", ") || "none (no gap claim is supported for this slot)"}, and state the gap. Any statement citing an evidence-gap ID MUST use unknown, including a populated description of demand uncertainty or 'No evidence yet'; neither is proof of demand. Known claims must not cite evidence-gap IDs. For any statement with a known source and no supporting record, estimate or observation, use firm_preference or hypothesis. Never select a basis supported only by some other claim in the report.`;
+    if (slot === "why_client_chooses_firm") node.properties.evidence_basis.description += " A selected practice.client_strength and its proposed effect are firm_preference, not firm_reported_experience. Keep the stated strength separate from reported experience, which must cite practice.experience, practice.capability or practice.client_strength_support. A label containing the word 'experience' is not itself supporting experience.";
   };
   for (const [key, slot] of Object.entries({client:"definition_client_type",client_matter:"definition_client_matter",reasons:"definition_reasons",outcome:"definition_outcome"})) {
     setPaths(sections.definition_components.properties[key as keyof typeof sections.definition_components.properties], slot);
   }
+  // These components are already determined from the firm's answers. A single
+  // enum value prevents the provider's prose instructions from paraphrasing a
+  // target that the unchanged grounding validator must reject.
+  const groundedProfile = buildStructuredBlueprintV4(answers);
+  const grounded = groundedProfile.definition_components;
+  for (const key of ["client", "client_matter", "reasons"] as const) {
+    const node = sections.definition_components.properties[key];
+    (node.properties.text as {enum?: string[]}).enum = [grounded[key].text];
+    (node.properties.evidence_basis as {enum: readonly string[]}).enum = [grounded[key].evidence_basis];
+    (node.properties.source_answer_ids.items as {enum?: string[]}).enum = Object.entries(aliases)
+      .filter(([, path]) => grounded[key].source_answer_ids.includes(path as AnswerReferencePath)).map(([id]) => id);
+    const sourceCount = node.properties.source_answer_ids as {minItems: number; maxItems: number};
+    sourceCount.minItems = grounded[key].source_answer_ids.length;
+    sourceCount.maxItems = grounded[key].source_answer_ids.length;
+  }
   for (const slot of ["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const) setPaths(sections[slot].properties.claims.items, slot);
+  // The confirmed card can contain a current stage-two clarification as well
+  // as the primary matter. Both are required by the grounding validator.
+  const targetIds = providerTargetClaimIds(answers);
+  (sections as unknown as Record<string, unknown>).client_and_matter = {
+    type: "object",
+    properties: { claim_ids: {
+      type: "array", items: { type: "string", enum: targetIds },
+      minItems: targetIds.length, maxItems: targetIds.length,
+      description: "Copy grounded_target_claim_ids exactly in their supplied order, including the current clarification. The application resolves these references to the confirmed text, evidence status and citations before independently validating the report.",
+    } },
+    required: ["claim_ids"],
+  };
   for (const [field, statement] of Object.entries(sections.decision_pathway.properties)) {
     setPaths(statement, "decision_pathway");
     if (field === "first_contact" && !answers.situation.contact && !answers.write_ins?.contact?.trim()) {

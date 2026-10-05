@@ -14,4 +14,10 @@ describe("safe provider diagnostics", () => {
   it("omits unsafe names and out-of-range status values", () => {
     expect(safeProviderFailureMetadata({ name: "Error\nwith text", status: 999 })).toEqual({ providerError: "UnknownError" });
   });
+  it("classifies a schema rejection without returning provider text or submitted details", () => {
+    const error=Object.assign(new Error("The given schema is too complex for serving. private submitted details"),{status:400});
+    expect(safeProviderFailureMetadata(error)).toEqual({providerError:"Error",providerStatus:400,providerReason:"schema_complexity"});
+    expect(JSON.stringify(safeProviderFailureMetadata(error))).not.toContain("private submitted details");
+    expect(safeProviderFailureMetadata(Object.assign(new Error("responseSchema rejected with private details"),{status:400})).providerReason).toBe("schema_rejected");
+  });
 });

@@ -15,7 +15,10 @@ export function buildDefinitionSentence(brief: Pick<DesiredClientBrief | Desired
   const reasonText = clean(reasons.text) || "the firm's reasons are still being established";
   const outcomeText = clean(outcome.text);
   if ("client" in brief.definition_components) {
-    const rawClientType = clean(brief.definition_components.client.text) || "the desired client type is still to be defined";
+    const clientComponent=brief.definition_components.client;
+    const rawClientType = clientComponent.evidence_basis === "unknown"
+      ? "a client group the firm has not yet defined"
+      : clean(clientComponent.text) || "the desired client type is still to be defined";
     const clientTypeWithArticle = rawClientType.replace(/^(A|An|The)\b/, article => article.toLowerCase());
     const singularRole = /^(owner or founder|owner|founder|buyer|seller|business owner|company owner|individual|entrepreneur|executive|shareholder|principal)\b/i.exec(rawClientType);
     const clientType = singularRole && !/^(a|an|the)\b/i.test(rawClientType)

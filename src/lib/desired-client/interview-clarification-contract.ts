@@ -34,6 +34,28 @@ const SOURCE_PREFIXES_BY_STAGE: Record<InterviewStage, readonly string[]> = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ASK_KEYS = ["outcome", "id", "stage", "purpose", "source_answer_ids", "question", "choices", "reflection"];
+const MODEL_ROOT_KEYS = ["outcome", "prompt", "reason"];
+const MODEL_PROMPT_KEYS = ["purpose", "source_answer_ids", "question", "choices", "reflection"];
+
+export const INTERVIEW_CLARIFICATION_LIMITS = {
+  questionCharacters: 140,
+  reflectionCharacters: 240,
+  reflectionWords: 35,
+  minimumSources: 1,
+  maximumSources: 4,
+  minimumChoices: 2,
+  maximumChoices: 4,
+  choiceLabelCharacters: 100,
+  continueReasonCharacters: 180,
+  answerCharacters: 220,
+  answerLines: 12,
+  maximumFollowups: 3,
+} as const;
+
+export type InterviewClarificationRejectionCode = "shape" | "outcome" | "payload" | "reason" | "purpose" | "sources" | "question" | "choices" | "reflection";
+export type InterviewClarificationModelParseResult =
+  | { ok: true; prompt: InterviewClarificationPrompt }
+  | { ok: false; code: InterviewClarificationRejectionCode };
 
 function record(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === "object" && !Array.isArray(value);
@@ -71,10 +93,10 @@ export function isInterviewClarificationAskPrompt(
   if (!record(value) || !hasExactKeys(value, ASK_KEYS) || value.outcome !== "ask" || value.stage !== stage ||
     typeof value.id !== "string" || !UUID.test(value.id) ||
     !INTERVIEW_CLARIFICATION_PURPOSES_BY_STAGE[stage].includes(value.purpose as InterviewClarificationPurpose) ||
-    typeof value.question !== "string" || !value.question.trim() || value.question.length > 140 || /[\r\n]/.test(value.question) ||
-    typeof value.reflection !== "string" || value.reflection.length > 240 || value.reflection.trim().split(/\s+/).filter(Boolean).length > 35 ||
-    !Array.isArray(value.source_answer_ids) || value.source_answer_ids.length < 1 || value.source_answer_ids.length > 4 ||
-    !Array.isArray(value.choices) || value.choices.length < 2 || value.choices.length > 4) return false;
+    typeof value.question !== "string" || !value.question.trim() || value.question.length > INTERVIEW_CLARIFICATION_LIMITS.questionCharacters || /[\r\n]/.test(value.question) ||
+    typeof value.reflection !== "string" || value.reflection.length > INTERVIEW_CLARIFICATION_LIMITS.reflectionCharacters || value.reflection.trim().split(/\s+/).filter(Boolean).length > INTERVIEW_CLARIFICATION_LIMITS.reflectionWords ||
+    !Array.isArray(value.source_answer_ids) || value.source_answer_ids.length < INTERVIEW_CLARIFICATION_LIMITS.minimumSources || value.source_answer_ids.length > INTERVIEW_CLARIFICATION_LIMITS.maximumSources ||
+    !Array.isArray(value.choices) || value.choices.length < INTERVIEW_CLARIFICATION_LIMITS.minimumChoices || value.choices.length > INTERVIEW_CLARIFICATION_LIMITS.maximumChoices) return false;
 
   const sources = value.source_answer_ids as unknown[];
   if (new Set(sources).size !== sources.length || !sources.every((path) =>
@@ -85,7 +107,7 @@ export function isInterviewClarificationAskPrompt(
   return value.choices.every((choice) => {
     if (!record(choice) || !hasExactKeys(choice, ["id", "label"]) || typeof choice.id !== "string" ||
       !/^[a-z0-9_-]{1,48}$/.test(choice.id) || choiceIds.has(choice.id) ||
-      typeof choice.label !== "string" || !choice.label.trim() || choice.label.length > 100 || /[\r\n]/.test(choice.label)) return false;
+      typeof choice.label !== "string" || !choice.label.trim() || choice.label.length > INTERVIEW_CLARIFICATION_LIMITS.choiceLabelCharacters || /[\r\n]/.test(choice.label)) return false;
     choiceIds.add(choice.id);
     return true;
   });
@@ -93,7 +115,7 @@ export function isInterviewClarificationAskPrompt(
 
 export function normalizeInterviewClarificationContinuePrompt(value: unknown): Extract<InterviewClarificationPrompt, { outcome: "continue" }> | null {
   if (!record(value) || !hasExactKeys(value, ["outcome", "reason"]) || value.outcome !== "continue" ||
-    typeof value.reason !== "string" || !value.reason.trim() || value.reason.length > 180) return null;
+    typeof value.reason !== "string" || !value.reason.trim() || value.reason.length > INTERVIEW_CLARIFICATION_LIMITS.continueReasonCharacters) return null;
   const reason = value.reason.trim().replace(/\s+/g, " ");
   return reason ? { outcome: "continue", reason } : null;
 }
@@ -104,25 +126,67 @@ export function normalizeInterviewClarificationModelPrompt(
   answers: DesiredClientAnswers,
   createId: () => string,
 ): InterviewClarificationPrompt | null {
-  if (!record(value) || (value.outcome !== "ask" && value.outcome !== "continue")) return null;
-  if (value.outcome === "continue") return normalizeInterviewClarificationContinuePrompt(value);
+  const result = parseInterviewClarificationModelOutput(value, stage, answers, createId);
+  return result.ok ? result.prompt : null;
+}
 
-  const allowedModelKeys = ["outcome", "id", "stage", "purpose", "source_answer_ids", "question", "choices", "reflection"];
-  if (Object.keys(value).some((key) => !allowedModelKeys.includes(key)) ||
-    (Object.hasOwn(value, "id") && typeof value.id !== "string") || value.stage !== stage ||
-    typeof value.question !== "string" || !value.question.trim() || value.question.length > 140 || /[\r\n]/.test(value.question) ||
-    typeof value.reflection !== "string" || value.reflection.length > 240 || value.reflection.trim().split(/\s+/).filter(Boolean).length > 35 ||
-    !Array.isArray(value.choices)) return null;
+export function parseInterviewClarificationModelOutput(
+  value: unknown,
+  stage: InterviewStage,
+  answers: DesiredClientAnswers,
+  createId: () => string,
+): InterviewClarificationModelParseResult {
+  if (!record(value) || !hasExactKeys(value, MODEL_ROOT_KEYS)) return { ok: false, code: "shape" };
+  if (value.outcome !== "ask" && value.outcome !== "continue") return { ok: false, code: "outcome" };
 
-  const prompt: Extract<InterviewClarificationPrompt, { outcome: "ask" }> = {
+  if (value.outcome === "continue") {
+    if (value.prompt !== null) return { ok: false, code: "outcome" };
+    const continuation = normalizeInterviewClarificationContinuePrompt({ outcome: "continue", reason: value.reason });
+    return continuation ? { ok: true, prompt: continuation } : { ok: false, code: "reason" };
+  }
+
+  if (value.reason !== null) return { ok: false, code: "outcome" };
+  if (!record(value.prompt) || !hasExactKeys(value.prompt, MODEL_PROMPT_KEYS)) return { ok: false, code: "payload" };
+  const modelPrompt = value.prompt;
+
+  if (typeof modelPrompt.purpose !== "string" || !INTERVIEW_CLARIFICATION_PURPOSES_BY_STAGE[stage].includes(modelPrompt.purpose as InterviewClarificationPurpose)) {
+    return { ok: false, code: "purpose" };
+  }
+  if (!Array.isArray(modelPrompt.source_answer_ids) ||
+    modelPrompt.source_answer_ids.length < INTERVIEW_CLARIFICATION_LIMITS.minimumSources ||
+    modelPrompt.source_answer_ids.length > INTERVIEW_CLARIFICATION_LIMITS.maximumSources ||
+    new Set(modelPrompt.source_answer_ids).size !== modelPrompt.source_answer_ids.length ||
+    !modelPrompt.source_answer_ids.every((path) => isInterviewClarificationSourceForStage(path, stage) && hasUsableInterviewClarificationSource(path, answers))) {
+    return { ok: false, code: "sources" };
+  }
+  if (typeof modelPrompt.question !== "string" || !modelPrompt.question.trim() ||
+    modelPrompt.question.length > INTERVIEW_CLARIFICATION_LIMITS.questionCharacters || /[\r\n]/.test(modelPrompt.question)) {
+    return { ok: false, code: "question" };
+  }
+  if (!Array.isArray(modelPrompt.choices) ||
+    modelPrompt.choices.length < INTERVIEW_CLARIFICATION_LIMITS.minimumChoices ||
+    modelPrompt.choices.length > INTERVIEW_CLARIFICATION_LIMITS.maximumChoices ||
+    !modelPrompt.choices.every((choice) => record(choice) && hasExactKeys(choice, ["label"]) && typeof choice.label === "string" &&
+      !!choice.label.trim() && choice.label.length <= INTERVIEW_CLARIFICATION_LIMITS.choiceLabelCharacters && !/[\r\n]/.test(choice.label))) {
+    return { ok: false, code: "choices" };
+  }
+  if (typeof modelPrompt.reflection !== "string" ||
+    modelPrompt.reflection.length > INTERVIEW_CLARIFICATION_LIMITS.reflectionCharacters ||
+    modelPrompt.reflection.trim().split(/\s+/).filter(Boolean).length > INTERVIEW_CLARIFICATION_LIMITS.reflectionWords) {
+    return { ok: false, code: "reflection" };
+  }
+
+  const canonical: Extract<InterviewClarificationPrompt, { outcome: "ask" }> = {
     outcome: "ask",
     id: createId(),
     stage,
-    purpose: value.purpose as InterviewClarificationPurpose,
-    source_answer_ids: value.source_answer_ids as AnswerReferencePath[],
-    question: value.question.trim(),
-    choices: value.choices as Array<{ id: string; label: string }>,
-    reflection: value.reflection.trim(),
+    purpose: modelPrompt.purpose as InterviewClarificationPurpose,
+    source_answer_ids: modelPrompt.source_answer_ids as AnswerReferencePath[],
+    question: modelPrompt.question.trim(),
+    choices: modelPrompt.choices.map((choice, index) => ({ id: `choice_${index + 1}`, label: (choice as { label: string }).label.trim() })),
+    reflection: modelPrompt.reflection.trim(),
   };
-  return isInterviewClarificationAskPrompt(prompt, stage, answers) ? prompt : null;
+  return isInterviewClarificationAskPrompt(canonical, stage, answers)
+    ? { ok: true, prompt: canonical }
+    : { ok: false, code: "payload" };
 }

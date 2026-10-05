@@ -1,9 +1,11 @@
 import { emptyAnswers } from "./brief";
 import { buildStructuredBlueprintV4 } from "./structured-blueprint";
 import { validateAnalysisResult } from "./output";
+import { isBoundedMultilineText } from "./validation";
 import { getEligibleClarificationCodes, clarificationOption } from "./clarifications";
 import { getMissingFieldsForStage, getMissingRequiredFields, type StageId } from "./screens";
 import { interviewClarificationSourceFingerprint, type AnalysisResult, type ClarificationCode, type DesiredClientAnswers, type InterviewClarificationAnswer, type InterviewClarificationPrompt, type SavedBrief, type PendingWorkComparison, type WorkComparison } from "./types";
+import { INTERVIEW_CLARIFICATION_LIMITS } from "./interview-clarification-contract";
 export type ToolView = "welcome" | "questions" | "comparison" | "review" | "clarification" | "interviewClarification" | "brief";
 export interface ToolState {
   view: ToolView; mode: "ai" | "structured" | null; answers: DesiredClientAnswers; stage: StageId;
@@ -88,6 +90,7 @@ export function showInterviewClarification(s:ToolState, prompt:Extract<Interview
 }
 export function answerInterviewClarification(s:ToolState, answer:string, choiceId?:string, skipped=false):ToolState {
   const prompt=s.interviewPrompt; if(!prompt) return s;
+  if(!skipped&&!isBoundedMultilineText(answer,INTERVIEW_CLARIFICATION_LIMITS.answerCharacters)) return s;
   const record:InterviewClarificationAnswer={id:prompt.id,stage:prompt.stage,purpose:prompt.purpose,source_answer_ids:prompt.source_answer_ids,source_answer_fingerprint:interviewClarificationSourceFingerprint(s.answers,prompt.source_answer_ids),question:prompt.question,answer:skipped?"":answer.replace(/\r\n?/g,"\n").trim(),...(choiceId?{choiceId}:{}),skipped,reflection:prompt.reflection};
   const answers=structuredClone(s.answers); answers.interview.followups=[...answers.interview.followups,record]; answers.revision++;
   const next=advanceStage({ ...s, answers, view:"questions", interviewPrompt:null, clarificationLoading:false });
