@@ -146,7 +146,10 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
   // The confirmed card can contain a current stage-two clarification as well
   // as the primary matter. Both are required by the grounding validator.
   const targetClaims = groundedProfile.client_and_matter.claims;
-  const targetArray = sections.client_and_matter.properties.claims as typeof sections.client_and_matter.properties.claims & { minItems: number; maxItems: number; description: string };
+  const targetArray = sections.client_and_matter.properties.claims as unknown as {
+    minItems: number; maxItems: number; description: string;
+    items: { properties: { text: { enum?: string[] }; evidence_basis: { enum: readonly string[] }; source_answer_ids: { items: { enum?: string[] } } } };
+  };
   targetArray.minItems = targetClaims.length;
   targetArray.maxItems = targetClaims.length;
   targetArray.description = "Copy every grounded_target.client_and_matter_claims statement exactly in its supplied order, including current clarification claims. Do not omit a clarification, add a claim, paraphrase its text, or change its evidence status.";
