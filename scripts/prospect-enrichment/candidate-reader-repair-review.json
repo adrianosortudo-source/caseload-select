@@ -35,6 +35,14 @@
       "name": "prospect_candidate_firm_field_fastpath",
       "bytes": 17580,
       "sha256": "28a2f20f6852475733b497bd6add3ce10eec6949bb4e2eeb194eb2936155624c"
+    },
+    {
+      "path": "supabase/migrations/20261005141204_prospect_candidate_original_status_fastpath.sql",
+      "filename": "20261005141204_prospect_candidate_original_status_fastpath.sql",
+      "version": "20261005141204",
+      "name": "prospect_candidate_original_status_fastpath",
+      "bytes": 20846,
+      "sha256": "8df3eb00df4672e7362344133b9c5b59d5eda7c0a4d2d364b6604da6af7ad034"
     }
   ],
   "exclusions": [
