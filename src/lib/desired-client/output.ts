@@ -1,5 +1,6 @@
 import { resolveAnswerReference } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
+import { getAnswerLabel } from "./catalog";
 import { buildStructuredBlueprintV4, paymentEvidenceClaim } from "./structured-blueprint";
 import { calculateContribution, hasNegativeContribution } from "./economics";
 import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
@@ -153,6 +154,10 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
     else if (Array.isArray(resolved.value) && resolved.value.every((item) => typeof item === "string")) supportedValues.push(...resolved.value);
     else if (typeof resolved.value === "string") supportedValues.push(resolved.value);
     else return reject("unsupported_source_value_type");
+    if (path === "value.collected_fee" || path === "value.team_hours") {
+      const optionLabel = getAnswerLabel(path, answers);
+      if (optionLabel) supportedValues.push(optionLabel);
+    }
   }
   if (hasUnknown !== (value.evidence_basis === "unknown")) return reject("unknown_evidence_basis_mismatch", unresolvedPath ?? paths[0] as SafeSourcePath);
   if (value.evidence_basis === "unknown" && value.kind !== "unknown") return reject("unknown_evidence_kind_mismatch");
@@ -177,9 +182,10 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   if (value.evidence_basis === "client_reported" || value.evidence_basis === "firm_reported_observation") {
     const expected = value.evidence_basis === "client_reported" ? "client_feedback" : "firm_observation";
     const paymentObservation = value.evidence_basis === "firm_reported_observation" && paths.length === 1 && paths[0] === "value.payment" && answers.focus.route === "established";
+    const valueRangeObservation = value.evidence_basis === "firm_reported_observation" && slot === "why_firm_wants_work" && answers.focus.route === "established" && paths.length > 0 && paths.every(path => path === "value.collected_fee" || path === "value.team_hours");
     const choice = paths.some(path => typeof path === "string" && path.startsWith("client.choice_"));
     const pathway = paths.some(path => typeof path === "string" && (path.startsWith("situation.") || ["client.goals","client.goal_detail","client.concerns","client.decision_needs","client.decision_context","client.pathway_basis"].includes(path)));
-    if (!paymentObservation && ((!choice && !pathway) || (choice && (!paths.includes("client.choice_basis") || answers.client.choice_basis !== expected)) || (pathway && (!paths.includes("client.pathway_basis") || answers.client.pathway_basis !== expected)))) return reject("client_reported_basis_mismatch");
+    if (!paymentObservation && !valueRangeObservation && ((!choice && !pathway) || (choice && (!paths.includes("client.choice_basis") || answers.client.choice_basis !== expected)) || (pathway && (!paths.includes("client.pathway_basis") || answers.client.pathway_basis !== expected)))) return reject("client_reported_basis_mismatch");
   }
   if (value.evidence_basis === "source_observed" && !(paths.includes("opportunity.sources") && answers.opportunity.sources.some((source) => source !== "unknown" && source !== "no_evidence"))) return reject("source_observation_unavailable");
   if (["firm_reported_recorded", "firm_reported_estimate"].includes(value.evidence_basis as string) && value.kind !== "experience" && value.kind !== "hypothesis") return reject("evidence_kind_mismatch");

@@ -179,6 +179,19 @@ describe("AI Blueprint output contract", () => {
     expect(rationale?.text).not.toMatch(/\bfees? (?:are )?worthwhile\b|\bfees? support(?:s)? the effort\b/i);
     expect(validateAnalysisResult({brief,clarification_code:null},answers,[])).not.toBeNull();
   });
+  it("accepts the structured report's firm-reported fee and team-time bands",()=>{
+    const answers=completeAnswers();
+    answers.value.reasons=["client_benefit","fees","skills"];
+    answers.value.collected_fee="5to15"; answers.value.team_hours="16to40";
+    Object.assign(answers.value,{fee_amount:"8000",direct_cost_amount:"8500",currency:"CAD",amount_basis:"estimated",amount_scope:"per_matter"});
+    const brief=buildStructuredBlueprintV4(answers);
+    const range=brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.collected_fee"));
+    expect(range?.evidence_basis).toBe("firm_reported_observation");
+    expect(range?.text).toContain("C$5,000 to under C$15,000");
+    expect(range?.text).toContain("More than 15, up to 40 hours");
+    expect(brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.reasons"))?.text).toContain("fee sustainability as a firm preference");
+    expect(validateAnalysisResult({brief,clarification_code:null},answers,[])).not.toBeNull();
+  });
   it("accepts an accurate negative result and a growth prerequisite without blessing positive economics",()=>{
     const answers=completeAnswers();
     Object.assign(answers.value,{fee_amount:"8000",direct_cost_amount:"10000",currency:"CAD",amount_basis:"estimated",amount_scope:"per_matter"});
