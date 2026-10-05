@@ -145,7 +145,7 @@ describe("AI Blueprint output contract", () => {
     expect(payment?.source_answer_ids).toEqual(["value.payment","value.payment_context","value.payment_context_basis"]);
     expect(payment?.text).toContain("Most buyers paid the first invoice within 15 days.");
     expect(payment?.text).toContain("payment is usually predictable");
-    const validated=validateAnalysisResult(validBlueprint(answers),answers,[]);
+    const validated=validateAnalysisResult({brief:built,clarification_code:null},answers,[]);
     expect(validated).not.toBeNull();
     const all=JSON.stringify(validated);
     for(const source of ["value.payment","value.payment_context","value.payment_context_basis","value.fee_amount","value.direct_cost_amount","value.collected_fee","value.team_hours","delivery.capacity","repeatability.target","repeatability.staffing_constraint"]){expect(all).toContain(source);}
