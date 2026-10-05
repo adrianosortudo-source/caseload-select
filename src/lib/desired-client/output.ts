@@ -291,6 +291,56 @@ function normalizePaymentEvidence(brief: Record<string, unknown>, answers: Desir
   return { brief: { ...brief, why_firm_wants_work: { ...card, claims: nextClaims } }, blocked: false };
 }
 
+/**
+ * A valid model response can still omit a supplied commercial or capacity fact.
+ * Recover only application-owned, source-linked statements that are absent from
+ * the firm's value card. Never invent or paraphrase a missing fact.
+ */
+function normalizeGroundedFirmValueClaims(brief: Record<string, unknown>, answers: DesiredClientAnswers): { brief: Record<string, unknown>; blocked: boolean } {
+  const card = brief.why_firm_wants_work;
+  if (!record(card) || !Array.isArray(card.claims)) return { brief, blocked: false };
+  const claims = card.claims as unknown[];
+  const groundedClaims = buildStructuredBlueprintV4(answers).why_firm_wants_work.claims;
+  const groundedPaths = new Set<string>(groundedClaims.flatMap((claim) => claim.source_answer_ids));
+  const representedPaths = new Set<string>(claims.flatMap((claim) =>
+    record(claim) && Array.isArray(claim.source_answer_ids)
+      ? claim.source_answer_ids.filter((path): path is string => typeof path === "string")
+      : [],
+  ));
+  const missing = groundedClaims.filter((claim) => claim.source_answer_ids.some((path) => !representedPaths.has(path)));
+  if (!missing.length) return { brief, blocked: false };
+
+  const hasAllSources = (candidate: unknown, expected: EvidenceLinkedStatement) =>
+    record(candidate) && Array.isArray(candidate.source_answer_ids) &&
+    expected.source_answer_ids.every((path) => candidate.source_answer_ids.includes(path));
+  const overlaps = (candidate: unknown, expected: EvidenceLinkedStatement) =>
+    record(candidate) && Array.isArray(candidate.source_answer_ids) &&
+    candidate.source_answer_ids.some((path) => expected.source_answer_ids.includes(path as AnswerReferencePath));
+  const nextClaims = [...claims];
+  for (let pass = 0; pass <= groundedClaims.length; pass += 1) {
+    const toRecover = groundedClaims.filter((claim) => !nextClaims.some((existing) => hasAllSources(existing, claim)));
+    if (!toRecover.length) break;
+    for (const claim of toRecover) {
+      // Replace a partial or mixed model claim with the complete application-owned
+      // statement. Any other grounded fact it carried will be recovered in its own
+      // pass below, rather than disappearing with the replacement.
+      for (let index = nextClaims.length - 1; index >= 0; index -= 1) {
+        if (overlaps(nextClaims[index], claim) && !hasAllSources(nextClaims[index], claim)) nextClaims.splice(index, 1);
+      }
+      if (!nextClaims.some((existing) => hasAllSources(existing, claim))) nextClaims.push(claim);
+    }
+  }
+  while (nextClaims.length > 7) {
+    const removable = nextClaims.findIndex((claim) =>
+      record(claim) && Array.isArray(claim.source_answer_ids) &&
+      !claim.source_answer_ids.some((path) => typeof path === "string" && groundedPaths.has(path)),
+    );
+    if (removable < 0) return { brief, blocked: true };
+    nextClaims.splice(removable, 1);
+  }
+  return { brief: { ...brief, why_firm_wants_work: { ...card, claims: nextClaims } }, blocked: false };
+}
+
 export function validateAnalysisResult(value: unknown, answers: DesiredClientAnswers, _eligibleCodes: readonly ClarificationCode[], reportFailure?: (failure: AnalysisValidationFailure) => void): AnalysisResult | null {
   const reject = (field: string, reason: string) => { reportFailure?.({ field, reason }); return null; };
   if (!exact(value, ["brief", "clarification_code"])) return reject("report", "root_shape");
@@ -300,7 +350,9 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   if(!exact(sourceBrief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"]))return reject("report", "brief_shape");
   const normalizedPayment = normalizePaymentEvidence(sourceBrief, answers);
   if (normalizedPayment.blocked) return reject("why_firm_wants_work", "payment_claim_cannot_fit_without_dropping_other_claims");
-  const brief = normalizedPayment.brief;
+  const normalizedFacts = normalizeGroundedFirmValueClaims(normalizedPayment.brief, answers);
+  if (normalizedFacts.blocked) return reject("why_firm_wants_work", "grounded_fact_claims_cannot_fit_without_dropping_other_claims");
+  const brief = normalizedFacts.brief;
   if(brief.report_version!=="dcm-blueprint-v4")return reject("report", "unsupported_report_version");
   if(typeof brief.definition_sentence!=="string")return reject("definition_sentence", "sentence_not_text");
   if(!exact(brief.definition_components,["client","client_matter","reasons","outcome"]))return reject("definition_components", "component_shape");
@@ -335,14 +387,23 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
     })) {
     return reject("client_and_matter", "target_card_not_grounded_in_confirmed_answers");
   }
-  const expectedSentence=buildDefinitionSentence(typedBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
+  // The outcome is application-owned so the proposed measure, target and
+  // review period cannot disappear when the model returns a sparse component.
+  const canonicalBrief = {
+    ...typedBrief,
+    definition_components: {
+      ...typedBrief.definition_components,
+      outcome: groundedTarget.definition_components.outcome,
+    },
+  } as DesiredClientBriefV4;
+  const expectedSentence=buildDefinitionSentence(canonicalBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
   // The definition is assembled from bounded, source-linked fields. A hard
   // 85-word ceiling rejected valid, specific client-and-matter definitions;
   // keep a generous abuse limit while preserving supported detail.
   if(typedBrief.definition_sentence.length>1600||expectedSentence.length>1600)return reject("definition_sentence", "sentence_length");
-  const reportWords=[...cardNames.flatMap(field=>typedBrief[field].claims.map(claim=>claim.text)),...pathwayFields.map(field=>typedBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
+  const reportWords=[...cardNames.flatMap(field=>canonicalBrief[field].claims.map(claim=>claim.text)),...pathwayFields.map(field=>canonicalBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
   if(reportWords>800)return reject("report", "word_limit");
-  return { clarification_code: null, brief: { ...typedBrief, definition_sentence: expectedSentence } };
+  return { clarification_code: null, brief: { ...canonicalBrief, definition_sentence: expectedSentence } };
 }
 
 const LINKED_STATEMENT_SCHEMA = { type: "object", properties: { text: { type: "string" }, kind: { type: "string", enum: KIND }, source_answer_ids: { type: "array", minItems: 1, maxItems: 8, items: { type: "string" } }, evidence_basis: { type: "string", enum: BASIS } }, required: ["text", "kind", "source_answer_ids", "evidence_basis"] } as const;
