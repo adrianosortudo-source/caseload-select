@@ -21,6 +21,7 @@ test("reader repair receipt binds the exact ordered migration sources", () => {
     "20260930130000_prospect_candidate_reader_defer_legacy_audit.sql",
     "20260930225510_prospect_enrichment_apply_refresh_gate.sql",
     "20261004120000_prospect_candidate_firm_field_fastpath.sql",
+    "20261005141204_prospect_candidate_original_status_fastpath.sql",
   ]);
   assert.equal(verified.productionApplicationApproved, false);
   assert.throws(() => verifyReaderRepairReceipt({ ...receipt, migrations: receipt.migrations.map((item, index) => index === 1 ? { ...item, sha256: "0".repeat(64) } : item) }, root), /reader_repair_receipt_source_mismatch/);
@@ -31,22 +32,29 @@ test("reader repair preflight allows only its exact ordered suffix and post-read
   const later = "20260930130000_prospect_candidate_reader_defer_legacy_audit.sql";
   const refreshGate = "20260930225510_prospect_enrichment_apply_refresh_gate.sql";
   const firmFieldFastpath = "20261004120000_prospect_candidate_firm_field_fastpath.sql";
+  const originalStatusFastpath = "20261005141204_prospect_candidate_original_status_fastpath.sql";
   const pending = paths => ({ phase: "candidate-reader-repair-pending", pendingPaths: paths.map(file => "supabase/migrations/" + file) });
   assert.deepEqual(verifyReaderRepairPlan(
-    { dryRun: true, upToDate: false, migrations: [earlier, later, refreshGate, firmFieldFastpath], seeds: [], roles: [] },
-    pending([earlier, later, refreshGate, firmFieldFastpath]),
+    { dryRun: true, upToDate: false, migrations: [earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath], seeds: [], roles: [] },
+    pending([earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath]),
     "pre",
-  ), { phase: "pre", migrations: [earlier, later, refreshGate, firmFieldFastpath], dryRun: true, upToDate: false, exactScope: true });
+  ), { phase: "pre", migrations: [earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath], dryRun: true, upToDate: false, exactScope: true });
   assert.deepEqual(verifyReaderRepairPlan(
-    { dryRun: true, upToDate: false, migrations: [refreshGate, firmFieldFastpath], seeds: [], roles: [] },
-    pending([refreshGate, firmFieldFastpath]),
+    { dryRun: true, upToDate: false, migrations: [refreshGate, firmFieldFastpath, originalStatusFastpath], seeds: [], roles: [] },
+    pending([refreshGate, firmFieldFastpath, originalStatusFastpath]),
     "pre",
-  ), { phase: "pre", migrations: [refreshGate, firmFieldFastpath], dryRun: true, upToDate: false, exactScope: true });
+  ), { phase: "pre", migrations: [refreshGate, firmFieldFastpath, originalStatusFastpath], dryRun: true, upToDate: false, exactScope: true });
   assert.deepEqual(verifyReaderRepairPlan(
-    { dryRun: true, upToDate: false, migrations: [later, refreshGate, firmFieldFastpath], seeds: [], roles: [] },
-    pending([later, refreshGate, firmFieldFastpath]),
+    { dryRun: true, upToDate: false, migrations: [later, refreshGate, firmFieldFastpath, originalStatusFastpath], seeds: [], roles: [] },
+    pending([later, refreshGate, firmFieldFastpath, originalStatusFastpath]),
     "pre",
-  ), { phase: "pre", migrations: [later, refreshGate, firmFieldFastpath], dryRun: true, upToDate: false, exactScope: true });
+  ), { phase: "pre", migrations: [later, refreshGate, firmFieldFastpath, originalStatusFastpath], dryRun: true, upToDate: false, exactScope: true });
+  assert.deepEqual(verifyReaderRepairPlan(
+    { dryRun: true, upToDate: false, migrations: [originalStatusFastpath], seeds: [], roles: [] },
+    pending([originalStatusFastpath]),
+    "pre",
+  ), { phase: "pre", migrations: [originalStatusFastpath], dryRun: true, upToDate: false, exactScope: true });
+
   assert.throws(() => verifyReaderRepairPlan(
     { dryRun: true, upToDate: false, migrations: [earlier, refreshGate], seeds: [], roles: [] },
     pending([earlier, refreshGate]),
@@ -67,6 +75,7 @@ test("reader repair preflight allows only its exact ordered suffix and post-read
 test("reader catalog readback requires indexes, privileges and the refresh-trigger security/transition contract", () => {
   assert.equal(verifyReaderCatalog([{ reader_contract: { ...catalogExpectations } }]).verified, true);
   assert.throws(() => verifyReaderCatalog([{ reader_contract: { ...catalogExpectations, invalid_date_coverage_index: false } }]), /reader_catalog_contract_mismatch/);
+  assert.throws(() => verifyReaderCatalog([{ reader_contract: { ...catalogExpectations, original_status_exact_index: false } }]), /reader_catalog_contract_mismatch/);
   for (const key of ["apply_refresh_security_definer", "apply_refresh_empty_search_path", "apply_refresh_update_transition",
     "apply_refresh_own_core_audit_excluded", "apply_refresh_current_identity_excluded"]) {
     assert.throws(() => verifyReaderCatalog([{ reader_contract: { ...catalogExpectations, [key]: false } }]), /reader_catalog_contract_mismatch/);

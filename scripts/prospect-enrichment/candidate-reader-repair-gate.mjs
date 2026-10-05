@@ -22,6 +22,7 @@ export const catalogExpectations = {
  private_firm_links_service_role_execute:false,private_firm_links_anon_execute:false,private_firm_links_auth_execute:false,
  history_metadata_search_index:true,identity_by_candidate_index:true,identity_by_firm_index:true,
  invalid_date_coverage_index:true,
+ original_status_exact_index:true,
  apply_refresh_security_definer:true,apply_refresh_empty_search_path:true,
  apply_refresh_update_transition:true,apply_refresh_own_core_audit_excluded:true,
  apply_refresh_current_identity_excluded:true
@@ -78,6 +79,7 @@ export const catalogQuery=[
 " 'identity_by_candidate_index',to_regclass('public.prospect_candidate_identity_by_candidate') IS NOT NULL,",
 " 'identity_by_firm_index',to_regclass('public.prospect_candidate_identity_by_firm') IS NOT NULL,",
 " 'invalid_date_coverage_index',to_regclass('public.prospect_candidate_invalid_date_coverage') IS NOT NULL,",
+" 'original_status_exact_index',to_regclass('public.prospect_candidate_original_status_exact') IS NOT NULL,",
 " 'apply_refresh_security_definer',(SELECT p.prosecdef FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure),",
 " 'apply_refresh_empty_search_path',(SELECT coalesce(p.proconfig @> ARRAY['search_path=\"\"']::text[],false) FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure),",
 " 'apply_refresh_update_transition',(SELECT position('TG_OP = ''UPDATE''' in p.prosrc)>0 AND position('OLD.state IS DISTINCT FROM ''applied''' in p.prosrc)>0 AND position('NEW.state = ''applied''' in p.prosrc)>0 AND position('NEW.firm_id IS NOT NULL' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure),",

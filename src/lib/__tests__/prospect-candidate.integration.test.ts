@@ -319,10 +319,10 @@ suite("all-candidate immutable PostgreSQL projection", () => {
     try {
       const token = "statusgroup" + randomUUID().replaceAll("-", ""), status = "rejected-" + token;
       const governed = await governedLegacyFirm(db, token), other = await governedLegacyFirm(db, token + "other");
-      const addStatusAudit = async (firm: { firmId: string; batchId: string }, key: string) => (await db.query<{ id: string }>(
+      const addStatusAudit = async (firm: { firmId: string; batchId: string }, key: string, recordStatus = status, batchId = firm.batchId) => (await db.query<{ id: string }>(
         "INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) VALUES($1,$2,$3,'accepted','created',$4,$5::jsonb) RETURNING id",
-        [firm.batchId, key, "d".repeat(64), firm.firmId, JSON.stringify({ sourceRecordKey: key, originalStatus: status })])).rows[0].id;
-      const auditId = await addStatusAudit(governed, token + "status");
+        [batchId, key, "d".repeat(64), firm.firmId, JSON.stringify({ sourceRecordKey: key, originalStatus: recordStatus })])).rows[0].id;
+      await addStatusAudit(governed, token + "status");
       await db.query("INSERT INTO public.prospect_service_observations(firm_id,service_name,matter_fit,source_url,observed_at) VALUES($1,'Synthetic status sibling','strong-match','https://synthetic.example/status',now())", [governed.firmId]);
       await register(db, [{ key: token + "unresolved", raw: { status } }, { key: token + "unknown", raw: {} }, { key: token + "empty", raw: { status: "" } }]);
       const group = await list(db, { firmId: governed.firmId });
@@ -342,9 +342,12 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       expect(unknown.items.some(item => item.verifiedFirmId === governed.firmId)).toBe(false);
       const first = await list(db, { originalStatus: status }, 1);
       expect(first.nextAfterId).toBe(first.items[0].id);
-      // A latest status change retains the old status. New candidates/statuses
+      // A later same-firm source row must retain the old status. New candidates/statuses
       // enter only new reads; a continuation retains its original identity cutoff.
-      await db.query("UPDATE public.gta_prospect_import_audit SET canonical_record=canonical_record||'{\"originalStatus\":\"selected\"}'::jsonb WHERE id=$1", [auditId]);
+      const laterStatusBatchId = (await db.query<{ id: string }>(
+        "INSERT INTO public.gta_prospect_import_batches(source_name,source_sha256,source_record_count,state,applied_at) VALUES($1,$2,1,'applied',now()) RETURNING id",
+        [token + "later-status-batch", "f".repeat(64)])).rows[0].id;
+      await addStatusAudit(governed, token + "same-firm-later-status", "selected", laterStatusBatchId);
       await db.query("INSERT INTO public.prospect_source_captures(firm_id,requested_url,retrieval_method,observed_at,policy_state) VALUES($1,'https://synthetic.example/later-status','synthetic',now(),'allowed')", [governed.firmId]);
       await addStatusAudit(other, token + "later");
       expect((await list(db, { originalStatus: status })).filteredCount).toBeGreaterThan(first.filteredCount);
