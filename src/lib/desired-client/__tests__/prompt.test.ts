@@ -5,6 +5,19 @@ import type { AnalysisRequestEnvelope } from "../types";
 import { interviewClarificationSourceFingerprint } from "../types";
 const request = (): AnalysisRequestEnvelope => { const answers = completeAnswers(); answers.situation.trigger = null; answers.write_ins = { trigger: "A planned acquisition is under consideration" }; return { schemaVersion: 4, operation:"generate", requestId: "11111111-1111-4111-8111-111111111111", answerRevision: answers.revision, reviewRunId: "22222222-2222-4222-8222-222222222222", analysisIndex: 0, aiConsent: true, answers, clarifications: [] }; };
 describe("Desired Client Blueprint model prompt", () => {
+  it("classifies populated demand uncertainty and no-evidence selections as gaps", () => {
+    const input = request();
+    input.answers.opportunity.sources = ["no_evidence"];
+    input.answers.opportunity.uncertainty = "Referral demand has not been verified.";
+    const payload = JSON.parse(buildDesiredClientUserPrompt(input, []));
+    for (const path of ["opportunity.sources", "opportunity.uncertainty"]) {
+      expect(payload.resolved_answers[path].unknown).toBe(true);
+      expect(payload.unknown_source_paths).toContain(path);
+    }
+    expect(payload.resolved_answers["practice.capability"].unknown).toBe(false);
+    expect(payload.resolved_answers["opportunity.uncertainty"].text).toBe(input.answers.opportunity.uncertainty);
+    expect(input.answers.opportunity.sources).toEqual(["no_evidence"]);
+  });
   it("uses the displayed time and fee bounds in every model answer representation", () => {
     const input = request();
     input.answers.value.team_hours = "16to40";

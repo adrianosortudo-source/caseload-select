@@ -68,6 +68,7 @@ export async function runDesiredClientAnalysis(
     const userPrompt = JSON.parse(buildDesiredClientUserPrompt(request, eligibleCodes));
     delete userPrompt.schema;
     userPrompt.grounded_target = encodeProviderSources(userPrompt.grounded_target, aliases);
+    userPrompt.evidence_gap_source_ids = Object.entries(aliases).filter(([, path]) => userPrompt.unknown_source_paths.includes(path)).map(([id]) => id);
     userPrompt.instruction += " The confirmed grounded_target statements already use compact source IDs and omit kind. Copy text, evidence_basis and source_answer_ids exactly; omit kind in every returned statement because the application derives it.";
     const response = await model.generateContent(JSON.stringify({ ...userPrompt, provider_source_aliases: aliases }));
     const finishReason = response.response.candidates?.[0]?.finishReason;
@@ -105,7 +106,7 @@ export async function runDesiredClientAnalysis(
         : pathwayBasisGuidance
         ? pathwayBasisGuidance
         : failure.reason === "unknown_evidence_basis_mismatch"
-        ? " Separate each known statement from any unanswered or unknown finding. A known claim cites only known sources and its supported evidence basis; a gap claim cites only unknown or empty sources and uses evidence_basis unknown (the application derives kind unknown). Never combine a known fact with a gap in one claim."
+        ? ` Separate each known statement from any unanswered or unknown finding. A known claim cites only known sources and its supported evidence basis; a gap claim cites only evidence_gap_source_ids and uses evidence_basis unknown (the application derives kind unknown). Populated descriptions of demand uncertainty and 'No evidence yet' are evidence gaps, not known demand.${failure.sourcePath ? ` The offending citation is ${failure.sourcePath}.` : ""} Never combine a known fact with a gap in one claim.`
         : failure.reason === "client_reported_basis_mismatch"
         ? " Separate client-choice details from pathway details when their selected bases differ. Cite only the sources supporting each claim, including its matching basis answer. Decision-pathway fields use pathway sources only."
         : ["card_not_object", "card_shape", "claims_not_array", "card_claims_empty", "card_claim_limit_exceeded"].includes(failure.reason)

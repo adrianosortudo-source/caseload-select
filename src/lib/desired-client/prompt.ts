@@ -1,6 +1,6 @@
 import { AREA_CATALOG, WRITE_IN_KEYS, getRoleOptions, getWorkOptions, resolveAnswerReference } from "./catalog";
 import { getSourceDetails } from "./sources";
-import { allowedSourceAnswerPathsForAnswers, BLUEPRINT_RESPONSE_SCHEMA } from "./output";
+import { allowedSourceAnswerPathsForAnswers, BLUEPRINT_RESPONSE_SCHEMA, isUnresolvedEvidenceSource } from "./output";
 import { buildStructuredBlueprintV4 } from "./structured-blueprint";
 import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
 import { isInterviewClarificationCurrent, type AnalysisRequestEnvelope, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers } from "./types";
@@ -43,7 +43,7 @@ function resolvedAnswers(answers: DesiredClientAnswers): Record<string, { questi
     const resolved = resolveAnswerReference(path, answers);
     if (!resolved.present) return [];
     const source = getSourceDetails(path, answers);
-    return [[path, { question: source.question, text: source.answer, unknown: resolved.unknown }]];
+    return [[path, { question: source.question, text: source.answer, unknown: isUnresolvedEvidenceSource(path, answers) }]];
   }));
 }
 

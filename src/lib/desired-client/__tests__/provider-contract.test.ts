@@ -228,6 +228,28 @@ describe("provider output contract", () => {
       expect(outcome.result.brief.client_goals_needs.claims[1].evidence_basis).toBe("unknown");
     }
   });
+  it("gives the provider and fragment repair the validator's demand-gap classification", async () => {
+    const input = request();
+    input.answers.opportunity.sources = ["no_evidence"];
+    input.answers.opportunity.uncertainty = "Referral demand has not been verified.";
+    const invalid = validBlueprint(input.answers);
+    invalid.brief.evidence_and_open_questions.claims = [evidence("Referral demand still needs verification.", "firm_preference", "opportunity.uncertainty")];
+    const repaired = {claims:[evidence("Referral demand has not been verified.", "unknown", "opportunity.uncertainty")]};
+    provider.generate.mockResolvedValueOnce({response:{text:()=>JSON.stringify(invalid)}})
+      .mockResolvedValueOnce({response:{text:()=>JSON.stringify(repaired)}});
+    expect((await runDesiredClientAnalysis(input, [])).mode).toBe("live");
+    const prompt = JSON.parse(provider.generate.mock.calls[0][0]);
+    const aliases = providerSourceAliases(input.answers);
+    const gapAlias = Object.keys(aliases).find(id => aliases[id] === "opportunity.uncertainty")!;
+    const noEvidenceAlias = Object.keys(aliases).find(id => aliases[id] === "opportunity.sources")!;
+    expect(prompt.evidence_gap_source_ids).toEqual(expect.arrayContaining([gapAlias, noEvidenceAlias]));
+    const schema = provider.configure.mock.calls[0][0].generationConfig.responseSchema;
+    const guidance = schema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.evidence_basis.description;
+    expect(guidance).toContain(gapAlias);
+    expect(guidance).toContain(noEvidenceAlias);
+    expect(guidance).toContain("including a populated description of demand uncertainty");
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("The offending citation is opportunity.uncertainty");
+  });
   it("repairs an unsupported first-contact claim as an explicit evidence gap", async () => {
     const input = request();
     input.answers.client.pathway_basis = "firm_observation";

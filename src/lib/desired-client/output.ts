@@ -53,6 +53,15 @@ const numericTokens = (text: string) => [ ...[...text.matchAll(/[+-]?\s*(?:[$€
 }), ...spelledNumericTokens(text) ];
 export type AnalysisValidationFailure = { field: string; reason: string; sourcePath?: AnswerReferencePath | `interview.followups.${number}` };
 
+/** A description of uncertainty is still an evidence gap, even when its text
+ * is populated. Share this classification with both model input and schema. */
+export function isUnresolvedEvidenceSource(path: string, answers: DesiredClientAnswers): boolean {
+  const source = resolveAnswerReference(path as AnswerReferencePath, answers);
+  return source.unknown || source.value === null || source.value === "" ||
+    path === "opportunity.uncertainty" ||
+    (path === "opportunity.sources" && answers.opportunity.sources.includes("no_evidence"));
+}
+
 function allowedPaths(slot: string): readonly string[] {
   if (slot === "practice_current_practice") return ["practice.firm_type"];
   if (slot === "practice_work_to_grow") return ["focus.area", "focus.work", "focus.work_other", "practice.direction"];
@@ -115,16 +124,17 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   const disallowedPath = paths.find((path) => typeof path === "string" && !permittedSourceAnswerPath(path, answers, slot));
   if (typeof disallowedPath === "string" && isSafeSourcePath(disallowedPath)) return reject("source_answer_path_not_allowed_for_slot", disallowedPath);
   let hasUnknown = false;
+  let unresolvedPath: SafeSourcePath | undefined;
   const supportedValues: string[] = [];
   for (const path of paths as AnswerReferencePath[]) {
     const resolved = resolveAnswerReference(path, answers);
     if (!resolved.present || (resolved.value === null && value.evidence_basis !== "unknown")) return reject("source_answer_unavailable");
-    if (resolved.unknown || resolved.value === null || resolved.value === "" || path === "opportunity.uncertainty" || (path === "opportunity.sources" && answers.opportunity.sources.includes("no_evidence")) || (Array.isArray(resolved.value) && resolved.value.length === 0)) hasUnknown = true;
+    if (isUnresolvedEvidenceSource(path, answers)) { hasUnknown = true; unresolvedPath ??= path; }
     else if (Array.isArray(resolved.value) && resolved.value.every((item) => typeof item === "string")) supportedValues.push(...resolved.value);
     else if (typeof resolved.value === "string") supportedValues.push(resolved.value);
     else return reject("unsupported_source_value_type");
   }
-  if (hasUnknown !== (value.evidence_basis === "unknown")) return reject("unknown_evidence_basis_mismatch");
+  if (hasUnknown !== (value.evidence_basis === "unknown")) return reject("unknown_evidence_basis_mismatch", unresolvedPath ?? paths[0] as SafeSourcePath);
   if (value.evidence_basis === "unknown" && value.kind !== "unknown") return reject("unknown_evidence_kind_mismatch");
   const contributionCheck = slot === "why_firm_wants_work" ? calculateContribution(answers) : null;
   if (contributionCheck && hasNegativeContribution(answers) && /\b(?:profitable|positive (?:contribution|margin)|fees? (?:are )?worthwhile|fees? support(?:s)? the effort|margin is positive)\b/i.test(text)) return reject("negative_contribution_claim");
