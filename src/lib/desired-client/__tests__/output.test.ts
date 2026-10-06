@@ -278,7 +278,7 @@ describe("AI Blueprint output contract", () => {
     const value = validBlueprint(answers);
     const contextIndex = value.brief.why_firm_wants_work.claims.length;
     value.brief.why_firm_wants_work.claims.push(evidence(
-      "Clients said the first invoice was generally paid as scheduled.",
+      "Clients said the first invoice was usually paid on time.",
       "client_reported",
       "value.payment_context",
       "value.payment_context_basis",
@@ -298,12 +298,21 @@ describe("AI Blueprint output contract", () => {
 
     const wrongBasis = structuredClone(value);
     wrongBasis.brief.why_firm_wants_work.claims[contextIndex] = evidence(
-      "Clients said the first invoice was generally paid as scheduled.",
+      "Clients said the first invoice was usually paid on time.",
       "firm_reported_observation",
       "value.payment_context",
       "value.payment_context_basis",
     );
     expect(validateAnalysisResult(wrongBasis, answers, [])).toBeNull();
+
+    const contradicted = structuredClone(value);
+    contradicted.brief.why_firm_wants_work.claims[contextIndex] = evidence(
+      "Clients said the first invoice was usually paid late.",
+      "client_reported",
+      "value.payment_context",
+      "value.payment_context_basis",
+    );
+    expect(validateAnalysisResult(contradicted, answers, [])).toBeNull();
 
     const fabricated = structuredClone(value);
     fabricated.brief.why_firm_wants_work.claims[contextIndex] = evidence(
@@ -344,6 +353,84 @@ describe("AI Blueprint output contract", () => {
     expect(experience[0].evidence_basis).toBe("firm_reported_experience");
     expect(claims.some(claim => claim.source_answer_ids.includes("value.payment_context") && claim.source_answer_ids.includes("practice.experience"))).toBe(false);
   });
+  it("splits a canonical client-feedback payment claim from grounded experience and capacity while preserving the full commercial fixture", () => {
+    const answers = completeAnswers();
+    answers.value.reasons = ["client_benefit", "fees", "skills"];
+    Object.assign(answers.value, {
+      fee_effort: "worthwhile", collected_fee: "15to50", team_hours: "16to40",
+      payment: "predictable",
+      payment_context: "Clients told the firm the first invoice was usually paid on schedule.",
+      payment_context_basis: "client_feedback",
+      currency: "CAD", fee_amount: "8000", direct_cost_amount: "8500",
+      amount_basis: "recorded", amount_scope: "per_matter",
+    });
+    answers.practice.experience = "regular";
+    Object.assign(answers.delivery, { conditions: ["scope", "information"], capacity: "room" });
+    Object.assign(answers.repeatability, {
+      success_measure: "retained_matters",
+      target: "2 additional retained matters per quarter",
+      review_period: "quarterly",
+      additional_matters: "2 comparable matters per quarter",
+      staffing_constraint: "One associate has room for two more matters.",
+    });
+
+    const built = buildStructuredBlueprintV4(answers);
+    const contextIndex = built.why_firm_wants_work.claims.findIndex((claim) => claim.source_answer_ids.includes("value.payment_context"));
+    const context = built.why_firm_wants_work.claims[contextIndex];
+    const experience = built.why_firm_wants_work.claims.find((claim) => claim.source_answer_ids.includes("practice.experience"));
+    const capacity = built.why_firm_wants_work.claims.find((claim) => claim.source_answer_ids.includes("repeatability.additional_matters"));
+    expect(contextIndex).toBeGreaterThanOrEqual(0);
+    expect(experience).toBeDefined();
+    expect(capacity).toBeDefined();
+
+    const result = { brief: structuredClone(built), clarification_code: null };
+    result.brief.why_firm_wants_work.claims[contextIndex] = evidence(
+      [context.text, experience!.text, capacity!.text].join(" "),
+      "client_reported",
+      "value.payment_context",
+      "value.payment_context_basis",
+      ...experience!.source_answer_ids,
+      ...capacity!.source_answer_ids,
+    );
+    const failures: Array<{ field: string; reason: string }> = [];
+    const validated = validateAnalysisResult(result, answers, [], (failure) => failures.push({ field: failure.field, reason: failure.reason }));
+    expect(validated, JSON.stringify(failures)).not.toBeNull();
+    const claims = validated!.brief.why_firm_wants_work.claims;
+    expect(claims.length).toBeLessThanOrEqual(7);
+
+    const normalizedContext = claims.find((claim) => claim.source_answer_ids.includes("value.payment_context"));
+    expect(normalizedContext).toMatchObject({
+      evidence_basis: "client_reported",
+      source_answer_ids: ["value.payment_context", "value.payment_context_basis"],
+    });
+    expect(normalizedContext?.text).toContain("usually paid on schedule");
+    const normalizedExperience = claims.find((claim) => claim.source_answer_ids.includes("practice.experience"));
+    expect(normalizedExperience?.evidence_basis).toBe("firm_reported_experience");
+    expect(normalizedExperience?.source_answer_ids).not.toContain("value.payment_context");
+    const normalizedCapacity = claims.find((claim) => claim.source_answer_ids.includes("repeatability.additional_matters"));
+    expect(normalizedCapacity?.evidence_basis).toBe("firm_reported_observation");
+    expect(normalizedCapacity?.text).toContain("2 comparable matters per quarter");
+    expect(normalizedCapacity?.source_answer_ids).not.toContain("value.payment_context");
+
+    const serialized = JSON.stringify(validated);
+    for (const path of [
+      "value.fee_amount", "value.direct_cost_amount", "value.collected_fee", "value.team_hours",
+      "value.payment_context", "value.payment_context_basis", "delivery.capacity", "delivery.conditions",
+      "repeatability.staffing_constraint", "repeatability.target", "repeatability.review_period",
+    ]) expect(serialized).toContain(path);
+    expect(serialized).toContain("8000");
+    expect(serialized).toContain("8500");
+    expect(serialized).toContain("C$500.00");
+    expect(serialized).toContain("C$15,000 to under C$50,000");
+    expect(serialized).toContain("More than 15, up to 40 hours");
+    expect(serialized).toContain("A clearly agreed scope");
+    expect(serialized).toContain("Access to the information we need");
+    expect(serialized).toContain("One associate has room for two more matters.");
+    expect(serialized).toContain("2 additional retained matters per quarter");
+    expect(validated!.brief.definition_components.outcome.source_answer_ids).toContain("repeatability.review_period");
+    expect(calculateContribution(answers)?.amount.replace(/\u2212/u, "-")).toBe("-C$500.00");
+    expect(calculateContribution(answers)?.margin?.amount.replace(/\u2212/u, "-")).toBe("-6.25%");
+  });
   it("rejects fabricated payment assertions before repairable source separation", () => {
     const answers = completeAnswers();
     answers.value.payment = "predictable";
@@ -363,6 +450,19 @@ describe("AI Blueprint output contract", () => {
       )];
       expect(validateAnalysisResult(value, answers, [])).toBeNull();
     }
+  });
+  it("rejects an unsupported number in a mixed payment and experience claim before recovery", () => {
+    const answers = completeAnswers();
+    answers.value.payment = "predictable";
+    answers.practice.experience = "regular";
+    const value = validBlueprint(answers);
+    value.brief.why_firm_wants_work.claims = [evidence(
+      "Payment is usually predictable and the firm handled 999 matters.",
+      "firm_reported_observation",
+      "value.payment",
+      "practice.experience",
+    )];
+    expect(validateAnalysisResult(value, answers, [])).toBeNull();
   });
   it("keeps an explicit unknown payment gap while rejecting an unknown-as-fact claim", () => {
     const answers = completeAnswers();

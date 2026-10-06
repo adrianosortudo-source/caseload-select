@@ -9,6 +9,7 @@ import { isSafeSourcePath, validateAnalysisResult, type AnalysisValidationFailur
 import { safeProviderFailureMetadata } from "./provider-diagnostics";
 import { decodeProviderSources, decodeProviderTargetCard, encodeProviderSources, providerBlueprintSchema, providerSourceAliases, providerTargetClaimIds } from "./provider-schema";
 import type { AnalysisRequestEnvelope, AnalysisResult, ClarificationCode } from "./types";
+import { buildStructuredBlueprintV4 } from "./structured-blueprint";
 
 const MODEL = "gemini-2.5-flash";
 const REQUEST_TIMEOUT_MS = 24_000;
@@ -68,9 +69,16 @@ export async function runDesiredClientAnalysis(
     const userPrompt = JSON.parse(buildDesiredClientUserPrompt(request, eligibleCodes));
     delete userPrompt.schema;
     userPrompt.grounded_target = encodeProviderSources(userPrompt.grounded_target, aliases);
+    userPrompt.grounded_payment_claims = encodeProviderSources(
+      buildStructuredBlueprintV4(request.answers).why_firm_wants_work.claims.filter((claim) =>
+        claim.source_answer_ids.some((path) => ["value.payment", "value.payment_context", "value.payment_context_basis"].includes(path)),
+      ),
+      aliases,
+    );
     userPrompt.grounded_target_claim_ids = providerTargetClaimIds(request.answers);
     userPrompt.evidence_gap_source_ids = Object.entries(aliases).filter(([, path]) => userPrompt.unknown_source_paths.includes(path)).map(([id]) => id);
     userPrompt.instruction += " The confirmed grounded_target statements already use compact source IDs and omit kind. Copy text, evidence_basis and source_answer_ids exactly for the definition components; omit kind in every returned statement because the application derives it. For client_and_matter only, follow the provider schema: return {claim_ids: grounded_target_claim_ids}, copying the complete ordered list of IDs. Do not return target text, evidence status or citations in that card; the application resolves each selected ID to its confirmed statement, including a current stage-two clarification if present, before independent validation. This transport instruction supersedes the earlier target-card copy format; all other cards remain AI-written grounded analysis.";
+    userPrompt.instruction += " For why_firm_wants_work, copy every applicable canonical payment or payment-context statement from grounded_payment_claims exactly, including its evidence basis and compact source IDs. Keep those statements separate from other fact groups. Preserve every supplied commercial and capacity fact within the seven-claim card limit.";
     const response = await model.generateContent(JSON.stringify({ ...userPrompt, provider_source_aliases: aliases }));
     const finishReason = response.response.candidates?.[0]?.finishReason;
     let parsed: unknown;
@@ -102,7 +110,7 @@ export async function runDesiredClientAnalysis(
         : pathwayBasisMismatch && request.answers.client.pathway_basis === "client_feedback"
         ? " The selected client.pathway_basis is client_feedback. For this known pathway claim, use evidence_basis client_reported and cite the relevant client-pathway answer plus client.pathway_basis. firm_reported_observation is incorrect because this item is based on client feedback. If the field is not established, return only a gap using evidence_basis unknown and an unanswered relevant source."
         : "";
-      const repairGuidance = firstContactUnanswered
+      let repairGuidance = firstContactUnanswered
         ? " The submitted answers do not establish who initiates first contact or how the client reaches the firm. State that gap plainly, cite only situation.contact, and use evidence_basis unknown. Do not infer contact behaviour from the client's role, timing or decision context, and do not label the gap client_reported or firm_reported_observation."
         : pathwayBasisGuidance
         ? pathwayBasisGuidance
@@ -112,13 +120,16 @@ export async function runDesiredClientAnalysis(
         ? " The application calculated negative contribution from the supplied comparable fee and direct cost. Do not call this work profitable, worthwhile on fee grounds, or able to support the effort. State the firm's reported preference separately from the negative calculation, identify the contradiction, and describe what must be verified or changed before increasing volume. Do not invent a future fee, cost, margin or recovery plan."
         : failure.reason === "unknown_evidence_basis_mismatch"
         ? ` Separate each known statement from any unanswered or unknown finding. A known claim cites only known sources and its supported evidence basis; a gap claim cites only evidence_gap_source_ids and uses evidence_basis unknown (the application derives kind unknown). Populated descriptions of demand uncertainty and 'No evidence yet' are evidence gaps, not known demand.${failure.sourcePath ? ` The offending citation is ${failure.sourcePath}.` : ""} Never combine a known fact with a gap in one claim.`
+        : failure.reason === "client_reported_basis_mismatch" && parts[0] === "why_firm_wants_work"
+        ? " Copy the applicable payment and payment-context statement from grounded_payment_claims exactly with its own selected evidence basis and compact source IDs. Keep payment/context separate from experience, capacity and preferences; do not borrow a client-reported basis from another source group."
         : failure.reason === "client_reported_basis_mismatch"
         ? " Separate client-choice details from pathway details when their selected bases differ. Cite only the sources supporting each claim, including its matching basis answer. Decision-pathway fields use pathway sources only."
         : failure.reason === "experience_basis_mismatch"
         ? " A chosen strength or its proposed benefit is a firm preference, not evidence of experience. If a claim cites only practice.client_strength or practice.client_strength_effect, use evidence_basis firm_preference and describe it as the firm's stated strength. Use firm_reported_experience only for experience actually supplied in practice.experience, practice.capability or practice.client_strength_support, and cite at least one of those specific sources using its compact ID. Do not add an unrelated experience citation to upgrade a selected strength; keep selection, proposed effect and reported experience in separate claims."
         : ["card_not_object", "card_shape", "claims_not_array", "card_claims_empty", "card_claim_limit_exceeded"].includes(failure.reason)
-        ? " Return exactly one card object with only a claims array and one to six grounded claims. If there are too many details, combine only closely related statements that share an evidence basis; preserve consequential demand gaps, estimates, capacity prerequisites, and the proposed measure and review period. Never mix known facts with unknowns or omit a consequential condition. If no known claim is supported, state the relevant evidence gap using only an unanswered or no-evidence source."
+        ? " Return exactly one card object with only a claims array and one to " + (parts[0] === "why_firm_wants_work" ? "seven" : "six") + " grounded claims. If there are too many details, combine only closely related statements that share an evidence basis; preserve consequential demand gaps, estimates, capacity prerequisites, and the proposed measure and review period. Never mix known facts with unknowns or omit a consequential condition. If no known claim is supported, state the relevant evidence gap using only an unanswered or no-evidence source."
         : "";
+      if (parts[0] === "why_firm_wants_work") repairGuidance += " This card allows up to seven grounded claims. Copy every applicable canonical payment or payment-context statement from grounded_payment_claims exactly, including its evidence_basis and compact source_answer_ids. Keep those statements separate from other fact groups, preserve every supplied commercial and capacity fact, and do not drop delivery conditions, the proposed target or its review period.";
       const root = parsed as { brief: Record<string, unknown> };
       let fragment = root.brief[parts[0]];
       let fragmentSchema = (providerBlueprintSchema(request.answers) as { properties: { brief: { properties: Record<string, unknown> } } }).properties.brief.properties[parts[0]];

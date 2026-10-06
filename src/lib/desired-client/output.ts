@@ -62,6 +62,72 @@ const PAYMENT_CONTEXT_STOP_WORDS = new Set([
   "about", "after", "also", "and", "been", "before", "from", "into", "last", "most", "our",
   "over", "that", "the", "their", "this", "within", "with", "would", "your",
 ]);
+const PAYMENT_ON_TIME = /\b(?:on[ -]schedule|on[ -]time|prompt(?:ly)?|within\s+(?:the\s+)?\d+(?:\s+\w+){0,2}|not\s+(?:usually\s+)?late)\b/iu;
+const PAYMENT_LATE = /\b(?:late|delayed|overdue|past[ -]due|behind\s+schedule)\b/iu;
+const MIXED_CLAIM_STOP_WORDS = new Set([
+  ...PAYMENT_CONTEXT_STOP_WORDS, "a", "an", "are", "as", "at", "be", "been", "being", "but", "by", "can", "could", "did", "do", "does", "for", "from", "get", "gets", "has", "have", "in", "is", "it", "may", "of", "on", "or", "our", "should", "so", "than", "then", "there", "these", "they", "to", "was", "were", "will", "we", "when", "which", "who", "while", "you", "firm", "firms", "reports", "reported", "reporting", "states", "stated", "says", "said", "notes", "noted", "basis", "specified", "established", "observation", "observed", "hypothesis", "working", "assumption", "test", "testing", "context", "feedback", "payment", "payments", "claim", "claims", "current", "assessment", "additional", "supplied", "matter", "matters", "client", "clients",
+]);
+
+function answerTextForPath(path: string, answers: DesiredClientAnswers): string[] {
+  const followup = /^interview\.followups\.(\d+)$/.exec(path);
+  if (followup) {
+    const answer = answers.interview.followups[Number(followup[1])]?.answer;
+    return typeof answer === "string" && answer.trim() ? [answer] : [];
+  }
+  if (!SOURCE_PATHS.has(path)) return [];
+  const resolved = resolveAnswerReference(path as AnswerReferencePath, answers);
+  const values = typeof resolved.value === "string" && resolved.value.trim() ? [resolved.value] : [];
+  const label = getAnswerLabel(path as AnswerReferencePath, answers);
+  return label && !values.includes(label) ? [...values, label] : values;
+}
+
+function citationSupportsNumericTokens(text: string, paths: readonly string[], answers: DesiredClientAnswers): boolean {
+  const sourceNumbers = paths.flatMap((path) => answerTextForPath(path, answers)).flatMap((source) => numericTokens(source));
+  const unsupported = numericTokens(text).filter((token) => !sourceNumbers.includes(token));
+  if (!unsupported.length) return true;
+  const contribution = calculateContribution(answers);
+  const economicsPaths = ["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"];
+  const hasAllEconomicsSources = economicsPaths.every((path) => paths.includes(path));
+  const calculatedTokens = contribution ? [contribution.amount, contribution.margin?.amount ?? ""].flatMap(numericTokens) : [];
+  return !!contribution && hasAllEconomicsSources && /\bcontribution\b/iu.test(text) &&
+    unsupported.every((token) => calculatedTokens.includes(token));
+}
+
+function normalizedGroundingToken(token: string): string {
+  const lower = token.toLocaleLowerCase("en-CA");
+  const aliasGroups = [
+    ["usually", "generally", "typically"], ["said", "told", "reported"], ["paid", "received"],
+    ["schedule", "scheduled", "time", "timely", "prompt", "promptly", "punctual", "punctually"], ["client", "clients", "buyer", "buyers"], ["handle", "handles", "handled", "handling"],
+  ];
+  const alias = aliasGroups.find((group) => group.includes(lower));
+  if (alias) return alias[0];
+  if (lower.length > 5 && lower.endsWith("ly")) return lower.slice(0, -2);
+  if (lower.length > 5 && lower.endsWith("ed")) return lower.slice(0, -2);
+  if (lower.length > 4 && lower.endsWith("s")) return lower.slice(0, -1);
+  return lower;
+}
+
+function significantGroundingTokens(text: string): string[] {
+  return text.toLocaleLowerCase("en-CA").split(/[^\p{L}\p{N}]+/u)
+    .filter((token) => token.length > 3 && !MIXED_CLAIM_STOP_WORDS.has(token) && !/^\d+$/u.test(token))
+    .map(normalizedGroundingToken);
+}
+
+function mixedPaymentClaimLanguageIsGrounded(text: string, paths: readonly string[], answers: DesiredClientAnswers): boolean {
+  const paymentPaths = new Set(["value.payment", "value.payment_context", "value.payment_context_basis"]);
+  const mixedPaths = paths.filter((path) => !paymentPaths.has(path));
+  if (!mixedPaths.length) return true;
+  const structuredClaims = buildStructuredBlueprintV4(answers).why_firm_wants_work.claims;
+  const relevantClaims = structuredClaims.filter((claim) => claim.source_answer_ids.some((path) => mixedPaths.includes(path)));
+  if (mixedPaths.some((path) => !relevantClaims.some((claim) => claim.source_answer_ids.includes(path)))) return false;
+  const supportedText = [
+    ...paths.flatMap((path) => answerTextForPath(path, answers)),
+    ...paymentEvidenceClaims(answers).filter((claim): claim is EvidenceLinkedStatement => claim !== null).map((claim) => claim.text),
+    ...relevantClaims.map((claim) => claim.text),
+  ];
+  const supportedTokens = new Set(supportedText.flatMap(significantGroundingTokens));
+  return significantGroundingTokens(text).every((token) => supportedTokens.has(token));
+}
 
 /**
  * Payment is an application-owned enum plus an optional free-text note. A
@@ -77,6 +143,7 @@ function paymentClaimIsAuthentic(value: unknown, answers: DesiredClientAnswers):
   const hasContext = paths.includes("value.payment_context") || paths.includes("value.payment_context_basis");
   if (!hasPayment && !hasContext) return true;
   const text = value.text.trim().replace(/\s+/g, " ");
+  if (!citationSupportsNumericTokens(text, paths, answers) || !mixedPaymentClaimLanguageIsGrounded(text, paths, answers)) return false;
   const expectedPayment = paymentEvidenceClaim(answers);
   const expectedContext = paymentContextEvidenceClaim(answers);
   const exactSupported = [expectedPayment, expectedContext, ...(paymentEvidenceClaims(answers) ?? [])]
@@ -96,20 +163,21 @@ function paymentClaimIsAuthentic(value: unknown, answers: DesiredClientAnswers):
   // and cannot introduce a different number. This permits the existing mixed
   // payment/experience repair while blocking generic or invented context.
   if (hasContext && answers.value.payment_context.trim()) {
-    const supportedValues = [answers.value.payment_context, answers.value.payment_context_basis ?? ""];
-    const supportedNumbers = supportedValues.flatMap((source) => numericTokens(source));
-    const unsupportedNumbers = numericTokens(text).filter((token) => !supportedNumbers.includes(token));
-    if (unsupportedNumbers.length) return false;
     const contextWords = answers.value.payment_context.toLocaleLowerCase("en-CA")
       .split(/[^\p{L}\p{N}]+/u)
       .filter((word) => word.length > 3 && !PAYMENT_CONTEXT_STOP_WORDS.has(word));
     const textWords = new Set(text.toLocaleLowerCase("en-CA").split(/[^\p{L}\p{N}]+/u));
     if (contextWords.length && !contextWords.some((word) => textWords.has(word))) return false;
+    const noteIsOnTime = PAYMENT_ON_TIME.test(answers.value.payment_context);
+    const noteIsLate = PAYMENT_LATE.test(answers.value.payment_context) && !/\bnot\s+(?:usually\s+)?late\b/iu.test(answers.value.payment_context);
+    const claimIsOnTime = PAYMENT_ON_TIME.test(text);
+    const claimIsLate = PAYMENT_LATE.test(text) && !/\bnot\s+(?:usually\s+)?late\b/iu.test(text);
+    if ((noteIsOnTime && claimIsLate) || (noteIsLate && claimIsOnTime)) return false;
   }
 
   // Do not allow broad payment assertions to pass merely because they cite a
   // payment source. Exact user-supplied notes remain allowed above.
-  if (/\b(?:audited?|records?|prove[sd]?|all clients?|every client|always|never|paid on time|on time)\b/iu.test(text)) return false;
+  if (/\b(?:audited?|records?|prove[sd]?|all clients?|every client|always|never)\b/iu.test(text)) return false;
   return true;
 }
 
@@ -266,8 +334,7 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
     const paymentObservation = value.evidence_basis === "firm_reported_observation" && answers.focus.route === "established" &&
       ((paths.length === 1 && paths[0] === "value.payment") || (isCombinedPayment && paths.includes("value.payment")));
     const paymentContextSource = answers.value.payment_context.trim() && answers.value.payment_context_basis === expected &&
-      ((paths.length === 2 && paths.includes("value.payment_context") && paths.includes("value.payment_context_basis")) ||
-        (isCombinedPayment && paths.includes("value.payment_context") && paths.includes("value.payment_context_basis")));
+      paths.includes("value.payment_context") && paths.includes("value.payment_context_basis");
     const valueRangeObservation = value.evidence_basis === "firm_reported_observation" && slot === "why_firm_wants_work" && answers.focus.route === "established" && paths.length > 0 && paths.every(path => path === "value.collected_fee" || path === "value.team_hours");
     const capacityObservation = value.evidence_basis === "firm_reported_observation" && slot === "why_firm_wants_work" && paths.length > 0 && paths.every(path => path === "delivery.capacity" || path === "write_ins.capacity" || path === "repeatability.additional_matters");
     const valueRangeSource = paths.some(path => path === "value.collected_fee" || path === "value.team_hours");

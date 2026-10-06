@@ -75,7 +75,43 @@ describe("provider output contract", () => {
     expect(claim.evidence_basis.enum).toContain(expected);
     expect(claim.evidence_basis.description).toContain("payment_context_basis");
     expect(claim.evidence_basis.description).toContain("Keep payment and context claims separate when their derived status differs");
+    expect(claim.evidence_basis.description).toContain("copy the matching canonical text");
     if (paymentContextBasis === "firm_observation") expect(claim.evidence_basis.enum).not.toContain("client_reported");
+  });
+  it("supplies canonical payment claims with compact sources to the initial and repair prompts", async () => {
+    const input = request();
+    input.answers.value.payment = "predictable";
+    input.answers.value.payment_context = "Clients told the firm that the first invoice was usually paid on schedule.";
+    input.answers.value.payment_context_basis = "client_feedback";
+    const aliases = providerSourceAliases(input.answers);
+    const groundedPaymentClaims = buildStructuredBlueprintV4(input.answers).why_firm_wants_work.claims.filter((claim) =>
+      claim.source_answer_ids.some((path) => ["value.payment", "value.payment_context", "value.payment_context_basis"].includes(path)),
+    );
+    const compactPaymentClaims = encodeProviderSources(groundedPaymentClaims, aliases);
+
+    const invalid = validBlueprint(input.answers);
+    invalid.brief.why_firm_wants_work.claims = Array.from(
+      { length: 8 },
+      () => structuredClone(invalid.brief.why_firm_wants_work.claims[0]),
+    );
+    const repaired = buildStructuredBlueprintV4(input.answers).why_firm_wants_work;
+    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(encodeProviderSources(invalid, aliases)) } })
+      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(encodeProviderSources(repaired, aliases)) } });
+
+    const outcome = await runDesiredClientAnalysis(input, []);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(2);
+    const initialPrompt = JSON.parse(provider.generate.mock.calls[0][0]);
+    const repairPrompt = JSON.parse(provider.generate.mock.calls[1][0]);
+    expect(initialPrompt.grounded_payment_claims).toEqual(compactPaymentClaims);
+    expect(repairPrompt.grounded_payment_claims).toEqual(compactPaymentClaims);
+    expect(initialPrompt.instruction).toContain("copy every applicable canonical payment");
+    expect(repairPrompt.grounded_payment_claims.every((claim: { source_answer_ids: string[] }) =>
+      claim.source_answer_ids.every((id) => Object.hasOwn(aliases, id)),
+    )).toBe(true);
+    const repairInstruction = provider.configure.mock.calls[1][0].systemInstruction;
+    expect(repairInstruction).toContain("up to seven grounded claims");
+    expect(repairInstruction).toContain("grounded_payment_claims exactly");
   });
   it("asks the model to format a specific client type as a grammatically complete noun phrase", () => {
     const schema = providerBlueprintSchema(completeAnswers()) as {properties:{brief:{properties:{definition_components:{properties:{client:{properties:{text:{description:string}}}}}}}}};
