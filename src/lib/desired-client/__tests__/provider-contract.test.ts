@@ -137,7 +137,15 @@ describe("provider output contract", () => {
     const repairInstruction=provider.configure.mock.calls[1][0].systemInstruction;
     expect(repairInstruction).toContain("The application calculated negative contribution");
     expect(repairInstruction).toContain("State the firm's reported preference separately");
-    if(outcome.mode==="live")expect(outcome.result.brief.why_firm_wants_work.claims).toEqual(repaired.claims);
+    if(outcome.mode==="live") {
+      const claims = outcome.result.brief.why_firm_wants_work.claims;
+      const grounded = buildStructuredBlueprintV4(input.answers).why_firm_wants_work.claims;
+      expect(claims).toEqual(expect.arrayContaining([
+        repaired.claims[1],
+        ...grounded.filter((claim) => !claim.source_answer_ids.includes("value.fee_amount")),
+      ]));
+      expect(claims.some((claim) => /fees support the effort|make the work profitable/iu.test(claim.text))).toBe(false);
+    }
   });
   it("does not silently replace an invented target with the confirmed target", async () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});

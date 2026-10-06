@@ -44,6 +44,73 @@ function assertsPositiveEconomics(text: string): boolean {
   return false;
 }
 
+const PAYMENT_LANGUAGE: Record<string, string> = {
+  predictable: "payment is usually predictable",
+  varies: "payment depends on the matter",
+  uncertain: "payment is often uncertain",
+};
+
+function paymentMeaningIsPresent(text: string, payment: string | null): boolean {
+  const lower = text.toLocaleLowerCase("en-CA");
+  if (payment === "predictable") return /\bpayment\b[\w\s-]{0,30}\bpredictable\b/iu.test(lower);
+  if (payment === "varies") return /\bpayment\b[\w\s-]{0,30}\b(?:varies|variable|depends)\b/iu.test(lower);
+  if (payment === "uncertain") return /\bpayment\b[\w\s-]{0,30}\buncertain\b/iu.test(lower);
+  return false;
+}
+
+const PAYMENT_CONTEXT_STOP_WORDS = new Set([
+  "about", "after", "also", "and", "been", "before", "from", "into", "last", "most", "our",
+  "over", "that", "the", "their", "this", "within", "with", "would", "your",
+]);
+
+/**
+ * Payment is an application-owned enum plus an optional free-text note. A
+ * model may rephrase a supported note, but it must retain the selected
+ * payment meaning, the note's material context, and every supplied number.
+ * This check runs before repairable payment wording is considered, so a
+ * fabricated statement cannot be replaced by a canonical fallback.
+ */
+function paymentClaimIsAuthentic(value: unknown, answers: DesiredClientAnswers): boolean {
+  if (!record(value) || !Array.isArray(value.source_answer_ids) || typeof value.text !== "string") return true;
+  const paths = value.source_answer_ids.filter((path): path is string => typeof path === "string");
+  const hasPayment = paths.includes("value.payment");
+  const hasContext = paths.includes("value.payment_context") || paths.includes("value.payment_context_basis");
+  if (!hasPayment && !hasContext) return true;
+  const text = value.text.trim().replace(/\s+/g, " ");
+  const expectedPayment = paymentEvidenceClaim(answers);
+  const expectedContext = paymentContextEvidenceClaim(answers);
+  const exactSupported = [expectedPayment, expectedContext, ...(paymentEvidenceClaims(answers) ?? [])]
+    .filter((claim): claim is EvidenceLinkedStatement => claim !== null)
+    .some((claim) => claim.text === text);
+  if (exactSupported) return true;
+
+  // Keep the payment enum's meaning in every mixed or paraphrased claim.
+  if (hasPayment) {
+    const phrase = answers.value.payment ? PAYMENT_LANGUAGE[answers.value.payment] : "";
+    if (!phrase || !paymentMeaningIsPresent(text, answers.value.payment)) return false;
+  }
+
+  // A context note may be paraphrased, but it must leave a recognizable trace
+  // and cannot introduce a different number. This permits the existing mixed
+  // payment/experience repair while blocking generic or invented context.
+  if (hasContext && answers.value.payment_context.trim()) {
+    const supportedValues = [answers.value.payment_context, answers.value.payment_context_basis ?? ""];
+    const supportedNumbers = supportedValues.flatMap((source) => numericTokens(source));
+    const unsupportedNumbers = numericTokens(text).filter((token) => !supportedNumbers.includes(token));
+    if (unsupportedNumbers.length) return false;
+    const contextWords = answers.value.payment_context.toLocaleLowerCase("en-CA")
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((word) => word.length > 3 && !PAYMENT_CONTEXT_STOP_WORDS.has(word));
+    const textWords = new Set(text.toLocaleLowerCase("en-CA").split(/[^\p{L}\p{N}]+/u));
+    if (contextWords.length && !contextWords.some((word) => textWords.has(word))) return false;
+  }
+
+  // Do not allow broad payment assertions to pass merely because they cite a
+  // payment source. Exact user-supplied notes remain allowed above.
+  if (/\b(?:audited?|records?|prove[sd]?|all clients?|every client|always|never|paid on time|on time)\b/iu.test(text)) return false;
+  return true;
+}
+
 /** Match common written-out counts only when a nearby quantity word makes the
  * numeric meaning clear. This keeps “two matters” equivalent to “2 matters”
  * without treating every prose use of “one” or “first” as a figure. */
@@ -361,10 +428,9 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
     for (const claim of sourceValueCard.claims) {
       const hasPaymentSource = record(claim) && Array.isArray(claim.source_answer_ids) &&
         claim.source_answer_ids.some((path) => typeof path === "string" && paymentPaths.has(path));
-      const unsupportedPaymentAssertion = hasPaymentSource && record(claim) && Array.isArray(claim.source_answer_ids) &&
-        claim.source_answer_ids.length === 1 && claim.source_answer_ids[0] === "value.payment" &&
-        typeof claim.text === "string" && /\b(?:audited?|records?|prove[sd]?|all clients?|every client|always|never|paid on time|on time)\b/iu.test(claim.text);
-      if (unsupportedPaymentAssertion) return reject("why_firm_wants_work", "claim_not_valid");
+      // Validate payment meaning, context trace and numeric authenticity before
+      // allowing any repairable wording or source-separation path.
+      if (hasPaymentSource && !paymentClaimIsAuthentic(claim, answers)) return reject("why_firm_wants_work", "claim_not_valid");
       let failure: { reason: string; sourcePath?: SafeSourcePath } | undefined;
       if (validStatement(claim, answers, "why_firm_wants_work", (reason, sourcePath) => { failure = { reason, ...(sourcePath ? { sourcePath } : {}) }; })) continue;
       if (!hasPaymentSource || !record(claim) || !Array.isArray(claim.source_answer_ids)) {

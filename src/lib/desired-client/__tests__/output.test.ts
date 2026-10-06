@@ -216,6 +216,26 @@ describe("AI Blueprint output contract", () => {
     expect(experience[0].evidence_basis).toBe("firm_reported_experience");
     expect(claims.some(claim => claim.source_answer_ids.includes("value.payment_context") && claim.source_answer_ids.includes("practice.experience"))).toBe(false);
   });
+  it("rejects fabricated payment assertions before repairable source separation", () => {
+    const answers = completeAnswers();
+    answers.value.payment = "predictable";
+    answers.value.payment_context = "In our last ten comparable engagements, payment was usually received on schedule.";
+    answers.value.payment_context_basis = "firm_observation";
+    for (const text of [
+      "Firm observation: 999 clients never paid.",
+      "Audited records prove all clients pay on time.",
+    ]) {
+      const value = validBlueprint(answers);
+      value.brief.why_firm_wants_work.claims = [evidence(
+        text,
+        "firm_reported_observation",
+        "value.payment",
+        "value.payment_context",
+        "value.payment_context_basis",
+      )];
+      expect(validateAnalysisResult(value, answers, [])).toBeNull();
+    }
+  });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
     const value = validBlueprint();
