@@ -78,7 +78,7 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   await expect(page.getByText("Client decision pathway", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Progress review", exact: true })).toBeVisible();
   await expect(page.getByText("6 months", { exact: true })).toBeVisible();
-  await expect(page.getByText("An associate must be hired before increasing volume.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Before increasing volume, the firm identified this prerequisite: An associate must be hired before increasing volume.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download HTML report", exact: true })).toBeVisible();
   expect(analysisCalls).toBe(1);
 
@@ -95,6 +95,9 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   expect(progressReview).toBeDefined();
   expect(progressReview).toContain("<dt>Target</dt><dd>2 additional retained matters per quarter</dd>");
   expect(progressReview).toContain("<dt>Review period</dt><dd>6 months</dd>");
+  const conditions = html.match(/<section class="conditions">[\s\S]*?<\/section>/)?.[0];
+  expect(conditions).toBeDefined();
+  expect(conditions).toContain("<li>Before increasing volume, the firm identified this prerequisite: An associate must be hired before increasing volume.</li>");
   const valueCard = html.match(/<section class="card"><h2>Why this work<\/h2>[\s\S]*?<\/section>/)?.[0];
   expect(valueCard).toBeDefined();
   expect(valueCard).toContain("8000");

@@ -112,8 +112,11 @@ describe("provider output contract", () => {
     const repairInstruction = provider.configure.mock.calls[1][0].systemInstruction;
     expect(repairInstruction).toContain("up to seven grounded claims");
     expect(repairInstruction).toContain("grounded_payment_claims exactly");
-    expect(repairInstruction).not.toContain("proposed target or its review period");
-    expect(repairInstruction).not.toContain("proposed measure and review period");
+    const cardRepair = repairInstruction.split("This card allows up to seven grounded claims.").at(-1) ?? "";
+    expect(cardRepair).toContain("do not drop delivery conditions");
+    expect(cardRepair).toContain("Do not include progress targets or review periods in this card");
+    expect(cardRepair).not.toContain("proposed target or its review period");
+    expect(cardRepair).not.toContain("proposed measure and review period");
   });
   it("asks the model to format a specific client type as a grammatically complete noun phrase", () => {
     const schema = providerBlueprintSchema(completeAnswers()) as {properties:{brief:{properties:{definition_components:{properties:{client:{properties:{text:{description:string}}}}}}}}};

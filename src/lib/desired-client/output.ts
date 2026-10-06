@@ -65,7 +65,7 @@ const PAYMENT_CONTEXT_STOP_WORDS = new Set([
   "over", "that", "the", "their", "this", "within", "with", "would", "your",
 ]);
 const PAYMENT_ON_TIME = /\b(?:on[ -]schedule|on[ -]time|prompt(?:ly)?|within\s+(?:the\s+)?\d+(?:\s+\w+){0,2}|not\s+(?:usually\s+)?late)\b/iu;
-const PAYMENT_ON_TIME_NEGATED = /\b(?:not|never|rarely|seldom|hardly|infrequently)\b(?:[\w'-]+\s+){0,3}(?:paid\s+)?on[ -](?:time|schedule)\b/iu;
+const PAYMENT_ON_TIME_NEGATED = /\b(?:not|never|rarely|seldom|hardly|infrequently)\b(?:\s+[\w'-]+){0,3}\s+(?:paid\s+)?on[ -](?:time|schedule)\b/iu;
 const PAYMENT_LATE = /\b(?:late|delayed|overdue|past[ -]due|behind\s+schedule)\b/iu;
 const MIXED_CLAIM_STOP_WORDS = new Set([
   ...PAYMENT_CONTEXT_STOP_WORDS, "a", "an", "are", "as", "at", "be", "been", "being", "but", "by", "can", "could", "did", "do", "does", "for", "from", "get", "gets", "has", "have", "in", "is", "it", "may", "of", "on", "or", "our", "should", "so", "than", "then", "there", "these", "they", "to", "was", "were", "will", "we", "when", "which", "who", "while", "you", "firm", "firms", "reports", "reported", "reporting", "states", "stated", "says", "said", "notes", "noted", "basis", "specified", "established", "observation", "observed", "hypothesis", "working", "assumption", "test", "testing", "context", "feedback", "payment", "payments", "claim", "claims", "current", "assessment", "additional", "supplied", "matter", "matters", "client", "clients",
