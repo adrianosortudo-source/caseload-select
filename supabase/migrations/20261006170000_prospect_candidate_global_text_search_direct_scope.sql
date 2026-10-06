@@ -1,6 +1,6 @@
--- Global text search stays within indexed candidate scope.
--- Text-only searches do not expand identity links or firm groups before pagination;
--- coverage and raw-projection audits remain explicit warnings.
+-- Global text search starts with indexed candidate hits. Small anchor sets retain
+-- proven firm expansion through a bounded identity seed; large sets stay direct
+-- before pagination. Coverage and raw-projection audits remain explicit warnings.
 BEGIN;
 
 CREATE INDEX IF NOT EXISTS prospect_candidate_identity_search
@@ -82,6 +82,9 @@ BEGIN
     WHERE candidates.firm_count=1
     UNION ALL
     SELECT candidate_id,'candidate:'||candidate_id::text
+    FROM anchor_candidates
+    UNION ALL
+    SELECT candidate_id,'candidate:'||candidate_id::text
     FROM anchor_identities
     WHERE firm_count<>1 OR (SELECT count(*) FROM anchor_candidates)>128
   ), scoped_text_hits AS MATERIALIZED (
@@ -112,9 +115,9 @@ BEGIN
     HAVING count(DISTINCT term)=(SELECT count(*) FROM text_terms)
   ), filtered AS MATERIALIZED (
     SELECT DISTINCT scope.candidate_id id
-    FROM anchor_candidates scope
+    FROM candidate_scope scope
     WHERE NOT EXISTS (SELECT 1 FROM text_terms)
-       OR ('candidate:'||scope.candidate_id::text) IN (SELECT group_key FROM matched_groups)
+       OR scope.group_key IN (SELECT group_key FROM matched_groups)
   ), page_ids AS MATERIALIZED (
     SELECT id FROM filtered
     WHERE p_after_id IS NULL OR id>p_after_id

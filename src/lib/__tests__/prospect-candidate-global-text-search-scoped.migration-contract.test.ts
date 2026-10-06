@@ -41,7 +41,9 @@ describe("global candidate text search scoping migration", () => {
   it("keeps text-only searches in direct indexed candidate scope", () => {
     expect(directScopeSql).toContain("CREATE INDEX IF NOT EXISTS prospect_candidate_identity_search");
     expect(directScopeSql).toContain("anchor_candidates AS MATERIALIZED");
+    expect(directScopeSql).toContain("FROM anchor_candidates\n    UNION ALL\n    SELECT candidate_id,'candidate:'||candidate_id::text");
     expect(directScopeSql).toContain("candidate:'||scope.candidate_id::text");
+    expect(directScopeSql).toContain("FROM candidate_scope scope\n    WHERE NOT EXISTS (SELECT 1 FROM text_terms)");
     expect(directScopeSql).toContain("search_document @@ terms.query");
     expect(directScopeSql).toContain("identity_links_for_candidates");
     expect(directScopeSql).toContain("LIMIT 128");
