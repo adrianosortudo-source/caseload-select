@@ -59,6 +59,7 @@ export const CANDIDATE_READER_REPAIR_PATHS = Object.freeze([
   "supabase/migrations/20261006111650_prospect_candidate_global_text_search_scoped.sql",
   "supabase/migrations/20261006133000_prospect_candidate_global_text_search_set_identity.sql",
   "supabase/migrations/20261006150000_prospect_candidate_global_text_search_warning_fastpath.sql",
+  "supabase/migrations/20261006160000_prospect_candidate_global_text_search_index_only.sql",
 ]);
 export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
