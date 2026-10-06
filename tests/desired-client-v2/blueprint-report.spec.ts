@@ -8,7 +8,23 @@ import { STAGE_DEFINITIONS } from "../../src/lib/desired-client/screens";
 const route = "**/api/tools/desired-client-matter/analyze";
 const storageKey = "cls-desired-client-v2";
 const answers = completeAnswers();
-const result = validateAnalysisResult(validBlueprint(), answers, [])!;
+Object.assign(answers.value, {
+  fee_amount: "8000",
+  direct_cost_amount: "8500",
+  currency: "CAD",
+  amount_basis: "recorded",
+  amount_scope: "per_matter",
+  collected_fee: "15to50",
+  team_hours: "16to40",
+  payment: "predictable",
+  payment_context: "Clients told the firm that the first invoice was usually paid on schedule.",
+  payment_context_basis: "client_feedback",
+});
+answers.delivery.capacity = "room";
+answers.repeatability.additional_matters = "2 comparable matters per quarter";
+answers.repeatability.staffing_constraint = "An associate must be hired before increasing volume.";
+const result = validateAnalysisResult(validBlueprint(answers), answers, [])!;
+if (!result) throw new Error("The fictional export fixture must satisfy the current report contract before browser assertions run.");
 
 test("a reviewed six-section draft becomes a synthesized blueprint and HTML report", async ({ page }, testInfo) => {
   let analysisCalls = 0;
@@ -63,9 +79,25 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   const download = await downloadReady;
   expect(download.suggestedFilename()).toMatch(/\.html$/);
   const path = await download.path();
+  await download.saveAs(testInfo.outputPath("blueprint-negative-report.html"));
   const html = await import("node:fs/promises").then(fs => fs.readFile(path!, "utf8"));
   expect(html).toContain("Desired Client Blueprint");
   expect(html).toContain(REPORT_FOOTNOTE_COPY);
+  const valueCard = html.match(/<section class="card"><h2>Why this work<\/h2>[\s\S]*?<\/section>/)?.[0];
+  expect(valueCard).toBeDefined();
+  expect(valueCard).toContain("8000");
+  expect(valueCard).toContain("8500");
+  expect(valueCard).toContain("C$15,000 to under C$50,000");
+  expect(valueCard).toContain("More than 15, up to 40 hours");
+  expect(valueCard).toContain("Firm-reported records");
+  expect(valueCard).toContain("Client-reported information");
+  expect(valueCard).toContain("−C$500.00");
+  expect(valueCard).toContain("−6.25%");
+  expect(valueCard).toContain("Clients told the firm that the first invoice was usually paid on schedule.");
+  expect(valueCard).toContain("2 comparable matters per quarter");
+  expect(valueCard).toContain("An associate must be hired before increasing volume.");
+  expect(valueCard).toContain("before overhead and acquisition costs");
+  expect(valueCard).toContain("This is not net profit");
   const exportedDefinition = html.match(/<section class="definition"><h2>Client definition<\/h2><p>([\s\S]*?)<\/p><\/section>/)?.[1];
   expect(exportedDefinition).toBeDefined();
   const plainDefinition = exportedDefinition!

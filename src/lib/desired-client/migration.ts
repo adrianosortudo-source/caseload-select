@@ -1,5 +1,5 @@
 import { emptyAnswers } from "./brief";
-import { validateDraftAnswers, validateLegacyV22DraftAnswers, validateLegacyV30DraftAnswers, validateLegacyV31DraftAnswers } from "./validation";
+import { validateDraftAnswers, validateLegacyV22DraftAnswers, validateLegacyV30DraftAnswers, validateLegacyV31DraftAnswers, validateLegacyV32DraftAnswers } from "./validation";
 import type { DesiredClientAnswers } from "./types";
 
 type RecordValue = Record<string, unknown>;
@@ -49,7 +49,7 @@ export function migrateV22Answers(value: unknown): DesiredClientAnswers | null {
   };
   const migrated: DesiredClientAnswers = {
     ...base,
-    schema_version: "dcm-v3.2",
+    schema_version: "dcm-v3.3",
     revision: Number(old.revision) + 1,
     ...(old.write_ins ? { write_ins: structuredClone(old.write_ins) as DesiredClientAnswers["write_ins"] } : {}),
     focus: structuredClone(focus) as unknown as DesiredClientAnswers["focus"],
@@ -66,6 +66,8 @@ export function migrateV22Answers(value: unknown): DesiredClientAnswers | null {
       collected_fee: valueGroup.collected_fee as DesiredClientAnswers["value"]["collected_fee"],
       team_hours: valueGroup.team_hours as DesiredClientAnswers["value"]["team_hours"],
       payment: valueGroup.payment as DesiredClientAnswers["value"]["payment"],
+      payment_context: "",
+      payment_context_basis: null,
       currency: "", fee_amount: "", direct_cost_amount: "", amount_basis: null, amount_scope: null,
     },
     delivery: structuredClone(old.delivery) as unknown as DesiredClientAnswers["delivery"],
@@ -104,12 +106,26 @@ export function migrateV31Answers(value: unknown): DesiredClientAnswers | null {
   const migrated: DesiredClientAnswers = {
     ...base,
     ...old,
-    schema_version: "dcm-v3.2",
+    schema_version: "dcm-v3.3",
     revision: Number(old.revision) + 1,
     interview: base.interview,
+    value: { ...(old.value as unknown as DesiredClientAnswers["value"]), payment_context: "", payment_context_basis: null },
     practice: { ...(practice as unknown as DesiredClientAnswers["practice"]), client_strength: null, client_strength_effect: "", client_strength_support: "" },
     client_context: { ...(context as unknown as DesiredClientAnswers["client_context"]), discovery_behaviour: "" },
     client: { ...(client as unknown as { goals: DesiredClientAnswers["client"]["goals"]; concerns: DesiredClientAnswers["client"]["concerns"]; decision_needs: DesiredClientAnswers["client"]["decision_needs"] }), goal_detail: "", decision_context: "", pathway_basis: null, choice_priorities: [], choice_detail: "", choice_basis: null },
+  };
+  return validateDraftAnswers(migrated) ? migrated : null;
+}
+
+/** Add optional payment context to a v3.2 draft without changing its meaning or answer revision. */
+export function migrateV32Answers(value: unknown): DesiredClientAnswers | null {
+  if (!validateLegacyV32DraftAnswers(value)) return null;
+  const old = structuredClone(value) as RecordValue;
+  const valueGroup = old.value as RecordValue;
+  const migrated = {
+    ...old,
+    schema_version: "dcm-v3.3" as const,
+    value: { ...valueGroup, payment_context: "", payment_context_basis: null },
   };
   return validateDraftAnswers(migrated) ? migrated : null;
 }

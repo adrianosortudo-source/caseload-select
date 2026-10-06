@@ -5,7 +5,7 @@ import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { completeAnswers, validBlueprint } from "./blueprint-helpers";
 import { interviewClarificationSourceFingerprint, type LegacyDesiredClientBriefV1, type SavedBrief } from "../types";
 describe("Blueprint exports", () => {
-  const setup = () => { const answers = completeAnswers(), saved: SavedBrief = { brief: buildStructuredBlueprintV4(answers), sourceAnswersSnapshot: answers, sourceAnswersVersion: "dcm-v3.2", sourceBriefRevision: answers.revision, generatedAt: "2026-09-26T12:00:00.000Z", wordingReviewed: false, mode: "structured" }; return { answers, saved }; };
+  const setup = () => { const answers = completeAnswers(), saved: SavedBrief = { brief: buildStructuredBlueprintV4(answers), sourceAnswersSnapshot: answers, sourceAnswersVersion: "dcm-v3.3", sourceBriefRevision: answers.revision, generatedAt: "2026-09-26T12:00:00.000Z", wordingReviewed: false, mode: "structured" }; return { answers, saved }; };
   it("preserves older clarification history with a reconfirmation label after its source changes", () => {
     const {answers,saved}=setup();
     Object.assign(answers.value,{fee_amount:"8000",direct_cost_amount:"10000",currency:"CAD",amount_basis:"estimated",amount_scope:"per_matter"});
@@ -22,7 +22,56 @@ describe("Blueprint exports", () => {
     expect(formatBriefText(saved,answers)).not.toContain("C$10,000");
   });
   it("exports the synthesis and evidence cards, not an answer inventory", () => { const { answers, saved } = setup(), text = formatBriefText(saved, answers); expect(text).toContain((saved.brief as ReturnType<typeof buildStructuredBlueprintV4>).definition_sentence); expect(text).toContain("WHY THIS WORK"); expect(text).toContain("DESIRED CLIENT AND MATTER"); expect(text).toContain("EVIDENCE & OPEN QUESTIONS"); expect(text).not.toContain("What would you like the lawyer to help you with?"); });
+  it("exports the calculated contribution margin with its limits and profit caveat", () => {
+    const { answers, saved } = setup();
+    Object.assign(answers.value, { fee_amount: "8000", direct_cost_amount: "4800", currency: "CAD", amount_basis: "recorded", amount_scope: "per_matter" });
+    saved.brief = buildStructuredBlueprintV4(answers);
+    const outputs = [formatBriefText(saved, answers), formatBriefMarkdown(saved, answers), formatBriefHtml(saved, answers)];
+    for (const output of outputs) {
+      expect(output).toContain("C$3,200.00");
+      expect(output).toContain("Contribution margin on collected fees");
+      expect(output).toContain("40.00%");
+      expect(output).toContain("overhead and acquisition costs are excluded");
+      expect(output).toContain("This is not net profit");
+    }
+  });
+  it("preserves optional payment context and its evidence source through report and answer exports", () => {
+    const { answers, saved } = setup();
+    const note = "The firm observed that 8 of 10 buyers paid the first invoice within 15 days.\nThe pattern is based on closed matters.";
+    answers.value.payment_context = note;
+    answers.value.payment_context_basis = "firm_observation";
+    saved.brief = buildStructuredBlueprintV4(answers);
+    const outputs = [formatBriefText(saved, answers), formatBriefMarkdown(saved, answers), formatBriefHtml(saved, answers)];
+    for (const output of outputs) {
+      expect(output).toContain(note);
+      expect(output).toContain("Firm observation:");
+    }
+    expect(getSourceDetails("value.payment_context", answers)).toMatchObject({ question: "Payment context supplied", answer: note });
+    expect(getSourceDetails("value.payment_context_basis", answers).answer).toBe("The firm has observed this");
+    const answersExport = createAnswersDownload(answers).content;
+    expect(answersExport).toContain(note);
+    expect(answersExport).toContain("Payment context supplied");
+    expect(answersExport).toContain("Source of payment context");
+    expect(answersExport).toContain("The firm has observed this");
+  });
   it("provides a print-ready HTML download with six cards and no PDF route", () => { const { answers, saved } = setup(), html = formatBriefHtml(saved, answers); expect(html).toContain("@media print"); expect(html).toContain("Evidence &amp; open questions"); expect(html).not.toContain("Download PDF"); expect(html).not.toContain("application/pdf"); const download = createHtmlDownload(saved, answers, new Date(2026, 8, 26)); expect(download.filename).toBe("desired-client-blueprint-2026-09-26.html"); expect(download.content).toBe(html); });
+  it("exports material conditions after the definition and omits the section when there are none", () => {
+    const {answers,saved}=setup();
+    answers.opportunity.uncertainty="Demand beyond existing referrals is not yet known.";
+    saved.brief=buildStructuredBlueprintV4(answers);
+    const html=formatBriefHtml(saved,answers), text=formatBriefText(saved,answers), markdown=formatBriefMarkdown(saved,answers);
+    expect(html.indexOf("class=\"definition\"")).toBeLessThan(html.indexOf("class=\"conditions\""));
+    expect(html).toContain("Demand beyond existing referrals is not yet known.");
+    expect(text).toContain("CONDITIONS AND UNRESOLVED QUESTIONS");
+    expect(markdown).toContain("## Conditions and unresolved questions");
+
+    answers.opportunity.uncertainty="";
+    answers.opportunity.sources=[];
+    saved.brief=buildStructuredBlueprintV4(answers);
+    expect(formatBriefHtml(saved,answers)).not.toContain("class=\"conditions\"");
+    expect(formatBriefText(saved,answers)).not.toContain("CONDITIONS AND UNRESOLVED QUESTIONS");
+    expect(formatBriefMarkdown(saved,answers)).not.toContain("## Conditions and unresolved questions");
+  });
   it("keeps the client and matter distinct and the decision pathway separate in v4 outputs", () => {
     const { answers, saved } = setup();
     const html = formatBriefHtml(saved, answers);
@@ -63,7 +112,7 @@ describe("Blueprint exports", () => {
     answers.practice.client_strength_support="Clients have said our transaction explanations are clear.";
     answers.client_context.discovery_behaviour="They usually ask their accountant for a referral.";
     answers.repeatability.additional_matters="Two additional matters per quarter";
-    const saved:SavedBrief={brief:buildStructuredBlueprintV4(answers),sourceAnswersSnapshot:answers,sourceAnswersVersion:"dcm-v3.2",sourceBriefRevision:answers.revision,generatedAt:"2026-09-26T12:00:00.000Z",wordingReviewed:false,mode:"structured"};
+    const saved:SavedBrief={brief:buildStructuredBlueprintV4(answers),sourceAnswersSnapshot:answers,sourceAnswersVersion:"dcm-v3.3",sourceBriefRevision:answers.revision,generatedAt:"2026-09-26T12:00:00.000Z",wordingReviewed:false,mode:"structured"};
     for(const output of [formatBriefText(saved,answers),formatBriefMarkdown(saved,answers),formatBriefHtml(saved,answers)]) {
       expect(output).toContain("We have not tested whether enough buyers are seeking this service.");
       expect(output).toContain("Reserve associate time before promoting additional matters.");

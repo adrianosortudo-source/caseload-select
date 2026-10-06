@@ -47,6 +47,16 @@ describe("provider output contract", () => {
     expect(evidenceDescription).toContain(feeAlias);
     expect(sources.items.enum.map(id => aliases[id])).toEqual(expect.arrayContaining(["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"]));
   });
+  it("permits a firm-reported observation for current capacity while keeping targets as preferences", () => {
+    const answers = completeAnswers();
+    answers.repeatability.additional_matters = "2 comparable matters per quarter";
+    const schema = providerBlueprintSchema(answers) as ReturnType<typeof providerBlueprintSchema> & {properties:{brief:{properties:{why_firm_wants_work:{properties:{claims:{items:{properties:{source_answer_ids:{items:{enum:string[]}};evidence_basis:{enum:string[];description:string}}}}}}}}}};
+    const aliases = providerSourceAliases(answers);
+    const basis = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_basis;
+    expect(basis.enum).toContain("firm_reported_observation");
+    expect(basis.description).toContain(Object.keys(aliases).find(id => aliases[id] === "repeatability.additional_matters"));
+    expect(basis.description).toContain("proposed targets");
+  });
   it("asks the model to format a specific client type as a grammatically complete noun phrase", () => {
     const schema = providerBlueprintSchema(completeAnswers()) as {properties:{brief:{properties:{definition_components:{properties:{client:{properties:{text:{description:string}}}}}}}}};
     const guidance = schema.properties.brief.properties.definition_components.properties.client.properties.text.description;
@@ -137,7 +147,15 @@ describe("provider output contract", () => {
     const repairInstruction=provider.configure.mock.calls[1][0].systemInstruction;
     expect(repairInstruction).toContain("The application calculated negative contribution");
     expect(repairInstruction).toContain("State the firm's reported preference separately");
-    if(outcome.mode==="live")expect(outcome.result.brief.why_firm_wants_work.claims).toEqual(repaired.claims);
+    if(outcome.mode==="live") {
+      const claims = outcome.result.brief.why_firm_wants_work.claims;
+      const grounded = buildStructuredBlueprintV4(input.answers).why_firm_wants_work.claims;
+      expect(claims).toEqual(expect.arrayContaining([
+        repaired.claims[1],
+        ...grounded.filter((claim) => !claim.source_answer_ids.includes("value.fee_amount")),
+      ]));
+      expect(claims.some((claim) => /fees support the effort|make the work profitable/iu.test(claim.text))).toBe(false);
+    }
   });
   it("does not silently replace an invented target with the confirmed target", async () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});

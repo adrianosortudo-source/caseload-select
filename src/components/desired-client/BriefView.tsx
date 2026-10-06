@@ -139,11 +139,19 @@ export function BriefView({
         <h2 data-ui-copy="supporting">Client definition</h2>
         <p data-ui-copy="body">{definitionSegments(model.definition, model.definitionComponents)}</p>
       </section>
-      <section className="dc-report-conditions" aria-labelledby="dc-conditions-title" data-ui-component-content="desired-client-conditions">
-        <h2 id="dc-conditions-title" data-ui-copy="heading">Conditions to resolve</h2>
-        <p data-ui-copy="supporting">Resolve these constraints or evidence gaps before treating this direction as ready to grow.</p>
-        {model.conditions.length ? <ul>{model.conditions.map((condition, index) => <li key={`${index}-${condition}`} data-ui-copy="body">{condition}</li>)}</ul> : <p data-ui-copy="supporting">No material constraint or uncertainty was recorded in these answers.</p>}
+      <section className="dc-definition-review dc-screen-only" aria-labelledby="dc-definition-review-title" data-ui-component-content="desired-client-definition-review">
+        <h2 id="dc-definition-review-title" data-ui-copy="heading">Does this describe the clients and work your firm wants more of?</h2>
+        <div className="dc-definition-review__actions">
+          <button className="dc-button dc-button--primary" type="button" onClick={() => onReview(true)}>{reviewed ? "This definition reflects our direction" : "Yes, this reflects our direction"}</button>
+          <button className="dc-button dc-button--secondary" type="button" onClick={() => onEdit(2)}>Edit the definition</button>
+        </div>
+        <p className="dc-report-review__note" data-ui-copy="supporting">Confirming this wording records a review of the definition only. It does not verify the firm&apos;s experience, economics, market demand, or proposed target.</p>
       </section>
+      {model.conditions.length > 0 && <section className="dc-report-conditions" aria-labelledby="dc-conditions-title" data-ui-component-content="desired-client-conditions">
+        <h2 id="dc-conditions-title" data-ui-copy="heading">Conditions and unresolved questions</h2>
+        <p data-ui-copy="supporting">Resolve these constraints or evidence gaps before treating this direction as ready to grow.</p>
+        <ul>{model.conditions.map((condition, index) => <li key={`${index}-${condition}`} data-ui-copy="body">{condition}</li>)}</ul>
+      </section>}
       <section className="dc-report-progress" aria-labelledby="dc-progress-title" data-ui-component-content="desired-client-progress-review">
         <h2 id="dc-progress-title" data-ui-copy="heading">Progress review</h2>
         <dl>
@@ -172,7 +180,11 @@ export function BriefView({
               <p data-ui-copy="body">{claim.text}</p>
               <span className="dc-evidence-label" data-ui-copy="supporting">{EVIDENCE_BASIS_LABELS[claim.evidence_basis]}</span>
             </div>)}
-            {card.contribution && <div className="dc-calculated-metric"><strong>{card.contribution.label}</strong><span>{card.contribution.amount}</span><small>{EVIDENCE_BASIS_LABELS[card.contribution.basis]} · {card.contribution.scope}</small></div>}
+            {card.contribution && <div className="dc-calculated-metric">
+              <strong>{card.contribution.label}</strong><span>{card.contribution.amount}</span>
+              {card.contribution.margin ? <div className="dc-calculated-metric__margin"><strong>{card.contribution.margin.label}</strong><span>{card.contribution.margin.amount}</span></div> : <small>Contribution margin not calculated because collected fees are zero.</small>}
+              <small>{EVIDENCE_BASIS_LABELS[card.contribution.basis]} · {card.contribution.scope}. Calculated as collected fees less direct delivery costs; overhead and acquisition costs are excluded. This is not net profit.</small>
+            </div>}
             {card.opportunityBasis && <span className="dc-evidence-label dc-opportunity-basis">Numeric and source results: {card.opportunityBasis}</span>}
           </div>
         </section>)}
@@ -193,11 +205,10 @@ export function BriefView({
       </details>
     </>}
 
-    <div className="dc-report-review dc-screen-only">
+    {legacy && <div className="dc-report-review dc-screen-only">
       <p data-ui-copy="body">Have you reviewed this draft wording?</p>
-      <label className="dc-reviewed"><input type="checkbox" checked={reviewed} onChange={(event) => onReview(event.currentTarget.checked)} /><span>{legacy ? "I have reviewed this original report wording." : "I have reviewed this draft wording."}</span></label>
-      {!legacy && <p className="dc-report-review__note" data-ui-copy="supporting">Reviewing wording does not verify the firm&apos;s experience, establish its economics, or approve a proposed target. The firm remains responsible for those decisions.</p>}
-    </div>
+      <label className="dc-reviewed"><input type="checkbox" checked={reviewed} onChange={(event) => onReview(event.currentTarget.checked)} /><span>I have reviewed this original report wording.</span></label>
+    </div>}
     {copied && <p role="status" className="dc-screen-only">Profile copied.</p>}
     {copyFailed && <><p role="status" className="dc-screen-only">The profile could not be copied automatically. Select and copy the profile text below.</p><textarea className="dc-screen-only" ref={fallback} aria-label="Select and copy profile" readOnly value={text} /></>}
     {htmlFailed && <p className="dc-alert dc-screen-only" role="status">The HTML report could not be prepared. Your answers are still saved.</p>}

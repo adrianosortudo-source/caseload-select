@@ -6,6 +6,7 @@ import { calculateContribution } from "../economics";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { buildDefinitionSentence } from "../definition";
 import { interviewClarificationSourceFingerprint } from "../types";
+import { validateDraftAnswers } from "../validation";
 describe("AI Blueprint output contract", () => {
   it("joins model fragments without repeating because or capitalizing a mid-sentence article", () => {
     const value = validBlueprint();
@@ -75,6 +76,260 @@ describe("AI Blueprint output contract", () => {
     value.brief.evidence_and_open_questions.claims[0] = evidence("The proposed target of 3 additional retained buyer-side acquisition matters per quarter needs firm approval.", "firm_preference", "repeatability.target");
     expect(validateAnalysisResult(value, answers, [])).toBeNull();
   });
+  it("preserves payment answers as an observation, a testable hypothesis, or an unknown", () => {
+    const answers=completeAnswers();
+    answers.value.payment="predictable";
+    const ai=validBlueprint(answers);
+    ai.brief.why_firm_wants_work.claims.push(evidence("Payment timing is usually predictable.","firm_reported_observation","value.payment"));
+    const result=validateAnalysisResult(ai,answers,[]);
+    expect(result).not.toBeNull();
+    const recorded=result!.brief.why_firm_wants_work.claims.find((claim)=>claim.source_answer_ids.includes("value.payment"));
+    expect(recorded?.evidence_basis).toBe("firm_reported_observation");
+    expect(recorded?.text).toContain("Basis not specified.");
+    expect(recorded?.text).not.toContain("timing is usually predictable");
+
+    const fabricated = validBlueprint(answers);
+    fabricated.brief.why_firm_wants_work.claims.push(evidence("Payment records prove all clients pay on time.","firm_reported_observation","value.payment"));
+    expect(validateAnalysisResult(fabricated, answers, [])).toBeNull();
+
+    answers.focus.route="new";
+    const newWork=validateAnalysisResult(validBlueprint(answers),answers,[]);
+    const hypothesis=newWork!.brief.why_firm_wants_work.claims.find((claim)=>claim.source_answer_ids.includes("value.payment"));
+    expect(hypothesis?.evidence_basis).toBe("hypothesis");
+    expect(hypothesis?.text).toContain("Working assumption to test");
+
+    answers.value.payment="unknown";
+    const unknown=validateAnalysisResult(validBlueprint(answers),answers,[]);
+    const unresolved=unknown!.brief.why_firm_wants_work.claims.find((claim)=>claim.source_answer_ids.includes("value.payment"));
+    expect(unresolved?.evidence_basis).toBe("unknown");
+    expect(unresolved?.text).toContain("Basis not specified.");
+  });
+  it("distinguishes an omitted payment-context basis from an explicit unknown basis",()=>{
+    const answers=completeAnswers();
+    answers.value.payment_context="The client paid the initial retainer promptly.";
+    answers.value.payment_context_basis=null;
+    const unspecified=buildStructuredBlueprintV4(answers).why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.payment_context"));
+    expect(unspecified?.text).toContain("Basis not specified.");
+    answers.value.payment_context_basis="unknown";
+    const unknown=buildStructuredBlueprintV4(answers).why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.payment_context"));
+    expect(unknown?.text).toContain("Not established.");
+    expect(unknown?.text).not.toContain("Basis not specified.");
+  });
+  it("recovers mixed payment and experience claims as separate statements with their own evidence categories", () => {
+    const answers = completeAnswers();
+    answers.value.payment = "predictable";
+    const result = validBlueprint(answers);
+    result.brief.why_firm_wants_work.claims = [evidence(
+      "The firm reports payment is usually predictable and handles this work regularly.",
+      "firm_reported_observation",
+      "value.payment",
+      "practice.experience",
+    ), evidence("The firm handles this work regularly.", "firm_reported_experience", "practice.experience")];
+    const validated = validateAnalysisResult(result, answers, []);
+    expect(validated).not.toBeNull();
+    const recovered = validated!.brief.why_firm_wants_work.claims;
+    const payment = recovered.find(claim => claim.source_answer_ids.includes("value.payment"));
+    const experience = recovered.find(claim => claim.source_answer_ids.includes("practice.experience"));
+    expect(payment).toMatchObject({ evidence_basis: "firm_reported_observation", source_answer_ids: ["value.payment"] });
+    expect(payment?.text).toContain("payment is usually predictable");
+    expect(experience).toMatchObject({ evidence_basis: "firm_reported_experience" });
+    expect(experience?.source_answer_ids).toContain("practice.experience");
+    expect(experience?.source_answer_ids).not.toContain("value.payment");
+    expect(recovered.some(claim => claim.source_answer_ids.includes("value.payment") && claim.source_answer_ids.includes("practice.experience"))).toBe(false);
+    expect(recovered.filter(claim => claim.source_answer_ids.includes("practice.experience"))).toHaveLength(1);
+  });
+  it("accepts current capacity as a firm-reported observation and keeps staffing change as preference", () => {
+    const answers = completeAnswers();
+    answers.repeatability.additional_matters = "2 comparable matters per quarter";
+    answers.repeatability.staffing_constraint = "An associate must be hired before increasing volume.";
+    const brief = buildStructuredBlueprintV4(answers);
+    const capacity = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.additional_matters"));
+    const staffing = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
+    expect(capacity).toMatchObject({ evidence_basis: "firm_reported_observation", kind: "experience" });
+    expect(staffing).toMatchObject({ evidence_basis: "firm_preference", kind: "preference" });
+    expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
+  });
+  it("keeps established and new routes within the firm-value claim budget while preserving capacity provenance", () => {
+    for (const route of ["established", "new"] as const) {
+      const answers = completeAnswers();
+      answers.focus.route = route;
+      answers.value.reasons = ["client_benefit", "fees", "skills"];
+      Object.assign(answers.value, {
+        fee_effort: "worthwhile",
+        collected_fee: "15to50",
+        team_hours: "16to40",
+        payment: "predictable",
+        payment_context: "The firm observed that comparable buyers usually paid the first invoice within 15 days.",
+        payment_context_basis: "firm_observation",
+        currency: "CAD",
+        fee_amount: "25000",
+        direct_cost_amount: "12000",
+        amount_basis: "recorded",
+        amount_scope: "per_matter",
+      });
+      Object.assign(answers.delivery, { capacity: "room" });
+      Object.assign(answers.repeatability, {
+        target: "2 additional retained matters per quarter",
+        review_period: "quarterly",
+        additional_matters: "2 comparable matters per quarter",
+        staffing_constraint: "An associate must be hired before increasing volume.",
+      });
+      if (route === "new") {
+        answers.practice.experience = "new";
+        answers.practice.direction = "explore_direction";
+        answers.interview.clarification_count = 1;
+        answers.interview.clarified_stages = [3];
+        answers.interview.followups = [{
+          id: "44444444-4444-4444-8444-444444444444",
+          stage: 3,
+          purpose: "firm_desirability",
+          source_answer_ids: ["value.reasons"],
+          source_answer_fingerprint: interviewClarificationSourceFingerprint(answers, ["value.reasons"]),
+          question: "Why does the firm want this work?",
+          answer: "The team enjoys the strategic work and wants to test repeatable demand.",
+          skipped: false,
+        }];
+      }
+
+      const brief = buildStructuredBlueprintV4(answers);
+      expect(brief.why_firm_wants_work.claims.length).toBeLessThanOrEqual(7);
+      const capacity = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.additional_matters"));
+      expect(capacity?.evidence_basis).toBe("firm_reported_observation");
+      expect(capacity?.source_answer_ids).toContain("delivery.capacity");
+      const staffing = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
+      expect(staffing?.evidence_basis).toBe("firm_preference");
+      if (route === "new") expect(JSON.stringify(brief)).toContain("The team enjoys the strategic work and wants to test repeatable demand.");
+      expect(validateDraftAnswers(answers)).toBe(true);
+      expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
+    }
+  });
+  it("keeps an unresolved rationale separate from a current capacity preference", () => {
+    const answers = completeAnswers();
+    answers.value.reasons = ["undecided"];
+    answers.value.fee_effort = "unknown";
+    answers.practice.enjoys = "";
+    answers.repeatability.additional_matters = "2 comparable matters per quarter";
+    answers.repeatability.staffing_constraint = "An associate must be hired before increasing volume.";
+    const brief = buildStructuredBlueprintV4(answers);
+    const rationale = brief.why_firm_wants_work.claims[0];
+    const staffing = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
+    expect(rationale.source_answer_ids.length).toBeGreaterThan(0);
+    expect(rationale.evidence_basis).toBe("unknown");
+    expect(staffing).toMatchObject({ evidence_basis: "firm_preference", kind: "preference" });
+    expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
+  });
+  it("fits all supplied commercial and capacity facts into the six-claim limit without losing provenance",()=>{
+    const answers=completeAnswers();
+    answers.value.reasons=["client_benefit","fees","skills"];
+    Object.assign(answers.value,{fee_effort:"worthwhile",collected_fee:"15to50",team_hours:"16to40",payment:"predictable",payment_context:"Most buyers paid the first invoice within 15 days.",payment_context_basis:"firm_observation",currency:"CAD",fee_amount:"25000",direct_cost_amount:"12000",amount_basis:"recorded",amount_scope:"per_matter"});
+    Object.assign(answers.delivery,{capacity:"room"});
+    Object.assign(answers.repeatability,{target:"2 additional retained matters per quarter",review_period:"quarterly",additional_matters:"2",staffing_constraint:"One associate has room for two more matters."});
+    const built=buildStructuredBlueprintV4(answers);
+    expect(built.why_firm_wants_work.claims.length).toBeLessThanOrEqual(7);
+    const payment=built.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.payment"));
+    expect(payment?.source_answer_ids).toEqual(["value.payment","value.payment_context","value.payment_context_basis"]);
+    expect(payment?.text).toContain("Most buyers paid the first invoice within 15 days.");
+    expect(payment?.text).toContain("payment is usually predictable");
+    const validated=validateAnalysisResult(validBlueprint(answers),answers,[]);
+    expect(validated).not.toBeNull();
+    const all=JSON.stringify(validated);
+    for(const source of ["value.payment","value.payment_context","value.payment_context_basis","value.fee_amount","value.direct_cost_amount","value.collected_fee","value.team_hours","delivery.capacity","repeatability.target","repeatability.staffing_constraint"]){expect(all).toContain(source);}
+  });
+  it("keeps a full commercial fixture valid when payment context has a different evidence basis",()=>{
+    for(const basis of [null,"unknown","client_feedback","firm_hypothesis"] as const){
+      const answers=completeAnswers();
+      answers.value.reasons=["client_benefit","fees","skills"];
+      Object.assign(answers.value,{fee_effort:"worthwhile",collected_fee:"15to50",team_hours:"16to40",payment:"predictable",payment_context:"In our last ten comparable engagements, payment was usually received on schedule.",payment_context_basis:basis,currency:"CAD",fee_amount:"8000",direct_cost_amount:"8500",amount_basis:"recorded",amount_scope:"per_matter"});
+      answers.practice.experience="regular";
+      Object.assign(answers.delivery,{capacity:"room"});
+      Object.assign(answers.repeatability,{target:"2 additional retained matters per quarter",review_period:"quarterly",additional_matters:"2",staffing_constraint:"One associate has room for two more matters."});
+      const built=buildStructuredBlueprintV4(answers);
+      expect(built.why_firm_wants_work.claims.length).toBeLessThanOrEqual(7);
+      expect(validateAnalysisResult({brief:built,clarification_code:null},answers,[])).not.toBeNull();
+      const serialized=JSON.stringify(built);
+      for(const source of ["value.payment","value.payment_context","value.payment_context_basis","value.fee_amount","value.direct_cost_amount","value.collected_fee","value.team_hours","delivery.capacity","repeatability.target"]){expect(serialized).toContain(source);}
+      expect(serialized).toContain("In our last ten comparable engagements, payment was usually received on schedule.");
+    }
+  });
+  it("accepts seven firm-value claims but rejects an eighth",()=>{
+    const answers=completeAnswers();
+    answers.focus.route="new";
+    answers.practice.experience="new";
+    answers.practice.direction="explore_direction";
+    answers.value.reasons=["client_benefit","fees","skills"];
+    Object.assign(answers.value,{fee_effort:"worthwhile",collected_fee:"15to50",team_hours:"16to40",payment:"predictable",payment_context:"Payment was usually received on schedule.",payment_context_basis:null,currency:"CAD",fee_amount:"8000",direct_cost_amount:"8500",amount_basis:"recorded",amount_scope:"per_matter"});
+    Object.assign(answers.delivery,{capacity:"room"});
+    Object.assign(answers.repeatability,{target:"2 additional retained matters per quarter",review_period:"quarterly",additional_matters:"2",staffing_constraint:"One associate has room for two more matters."});
+    const built=buildStructuredBlueprintV4(answers);
+    expect(built.why_firm_wants_work.claims).toHaveLength(7);
+    expect(validateDraftAnswers(answers)).toBe(true);
+    expect(validateAnalysisResult({brief:built,clarification_code:null},answers,[])).not.toBeNull();
+    const excessive=structuredClone(built);
+    excessive.why_firm_wants_work.claims.push(structuredClone(excessive.why_firm_wants_work.claims[0]));
+    const failures: Array<{field:string;reason:string}> = [];
+    expect(validateAnalysisResult({brief:excessive,clarification_code:null},answers,[],failure=>failures.push(failure))).toBeNull();
+    expect(failures).toContainEqual({field:"why_firm_wants_work",reason:"payment_claim_cannot_fit_without_dropping_other_claims"});
+  });
+  it("preserves optional payment context and recovers a mixed experience claim without duplication", () => {
+    const answers = completeAnswers();
+    answers.value.payment = "predictable";
+    answers.value.payment_context = "The firm observed that 8 of 10 buyers paid the first invoice within 15 days.";
+    answers.value.payment_context_basis = "firm_observation";
+    const result = validBlueprint(answers);
+    result.brief.why_firm_wants_work.claims = [evidence(
+      "The firm reports payment is usually predictable, observed that 8 of 10 buyers paid within 15 days, and handles this work regularly.",
+      "firm_reported_observation",
+      "value.payment",
+      "value.payment_context",
+      "value.payment_context_basis",
+      "practice.experience",
+    ), evidence("The firm handles this work regularly.", "firm_reported_experience", "practice.experience")];
+
+    const validated = validateAnalysisResult(result, answers, []);
+    expect(validated).not.toBeNull();
+    const claims = validated!.brief.why_firm_wants_work.claims;
+    const context = claims.find(claim => claim.source_answer_ids.includes("value.payment_context"));
+    const experience = claims.filter(claim => claim.source_answer_ids.includes("practice.experience"));
+    expect(context?.text).toContain("payment is usually predictable");
+    expect(context?.text).toContain("Firm observation: “The firm observed that 8 of 10 buyers paid the first invoice within 15 days.”");
+    expect(context).toMatchObject({
+      evidence_basis: "firm_reported_observation",
+      source_answer_ids: ["value.payment", "value.payment_context", "value.payment_context_basis"],
+    });
+    expect(experience).toHaveLength(1);
+    expect(experience[0].evidence_basis).toBe("firm_reported_experience");
+    expect(claims.some(claim => claim.source_answer_ids.includes("value.payment_context") && claim.source_answer_ids.includes("practice.experience"))).toBe(false);
+  });
+  it("rejects fabricated payment assertions before repairable source separation", () => {
+    const answers = completeAnswers();
+    answers.value.payment = "predictable";
+    answers.value.payment_context = "In our last ten comparable engagements, payment was usually received on schedule.";
+    answers.value.payment_context_basis = "firm_observation";
+    for (const text of [
+      "Firm observation: 999 clients never paid.",
+      "Audited records prove all clients pay on time.",
+    ]) {
+      const value = validBlueprint(answers);
+      value.brief.why_firm_wants_work.claims = [evidence(
+        text,
+        "firm_reported_observation",
+        "value.payment",
+        "value.payment_context",
+        "value.payment_context_basis",
+      )];
+      expect(validateAnalysisResult(value, answers, [])).toBeNull();
+    }
+  });
+  it("keeps an explicit unknown payment gap while rejecting an unknown-as-fact claim", () => {
+    const answers = completeAnswers();
+    answers.value.payment = "unknown";
+    const gap = validBlueprint(answers);
+    gap.brief.why_firm_wants_work.claims = [evidence("Payment predictability is unknown.", "unknown", "value.payment")];
+    expect(validateAnalysisResult(gap, answers, [])).not.toBeNull();
+    const asserted = validBlueprint(answers);
+    asserted.brief.why_firm_wants_work.claims = [evidence("Payment is predictable for every client.", "firm_reported_observation", "value.payment")];
+    expect(validateAnalysisResult(asserted, answers, [])).toBeNull();
+  });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
     const value = validBlueprint();
@@ -134,7 +389,7 @@ describe("AI Blueprint output contract", () => {
     const brief = buildStructuredBlueprintV4(answers);
     const economics = brief.why_firm_wants_work.claims.find((claim) => claim.text.startsWith("Matter economics supplied:"));
     expect(economics?.text).toContain("fee amount: 8000; direct cost amount: 4800");
-    expect(economics?.text).toContain("estimated contribution before overhead and acquisition costs: $3,200.00");
+    expect(economics?.text).toContain("estimated contribution before overhead and acquisition costs: C$3,200.00");
     expect(economics && validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
   });
   it("does not allow a positive contribution claim when the calculated result is negative",()=>{
@@ -145,6 +400,29 @@ describe("AI Blueprint output contract", () => {
     expect(validateAnalysisResult(result,answers,[])).toBeNull();
     result.brief.why_firm_wants_work.claims=[evidence("The contribution is $3,200.00 per matter.","firm_reported_recorded","value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope")];
     expect(validateAnalysisResult(result,answers,[])).toBeNull();
+  });
+  it("preserves a selected fee preference without claiming positive economics when the figures are negative",()=>{
+    const answers=completeAnswers();
+    answers.value.reasons=["client_benefit","fees","skills"];
+    Object.assign(answers.value,{fee_amount:"8000",direct_cost_amount:"8500",currency:"CAD",amount_basis:"recorded",amount_scope:"per_matter"});
+    const brief=buildStructuredBlueprintV4(answers);
+    const rationale=brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.reasons"));
+    expect(rationale?.text).toContain("fee sustainability as a firm preference");
+    expect(rationale?.text).not.toMatch(/\bfees? (?:are )?worthwhile\b|\bfees? support(?:s)? the effort\b/i);
+    expect(validateAnalysisResult({brief,clarification_code:null},answers,[])).not.toBeNull();
+  });
+  it("accepts the structured report's firm-reported fee and team-time bands",()=>{
+    const answers=completeAnswers();
+    answers.value.reasons=["client_benefit","fees","skills"];
+    answers.value.collected_fee="5to15"; answers.value.team_hours="16to40";
+    Object.assign(answers.value,{fee_amount:"8000",direct_cost_amount:"8500",currency:"CAD",amount_basis:"estimated",amount_scope:"per_matter"});
+    const brief=buildStructuredBlueprintV4(answers);
+    const range=brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.collected_fee"));
+    expect(range?.evidence_basis).toBe("firm_reported_observation");
+    expect(range?.text).toContain("C$5,000 to under C$15,000");
+    expect(range?.text).toContain("More than 15, up to 40 hours");
+    expect(brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.reasons"))?.text).toContain("fee sustainability as a firm preference");
+    expect(validateAnalysisResult({brief,clarification_code:null},answers,[])).not.toBeNull();
   });
   it("accepts an accurate negative result and a growth prerequisite without blessing positive economics",()=>{
     const answers=completeAnswers();

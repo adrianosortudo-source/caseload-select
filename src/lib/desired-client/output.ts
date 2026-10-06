@@ -1,6 +1,7 @@
 import { resolveAnswerReference } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
-import { buildStructuredBlueprintV4 } from "./structured-blueprint";
+import { getAnswerLabel } from "./catalog";
+import { buildStructuredBlueprintV4, paymentContextEvidenceClaim, paymentEvidenceClaim, paymentEvidenceClaims } from "./structured-blueprint";
 import { calculateContribution, hasNegativeContribution } from "./economics";
 import { DESIRED_CLIENT_ANSWER_PATHS } from "./answer-paths";
 import { isInterviewClarificationCurrent, type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
@@ -41,6 +42,75 @@ function assertsPositiveEconomics(text: string): boolean {
     if (!negated && !prerequisite && !unverified) return true;
   }
   return false;
+}
+
+const PAYMENT_LANGUAGE: Record<string, string> = {
+  predictable: "payment is usually predictable",
+  varies: "payment depends on the matter",
+  uncertain: "payment is often uncertain",
+};
+
+function paymentMeaningIsPresent(text: string, payment: string | null): boolean {
+  const lower = text.toLocaleLowerCase("en-CA");
+  if (payment === "predictable") return /\bpayment\b[\w\s-]{0,30}\bpredictable\b/iu.test(lower);
+  if (payment === "varies") return /\bpayment\b[\w\s-]{0,30}\b(?:varies|variable|depends)\b/iu.test(lower);
+  if (payment === "uncertain") return /\bpayment\b[\w\s-]{0,30}\buncertain\b/iu.test(lower);
+  return false;
+}
+
+const PAYMENT_CONTEXT_STOP_WORDS = new Set([
+  "about", "after", "also", "and", "been", "before", "from", "into", "last", "most", "our",
+  "over", "that", "the", "their", "this", "within", "with", "would", "your",
+]);
+
+/**
+ * Payment is an application-owned enum plus an optional free-text note. A
+ * model may rephrase a supported note, but it must retain the selected
+ * payment meaning, the note's material context, and every supplied number.
+ * This check runs before repairable payment wording is considered, so a
+ * fabricated statement cannot be replaced by a canonical fallback.
+ */
+function paymentClaimIsAuthentic(value: unknown, answers: DesiredClientAnswers): boolean {
+  if (!record(value) || !Array.isArray(value.source_answer_ids) || typeof value.text !== "string") return true;
+  const paths = value.source_answer_ids.filter((path): path is string => typeof path === "string");
+  const hasPayment = paths.includes("value.payment");
+  const hasContext = paths.includes("value.payment_context") || paths.includes("value.payment_context_basis");
+  if (!hasPayment && !hasContext) return true;
+  const text = value.text.trim().replace(/\s+/g, " ");
+  const expectedPayment = paymentEvidenceClaim(answers);
+  const expectedContext = paymentContextEvidenceClaim(answers);
+  const exactSupported = [expectedPayment, expectedContext, ...(paymentEvidenceClaims(answers) ?? [])]
+    .filter((claim): claim is EvidenceLinkedStatement => claim !== null)
+    .some((claim) => claim.text === text);
+  if (exactSupported) return true;
+
+  // Keep the payment enum's meaning in every mixed or paraphrased claim.
+  if (hasPayment) {
+    const phrase = answers.value.payment ? PAYMENT_LANGUAGE[answers.value.payment] : "";
+    if (answers.value.payment === "unknown") {
+      if (!/\b(?:unknown|not established|not yet established|basis not specified)\b/iu.test(text)) return false;
+    } else if (!phrase || !paymentMeaningIsPresent(text, answers.value.payment)) return false;
+  }
+
+  // A context note may be paraphrased, but it must leave a recognizable trace
+  // and cannot introduce a different number. This permits the existing mixed
+  // payment/experience repair while blocking generic or invented context.
+  if (hasContext && answers.value.payment_context.trim()) {
+    const supportedValues = [answers.value.payment_context, answers.value.payment_context_basis ?? ""];
+    const supportedNumbers = supportedValues.flatMap((source) => numericTokens(source));
+    const unsupportedNumbers = numericTokens(text).filter((token) => !supportedNumbers.includes(token));
+    if (unsupportedNumbers.length) return false;
+    const contextWords = answers.value.payment_context.toLocaleLowerCase("en-CA")
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter((word) => word.length > 3 && !PAYMENT_CONTEXT_STOP_WORDS.has(word));
+    const textWords = new Set(text.toLocaleLowerCase("en-CA").split(/[^\p{L}\p{N}]+/u));
+    if (contextWords.length && !contextWords.some((word) => textWords.has(word))) return false;
+  }
+
+  // Do not allow broad payment assertions to pass merely because they cite a
+  // payment source. Exact user-supplied notes remain allowed above.
+  if (/\b(?:audited?|records?|prove[sd]?|all clients?|every client|always|never|paid on time|on time)\b/iu.test(text)) return false;
+  return true;
 }
 
 /** Match common written-out counts only when a nearby quantity word makes the
@@ -138,6 +208,24 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   if (paths.some((path) => typeof path !== "string" || !isSafeSourcePath(path))) return reject("source_answer_path_unrecognized");
   const disallowedPath = paths.find((path) => typeof path === "string" && !permittedSourceAnswerPath(path, answers, slot));
   if (typeof disallowedPath === "string" && isSafeSourcePath(disallowedPath)) return reject("source_answer_path_not_allowed_for_slot", disallowedPath);
+  const combinedPayment = paymentEvidenceClaims(answers).find(claim => claim.source_answer_ids.includes("value.payment") && claim.source_answer_ids.includes("value.payment_context"));
+  const expectedPayment = paymentEvidenceClaim(answers);
+  const expectedContext = paymentContextEvidenceClaim(answers);
+  const isCombinedPayment = paths.length === 3 && !!combinedPayment && !!expectedPayment && !!expectedContext &&
+    combinedPayment.source_answer_ids.length === 3 && combinedPayment.source_answer_ids.every(path => paths.includes(path)) &&
+    expectedPayment.evidence_basis === expectedContext.evidence_basis && expectedPayment.kind === expectedContext.kind &&
+    value.evidence_basis === expectedPayment.evidence_basis && value.kind === expectedPayment.kind;
+  if (paths.includes("value.payment") && (!answers.value.payment || (paths.length !== 1 && (!combinedPayment || paths.length !== combinedPayment.source_answer_ids.length || !combinedPayment.source_answer_ids.every(path => paths.includes(path)) || text !== combinedPayment.text)))) return reject("payment_source_must_be_isolated");
+  if (paths.includes("value.payment")) {
+    if (!expectedPayment || value.kind !== expectedPayment.kind || value.evidence_basis !== expectedPayment.evidence_basis) return reject("payment_evidence_status_mismatch", "value.payment");
+  }
+  if (paths.some((path) => path === "value.payment_context" || path === "value.payment_context_basis")) {
+    const expected = combinedPayment?.text===text ? combinedPayment : expectedContext;
+    if (!expected || !paths.includes("value.payment_context") || !paths.includes("value.payment_context_basis") ||
+      value.kind !== expected.kind || value.evidence_basis !== expected.evidence_basis || text !== expected.text) {
+      return reject("payment_context_claim_mismatch", "value.payment_context");
+    }
+  }
   let hasUnknown = false;
   let unresolvedPath: SafeSourcePath | undefined;
   const supportedValues: string[] = [];
@@ -148,6 +236,10 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
     else if (Array.isArray(resolved.value) && resolved.value.every((item) => typeof item === "string")) supportedValues.push(...resolved.value);
     else if (typeof resolved.value === "string") supportedValues.push(resolved.value);
     else return reject("unsupported_source_value_type");
+    if (path === "value.collected_fee" || path === "value.team_hours") {
+      const optionLabel = getAnswerLabel(path, answers);
+      if (optionLabel) supportedValues.push(optionLabel);
+    }
   }
   if (hasUnknown !== (value.evidence_basis === "unknown")) return reject("unknown_evidence_basis_mismatch", unresolvedPath ?? paths[0] as SafeSourcePath);
   if (value.evidence_basis === "unknown" && value.kind !== "unknown") return reject("unknown_evidence_kind_mismatch");
@@ -171,9 +263,19 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   )) return reject("experience_basis_mismatch", paths[0] as SafeSourcePath);
   if (value.evidence_basis === "client_reported" || value.evidence_basis === "firm_reported_observation") {
     const expected = value.evidence_basis === "client_reported" ? "client_feedback" : "firm_observation";
+    const paymentObservation = value.evidence_basis === "firm_reported_observation" && answers.focus.route === "established" &&
+      ((paths.length === 1 && paths[0] === "value.payment") || (isCombinedPayment && paths.includes("value.payment")));
+    const paymentContextSource = answers.value.payment_context.trim() && answers.value.payment_context_basis === expected &&
+      ((paths.length === 2 && paths.includes("value.payment_context") && paths.includes("value.payment_context_basis")) ||
+        (isCombinedPayment && paths.includes("value.payment_context") && paths.includes("value.payment_context_basis")));
+    const valueRangeObservation = value.evidence_basis === "firm_reported_observation" && slot === "why_firm_wants_work" && answers.focus.route === "established" && paths.length > 0 && paths.every(path => path === "value.collected_fee" || path === "value.team_hours");
+    const capacityObservation = value.evidence_basis === "firm_reported_observation" && slot === "why_firm_wants_work" && paths.length > 0 && paths.every(path => path === "delivery.capacity" || path === "write_ins.capacity" || path === "repeatability.additional_matters");
+    const valueRangeSource = paths.some(path => path === "value.collected_fee" || path === "value.team_hours");
+    const capacitySource = paths.some(path => path === "delivery.capacity" || path === "write_ins.capacity" || path === "repeatability.additional_matters");
+    const combinedValueAndCapacityObservation = value.evidence_basis === "firm_reported_observation" && slot === "why_firm_wants_work" && answers.focus.route === "established" && valueRangeSource && capacitySource && paths.every(path => path === "value.collected_fee" || path === "value.team_hours" || path === "delivery.capacity" || path === "write_ins.capacity" || path === "repeatability.additional_matters");
     const choice = paths.some(path => typeof path === "string" && path.startsWith("client.choice_"));
     const pathway = paths.some(path => typeof path === "string" && (path.startsWith("situation.") || ["client.goals","client.goal_detail","client.concerns","client.decision_needs","client.decision_context","client.pathway_basis"].includes(path)));
-    if ((!choice && !pathway) || (choice && (!paths.includes("client.choice_basis") || answers.client.choice_basis !== expected)) || (pathway && (!paths.includes("client.pathway_basis") || answers.client.pathway_basis !== expected))) return reject("client_reported_basis_mismatch");
+    if (!paymentObservation && !paymentContextSource && !valueRangeObservation && !capacityObservation && !combinedValueAndCapacityObservation && ((!choice && !pathway) || (choice && (!paths.includes("client.choice_basis") || answers.client.choice_basis !== expected)) || (pathway && (!paths.includes("client.pathway_basis") || answers.client.pathway_basis !== expected)))) return reject("client_reported_basis_mismatch");
   }
   if (value.evidence_basis === "source_observed" && !(paths.includes("opportunity.sources") && answers.opportunity.sources.some((source) => source !== "unknown" && source !== "no_evidence"))) return reject("source_observation_unavailable");
   if (["firm_reported_recorded", "firm_reported_estimate"].includes(value.evidence_basis as string) && value.kind !== "experience" && value.kind !== "hypothesis") return reject("evidence_kind_mismatch");
@@ -208,17 +310,157 @@ function validCard(value: unknown, answers: DesiredClientAnswers, slot: string, 
   if (!exact(value, ["claims"])) { reportFailure?.("card_shape"); return false; }
   if (!Array.isArray(value.claims)) { reportFailure?.("claims_not_array"); return false; }
   if (value.claims.length < 1) { reportFailure?.("card_claims_empty"); return false; }
-  if (value.claims.length > 6) { reportFailure?.("card_claim_limit_exceeded"); return false; }
+  const claimLimit = slot === "why_firm_wants_work" ? 7 : 6;
+  if (value.claims.length > claimLimit) { reportFailure?.("card_claim_limit_exceeded"); return false; }
   return value.claims.every((claim) => validStatement(claim, answers, slot, reportFailure));
+}
+
+function normalizePaymentEvidence(brief: Record<string, unknown>, answers: DesiredClientAnswers): { brief: Record<string, unknown>; blocked: boolean } {
+  const expectedClaims = paymentEvidenceClaims(answers);
+  const protectedPaths = new Set<string>(["value.payment", "value.payment_context", "value.payment_context_basis"]);
+  const card = brief.why_firm_wants_work;
+  if (!record(card) || !Array.isArray(card.claims)) return { brief, blocked: false };
+  const claims = card.claims as unknown[];
+  const protectedPathsForClaim = (claim: unknown) => record(claim) && Array.isArray(claim.source_answer_ids)
+    ? claim.source_answer_ids.filter((path): path is string => typeof path === "string" && protectedPaths.has(path))
+    : [];
+  const protectedClaims = claims.filter((claim) => protectedPathsForClaim(claim).length > 0);
+  if (!protectedClaims.length && !expectedClaims.length) return { brief, blocked: false };
+  const mixedSourcePaths = new Set<string>(protectedClaims.flatMap((claim) =>
+    record(claim) && Array.isArray(claim.source_answer_ids)
+      ? claim.source_answer_ids.filter((path): path is string => typeof path === "string" && !protectedPaths.has(path))
+      : [],
+  ));
+  let nextClaims: unknown[];
+  if (mixedSourcePaths.size) {
+    // Rebuild any claim that combines payment evidence with a different fact
+    // as separate, application-owned statements with distinct sources.
+    const structuredClaims = buildStructuredBlueprintV4(answers).why_firm_wants_work.claims;
+    const recoveredFacts = structuredClaims.filter((claim) => claim.source_answer_ids.some((path) => mixedSourcePaths.has(path)));
+    const representedPaths = new Set<string>(recoveredFacts.flatMap((claim) => claim.source_answer_ids));
+    if ([...mixedSourcePaths].some((path) => !representedPaths.has(path))) return { brief, blocked: true };
+    const overlapsMixedPaths = (claim: unknown) => record(claim) && Array.isArray(claim.source_answer_ids) && claim.source_answer_ids.some((path) => typeof path === "string" && mixedSourcePaths.has(path));
+    const overlappingClaims = claims.filter((claim) => protectedPathsForClaim(claim).length === 0 && overlapsMixedPaths(claim));
+    if (overlappingClaims.some((claim) => record(claim) && Array.isArray(claim.source_answer_ids) && claim.source_answer_ids.some((path) => typeof path === "string" && !representedPaths.has(path)))) {
+      return { brief, blocked: true };
+    }
+    const retainedClaims = claims.filter((claim) => protectedPathsForClaim(claim).length === 0 && !overlapsMixedPaths(claim));
+    nextClaims = [...retainedClaims, ...expectedClaims, ...recoveredFacts];
+    if (nextClaims.length > 7) {
+      const protectedRepresented = expectedClaims.every((expected) => structuredClaims.some((claim) =>
+        protectedPathsForClaim(claim).some((path) => expected.source_answer_ids.some((source) => source === path))));
+      const mixedRepresented = [...mixedSourcePaths].every((path) => structuredClaims.some((claim) => claim.source_answer_ids.some((source) => source === path)));
+      if (!protectedRepresented || !mixedRepresented) return { brief, blocked: true };
+      nextClaims = structuredClaims;
+    }
+  } else {
+    const firstIndex = claims.findIndex((claim) => protectedPathsForClaim(claim).length > 0);
+    const before = firstIndex < 0 ? claims : claims.slice(0, firstIndex);
+    const after = firstIndex < 0 ? [] : claims.slice(firstIndex + 1);
+    nextClaims = [...before.filter((claim) => protectedPathsForClaim(claim).length === 0), ...expectedClaims,
+      ...after.filter((claim) => protectedPathsForClaim(claim).length === 0)];
+    if (nextClaims.length > 7) return { brief, blocked: true };
+  }
+  return { brief: { ...brief, why_firm_wants_work: { ...card, claims: nextClaims } }, blocked: false };
+}
+
+/**
+ * A valid model response can still omit a supplied commercial or capacity fact.
+ * Recover only application-owned, source-linked statements that are absent from
+ * the firm's value card. Never invent or paraphrase a missing fact.
+ */
+function normalizeGroundedFirmValueClaims(brief: Record<string, unknown>, answers: DesiredClientAnswers): { brief: Record<string, unknown>; blocked: boolean } {
+  const card = brief.why_firm_wants_work;
+  if (!record(card) || !Array.isArray(card.claims)) return { brief, blocked: false };
+  const claims = card.claims as unknown[];
+  const groundedClaims = buildStructuredBlueprintV4(answers).why_firm_wants_work.claims;
+  const groundedPaths = new Set<string>(groundedClaims.flatMap((claim) => claim.source_answer_ids));
+  const representedPaths = new Set<string>(claims.flatMap((claim) =>
+    record(claim) && Array.isArray(claim.source_answer_ids)
+      ? claim.source_answer_ids.filter((path): path is string => typeof path === "string")
+      : [],
+  ));
+  const missing = groundedClaims.filter((claim) => claim.source_answer_ids.some((path) => !representedPaths.has(path)));
+  if (!missing.length) return { brief, blocked: false };
+
+  const hasAllSources = (candidate: unknown, expected: EvidenceLinkedStatement) => {
+    if (!record(candidate) || !Array.isArray(candidate.source_answer_ids)) return false;
+    const sourceIds = candidate.source_answer_ids;
+    return expected.source_answer_ids.every((path) => sourceIds.includes(path));
+  };
+  const overlaps = (candidate: unknown, expected: EvidenceLinkedStatement) => {
+    if (!record(candidate) || !Array.isArray(candidate.source_answer_ids)) return false;
+    const sourceIds = candidate.source_answer_ids;
+    return sourceIds.some((path) => expected.source_answer_ids.includes(path as AnswerReferencePath));
+  };
+  const nextClaims = [...claims];
+  for (let pass = 0; pass <= groundedClaims.length; pass += 1) {
+    const toRecover = groundedClaims.filter((claim) => !nextClaims.some((existing) => hasAllSources(existing, claim)));
+    if (!toRecover.length) break;
+    for (const claim of toRecover) {
+      // Replace a partial or mixed model claim with the complete application-owned
+      // statement. Any other grounded fact it carried will be recovered in its own
+      // pass below, rather than disappearing with the replacement.
+      for (let index = nextClaims.length - 1; index >= 0; index -= 1) {
+        if (overlaps(nextClaims[index], claim) && !hasAllSources(nextClaims[index], claim)) nextClaims.splice(index, 1);
+      }
+      if (!nextClaims.some((existing) => hasAllSources(existing, claim))) nextClaims.push(claim);
+    }
+  }
+  while (nextClaims.length > 7) {
+    const removable = nextClaims.findIndex((claim) =>
+      record(claim) && Array.isArray(claim.source_answer_ids) &&
+      !claim.source_answer_ids.some((path) => typeof path === "string" && groundedPaths.has(path)),
+    );
+    if (removable < 0) return { brief, blocked: true };
+    nextClaims.splice(removable, 1);
+  }
+  return { brief: { ...brief, why_firm_wants_work: { ...card, claims: nextClaims } }, blocked: false };
 }
 
 export function validateAnalysisResult(value: unknown, answers: DesiredClientAnswers, _eligibleCodes: readonly ClarificationCode[], reportFailure?: (failure: AnalysisValidationFailure) => void): AnalysisResult | null {
   const reject = (field: string, reason: string) => { reportFailure?.({ field, reason }); return null; };
   if (!exact(value, ["brief", "clarification_code"])) return reject("report", "root_shape");
   if (value.clarification_code !== null) return reject("report", "unexpected_clarification_code");
-  const brief=value.brief;
+  const sourceBrief=value.brief;
   const cardNames=["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const;
-  if(!exact(brief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"]))return reject("report", "brief_shape");
+  if(!exact(sourceBrief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"]))return reject("report", "brief_shape");
+  // Validate source claims before omission recovery. Payment claims may be
+  // normalized for harmless wording or mixed-source separation, but their
+  // evidence status and numeric content must still be authentic.
+  const paymentPaths = new Set(["value.payment", "value.payment_context", "value.payment_context_basis"]);
+  const sourceValueCard = sourceBrief.why_firm_wants_work;
+  if (record(sourceValueCard) && Array.isArray(sourceValueCard.claims)) {
+    for (const claim of sourceValueCard.claims) {
+      const hasPaymentSource = record(claim) && Array.isArray(claim.source_answer_ids) &&
+        claim.source_answer_ids.some((path) => typeof path === "string" && paymentPaths.has(path));
+      // Validate payment meaning, context trace and numeric authenticity before
+      // allowing any repairable wording or source-separation path.
+      if (hasPaymentSource && !paymentClaimIsAuthentic(claim, answers)) return reject("why_firm_wants_work", "claim_not_valid");
+      let failure: { reason: string; sourcePath?: SafeSourcePath } | undefined;
+      if (validStatement(claim, answers, "why_firm_wants_work", (reason, sourcePath) => { failure = { reason, ...(sourcePath ? { sourcePath } : {}) }; })) continue;
+      if (!hasPaymentSource || !record(claim) || !Array.isArray(claim.source_answer_ids)) {
+        if (failure) reportFailure?.({ field: "why_firm_wants_work", ...failure });
+        return reject("why_firm_wants_work", "claim_not_valid");
+      }
+      const repairablePaymentWording = failure?.reason === "payment_source_must_be_isolated" || failure?.reason === "payment_context_claim_mismatch";
+      const expectedPayment = paymentEvidenceClaim(answers);
+      const expectedContext = paymentContextEvidenceClaim(answers);
+      const paymentStatusMatches = !claim.source_answer_ids.includes("value.payment") ||
+        (!!expectedPayment && claim.kind === expectedPayment.kind && claim.evidence_basis === expectedPayment.evidence_basis);
+      const contextStatusMatches = !claim.source_answer_ids.some((path) => path === "value.payment_context" || path === "value.payment_context_basis") ||
+        (!!expectedContext && claim.kind === expectedContext.kind && claim.evidence_basis === expectedContext.evidence_basis);
+      if (!repairablePaymentWording || !paymentStatusMatches || !contextStatusMatches) {
+        if (failure) reportFailure?.({ field: "why_firm_wants_work", ...failure });
+        return reject("why_firm_wants_work", "claim_not_valid");
+      }
+    }
+  }
+  const normalizedPayment = normalizePaymentEvidence(sourceBrief, answers);
+  if (normalizedPayment.blocked) return reject("why_firm_wants_work", "payment_claim_cannot_fit_without_dropping_other_claims");
+  const normalizedFacts = normalizeGroundedFirmValueClaims(normalizedPayment.brief, answers);
+  if (normalizedFacts.blocked) return reject("why_firm_wants_work", "grounded_fact_claims_cannot_fit_without_dropping_other_claims");
+  const brief = normalizedFacts.brief;
   if(brief.report_version!=="dcm-blueprint-v4")return reject("report", "unsupported_report_version");
   if(typeof brief.definition_sentence!=="string")return reject("definition_sentence", "sentence_not_text");
   if(!exact(brief.definition_components,["client","client_matter","reasons","outcome"]))return reject("definition_components", "component_shape");
@@ -253,25 +495,40 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
     })) {
     return reject("client_and_matter", "target_card_not_grounded_in_confirmed_answers");
   }
-  const expectedSentence=buildDefinitionSentence(typedBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
+  // The outcome is application-owned so the proposed measure, target and
+  // review period cannot disappear when the model returns a sparse component.
+  const progressSources = new Set(["repeatability.target", "repeatability.review_period"]);
+  const canonicalOutcome = groundedTarget.definition_components.outcome.source_answer_ids.some((path) => progressSources.has(path)) &&
+    !sameGroundedStatement(typedBrief.definition_components.outcome, groundedTarget.definition_components.outcome)
+    ? groundedTarget.definition_components.outcome
+    : typedBrief.definition_components.outcome;
+  const canonicalBrief = {
+    ...typedBrief,
+    definition_components: {
+      ...typedBrief.definition_components,
+      outcome: canonicalOutcome,
+    },
+  } as DesiredClientBriefV4;
+  const expectedSentence=buildDefinitionSentence(canonicalBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
   // The definition is assembled from bounded, source-linked fields. A hard
   // 85-word ceiling rejected valid, specific client-and-matter definitions;
   // keep a generous abuse limit while preserving supported detail.
   if(typedBrief.definition_sentence.length>1600||expectedSentence.length>1600)return reject("definition_sentence", "sentence_length");
-  const reportWords=[...cardNames.flatMap(field=>typedBrief[field].claims.map(claim=>claim.text)),...pathwayFields.map(field=>typedBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
+  const reportWords=[...cardNames.flatMap(field=>canonicalBrief[field].claims.map(claim=>claim.text)),...pathwayFields.map(field=>canonicalBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
   if(reportWords>800)return reject("report", "word_limit");
-  return { clarification_code: null, brief: { ...typedBrief, definition_sentence: expectedSentence } };
+  return { clarification_code: null, brief: { ...canonicalBrief, definition_sentence: expectedSentence } };
 }
 
 const LINKED_STATEMENT_SCHEMA = { type: "object", properties: { text: { type: "string" }, kind: { type: "string", enum: KIND }, source_answer_ids: { type: "array", minItems: 1, maxItems: 8, items: { type: "string" } }, evidence_basis: { type: "string", enum: BASIS } }, required: ["text", "kind", "source_answer_ids", "evidence_basis"] } as const;
 const EVIDENCE_CARD_SCHEMA = { type: "object", properties: { claims: { type: "array", minItems: 1, maxItems: 6, items: LINKED_STATEMENT_SCHEMA } }, required: ["claims"] } as const;
+const WHY_FIRM_EVIDENCE_CARD_SCHEMA = { type: "object", properties: { claims: { type: "array", minItems: 1, maxItems: 7, items: LINKED_STATEMENT_SCHEMA } }, required: ["claims"] } as const;
 export const BLUEPRINT_RESPONSE_SCHEMA = {
   type: "object", properties: {
     clarification_code: { type: "string", nullable: true, enum: ["CLIENT_MATTER_UNCLEAR", "VALUE_EFFORT_CONFLICT", "CAPACITY_CONFLICT", "REPEATABILITY_UNPROVEN", "OPPORTUNITY_UNSUPPORTED"] },
     brief: { type: "object", properties: {
       report_version: { type: "string", enum: ["dcm-blueprint-v4"] }, definition_sentence: { type: "string" },
       definition_components: { type: "object", properties: { client: LINKED_STATEMENT_SCHEMA, client_matter: LINKED_STATEMENT_SCHEMA, reasons: LINKED_STATEMENT_SCHEMA, outcome: LINKED_STATEMENT_SCHEMA }, required: ["client", "client_matter", "reasons", "outcome"] },
-      client_and_matter:EVIDENCE_CARD_SCHEMA,client_goals_needs:EVIDENCE_CARD_SCHEMA,why_firm_wants_work:EVIDENCE_CARD_SCHEMA,why_client_chooses_firm:EVIDENCE_CARD_SCHEMA,recognizable_circumstances:EVIDENCE_CARD_SCHEMA,evidence_and_open_questions:EVIDENCE_CARD_SCHEMA,
+      client_and_matter:EVIDENCE_CARD_SCHEMA,client_goals_needs:EVIDENCE_CARD_SCHEMA,why_firm_wants_work:WHY_FIRM_EVIDENCE_CARD_SCHEMA,why_client_chooses_firm:EVIDENCE_CARD_SCHEMA,recognizable_circumstances:EVIDENCE_CARD_SCHEMA,evidence_and_open_questions:EVIDENCE_CARD_SCHEMA,
       decision_pathway:{type:"object",properties:{trigger:LINKED_STATEMENT_SCHEMA,first_contact:LINKED_STATEMENT_SCHEMA,decision:LINKED_STATEMENT_SCHEMA,desired_progress:LINKED_STATEMENT_SCHEMA},required:["trigger","first_contact","decision","desired_progress"]},
     }, required: ["report_version", "definition_sentence", "definition_components",...(["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions","decision_pathway"])] },
   }, required: ["clarification_code", "brief"],

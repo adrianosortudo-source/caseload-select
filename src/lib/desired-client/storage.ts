@@ -2,8 +2,8 @@ import { buildStructuredBrief } from "./brief";
 import { getEligibleClarificationCodes } from "./clarifications";
 import { validateAnalysisResult } from "./output";
 import { resolveAnswerReference } from "./catalog";
-import { validateDraftAnswers, validateLegacyV22DraftAnswers, validateLegacyV31DraftAnswers } from "./validation";
-import { migrateV21Answers, migrateV22Answers, migrateV30Answers, migrateV31Answers } from "./migration";
+import { validateDraftAnswers, validateLegacyV22DraftAnswers, validateLegacyV31DraftAnswers, validateLegacyV32DraftAnswers } from "./validation";
+import { migrateV21Answers, migrateV22Answers, migrateV30Answers, migrateV31Answers, migrateV32Answers } from "./migration";
 import { type AnalysisResult, type AnswerReferencePath, type ClarificationCode, type DesiredClientAnswers, type DesiredClientBriefV2, type LegacyDesiredClientBriefV1, type SavedBrief, type SavedDraft } from "./types";
 
 export const DRAFT_STORAGE_KEY = "cls-desired-client-v2";
@@ -32,14 +32,16 @@ function mappedStage(value: number): number {
 function migratedLegacyDraft(value: unknown, now: number): SavedDraft | null {
   if (!validDraftEnvelope(value, now)) return null;
   const schema = isRecord(value.answers) ? value.answers.schema_version : null;
-  const answers = schema === "dcm-v2.1" ? migrateV21Answers(value.answers) : schema === "dcm-v2.2" ? migrateV22Answers(value.answers) : schema === "dcm-v3.0" ? migrateV30Answers(value.answers) : schema === "dcm-v3.1" ? migrateV31Answers(value.answers) : null;
+  const answers = schema === "dcm-v2.1" ? migrateV21Answers(value.answers) : schema === "dcm-v2.2" ? migrateV22Answers(value.answers) : schema === "dcm-v3.0" ? migrateV30Answers(value.answers) : schema === "dcm-v3.1" ? migrateV31Answers(value.answers) : schema === "dcm-v3.2" ? migrateV32Answers(value.answers) : null;
   if (!answers) return null;
   const edited = Date.parse(value.lastEditedAt as string), expires = Date.parse(value.expiresAt as string);
-  const stage = schema === "dcm-v3.0" ? Math.min(Number(value.currentStage), 2) : schema === "dcm-v3.1" ? Math.min(Number(value.currentStage), 4) : mappedStage(Number(value.currentStage));
+  const stage = schema === "dcm-v3.0" ? Math.min(Number(value.currentStage), 2) : schema === "dcm-v3.1" ? Math.min(Number(value.currentStage), 4) : schema === "dcm-v3.2" ? Number(value.currentStage) : mappedStage(Number(value.currentStage));
   let savedBrief: SavedBrief | undefined;
   if (isRecord(value.savedBrief)) {
     const savedValue = schema === "dcm-v2.2"
       ? { ...value.savedBrief, sourceAnswersVersion: "dcm-v2.2", sourceAnswersSnapshot: structuredClone(value.answers) }
+      : schema === "dcm-v3.2" && isRecord(value.savedBrief.sourceAnswersSnapshot) && value.savedBrief.sourceAnswersVersion === "dcm-v3.2" && validateLegacyV32DraftAnswers(value.savedBrief.sourceAnswersSnapshot)
+      ? { ...value.savedBrief, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: migrateV32Answers(value.savedBrief.sourceAnswersSnapshot) }
       : value.savedBrief;
     savedBrief = restoreSavedBrief(savedValue, answers);
   }
@@ -51,7 +53,7 @@ function legacyTimestampsForSameMigration(value: unknown, answers: DesiredClient
   const edited = Date.parse(value.lastEditedAt), expires = Date.parse(value.expiresAt);
   if (!Number.isFinite(edited) || !Number.isFinite(expires) || expires <= edited || expires - edited > DRAFT_TTL_MS + 1000) return null;
   const schema = isRecord(value.answers) ? value.answers.schema_version : null;
-  const migrated = schema === "dcm-v2.1" ? migrateV21Answers(value.answers) : schema === "dcm-v2.2" ? migrateV22Answers(value.answers) : schema === "dcm-v3.0" ? migrateV30Answers(value.answers) : schema === "dcm-v3.1" ? migrateV31Answers(value.answers) : null;
+  const migrated = schema === "dcm-v2.1" ? migrateV21Answers(value.answers) : schema === "dcm-v2.2" ? migrateV22Answers(value.answers) : schema === "dcm-v3.0" ? migrateV30Answers(value.answers) : schema === "dcm-v3.1" ? migrateV31Answers(value.answers) : schema === "dcm-v3.2" ? migrateV32Answers(value.answers) : null;
   return migrated && migrated.revision === answers.revision ? { edited, expires } : null;
 }
 
@@ -85,17 +87,21 @@ function restoreSavedBrief(value: unknown, answers: DesiredClientAnswers): Saved
   if (value.mode === "structured") {
     const rebuilt = buildStructuredBrief(answers);
     const hasCurrentReportMarker = isRecord(brief) && brief.report_version === "dcm-blueprint-v4";
-    const exactAnswerSnapshot = value.sourceAnswersVersion === "dcm-v3.2" && isRecord(value.sourceAnswersSnapshot) && value.sourceAnswersSnapshot.schema_version === "dcm-v3.2" && value.sourceAnswersSnapshot.revision === answers.revision && validateDraftAnswers(value.sourceAnswersSnapshot) && sameJson(value.sourceAnswersSnapshot, answers);
+    const currentAnswerSnapshot = isRecord(value.sourceAnswersSnapshot) && value.sourceAnswersSnapshot.schema_version === "dcm-v3.3" && value.sourceAnswersSnapshot.revision === answers.revision && validateDraftAnswers(value.sourceAnswersSnapshot) && sameJson(value.sourceAnswersSnapshot, answers);
+    // A prior release could preserve the v3.2 label while already storing a v3.3
+    // snapshot. Treat that combination as an exact current-answer snapshot so a
+    // saved report can be refreshed once, while still rejecting mismatched data.
+    const exactAnswerSnapshot = (value.sourceAnswersVersion === "dcm-v3.3" || value.sourceAnswersVersion === "dcm-v3.2") && currentAnswerSnapshot;
     const reportMatchesCurrentBuilder = sameJson(brief, rebuilt);
     if (!hasCurrentReportMarker || (!reportMatchesCurrentBuilder && !exactAnswerSnapshot)) return undefined;
     const refreshRecord = reportMatchesCurrentBuilder ? refreshedFrom : (refreshedFrom ?? { generatedAt: new Date(Date.parse(value.generatedAt as string)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "structured" as const });
-    return { brief: rebuilt, sourceAnswersVersion: "dcm-v3.2", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: reportMatchesCurrentBuilder ? new Date(Date.parse(value.generatedAt as string)).toISOString() : new Date().toISOString(), wordingReviewed: reportMatchesCurrentBuilder ? value.wordingReviewed : false, mode: "structured", ...(refreshRecord ? { refreshedFrom: refreshRecord } : {}), ...(openClarificationCode ? { openClarificationCode: openClarificationCode as ClarificationCode } : {}) };
+    return { brief: rebuilt, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: reportMatchesCurrentBuilder ? new Date(Date.parse(value.generatedAt as string)).toISOString() : new Date().toISOString(), wordingReviewed: reportMatchesCurrentBuilder ? value.wordingReviewed : false, mode: "structured", ...(refreshRecord ? { refreshedFrom: refreshRecord } : {}), ...(openClarificationCode ? { openClarificationCode: openClarificationCode as ClarificationCode } : {}) };
   }
   const result = validateAnalysisResult({ brief, clarification_code: null }, answers, []);
   if (!result) return undefined;
   const wordingChanged = !sameJson(brief, result.brief);
   const refreshRecord = wordingChanged ? (refreshedFrom ?? { generatedAt: new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "ai" as const }) : refreshedFrom;
-  return { brief: result.brief, sourceAnswersVersion: "dcm-v3.2", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: wordingChanged ? new Date().toISOString() : new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: wordingChanged ? false : value.wordingReviewed, mode: "ai", ...(refreshRecord ? { refreshedFrom: refreshRecord } : {}), ...(openClarificationCode ? { openClarificationCode: openClarificationCode as ClarificationCode } : {}) };
+  return { brief: result.brief, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: wordingChanged ? new Date().toISOString() : new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: wordingChanged ? false : value.wordingReviewed, mode: "ai", ...(refreshRecord ? { refreshedFrom: refreshRecord } : {}), ...(openClarificationCode ? { openClarificationCode: openClarificationCode as ClarificationCode } : {}) };
 }
 
 function validateLegacyAnswerSnapshot(value: unknown): boolean {
@@ -177,7 +183,7 @@ export function saveDraft(storage: Storage, answers: DesiredClientAnswers, curre
       const previous = validateSavedDraft(parsed);
       if (previous) reportNeedsRegeneration = previous.reportNeedsRegeneration === true;
       if (previous && previous.answers.revision === answers.revision) { editedAt = Date.parse(previous.lastEditedAt); expiresAt = Date.parse(previous.expiresAt); }
-      else if (answers.schema_version === "dcm-v3.2" || answers.schema_version === "dcm-v3.1") {
+      else if (["dcm-v3.1", "dcm-v3.2", "dcm-v3.3"].includes(answers.schema_version)) {
         const legacy = legacyTimestampsForSameMigration(parsed, answers);
         if (legacy) { editedAt = legacy.edited; expiresAt = legacy.expires; }
       }
@@ -200,7 +206,7 @@ function hydrateLegacyFollowupFingerprints(input: DesiredClientAnswers): Desired
 export function clearDraft(storage: Storage): boolean { try { storage.removeItem(DRAFT_STORAGE_KEY); return true; } catch { return false; } }
 export function savedAnalysis(result: AnalysisResult, answers: DesiredClientAnswers): SavedBrief | undefined {
   const checked = validateAnalysisResult(result, answers, []);
-  return checked ? { brief: checked.brief, sourceAnswersVersion: "dcm-v3.2", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: new Date().toISOString(), wordingReviewed: false, mode: "ai" } : undefined;
+  return checked ? { brief: checked.brief, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: new Date().toISOString(), wordingReviewed: false, mode: "ai" } : undefined;
 }
 
 function validSavedV2Brief(value: Record<string, unknown>): boolean {

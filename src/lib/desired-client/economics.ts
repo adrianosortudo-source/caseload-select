@@ -3,6 +3,7 @@ import type { DesiredClientAnswers } from "./types";
 export interface CalculatedContribution {
   label: "Contribution before overhead and acquisition costs";
   amount: string;
+  margin: { label: "Contribution margin on collected fees"; amount: string } | null;
   currency: string;
   basis: "firm_reported_recorded" | "firm_reported_estimate";
   scope: "per matter";
@@ -32,8 +33,14 @@ export function calculateContribution(answers: DesiredClientAnswers): Calculated
   const currency = answers.value.currency.trim().toUpperCase();
   if (fee === null || cost === null || answers.value.amount_scope !== "per_matter" || !["recorded", "estimated"].includes(answers.value.amount_basis ?? "") || !/^[A-Z]{3}$/.test(currency)) return null;
   try {
-    const formatted = new Intl.NumberFormat("en-CA", { style: "currency", currency, maximumFractionDigits: 2 }).format((fee - cost) / 100);
-    return { label: "Contribution before overhead and acquisition costs", amount: formatted, currency, basis: answers.value.amount_basis === "recorded" ? "firm_reported_recorded" : "firm_reported_estimate", scope: "per matter" };
+    const contributionCents = fee - cost;
+    const magnitude = new Intl.NumberFormat("en-CA", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Math.abs(contributionCents) / 100);
+    const currencyLabel = currency === "CAD" ? "C$" : `${currency} `;
+    const formatted = `${contributionCents < 0 ? "−" : ""}${currencyLabel}${magnitude}`;
+    const margin = fee > 0
+      ? { label: "Contribution margin on collected fees" as const, amount: new Intl.NumberFormat("en-CA", { style: "percent", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(contributionCents / fee).replace(/^-/, "−") }
+      : null;
+    return { label: "Contribution before overhead and acquisition costs", amount: formatted, margin, currency, basis: answers.value.amount_basis === "recorded" ? "firm_reported_recorded" : "firm_reported_estimate", scope: "per matter" };
   } catch {
     return null;
   }

@@ -1,4 +1,4 @@
-import { getAnswerLabel, getWorkLabel, REASON_LABELS, resolveAnswerReference, TIMING_PHRASES } from "./catalog";
+import { getAnswerLabel, getReasonLabel, getWorkLabel, REASON_LABELS, resolveAnswerReference, TIMING_PHRASES } from "./catalog";
 import { buildDefinitionSentence } from "./definition";
 import { calculateContribution, hasNegativeContribution } from "./economics";
 import { isInterviewClarificationCurrent, type AnswerReferencePath, type DesiredClientAnswers, type DesiredClientBrief, type DesiredClientBriefV4, type EvidenceBasis, type EvidenceLinkedStatement } from "./types";
@@ -221,6 +221,40 @@ function insightBasis(value:DesiredClientAnswers["client"]["pathway_basis"]|Desi
   return value==="client_feedback"?"client_reported":value==="firm_observation"?"firm_reported_observation":value==="firm_hypothesis"?"hypothesis":"unknown";
 }
 function unknownClaim(label:string,path:AnswerReferencePath):EvidenceLinkedStatement{return linked(label,"unknown",[path]);}
+export function paymentEvidenceClaim(answers:DesiredClientAnswers):EvidenceLinkedStatement|null {
+  const payment=answers.value.payment;
+  if(!payment)return null;
+  if(payment==="unknown")return unknownClaim("Payment predictability has not been established. Basis not specified.","value.payment");
+  const descriptions={
+    predictable:"payment is usually predictable",
+    varies:"payment depends on the matter",
+    uncertain:"payment is often uncertain",
+  } as const;
+  const description=descriptions[payment];
+  if(!description)return unknownClaim("Payment predictability has not been established. Basis not specified.","value.payment");
+  if(answers.focus.route==="established")return linked(`The firm reports that ${description}. Basis not specified.`,"firm_reported_observation",["value.payment"]);
+  if(answers.focus.route==="new"||answers.focus.route==="exploring")return linked(`Working assumption to test: ${description}. Basis not specified.`,"hypothesis",["value.payment"]);
+  return unknownClaim("Payment predictability and its basis have not been established.","value.payment");
+}
+export function paymentContextEvidenceClaim(answers:DesiredClientAnswers):EvidenceLinkedStatement|null {
+  const note=answers.value.payment_context;
+  if(!note.trim())return null;
+  const paths:AnswerReferencePath[]=["value.payment_context","value.payment_context_basis"];
+  switch(answers.value.payment_context_basis){
+    case "client_feedback":return linked(`Client feedback reported by the firm: “${note}”` ,"client_reported",paths);
+    case "firm_observation":return linked(`Firm observation: “${note}”`,"firm_reported_observation",paths);
+    case "firm_hypothesis":return linked(`Firm hypothesis to test: “${note}”`,"hypothesis",paths);
+    case "unknown":return linked(`Payment context supplied by the firm: “${note}”. Not established.`,"unknown",paths);
+    default:return linked(`Payment context supplied by the firm: “${note}”. Basis not specified.`,"unknown",paths);
+  }
+}
+export function paymentEvidenceClaims(answers:DesiredClientAnswers):EvidenceLinkedStatement[] {
+  const payment=paymentEvidenceClaim(answers), context=paymentContextEvidenceClaim(answers);
+  if(payment&&context&&payment.kind===context.kind&&payment.evidence_basis===context.evidence_basis){
+    return [linked(`${payment.text} ${context.text}`,payment.evidence_basis,[...payment.source_answer_ids,...context.source_answer_ids])];
+  }
+  return [payment,context].filter((claim):claim is EvidenceLinkedStatement=>claim!==null);
+}
 function interviewClaims(answers:DesiredClientAnswers, stages:number[], prefix:string):EvidenceLinkedStatement[] {
   return answers.interview.followups.flatMap((item,index)=>{
     if(item.skipped||!stages.includes(item.stage)||!isInterviewClarificationCurrent(item,answers))return [];
@@ -246,20 +280,53 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const goalsClaims=[progress,...(needPaths.length?[linked(`Needs, concerns or decision participants noted by the firm: ${facts(answers,needPaths)}.`,"hypothesis",needPaths)]:[]),...interviewClaims(answers,[2],"Additional context supplied: ")].slice(0,6);
 
   const reasonPaths=knownPaths(answers,["value.reasons","write_ins.reasons","practice.enjoys","value.fee_effort","write_ins.fee_effort"]).filter((path)=>path!=="value.reasons"||!answers.value.reasons.includes("undecided"));
-  const reasonLabels=reasonPaths.map(path=>fragment(text(answers,path))).filter(Boolean);
+  const negativeEconomics=hasNegativeContribution(answers);
+  // Preserve the firm's fee preference as a preference; do not restate it as
+  // a positive financial result when the comparable figures calculate negative.
+  const reasonLabels=reasonPaths.flatMap(path=>path==="value.reasons"
+    ?answers.value.reasons.filter(id=>id!=="undecided").map(id=>negativeEconomics&&id==="fees"?"fee sustainability as a firm preference":getReasonLabel(id,answers.focus.route))
+    :[fragment(text(answers,path))]).filter(Boolean);
   const firmRationale=reasonPaths.length?linked(`Reasons reported by the firm: ${reasonLabels.join("; ")||text(answers,"value.reasons")}.`,"firm_preference",reasonPaths):unknownClaim("The firm's reasons for wanting more of this work are not yet established.","value.reasons");
   const economicsPaths=knownPaths(answers,["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]);
   const contribution=calculateContribution(answers);
   const economicsText=economicsPaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")+(contribution?`; ${contribution.basis==="firm_reported_estimate"?"estimated":"firm-record-based"} contribution before overhead and acquisition costs: ${contribution.amount} per matter, calculated as collected fee less direct delivery cost`:"");
   const experiencePaths=knownPaths(answers,["practice.experience","practice.capability","practice.development_needs"]);
-  const deliveryPaths=knownPaths(answers,["delivery.capacity","write_ins.capacity","repeatability.staffing_constraint","repeatability.additional_matters","direction.less_note","direction.less_reason"]);
-  const rangePaths=knownPaths(answers,["value.collected_fee","value.team_hours","value.payment"]);
-  const whyFirmClaims=[firmRationale,
-    ...(experiencePaths.length?[linked(`Experience and development reported by the firm: ${facts(answers,experiencePaths)}.`,["regular","occasional","adjacent"].includes(answers.practice.experience??"")?"firm_reported_experience":"firm_preference",experiencePaths)]:[]),
-    ...(economicsPaths.length?[linked(`Matter economics supplied: ${economicsText}. ${answers.value.amount_basis==="recorded"||answers.value.amount_basis==="estimated"?"":"The evidence basis remains unconfirmed. "}These details do not establish net profit.`,answers.value.amount_basis==="recorded"?"firm_reported_recorded":answers.value.amount_basis==="estimated"?"firm_reported_estimate":"hypothesis",economicsPaths)]:[]),
-    ...(rangePaths.length?[linked(`Fee range, effort or payment pattern supplied: ${rangePaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")}.`,"hypothesis",rangePaths)]:[]),
-    ...(deliveryPaths.length?[linked(`Capacity, constraints and marketing trade-offs supplied: ${facts(answers,deliveryPaths)}.`,"firm_preference",deliveryPaths)]:[]),
-    ...interviewClaims(answers,[3],"Clarification: ")];
+  const currentCapacityPaths=knownPaths(answers,["delivery.capacity","write_ins.capacity","repeatability.additional_matters"]);
+  const deliveryPreferencePaths=knownPaths(answers,["repeatability.staffing_constraint","direction.less_note","direction.less_reason"]);
+  const rangePaths=knownPaths(answers,["value.collected_fee","value.team_hours"]);
+  const paymentClaims=paymentEvidenceClaims(answers);
+  const economicsClaim=economicsPaths.length?linked(`Matter economics supplied: ${economicsText}. ${answers.value.amount_basis==="recorded"||answers.value.amount_basis==="estimated"?"":"The evidence basis remains unconfirmed. "}These details do not establish net profit.`,answers.value.amount_basis==="recorded"?"firm_reported_recorded":answers.value.amount_basis==="estimated"?"firm_reported_estimate":"hypothesis",economicsPaths):null;
+  const rangeClaim=rangePaths.length?linked(`${answers.focus.route==="established"?"The firm reports":"Working assumption to test"}: fee range or team time: ${rangePaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")}. Basis not specified.`,answers.focus.route==="established"?"firm_reported_observation":"hypothesis",rangePaths):null;
+  const currentCapacityClaim=currentCapacityPaths.length
+    ? linked(`Current capacity assessment reported by the firm: ${facts(answers,currentCapacityPaths)}.`,"firm_reported_observation",currentCapacityPaths)
+    : null;
+  // Payment and its context remain separate when their evidence bases differ.
+  // The firm-value card has a seven-claim allowance for this bounded case, so
+  // each statement keeps its own evidence basis and source citations.
+  const rangeAndCapacityClaim=rangeClaim&&currentCapacityClaim&&rangeClaim.evidence_basis===currentCapacityClaim.evidence_basis
+    ? linked(`${rangeClaim.text} ${currentCapacityClaim.text}`,rangeClaim.evidence_basis,unique([...rangeClaim.source_answer_ids,...currentCapacityClaim.source_answer_ids]))
+    : null;
+  const commercialClaims=[economicsClaim,rangeAndCapacityClaim??rangeClaim].filter((claim):claim is EvidenceLinkedStatement=>claim!==null);
+  const deliveryPreferenceClaim=deliveryPreferencePaths.length
+    ? linked(`Growth prerequisites and marketing trade-offs selected by the firm: ${facts(answers,deliveryPreferencePaths)}.`,"firm_preference",deliveryPreferencePaths)
+    : null;
+  const firmInterviewClaims=interviewClaims(answers,[3],"Clarification: ");
+  const preferenceClaims=[...(deliveryPreferenceClaim?[deliveryPreferenceClaim]:[]),...firmInterviewClaims];
+  const preferenceSources=firmRationale.evidence_basis==="firm_preference"&&preferenceClaims.length
+    ? [...new Set([...
+      firmRationale.source_answer_ids,
+      ...preferenceClaims.flatMap(claim=>claim.source_answer_ids),
+    ])]
+    : [];
+  const rationaleWithDelivery=preferenceClaims.length&&preferenceSources.length>0&&preferenceSources.length<=8
+    ? linked(`${firmRationale.text} ${preferenceClaims.map(claim=>claim.text).join(" ")}`,"firm_preference",preferenceSources)
+    : firmRationale;
+  const whyFirmClaims=[rationaleWithDelivery,
+     ...(experiencePaths.length?[linked(`Experience and development reported by the firm: ${facts(answers,experiencePaths)}.`,["regular","occasional","adjacent"].includes(answers.practice.experience??"")?"firm_reported_experience":"firm_preference",experiencePaths)]:[]),
+     ...commercialClaims,
+     ...paymentClaims,
+     ...(!rangeAndCapacityClaim&&currentCapacityClaim?[currentCapacityClaim]:[]),
+      ...(preferenceClaims.length&&rationaleWithDelivery===firmRationale?preferenceClaims:[])];
 
   const choiceBasis=insightBasis(answers.client.choice_basis);
   const choicePaths=knownPaths(answers,["client.choice_priorities","client.choice_detail","client.choice_basis"]);

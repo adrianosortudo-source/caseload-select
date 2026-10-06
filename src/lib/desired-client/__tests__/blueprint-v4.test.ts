@@ -138,7 +138,7 @@ describe("v4 provenance and client pathway", () => {
     expect(prose).not.toContain("input..");
     expect(prose).not.toContain("The client is seeking Complete");
     expect(validateAnalysisResult({brief,clarification_code:null},a,[])).not.toBeNull();
-    const saved={brief,sourceAnswersVersion:"dcm-v3.2" as const,sourceAnswersSnapshot:structuredClone(a),sourceBriefRevision:a.revision,generatedAt:"2026-10-05T12:00:00.000Z",wordingReviewed:false,mode:"structured" as const};
+    const saved={brief,sourceAnswersVersion:"dcm-v3.3" as const,sourceAnswersSnapshot:structuredClone(a),sourceBriefRevision:a.revision,generatedAt:"2026-10-05T12:00:00.000Z",wordingReviewed:false,mode:"structured" as const};
     const html=createHtmlDownload(saved,a,new Date(2026,9,5)).content;
     expect(html).toContain("Comparable enquiries: 20; Retained matters: 12; Reported conversion: 60%");
     expect(html).not.toContain("obligations..");
@@ -198,6 +198,41 @@ describe("v4 provenance and client pathway", () => {
     unsupported.brief.why_firm_wants_work.claims[0].text="These fees are worthwhile and support a positive contribution.";
     unsupported.brief.why_firm_wants_work.claims[0].source_answer_ids=["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"];
     expect(validateAnalysisResult(unsupported,a,[])).toBeNull();
+  });
+  it("explains when the firm's fee-support preference conflicts with negative contribution",()=>{
+    const a=completeAnswers();
+    a.value.reasons=["client_benefit","fees","skills"];
+    a.value.fee_amount="8000"; a.value.direct_cost_amount="8500"; a.value.currency="CAD"; a.value.amount_scope="per_matter"; a.value.amount_basis="recorded";
+    const brief=buildStructuredBlueprintV4(a);
+    const view=buildBlueprintViewModel(brief,a,{mode:"structured",generatedAt:"2026-10-01T12:00:00.000Z",wordingReviewed:false});
+    expect(view.conditions.some(condition=>condition.includes("selected fee sustainability as a reason")&&condition.includes("negative contribution of −C$500.00"))).toBe(true);
+    expect(view.definition).toContain("preference needs to be reconciled with the negative contribution");
+  });
+  it("retains a fully populated commercial and delivery fixture within every six-claim section",()=>{
+    const a=completeAnswers();
+    a.value.reasons=["client_benefit","fees","skills"];
+    Object.assign(a.value,{fee_effort:"worthwhile",collected_fee:"15to50",team_hours:"16to40",payment:"predictable",payment_context:"Most buyers paid the first invoice within 15 days.",payment_context_basis:"firm_observation",currency:"CAD",fee_amount:"25000",direct_cost_amount:"12000",amount_basis:"recorded",amount_scope:"per_matter"});
+    a.practice.experience="regular";
+    Object.assign(a.delivery,{capacity:"room"});
+    Object.assign(a.repeatability,{target:"2 additional retained matters per quarter",review_period:"quarterly",additional_matters:"2",staffing_constraint:"One associate has room for two more matters."});
+    const brief=buildStructuredBlueprintV4(a);
+    const cards=[brief.client_and_matter,brief.client_goals_needs,brief.why_firm_wants_work,brief.why_client_chooses_firm,brief.recognizable_circumstances,brief.evidence_and_open_questions];
+    const text=cards.flatMap(card=>card.claims).map(claim=>claim.text).join(" ");
+    expect(brief.why_firm_wants_work.claims.length).toBeLessThanOrEqual(7);
+    expect(brief.client_and_matter.claims.length).toBeLessThanOrEqual(6);
+    expect(brief.client_goals_needs.claims.length).toBeLessThanOrEqual(6);
+    expect(brief.why_client_chooses_firm.claims.length).toBeLessThanOrEqual(6);
+    expect(brief.recognizable_circumstances.claims.length).toBeLessThanOrEqual(6);
+    expect(brief.evidence_and_open_questions.claims.length).toBeLessThanOrEqual(6);
+    for(const detail of ["25000","12000","C$15,000 to under C$50,000","More than 15, up to 40 hours","payment is usually predictable","Most buyers paid the first invoice within 15 days","Yes, with the current team","2 additional retained matters per quarter","One associate has room for two more matters"]){
+      expect(JSON.stringify(brief)).toContain(detail);
+    }
+    expect(text).toContain("One associate has room for two more matters");
+    const capacityClaim=brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("delivery.capacity"));
+    expect(capacityClaim?.evidence_basis).toBe("firm_reported_observation");
+    expect(capacityClaim?.source_answer_ids).toContain("repeatability.additional_matters");
+    const staffingClaim=brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("repeatability.staffing_constraint"));
+    expect(staffingClaim?.evidence_basis).toBe("firm_preference");
   });
   it("labels clarification answers by the kind of information they contribute", () => {
     const a=completeAnswers();
