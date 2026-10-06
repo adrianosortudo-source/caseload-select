@@ -102,7 +102,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json","utf8"));if(!Array.isArray(r.migrations)||r.migrations.length!==6)process.exit(1);fs.writeFileSync(process.env.RUNNER_TEMP+"/preflight-binding.json",JSON.stringify({runId:process.env.GITHUB_RUN_ID,sourceSha:process.env.REVIEWED_SOURCE_SHA,migrationSha256:require("node:crypto").createHash("sha256").update(JSON.stringify(r.migrations)).digest("hex"),receiptSha256:require("node:crypto").createHash("sha256").update(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json")).digest("hex"),databaseWrites:0})+"\n");'
+          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json","utf8"));if(!Array.isArray(r.migrations)||r.migrations.length!==7)process.exit(1);fs.writeFileSync(process.env.RUNNER_TEMP+"/preflight-binding.json",JSON.stringify({runId:process.env.GITHUB_RUN_ID,sourceSha:process.env.REVIEWED_SOURCE_SHA,migrationSha256:require("node:crypto").createHash("sha256").update(JSON.stringify(r.migrations)).digest("hex"),receiptSha256:require("node:crypto").createHash("sha256").update(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json")).digest("hex"),databaseWrites:0})+"\n");'
           cat "$RUNNER_TEMP/preflight-binding.json"
       - name: Upload redacted preflight evidence for second review
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
