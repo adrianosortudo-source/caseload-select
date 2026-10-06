@@ -38,10 +38,10 @@ suite("candidate reads above the observed Admin inventory", () => {
       const batchId = (await db.query<{ id: string }>(
         "INSERT INTO public.gta_prospect_import_batches(source_name,source_sha256,source_record_count,state,applied_at) VALUES($1,$2,6000,'applied',now()) RETURNING id",
         [prefix, "b".repeat(64)])).rows[0].id;
-      // Bounded setup batches let PostgreSQL refresh statistics as the synthetic
-      // journal grows. The measured read allowance below stays exactly five seconds.
+      // 1,000-row batches keep statistics current without repeatedly rescanning
+      // the growing synthetic journal. The measured read allowance stays five seconds.
       const auditSetupStart = performance.now();
-      const auditSetupBatchSize = 100;
+      const auditSetupBatchSize = 1000;
       await db.query("SET LOCAL statement_timeout = '60s'");
       for (let first = 1; first <= 6000; first += auditSetupBatchSize) {
         await db.query(`INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record)
@@ -62,7 +62,7 @@ suite("candidate reads above the observed Admin inventory", () => {
       // The rare token is on the firm source record; the broad token appears on
       // a sibling source record. Search must resolve the rare anchor first but
       // retain matching across every candidate linked to the same verified firm.
-      await db.query("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) SELECT $1,f.source_record_key,$2,'accepted','created',$3,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName','Synthetic Law Evidence Record','originalStatus','selected') FROM public.gta_prospect_firms f WHERE f.source_record_key=$4",
+      await db.query("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) SELECT $1,f.source_record_key||'-law-evidence',$2,'accepted','created',$3,jsonb_build_object('sourceRecordKey',f.source_record_key||'-law-evidence','firmName','Synthetic Law Evidence Record','originalStatus','selected') FROM public.gta_prospect_firms f WHERE f.source_record_key=$4",
         [batchId, "d".repeat(64), targetFirm, targetSourceKey]);
       const counts = (await db.query<{ candidates: number; histories: number; fields: number; sources: number; identityLinks: number }>(`SELECT
         (SELECT count(*)::integer FROM public.prospect_research_candidates) candidates,
