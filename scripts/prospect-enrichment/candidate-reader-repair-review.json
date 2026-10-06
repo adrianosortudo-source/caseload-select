@@ -83,6 +83,14 @@
       "name": "prospect_candidate_global_text_search_index_only",
       "bytes": 8220,
       "sha256": "624209edd0de39c8085cf7177cbd0815992029201c466871b4ad995cdfacd368"
+    },
+    {
+      "path": "supabase/migrations/20261006170000_prospect_candidate_global_text_search_direct_scope.sql",
+      "filename": "20261006170000_prospect_candidate_global_text_search_direct_scope.sql",
+      "version": "20261006170000",
+      "name": "prospect_candidate_global_text_search_direct_scope",
+      "bytes": 5691,
+      "sha256": "51a828be0be45fff8428f9b899bdcba8ca20507140d247e294e1a987f125fbcc"
     }
   ],
   "exclusions": [
