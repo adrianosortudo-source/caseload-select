@@ -11,6 +11,11 @@ const expectCatalog = {
  candidate_history_service_role_execute:true,candidate_history_anon_execute:false,candidate_history_auth_execute:false,
  candidate_chunk_service_role_execute:true,candidate_chunk_anon_execute:false,candidate_chunk_auth_execute:false,
  private_list_service_role_execute:true,private_list_anon_execute:false,private_list_auth_execute:false,
+ private_firm_list_service_role_execute:true,private_firm_list_anon_execute:false,private_firm_list_auth_execute:false,
+ private_text_list_service_role_execute:true,private_text_list_anon_execute:false,private_text_list_auth_execute:false,
+ firm_list_security_definer:true,firm_list_empty_search_path:true,
+ text_list_security_definer:true,text_list_empty_search_path:true,
+ public_list_security_invoker:true,public_list_empty_search_path:true,public_list_firm_dispatch:true,public_list_text_dispatch:true,
  private_firm_links_service_role_execute:false,private_firm_links_anon_execute:false,private_firm_links_auth_execute:false,
  history_metadata_search_index:true,identity_by_candidate_index:true,identity_by_firm_index:true,
  invalid_date_coverage_index:true,original_status_exact_index:true,
@@ -19,7 +24,7 @@ const expectCatalog = {
  apply_refresh_current_identity_excluded:true
 };
 describe("candidate reader repair gate", () => {
- it("binds the review receipt to all five exact migration sources and never grants write approval", () => {
+ it("binds the review receipt to all six exact migration sources and never grants write approval", () => {
   expect(source.verified).toBe(true);
   expect(source.productionApplicationApproved).toBe(false);
   expect(source.migrations.map(item => item.filename)).toEqual([
@@ -28,6 +33,7 @@ describe("candidate reader repair gate", () => {
    "20260930225510_prospect_enrichment_apply_refresh_gate.sql",
    "20261004120000_prospect_candidate_firm_field_fastpath.sql",
    "20261005141204_prospect_candidate_original_status_fastpath.sql",
+   "20261006003626_prospect_candidate_scoped_reader_fastpaths.sql",
   ]);
   const receipt=JSON.parse(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json","utf8"));
   const changedReceipt={...receipt,migrations:[...receipt.migrations]};
@@ -45,6 +51,9 @@ describe("candidate reader repair gate", () => {
   changedReceipt.migrations=[...receipt.migrations];
   changedReceipt.migrations[4]={...changedReceipt.migrations[4],sha256:"0".repeat(64)};
   expect(()=>verifyReaderRepairReceipt(changedReceipt)).toThrow("reader_repair_receipt_source_mismatch");
+  changedReceipt.migrations=[...receipt.migrations];
+  changedReceipt.migrations[5]={...changedReceipt.migrations[5],sha256:"0".repeat(64)};
+  expect(()=>verifyReaderRepairReceipt(changedReceipt)).toThrow("reader_repair_receipt_source_mismatch");
  });
  it("accepts only the exact ordered pending suffix and empty post-plan", () => {
   const first="20260930050000_prospect_candidate_coverage_warning_index.sql";
@@ -52,15 +61,17 @@ describe("candidate reader repair gate", () => {
   const third="20260930225510_prospect_enrichment_apply_refresh_gate.sql";
   const fourth="20261004120000_prospect_candidate_firm_field_fastpath.sql";
   const fifth="20261005141204_prospect_candidate_original_status_fastpath.sql";
+  const sixth="20261006003626_prospect_candidate_scoped_reader_fastpaths.sql";
   const pending=(files:string[])=>({phase:"candidate-reader-repair-pending",pendingPaths:files.map(file=>"supabase/migrations/"+file)});
-  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,second,third,fourth,fifth],seeds:[],roles:[]},pending([first,second,third,fourth,fifth]),"pre").exactScope).toBe(true);
-  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[second,third,fourth,fifth],seeds:[],roles:[]},pending([second,third,fourth,fifth]),"pre").exactScope).toBe(true);
-  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[third,fourth,fifth],seeds:[],roles:[]},pending([third,fourth,fifth]),"pre").exactScope).toBe(true);
-  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[fourth,fifth],seeds:[],roles:[]},pending([fourth,fifth]),"pre").exactScope).toBe(true);
-  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[fifth],seeds:[],roles:[]},pending([fifth]),"pre").exactScope).toBe(true);
-  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,third,fourth,fifth],seeds:[],roles:[]},pending([first,third,fourth,fifth]),"pre")).toThrow("unexpected_reader_repair_plan");
-  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,second,fourth,fifth],seeds:[],roles:[]},pending([first,second,fourth,fifth]),"pre")).toThrow("unexpected_reader_repair_plan");
-  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[fifth,fourth],seeds:[],roles:[]},pending([fifth,fourth]),"pre")).toThrow("unexpected_reader_repair_plan");
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,second,third,fourth,fifth,sixth],seeds:[],roles:[]},pending([first,second,third,fourth,fifth,sixth]),"pre").exactScope).toBe(true);
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[second,third,fourth,fifth,sixth],seeds:[],roles:[]},pending([second,third,fourth,fifth,sixth]),"pre").exactScope).toBe(true);
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[third,fourth,fifth,sixth],seeds:[],roles:[]},pending([third,fourth,fifth,sixth]),"pre").exactScope).toBe(true);
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[fourth,fifth,sixth],seeds:[],roles:[]},pending([fourth,fifth,sixth]),"pre").exactScope).toBe(true);
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[fifth,sixth],seeds:[],roles:[]},pending([fifth,sixth]),"pre").exactScope).toBe(true);
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[sixth],seeds:[],roles:[]},pending([sixth]),"pre").exactScope).toBe(true);
+  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,third,fourth,fifth,sixth],seeds:[],roles:[]},pending([first,third,fourth,fifth,sixth]),"pre")).toThrow("unexpected_reader_repair_plan");
+  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,second,fourth,fifth,sixth],seeds:[],roles:[]},pending([first,second,fourth,fifth,sixth]),"pre")).toThrow("unexpected_reader_repair_plan");
+  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[sixth,fifth],seeds:[],roles:[]},pending([sixth,fifth]),"pre")).toThrow("unexpected_reader_repair_plan");
   expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},pending([first,second]),"post")).toThrow("invalid_reader_repair_plan");
   expect(verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},{phase:"complete",pendingPaths:[]},"post").upToDate).toBe(true);
  });
@@ -81,7 +92,7 @@ describe("candidate reader repair gate", () => {
  });
  it("requires exact candidate reader grants, private helper revocation and supporting indexes", () => {
   expect(catalogQuery).toContain("has_function_privilege('anon'");
-  expect(verifyReaderCatalog([{reader_contract:expectCatalog}]).catalogChecks).toBe(28);
+  expect(verifyReaderCatalog([{reader_contract:expectCatalog}]).catalogChecks).toBe(42);
   expect(()=>verifyReaderCatalog([{reader_contract:{...expectCatalog,candidate_list_anon_execute:true}}])).toThrow("reader_catalog_contract_mismatch");
   expect(()=>verifyReaderCatalog([{reader_contract:{...expectCatalog,identity_by_firm_index:false}}])).toThrow("reader_catalog_contract_mismatch");
   expect(()=>verifyReaderCatalog([{reader_contract:{...expectCatalog,original_status_exact_index:false}}])).toThrow("reader_catalog_contract_mismatch");
