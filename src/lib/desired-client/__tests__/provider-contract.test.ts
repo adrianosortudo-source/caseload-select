@@ -112,6 +112,8 @@ describe("provider output contract", () => {
     const repairInstruction = provider.configure.mock.calls[1][0].systemInstruction;
     expect(repairInstruction).toContain("up to seven grounded claims");
     expect(repairInstruction).toContain("grounded_payment_claims exactly");
+    expect(repairInstruction).not.toContain("proposed target or its review period");
+    expect(repairInstruction).not.toContain("proposed measure and review period");
   });
   it("asks the model to format a specific client type as a grammatically complete noun phrase", () => {
     const schema = providerBlueprintSchema(completeAnswers()) as {properties:{brief:{properties:{definition_components:{properties:{client:{properties:{text:{description:string}}}}}}}}};
@@ -359,7 +361,7 @@ describe("provider output contract", () => {
     expect(provider.generate).toHaveBeenCalledTimes(2);
     const repairInstruction = provider.configure.mock.calls[1][0].systemInstruction;
     expect(repairInstruction).toContain("Return exactly one card object with only a claims array and one to six grounded claims");
-    expect(repairInstruction).toContain("preserve consequential demand gaps, estimates, capacity prerequisites, and the proposed measure and review period");
+    expect(repairInstruction).toContain("preserve all supplied facts and material conditions that belong in this card");
     if (outcome.mode === "live") expect(outcome.result.brief.evidence_and_open_questions).toEqual(original.brief.evidence_and_open_questions);
   });
   it("repairs a claim that combines known goals with an unknown choice factor", async () => {

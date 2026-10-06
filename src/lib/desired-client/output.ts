@@ -50,8 +50,10 @@ const PAYMENT_LANGUAGE: Record<string, string> = {
   uncertain: "payment is often uncertain",
 };
 
+const PAYMENT_MEANING_NEGATED = /\bpayment\b[^.!?;]{0,40}\b(?:not|never|rarely|seldom|hardly|isn\W?t|aren\W?t|doesn\W?t|don\W?t|can(?:not|\W?t)|won\W?t)\b[^.!?;]{0,20}\b(?:predictable|vary|varies|variable|depend|depends|uncertain)\b/iu;
 function paymentMeaningIsPresent(text: string, payment: string | null): boolean {
   const lower = text.toLocaleLowerCase("en-CA");
+  if (PAYMENT_MEANING_NEGATED.test(lower)) return false;
   if (payment === "predictable") return /\bpayment\b[\w\s-]{0,30}\bpredictable\b/iu.test(lower);
   if (payment === "varies") return /\bpayment\b[\w\s-]{0,30}\b(?:varies|variable|depends)\b/iu.test(lower);
   if (payment === "uncertain") return /\bpayment\b[\w\s-]{0,30}\buncertain\b/iu.test(lower);
@@ -63,6 +65,7 @@ const PAYMENT_CONTEXT_STOP_WORDS = new Set([
   "over", "that", "the", "their", "this", "within", "with", "would", "your",
 ]);
 const PAYMENT_ON_TIME = /\b(?:on[ -]schedule|on[ -]time|prompt(?:ly)?|within\s+(?:the\s+)?\d+(?:\s+\w+){0,2}|not\s+(?:usually\s+)?late)\b/iu;
+const PAYMENT_ON_TIME_NEGATED = /\b(?:not|never|rarely|seldom|hardly|infrequently)\b(?:[\w'-]+\s+){0,3}(?:paid\s+)?on[ -](?:time|schedule)\b/iu;
 const PAYMENT_LATE = /\b(?:late|delayed|overdue|past[ -]due|behind\s+schedule)\b/iu;
 const MIXED_CLAIM_STOP_WORDS = new Set([
   ...PAYMENT_CONTEXT_STOP_WORDS, "a", "an", "are", "as", "at", "be", "been", "being", "but", "by", "can", "could", "did", "do", "does", "for", "from", "get", "gets", "has", "have", "in", "is", "it", "may", "of", "on", "or", "our", "should", "so", "than", "then", "there", "these", "they", "to", "was", "were", "will", "we", "when", "which", "who", "while", "you", "firm", "firms", "reports", "reported", "reporting", "states", "stated", "says", "said", "notes", "noted", "basis", "specified", "established", "observation", "observed", "hypothesis", "working", "assumption", "test", "testing", "context", "feedback", "payment", "payments", "claim", "claims", "current", "assessment", "additional", "supplied", "matter", "matters", "client", "clients",
@@ -168,10 +171,10 @@ function paymentClaimIsAuthentic(value: unknown, answers: DesiredClientAnswers):
       .filter((word) => word.length > 3 && !PAYMENT_CONTEXT_STOP_WORDS.has(word));
     const textWords = new Set(text.toLocaleLowerCase("en-CA").split(/[^\p{L}\p{N}]+/u));
     if (contextWords.length && !contextWords.some((word) => textWords.has(word))) return false;
-    const noteIsOnTime = PAYMENT_ON_TIME.test(answers.value.payment_context);
-    const noteIsLate = PAYMENT_LATE.test(answers.value.payment_context) && !/\bnot\s+(?:usually\s+)?late\b/iu.test(answers.value.payment_context);
-    const claimIsOnTime = PAYMENT_ON_TIME.test(text);
-    const claimIsLate = PAYMENT_LATE.test(text) && !/\bnot\s+(?:usually\s+)?late\b/iu.test(text);
+    const noteIsOnTime = PAYMENT_ON_TIME.test(answers.value.payment_context) && !PAYMENT_ON_TIME_NEGATED.test(answers.value.payment_context);
+    const noteIsLate = PAYMENT_ON_TIME_NEGATED.test(answers.value.payment_context) || (PAYMENT_LATE.test(answers.value.payment_context) && !/\bnot\s+(?:usually\s+)?late\b/iu.test(answers.value.payment_context));
+    const claimIsOnTime = PAYMENT_ON_TIME.test(text) && !PAYMENT_ON_TIME_NEGATED.test(text);
+    const claimIsLate = PAYMENT_ON_TIME_NEGATED.test(text) || (PAYMENT_LATE.test(text) && !/\bnot\s+(?:usually\s+)?late\b/iu.test(text));
     if ((noteIsOnTime && claimIsLate) || (noteIsLate && claimIsOnTime)) return false;
   }
 

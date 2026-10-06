@@ -115,6 +115,46 @@ describe("AI Blueprint output contract", () => {
     expect(unknown?.text).toContain("Not established.");
     expect(unknown?.text).not.toContain("Basis not specified.");
   });
+  it("rejects negated payment meaning and timing before canonical recovery", () => {
+    const answers = completeAnswers();
+    answers.value.payment = "predictable";
+    answers.value.payment_context = "Clients told the firm that the first invoice was usually paid on schedule.";
+    answers.value.payment_context_basis = "client_feedback";
+
+    const positiveContext = validBlueprint(answers);
+    positiveContext.brief.why_firm_wants_work.claims = [evidence(
+      "Clients said the first invoice was usually paid on time.",
+      "client_reported",
+      "value.payment_context",
+      "value.payment_context_basis",
+    )];
+    expect(validateAnalysisResult(positiveContext, answers, [])).not.toBeNull();
+
+    const negatedContext = validBlueprint(answers);
+    negatedContext.brief.why_firm_wants_work.claims = [evidence(
+      "Clients said the first invoice was not usually paid on time.",
+      "client_reported",
+      "value.payment_context",
+      "value.payment_context_basis",
+    )];
+    expect(validateAnalysisResult(negatedContext, answers, [])).toBeNull();
+
+    const positivePayment = validBlueprint(answers);
+    positivePayment.brief.why_firm_wants_work.claims = [evidence(
+      "Payment is usually predictable.",
+      "firm_reported_observation",
+      "value.payment",
+    )];
+    expect(validateAnalysisResult(positivePayment, answers, [])).not.toBeNull();
+
+    const negatedPayment = validBlueprint(answers);
+    negatedPayment.brief.why_firm_wants_work.claims = [evidence(
+      "Payment is not predictable.",
+      "firm_reported_observation",
+      "value.payment",
+    )];
+    expect(validateAnalysisResult(negatedPayment, answers, [])).toBeNull();
+  });
   it("recovers mixed payment and experience claims as separate statements with their own evidence categories", () => {
     const answers = completeAnswers();
     answers.value.payment = "predictable";
@@ -369,9 +409,9 @@ describe("AI Blueprint output contract", () => {
     Object.assign(answers.repeatability, {
       success_measure: "retained_matters",
       target: "2 additional retained matters per quarter",
-      review_period: "quarterly",
+      review_period: "6 months",
       additional_matters: "2 comparable matters per quarter",
-      staffing_constraint: "One associate has room for two more matters.",
+      staffing_constraint: "An associate must be hired before increasing volume.",
     });
 
     const built = buildStructuredBlueprintV4(answers);
@@ -425,7 +465,7 @@ describe("AI Blueprint output contract", () => {
     expect(serialized).toContain("More than 15, up to 40 hours");
     expect(serialized).toContain("A clearly agreed scope");
     expect(serialized).toContain("Access to the information we need");
-    expect(serialized).toContain("One associate has room for two more matters.");
+    expect(serialized).toContain("An associate must be hired before increasing volume.");
     expect(serialized).toContain("2 additional retained matters per quarter");
     expect(validated!.brief.definition_components.outcome.source_answer_ids).toContain("repeatability.review_period");
     expect(calculateContribution(answers)?.amount.replace(/\u2212/u, "-")).toBe("-C$500.00");

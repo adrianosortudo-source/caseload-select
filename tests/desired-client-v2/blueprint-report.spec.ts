@@ -21,8 +21,13 @@ Object.assign(answers.value, {
   payment_context_basis: "client_feedback",
 });
 answers.delivery.capacity = "room";
-answers.repeatability.additional_matters = "2 comparable matters per quarter";
-answers.repeatability.staffing_constraint = "An associate must be hired before increasing volume.";
+Object.assign(answers.repeatability, {
+  success_measure: "retained_matters",
+  target: "2 additional retained matters per quarter",
+  review_period: "6 months",
+  additional_matters: "2 comparable matters per quarter",
+  staffing_constraint: "An associate must be hired before increasing volume.",
+});
 const result = validateAnalysisResult(validBlueprint(answers), answers, [])!;
 if (!result) throw new Error("The fictional export fixture must satisfy the current report contract before browser assertions run.");
 
@@ -71,6 +76,9 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   await expect(page.getByText(result.brief.definition_sentence, { exact: true })).toBeVisible();
   await expect(page.getByText("Client definition", { exact: true })).toBeVisible();
   await expect(page.getByText("Client decision pathway", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Progress review", exact: true })).toBeVisible();
+  await expect(page.getByText("6 months", { exact: true })).toBeVisible();
+  await expect(page.getByText("An associate must be hired before increasing volume.", { exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download HTML report", exact: true })).toBeVisible();
   expect(analysisCalls).toBe(1);
 
@@ -83,6 +91,10 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   const html = await import("node:fs/promises").then(fs => fs.readFile(path!, "utf8"));
   expect(html).toContain("Desired Client Blueprint");
   expect(html).toContain(REPORT_FOOTNOTE_COPY);
+  const progressReview = html.match(/<section class="progress"><h2>Progress review<\/h2>[\s\S]*?<\/section>/)?.[0];
+  expect(progressReview).toBeDefined();
+  expect(progressReview).toContain("<dt>Target</dt><dd>2 additional retained matters per quarter</dd>");
+  expect(progressReview).toContain("<dt>Review period</dt><dd>6 months</dd>");
   const valueCard = html.match(/<section class="card"><h2>Why this work<\/h2>[\s\S]*?<\/section>/)?.[0];
   expect(valueCard).toBeDefined();
   expect(valueCard).toContain("8000");
