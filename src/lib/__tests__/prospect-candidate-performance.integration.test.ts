@@ -129,6 +129,11 @@ suite("candidate reads above the observed Admin inventory", () => {
       expect(broadTermText.items).toHaveLength(3);
       expect(broadTermText.items.every(item => item.verifiedFirmId === targetFirm)).toBe(true);
       expect(broadTermText.nextAfterId).toBeNull();
+      const broadFirstText = await read("broad-term-before-rare-anchor", { text: "Law " + targetUnique });
+      expect(broadFirstText.filteredCount).toBe(broadTermText.filteredCount);
+      expect(broadFirstText.items.map(item => item.id)).toEqual(broadTermText.items.map(item => item.id));
+      expect(broadFirstText.items.every(item => item.verifiedFirmId === targetFirm)).toBe(true);
+      expect(broadFirstText.nextAfterId).toBeNull();
       expect((await read("typed-field", { fieldPointer: "/reconciliation_status", fieldValue: "provisional_new" })).filteredCount).toBeGreaterThanOrEqual(6500);
       expect((await read("unresolved", { identityState: "unresolved" })).filteredCount).toBeGreaterThanOrEqual(500);
       const linked = await read("verified-firm", { firmId: targetFirm });
@@ -189,6 +194,7 @@ suite("candidate reads above the observed Admin inventory", () => {
       const p95 = ordered[Math.ceil(ordered.length * 0.95) - 1];
       expect(timings.find(item => item.label === "indexed-text")!.milliseconds).toBeLessThan(4500);
       expect(timings.find(item => item.label === "rare-anchor-with-broad-term")!.milliseconds).toBeLessThan(4500);
+      expect(timings.find(item => item.label === "broad-term-before-rare-anchor")!.milliseconds).toBeLessThan(4500);
       expect(timings.find(item => item.label === "indexed-original-status")!.milliseconds).toBeLessThan(4500);
       expect(timings.find(item => item.label === "verified-firm")!.milliseconds).toBeLessThan(4500);
       expect(timings.find(item => item.label === "verified-firm-original-status")!.milliseconds).toBeLessThan(4500);
