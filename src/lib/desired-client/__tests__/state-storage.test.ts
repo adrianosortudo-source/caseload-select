@@ -3,6 +3,7 @@ import {createElement} from "react";
 import {renderToStaticMarkup} from "react-dom/server";
 import {completeAnswers,validBlueprint} from "./blueprint-helpers";
 import {buildStructuredBrief} from "../brief";
+import {buildStructuredBlueprintV4} from "../structured-blueprint";
 import {answerInterviewClarification,applyAnalysis,applyStructuredFallback,canEnterStage,editAnswers,enterTool,failAnalysis,initialToolState,markReviewed,moveToStage,recordClarificationAttempt,showInterviewClarification} from "../state";
 import {interviewClarificationSourceFingerprint,type InterviewClarificationPrompt} from "../types";
 import {DRAFT_STORAGE_KEY,loadDraft,saveDraft} from "../storage";
@@ -75,7 +76,7 @@ describe("draft lifecycle and migration",()=>{
    }
   });
   it("revalidates changed AI wording, resets its approval, and preserves the earlier report provenance",()=>{
-   const {storage}=memory(),answers=completeAnswers(),oldDate="2026-09-29T14:00:00.000Z",current=validBlueprint(answers).brief;
+   const {storage}=memory(),answers=completeAnswers(),oldDate="2026-09-29T14:00:00.000Z",current=buildStructuredBlueprintV4(answers);
    const previousDefinition=current.definition_sentence.replace("with the intended client benefit described as “Understand the assets, liabilities and closing obligations before deciding whether to proceed”; the firm prioritizes this work because","so the client can understand the assets, liabilities and closing obligations before deciding whether to proceed, because");
    expect(previousDefinition).not.toBe(current.definition_sentence);
    const prior={brief:{...current,definition_sentence:previousDefinition},sourceAnswersVersion:"dcm-v3.2" as const,sourceAnswersSnapshot:structuredClone(answers),sourceBriefRevision:answers.revision,generatedAt:oldDate,wordingReviewed:true,mode:"ai" as const};
@@ -98,7 +99,7 @@ describe("draft lifecycle and migration",()=>{
    }
   });
   it("retains approval for unchanged AI report wording",()=>{
-   const {storage}=memory(),answers=completeAnswers(),oldDate="2026-09-29T14:00:00.000Z",brief=validBlueprint(answers).brief,prior={brief,sourceAnswersVersion:"dcm-v3.2" as const,sourceAnswersSnapshot:structuredClone(answers),sourceBriefRevision:answers.revision,generatedAt:oldDate,wordingReviewed:true,mode:"ai" as const},now=Date.now();
+   const {storage}=memory(),answers=completeAnswers(),oldDate="2026-09-29T14:00:00.000Z",brief=buildStructuredBlueprintV4(answers),prior={brief,sourceAnswersVersion:"dcm-v3.2" as const,sourceAnswersSnapshot:structuredClone(answers),sourceBriefRevision:answers.revision,generatedAt:oldDate,wordingReviewed:true,mode:"ai" as const},now=Date.now();
    storage.setItem(DRAFT_STORAGE_KEY,JSON.stringify({schemaVersion:2,answers,currentStage:7,lastEditedAt:new Date(now-1000).toISOString(),expiresAt:new Date(now+100000).toISOString(),savedBrief:prior}));
    const loaded=loadDraft(storage,now);
    expect(loaded.status).toBe("ready");

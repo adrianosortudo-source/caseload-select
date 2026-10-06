@@ -79,13 +79,17 @@ describe("AI Blueprint output contract", () => {
     const answers=completeAnswers();
     answers.value.payment="predictable";
     const ai=validBlueprint(answers);
-    ai.brief.why_firm_wants_work.claims.push(evidence("Payment records prove all clients pay on time.","firm_reported_recorded","value.payment"));
+    ai.brief.why_firm_wants_work.claims.push(evidence("Payment timing is usually predictable.","firm_reported_observation","value.payment"));
     const result=validateAnalysisResult(ai,answers,[]);
     expect(result).not.toBeNull();
     const recorded=result!.brief.why_firm_wants_work.claims.find((claim)=>claim.source_answer_ids.includes("value.payment"));
     expect(recorded?.evidence_basis).toBe("firm_reported_observation");
     expect(recorded?.text).toContain("Basis not specified.");
-    expect(recorded?.text).not.toContain("records prove");
+    expect(recorded?.text).not.toContain("timing is usually predictable");
+
+    const fabricated = validBlueprint(answers);
+    fabricated.brief.why_firm_wants_work.claims.push(evidence("Payment records prove all clients pay on time.","firm_reported_observation","value.payment"));
+    expect(validateAnalysisResult(fabricated, answers, [])).toBeNull();
 
     answers.focus.route="new";
     const newWork=validateAnalysisResult(validBlueprint(answers),answers,[]);

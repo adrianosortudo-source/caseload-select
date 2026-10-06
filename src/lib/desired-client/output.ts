@@ -312,11 +312,13 @@ function normalizeGroundedFirmValueClaims(brief: Record<string, unknown>, answer
 
   const hasAllSources = (candidate: unknown, expected: EvidenceLinkedStatement) => {
     if (!record(candidate) || !Array.isArray(candidate.source_answer_ids)) return false;
-    return expected.source_answer_ids.every((path) => candidate.source_answer_ids.includes(path));
+    const sourceIds = candidate.source_answer_ids;
+    return expected.source_answer_ids.every((path) => sourceIds.includes(path));
   };
   const overlaps = (candidate: unknown, expected: EvidenceLinkedStatement) => {
     if (!record(candidate) || !Array.isArray(candidate.source_answer_ids)) return false;
-    return candidate.source_answer_ids.some((path) => expected.source_answer_ids.includes(path as AnswerReferencePath));
+    const sourceIds = candidate.source_answer_ids;
+    return sourceIds.some((path) => expected.source_answer_ids.includes(path as AnswerReferencePath));
   };
   const nextClaims = [...claims];
   for (let pass = 0; pass <= groundedClaims.length; pass += 1) {
@@ -350,6 +352,38 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   const sourceBrief=value.brief;
   const cardNames=["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const;
   if(!exact(sourceBrief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"]))return reject("report", "brief_shape");
+  // Validate source claims before omission recovery. Payment claims may be
+  // normalized for harmless wording or mixed-source separation, but their
+  // evidence status and numeric content must still be authentic.
+  const paymentPaths = new Set(["value.payment", "value.payment_context", "value.payment_context_basis"]);
+  const sourceValueCard = sourceBrief.why_firm_wants_work;
+  if (record(sourceValueCard) && Array.isArray(sourceValueCard.claims)) {
+    for (const claim of sourceValueCard.claims) {
+      const hasPaymentSource = record(claim) && Array.isArray(claim.source_answer_ids) &&
+        claim.source_answer_ids.some((path) => typeof path === "string" && paymentPaths.has(path));
+      const unsupportedPaymentAssertion = hasPaymentSource && record(claim) && Array.isArray(claim.source_answer_ids) &&
+        claim.source_answer_ids.length === 1 && claim.source_answer_ids[0] === "value.payment" &&
+        typeof claim.text === "string" && /\b(?:audited?|records?|prove[sd]?|all clients?|every client|always|never|paid on time|on time)\b/iu.test(claim.text);
+      if (unsupportedPaymentAssertion) return reject("why_firm_wants_work", "claim_not_valid");
+      let failure: { reason: string; sourcePath?: SafeSourcePath } | undefined;
+      if (validStatement(claim, answers, "why_firm_wants_work", (reason, sourcePath) => { failure = { reason, ...(sourcePath ? { sourcePath } : {}) }; })) continue;
+      if (!hasPaymentSource || !record(claim) || !Array.isArray(claim.source_answer_ids)) {
+        if (failure) reportFailure?.({ field: "why_firm_wants_work", ...failure });
+        return reject("why_firm_wants_work", "claim_not_valid");
+      }
+      const repairablePaymentWording = failure?.reason === "payment_source_must_be_isolated" || failure?.reason === "payment_context_claim_mismatch";
+      const expectedPayment = paymentEvidenceClaim(answers);
+      const expectedContext = paymentContextEvidenceClaim(answers);
+      const paymentStatusMatches = !claim.source_answer_ids.includes("value.payment") ||
+        (!!expectedPayment && claim.kind === expectedPayment.kind && claim.evidence_basis === expectedPayment.evidence_basis);
+      const contextStatusMatches = !claim.source_answer_ids.some((path) => path === "value.payment_context" || path === "value.payment_context_basis") ||
+        (!!expectedContext && claim.kind === expectedContext.kind && claim.evidence_basis === expectedContext.evidence_basis);
+      if (!repairablePaymentWording || !paymentStatusMatches || !contextStatusMatches) {
+        if (failure) reportFailure?.({ field: "why_firm_wants_work", ...failure });
+        return reject("why_firm_wants_work", "claim_not_valid");
+      }
+    }
+  }
   const normalizedPayment = normalizePaymentEvidence(sourceBrief, answers);
   if (normalizedPayment.blocked) return reject("why_firm_wants_work", "payment_claim_cannot_fit_without_dropping_other_claims");
   const normalizedFacts = normalizeGroundedFirmValueClaims(normalizedPayment.brief, answers);
@@ -391,11 +425,16 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   }
   // The outcome is application-owned so the proposed measure, target and
   // review period cannot disappear when the model returns a sparse component.
+  const progressSources = new Set(["repeatability.target", "repeatability.review_period"]);
+  const canonicalOutcome = groundedTarget.definition_components.outcome.source_answer_ids.some((path) => progressSources.has(path)) &&
+    !sameGroundedStatement(typedBrief.definition_components.outcome, groundedTarget.definition_components.outcome)
+    ? groundedTarget.definition_components.outcome
+    : typedBrief.definition_components.outcome;
   const canonicalBrief = {
     ...typedBrief,
     definition_components: {
       ...typedBrief.definition_components,
-      outcome: groundedTarget.definition_components.outcome,
+      outcome: canonicalOutcome,
     },
   } as DesiredClientBriefV4;
   const expectedSentence=buildDefinitionSentence(canonicalBrief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
