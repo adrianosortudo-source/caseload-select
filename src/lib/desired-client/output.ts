@@ -12,6 +12,16 @@ type SafeSourcePath = AnswerReferencePath | `interview.followups.${number}`;
 export function isSafeSourcePath(path: string): path is SafeSourcePath {
   return SOURCE_PATHS.has(path) || /^interview\.followups\.\d+$/.test(path);
 }
+export function isSafeDiagnosticSourcePath(path: string, answers: DesiredClientAnswers): boolean {
+  if (path.length > 80) return false;
+  if (SOURCE_PATHS.has(path)) return true;
+  const match = /^interview\.followups\.(0|[1-9]\d{0,2})$/.exec(path);
+  if (!match) return false;
+  const index = Number(match[1]);
+  if (!Number.isSafeInteger(index) || index < 0 || index >= answers.interview.followups.length) return false;
+  const item = answers.interview.followups[index];
+  return !!item && !item.skipped && isInterviewClarificationCurrent(item, answers);
+}
 const BASIS: readonly EvidenceBasis[] = ["firm_reported_recorded", "firm_reported_estimate", "firm_reported_experience", "firm_reported_observation", "client_reported", "firm_preference", "source_observed", "hypothesis", "unknown"];
 const KIND = ["experience", "preference", "hypothesis", "unknown", "suggestion"] as const;
 const BUDGETS = {
@@ -227,13 +237,15 @@ export type AnalysisValidationFailure = {
 
 function diagnosticForClaim(value: unknown, claimIndex: number, answers: DesiredClientAnswers): AnalysisClaimDiagnostic {
   const sourceAnswerIds = record(value) && Array.isArray(value.source_answer_ids)
-    ? value.source_answer_ids.filter((path): path is string => typeof path === "string" && isSafeSourcePath(path)).slice(0, 8)
+    ? value.source_answer_ids.slice(0, 8).filter((path): path is string => typeof path === "string" &&
+      isSafeDiagnosticSourcePath(path, answers) && permittedSourceAnswerPath(path, answers, "why_firm_wants_work"))
     : [];
   const expectedGroups = buildStructuredBlueprintV4(answers).why_firm_wants_work.claims
     .filter((claim) => claim.source_answer_ids.some((path) => sourceAnswerIds.includes(path)))
     .slice(0, 7)
     .map((claim) => ({
-      sourceAnswerIds: claim.source_answer_ids.filter(isSafeSourcePath).slice(0, 8),
+      sourceAnswerIds: claim.source_answer_ids.filter((path) => isSafeDiagnosticSourcePath(path, answers) &&
+        permittedSourceAnswerPath(path, answers, "why_firm_wants_work")).slice(0, 8),
       kind: claim.kind,
       evidenceBasis: claim.evidence_basis,
     }));
@@ -551,7 +563,11 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
       let failure: { reason: string; sourcePath?: SafeSourcePath } | undefined;
       if (validStatement(claim, answers, "why_firm_wants_work", (reason, sourcePath) => { failure = { reason, ...(sourcePath ? { sourcePath } : {}) }; })) continue;
       if (!hasPaymentSource || !record(claim) || !Array.isArray(claim.source_answer_ids)) {
-        if (failure) reportFailure?.({ field: "why_firm_wants_work", ...failure, claimDiagnostic });
+        if (failure) {
+          const { sourcePath, ...safeFailure } = failure;
+          reportFailure?.({ field: "why_firm_wants_work", ...safeFailure,
+            ...(sourcePath && isSafeDiagnosticSourcePath(sourcePath, answers) ? { sourcePath } : {}), claimDiagnostic });
+        }
         return reject("why_firm_wants_work", "claim_not_valid");
       }
       const repairablePaymentWording = failure?.reason === "payment_source_must_be_isolated" || failure?.reason === "payment_context_claim_mismatch";
@@ -562,7 +578,11 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
       const contextStatusMatches = !claim.source_answer_ids.some((path) => path === "value.payment_context" || path === "value.payment_context_basis") ||
         (!!expectedContext && claim.kind === expectedContext.kind && claim.evidence_basis === expectedContext.evidence_basis);
       if (!repairablePaymentWording || !paymentStatusMatches || !contextStatusMatches) {
-        if (failure) reportFailure?.({ field: "why_firm_wants_work", ...failure, claimDiagnostic });
+        if (failure) {
+          const { sourcePath, ...safeFailure } = failure;
+          reportFailure?.({ field: "why_firm_wants_work", ...safeFailure,
+            ...(sourcePath && isSafeDiagnosticSourcePath(sourcePath, answers) ? { sourcePath } : {}), claimDiagnostic });
+        }
         return reject("why_firm_wants_work", "claim_not_valid");
       }
     }

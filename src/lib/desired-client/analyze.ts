@@ -5,10 +5,10 @@ import {
   buildDesiredClientSystemPrompt,
   buildDesiredClientUserPrompt,
 } from "./prompt";
-import { isSafeSourcePath, validateAnalysisResult, type AnalysisClaimDiagnostic, type AnalysisValidationFailure } from "./output";
+import { isSafeDiagnosticSourcePath, validateAnalysisResult, type AnalysisClaimDiagnostic, type AnalysisValidationFailure } from "./output";
 import { safeProviderFailureMetadata } from "./provider-diagnostics";
 import { decodeProviderSources, decodeProviderTargetCard, encodeProviderSources, providerBlueprintSchema, providerSourceAliases, providerTargetClaimIds } from "./provider-schema";
-import type { AnalysisRequestEnvelope, AnalysisResult, ClarificationCode } from "./types";
+import type { AnalysisRequestEnvelope, AnalysisResult, ClarificationCode, DesiredClientAnswers } from "./types";
 import { buildStructuredBlueprintV4 } from "./structured-blueprint";
 
 const MODEL = "gemini-2.5-flash";
@@ -28,6 +28,7 @@ function logRejectedOutput(
   finalFailure: AnalysisValidationFailure = failure,
   repairAttempts = 0,
   finishReason?: string,
+  answers?: DesiredClientAnswers,
 ): void {
   const previewClaimDiagnostic = (diagnostic: AnalysisClaimDiagnostic | undefined) => {
     if (process.env.VERCEL_ENV !== "preview" || !diagnostic) return undefined;
@@ -53,7 +54,7 @@ function logRejectedOutput(
     ...(previewClaimDiagnostic(failure.claimDiagnostic) ? { firstClaimDiagnostic: previewClaimDiagnostic(failure.claimDiagnostic) } : {}),
     ...(previewClaimDiagnostic(finalFailure.claimDiagnostic) ? { finalClaimDiagnostic: previewClaimDiagnostic(finalFailure.claimDiagnostic) } : {}),
     ...(finishReason && /^[A-Z_]{1,40}$/.test(finishReason) ? { finishReason } : {}),
-    ...(failure.sourcePath && isSafeSourcePath(failure.sourcePath) ? { sourcePath: failure.sourcePath } : {}),
+    ...(failure.sourcePath && answers && isSafeDiagnosticSourcePath(failure.sourcePath, answers) ? { sourcePath: failure.sourcePath } : {}),
   }));
 }
 
@@ -96,7 +97,7 @@ export async function runDesiredClientAnalysis(
     let parsed: unknown;
     try { parsed = JSON.parse(response.response.text()); }
     catch {
-      logRejectedOutput(request.requestId, { field: "report", reason: "invalid_json" }, undefined, 0, finishReason);
+      logRejectedOutput(request.requestId, { field: "report", reason: "invalid_json" }, undefined, 0, finishReason, request.answers);
       return { mode: "invalid_output", diagnostic: { field: "report", reason: "invalid_json" } };
     }
     let validationFailure: AnalysisValidationFailure | null = null;
@@ -107,9 +108,8 @@ export async function runDesiredClientAnalysis(
     let result = validate();
     const firstFailure = validationFailure as AnalysisValidationFailure | null;
     let repairAttempts = 0;
-    const stopPreviewBasisMismatch = process.env.VERCEL_ENV === "preview" &&
-      firstFailure?.field === "why_firm_wants_work" && firstFailure.reason === "client_reported_basis_mismatch";
-    for (let attempt = 0; !stopPreviewBasisMismatch && !result && validationFailure && attempt < 2; attempt++) {
+    const stopPreviewRepairs = process.env.VERCEL_ENV === "preview" && !result;
+    for (let attempt = 0; !stopPreviewRepairs && !result && validationFailure && attempt < 2; attempt++) {
       const failure = validationFailure as AnalysisValidationFailure;
       const parts = failure.field.split(".");
       const repairable = REPAIRABLE_CARDS.includes(parts[0]) && parts.length === 1 ||
@@ -174,6 +174,7 @@ export async function runDesiredClientAnalysis(
         finalFailure ?? firstFailure ?? { field: "report", reason: "unclassified_validation_failure" },
         repairAttempts,
         finishReason,
+        request.answers,
       );
     }
     if (result) return { mode: "live", result };

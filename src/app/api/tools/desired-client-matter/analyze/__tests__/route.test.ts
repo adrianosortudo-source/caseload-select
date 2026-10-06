@@ -467,6 +467,40 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain("A private production-only claim sentinel");
   });
 
+  it.each([
+    ["unbounded numeric suffix", `interview.followups.${"9".repeat(512)}`],
+    ["unknown followup index", "interview.followups.999"],
+  ])("omits %s from Preview diagnostics and does not retry", async (_label, unsafeSourceId) => {
+    process.env.VERCEL_ENV = "preview";
+    const invalid = structuredClone(MODEL_RESULT);
+    const privateClaim = "private unsupported followup claim sentinel";
+    invalid.brief.why_firm_wants_work.claims[0] = {
+      text: privateClaim,
+      kind: "experience",
+      source_answer_ids: [unsafeSourceId as never],
+      evidence_basis: "client_reported",
+    };
+    const privateAnswer = "private unsupported followup answer sentinel";
+    const request = structuredClone(ENVELOPE);
+    request.answers.client.goal_detail = privateAnswer;
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const response = await POST(makeRequest(JSON.stringify(request)));
+
+    expect(response.status).toBe(502);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+    const log = JSON.parse(warn.mock.calls[0][0] as string);
+    expect(log.repairAttempts).toBe(0);
+    expect(log.firstClaimDiagnostic).toMatchObject({ sourceAnswerIds: [], expectedGroups: [] });
+    expect(log).not.toHaveProperty("sourcePath");
+    const serializedLog = JSON.stringify(warn.mock.calls);
+    expect(serializedLog).not.toContain(unsafeSourceId);
+    expect(serializedLog).not.toContain(privateClaim);
+    expect(serializedLog).not.toContain(privateAnswer);
+    expect(JSON.stringify(await response.json())).not.toContain(unsafeSourceId);
+  });
+
   it("rejects a request without explicit AI consent", async () => {
     const invalid = { ...ENVELOPE, aiConsent: false };
     const response = await POST(makeRequest(JSON.stringify(invalid)));
