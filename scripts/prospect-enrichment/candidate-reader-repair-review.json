@@ -59,6 +59,14 @@
       "name": "prospect_candidate_global_text_search_scoped",
       "bytes": 7459,
       "sha256": "8cb17f7dc28b8560fae73609bf0bbddf4e4e7a8bbe250c16efcd7b96e6adff83"
+    },
+    {
+      "path": "supabase/migrations/20261006133000_prospect_candidate_global_text_search_set_identity.sql",
+      "filename": "20261006133000_prospect_candidate_global_text_search_set_identity.sql",
+      "version": "20261006133000",
+      "name": "prospect_candidate_global_text_search_set_identity",
+      "bytes": 9040,
+      "sha256": "efe25d6473dff875ef1efce310cfb36c9449542e25f72f025c1b33259c921e78"
     }
   ],
   "exclusions": [
