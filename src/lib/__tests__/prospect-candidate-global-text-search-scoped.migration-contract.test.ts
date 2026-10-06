@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const sql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006111650_prospect_candidate_global_text_search_scoped.sql"), "utf8");
+const setIdentitySql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006133000_prospect_candidate_global_text_search_set_identity.sql"), "utf8");
+const indexOnlySql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006160000_prospect_candidate_global_text_search_index_only.sql"), "utf8");
 
 describe("global candidate text search scoping migration", () => {
   it("discovers identity groups from one selective anchor and searches other terms only inside that scope", () => {
@@ -25,10 +27,40 @@ describe("global candidate text search scoping migration", () => {
     expect(fn).toContain("SECURITY DEFINER SET search_path = ''");
   });
 
+
+  it("keeps the deployed text path within the indexed read budget and surfaces deferred coverage explicitly", () => {
+    expect(indexOnlySql).toContain("coverage_warnings_text_search_v1");
+    expect(indexOnlySql).toContain("enrichment_coverage_audit_deferred_for_text_search");
+    expect(indexOnlySql).toContain("raw_projection_text_search_deferred_for_text_search");
+    expect(indexOnlySql).toContain("prospect_research_candidate_search_chunks");
+    expect(indexOnlySql).toContain("prospect_research_candidate_history h");
+    expect(indexOnlySql).not.toContain("prospect_candidate_projection_issues i ON true");
+    expect(indexOnlySql).not.toContain("strpos(lower(h.original_json::text)");
+  });
   it("retains transaction boundaries and service-role-only execution", () => {
     expect(sql).toMatch(/^BEGIN;$/m);
     expect(sql).toMatch(/^COMMIT;$/m);
     expect(sql).toContain("FROM PUBLIC,anon,authenticated,service_role");
     expect(sql).toContain("TO service_role;");
+  });
+
+  it("uses one bounded identity resolution pass for anchor and expanded members", () => {
+    const start = setIdentitySql.indexOf("CREATE OR REPLACE FUNCTION prospect_candidate_private.list_candidates_for_text");
+    const end = setIdentitySql.indexOf("REVOKE ALL ON FUNCTION prospect_candidate_private.list_candidates_for_text", start);
+    const fn = setIdentitySql.slice(start, end);
+    expect(setIdentitySql).toContain("CREATE OR REPLACE FUNCTION prospect_candidate_private.identity_links_for_candidates(");
+    expect(fn).toContain("anchor_identity_links AS MATERIALIZED");
+    expect(fn).toContain("expanded_seed AS MATERIALIZED");
+    expect(fn).toContain("FROM prospect_candidate_private.identity_links_for_candidates(");
+    expect(fn).toContain("GROUP BY candidate_id");
+    expect(fn).not.toContain("LEFT JOIN LATERAL prospect_candidate_private.identity_links_for(cutoff,anchors.candidate_id)");
+    expect(fn).not.toContain("LEFT JOIN LATERAL prospect_candidate_private.identity_links_for(cutoff,candidates.candidate_id)");
+  });
+
+  it("keeps the follow-up migration protected and transactional", () => {
+    expect(setIdentitySql).toMatch(/^BEGIN;$/m);
+    expect(setIdentitySql).toMatch(/^COMMIT;$/m);
+    expect(setIdentitySql).toContain("FROM PUBLIC,anon,authenticated,service_role");
+    expect(setIdentitySql).toContain("TO service_role;");
   });
 });
