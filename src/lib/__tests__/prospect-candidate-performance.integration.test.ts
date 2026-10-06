@@ -42,7 +42,11 @@ suite("candidate reads above the observed Admin inventory", () => {
       // the growing synthetic journal. The measured read allowance stays five seconds.
       const auditSetupStart = performance.now();
       const auditSetupBatchSize = 1000;
-      await db.query("SET LOCAL statement_timeout = '60s'");
+      // The legacy journal trigger serializes each audit batch under one
+      // transaction advisory lock. Keep the per-batch guard below the
+      // existing ten-minute fixture budget while allowing the real reader
+      // assertions to run on the populated inventory.
+      await db.query("SET LOCAL statement_timeout = '180s'");
       for (let first = 1; first <= 6000; first += auditSetupBatchSize) {
         await db.query(`INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record)
           SELECT $1,f.source_record_key,$2,'accepted','created',f.id,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name,'originalStatus',CASE WHEN n%100=0 THEN 'rejected' ELSE 'selected' END)
@@ -129,6 +133,11 @@ suite("candidate reads above the observed Admin inventory", () => {
       expect(broadTermText.items).toHaveLength(3);
       expect(broadTermText.items.every(item => item.verifiedFirmId === targetFirm)).toBe(true);
       expect(broadTermText.nextAfterId).toBeNull();
+      const broadFirstText = await read("broad-term-before-rare-anchor", { text: "Law " + targetUnique });
+      expect(broadFirstText.filteredCount).toBe(broadTermText.filteredCount);
+      expect(broadFirstText.items.map(item => item.id)).toEqual(broadTermText.items.map(item => item.id));
+      expect(broadFirstText.items.every(item => item.verifiedFirmId === targetFirm)).toBe(true);
+      expect(broadFirstText.nextAfterId).toBeNull();
       expect((await read("typed-field", { fieldPointer: "/reconciliation_status", fieldValue: "provisional_new" })).filteredCount).toBeGreaterThanOrEqual(6500);
       expect((await read("unresolved", { identityState: "unresolved" })).filteredCount).toBeGreaterThanOrEqual(500);
       const linked = await read("verified-firm", { firmId: targetFirm });
@@ -189,6 +198,7 @@ suite("candidate reads above the observed Admin inventory", () => {
       const p95 = ordered[Math.ceil(ordered.length * 0.95) - 1];
       expect(timings.find(item => item.label === "indexed-text")!.milliseconds).toBeLessThan(4500);
       expect(timings.find(item => item.label === "rare-anchor-with-broad-term")!.milliseconds).toBeLessThan(4500);
+      expect(timings.find(item => item.label === "broad-term-before-rare-anchor")!.milliseconds).toBeLessThan(4500);
       expect(timings.find(item => item.label === "indexed-original-status")!.milliseconds).toBeLessThan(4500);
       expect(timings.find(item => item.label === "verified-firm")!.milliseconds).toBeLessThan(4500);
       expect(timings.find(item => item.label === "verified-firm-original-status")!.milliseconds).toBeLessThan(4500);

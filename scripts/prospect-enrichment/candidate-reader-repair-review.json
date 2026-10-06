@@ -51,6 +51,14 @@
       "name": "prospect_candidate_scoped_reader_fastpaths",
       "bytes": 11028,
       "sha256": "4458887d6afc5a3ec3f2f850bda648fc4c540ec7f28827380eae2be5caf98bfb"
+    },
+    {
+      "path": "supabase/migrations/20261006111650_prospect_candidate_global_text_search_scoped.sql",
+      "filename": "20261006111650_prospect_candidate_global_text_search_scoped.sql",
+      "version": "20261006111650",
+      "name": "prospect_candidate_global_text_search_scoped",
+      "bytes": 7459,
+      "sha256": "8cb17f7dc28b8560fae73609bf0bbddf4e4e7a8bbe250c16efcd7b96e6adff83"
     }
   ],
   "exclusions": [
