@@ -119,7 +119,7 @@ function mixedPaymentClaimLanguageIsGrounded(text: string, paths: readonly strin
   if (!mixedPaths.length) return true;
   const structuredClaims = buildStructuredBlueprintV4(answers).why_firm_wants_work.claims;
   const relevantClaims = structuredClaims.filter((claim) => claim.source_answer_ids.some((path) => mixedPaths.includes(path)));
-  if (mixedPaths.some((path) => !relevantClaims.some((claim) => claim.source_answer_ids.includes(path)))) return false;
+  if (mixedPaths.some((path) => !relevantClaims.some((claim) => claim.source_answer_ids.some((sourcePath) => sourcePath === path)))) return false;
   const supportedText = [
     ...paths.flatMap((path) => answerTextForPath(path, answers)),
     ...paymentEvidenceClaims(answers).filter((claim): claim is EvidenceLinkedStatement => claim !== null).map((claim) => claim.text),
