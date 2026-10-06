@@ -67,6 +67,14 @@
       "name": "prospect_candidate_global_text_search_set_identity",
       "bytes": 9040,
       "sha256": "efe25d6473dff875ef1efce310cfb36c9449542e25f72f025c1b33259c921e78"
+    },
+    {
+      "path": "supabase/migrations/20261006150000_prospect_candidate_global_text_search_warning_fastpath.sql",
+      "filename": "20261006150000_prospect_candidate_global_text_search_warning_fastpath.sql",
+      "version": "20261006150000",
+      "name": "prospect_candidate_global_text_search_warning_fastpath",
+      "bytes": 9206,
+      "sha256": "4fafbb1d7f4c7380f65c05c882d045022163a2e37f30e675ba8b2979ef0764f7"
     }
   ],
   "exclusions": [
