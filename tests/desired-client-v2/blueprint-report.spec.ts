@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { pathToFileURL } from "node:url";
 import { completeAnswers, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResult } from "../../src/lib/desired-client/output";
 import { REPORT_EDIT_LINKS } from "../../src/lib/desired-client/blueprint";
@@ -89,6 +90,15 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   const path = await download.path();
   await download.saveAs(testInfo.outputPath("blueprint-negative-report.html"));
   const html = await import("node:fs/promises").then(fs => fs.readFile(path!, "utf8"));
+  const printPage = await page.context().newPage();
+  await printPage.goto(pathToFileURL(path!).href);
+  await printPage.emulateMedia({ media: "print" });
+  const printPdf = await printPage.pdf({
+    path: testInfo.outputPath("blueprint-negative-report-print-preview.pdf"),
+    printBackground: true,
+  });
+  expect(printPdf.byteLength).toBeGreaterThan(0);
+  await printPage.close();
   expect(html).toContain("Desired Client Blueprint");
   expect(html).toContain(REPORT_FOOTNOTE_COPY);
   const progressReview = html.match(/<section class="progress"><h2>Progress review<\/h2>[\s\S]*?<\/section>/)?.[0];
