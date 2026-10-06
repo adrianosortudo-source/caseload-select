@@ -42,7 +42,11 @@ suite("candidate reads above the observed Admin inventory", () => {
       // the growing synthetic journal. The measured read allowance stays five seconds.
       const auditSetupStart = performance.now();
       const auditSetupBatchSize = 1000;
-      await db.query("SET LOCAL statement_timeout = '60s'");
+      // The legacy journal trigger serializes each audit batch under one
+      // transaction advisory lock. Keep the per-batch guard below the
+      // existing ten-minute fixture budget while allowing the real reader
+      // assertions to run on the populated inventory.
+      await db.query("SET LOCAL statement_timeout = '180s'");
       for (let first = 1; first <= 6000; first += auditSetupBatchSize) {
         await db.query(`INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record)
           SELECT $1,f.source_record_key,$2,'accepted','created',f.id,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name,'originalStatus',CASE WHEN n%100=0 THEN 'rejected' ELSE 'selected' END)
