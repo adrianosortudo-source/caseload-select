@@ -89,8 +89,8 @@
       "filename": "20261006170000_prospect_candidate_global_text_search_direct_scope.sql",
       "version": "20261006170000",
       "name": "prospect_candidate_global_text_search_direct_scope",
-      "bytes": 5731,
-      "sha256": "41bfbc35156594b3d9e45851325ad7551a593875a7b1d2fe8990350500f52372"
+      "bytes": 7397,
+      "sha256": "a310d12178e8df0cf94d5c81d23ef0f18251e0e1855397b4b37f772d0a01f4d7"
     }
   ],
   "exclusions": [

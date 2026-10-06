@@ -43,7 +43,8 @@ describe("global candidate text search scoping migration", () => {
     expect(directScopeSql).toContain("anchor_candidates AS MATERIALIZED");
     expect(directScopeSql).toContain("candidate:'||scope.candidate_id::text");
     expect(directScopeSql).toContain("search_document @@ terms.query");
-    expect(directScopeSql).not.toContain("identity_links_for_candidates");
+    expect(directScopeSql).toContain("identity_links_for_candidates");
+    expect(directScopeSql).toContain("LIMIT 128");
     expect(directScopeSql).not.toContain("max(id)");
     expect(directScopeSql).toContain("ORDER BY id DESC LIMIT 1");
     expect(directScopeSql).not.toContain("prospect_candidate_projection_issues");

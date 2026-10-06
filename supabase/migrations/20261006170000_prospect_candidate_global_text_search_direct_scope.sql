@@ -50,24 +50,58 @@ BEGIN
       WHERE h.coverage_revision<=cutoff
     ) hits
     GROUP BY hits.candidate_id
+  ), anchor_identity_seed AS MATERIALIZED (
+    SELECT candidate_id FROM anchor_candidates ORDER BY candidate_id LIMIT 128
+  ), anchor_identity_links AS MATERIALIZED (
+    SELECT * FROM prospect_candidate_private.identity_links_for_candidates(
+      cutoff,ARRAY(SELECT candidate_id FROM anchor_identity_seed))
+  ), anchor_identities AS MATERIALIZED (
+    SELECT anchors.candidate_id,count(DISTINCT links.verified_firm_id) firm_count,
+      min(links.verified_firm_id::text)::uuid firm_id
+    FROM anchor_candidates anchors
+    LEFT JOIN anchor_identity_links links USING(candidate_id)
+    GROUP BY anchors.candidate_id
+  ), anchor_firms AS MATERIALIZED (
+    SELECT DISTINCT firm_id FROM anchor_identities
+    WHERE firm_count=1 AND (SELECT count(*) FROM anchor_candidates)<=128
+  ), expanded_seed AS MATERIALIZED (
+    SELECT DISTINCT links.candidate_id
+    FROM prospect_candidate_private.identity_links_for_firms(
+      cutoff,ARRAY(SELECT firm_id FROM anchor_firms)) links
+  ), expanded_identity_links AS MATERIALIZED (
+    SELECT * FROM prospect_candidate_private.identity_links_for_candidates(
+      cutoff,ARRAY(SELECT candidate_id FROM expanded_seed))
+  ), expanded_firms AS MATERIALIZED (
+    SELECT candidate_id,count(DISTINCT verified_firm_id) firm_count,
+      min(verified_firm_id::text)::uuid firm_id
+    FROM expanded_identity_links
+    GROUP BY candidate_id
+  ), candidate_scope AS MATERIALIZED (
+    SELECT candidates.candidate_id,'firm:'||candidates.firm_id::text group_key
+    FROM expanded_firms candidates JOIN anchor_firms firms USING(firm_id)
+    WHERE candidates.firm_count=1
+    UNION ALL
+    SELECT candidate_id,'candidate:'||candidate_id::text
+    FROM anchor_identities
+    WHERE firm_count<>1 OR (SELECT count(*) FROM anchor_candidates)>128
   ), scoped_text_hits AS MATERIALIZED (
-    SELECT 'candidate:'||scope.candidate_id::text group_key,terms.term
-    FROM anchor_candidates scope CROSS JOIN text_terms terms
+    SELECT scope.group_key,terms.term
+    FROM candidate_scope scope CROSS JOIN text_terms terms
     WHERE EXISTS (
       SELECT 1 FROM public.prospect_research_candidate_search_chunks f
       WHERE f.candidate_id=scope.candidate_id AND f.coverage_revision<=cutoff
         AND f.search_document @@ terms.query
     )
     UNION ALL
-    SELECT 'candidate:'||scope.candidate_id::text group_key,terms.term
-    FROM anchor_candidates scope
+    SELECT scope.group_key,terms.term
+    FROM candidate_scope scope
     JOIN public.prospect_research_candidates named ON named.id=scope.candidate_id
     CROSS JOIN text_terms terms
     WHERE named.created_revision<=cutoff
       AND to_tsvector('simple'::regconfig,named.identity_key||' '||named.identity_namespace) @@ terms.query
     UNION ALL
-    SELECT 'candidate:'||scope.candidate_id::text group_key,terms.term
-    FROM anchor_candidates scope
+    SELECT scope.group_key,terms.term
+    FROM candidate_scope scope
     JOIN public.prospect_research_candidate_history h ON h.candidate_id=scope.candidate_id
     CROSS JOIN text_terms terms
     WHERE h.coverage_revision<=cutoff
