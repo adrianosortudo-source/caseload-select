@@ -47,6 +47,16 @@ describe("provider output contract", () => {
     expect(evidenceDescription).toContain(feeAlias);
     expect(sources.items.enum.map(id => aliases[id])).toEqual(expect.arrayContaining(["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"]));
   });
+  it("permits a firm-reported observation for current capacity while keeping targets as preferences", () => {
+    const answers = completeAnswers();
+    answers.repeatability.additional_matters = "2 comparable matters per quarter";
+    const schema = providerBlueprintSchema(answers) as ReturnType<typeof providerBlueprintSchema> & {properties:{brief:{properties:{why_firm_wants_work:{properties:{claims:{items:{properties:{source_answer_ids:{items:{enum:string[]}};evidence_basis:{enum:string[];description:string}}}}}}}}}};
+    const aliases = providerSourceAliases(answers);
+    const basis = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_basis;
+    expect(basis.enum).toContain("firm_reported_observation");
+    expect(basis.description).toContain(Object.keys(aliases).find(id => aliases[id] === "repeatability.additional_matters"));
+    expect(basis.description).toContain("proposed targets");
+  });
   it("asks the model to format a specific client type as a grammatically complete noun phrase", () => {
     const schema = providerBlueprintSchema(completeAnswers()) as {properties:{brief:{properties:{definition_components:{properties:{client:{properties:{text:{description:string}}}}}}}}};
     const guidance = schema.properties.brief.properties.definition_components.properties.client.properties.text.description;

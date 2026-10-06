@@ -218,7 +218,7 @@ describe("v4 provenance and client pathway", () => {
     const brief=buildStructuredBlueprintV4(a);
     const cards=[brief.client_and_matter,brief.client_goals_needs,brief.why_firm_wants_work,brief.why_client_chooses_firm,brief.recognizable_circumstances,brief.evidence_and_open_questions];
     const text=cards.flatMap(card=>card.claims).map(claim=>claim.text).join(" ");
-    expect(brief.why_firm_wants_work.claims.length).toBeLessThanOrEqual(6);
+    expect(brief.why_firm_wants_work.claims.length).toBeLessThanOrEqual(7);
     expect(brief.client_and_matter.claims.length).toBeLessThanOrEqual(6);
     expect(brief.client_goals_needs.claims.length).toBeLessThanOrEqual(6);
     expect(brief.why_client_chooses_firm.claims.length).toBeLessThanOrEqual(6);
@@ -228,6 +228,11 @@ describe("v4 provenance and client pathway", () => {
       expect(JSON.stringify(brief)).toContain(detail);
     }
     expect(text).toContain("One associate has room for two more matters");
+    const capacityClaim=brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("delivery.capacity"));
+    expect(capacityClaim?.evidence_basis).toBe("firm_reported_observation");
+    expect(capacityClaim?.source_answer_ids).toContain("repeatability.additional_matters");
+    const staffingClaim=brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("repeatability.staffing_constraint"));
+    expect(staffingClaim?.evidence_basis).toBe("firm_preference");
   });
   it("labels clarification answers by the kind of information they contribute", () => {
     const a=completeAnswers();

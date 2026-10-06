@@ -137,6 +137,83 @@ describe("AI Blueprint output contract", () => {
     expect(recovered.some(claim => claim.source_answer_ids.includes("value.payment") && claim.source_answer_ids.includes("practice.experience"))).toBe(false);
     expect(recovered.filter(claim => claim.source_answer_ids.includes("practice.experience"))).toHaveLength(1);
   });
+  it("accepts current capacity as a firm-reported observation and keeps staffing change as preference", () => {
+    const answers = completeAnswers();
+    answers.repeatability.additional_matters = "2 comparable matters per quarter";
+    answers.repeatability.staffing_constraint = "An associate must be hired before increasing volume.";
+    const brief = buildStructuredBlueprintV4(answers);
+    const capacity = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.additional_matters"));
+    const staffing = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
+    expect(capacity).toMatchObject({ evidence_basis: "firm_reported_observation", kind: "experience" });
+    expect(staffing).toMatchObject({ evidence_basis: "firm_preference", kind: "preference" });
+    expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
+  });
+  it("keeps established and new routes within the firm-value claim budget while preserving capacity provenance", () => {
+    for (const route of ["established", "new"] as const) {
+      const answers = completeAnswers();
+      answers.focus.route = route;
+      answers.value.reasons = ["client_benefit", "fees", "skills"];
+      Object.assign(answers.value, {
+        fee_effort: "worthwhile",
+        collected_fee: "15to50",
+        team_hours: "16to40",
+        payment: "predictable",
+        payment_context: "The firm observed that comparable buyers usually paid the first invoice within 15 days.",
+        payment_context_basis: "firm_observation",
+        currency: "CAD",
+        fee_amount: "25000",
+        direct_cost_amount: "12000",
+        amount_basis: "recorded",
+        amount_scope: "per_matter",
+      });
+      Object.assign(answers.delivery, { capacity: "room" });
+      Object.assign(answers.repeatability, {
+        target: "2 additional retained matters per quarter",
+        review_period: "quarterly",
+        additional_matters: "2 comparable matters per quarter",
+        staffing_constraint: "An associate must be hired before increasing volume.",
+      });
+      if (route === "new") {
+        answers.interview.clarification_count = 1;
+        answers.interview.clarified_stages = [3];
+        answers.interview.followups = [{
+          id: "44444444-4444-4444-8444-444444444444",
+          stage: 3,
+          purpose: "firm_desirability",
+          source_answer_ids: ["value.reasons"],
+          source_answer_fingerprint: interviewClarificationSourceFingerprint(answers, ["value.reasons"]),
+          question: "Why does the firm want this work?",
+          answer: "The team enjoys the strategic work and wants to test repeatable demand.",
+          skipped: false,
+        }];
+      }
+
+      const brief = buildStructuredBlueprintV4(answers);
+      expect(brief.why_firm_wants_work.claims.length).toBeLessThanOrEqual(7);
+      const capacity = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.additional_matters"));
+      expect(capacity?.evidence_basis).toBe("firm_reported_observation");
+      expect(capacity?.source_answer_ids).toContain("delivery.capacity");
+      const staffing = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
+      expect(staffing?.evidence_basis).toBe("firm_preference");
+      if (route === "new") expect(JSON.stringify(brief)).toContain("The team enjoys the strategic work and wants to test repeatable demand.");
+      expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
+    }
+  });
+  it("keeps an unresolved rationale separate from a current capacity preference", () => {
+    const answers = completeAnswers();
+    answers.value.reasons = ["undecided"];
+    answers.value.fee_effort = "unknown";
+    answers.practice.enjoys = "";
+    answers.repeatability.additional_matters = "2 comparable matters per quarter";
+    answers.repeatability.staffing_constraint = "An associate must be hired before increasing volume.";
+    const brief = buildStructuredBlueprintV4(answers);
+    const rationale = brief.why_firm_wants_work.claims[0];
+    const staffing = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
+    expect(rationale.source_answer_ids.length).toBeGreaterThan(0);
+    expect(rationale.evidence_basis).toBe("unknown");
+    expect(staffing).toMatchObject({ evidence_basis: "firm_preference", kind: "preference" });
+    expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
+  });
   it("fits all supplied commercial and capacity facts into the six-claim limit without losing provenance",()=>{
     const answers=completeAnswers();
     answers.value.reasons=["client_benefit","fees","skills"];
@@ -144,7 +221,7 @@ describe("AI Blueprint output contract", () => {
     Object.assign(answers.delivery,{capacity:"room"});
     Object.assign(answers.repeatability,{target:"2 additional retained matters per quarter",review_period:"quarterly",additional_matters:"2",staffing_constraint:"One associate has room for two more matters."});
     const built=buildStructuredBlueprintV4(answers);
-    expect(built.why_firm_wants_work.claims).toHaveLength(6);
+    expect(built.why_firm_wants_work.claims).toHaveLength(7);
     const payment=built.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.payment"));
     expect(payment?.source_answer_ids).toEqual(["value.payment","value.payment_context","value.payment_context_basis"]);
     expect(payment?.text).toContain("Most buyers paid the first invoice within 15 days.");
