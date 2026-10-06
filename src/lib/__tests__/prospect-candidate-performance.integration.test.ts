@@ -26,18 +26,22 @@ suite("candidate reads above the observed Admin inventory", () => {
       // Exercise ordinary source triggers, not hand-built candidate indexes.
       await db.query("SET LOCAL statement_timeout = '180s'");
       await db.query(`INSERT INTO public.gta_prospect_firms(source_record_key,display_name,normalized_display_name,reconciliation_status)
-        SELECT $1||'-'||n, 'Synthetic throughput firm '||n, 'synthetic throughput firm '||n, 'provisional_new' FROM generate_series(1,6500) n`, [prefix]);
+        SELECT $1||'-'||n, 'Synthetic Law Firm '||n, 'synthetic law firm '||n, 'provisional_new' FROM generate_series(1,6500) n`, [prefix]);
       for (const suffix of [" revised", ""]) {
-        await db.query(`UPDATE public.gta_prospect_firms SET display_name='Synthetic throughput firm '||n||$2
+        await db.query(`UPDATE public.gta_prospect_firms SET display_name='Synthetic Law Firm '||n||$2
           FROM generate_series(1,500) n WHERE source_record_key=$1||'-'||n`, [prefix, suffix]);
       }
+      const targetSourceKey = prefix + "-6500";
+      const targetUnique = "needlemark" + randomUUID().replaceAll("-", "");
+      await db.query("UPDATE public.gta_prospect_firms SET display_name=$2,normalized_display_name=$2 WHERE source_record_key=$1",
+        [targetSourceKey, "Synthetic " + targetUnique + " Practice"]);
       const batchId = (await db.query<{ id: string }>(
         "INSERT INTO public.gta_prospect_import_batches(source_name,source_sha256,source_record_count,state,applied_at) VALUES($1,$2,6000,'applied',now()) RETURNING id",
         [prefix, "b".repeat(64)])).rows[0].id;
-      // Bounded setup batches let PostgreSQL refresh statistics as the synthetic
-      // journal grows. The measured read allowance below stays exactly five seconds.
+      // 1,000-row batches keep statistics current without repeatedly rescanning
+      // the growing synthetic journal. The measured read allowance stays five seconds.
       const auditSetupStart = performance.now();
-      const auditSetupBatchSize = 100;
+      const auditSetupBatchSize = 1000;
       await db.query("SET LOCAL statement_timeout = '60s'");
       for (let first = 1; first <= 6000; first += auditSetupBatchSize) {
         await db.query(`INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record)
@@ -50,12 +54,16 @@ suite("candidate reads above the observed Admin inventory", () => {
         console.info("candidate-setup-progress", JSON.stringify({ appliedAuditRows: first + auditSetupBatchSize - 1, milliseconds: elapsed }));
         expect(elapsed).toBeLessThan(600_000);
       }
-      const targetSourceKey = prefix + "-6500";
       const targetFirm = (await db.query<{ id: string }>("SELECT id FROM public.gta_prospect_firms WHERE source_record_key=$1", [targetSourceKey])).rows[0].id;
       // The firm and its audit candidate share this exact source key. Linking the audit
       // candidate to the canonical firm gives the exact firm+field page two real matches.
       await db.query("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) SELECT $1,f.source_record_key,$2,'accepted','created',$3,jsonb_build_object('sourceRecordKey',f.source_record_key,'firmName',f.display_name,'originalStatus','rejected') FROM public.gta_prospect_firms f WHERE f.source_record_key=$4",
         [batchId, "c".repeat(64), targetFirm, targetSourceKey]);
+      // The rare token is on the firm source record; the broad token appears on
+      // a sibling source record. Search must resolve the rare anchor first but
+      // retain matching across every candidate linked to the same verified firm.
+      await db.query("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) SELECT $1,f.source_record_key||'-law-evidence',$2,'accepted','created',$3,jsonb_build_object('sourceRecordKey',f.source_record_key||'-law-evidence','firmName','Synthetic Law Evidence Record','originalStatus','selected') FROM public.gta_prospect_firms f WHERE f.source_record_key=$4",
+        [batchId, "d".repeat(64), targetFirm, targetSourceKey]);
       const counts = (await db.query<{ candidates: number; histories: number; fields: number; sources: number; identityLinks: number }>(`SELECT
         (SELECT count(*)::integer FROM public.prospect_research_candidates) candidates,
         (SELECT count(*)::integer FROM public.prospect_research_candidate_history) histories,
@@ -91,6 +99,15 @@ suite("candidate reads above the observed Admin inventory", () => {
       inspectPlan(statusExplanation);
       expect(indexes).toContain("prospect_candidate_original_status_exact");
       console.info("candidate-status-index-plan", JSON.stringify({ indexes }));
+      const firmSeedExplanation = (await db.query<{ "QUERY PLAN": unknown }>(
+        `EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON)
+         SELECT DISTINCT h.candidate_id FROM public.prospect_research_candidate_history h
+         WHERE h.item_kind='identity_link' AND h.verified_firm_id=$1
+           AND h.coverage_revision<=9223372036854775807`, [targetFirm])).rows[0]["QUERY PLAN"];
+      indexes.length = 0;
+      inspectPlan(firmSeedExplanation);
+      expect(indexes).toContain("prospect_candidate_identity_by_firm");
+      console.info("candidate-firm-seed-index-plan", JSON.stringify({ indexes }));
       const timings: { label: string; milliseconds: number }[] = [];
       const read = async (label: string, filters: Record<string, unknown>, limit = 25, afterId: string | null = null, coverageRevision: number | null = null) => {
         console.info("candidate-read-start", label);
@@ -107,11 +124,34 @@ suite("candidate reads above the observed Admin inventory", () => {
       for (let index = 0; index < 4; index++) await read("unfiltered-repeat-" + index, {});
       const selectiveText = await read("indexed-text", { text: prefix + "-6500" });
       expect(selectiveText.filteredCount).toBeGreaterThanOrEqual(1);
+      const broadTermText = await read("rare-anchor-with-broad-term", { text: targetUnique + " Law" });
+      expect(broadTermText.filteredCount).toBe(3);
+      expect(broadTermText.items).toHaveLength(3);
+      expect(broadTermText.items.every(item => item.verifiedFirmId === targetFirm)).toBe(true);
+      expect(broadTermText.nextAfterId).toBeNull();
       expect((await read("typed-field", { fieldPointer: "/reconciliation_status", fieldValue: "provisional_new" })).filteredCount).toBeGreaterThanOrEqual(6500);
       expect((await read("unresolved", { identityState: "unresolved" })).filteredCount).toBeGreaterThanOrEqual(500);
       const linked = await read("verified-firm", { firmId: targetFirm });
       expect(linked.filteredCount).toBeGreaterThanOrEqual(2);
       expect(linked.items.every(item => item.verifiedFirmId === targetFirm)).toBe(true);
+      const firmStatus = await read("verified-firm-original-status", { firmId: targetFirm, originalStatus: "rejected" }, 1);
+      expect(firmStatus.filteredCount).toBeGreaterThanOrEqual(2);
+      expect(firmStatus.items).toHaveLength(1);
+      expect(firmStatus.items[0].verifiedFirmId).toBe(targetFirm);
+      expect(firmStatus.nextAfterId).toBe(firmStatus.items[0].id);
+      const nextFirmStatus = await read("verified-firm-original-status-next-page",
+        { firmId: targetFirm, originalStatus: "rejected" }, 1, firmStatus.nextAfterId, firmStatus.coverageRevision);
+      expect(nextFirmStatus.coverageRevision).toBe(firmStatus.coverageRevision);
+      expect(nextFirmStatus.filteredCount).toBe(firmStatus.filteredCount);
+      expect(nextFirmStatus.items).toHaveLength(1);
+      expect(nextFirmStatus.items[0].verifiedFirmId).toBe(targetFirm);
+      const wrongFirmStatus = await read("verified-firm-original-status-exact-value",
+        { firmId: targetFirm, originalStatus: "Rejected" });
+      expect(wrongFirmStatus.filteredCount).toBe(0);
+      expect(wrongFirmStatus.items).toEqual([]);
+      const absentFirm = await read("verified-firm-absent", { firmId: randomUUID(), originalStatus: "rejected" });
+      expect(absentFirm.filteredCount).toBe(0);
+      expect(absentFirm.items).toEqual([]);
       const firmFieldFilters = { firmId: targetFirm, fieldPointer: "/source_record_key", fieldValue: targetSourceKey };
       const firmField = await read("indexed-firm-field", firmFieldFilters, 1);
       expect(firmField.filteredCount).toBeGreaterThanOrEqual(2);
@@ -148,7 +188,10 @@ suite("candidate reads above the observed Admin inventory", () => {
       const ordered = timings.map(item => item.milliseconds).sort((a, b) => a - b);
       const p95 = ordered[Math.ceil(ordered.length * 0.95) - 1];
       expect(timings.find(item => item.label === "indexed-text")!.milliseconds).toBeLessThan(4500);
+      expect(timings.find(item => item.label === "rare-anchor-with-broad-term")!.milliseconds).toBeLessThan(4500);
       expect(timings.find(item => item.label === "indexed-original-status")!.milliseconds).toBeLessThan(4500);
+      expect(timings.find(item => item.label === "verified-firm")!.milliseconds).toBeLessThan(4500);
+      expect(timings.find(item => item.label === "verified-firm-original-status")!.milliseconds).toBeLessThan(4500);
       console.info("candidate-read-performance", JSON.stringify({ counts, timings, p95Milliseconds: p95, statementTimeoutMilliseconds: 5000 }));
       expect(p95).toBeLessThan(5000);
     } finally { await db.query("ROLLBACK"); db.release(); }

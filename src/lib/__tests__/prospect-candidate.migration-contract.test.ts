@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const sql = readFileSync(resolve(process.cwd(), "supabase/migrations/20260924172758_prospect_enrichment_candidate_profiles.sql"), "utf8");
+const scopedReaderSql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006003626_prospect_candidate_scoped_reader_fastpaths.sql"), "utf8");
 const publicReads = ["list_prospect_research_candidates_v1", "get_prospect_research_candidate_v1",
   "list_prospect_research_candidate_history_v1", "get_prospect_research_candidate_revision_chunk_v1"];
 
@@ -83,5 +84,38 @@ describe("candidate migration preservation and privilege contract", () => {
     expect(sql).toContain("invalid_source_date:");
     expect(sql).toContain("held_original_json_requires_raw_review");
     expect(sql).not.toMatch(/UPDATE public\.prospect_enrichment_|DELETE FROM public\.prospect_enrichment_/);
+  });
+});
+
+describe("scoped candidate reader migration contract", () => {
+  it("bounds firm-filter identity work and preserves the public invoker boundary", () => {
+    expect(scopedReaderSql.match(/^BEGIN;$/gm)).toHaveLength(1);
+    expect(scopedReaderSql.match(/^COMMIT;$/gm)).toHaveLength(1);
+    expect(scopedReaderSql).toContain("CREATE OR REPLACE FUNCTION prospect_candidate_private.list_candidates_for_firm(");
+    expect(scopedReaderSql).toContain("STABLE SECURITY DEFINER SET search_path = ''");
+    expect(scopedReaderSql).toContain("h.item_kind='identity_link'");
+    expect(scopedReaderSql).toContain("h.verified_firm_id=requested_firm");
+    expect(scopedReaderSql).toContain("h.coverage_revision<=cutoff");
+    expect(scopedReaderSql).toContain("prospect_candidate_private.identity_links_for(cutoff,seed.candidate_id)");
+    expect(scopedReaderSql).toContain("identity.firm_count=1 AND identity.firm_id=requested_firm");
+    expect(scopedReaderSql).toContain("matches_group(inventory.id,inventory.data,p_filters,cutoff,inventory.group_ids)");
+    expect(scopedReaderSql).toContain("REVOKE ALL ON FUNCTION prospect_candidate_private.list_candidates_for_firm");
+    expect(scopedReaderSql).toContain("TO service_role");
+  });
+
+  it("resolves text-search identity from the rarest term and retains cross-candidate firm-group matching", () => {
+    expect(scopedReaderSql).toContain("CREATE OR REPLACE FUNCTION prospect_candidate_private.list_candidates_for_text(");
+    expect(scopedReaderSql).toContain("count(DISTINCT candidate_id) candidate_count FROM text_hits GROUP BY term");
+    expect(scopedReaderSql).toContain("ORDER BY candidate_count,term LIMIT 1");
+    expect(scopedReaderSql).toContain("FROM anchor_candidates anchors");
+    expect(scopedReaderSql).toContain("identity_links_for(cutoff,anchors.candidate_id)");
+    expect(scopedReaderSql).toContain("identity_links_for_firms(cutoff,ARRAY(SELECT firm_id FROM anchor_firms))");
+    expect(scopedReaderSql).toContain("HAVING count(DISTINCT term)=(SELECT count(*) FROM text_terms)");
+    expect(scopedReaderSql).toContain("JOIN matched_groups groups USING(group_key)");
+    expect(scopedReaderSql).toContain("REVOKE ALL ON FUNCTION prospect_candidate_private.list_candidates_for_text");
+    expect(scopedReaderSql).toContain("TO service_role");
+    expect(scopedReaderSql).toContain("THEN prospect_candidate_private.list_candidates_for_text(p_filters,p_limit,p_after_id,p_coverage_revision)");
+    expect(scopedReaderSql).toContain("RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER SET search_path = ''");
+    expect(scopedReaderSql).not.toMatch(/\b(?:INSERT INTO|UPDATE public\.|DELETE FROM)\b/i);
   });
 });
