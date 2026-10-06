@@ -87,11 +87,13 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   await page.getByRole("button", { name: "Download HTML report", exact: true }).click();
   const download = await downloadReady;
   expect(download.suggestedFilename()).toMatch(/\.html$/);
-  const path = await download.path();
-  await download.saveAs(testInfo.outputPath("blueprint-negative-report.html"));
-  const html = await import("node:fs/promises").then(fs => fs.readFile(path!, "utf8"));
+  const reportPath = testInfo.outputPath("blueprint-negative-report.html");
+  await download.saveAs(reportPath);
+  const html = await import("node:fs/promises").then(fs => fs.readFile(reportPath, "utf8"));
   const printPage = await page.context().newPage();
-  await printPage.goto(pathToFileURL(path!).href);
+  await printPage.goto(pathToFileURL(reportPath).href);
+  await expect(printPage.locator("article.page")).toHaveCount(1);
+  await expect(printPage.getByRole("heading", { level: 1 })).toContainText("Business & commercial");
   await printPage.emulateMedia({ media: "print" });
   const printPdf = await printPage.pdf({
     path: testInfo.outputPath("blueprint-negative-report-print-preview.pdf"),
