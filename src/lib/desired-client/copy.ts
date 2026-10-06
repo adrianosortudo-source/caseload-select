@@ -1,6 +1,8 @@
 export const WELCOME_COPY = {
   heading: "Define your desired client",
   description: "A firm can have a full calendar and still be building the wrong practice. This guided exercise helps you choose the client situation and matter you would want more of, explain why it suits your firm, and set a direction you can use in marketing.",
+  definition: "The Desired Client brings the specific legal mandate the firm most wants more of because it offers its strongest credible combination of fees, margin, return on lawyer time and repeatable commercial value.",
+  ambition: "That must be an ambitious target, not whatever is easiest to deliver today. Capacity constraints identify what must change; they shouldn’t automatically lower the ambition. Highest fee and highest margin are not necessarily the same. We should deliberately seek the strongest opportunity, then substantiate why it is superior rather than assume the biggest number wins.",
   time: "Plan for about 10 minutes for a first draft. Comparing two types of work or adding detail will take longer.",
   process: "Six guided sections take you from the practice you want to build to the client situation, matter, value, fit signals, opportunity and measure of success. Choose from examples, write your own answer, or mark something as not yet known.",
   preparation: "Think about work you would gladly handle again, what the team put into it, and what made it worthwhile. Records are not required. You can share estimates or leave figures unknown.",

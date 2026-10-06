@@ -66,6 +66,8 @@
 .dc-eyebrow{color:var(--dc-secondary);font-size:.8125rem;font-weight:700}
 .dc-welcome__heading{font-size:2rem!important}
 .dc-welcome__description,.dc-welcome__supporting,.dc-welcome__privacy,.dc-welcome__ai-disclosure,.dc-welcome__draft-notice{width:100%;font-size:1rem;line-height:1.55}
+.dc-welcome__positioning{display:grid;gap:.75rem;width:100%;padding:1rem 1.25rem;border-left:3px solid var(--dc-navy);background:var(--dc-white)}
+.dc-welcome__positioning p{width:100%;line-height:1.55;text-wrap:pretty}
 .dc-welcome__privacy,.dc-welcome__ai-disclosure,.dc-welcome__draft-notice{padding:1rem;border-left:3px solid var(--dc-navy);background:var(--dc-white)}
 .dc-welcome__actions{display:grid;grid-template-columns:minmax(0,1fr);gap:.75rem;width:100%;margin-block:.5rem}.dc-welcome__actions>.dc-button{width:100%;max-width:32rem}
 .dc-review{width:100%}
