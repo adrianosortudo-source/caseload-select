@@ -95,8 +95,8 @@ BEGIN
   SELECT jsonb_build_object(
     'items',coalesce((SELECT jsonb_agg(data ORDER BY id) FROM page),'[]'),
     'nextAfterId',CASE WHEN (SELECT count(*) FROM page)=p_limit
-      AND EXISTS(SELECT 1 FROM filtered f WHERE f.id>(SELECT max(id) FROM page))
-      THEN (SELECT max(id::text) FROM page) ELSE NULL END,
+      AND EXISTS(SELECT 1 FROM filtered f WHERE f.id>(SELECT id FROM page ORDER BY id DESC LIMIT 1))
+      THEN (SELECT id::text FROM page ORDER BY id DESC LIMIT 1) ELSE NULL END,
     'inventoryCount',(SELECT count(*) FROM public.prospect_research_candidates WHERE created_revision<=cutoff),
     'filteredCount',(SELECT count(*) FROM filtered),
     'coverageRevision',cutoff,'readWarnings',warnings,'complete',warnings='[]'::jsonb
