@@ -28,6 +28,7 @@ test("reader repair receipt binds the exact ordered migration sources", () => {
       "20261006111650_prospect_candidate_global_text_search_scoped.sql",
       "20261006133000_prospect_candidate_global_text_search_set_identity.sql",
       "20261006150000_prospect_candidate_global_text_search_warning_fastpath.sql",
+    "20261006160000_prospect_candidate_global_text_search_index_only.sql",
   ]);
   assert.equal(verified.productionApplicationApproved, false);
   assert.throws(() => verifyReaderRepairReceipt({ ...receipt, migrations: receipt.migrations.map((item, index) => index === 1 ? { ...item, sha256: "0".repeat(64) } : item) }, root), /reader_repair_receipt_source_mismatch/);
@@ -43,38 +44,39 @@ test("reader repair preflight allows only its exact ordered suffix and post-read
    const globalTextScoped = "20261006111650_prospect_candidate_global_text_search_scoped.sql";
    const setIdentity = "20261006133000_prospect_candidate_global_text_search_set_identity.sql";
    const warningFastpath = "20261006150000_prospect_candidate_global_text_search_warning_fastpath.sql";
+  const indexOnly = "20261006160000_prospect_candidate_global_text_search_index_only.sql";
   const pending = paths => ({ phase: "candidate-reader-repair-pending", pendingPaths: paths.map(file => "supabase/migrations/" + file) });
   assert.deepEqual(verifyReaderRepairPlan(
-      { dryRun: true, upToDate: false, migrations: [earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath], seeds: [], roles: [] },
-      pending([earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath]),
+      { dryRun: true, upToDate: false, migrations: [earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly], seeds: [], roles: [] },
+      pending([earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly]),
     "pre",
-      ), { phase: "pre", migrations: [earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath], dryRun: true, upToDate: false, exactScope: true });
+      ), { phase: "pre", migrations: [earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly], dryRun: true, upToDate: false, exactScope: true });
   assert.deepEqual(verifyReaderRepairPlan(
-      { dryRun: true, upToDate: false, migrations: [refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath], seeds: [], roles: [] },
-      pending([refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath]),
+      { dryRun: true, upToDate: false, migrations: [refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly], seeds: [], roles: [] },
+      pending([refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly]),
     "pre",
-      ), { phase: "pre", migrations: [refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath], dryRun: true, upToDate: false, exactScope: true });
+      ), { phase: "pre", migrations: [refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly], dryRun: true, upToDate: false, exactScope: true });
   assert.deepEqual(verifyReaderRepairPlan(
-      { dryRun: true, upToDate: false, migrations: [later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath], seeds: [], roles: [] },
-      pending([later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath]),
+      { dryRun: true, upToDate: false, migrations: [later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly], seeds: [], roles: [] },
+      pending([later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly]),
     "pre",
-      ), { phase: "pre", migrations: [later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath], dryRun: true, upToDate: false, exactScope: true });
+      ), { phase: "pre", migrations: [later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly], dryRun: true, upToDate: false, exactScope: true });
   assert.deepEqual(verifyReaderRepairPlan(
-      { dryRun: true, upToDate: false, migrations: [originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath], seeds: [], roles: [] },
-      pending([originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath]),
+      { dryRun: true, upToDate: false, migrations: [originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly], seeds: [], roles: [] },
+      pending([originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly]),
     "pre",
-      ), { phase: "pre", migrations: [originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath], dryRun: true, upToDate: false, exactScope: true });
+      ), { phase: "pre", migrations: [originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly], dryRun: true, upToDate: false, exactScope: true });
   assert.deepEqual(verifyReaderRepairPlan(
-      { dryRun: true, upToDate: false, migrations: [scopedReader, globalTextScoped, setIdentity, warningFastpath], seeds: [], roles: [] },
-      pending([scopedReader, globalTextScoped, setIdentity, warningFastpath]),
+      { dryRun: true, upToDate: false, migrations: [scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly], seeds: [], roles: [] },
+      pending([scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly]),
     "pre",
-      ), { phase: "pre", migrations: [scopedReader, globalTextScoped, setIdentity, warningFastpath], dryRun: true, upToDate: false, exactScope: true });
+      ), { phase: "pre", migrations: [scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly], dryRun: true, upToDate: false, exactScope: true });
 
   assert.deepEqual(verifyReaderRepairPlan(
-    { dryRun: true, upToDate: false, migrations: [setIdentity, warningFastpath], seeds: [], roles: [] },
-    pending([setIdentity, warningFastpath]),
+    { dryRun: true, upToDate: false, migrations: [setIdentity, warningFastpath,indexOnly], seeds: [], roles: [] },
+    pending([setIdentity, warningFastpath,indexOnly]),
     "pre",
-  ), { phase: "pre", migrations: [setIdentity, warningFastpath], dryRun: true, upToDate: false, exactScope: true });
+  ), { phase: "pre", migrations: [setIdentity, warningFastpath,indexOnly], dryRun: true, upToDate: false, exactScope: true });
 
   assert.throws(() => verifyReaderRepairPlan(
     { dryRun: true, upToDate: false, migrations: [earlier, refreshGate], seeds: [], roles: [] },
@@ -111,7 +113,7 @@ test("target ledger query includes every reviewed reader-repair migration and re
   const versions = receipt.migrations.map(item => item.version);
   const expectedQuery = `SELECT version,name,statements FROM supabase_migrations.schema_migrations WHERE version IN (${versions.map(version => `'${version}'`).join(",")}) ORDER BY version;\n`;
   assert.equal(targetLedgerQuery(), expectedQuery);
-   assert.equal((targetLedgerQuery().match(/'\d{14}'/g) ?? []).length, 9);
+   assert.equal((targetLedgerQuery().match(/'\d{14}'/g) ?? []).length, 10);
 
   const rows = receipt.migrations.map(({ version, name }) => ({ version, name, statements: ["SELECT 1"] }));
   assert.throws(() => verifyTargetLedgerStatements(rows.slice(0, 4), root), /reader_repair_target_ledger_invalid/);

@@ -96,7 +96,7 @@ jobs:
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/full-ledger.json"
           node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger.json" "$RUNNER_TEMP/reader-migrations" complete > "$RUNNER_TEMP/full-ledger-check.json"
 
-      - name: Verify all nine exact reader-repair statements and catalog contracts
+      - name: Verify all ten exact reader-repair statements and catalog contracts
         shell: bash
         run: |
           set -euo pipefail
