@@ -22,6 +22,7 @@ export const catalogExpectations = {
  private_firm_links_service_role_execute:false,private_firm_links_anon_execute:false,private_firm_links_auth_execute:false,
  history_metadata_search_index:true,identity_by_candidate_index:true,identity_by_firm_index:true,
  invalid_date_coverage_index:true,
+ original_status_exact_index:true,
  apply_refresh_security_definer:true,apply_refresh_empty_search_path:true,
  apply_refresh_update_transition:true,apply_refresh_own_core_audit_excluded:true,
  apply_refresh_current_identity_excluded:true
@@ -78,6 +79,7 @@ export const catalogQuery=[
 " 'identity_by_candidate_index',to_regclass('public.prospect_candidate_identity_by_candidate') IS NOT NULL,",
 " 'identity_by_firm_index',to_regclass('public.prospect_candidate_identity_by_firm') IS NOT NULL,",
 " 'invalid_date_coverage_index',to_regclass('public.prospect_candidate_invalid_date_coverage') IS NOT NULL,",
+" 'original_status_exact_index',to_regclass('public.prospect_candidate_original_status_exact') IS NOT NULL,",
 " 'apply_refresh_security_definer',(SELECT p.prosecdef FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure),",
 " 'apply_refresh_empty_search_path',(SELECT coalesce(p.proconfig @> ARRAY['search_path=\"\"']::text[],false) FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure),",
 " 'apply_refresh_update_transition',(SELECT position('TG_OP = ''UPDATE''' in p.prosrc)>0 AND position('OLD.state IS DISTINCT FROM ''applied''' in p.prosrc)>0 AND position('NEW.state = ''applied''' in p.prosrc)>0 AND position('NEW.firm_id IS NOT NULL' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure),",
@@ -85,6 +87,9 @@ export const catalogQuery=[
 " 'apply_refresh_current_identity_excluded',(SELECT position('h.package_id IS DISTINCT FROM NEW.id' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure)",
 ") AS reader_contract;"
 ].join("\n");
+export function targetLedgerQuery() {
+ return `SELECT version,name,statements FROM supabase_migrations.schema_migrations WHERE version IN (${repairMigrations.map(identity=>`'${identity.version}'`).join(",")}) ORDER BY version;\n`;
+}
 export function verifyReaderCatalog(payload) {
  const rows=Array.isArray(payload)?payload:isRecord(payload)&&Array.isArray(payload.data)?payload.data:isRecord(payload)&&Array.isArray(payload.rows)?payload.rows:null;
  if(!rows||rows.length!==1||!isRecord(rows[0])||!same(Object.keys(rows[0]),["reader_contract"])||!isRecord(rows[0].reader_contract)) fail("reader_catalog_shape_invalid");
@@ -111,8 +116,9 @@ if(command==="generate"&&args.length===0){writeJson(path.join(root,receiptPath),
 else if(command==="source"&&args.length===0) console.log(JSON.stringify(verifyReaderRepairReceipt(readJson(path.join(root,receiptPath)))));
 else if(command==="plan"&&args.length===2) console.log(JSON.stringify(verifyReaderRepairPlan(readJson(args[0]),readJson(args[1]),process.env.PLAN_PHASE)));
 else if(command==="catalog-query"&&args.length===0) process.stdout.write(catalogQuery+"\n");
+else if(command==="target-ledger-query"&&args.length===0) process.stdout.write(targetLedgerQuery());
 else if(command==="catalog"&&args.length===1) console.log(JSON.stringify(verifyReaderCatalog(readJson(args[0]))));
 else if(command==="target-ledger"&&args.length===1) console.log(JSON.stringify(verifyTargetLedgerStatements(readJson(args[0]))));
-else fail("usage_generate_source_plan_catalog-query_catalog_or_target-ledger");
+else fail("usage_generate_source_plan_catalog-query_target-ledger-query_catalog_or_target-ledger");
 
 }

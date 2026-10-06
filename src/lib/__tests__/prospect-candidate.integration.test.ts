@@ -298,6 +298,13 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       expect(fresh.items).toHaveLength(1);
       expect(fresh.items[0].originalStatuses).toEqual(expect.arrayContaining(["selected", "not_selected"]));
       expect(fresh.items[0].qualificationStates).toEqual(["needs_evidence"]);
+      const statusConflict = await list(db, { originalStatus: "selected" });
+      expect(statusConflict.items.find(item => item.id === fresh.items[0].id)).toMatchObject({ identityState: "conflict", verifiedFirmId: null });
+      // A conflicting seed cannot donate its status to either formerly linked firm.
+      expect(statusConflict.items.some(item => firmIds.includes(item.verifiedFirmId ?? ""))).toBe(false);
+      const statusHistorical = await list(db, { originalStatus: "selected" }, 100, null, cutoffBeforeSecond);
+      expect(statusHistorical.items.find(item => item.id === fresh.items[0].id)).toMatchObject({ identityState: "resolved", verifiedFirmId: firmIds[0] });
+      expect(statusConflict).toEqual(await list(db, { originalStatus: "selected", text: "" }));
       const historical = await sourceCandidates(cutoffBeforeSecond);
       expect(historical.items[0]).toMatchObject({ identityState: "resolved", verifiedFirmId: firmIds[0] });
       const revisions = await history(db, fresh.items[0].id);
@@ -307,6 +314,84 @@ suite("all-candidate immutable PostgreSQL projection", () => {
     } finally { await db.query("ROLLBACK"); db.release(); }
   }, 60_000);
 
+  it("expands retained literal statuses across verified firms and freezes every continuation", async () => {
+    const db = await pool!.connect(); await db.query("BEGIN");
+    try {
+      const token = "statusgroup" + randomUUID().replaceAll("-", ""), status = "rejected-" + token;
+      const governed = await governedLegacyFirm(db, token), other = await governedLegacyFirm(db, token + "other");
+      const addStatusAudit = async (firm: { firmId: string; batchId: string }, key: string, recordStatus = status, batchId = firm.batchId) => (await db.query<{ id: string }>(
+        "INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) VALUES($1,$2,$3,'accepted','created',$4,$5::jsonb) RETURNING id",
+        [batchId, key, "d".repeat(64), firm.firmId, JSON.stringify({ sourceRecordKey: key, originalStatus: recordStatus })])).rows[0].id;
+      await addStatusAudit(governed, token + "status");
+      await db.query("INSERT INTO public.prospect_service_observations(firm_id,service_name,matter_fit,source_url,observed_at) VALUES($1,'Synthetic status sibling','strong-match','https://synthetic.example/status',now())", [governed.firmId]);
+      await register(db, [{ key: token + "unresolved", raw: { status } }, { key: token + "unknown", raw: {} }, { key: token + "empty", raw: { status: "" } }]);
+      const group = await list(db, { firmId: governed.firmId });
+      const page = await list(db, { originalStatus: status });
+      const singleton = page.items.find(item => item.identityKey === token + "unresolved")!;
+      expect(singleton).toMatchObject({ identityState: "unresolved", verifiedFirmId: null });
+      const expectedIds = [...group.items.map(item => item.id), singleton.id].sort();
+      expect(page.items.map(item => item.id)).toEqual(expectedIds);
+      expect(page.filteredCount).toBe(expectedIds.length);
+      expect(page.items.some(item => item.verifiedFirmId === governed.firmId && !item.originalStatuses.includes(status))).toBe(true);
+      expect(await list(db, { originalStatus: status, text: "" }, 100, null, page.coverageRevision)).toEqual(page);
+      expect((await list(db, { originalStatus: status.toUpperCase() })).filteredCount).toBe(0);
+      expect(await list(db, { originalStatus: "" })).toEqual(await list(db, { originalStatus: "", text: "" }));
+      const unknown = await list(db, { originalStatus: "__unknown__" });
+      expect(unknown).toEqual(await list(db, { originalStatus: "__unknown__", text: "" }));
+      expect(unknown.items.some(item => item.identityKey === token + "unknown")).toBe(true);
+      expect(unknown.items.some(item => item.verifiedFirmId === governed.firmId)).toBe(false);
+      const first = await list(db, { originalStatus: status }, 1);
+      expect(first.nextAfterId).toBe(first.items[0].id);
+      // A later same-firm source row must retain the old status. New candidates/statuses
+      // enter only new reads; a continuation retains its original identity cutoff.
+      const laterStatusBatchId = (await db.query<{ id: string }>(
+        "INSERT INTO public.gta_prospect_import_batches(source_name,source_sha256,source_record_count,state,applied_at) VALUES($1,$2,1,'applied',now()) RETURNING id",
+        [token + "later-status-batch", "f".repeat(64)])).rows[0].id;
+      await addStatusAudit(governed, token + "same-firm-later-status", "selected", laterStatusBatchId);
+      await db.query("INSERT INTO public.prospect_source_captures(firm_id,requested_url,retrieval_method,observed_at,policy_state) VALUES($1,'https://synthetic.example/later-status','synthetic',now(),'allowed')", [governed.firmId]);
+      await addStatusAudit(other, token + "later");
+      expect((await list(db, { originalStatus: status })).filteredCount).toBeGreaterThan(first.filteredCount);
+      const ids = first.items.map(item => item.id);
+      let after = first.nextAfterId;
+      while (after !== null) {
+        const next = await list(db, { originalStatus: status }, 1, after, first.coverageRevision);
+        expect(next.coverageRevision).toBe(first.coverageRevision);
+        expect(next.inventoryCount).toBe(first.inventoryCount);
+        expect(next.filteredCount).toBe(first.filteredCount);
+        expect(next.items).toHaveLength(1);
+        expect(next.items[0].id > ids[ids.length - 1]).toBe(true);
+        ids.push(next.items[0].id); after = next.nextAfterId;
+      }
+      expect(ids).toEqual(expectedIds);
+      expect(await list(db, { originalStatus: status }, 100, null, first.coverageRevision)).toEqual(page);
+    } finally { await db.query("ROLLBACK"); db.release(); }
+  }, 90_000);
+
+  it("excludes stale expanded links without discarding retained status seeds or frozen identity proofs", async () => {
+    const db = await pool!.connect(); await db.query("BEGIN");
+    try {
+      const token = "statusstale" + randomUUID().replaceAll("-", ""), status = "rejected-" + token;
+      const governed = await governedLegacyFirm(db, token);
+      const auditId = (await db.query<{ id: string }>("INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) VALUES($1,$2,$3,'accepted','created',$4,$5::jsonb) RETURNING id",
+        [governed.batchId, token + "status", "d".repeat(64), governed.firmId, JSON.stringify({ originalStatus: status })])).rows[0].id;
+      const mapId = (await db.query<{ id: string }>("INSERT INTO public.prospect_source_record_map(source_system,source_record_id,firm_id,mapping_status,identity_decision_id,reviewed_at) VALUES('synthetic',$1,$2,'confirmed','synthetic-reviewed-status-decision',now()) RETURNING id", [token, governed.firmId])).rows[0].id;
+      const before = await list(db, { originalStatus: status });
+      const mapping = before.items.find(item => item.identityKey === mapId)!;
+      expect(mapping.verifiedFirmId).toBe(governed.firmId);
+      await db.query("UPDATE public.prospect_source_record_map SET mapping_status='conflict' WHERE id=$1", [mapId]);
+      const withoutMapping = await list(db, { originalStatus: status });
+      expect(withoutMapping.items.some(item => item.id === mapping.id)).toBe(false);
+      expect(withoutMapping.filteredCount).toBe(before.filteredCount - 1);
+      expect(await list(db, { originalStatus: status }, 100, null, before.coverageRevision)).toEqual(before);
+      await db.query("UPDATE public.gta_prospect_import_batches SET state='failed',applied_at=NULL WHERE id=$1", [governed.batchId]);
+      const unlinked = await list(db, { originalStatus: status });
+      expect(unlinked.items).toHaveLength(1);
+      expect(unlinked.filteredCount).toBe(1);
+      expect(unlinked.items[0]).toMatchObject({ identityKey: auditId, identityState: "unresolved", verifiedFirmId: null });
+      expect(unlinked).toEqual(await list(db, { originalStatus: status, text: "" }));
+      expect(await list(db, { originalStatus: status }, 100, null, before.coverageRevision)).toEqual(before);
+    } finally { await db.query("ROLLBACK"); db.release(); }
+  }, 90_000);
   it("unions separate producers only through a proven canonical firm and preserves frozen candidate counts", async () => {
     const db = await pool!.connect(); await db.query("BEGIN");
     try {

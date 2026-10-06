@@ -56,6 +56,24 @@ describe("candidate RPC read adapter", () => {
     await expect(listCandidateResearch({ filters: { fieldPointer: "/unknownFact", fieldValue: "true" }, cursor: page.nextCursor! }, db)).rejects.toMatchObject({ status: 422 });
     expect(db.rpc).toHaveBeenCalledTimes(2);
   });
+  it("passes the global literal status unchanged and holds on the observed SQL timeout", async () => {
+    const filters = parseCandidateFilters(new URLSearchParams({ originalStatus: "rejected" }));
+    const db = client({ ...candidateList, nextAfterId: null });
+    await listCandidateResearch({ filters }, db);
+    expect(db.rpc).toHaveBeenCalledWith("list_prospect_research_candidates_v1", {
+      p_filters: { originalStatus: "rejected" }, p_limit: 25, p_after_id: null, p_coverage_revision: null,
+    });
+    const secret = "private timeout query and candidate source values";
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const timeout = { rpc: vi.fn(async () => ({ data: null, error: { code: "57014", message: secret, details: secret } })) };
+      await expect(listCandidateResearch({ filters }, timeout)).rejects.toMatchObject({ status: 503 });
+      expect(log).toHaveBeenCalledWith("[prospect-enrichment] candidate RPC unavailable", {
+        rpc: "list_prospect_research_candidates_v1", databaseErrorCode: "57014", httpStatus: null, errorName: null,
+      });
+      expect(JSON.stringify(log.mock.calls)).not.toContain(secret);
+    } finally { log.mockRestore(); }
+  });
   it("fails closed on missing RPC, malformed result and changed coverage", async () => {
     await expect(listCandidateResearch({ filters: {} }, { rpc: vi.fn(async () => ({ data: null, error: { message: "private SQL" } })) })).rejects.toMatchObject({ status: 503 });
     await expect(listCandidateResearch({ filters: {} }, client({ ...candidateList, items: "bad" }))).rejects.toThrow(CandidateContractError);
