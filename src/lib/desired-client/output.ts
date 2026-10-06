@@ -207,7 +207,44 @@ const numericTokens = (text: string) => [ ...[...text.matchAll(/[+-]?\s*(?:[$€
   const sign = raw.startsWith("-") ? "-" : raw.startsWith("+") ? "+" : "";
   return sign + raw.replace(/[^\d.%]/g, "");
 }), ...spelledNumericTokens(text) ];
-export type AnalysisValidationFailure = { field: string; reason: string; sourcePath?: AnswerReferencePath | `interview.followups.${number}` };
+export type AnalysisClaimDiagnostic = {
+  claimIndex: number;
+  kind: string;
+  evidenceBasis: string;
+  sourceAnswerIds: string[];
+  expectedGroups: Array<{
+    sourceAnswerIds: string[];
+    kind: EvidenceLinkedStatement["kind"];
+    evidenceBasis: EvidenceBasis;
+  }>;
+};
+export type AnalysisValidationFailure = {
+  field: string;
+  reason: string;
+  sourcePath?: AnswerReferencePath | `interview.followups.${number}`;
+  claimDiagnostic?: AnalysisClaimDiagnostic;
+};
+
+function diagnosticForClaim(value: unknown, claimIndex: number, answers: DesiredClientAnswers): AnalysisClaimDiagnostic {
+  const sourceAnswerIds = record(value) && Array.isArray(value.source_answer_ids)
+    ? value.source_answer_ids.filter((path): path is string => typeof path === "string" && isSafeSourcePath(path)).slice(0, 8)
+    : [];
+  const expectedGroups = buildStructuredBlueprintV4(answers).why_firm_wants_work.claims
+    .filter((claim) => claim.source_answer_ids.some((path) => sourceAnswerIds.includes(path)))
+    .slice(0, 7)
+    .map((claim) => ({
+      sourceAnswerIds: claim.source_answer_ids.filter(isSafeSourcePath).slice(0, 8),
+      kind: claim.kind,
+      evidenceBasis: claim.evidence_basis,
+    }));
+  return {
+    claimIndex: claimIndex + 1,
+    kind: record(value) && typeof value.kind === "string" && KIND.includes(value.kind as typeof KIND[number]) ? value.kind : "invalid",
+    evidenceBasis: record(value) && typeof value.evidence_basis === "string" && BASIS.includes(value.evidence_basis as EvidenceBasis) ? value.evidence_basis : "invalid",
+    sourceAnswerIds,
+    expectedGroups,
+  };
+}
 
 /** A description of uncertainty is still an evidence gap, even when its text
  * is populated. Share this classification with both model input and schema. */
@@ -501,16 +538,20 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   const paymentPaths = new Set(["value.payment", "value.payment_context", "value.payment_context_basis"]);
   const sourceValueCard = sourceBrief.why_firm_wants_work;
   if (record(sourceValueCard) && Array.isArray(sourceValueCard.claims)) {
-    for (const claim of sourceValueCard.claims) {
+    for (const [claimIndex, claim] of sourceValueCard.claims.entries()) {
+      const claimDiagnostic = diagnosticForClaim(claim, claimIndex, answers);
       const hasPaymentSource = record(claim) && Array.isArray(claim.source_answer_ids) &&
         claim.source_answer_ids.some((path) => typeof path === "string" && paymentPaths.has(path));
       // Validate payment meaning, context trace and numeric authenticity before
       // allowing any repairable wording or source-separation path.
-      if (hasPaymentSource && !paymentClaimIsAuthentic(claim, answers)) return reject("why_firm_wants_work", "claim_not_valid");
+      if (hasPaymentSource && !paymentClaimIsAuthentic(claim, answers)) {
+        reportFailure?.({ field: "why_firm_wants_work", reason: "claim_not_valid", claimDiagnostic });
+        return reject("why_firm_wants_work", "claim_not_valid");
+      }
       let failure: { reason: string; sourcePath?: SafeSourcePath } | undefined;
       if (validStatement(claim, answers, "why_firm_wants_work", (reason, sourcePath) => { failure = { reason, ...(sourcePath ? { sourcePath } : {}) }; })) continue;
       if (!hasPaymentSource || !record(claim) || !Array.isArray(claim.source_answer_ids)) {
-        if (failure) reportFailure?.({ field: "why_firm_wants_work", ...failure });
+        if (failure) reportFailure?.({ field: "why_firm_wants_work", ...failure, claimDiagnostic });
         return reject("why_firm_wants_work", "claim_not_valid");
       }
       const repairablePaymentWording = failure?.reason === "payment_source_must_be_isolated" || failure?.reason === "payment_context_claim_mismatch";
@@ -521,7 +562,7 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
       const contextStatusMatches = !claim.source_answer_ids.some((path) => path === "value.payment_context" || path === "value.payment_context_basis") ||
         (!!expectedContext && claim.kind === expectedContext.kind && claim.evidence_basis === expectedContext.evidence_basis);
       if (!repairablePaymentWording || !paymentStatusMatches || !contextStatusMatches) {
-        if (failure) reportFailure?.({ field: "why_firm_wants_work", ...failure });
+        if (failure) reportFailure?.({ field: "why_firm_wants_work", ...failure, claimDiagnostic });
         return reject("why_firm_wants_work", "claim_not_valid");
       }
     }

@@ -60,7 +60,7 @@ function makeClarificationRequest(): InterviewClarificationRequestEnvelope {
 const MODEL_RESULT = validBlueprint();
 const EXPECTED_RESULT = validateAnalysisResult(MODEL_RESULT, B0, []);
 const ORIGINAL_ENV = new Map<string, string | undefined>();
-const ENV_KEYS = ["DESIRED_CLIENT_AI_ENABLED", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"];
+const ENV_KEYS = ["DESIRED_CLIENT_AI_ENABLED", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "VERCEL_ENV"];
 
 function browserHeaders(extra: Record<string, string> = {}): Headers {
   return new Headers({ "content-type": "application/json", origin: "https://app.caseloadselect.ca", "sec-fetch-site": "same-origin", ...extra });
@@ -78,6 +78,7 @@ beforeEach(() => {
   delete process.env.GEMINI_API_KEY;
   process.env.UPSTASH_REDIS_REST_URL = "https://redis.invalid";
   process.env.UPSTASH_REDIS_REST_TOKEN = "test-redis-token";
+  delete process.env.VERCEL_ENV;
   mocks.GoogleGenerativeAI.mockReset().mockImplementation(() => ({ getGenerativeModel: mocks.getGenerativeModel }));
   mocks.getGenerativeModel.mockReset().mockReturnValue({ generateContent: mocks.generateContent });
   mocks.generateContent.mockReset().mockResolvedValue(providerResponse(MODEL_RESULT));
@@ -390,6 +391,80 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     });
     expect(JSON.stringify(warn.mock.calls)).not.toContain(JSON.stringify(ENVELOPE.answers));
     expect(JSON.stringify(warn.mock.calls)).not.toContain(invalid.brief.definition_components.client.text);
+  });
+
+  it("identifies a nonpayment why-firm claim in Preview without exposing text or spending repair calls", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const invalid = structuredClone(MODEL_RESULT);
+    const privateClaim = "private diagnostic claim text sentinel";
+    invalid.brief.why_firm_wants_work.claims[0] = {
+      text: privateClaim,
+      kind: "experience",
+      source_answer_ids: ["practice.experience"],
+      evidence_basis: "client_reported",
+    };
+    const privateAnswer = "private diagnostic answer text sentinel";
+    const request = structuredClone(ENVELOPE);
+    request.answers.client.goal_detail = privateAnswer;
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const response = await POST(makeRequest(JSON.stringify(request)));
+
+    expect(response.status).toBe(502);
+    const body = await response.json();
+    expect(body).toEqual({
+      ok: false,
+      requestId: ENVELOPE.requestId,
+      error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "why_firm_wants_work", reason: "client_reported_basis_mismatch" } },
+    });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+    const log = JSON.parse(warn.mock.calls[0][0] as string);
+    expect(log.repairAttempts).toBe(0);
+    expect(log.firstClaimDiagnostic).toEqual({
+      claimIndex: 1,
+      kind: "experience",
+      evidenceBasis: "client_reported",
+      sourceAnswerIds: ["practice.experience"],
+      expectedGroups: [{ sourceAnswerIds: ["practice.experience", "practice.capability"], kind: "experience", evidenceBasis: "firm_reported_experience" }],
+    });
+    expect(log.finalClaimDiagnostic).toEqual(log.firstClaimDiagnostic);
+    const serializedLog = JSON.stringify(warn.mock.calls);
+    expect(serializedLog).toContain("client_reported_basis_mismatch");
+    expect(serializedLog).not.toContain(privateClaim);
+    expect(serializedLog).not.toContain(privateAnswer);
+    expect(serializedLog).not.toContain(JSON.stringify(request.answers));
+    expect(JSON.stringify(body)).not.toContain(privateClaim);
+    expect(JSON.stringify(body)).not.toContain(privateAnswer);
+  });
+
+  it("keeps basis-mismatch repair behavior unchanged in Production", async () => {
+    process.env.VERCEL_ENV = "production";
+    const invalid = structuredClone(MODEL_RESULT);
+    invalid.brief.why_firm_wants_work.claims[0] = {
+      text: "A private production-only claim sentinel",
+      kind: "experience",
+      source_answer_ids: ["practice.experience"],
+      evidence_basis: "client_reported",
+    };
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid)).mockResolvedValue(providerResponse({ claims: invalid.brief.why_firm_wants_work.claims }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+
+    expect(response.status).toBe(502);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+    const log = JSON.parse(warn.mock.calls[0][0] as string);
+    expect(log).toMatchObject({
+      field: "why_firm_wants_work",
+      reason: "client_reported_basis_mismatch",
+      finalField: "why_firm_wants_work",
+      finalReason: "client_reported_basis_mismatch",
+      repairAttempts: 2,
+    });
+    expect(log).not.toHaveProperty("firstClaimDiagnostic");
+    expect(log).not.toHaveProperty("finalClaimDiagnostic");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("A private production-only claim sentinel");
   });
 
   it("rejects a request without explicit AI consent", async () => {

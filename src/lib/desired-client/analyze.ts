@@ -5,7 +5,7 @@ import {
   buildDesiredClientSystemPrompt,
   buildDesiredClientUserPrompt,
 } from "./prompt";
-import { isSafeSourcePath, validateAnalysisResult, type AnalysisValidationFailure } from "./output";
+import { isSafeSourcePath, validateAnalysisResult, type AnalysisClaimDiagnostic, type AnalysisValidationFailure } from "./output";
 import { safeProviderFailureMetadata } from "./provider-diagnostics";
 import { decodeProviderSources, decodeProviderTargetCard, encodeProviderSources, providerBlueprintSchema, providerSourceAliases, providerTargetClaimIds } from "./provider-schema";
 import type { AnalysisRequestEnvelope, AnalysisResult, ClarificationCode } from "./types";
@@ -29,6 +29,16 @@ function logRejectedOutput(
   repairAttempts = 0,
   finishReason?: string,
 ): void {
+  const previewClaimDiagnostic = (diagnostic: AnalysisClaimDiagnostic | undefined) => {
+    if (process.env.VERCEL_ENV !== "preview" || !diagnostic) return undefined;
+    return {
+      claimIndex: diagnostic.claimIndex,
+      kind: diagnostic.kind,
+      evidenceBasis: diagnostic.evidenceBasis,
+      sourceAnswerIds: diagnostic.sourceAnswerIds,
+      expectedGroups: diagnostic.expectedGroups,
+    };
+  };
   // Keep diagnostics in one message: Vercel's runtime log view drops extra
   // console arguments, which hid the bounded details when passed separately.
   console.warn(JSON.stringify({
@@ -40,6 +50,8 @@ function logRejectedOutput(
     finalField: finalFailure.field.slice(0, 80),
     finalReason: finalFailure.reason.slice(0, 80),
     repairAttempts,
+    ...(previewClaimDiagnostic(failure.claimDiagnostic) ? { firstClaimDiagnostic: previewClaimDiagnostic(failure.claimDiagnostic) } : {}),
+    ...(previewClaimDiagnostic(finalFailure.claimDiagnostic) ? { finalClaimDiagnostic: previewClaimDiagnostic(finalFailure.claimDiagnostic) } : {}),
     ...(finishReason && /^[A-Z_]{1,40}$/.test(finishReason) ? { finishReason } : {}),
     ...(failure.sourcePath && isSafeSourcePath(failure.sourcePath) ? { sourcePath: failure.sourcePath } : {}),
   }));
@@ -95,7 +107,9 @@ export async function runDesiredClientAnalysis(
     let result = validate();
     const firstFailure = validationFailure as AnalysisValidationFailure | null;
     let repairAttempts = 0;
-    for (let attempt = 0; !result && validationFailure && attempt < 2; attempt++) {
+    const stopPreviewBasisMismatch = process.env.VERCEL_ENV === "preview" &&
+      firstFailure?.field === "why_firm_wants_work" && firstFailure.reason === "client_reported_basis_mismatch";
+    for (let attempt = 0; !stopPreviewBasisMismatch && !result && validationFailure && attempt < 2; attempt++) {
       const failure = validationFailure as AnalysisValidationFailure;
       const parts = failure.field.split(".");
       const repairable = REPAIRABLE_CARDS.includes(parts[0]) && parts.length === 1 ||
