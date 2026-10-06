@@ -83,13 +83,21 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   const html = await import("node:fs/promises").then(fs => fs.readFile(path!, "utf8"));
   expect(html).toContain("Desired Client Blueprint");
   expect(html).toContain(REPORT_FOOTNOTE_COPY);
-  expect(html).toContain("8,000");
-  expect(html).toContain("8,500");
-  expect(html).toContain("−C$500.00");
-  expect(html).toContain("−6.25%");
-  expect(html).toContain("Clients told the firm that the first invoice was usually paid on schedule.");
-  expect(html).toContain("2 comparable matters per quarter");
-  expect(html).toContain("An associate must be hired before increasing volume.");
+  const valueCard = html.match(/<section class="card"><h2>Why this work<\/h2>[\s\S]*?<\/section>/)?.[0];
+  expect(valueCard).toBeDefined();
+  expect(valueCard).toContain("8000");
+  expect(valueCard).toContain("8500");
+  expect(valueCard).toContain("C$15,000 to under C$50,000");
+  expect(valueCard).toContain("More than 15, up to 40 hours");
+  expect(valueCard).toContain("Firm-reported records");
+  expect(valueCard).toContain("Client-reported information");
+  expect(valueCard).toContain("−C$500.00");
+  expect(valueCard).toContain("−6.25%");
+  expect(valueCard).toContain("Clients told the firm that the first invoice was usually paid on schedule.");
+  expect(valueCard).toContain("2 comparable matters per quarter");
+  expect(valueCard).toContain("An associate must be hired before increasing volume.");
+  expect(valueCard).toContain("before overhead and acquisition costs");
+  expect(valueCard).toContain("This is not net profit");
   const exportedDefinition = html.match(/<section class="definition"><h2>Client definition<\/h2><p>([\s\S]*?)<\/p><\/section>/)?.[1];
   expect(exportedDefinition).toBeDefined();
   const plainDefinition = exportedDefinition!
