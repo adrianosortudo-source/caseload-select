@@ -55,6 +55,7 @@ export const CANDIDATE_READER_REPAIR_PATHS = Object.freeze([
   "supabase/migrations/20260930225510_prospect_enrichment_apply_refresh_gate.sql",
   "supabase/migrations/20261004120000_prospect_candidate_firm_field_fastpath.sql",
   "supabase/migrations/20261005141204_prospect_candidate_original_status_fastpath.sql",
+  "supabase/migrations/20261006003626_prospect_candidate_scoped_reader_fastpaths.sql",
 ]);
 export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
