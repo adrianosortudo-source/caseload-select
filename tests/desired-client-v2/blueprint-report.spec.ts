@@ -79,6 +79,7 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   const download = await downloadReady;
   expect(download.suggestedFilename()).toMatch(/\.html$/);
   const path = await download.path();
+  await download.saveAs(testInfo.outputPath("blueprint-negative-report.html"));
   const html = await import("node:fs/promises").then(fs => fs.readFile(path!, "utf8"));
   expect(html).toContain("Desired Client Blueprint");
   expect(html).toContain(REPORT_FOOTNOTE_COPY);
