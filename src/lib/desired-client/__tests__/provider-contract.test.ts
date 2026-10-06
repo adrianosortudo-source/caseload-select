@@ -57,6 +57,26 @@ describe("provider output contract", () => {
     expect(basis.description).toContain(Object.keys(aliases).find(id => aliases[id] === "repeatability.additional_matters"));
     expect(basis.description).toContain("proposed targets");
   });
+  it.each([
+    { paymentContextBasis: "client_feedback" as const, expected: "client_reported" },
+    { paymentContextBasis: "firm_observation" as const, expected: "firm_reported_observation" },
+    { paymentContextBasis: null, expected: "unknown" },
+  ])("permits payment context under its selected source: $paymentContextBasis", ({ paymentContextBasis, expected }) => {
+    const answers = completeAnswers();
+    answers.value.payment = "predictable";
+    answers.value.payment_context = "Clients told the firm that the first invoice was usually paid on schedule.";
+    answers.value.payment_context_basis = paymentContextBasis;
+    const schema = providerBlueprintSchema(answers) as ReturnType<typeof providerBlueprintSchema> & {properties:{brief:{properties:{why_firm_wants_work:{properties:{claims:{items:{properties:{source_answer_ids:{items:{enum:string[]}};evidence_basis:{enum:string[];description:string}}}}}}}}}};
+    const aliases = providerSourceAliases(answers);
+    const claim = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties;
+    const allowedPaths = claim.source_answer_ids.items.enum.map(id => aliases[id]);
+    expect(allowedPaths).toContain("value.payment_context");
+    expect(allowedPaths).toContain("value.payment_context_basis");
+    expect(claim.evidence_basis.enum).toContain(expected);
+    expect(claim.evidence_basis.description).toContain("payment_context_basis");
+    expect(claim.evidence_basis.description).toContain("Keep payment and context claims separate when their derived status differs");
+    if (paymentContextBasis === "firm_observation") expect(claim.evidence_basis.enum).not.toContain("client_reported");
+  });
   it("asks the model to format a specific client type as a grammatically complete noun phrase", () => {
     const schema = providerBlueprintSchema(completeAnswers()) as {properties:{brief:{properties:{definition_components:{properties:{client:{properties:{text:{description:string}}}}}}}}};
     const guidance = schema.properties.brief.properties.definition_components.properties.client.properties.text.description;

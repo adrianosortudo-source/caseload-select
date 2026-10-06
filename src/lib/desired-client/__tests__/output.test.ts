@@ -270,6 +270,50 @@ describe("AI Blueprint output contract", () => {
     expect(validateAnalysisResult({brief:excessive,clarification_code:null},answers,[],failure=>failures.push(failure))).toBeNull();
     expect(failures).toContainEqual({field:"why_firm_wants_work",reason:"payment_claim_cannot_fit_without_dropping_other_claims"});
   });
+  it("normalizes a grounded client-feedback payment-context paraphrase without accepting a changed source claim", () => {
+    const answers = completeAnswers();
+    answers.value.payment = "predictable";
+    answers.value.payment_context = "Clients told the firm that the first invoice was usually paid on schedule.";
+    answers.value.payment_context_basis = "client_feedback";
+    const value = validBlueprint(answers);
+    const contextIndex = value.brief.why_firm_wants_work.claims.length;
+    value.brief.why_firm_wants_work.claims.push(evidence(
+      "Clients said the first invoice was generally paid as scheduled.",
+      "client_reported",
+      "value.payment_context",
+      "value.payment_context_basis",
+    ));
+
+    const normalized = validateAnalysisResult(value, answers, []);
+    expect(normalized).not.toBeNull();
+    const context = normalized!.brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("value.payment_context"));
+    expect(context).toMatchObject({
+      text: 'Client feedback reported by the firm: “Clients told the firm that the first invoice was usually paid on schedule.”',
+      evidence_basis: "client_reported",
+      source_answer_ids: ["value.payment_context", "value.payment_context_basis"],
+    });
+    expect(normalized!.brief.why_firm_wants_work.claims.some(claim =>
+      claim.source_answer_ids.includes("value.payment_context") && claim.source_answer_ids.includes("value.payment"),
+    )).toBe(false);
+
+    const wrongBasis = structuredClone(value);
+    wrongBasis.brief.why_firm_wants_work.claims[contextIndex] = evidence(
+      "Clients said the first invoice was generally paid as scheduled.",
+      "firm_reported_observation",
+      "value.payment_context",
+      "value.payment_context_basis",
+    );
+    expect(validateAnalysisResult(wrongBasis, answers, [])).toBeNull();
+
+    const fabricated = structuredClone(value);
+    fabricated.brief.why_firm_wants_work.claims[contextIndex] = evidence(
+      "All clients always paid the first invoice on time.",
+      "client_reported",
+      "value.payment_context",
+      "value.payment_context_basis",
+    );
+    expect(validateAnalysisResult(fabricated, answers, [])).toBeNull();
+  });
   it("preserves optional payment context and recovers a mixed experience claim without duplication", () => {
     const answers = completeAnswers();
     answers.value.payment = "predictable";
