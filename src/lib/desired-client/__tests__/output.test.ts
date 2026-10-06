@@ -6,6 +6,7 @@ import { calculateContribution } from "../economics";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { buildDefinitionSentence } from "../definition";
 import { interviewClarificationSourceFingerprint } from "../types";
+import { validateDraftAnswers } from "../validation";
 describe("AI Blueprint output contract", () => {
   it("joins model fragments without repeating because or capitalizing a mid-sentence article", () => {
     const value = validBlueprint();
@@ -174,6 +175,8 @@ describe("AI Blueprint output contract", () => {
         staffing_constraint: "An associate must be hired before increasing volume.",
       });
       if (route === "new") {
+        answers.practice.experience = "new";
+        answers.practice.direction = "explore_direction";
         answers.interview.clarification_count = 1;
         answers.interview.clarified_stages = [3];
         answers.interview.followups = [{
@@ -196,6 +199,7 @@ describe("AI Blueprint output contract", () => {
       const staffing = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
       expect(staffing?.evidence_basis).toBe("firm_preference");
       if (route === "new") expect(JSON.stringify(brief)).toContain("The team enjoys the strategic work and wants to test repeatable demand.");
+      expect(validateDraftAnswers(answers)).toBe(true);
       expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
     }
   });
@@ -250,6 +254,8 @@ describe("AI Blueprint output contract", () => {
   it("accepts seven firm-value claims but rejects an eighth",()=>{
     const answers=completeAnswers();
     answers.focus.route="new";
+    answers.practice.experience="new";
+    answers.practice.direction="explore_direction";
     answers.value.reasons=["client_benefit","fees","skills"];
     Object.assign(answers.value,{fee_effort:"worthwhile",collected_fee:"15to50",team_hours:"16to40",payment:"predictable",payment_context:"Payment was usually received on schedule.",payment_context_basis:null,currency:"CAD",fee_amount:"8000",direct_cost_amount:"8500",amount_basis:"recorded",amount_scope:"per_matter"});
     answers.practice.experience="regular";
@@ -257,6 +263,7 @@ describe("AI Blueprint output contract", () => {
     Object.assign(answers.repeatability,{target:"2 additional retained matters per quarter",review_period:"quarterly",additional_matters:"2",staffing_constraint:"One associate has room for two more matters."});
     const built=buildStructuredBlueprintV4(answers);
     expect(built.why_firm_wants_work.claims).toHaveLength(7);
+    expect(validateDraftAnswers(answers)).toBe(true);
     expect(validateAnalysisResult({brief:built,clarification_code:null},answers,[])).not.toBeNull();
     const excessive=structuredClone(built);
     excessive.why_firm_wants_work.claims.push(structuredClone(excessive.why_firm_wants_work.claims[0]));
