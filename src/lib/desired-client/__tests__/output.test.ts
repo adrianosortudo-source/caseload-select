@@ -258,7 +258,6 @@ describe("AI Blueprint output contract", () => {
     answers.practice.direction="explore_direction";
     answers.value.reasons=["client_benefit","fees","skills"];
     Object.assign(answers.value,{fee_effort:"worthwhile",collected_fee:"15to50",team_hours:"16to40",payment:"predictable",payment_context:"Payment was usually received on schedule.",payment_context_basis:null,currency:"CAD",fee_amount:"8000",direct_cost_amount:"8500",amount_basis:"recorded",amount_scope:"per_matter"});
-    answers.practice.experience="regular";
     Object.assign(answers.delivery,{capacity:"room"});
     Object.assign(answers.repeatability,{target:"2 additional retained matters per quarter",review_period:"quarterly",additional_matters:"2",staffing_constraint:"One associate has room for two more matters."});
     const built=buildStructuredBlueprintV4(answers);
