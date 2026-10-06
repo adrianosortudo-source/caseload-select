@@ -236,6 +236,16 @@ describe("AI Blueprint output contract", () => {
       expect(validateAnalysisResult(value, answers, [])).toBeNull();
     }
   });
+  it("keeps an explicit unknown payment gap while rejecting an unknown-as-fact claim", () => {
+    const answers = completeAnswers();
+    answers.value.payment = "unknown";
+    const gap = validBlueprint(answers);
+    gap.brief.why_firm_wants_work.claims = [evidence("Payment predictability is unknown.", "unknown", "value.payment")];
+    expect(validateAnalysisResult(gap, answers, [])).not.toBeNull();
+    const asserted = validBlueprint(answers);
+    asserted.brief.why_firm_wants_work.claims = [evidence("Payment is predictable for every client.", "firm_reported_observation", "value.payment")];
+    expect(validateAnalysisResult(asserted, answers, [])).toBeNull();
+  });
   it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
     const value = validBlueprint();

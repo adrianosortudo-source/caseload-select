@@ -87,7 +87,9 @@ function paymentClaimIsAuthentic(value: unknown, answers: DesiredClientAnswers):
   // Keep the payment enum's meaning in every mixed or paraphrased claim.
   if (hasPayment) {
     const phrase = answers.value.payment ? PAYMENT_LANGUAGE[answers.value.payment] : "";
-    if (!phrase || !paymentMeaningIsPresent(text, answers.value.payment)) return false;
+    if (answers.value.payment === "unknown") {
+      if (!/\b(?:unknown|not established|not yet established|basis not specified)\b/iu.test(text)) return false;
+    } else if (!phrase || !paymentMeaningIsPresent(text, answers.value.payment)) return false;
   }
 
   // A context note may be paraphrased, but it must leave a recognizable trace
