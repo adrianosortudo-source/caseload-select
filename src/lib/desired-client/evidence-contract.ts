@@ -207,10 +207,7 @@ export function buildDesiredClientEvidenceGroups(slot: DesiredClientEvidenceSlot
     for (const [name, candidates] of pathSets) {
       const details = candidates.filter(path => allowed.has(path) && !unresolved(path as AnswerReferencePath, answers));
       if (details.length) {
-        const basisPath = "client.pathway_basis";
-        const basis = answers.client.pathway_basis ? pathwayBasis(answers.client.pathway_basis) : "unknown";
-        const paths = [...details, ...(allowed.has(basisPath) ? [basisPath] : [])];
-        add(`client_${name}`, basis, paths);
+        add(`client_${name}`, "hypothesis", details);
       }
     }
   }
