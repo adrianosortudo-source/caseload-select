@@ -288,9 +288,10 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
     :[fragment(text(answers,path))]).filter(Boolean);
   const directionPaths=knownPaths(answers,["practice.direction",...(answers.practice.direction==="other"?["write_ins.aim" as const]:[])]);
   const directionPreference=directionPaths.length?"The firm prefers this selected growth direction: "+facts(answers,directionPaths)+".":"";
-  const firmRationalePaths=unique([...reasonPaths,...directionPaths]);
-  const rationaleText=[reasonPaths.length?"Reasons reported by the firm: "+(reasonLabels.join("; ")||text(answers,"value.reasons"))+".":"",directionPreference].filter(Boolean).join(" ");
+  const firmRationalePaths=reasonPaths;
+  const rationaleText=reasonPaths.length?"Reasons reported by the firm: "+(reasonLabels.join("; ")||text(answers,"value.reasons"))+".":"";
   const firmRationale=firmRationalePaths.length?linked(rationaleText,"firm_preference",firmRationalePaths):unknownClaim("The firm's reasons for wanting more of this work are not yet established.","value.reasons");
+  const directionClaim=directionPaths.length?linked(directionPreference,"firm_preference",directionPaths):null;
   const economicsPaths=knownPaths(answers,["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]);
   const contribution=calculateContribution(answers);
   const economicsText=economicsPaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")+(contribution?`; ${contribution.basis==="firm_reported_estimate"?"estimated":"firm-record-based"} contribution before overhead and acquisition costs: ${contribution.amount} per matter, calculated as collected fee less direct delivery cost`:"");
@@ -327,7 +328,7 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
     ? linked(`Delivery conditions and limits selected by the firm: ${facts(answers,deliveryConditionPaths)}.`,"firm_preference",deliveryConditionPaths)
     : null;
   const firmInterviewClaims=interviewClaims(answers,[3],"Clarification: ");
-  const preferenceClaims=[...(deliveryPreferenceClaim?[deliveryPreferenceClaim]:[]),...(deliveryConditionClaim?[deliveryConditionClaim]:[]),...(developmentNeedsClaim?[developmentNeedsClaim]:[]),...(newToWorkClaim?[newToWorkClaim]:[]),...firmInterviewClaims];
+  const preferenceClaims=[...(directionClaim?[directionClaim]:[]),...(deliveryPreferenceClaim?[deliveryPreferenceClaim]:[]),...(deliveryConditionClaim?[deliveryConditionClaim]:[]),...(developmentNeedsClaim?[developmentNeedsClaim]:[]),...(newToWorkClaim?[newToWorkClaim]:[]),...firmInterviewClaims];
   const preferenceSources=firmRationale.evidence_basis==="firm_preference"&&preferenceClaims.length
     ? [...new Set([...
       firmRationale.source_answer_ids,

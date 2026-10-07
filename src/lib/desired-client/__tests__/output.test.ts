@@ -278,10 +278,21 @@ describe("AI Blueprint output contract", () => {
     "Audited records prove all clients need business acquisition advice.",
     "The firm reports regular experience in business acquisition advice and transaction planning worth $2,000,000.",
     "The firm reports regular experience in business acquisition advice and transaction planning, producing positive profit.",
-  ])("does not sanitize unsupported, negated, audited, numeric or positive-economics wording: %s", text => {
+  ])("replaces generated mixed-evidence wording with fully grounded output: %s", generatedText => {
     const answers = establishedAcquisitionAnswers();
-    const decoded = decodedMixedWhyFirmReport(answers, text) as Parameters<typeof validateAnalysisResult>[0];
-    expect(validateAnalysisResult(decoded, answers, [])).toBeNull();
+    const decoded = decodedMixedWhyFirmReport(answers, generatedText) as Parameters<typeof validateAnalysisResult>[0];
+    const result = validateAnalysisResult(decoded, answers, []);
+    expect(result).not.toBeNull();
+    expect(result?.recoveredSections).toEqual(["why_firm_wants_work"]);
+    expect(result?.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work);
+    const canonicalText = result?.brief.why_firm_wants_work.claims.map(claim => claim.text).join(" ") ?? "";
+    expect(canonicalText).not.toContain(generatedText);
+    const sourceIds = result?.brief.why_firm_wants_work.claims.flatMap(claim => claim.source_answer_ids) ?? [];
+    expect(sourceIds).toEqual(expect.arrayContaining(["practice.capability", "practice.experience", "practice.enjoys", "practice.direction", "value.fee_amount", "value.direct_cost_amount", "value.payment", "value.payment_context", "delivery.capacity", "repeatability.staffing_constraint"]));
+    const experience = result?.brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("practice.experience"));
+    const direction = result?.brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("practice.direction"));
+    expect(experience?.evidence_basis).toBe("firm_reported_experience");
+    expect(direction?.evidence_basis).toBe("firm_preference");
   });
 
   it("rejects a previously current mixed-group selection after its source answer changes", () => {
@@ -365,9 +376,13 @@ describe("AI Blueprint output contract", () => {
     answers.repeatability.staffing_constraint = "An associate must be hired before increasing volume.";
     const brief = buildStructuredBlueprintV4(answers);
     const rationale = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("value.reasons"));
+    const direction = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("practice.direction"));
     const staffing = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
-    expect(rationale?.source_answer_ids.length).toBeGreaterThan(0);
-    expect(rationale?.evidence_basis).toBe("unknown");
+    expect(rationale).toMatchObject({ evidence_basis: "unknown", source_answer_ids: ["value.reasons"] });
+    expect(rationale?.text).toContain("not yet established");
+    expect(direction).toMatchObject({ evidence_basis: "firm_preference", kind: "preference" });
+    expect(direction?.text).toContain("The firm prefers this selected growth direction:");
+    expect(direction?.source_answer_ids).not.toContain("practice.capability");
     expect(staffing).toMatchObject({ evidence_basis: "firm_preference", kind: "preference" });
     expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
   });
