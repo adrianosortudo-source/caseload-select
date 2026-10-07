@@ -223,4 +223,30 @@ describe("structured website intake evidence", () => {
   it("does not weaken unsafe JSON limits for retained unknown channels", async () => {
     await expect(listGtaProspectSupplementalEvidenceForOperator({ rpc: async () => ({ data: [{ ...row, website_intake_channels: JSON.parse('{"__proto__":{"bad":true}}') }], error: null }) })).rejects.toThrow("is invalid");
   });
+  it("reuses the guarded v2 registry projection for the exact v3 applied source while preserving qualification and UUID", async () => {
+    const current={...row,source_record_key:"q50-adillaw-ca",database_firm_id:"de1e6289-836f-487c-9e98-913f88c3db73",firm_id:null,canonical_domain:null,identity_match_state:null,identity_observed_on:null,identity_confidence:null,identity_source:null,qualification_state:"needs_evidence",qualification_criteria:{eligibleAdvertisingTag:false}};
+    const registry=Object.fromEntries(Object.entries({...row,source_record_key:current.source_record_key,identity_source:"stable_identity_registry",qualification_state:"qualified"}).filter(([key])=>key!=="database_firm_id"));
+    const rpc=vi.fn(async (name:string)=>({data:name.endsWith("_v3")?[current]:[registry],error:null}));
+    const result=await listGtaProspectSupplementalEvidenceForOperator({rpc});
+    expect(rpc.mock.calls.map(([name])=>name)).toEqual(["list_gta_prospect_supplemental_evidence_for_operator_v3","list_gta_prospect_supplemental_evidence_for_operator_v2"]);
+    expect(result[0]).toMatchObject({sourceRecordKey:current.source_record_key,databaseFirmId:current.database_firm_id,firmId:row.firm_id,identity:{source:"stable_identity_registry",matchState:"confirmed"},qualification:{state:"needs_evidence",criteria:{eligibleAdvertisingTag:false}}});
+  });
+  it.each(["unresolved","distinct"])("preserves explicit %s identity instead of borrowing a registry fallback", async identity_match_state => {
+    const current={...row,identity_match_state};
+    const rpc=vi.fn(async()=>({data:[current],error:null}));
+    const result=await listGtaProspectSupplementalEvidenceForOperator({rpc});
+    expect(result[0].identity?.matchState).toBe(identity_match_state);
+    expect(rpc).toHaveBeenCalledTimes(1);
+  });
+  it("never joins registry fallback by firm name or another source key", async () => {
+    const current={...row,firm_id:null,canonical_domain:null,identity_match_state:null,identity_observed_on:null,identity_confidence:null,identity_source:null};
+    const other=Object.fromEntries(Object.entries({...row,source_record_key:"q50-other-firm",identity_source:"stable_identity_registry"}).filter(([key])=>key!=="database_firm_id"));
+    const result=await listGtaProspectSupplementalEvidenceForOperator({rpc:async name=>({data:name.endsWith("_v3")?[current]:[other],error:null})});
+    expect(result[0]).toMatchObject({databaseFirmId:row.database_firm_id,firmId:null,identity:null});
+  });
+  it("fails visibly if a needed registry projection is unavailable", async () => {
+    const current={...row,firm_id:null,canonical_domain:null,identity_match_state:null,identity_observed_on:null,identity_confidence:null,identity_source:null};
+    await expect(listGtaProspectSupplementalEvidenceForOperator({rpc:async name=>name.endsWith("_v3")?{data:[current],error:null}:{data:null,error:{message:"unavailable"}}})).rejects.toThrow("registry identity fallback could not be verified");
+  });
+
 });
