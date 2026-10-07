@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   getGenerativeModel: vi.fn(),
   generateContent: vi.fn(),
   checkRateLimit: vi.fn(),
+  reserveDesiredClientProviderCall: vi.fn(),
+  releaseDesiredClientProviderRun: vi.fn(),
+  providerBudget: new Map<string, { revision: number; answerFingerprint: string; used: number; ownerToken: string | null }>(),
   ipFromRequest: vi.fn(() => "203.0.113.42"),
   rateLimitHeaders: vi.fn(() => ({ "Retry-After": "60", "X-RateLimit-Limit": "20" })),
 }));
@@ -19,6 +22,8 @@ vi.mock("@google/generative-ai", async (importOriginal) => {
 });
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: mocks.checkRateLimit,
+  reserveDesiredClientProviderCall: mocks.reserveDesiredClientProviderCall,
+  releaseDesiredClientProviderRun: mocks.releaseDesiredClientProviderRun,
   ipFromRequest: mocks.ipFromRequest,
   rateLimitHeaders: mocks.rateLimitHeaders,
 }));
@@ -94,6 +99,26 @@ beforeEach(() => {
   mocks.getGenerativeModel.mockReset().mockReturnValue({ generateContent: mocks.generateContent });
   mocks.generateContent.mockReset().mockResolvedValue(providerResponse(MODEL_RESULT));
   mocks.checkRateLimit.mockReset().mockResolvedValue({ ok: true, active: true, remaining: 19, reset: Date.now() + 60_000, limit: 20 });
+  mocks.providerBudget.clear();
+  mocks.reserveDesiredClientProviderCall.mockReset().mockImplementation(async (input: { reviewRunId: string; answerRevision: number; expectedCallsUsed: number; limit: number; answerFingerprint: string; ownerToken: string }) => {
+    let run = mocks.providerBudget.get(input.reviewRunId);
+    if (run && (run.revision !== input.answerRevision || run.answerFingerprint !== input.answerFingerprint)) return { status: "stale", callsUsed: run.used };
+    if (!run && input.expectedCallsUsed !== 0) return { status: "sequence_conflict", callsUsed: 0 };
+    if (!run) {
+      run = { revision: input.answerRevision, answerFingerprint: input.answerFingerprint, used: 0, ownerToken: null };
+      mocks.providerBudget.set(input.reviewRunId, run);
+    }
+    if (run.ownerToken && run.ownerToken !== input.ownerToken) return { status: "busy", callsUsed: run.used };
+    run.ownerToken = input.ownerToken;
+    if (run.used >= input.limit) return { status: "exhausted", callsUsed: run.used };
+    if (run.used !== input.expectedCallsUsed) return { status: "sequence_conflict", callsUsed: run.used };
+    run.used += 1;
+    return { status: "reserved", callsUsed: run.used };
+  });
+  mocks.releaseDesiredClientProviderRun.mockReset().mockImplementation(async (runId: string, ownerToken: string) => {
+    const run = mocks.providerBudget.get(runId);
+    if (run?.ownerToken === ownerToken) run.ownerToken = null;
+  });
   mocks.ipFromRequest.mockClear().mockReturnValue("203.0.113.42");
   mocks.rateLimitHeaders.mockClear();
   vi.spyOn(console, "info").mockImplementation(() => undefined);
@@ -107,18 +132,22 @@ afterEach(() => {
 });
 
 describe("GET /api/tools/desired-client-matter/analyze readiness", () => {
-  it("reports only whether live AI is ready and does not cache the result", async () => {
+  it("reports AI readiness and the server generation-call limit without caching", async () => {
     process.env.DESIRED_CLIENT_AI_ENABLED="false";
     const disabled=await GET();
-    expect(await disabled.json()).toEqual({enabled:false});
+    expect(await disabled.json()).toEqual({enabled:false,providerCallLimit:3});
     await expectNoStore(disabled);
     process.env.DESIRED_CLIENT_AI_ENABLED="true";
     const enabled=await GET();
-    expect(await enabled.json()).toEqual({enabled:true});
+    expect(await enabled.json()).toEqual({enabled:true,providerCallLimit:3});
     await expectNoStore(enabled);
+    process.env.VERCEL_ENV="preview";
+    const preview=await GET();
+    expect(await preview.json()).toEqual({enabled:true,providerCallLimit:1});
+    delete process.env.VERCEL_ENV;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
     const incomplete=await GET();
-    expect(await incomplete.json()).toEqual({enabled:false});
+    expect(await incomplete.json()).toEqual({enabled:false,providerCallLimit:3});
     await expectNoStore(incomplete);
   });
 });
@@ -166,6 +195,14 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     await expectNoStore(response);
   });
 
+  it("fails closed without a provider call when the atomic budget store is unavailable", async () => {
+    mocks.reserveDesiredClientProviderCall.mockResolvedValueOnce({ status: "unavailable", callsUsed: 0 });
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: { code: "AI_UNAVAILABLE" }, providerCallsUsed: 0, providerCallLimit: 3 });
+    expect(mocks.generateContent).not.toHaveBeenCalled();
+  });
+
   it("requires the current v3 answer contract and does not accept legacy schema envelopes", async () => {
     const oldEnvelope = { ...ENVELOPE, schemaVersion: 2 };
     const oldAnswers = { ...ENVELOPE, answers: { ...B0, schema_version: "dcm-v2.2" } };
@@ -192,7 +229,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body).toMatchObject({ ok: true, requestId: ENVELOPE.requestId, answerRevision: 1, reviewRunId: ENVELOPE.reviewRunId, result: EXPECTED_RESULT });
+    expect(body).toMatchObject({ ok: true, requestId: ENVELOPE.requestId, answerRevision: 1, reviewRunId: ENVELOPE.reviewRunId, providerCallsUsed: 1, providerCallLimit: 3, result: EXPECTED_RESULT });
     expect(body.result.brief.report_version).toBe("dcm-blueprint-v4");
     expect(body.result.brief.definition_sentence).toContain("The firm wants to attract and serve");
     expect(Object.keys(body.result.brief)).toEqual([
@@ -215,6 +252,67 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(prompt).not.toContain("203.0.113.42");
     expect(prompt).not.toContain("app.caseloadselect.ca");
     await expectNoStore(response);
+  });
+
+  it("allows only one concurrent provider request for a review run", async () => {
+    const [first, duplicate] = await Promise.all([
+      POST(makeRequest(JSON.stringify(ENVELOPE))),
+      POST(makeRequest(JSON.stringify(ENVELOPE))),
+    ]);
+    expect([first.status, duplicate.status].sort()).toEqual([200, 409]);
+    const rejected = first.status === 409 ? await first.json() : await duplicate.json();
+    expect(rejected.error.code).toBe("ANALYSIS_RUN_BUSY");
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("caps primary and repair generations at three for one review run", async () => {
+    const invalid = structuredClone(MODEL_RESULT);
+    invalid.brief.why_firm_wants_work.claims[0].text = "x".repeat(701);
+    mocks.generateContent.mockImplementation(async () => providerResponse(invalid));
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ providerCallsUsed: 3, providerCallLimit: 3 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+
+    const retry = { ...ENVELOPE, requestId: "33333333-3333-4333-8333-333333333333", analysisIndex: 2 as const };
+    const denied = await POST(makeRequest(JSON.stringify(retry)));
+    expect(denied.status).toBe(429);
+    expect(await denied.json()).toMatchObject({ error: { code: "PROVIDER_CALL_LIMIT_REACHED" }, providerCallsUsed: 3, providerCallLimit: 3 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+  });
+
+  it("rejects a repeated sequence index without spending another provider call", async () => {
+    const first = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(first.status).toBe(200);
+    const replay = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, requestId: "33333333-3333-4333-8333-333333333333" })));
+    expect(replay.status).toBe(409);
+    expect(await replay.json()).toMatchObject({ error: { code: "ANALYSIS_RUN_SEQUENCE_CONFLICT" }, providerCallsUsed: 1 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects changed answers on an existing run even when the revision is replayed", async () => {
+    const first = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(first.status).toBe(200);
+    const changedAnswers = structuredClone(B0);
+    changedAnswers.practice.firm_type = "A different Ontario business law firm";
+    const stale = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, requestId: "33333333-3333-4333-8333-333333333333", analysisIndex: 1, answers: changedAnswers })));
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: { code: "ANALYSIS_RUN_STALE" }, providerCallsUsed: 1 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Preview at one total generation call including later retries", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const invalid = structuredClone(MODEL_RESULT);
+    invalid.brief.why_firm_wants_work.claims[0].text = "x".repeat(701);
+    mocks.generateContent.mockImplementation(async () => providerResponse(invalid));
+    const first = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(first.status).toBe(502);
+    expect(await first.json()).toMatchObject({ providerCallsUsed: 1, providerCallLimit: 1 });
+    const retry = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, requestId: "33333333-3333-4333-8333-333333333333", analysisIndex: 1 })));
+    expect(retry.status).toBe(429);
+    expect(await retry.json()).toMatchObject({ error: { code: "PROVIDER_CALL_LIMIT_REACHED" }, providerCallsUsed: 1, providerCallLimit: 1 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
   });
 
   it("normalizes a provider ask and carries its answered history into the next request", async () => {
@@ -312,14 +410,14 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
   it("rejects legacy post-draft clarification codes because v4 follow-ups happen during discovery", async () => {
     const answers = { ...B0, delivery: { ...B0.delivery, capacity: "change" as const } };
     mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CAPACITY_CONFLICT" }));
-    const early = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 1 })));
+    const early = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, reviewRunId: "33333333-3333-4333-8333-333333333333", answers, analysisIndex: 0 })));
     expect(early.status).toBe(502);
     expect((await early.json()).error.code).toBe("INVALID_AI_OUTPUT");
     const earlyPrompt = JSON.parse(mocks.generateContent.mock.calls[0][0] as string);
     expect(earlyPrompt.eligible_codes).toEqual([]);
 
     mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CAPACITY_CONFLICT" }));
-    const final = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 2 })));
+    const final = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, reviewRunId: "44444444-4444-4444-8444-444444444444", answers, analysisIndex: 0 })));
     expect(final.status).toBe(502);
     expect((await final.json()).error.code).toBe("INVALID_AI_OUTPUT");
     const finalPrompt = JSON.parse(mocks.generateContent.mock.calls[1][0] as string);
@@ -343,7 +441,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(response.status).toBe(502);
     const body = await response.json();
-    expect(body).toEqual({ ok: false, requestId: ENVELOPE.requestId, error: { code: "AI_UNAVAILABLE" } });
+    expect(body).toEqual({ ok: false, requestId: ENVELOPE.requestId, error: { code: "AI_UNAVAILABLE" }, providerCallsUsed: 1, providerCallLimit: 3 });
     expect(JSON.stringify(body)).not.toContain("private prompt sentinel");
     await expectNoStore(response);
   });
@@ -367,6 +465,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(failure).toEqual({
       ok: false, requestId: ENVELOPE.requestId,
       error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "why_firm_wants_work", reason: "card_shape" } },
+      providerCallsUsed: 3, providerCallLimit: 3,
     });
     expect(JSON.parse(warn.mock.calls[0][0] as string)).toEqual({
       event: "[desired-client] analysis output rejected",
@@ -436,6 +535,8 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
       ok: false,
       requestId: ENVELOPE.requestId,
       error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "why_firm_wants_work", reason: "evidence_group_selection_invalid" } },
+      providerCallsUsed: 1,
+      providerCallLimit: 1,
     });
     expect(mocks.generateContent).toHaveBeenCalledTimes(1);
     const log = JSON.parse(warn.mock.calls[0][0] as string);

@@ -94,7 +94,7 @@ vi.mock("@google/generative-ai", () => ({ GoogleGenerativeAI: class {
 } }));
 const request = (): AnalysisRequestEnvelope => ({ schemaVersion: 4, operation: "generate", requestId: "11111111-1111-4111-8111-111111111111", answerRevision: 3, reviewRunId: "22222222-2222-4222-8222-222222222222", analysisIndex: 0, aiConsent: true, answers: completeAnswers(), clarifications: [] });
 const runDesiredClientAnalysis = (input: AnalysisRequestEnvelope, eligibleCodes: readonly ClarificationCode[]) =>
-  runAnalysis(input, eligibleCodes);
+  runAnalysis(input, eligibleCodes, 3, async (callsUsed) => ({ status: "reserved", callsUsed: callsUsed + 1 }));
 
 describe("provider output contract", () => {
   beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("GOOGLE_AI_API_KEY", "test-only"); });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { completeAnswers } from "@/lib/desired-client/__tests__/blueprint-helpers";
 import { initialToolState } from "@/lib/desired-client/state";
-import { advanceWithoutClarification, aiAvailabilityFromProbe, clarificationNoticeFor, reserveClarificationRequest, showValidClarificationPrompt } from "../DesiredClientTool";
+import { advanceWithoutClarification, aiAvailabilityFromProbe, clarificationNoticeFor, providerCallLimitFromProbe, providerCallUsageFromResponse, reserveClarificationRequest, showValidClarificationPrompt } from "../DesiredClientTool";
 
 const prompt = {
   outcome: "ask",
@@ -22,6 +22,14 @@ describe("clarification question allowance", () => {
     expect(aiAvailabilityFromProbe(true, { enabled: "false" })).toBeNull();
     expect(aiAvailabilityFromProbe(true, {})).toBeNull();
     expect(aiAvailabilityFromProbe(true, null)).toBeNull();
+  });
+
+  it("accepts only server call limits and usage within the reported limit", () => {
+    expect(providerCallLimitFromProbe({ enabled: true, providerCallLimit: 1 })).toBe(1);
+    expect(providerCallLimitFromProbe({ enabled: true, providerCallLimit: 3 })).toBe(3);
+    expect(providerCallLimitFromProbe({ enabled: true, providerCallLimit: 9 })).toBeNull();
+    expect(providerCallUsageFromResponse({ providerCallsUsed: 1, providerCallLimit: 3 })).toEqual({ providerCallsUsed: 1, providerCallLimit: 3 });
+    expect(providerCallUsageFromResponse({ providerCallsUsed: 2, providerCallLimit: 1 })).toBeNull();
   });
 
   it("counts only a valid prompt that is shown", () => {

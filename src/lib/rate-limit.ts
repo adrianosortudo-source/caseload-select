@@ -269,6 +269,75 @@ function getRedis(bucket: RateLimitBucket): Redis | null {
   }
 }
 
+export type DesiredClientProviderBudgetStatus = "reserved" | "exhausted" | "sequence_conflict" | "stale" | "busy" | "unavailable";
+export interface DesiredClientProviderBudgetResult { status: DesiredClientProviderBudgetStatus; callsUsed: number; }
+
+const DESIRED_CLIENT_PROVIDER_BUDGET_TTL_SECONDS = 86_400;
+const DESIRED_CLIENT_PROVIDER_LOCK_TTL_SECONDS = 60;
+const RESERVE_DESIRED_CLIENT_PROVIDER_CALL = `
+local revision = redis.call("HGET", KEYS[1], "revision")
+local fingerprint = redis.call("HGET", KEYS[1], "answer_fingerprint")
+local used = tonumber(redis.call("HGET", KEYS[1], "used")) or 0
+if revision and (tonumber(revision) ~= tonumber(ARGV[1]) or fingerprint ~= ARGV[4]) then return {0, used, 4} end
+if not revision and tonumber(ARGV[2]) ~= 0 then return {0, 0, 2} end
+local active = redis.call("GET", KEYS[2])
+if active and active ~= ARGV[5] then return {0, used, 5} end
+if not active then
+  local acquired = redis.call("SET", KEYS[2], ARGV[5], "NX", "EX", ARGV[6])
+  if not acquired then return {0, used, 5} end
+end
+if not revision then redis.call("HSET", KEYS[1], "revision", ARGV[1], "answer_fingerprint", ARGV[4], "used", 0) end
+if used >= tonumber(ARGV[3]) then return {0, used, 1} end
+if tonumber(ARGV[2]) ~= used then return {0, used, 2} end
+used = used + 1
+redis.call("HSET", KEYS[1], "used", used)
+redis.call("EXPIRE", KEYS[1], ARGV[7])
+return {1, used, 0}
+`;
+const RELEASE_DESIRED_CLIENT_PROVIDER_LOCK = `
+if redis.call("GET", KEYS[1]) == ARGV[1] then return redis.call("DEL", KEYS[1]) end
+return 0
+`;
+
+/** Atomically reserves one paid generation against the existing Upstash store. */
+export async function reserveDesiredClientProviderCall(input: {
+  reviewRunId: string;
+  answerRevision: number;
+  expectedCallsUsed: number;
+  limit: number;
+  answerFingerprint: string;
+  ownerToken: string;
+}): Promise<DesiredClientProviderBudgetResult> {
+  const redis = getRedis("desiredClientAnalyze");
+  if (!redis) return { status: "unavailable", callsUsed: input.expectedCallsUsed };
+  const keys = [`desired-client:provider-budget:${input.reviewRunId}`, `desired-client:provider-lock:${input.reviewRunId}`];
+  try {
+    const result = await redis.createScript<number[]>(RESERVE_DESIRED_CLIENT_PROVIDER_CALL).eval(keys, [
+      String(input.answerRevision), String(input.expectedCallsUsed), String(input.limit), input.answerFingerprint, input.ownerToken,
+      String(DESIRED_CLIENT_PROVIDER_LOCK_TTL_SECONDS), String(DESIRED_CLIENT_PROVIDER_BUDGET_TTL_SECONDS),
+    ]);
+    const [reserved, callsUsed, code] = result;
+    const status: DesiredClientProviderBudgetStatus = reserved === 1 ? "reserved" :
+      code === 1 ? "exhausted" : code === 2 ? "sequence_conflict" : code === 4 ? "stale" : code === 5 ? "busy" : "unavailable";
+    if (!Number.isSafeInteger(callsUsed) || callsUsed < 0) return { status: "unavailable", callsUsed: input.expectedCallsUsed };
+    return { status, callsUsed };
+  } catch {
+    console.warn("[rate-limit] desired_client_provider_budget outcome=reserve_failed");
+    return { status: "unavailable", callsUsed: input.expectedCallsUsed };
+  }
+}
+
+/** Releases only this request's short-lived in-flight lock; the run counter remains. */
+export async function releaseDesiredClientProviderRun(reviewRunId: string, ownerToken: string): Promise<void> {
+  const redis = getRedis("desiredClientAnalyze");
+  if (!redis) return;
+  try {
+    await redis.createScript<number>(RELEASE_DESIRED_CLIENT_PROVIDER_LOCK).eval([`desired-client:provider-lock:${reviewRunId}`], [ownerToken]);
+  } catch {
+    console.warn("[rate-limit] desired_client_provider_budget outcome=release_failed");
+  }
+}
+
 const _limiters = new Map<RateLimitBucket, Ratelimit>();
 
 function getLimiter(bucket: RateLimitBucket): Ratelimit | null {

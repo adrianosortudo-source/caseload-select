@@ -170,18 +170,18 @@ export function loadDraft(storage: Storage, now = Date.now()): DraftLoadResult {
   return { status: "ready", draft, ...(structuredRefresh ? { migrated: true } : {}) };
 }
 
-export function saveDraft(storage: Storage, answers: DesiredClientAnswers, currentStage: number, savedBrief?: SavedBrief, now = Date.now()): DraftSaveResult {
+export function saveDraft(storage: Storage, answers: DesiredClientAnswers, currentStage: number, savedBrief?: SavedBrief, now = Date.now(), reportNeedsRegeneration = false): DraftSaveResult {
   if (!validateDraftAnswers(answers) || !Number.isInteger(currentStage) || currentStage < 1 || currentStage > 7) return { status: "invalid" };
   let editedAt = now;
   let expiresAt = now + DRAFT_TTL_MS;
-  let reportNeedsRegeneration = false;
+  let needsRegeneration = reportNeedsRegeneration;
   let old: string | null;
   try { old = storage.getItem(DRAFT_STORAGE_KEY); } catch { return { status: "unavailable" }; }
   try {
     if (old) {
       const parsed = JSON.parse(old) as unknown;
       const previous = validateSavedDraft(parsed);
-      if (previous) reportNeedsRegeneration = previous.reportNeedsRegeneration === true;
+      if (previous) needsRegeneration = needsRegeneration || previous.reportNeedsRegeneration === true;
       if (previous && previous.answers.revision === answers.revision) { editedAt = Date.parse(previous.lastEditedAt); expiresAt = Date.parse(previous.expiresAt); }
       else if (["dcm-v3.1", "dcm-v3.2", "dcm-v3.3"].includes(answers.schema_version)) {
         const legacy = legacyTimestampsForSameMigration(parsed, answers);
@@ -191,9 +191,9 @@ export function saveDraft(storage: Storage, answers: DesiredClientAnswers, curre
   } catch { /* continue in memory and report a storage failure below */ }
   const timestamp = new Date(editedAt).toISOString();
   const safeBrief = savedBrief ? restoreSavedBrief(savedBrief, answers) : undefined;
-  if (safeBrief) reportNeedsRegeneration = false;
+  if (safeBrief) needsRegeneration = false;
   const draft: SavedDraft = { schemaVersion: 2, answers, currentStage, lastEditedAt: timestamp,
-    expiresAt: new Date(expiresAt).toISOString(), ...(safeBrief ? { savedBrief: safeBrief } : {}), ...(reportNeedsRegeneration ? { reportNeedsRegeneration: true } : {}) };
+    expiresAt: new Date(expiresAt).toISOString(), ...(safeBrief ? { savedBrief: safeBrief } : {}), ...(needsRegeneration ? { reportNeedsRegeneration: true } : {}) };
   try { storage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft)); return { status: "saved", draft }; } catch { return { status: "unavailable" }; }
 }
 

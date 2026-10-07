@@ -24,7 +24,7 @@ export const STORAGE_COPY = {
   unavailable: "This browser could not save your progress. You can still finish and download your answers.",
   expired: "Your saved draft expired after seven days without changes. Start a new draft to continue.",
   invalid: "Your saved draft could not be restored. Start a new draft to continue.",
-  briefNeedsRefresh: "A previous blueprint could not be reopened after a version update. Your answers are still saved. Create a new blueprint from them, then review it before use.",
+  briefNeedsRefresh: "A previous blueprint is no longer available as a current report. Your answers are still saved. Create a new blueprint from them, then review it before use.",
   resume: "Continue my saved draft",
   new: "Start a new draft",
   clearSaved: "Clear saved draft",
@@ -53,6 +53,9 @@ export const COMMON_COPY = {
   aiUnavailable: "AI could not create the blueprint just now. Your answers are still here. Retry or continue with a clearly labelled structured draft.",
   aiInvalid: "AI did not return a usable blueprint. Your answers are still here. Retry or continue with a clearly labelled structured draft.",
   structuredInvalid: "The structured blueprint could not be assembled from these answers. Your answers are still here. Review the matter details and try again.",
+  providerCallLimitReached: "The server has used the maximum AI generation calls for this review. Your answers and any saved blueprint remain available.",
+  previousBlueprintAvailable: "The saved blueprint and its review status remain available while this new draft is attempted.",
+  providerCallsUsed: (used: number, limit: number) => `Server generation calls used for this review: ${used} of ${limit}.`,
   briefChanged: "Your answers changed. Create the blueprint again so it reflects the updated direction.",
   workChanged: "Your selected work changed. Review the client situation, value, fit, opportunity and repeatability sections again.",
 } as const;

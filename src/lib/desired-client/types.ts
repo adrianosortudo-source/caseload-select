@@ -268,18 +268,22 @@ export function isInterviewClarificationCurrent(answer:InterviewClarificationAns
 export interface InterviewClarificationRequestEnvelope { schemaVersion:4; operation:"clarify"; requestId:string; answerRevision:number; interviewRunId:string; clarificationIndex:0|1|2; stage:InterviewStage; aiConsent:true; answers:DesiredClientAnswers; }
 export type InterviewClarificationPrompt = { outcome:"ask"; id:string; stage:InterviewStage; purpose:InterviewClarificationPurpose; source_answer_ids:AnswerReferencePath[]; question:string; choices:Array<{id:string;label:string}>; reflection:string } | { outcome:"continue"; reason:string };
 export interface InterviewClarificationSuccessEnvelope { ok:true; requestId:string; answerRevision:number; interviewRunId:string; prompt:InterviewClarificationPrompt; }
-export type AnalysisFailureCode = "INVALID_REQUEST" | "ORIGIN_DENIED" | "TOO_LARGE" | "RATE_LIMITED" | "AI_DISABLED" | "AI_UNAVAILABLE" | "INVALID_AI_OUTPUT";
+export type AnalysisFailureCode = "INVALID_REQUEST" | "ORIGIN_DENIED" | "TOO_LARGE" | "RATE_LIMITED" | "AI_DISABLED" | "AI_UNAVAILABLE" | "INVALID_AI_OUTPUT" | "PROVIDER_CALL_LIMIT_REACHED" | "ANALYSIS_RUN_BUSY" | "ANALYSIS_RUN_STALE" | "ANALYSIS_RUN_SEQUENCE_CONFLICT";
 export interface AnalysisSuccessEnvelope {
   ok: true;
   requestId: string;
   answerRevision: number;
   reviewRunId: string;
+  providerCallsUsed: number;
+  providerCallLimit: number;
   result: AnalysisResult;
 }
 export interface AnalysisFailureEnvelope {
   ok: false;
   requestId: string;
   error: { code: AnalysisFailureCode; diagnostic?: { field: string; reason: string } };
+  providerCallsUsed?: number;
+  providerCallLimit?: number;
 }
 export interface SavedBrief {
   brief: SavedBriefContent;

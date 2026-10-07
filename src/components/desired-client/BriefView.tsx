@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { buildBlueprintViewModel, EVIDENCE_BASIS_LABELS, REPORT_EDIT_LINKS } from "@/lib/desired-client/blueprint";
 import { createHtmlDownload, createProfileDownload } from "@/lib/desired-client/export";
-import { REPORT_FOOTNOTE_COPY } from "@/lib/desired-client/copy";
+import { COMMON_COPY, REPORT_FOOTNOTE_COPY, REVIEW_COPY } from "@/lib/desired-client/copy";
 import type { ClarificationCode, DesiredClientAnswers, DesiredClientBrief, DesiredClientBriefV4, SavedBrief } from "@/lib/desired-client/types";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 
@@ -62,6 +62,12 @@ export function BriefView({
   onEdit,
   onAnother,
   onClear,
+  onRetry = () => undefined,
+  analysisLoading = false,
+  analysisError = "",
+  retryAllowed = false,
+  providerCallsUsed = 0,
+  providerCallLimit = 3,
   storageWarning,
 }: {
   saved: SavedBrief;
@@ -72,6 +78,12 @@ export function BriefView({
   onEdit: (stage: 1 | 2 | 3 | 4 | 5 | 6) => void;
   onAnother: () => void;
   onClear: () => void;
+  onRetry?: () => void;
+  analysisLoading?: boolean;
+  analysisError?: "" | "unavailable" | "invalid" | "providerCallLimitReached";
+  retryAllowed?: boolean;
+  providerCallsUsed?: number;
+  providerCallLimit?: number;
   storageWarning: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -123,6 +135,12 @@ export function BriefView({
         : <><p className="dc-eyebrow" data-ui-copy="supporting">CASELOAD SELECT · DESIRED CLIENT &amp; MATTER BLUEPRINT</p><h1 data-ui-copy="heading">{model!.title}</h1><p className="dc-report-meta" data-ui-copy="supporting">{model!.modeLabel} · Created {model!.date}</p><div className="dc-report-status"><strong data-ui-copy="supporting">{model!.status}</strong><span data-ui-copy="supporting">{model!.evidenceStatus}</span></div></>}
     </header>
     {storageWarning && <p className="dc-alert dc-screen-only" data-ui-copy="supporting">This browser could not save your progress. You can still finish and download your blueprint.</p>}
+    {analysisLoading && <p className="dc-alert dc-screen-only" role="status" data-ui-copy="supporting">{COMMON_COPY.previousBlueprintAvailable}</p>}
+    {analysisError === "unavailable" && <p className="dc-alert dc-screen-only" role="alert" data-ui-copy="supporting">{COMMON_COPY.aiUnavailable} {COMMON_COPY.previousBlueprintAvailable}</p>}
+    {analysisError === "invalid" && <p className="dc-alert dc-screen-only" role="alert" data-ui-copy="supporting">{COMMON_COPY.aiInvalid} {COMMON_COPY.previousBlueprintAvailable}</p>}
+    {analysisError === "providerCallLimitReached" && <p className="dc-alert dc-screen-only" role="alert" data-ui-copy="supporting">{COMMON_COPY.providerCallLimitReached}</p>}
+    {(analysisLoading || analysisError) && <p className="dc-report-meta dc-screen-only" role="status" data-ui-copy="supporting">{COMMON_COPY.providerCallsUsed(providerCallsUsed, providerCallLimit)}</p>}
+    {analysisError && retryAllowed && <div className="dc-actions dc-screen-only"><button type="button" className="dc-button dc-button--primary" onClick={onRetry}>{REVIEW_COPY.tryAgain}</button></div>}
     {!legacy && saved.refreshedFrom && <p className="dc-alert dc-report-refresh" role="status" data-ui-component-content="desired-client-report-refresh" data-ui-copy="supporting">{saved.refreshedFrom.mode === "ai" ? "This saved AI blueprint was revalidated from its saved answers" : "This saved structured blueprint was rebuilt from its saved answers"} on {new Date(saved.generatedAt).toLocaleDateString("en-CA")}. {saved.refreshedFrom.mode === "structured" ? "No AI generation was used. " : "No new AI request was made. "}The wording changed during the refresh, so review it again. The earlier version was {saved.refreshedFrom.wordingReviewed ? "marked as reviewed" : "not marked as reviewed"}. {reviewed ? "You have reviewed the refreshed wording." : "Review this refreshed wording before using it in marketing."}</p>}
     {legacy && report ? <>
       <section className="dc-report-definition" data-ui-component-content="desired-client-legacy-definition"><h2 data-ui-copy="supporting">Desired client portrait</h2><p data-ui-copy="body">{report.portrait.text}</p><span className="dc-evidence-label">Original classification: {report.portrait.kind}</span></section>
@@ -219,6 +237,6 @@ export function BriefView({
     </div>
     {!legacy && <div className="dc-actions dc-report-edit-links dc-screen-only" aria-label="Edit blueprint answers">{REPORT_EDIT_LINKS.map(([stage, label]) => <button key={stage} className="dc-button dc-button--secondary" onClick={() => onEdit(stage)}>{label}</button>)}</div>}
     <div className="dc-actions dc-screen-only"><button className="dc-button dc-button--secondary" onClick={() => setConfirm("another")}>Start another</button><button className="dc-button dc-button--secondary" onClick={() => setConfirm("clear")}>Clear draft</button></div>
-    {confirm && <ConfirmationDialog open onClose={() => setConfirm(null)} labelledBy="dc-confirm-title"><h2 id="dc-confirm-title">{confirm === "another" ? "Replace the draft saved in this browser?" : "Clear the draft and blueprint saved in this browser?"}</h2>{confirm === "another" && <p>Download your blueprint first if you want to keep a copy.</p>}<button className="dc-button dc-button--primary" onClick={() => { confirm === "another" ? onAnother() : onClear(); setConfirm(null); }}>{confirm === "another" ? "Replace draft" : "Clear draft"}</button><button className="dc-button dc-button--secondary" onClick={() => setConfirm(null)}>Keep draft</button></ConfirmationDialog>}
+    {confirm && <ConfirmationDialog open onClose={() => setConfirm(null)} labelledBy="dc-confirm-title"><h2 id="dc-confirm-title">{confirm === "another" ? "Replace the draft saved in this browser?" : "Clear the draft and blueprint saved in this browser?"}</h2>{confirm === "another" && <p>Download your blueprint first if you want to keep a copy.</p>}<button className="dc-button dc-button--primary" onClick={() => { if (confirm === "another") onAnother(); else onClear(); setConfirm(null); }}>{confirm === "another" ? "Replace draft" : "Clear draft"}</button><button className="dc-button dc-button--secondary" onClick={() => setConfirm(null)}>Keep draft</button></ConfirmationDialog>}
   </article>;
 }
