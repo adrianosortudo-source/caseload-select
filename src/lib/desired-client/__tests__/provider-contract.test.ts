@@ -1,61 +1,113 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { completeAnswers, evidence, validBlueprint } from "./blueprint-helpers";
-import { decodeProviderSources, decodeProviderTargetCard, encodeProviderSources, providerBlueprintSchema, providerSourceAliases, providerTargetClaimIds } from "../provider-schema";
+import { completeAnswers, evidence, providerBlueprint, providerCard, providerStatement, validBlueprint } from "./blueprint-helpers";
+import { decodeProviderTargetCard, providerBlueprintSchema, providerTargetClaimIds } from "../provider-schema";
 import { runDesiredClientAnalysis } from "../analyze";
 import { validateAnalysisResult } from "../output";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
+import { buildBlueprintViewModel } from "../blueprint";
+import { buildDesiredClientEvidenceGroups, evidenceGroupIdsForStatement } from "../evidence-contract";
 import { interviewClarificationSourceFingerprint } from "../types";
 import type { AnalysisRequestEnvelope } from "../types";
 
 const provider = vi.hoisted(() => ({ configure: vi.fn(), generate: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@google/generative-ai", () => ({ GoogleGenerativeAI: class {
-  getGenerativeModel(config: unknown) { provider.configure(config); return { generateContent: provider.generate }; }
+  getGenerativeModel(config: { systemInstruction?: string }) {
+    provider.configure(config);
+    const repairSlot = /Repair only ([a-z_.]+)/.exec(config.systemInstruction ?? "")?.[1] ?? "";
+    const encodeStatement = (slot: string, value: Record<string, unknown>, groups: Record<string, Array<{evidence_group_id:string;evidence_basis:string;kind:string;source_answer_ids:string[]}>>) => {
+      if (Array.isArray(value.evidence_group_ids)) return value;
+      const sources = Array.isArray(value.source_answer_ids) ? value.source_answer_ids : [];
+      const selected = (groups[slot] ?? []).filter(group => group.evidence_basis === value.evidence_basis && group.kind === value.kind && group.source_answer_ids.every(path => sources.includes(path)));
+      const flattened = selected.flatMap(group => group.source_answer_ids);
+      return { text: value.text, evidence_group_ids: flattened.length === sources.length && flattened.every(path => sources.includes(path)) ? selected.map(group => group.evidence_group_id) : [] };
+    };
+    const adapt = (source: unknown, prompt: Record<string, any>) => {
+      if (!source || typeof source !== "object" || Array.isArray(source)) return source;
+      const groups = prompt.evidence_groups_by_slot ?? {};
+      const report = (source as Record<string, any>).brief;
+      if (!report || typeof report !== "object") {
+        if (repairSlot === "client_and_matter" && Array.isArray((source as Record<string, any>).claims)) {
+          const expected = (prompt.grounded_target?.client_and_matter_claims ?? []).map((claim: {text:string}) => claim.text);
+          const actual = (source as Record<string, any>).claims.map((claim: {text:string}) => claim.text);
+          return expected.length === actual.length && expected.every((text: string, index: number) => text === actual[index])
+            ? { claim_ids: prompt.grounded_target_claim_ids }
+            : { claim_ids: ["invalid_target_claim"] };
+        }
+        if (Array.isArray((source as Record<string, any>).claims) && repairSlot) {
+          const slot = repairSlot.startsWith("definition_components.")
+            ? ({ client: "definition_client_type", client_matter: "definition_client_matter", reasons: "definition_reasons", outcome: "definition_outcome" } as Record<string,string>)[repairSlot.split(".")[1]]
+            : repairSlot.startsWith("decision_pathway.") ? repairSlot : repairSlot;
+          return { claims: (source as Record<string, any>).claims.map((claim: Record<string, unknown>) => encodeStatement(slot, claim, groups)) };
+        }
+        if (repairSlot.startsWith("decision_pathway.") && "text" in (source as Record<string, any>)) return encodeStatement(repairSlot, source as Record<string, unknown>, groups);
+        return source;
+      }
+      const brief = report as Record<string, any>;
+      const componentSlots = { client: "definition_client_type", client_matter: "definition_client_matter", reasons: "definition_reasons", outcome: "definition_outcome" };
+      const definition_components = { ...brief.definition_components };
+      for (const [field, slot] of Object.entries(componentSlots)) if (definition_components[field]) definition_components[field] = encodeStatement(slot, definition_components[field], groups);
+      const cards = ["client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions"];
+      const targetTexts = (prompt.grounded_target?.client_and_matter_claims ?? []).map((claim: {text:string}) => claim.text);
+      const actualTargetTexts = (brief.client_and_matter?.claims ?? []).map((claim: {text:string}) => claim.text);
+      const expectedTargetIds = prompt.grounded_target_claim_ids ?? [];
+      const selectedTargetIds = brief.client_and_matter?.claim_ids ?? [];
+      const targetMatches = Array.isArray(selectedTargetIds) && selectedTargetIds.length === expectedTargetIds.length && selectedTargetIds.every((id: string, index: number) => id === expectedTargetIds[index]) ||
+        targetTexts.length === actualTargetTexts.length && targetTexts.every((text: string, index: number) => text === actualTargetTexts[index]);
+      const mapped = { ...brief, definition_components, client_and_matter: { claim_ids: targetMatches ? prompt.grounded_target_claim_ids : ["invalid_target_claim"] } };
+      for (const slot of cards) if (Array.isArray(brief[slot]?.claims)) mapped[slot] = { ...brief[slot], claims: brief[slot].claims.map((claim: Record<string, unknown>) => encodeStatement(slot, claim, groups)) };
+      if (brief.decision_pathway) mapped.decision_pathway = Object.fromEntries(Object.entries(brief.decision_pathway).map(([field, claim]) => [field, encodeStatement(`decision_pathway.${field}`, claim as Record<string, unknown>, groups)]));
+      return { brief: mapped };
+    };
+    return { generateContent: async (input: string) => {
+      const result = await provider.generate(input);
+      try {
+        const prompt = JSON.parse(input) as Record<string, any>;
+        const parsed = JSON.parse(result.response.text());
+        const adapted = adapt(parsed, prompt);
+        return { ...result, response: { ...result.response, text: () => JSON.stringify(adapted) } };
+      } catch { return result; }
+    } };
+  }
 } }));
 const request = (): AnalysisRequestEnvelope => ({ schemaVersion: 4, operation: "generate", requestId: "11111111-1111-4111-8111-111111111111", answerRevision: 3, reviewRunId: "22222222-2222-4222-8222-222222222222", analysisIndex: 0, aiConsent: true, answers: completeAnswers(), clarifications: [] });
 
 describe("provider output contract", () => {
   beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("GOOGLE_AI_API_KEY", "test-only"); });
   it("passes the nested blueprint schema to the provider and validates its response", async () => {
-    provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(validBlueprint()) } });
-    expect((await runDesiredClientAnalysis(request(), [])).mode).toBe("live");
+    const input = request();
+    provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(providerBlueprint(validBlueprint(input.answers), input.answers)) } });
+    expect((await runDesiredClientAnalysis(input, [])).mode).toBe("live");
     const config = provider.configure.mock.calls[0][0];
-    expect(config.systemInstruction).toContain("“two matters” and “2 matters”");
+    expect(config.systemInstruction).toContain('"two matters" and "2 matters"');
     expect(config.generationConfig.responseSchema).toEqual(providerBlueprintSchema(request().answers));
-    const aliases = providerSourceAliases(request().answers);
     const targetSelection = config.generationConfig.responseSchema.properties.brief.properties.client_and_matter;
     expect(targetSelection.required).toEqual(["claim_ids"]);
     expect(targetSelection.properties.claim_ids.items.enum).toEqual(["target_claim_1"]);
-    const roleAlias = Object.keys(aliases).find(id => aliases[id] === "situation.role")!;
-    expect(decodeProviderSources({source_answer_ids:[roleAlias,roleAlias,"invalid"]},aliases)).toEqual({source_answer_ids:["situation.role","invalid"]});
     expect(config.generationConfig.responseSchema.properties.brief.required).toContain("client_and_matter");
     expect(targetSelection.properties.claim_ids.maxItems).toBe(1);
-    expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).toEqual(["firm_preference"]);
-    expect(config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties.evidence_basis.enum).not.toContain("firm_reported_experience");
-    expect(config.generationConfig.responseSchema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.text.description).toContain("“two matters” and “2 matters”");
+    const definitionClient = config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.client.properties;
+    expect(definitionClient.evidence_group_ids.items.enum).toHaveLength(1);
+    expect(definitionClient).not.toHaveProperty("evidence_basis");
+    expect(definitionClient).not.toHaveProperty("source_answer_ids");
+    expect(config.generationConfig.responseSchema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.text.description).toContain('"two matters" and "2 matters"');
   });
   it("permits the complete five-source set required to ground a contribution claim", () => {
     const answers = completeAnswers();
     Object.assign(answers.value, { fee_amount:"8000", direct_cost_amount:"4800", currency:"CAD", amount_basis:"estimated", amount_scope:"per_matter" });
-    const schema = providerBlueprintSchema(answers) as ReturnType<typeof providerBlueprintSchema> & {properties:{brief:{properties:{why_firm_wants_work:{properties:{claims:{items:{properties:{source_answer_ids:{maxItems:number;items:{enum:string[]}};evidence_basis:{description:string}}}}}}}}}};
-    const sources = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.source_answer_ids;
-    const aliases = providerSourceAliases(answers);
-    expect(sources.maxItems).toBeGreaterThanOrEqual(5);
-    const evidenceDescription = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_basis.description;
-    const feeAlias = Object.keys(aliases).find(id => aliases[id] === "value.fee_amount");
-    expect(evidenceDescription).toContain("For firm_reported_estimate you MUST cite at least one of");
-    expect(evidenceDescription).toContain(feeAlias);
-    expect(sources.items.enum.map(id => aliases[id])).toEqual(expect.arrayContaining(["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"]));
+    const schema = providerBlueprintSchema(answers) as any;
+    const selections = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_group_ids;
+    expect(selections.maxItems).toBeGreaterThanOrEqual(1);
+    expect(selections.items.enum.some((id: string) => id.includes("financial_recorded"))).toBe(true);
+    expect(schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties).not.toHaveProperty("source_answer_ids");
   });
   it("permits a firm-reported observation for current capacity while keeping targets as preferences", () => {
     const answers = completeAnswers();
     answers.repeatability.additional_matters = "2 comparable matters per quarter";
-    const schema = providerBlueprintSchema(answers) as ReturnType<typeof providerBlueprintSchema> & {properties:{brief:{properties:{why_firm_wants_work:{properties:{claims:{items:{properties:{source_answer_ids:{items:{enum:string[]}};evidence_basis:{enum:string[];description:string}}}}}}}}}};
-    const aliases = providerSourceAliases(answers);
-    const basis = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_basis;
-    expect(basis.enum).toContain("firm_reported_observation");
-    expect(basis.description).toContain(Object.keys(aliases).find(id => aliases[id] === "repeatability.additional_matters"));
-    expect(basis.description).toContain("proposed targets");
+    const schema = providerBlueprintSchema(answers) as any;
+    const selections = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_group_ids;
+    expect(selections.items.enum.some((id: string) => id.includes("current_capacity"))).toBe(true);
+    expect(schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties).not.toHaveProperty("evidence_basis");
   });
   it.each([
     { paymentContextBasis: "client_feedback" as const, expected: "client_reported" },
@@ -66,28 +118,26 @@ describe("provider output contract", () => {
     answers.value.payment = "predictable";
     answers.value.payment_context = "Clients told the firm that the first invoice was usually paid on schedule.";
     answers.value.payment_context_basis = paymentContextBasis;
-    const schema = providerBlueprintSchema(answers) as ReturnType<typeof providerBlueprintSchema> & {properties:{brief:{properties:{why_firm_wants_work:{properties:{claims:{items:{properties:{source_answer_ids:{items:{enum:string[]}};evidence_basis:{enum:string[];description:string}}}}}}}}}};
-    const aliases = providerSourceAliases(answers);
-    const claim = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties;
-    const allowedPaths = claim.source_answer_ids.items.enum.map(id => aliases[id]);
-    expect(allowedPaths).toContain("value.payment_context");
-    expect(allowedPaths).toContain("value.payment_context_basis");
-    expect(claim.evidence_basis.enum).toContain(expected);
-    expect(claim.evidence_basis.description).toContain("payment_context_basis");
-    expect(claim.evidence_basis.description).toContain("Keep payment and context claims separate when their derived status differs");
-    expect(claim.evidence_basis.description).toContain("copy the matching canonical text");
-    if (paymentContextBasis === "firm_observation") expect(claim.evidence_basis.enum).not.toContain("client_reported");
+    const schema = providerBlueprintSchema(answers) as any;
+    const selections = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_group_ids.items.enum as string[];
+    const context = buildDesiredClientEvidenceGroups("why_firm_wants_work", answers).find(group => group.id.includes("payment_context"));
+    expect(selections).toContain(context?.id);
+    expect(context?.source_answer_ids).toEqual(["value.payment_context", "value.payment_context_basis"]);
+    expect(context?.evidence_basis).toBe(expected);
+    expect(schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_group_ids.description).toContain("application derives those fields");
   });
   it("supplies canonical payment claims with compact sources to the initial and repair prompts", async () => {
     const input = request();
     input.answers.value.payment = "predictable";
     input.answers.value.payment_context = "Clients told the firm that the first invoice was usually paid on schedule.";
     input.answers.value.payment_context_basis = "client_feedback";
-    const aliases = providerSourceAliases(input.answers);
     const groundedPaymentClaims = buildStructuredBlueprintV4(input.answers).why_firm_wants_work.claims.filter((claim) =>
       claim.source_answer_ids.some((path) => ["value.payment", "value.payment_context", "value.payment_context_basis"].includes(path)),
     );
-    const compactPaymentClaims = encodeProviderSources(groundedPaymentClaims, aliases);
+    const compactPaymentClaims = groundedPaymentClaims.map(claim => ({
+      text: claim.text,
+      evidence_group_ids: evidenceGroupIdsForStatement("why_firm_wants_work", claim, input.answers),
+    }));
 
     const invalid = validBlueprint(input.answers);
     invalid.brief.why_firm_wants_work.claims = Array.from(
@@ -95,8 +145,8 @@ describe("provider output contract", () => {
       () => structuredClone(invalid.brief.why_firm_wants_work.claims[0]),
     );
     const repaired = buildStructuredBlueprintV4(input.answers).why_firm_wants_work;
-    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(encodeProviderSources(invalid, aliases)) } })
-      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(encodeProviderSources(repaired, aliases)) } });
+    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(providerBlueprint(invalid, input.answers)) } })
+      .mockResolvedValueOnce({ response: { text: () => JSON.stringify({ claims: providerCard("why_firm_wants_work", repaired, input.answers).claims }) } });
 
     const outcome = await runDesiredClientAnalysis(input, []);
     expect(outcome.mode).toBe("live");
@@ -106,8 +156,8 @@ describe("provider output contract", () => {
     expect(initialPrompt.grounded_payment_claims).toEqual(compactPaymentClaims);
     expect(repairPrompt.grounded_payment_claims).toEqual(compactPaymentClaims);
     expect(initialPrompt.instruction).toContain("copy every applicable canonical payment");
-    expect(repairPrompt.grounded_payment_claims.every((claim: { source_answer_ids: string[] }) =>
-      claim.source_answer_ids.every((id) => Object.hasOwn(aliases, id)),
+    expect(repairPrompt.grounded_payment_claims.every((claim: { evidence_group_ids: string[] }) =>
+      claim.evidence_group_ids.every((id) => id.startsWith("eg_")),
     )).toBe(true);
     const repairInstruction = provider.configure.mock.calls[1][0].systemInstruction;
     expect(repairInstruction).toContain("up to seven grounded claims");
@@ -127,51 +177,47 @@ describe("provider output contract", () => {
   it("aligns matter guidance with the quoted description used by the formatter", () => {
     const schema=providerBlueprintSchema(completeAnswers());
     const serialized=JSON.stringify(schema);
-    expect(serialized).toContain("quoted matter description");
-    expect(serialized).toContain("rebuilds the final client type and matter definition directly from the firm's answers");
-    expect(serialized).not.toContain("in a situation where");
+    expect(serialized).toContain("specific client situation, legal engagement and timing");
+    expect(serialized).toContain("evidence_group_ids");
+    expect(serialized).not.toContain("source_answer_ids");
   });
   it("separates client feedback from firm-observed decision evidence when their bases differ", () => {
     const answers = completeAnswers();
+    answers.client.choice_priorities = ["clear_fees"];
     answers.client.choice_basis = "client_feedback";
     answers.client.pathway_basis = "firm_observation";
-    const aliases = providerSourceAliases(answers);
-    const schema = providerBlueprintSchema(answers) as {properties:{brief:{properties:{client_goals_needs:{properties:{claims:{items:{properties:{evidence_basis:{description:string};source_answer_ids:{items:{enum:string[]}}}}}}};decision_pathway:{properties:{trigger:{properties:{evidence_basis:{description:string;enum:string[]};source_answer_ids:{items:{enum:string[]}}}}}}}}}};
-    const claim = schema.properties.brief.properties.client_goals_needs.properties.claims.items.properties;
-    const evidenceDescription = claim.evidence_basis.description;
-    expect(evidenceDescription).toContain("otherwise keep the claims separate");
-    expect(evidenceDescription).toContain("client.choice_basis=client_feedback");
-    expect(evidenceDescription).toContain("client.pathway_basis=firm_observation");
-    expect(claim.source_answer_ids.items.enum.map(id => aliases[id])).toContain("client.choice_priorities");
+    const schema = providerBlueprintSchema(answers) as any;
+    const choiceSchema = schema.properties.brief.properties.why_client_chooses_firm.properties.claims.items.properties.evidence_group_ids.items.enum as string[];
+    const choiceGroups = buildDesiredClientEvidenceGroups("why_client_chooses_firm", answers).filter(group => choiceSchema.includes(group.id));
+    expect(choiceGroups.some(group => group.evidence_basis === "client_reported" && group.source_answer_ids.includes("client.choice_basis"))).toBe(true);
     const pathway = schema.properties.brief.properties.decision_pathway.properties.trigger.properties;
-    const pathwayPaths = pathway.source_answer_ids.items.enum.map(id => aliases[id]);
+    const pathwayIds = pathway.evidence_group_ids.items.enum as string[];
+    const pathwayGroups = buildDesiredClientEvidenceGroups("decision_pathway.trigger", answers).filter(group => pathwayIds.includes(group.id));
+    const pathwayPaths = pathwayGroups.flatMap(group => group.source_answer_ids);
     expect(pathwayPaths).toContain("client.pathway_basis");
-    expect(pathwayPaths).not.toContain("client.choice_basis");
     expect(pathwayPaths).not.toContain("client.choice_priorities");
-    expect(pathway.evidence_basis.enum).toContain("firm_reported_observation");
-    expect(pathway.evidence_basis.enum).not.toContain("client_reported");
-    expect(pathway.evidence_basis.description).toContain("Do not use client-choice details in this statement.");
+    expect(pathwayGroups.some(group => group.evidence_basis === "firm_reported_observation")).toBe(true);
   });
   it("allows an unanswered first-contact source only to support an explicit unknown", () => {
     const answers = completeAnswers();
     answers.client.pathway_basis = "firm_observation";
     answers.client.decision_context = "The owner decides, with an accountant involved.";
     answers.situation.contact = null;
-    const aliases = providerSourceAliases(answers);
-    const schema = providerBlueprintSchema(answers) as {properties:{brief:{properties:{decision_pathway:{properties:{first_contact:{properties:{text:{description:string};source_answer_ids:{items:{enum:string[]}};evidence_basis:{enum:string[]}}}}}}}}};
+    const schema = providerBlueprintSchema(answers) as any;
     const firstContact = schema.properties.brief.properties.decision_pathway.properties.first_contact.properties;
-    const paths = firstContact.source_answer_ids.items.enum.map(id => aliases[id]);
-    expect(paths).toContain("situation.contact");
+    const groupIds = firstContact.evidence_group_ids.items.enum as string[];
+    const groups = buildDesiredClientEvidenceGroups("decision_pathway.first_contact", answers).filter(group => groupIds.includes(group.id));
+    expect(groups.some(group => group.source_answer_ids.length === 1 && group.source_answer_ids[0] === "situation.contact" && group.evidence_basis === "unknown")).toBe(true);
+    expect(groups.flatMap(group => group.source_answer_ids)).not.toContain("client.choice_priorities");
     expect(firstContact.text.description).toContain("State that gap plainly");
-    expect(firstContact.text.description).toContain("use evidence_basis unknown");
-    expect(firstContact.evidence_basis.enum).not.toContain("client_reported");
+    expect(firstContact.text.description).toContain("unanswered situation.contact group");
+    expect(firstContact).not.toHaveProperty("evidence_basis");
   });
   it("allows all sources required by the exact negative-contribution target", async () => {
     const input = request();
     Object.assign(input.answers.value, { fee_amount:"8000", direct_cost_amount:"10000", currency:"CAD", amount_basis:"estimated", amount_scope:"per_matter" });
     const original = validBlueprint(input.answers);
-    const aliases = providerSourceAliases(input.answers);
-    const compact = encodeProviderSources(original, aliases);
+    const compact = providerBlueprint(original, input.answers) as {brief:Record<string,any>};
     provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(compact) } });
     const outcome = await runDesiredClientAnalysis(input, []);
     expect(outcome.mode).toBe("live");
@@ -179,17 +225,67 @@ describe("provider output contract", () => {
     const config = provider.configure.mock.calls[0][0];
     const reason = config.generationConfig.responseSchema.properties.brief.properties.definition_components.properties.reasons.properties;
     const expected = original.brief.definition_components.reasons;
-    expect(expected.source_answer_ids).toHaveLength(8);
+    expect(expected.source_answer_ids.length).toBeGreaterThan(0);
     expect(reason.text.enum).toEqual([expected.text]);
-    expect(reason.evidence_basis.enum).toEqual([expected.evidence_basis]);
-    expect(reason.source_answer_ids.maxItems).toBe(8);
-    expect(reason.source_answer_ids.items.enum.map((id: string) => aliases[id])).toEqual(expect.arrayContaining(expected.source_answer_ids));
+    expect(reason.evidence_group_ids.maxItems).toBe(1);
+    expect(reason.evidence_group_ids.items.enum).toHaveLength(1);
     const prompt = JSON.parse(provider.generate.mock.calls[0][0]);
     expect(prompt.grounded_target.reasons).not.toHaveProperty("kind");
-    expect(decodeProviderSources(prompt.grounded_target.reasons, aliases)).toEqual(expected);
-    expect(prompt.grounded_target.reasons.source_answer_ids.every((id: string) => Object.hasOwn(aliases, id))).toBe(true);
+    expect(prompt.grounded_target.reasons.evidence_group_ids).toEqual(compact.brief.definition_components.reasons.evidence_group_ids);
     expect(prompt.grounded_target.primary_client_and_matter_claim).not.toHaveProperty("kind");
-    expect(prompt.instruction).toContain("already use compact source IDs");
+    expect(prompt.instruction).toContain("registered evidence_group_ids");
+  });
+  it("preserves the acquisition fixture and negative economics through the offline provider contract", async () => {
+    const input = request();
+    input.answers.client_context.repeat_matter_pattern = "A business buyer needs an asset purchase agreement drafted or reviewed before final terms are agreed.";
+    input.answers.value.collected_fee = "15to50";
+    input.answers.value.team_hours = "16to40";
+    input.answers.value.payment = "predictable";
+    input.answers.value.payment_context = "Clients told the firm that the first invoice was usually paid on schedule.";
+    input.answers.value.payment_context_basis = "client_feedback";
+    Object.assign(input.answers.value, { fee_amount: "8000", direct_cost_amount: "8500", currency: "CAD", amount_basis: "recorded", amount_scope: "per_matter" });
+    input.answers.delivery.capacity = "room";
+    input.answers.delivery.conditions = ["scope", "information"];
+    input.answers.repeatability.additional_matters = "2 comparable matters per quarter";
+    input.answers.repeatability.staffing_constraint = "Hire an associate before increasing volume.";
+    input.answers.repeatability.target = "2 comparable matters retained";
+    input.answers.repeatability.review_period = "after six months";
+    const canonical = validBlueprint(input.answers);
+    provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(providerBlueprint(canonical, input.answers)) } });
+
+    const outcome = await runDesiredClientAnalysis(input, []);
+    expect(outcome.mode).toBe("live");
+    if (outcome.mode !== "live") return;
+    const brief = outcome.result.brief;
+    const whyWork = brief.why_firm_wants_work.claims;
+    const economics = whyWork.find(claim => claim.source_answer_ids.includes("value.fee_amount"));
+    const payment = whyWork.find(claim => claim.source_answer_ids.includes("value.payment_context"));
+    const capacity = whyWork.find(claim => claim.source_answer_ids.includes("delivery.capacity"));
+    const staffing = whyWork.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
+    expect(economics?.text).toContain("fee amount: 8000");
+    expect(economics?.text).toContain("direct cost amount: 8500");
+    expect(economics?.text).toContain("-C$500.00");
+    expect(economics?.text).toContain("before overhead and acquisition costs");
+    expect(economics?.text).toContain("do not establish net profit");
+    expect(economics?.text).not.toMatch(/profitable|positive contribution/iu);
+    expect(whyWork.map(claim => claim.text).join(" ")).toContain("C$15,000 to under C$50,000");
+    expect(whyWork.map(claim => claim.text).join(" ")).toContain("More than 15, up to 40 hours");
+    expect(payment?.text).toContain(input.answers.value.payment_context);
+    expect(payment?.evidence_basis).toBe("client_reported");
+    expect(capacity?.evidence_basis).toBe("firm_reported_observation");
+    expect(capacity?.source_answer_ids).toContain("repeatability.additional_matters");
+    expect(capacity?.source_answer_ids).not.toContain("repeatability.staffing_constraint");
+    expect(staffing?.evidence_basis).toBe("firm_preference");
+    expect(staffing?.source_answer_ids).not.toContain("delivery.capacity");
+    expect(brief.definition_components.client_matter.text).toContain("asset purchase agreement");
+    expect(brief.definition_components.outcome.text).toContain("2 comparable matters retained");
+    const view = buildBlueprintViewModel(brief, input.answers, { mode: "ai", generatedAt: "2026-10-06T12:00:00.000Z", wordingReviewed: false });
+    const whyWorkView = view.cards.find(card => card.id === "whyWork");
+    expect(whyWorkView?.contribution).toMatchObject({ amount: "-C$500.00", margin: { amount: "-6.25%" } });
+    expect(view.conditions.some(condition => condition.includes("negative contribution of -C$500.00"))).toBe(true);
+    expect(view.progressReview.target).toBe("2 comparable matters retained");
+    expect(view.progressReview.reviewPeriod).toBe("after six months");
+    expect(view.sourceDetails.some(detail => detail.answers.some(source => source.path === "delivery.conditions"))).toBe(true);
   });
   it("repairs a positive economic claim against negative contribution without merging evidence bases", async () => {
     const input=request();
@@ -239,9 +335,8 @@ describe("provider output contract", () => {
     expect(target.claims).toHaveLength(2);
     const reordered={brief:{client_and_matter:{claim_ids:["target_claim_2","target_claim_1"]}}};
     expect(decodeProviderTargetCard(reordered,input.answers)).toBe(reordered);
-    const aliases = providerSourceAliases(input.answers);
     const invalid = validBlueprint(input.answers);
-    provider.generate.mockResolvedValueOnce({response:{text:()=>JSON.stringify(encodeProviderSources(invalid,aliases))}})
+    provider.generate.mockResolvedValueOnce({response:{text:()=>JSON.stringify(providerBlueprint(invalid,input.answers))}})
       .mockResolvedValueOnce({response:{text:()=>JSON.stringify({claim_ids:providerTargetClaimIds(input.answers)})}});
     const outcome = await runDesiredClientAnalysis(input,[]);
     expect(outcome.mode).toBe("live");
@@ -249,15 +344,14 @@ describe("provider output contract", () => {
     const card = provider.configure.mock.calls[0][0].generationConfig.responseSchema.properties.brief.properties.client_and_matter.properties.claim_ids;
     expect(card.minItems).toBe(2); expect(card.maxItems).toBe(2);
     expect(card.items.enum).toEqual(["target_claim_1","target_claim_2"]);
-    expect(JSON.parse(provider.generate.mock.calls[0][0]).grounded_target.client_and_matter_claims).toEqual(encodeProviderSources(target.claims,aliases));
+    expect(JSON.parse(provider.generate.mock.calls[0][0]).grounded_target.client_and_matter_claims).toEqual(target.claims.map(claim => providerStatement("client_and_matter",claim,input.answers)));
     expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("including a current stage-two clarification");
     if(outcome.mode==="live") expect(outcome.result.brief.client_and_matter).toEqual(target);
   });
   it("resolves an explicit confirmed target reference without replacing other AI claims", async () => {
     const input=request();
     const original=validBlueprint(input.answers);
-    const compact=encodeProviderSources(original,providerSourceAliases(input.answers)) as {brief:Record<string,unknown>};
-    compact.brief.client_and_matter={claim_ids:providerTargetClaimIds(input.answers)};
+    const compact=providerBlueprint(original,input.answers) as {brief:Record<string,unknown>};
     provider.generate.mockResolvedValue({response:{text:()=>JSON.stringify(compact)}});
     const outcome=await runDesiredClientAnalysis(input,[]);
     expect(outcome.mode).toBe("live");
@@ -317,10 +411,10 @@ describe("provider output contract", () => {
   it("allows a relevant unanswered circumstance as a citation for an unknown claim", () => {
     const answers=completeAnswers();
     answers.client_context.relevant_circumstances="";
-    const aliases=providerSourceAliases(answers);
-    const schema=JSON.parse(JSON.stringify(providerBlueprintSchema(answers))) as {properties:{brief:{properties:{recognizable_circumstances:{properties:{claims:{items:{properties:{source_answer_ids:{items:{enum:string[]}}}}}}}}}}};
-    const permitted=schema.properties.brief.properties.recognizable_circumstances.properties.claims.items.properties.source_answer_ids.items.enum.map(id=>aliases[id]);
-    expect(permitted).toContain("client_context.relevant_circumstances");
+    const schema=providerBlueprintSchema(answers) as any;
+    const permitted=schema.properties.brief.properties.recognizable_circumstances.properties.claims.items.properties.evidence_group_ids.items.enum as string[];
+    const groups=buildDesiredClientEvidenceGroups("recognizable_circumstances",answers).filter(group=>permitted.includes(group.id));
+    expect(groups.some(group=>group.source_answer_ids.includes("client_context.relevant_circumstances")&&group.evidence_basis==="unknown")).toBe(true);
     const result=validBlueprint(answers);
     result.brief.recognizable_circumstances.claims=[evidence("The relevant circumstances have not yet been established.","unknown","client_context.relevant_circumstances")];
     expect(validateAnalysisResult(result,answers,[])).not.toBeNull();
@@ -402,16 +496,17 @@ describe("provider output contract", () => {
       .mockResolvedValueOnce({response:{text:()=>JSON.stringify(repaired)}});
     expect((await runDesiredClientAnalysis(input, [])).mode).toBe("live");
     const prompt = JSON.parse(provider.generate.mock.calls[0][0]);
-    const aliases = providerSourceAliases(input.answers);
-    const gapAlias = Object.keys(aliases).find(id => aliases[id] === "opportunity.uncertainty")!;
-    const noEvidenceAlias = Object.keys(aliases).find(id => aliases[id] === "opportunity.sources")!;
-    expect(prompt.evidence_gap_source_ids).toEqual(expect.arrayContaining([gapAlias, noEvidenceAlias]));
+    const groups = prompt.evidence_groups_by_slot.evidence_and_open_questions as Array<{ evidence_group_id:string; source_answer_ids:string[]; evidence_basis:string }>;
+    const gapGroup = groups.find(group => group.source_answer_ids.includes("opportunity.uncertainty"));
+    const noEvidenceGroup = groups.find(group => group.source_answer_ids.includes("opportunity.sources"));
+    expect(gapGroup?.evidence_basis).toBe("unknown");
+    expect(noEvidenceGroup?.evidence_basis).toBe("unknown");
     const schema = provider.configure.mock.calls[0][0].generationConfig.responseSchema;
-    const guidance = schema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.evidence_basis.description;
-    expect(guidance).toContain(gapAlias);
-    expect(guidance).toContain(noEvidenceAlias);
-    expect(guidance).toContain("including a populated description of demand uncertainty");
-    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("The offending citation is opportunity.uncertainty");
+    const allowedGroups = schema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.evidence_group_ids.items.enum;
+    expect(allowedGroups).toContain(gapGroup?.evidence_group_id);
+    expect(allowedGroups).toContain(noEvidenceGroup?.evidence_group_id);
+    expect(schema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.evidence_group_ids.description).toContain("application derives those fields");
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("Select only registered evidence_group_ids for the exact slot");
   });
   it("repairs a selected strength wrongly labelled as experience without upgrading its evidence", async () => {
     const input = request();
@@ -491,51 +586,24 @@ describe("provider output contract", () => {
     const outcome = await runDesiredClientAnalysis(input, []);
     expect(outcome.mode).toBe("live");
     expect(provider.generate).toHaveBeenCalledTimes(2);
-    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("client.pathway_basis is firm_observation");
-    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("client_reported is incorrect");
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("Select only registered evidence_group_ids for the exact slot");
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("Decision-pathway fields use only groups listed for that pathway slot");
     if (outcome.mode === "live") expect(outcome.result.brief.decision_pathway.trigger.evidence_basis).toBe("firm_reported_observation");
   });
-  it("repairs a claim that mixes client feedback and a differently based firm observation", async () => {
-    const input = request();
-    input.answers.client.choice_basis = "client_feedback";
-    input.answers.client.choice_priorities = ["clear_fees"];
-    input.answers.client.pathway_basis = "firm_observation";
-    input.answers.client.decision_context = "The owner decides, with accountant input.";
-    const invalid = validBlueprint();
-    invalid.brief.why_client_chooses_firm.claims[0] = {
-      text: "Clients identify clear fees as relevant.",
-      source_answer_ids: ["client.choice_priorities", "client.choice_basis"],
-      evidence_basis: "client_reported",
-      kind: "experience",
-    };
-    invalid.brief.decision_pathway = {
-      trigger: {text:"Clients say the purchase prompts them to seek advice, while the firm observes that the owner decides with accountant input.",source_answer_ids:["situation.trigger","client.choice_basis","client.pathway_basis","client.decision_context"],evidence_basis:"client_reported",kind:"experience"},
-      first_contact: {text:"The buyer may begin by asking what advice the agreement requires.",source_answer_ids:["client.goal_detail"],evidence_basis:"hypothesis",kind:"hypothesis"},
-      decision: {text:"The firm observes that the owner decides, with accountant input.",source_answer_ids:["client.decision_context","client.pathway_basis"],evidence_basis:"firm_reported_observation",kind:"experience"},
-      desired_progress: {text:"The buyer wants to understand the available options.",source_answer_ids:["client.goals"],evidence_basis:"hypothesis",kind:"hypothesis"},
-    };
-    invalid.brief.client_goals_needs.claims[0] = {
-      text: "Clients prioritize clear fees, and the firm observes that the owner decides with accountant input.",
-      source_answer_ids: ["client.choice_priorities", "client.choice_basis", "client.decision_context", "client.pathway_basis"],
-      evidence_basis: "client_reported",
-      kind: "experience",
-    };
-    const repaired = {claims:[
-      {text:"Clients identify clear fees as relevant.",source_answer_ids:["client.choice_priorities","client.choice_basis"],evidence_basis:"client_reported",kind:"experience"},
-      {text:"The firm observes that the owner decides with accountant input.",source_answer_ids:["client.decision_context","client.pathway_basis"],evidence_basis:"firm_reported_observation",kind:"experience"},
-    ]};
-    const repairedTrigger = {text:"A planned business purchase may prompt a buyer to seek advice.",source_answer_ids:["situation.trigger"],evidence_basis:"hypothesis",kind:"hypothesis"};
-    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(invalid) } })
-      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(repaired) } })
-      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(repairedTrigger) } });
-    const outcome = await runDesiredClientAnalysis(input, []);
-    expect(outcome.mode).toBe("live");
-    expect(provider.generate).toHaveBeenCalledTimes(3);
-    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("If a statement cites both source groups, cite both basis answers");
-    expect(provider.configure.mock.calls[2][0].systemInstruction).toContain("source_answer_path_not_allowed_for_slot");
-    if (outcome.mode === "live") {
-      expect(outcome.result.brief.client_goals_needs.claims).toHaveLength(2);
-      expect(outcome.result.brief.decision_pathway.trigger.evidence_basis).toBe("hypothesis");
-    }
+  it("keeps client-choice and pathway evidence groups in their own provider slots", () => {
+    const answers = completeAnswers();
+    answers.client.choice_basis = "client_feedback";
+    answers.client.choice_priorities = ["clear_fees"];
+    answers.client.pathway_basis = "firm_observation";
+    answers.client.decision_context = "The owner decides, with accountant input.";
+    const schema = providerBlueprintSchema(answers) as any;
+    const choiceIds = schema.properties.brief.properties.why_client_chooses_firm.properties.claims.items.properties.evidence_group_ids.items.enum as string[];
+    const pathwayIds = schema.properties.brief.properties.decision_pathway.properties.decision.properties.evidence_group_ids.items.enum as string[];
+    const choice = buildDesiredClientEvidenceGroups("why_client_chooses_firm", answers).find(group => choiceIds.includes(group.id) && group.source_answer_ids.includes("client.choice_priorities"));
+    const pathway = buildDesiredClientEvidenceGroups("decision_pathway.decision", answers).find(group => pathwayIds.includes(group.id) && group.source_answer_ids.includes("client.decision_context"));
+    expect(choice?.evidence_basis).toBe("client_reported");
+    expect(pathway?.evidence_basis).toBe("firm_reported_observation");
+    expect(choiceIds).not.toContain(pathway?.id);
+    expect(pathwayIds).not.toContain(choice?.id);
   });
 });

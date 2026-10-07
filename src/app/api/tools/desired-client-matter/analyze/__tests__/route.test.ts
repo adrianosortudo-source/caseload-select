@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { interviewClarificationSourceFingerprint, type AnalysisRequestEnvelope, type DesiredClientAnswers, type InterviewClarificationAnswer, type InterviewClarificationRequestEnvelope } from "@/lib/desired-client/types";
-import { completeAnswers, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
+import { completeAnswers, providerBlueprint, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResult } from "@/lib/desired-client/output";
+import type { AnalysisResult } from "@/lib/desired-client/types";
 
 const mocks = vi.hoisted(() => ({
   GoogleGenerativeAI: vi.fn(),
@@ -57,7 +58,7 @@ function makeClarificationRequest(): InterviewClarificationRequestEnvelope {
     answers,
   };
 }
-const MODEL_RESULT = validBlueprint();
+const MODEL_RESULT = validBlueprint(B0);
 const EXPECTED_RESULT = validateAnalysisResult(MODEL_RESULT, B0, []);
 const ORIGINAL_ENV = new Map<string, string | undefined>();
 const ENV_KEYS = ["DESIRED_CLIENT_AI_ENABLED", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "VERCEL_ENV"];
@@ -69,7 +70,17 @@ function makeRequest(body: string, extra: Record<string, string> = {}): NextRequ
   return new Request(ROUTE, { method: "POST", headers: browserHeaders(extra), body }) as unknown as NextRequest;
 }
 async function expectNoStore(response: Response) { expect(response.headers.get("cache-control")).toBe("no-store"); }
-function providerResponse(value: unknown) { return { response: { text: () => JSON.stringify(value) } }; }
+function providerResponse(value: unknown, answers: DesiredClientAnswers = B0) {
+  if (value && typeof value === "object" && !Array.isArray(value) && "brief" in value) {
+    const source = value as AnalysisResult;
+    const root = value as Record<string, unknown>;
+    const encoded = providerBlueprint(source, answers) as Record<string, unknown>;
+    if (root.clarification_code !== null && root.clarification_code !== undefined) encoded.clarification_code = root.clarification_code;
+    value = encoded;
+  }
+  return { response: { text: () => JSON.stringify(value) } };
+}
+function rawProviderResponse(value: unknown) { return { response: { text: () => JSON.stringify(value) } }; }
 
 beforeEach(() => {
   for (const key of ENV_KEYS) ORIGINAL_ENV.set(key, process.env[key]);
@@ -347,7 +358,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
 
   it("logs safe rejection details when blueprint validation fails", async () => {
     const invalid = structuredClone(MODEL_RESULT);
-    invalid.brief.client_and_matter.claims[0].text = "x".repeat(701);
+    invalid.brief.why_firm_wants_work.claims[0].text = "x".repeat(701);
     mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
@@ -355,15 +366,15 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const failure = await response.json();
     expect(failure).toEqual({
       ok: false, requestId: ENVELOPE.requestId,
-      error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "client_and_matter", reason: "card_shape" } },
+      error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "why_firm_wants_work", reason: "card_shape" } },
     });
     expect(JSON.parse(warn.mock.calls[0][0] as string)).toEqual({
       event: "[desired-client] analysis output rejected",
       requestId: ENVELOPE.requestId,
       model: "gemini-2.5-flash",
-      field: "client_and_matter",
+      field: "why_firm_wants_work",
       reason: "statement_text_budget_or_format",
-      finalField: "client_and_matter",
+      finalField: "why_firm_wants_work",
       finalReason: "card_shape",
       repairAttempts: 2,
     });
@@ -371,29 +382,35 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(JSON.stringify(failure)).not.toContain("x".repeat(701));
   });
 
-  it("logs a registered disallowed source path without logging answer or model text", async () => {
-    const invalid = structuredClone(MODEL_RESULT);
+  it("does not log provider-supplied answer paths or model text", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const invalid = providerBlueprint(MODEL_RESULT, B0) as any;
+    invalid.brief.definition_components.client.text = "Ontario business owners";
+    invalid.brief.definition_components.client.evidence_group_ids = [];
     invalid.brief.definition_components.client.source_answer_ids = ["practice.firm_type"];
-    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(invalid));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(response.status).toBe(502);
-    expect(JSON.parse(warn.mock.calls[0][0] as string)).toEqual({
+    const log = JSON.parse(warn.mock.calls[0][0] as string);
+    expect(log).toMatchObject({
       event: "[desired-client] analysis output rejected",
       requestId: ENVELOPE.requestId,
       model: "gemini-2.5-flash",
       field: "definition_components.client",
-      reason: "source_answer_path_not_allowed_for_slot",
-      sourcePath: "practice.firm_type",
+      reason: "evidence_group_selection_invalid",
       finalField: "definition_components.client",
-      finalReason: "statement_shape",
-      repairAttempts: 2,
+      finalReason: "evidence_group_selection_invalid",
+      repairAttempts: 0,
     });
+    expect(log).not.toHaveProperty("sourcePath");
+    expect(log.firstClaimDiagnostic).toMatchObject({ slot: "definition_client_type", claimIndex: 1, sourceAnswerIds: [], groupIds: [], expectedGroups: [] });
     expect(JSON.stringify(warn.mock.calls)).not.toContain(JSON.stringify(ENVELOPE.answers));
-    expect(JSON.stringify(warn.mock.calls)).not.toContain(invalid.brief.definition_components.client.text);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("Ontario business owners");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("practice.firm_type");
   });
 
-  it("identifies a nonpayment why-firm claim in Preview without exposing text or spending repair calls", async () => {
+  it("rejects a non-registered why-firm selection in Preview without exposing text or spending repair calls", async () => {
     process.env.VERCEL_ENV = "preview";
     const invalid = structuredClone(MODEL_RESULT);
     const privateClaim = "private diagnostic claim text sentinel";
@@ -416,21 +433,23 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(body).toEqual({
       ok: false,
       requestId: ENVELOPE.requestId,
-      error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "why_firm_wants_work", reason: "client_reported_basis_mismatch" } },
+      error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "why_firm_wants_work", reason: "evidence_group_selection_invalid" } },
     });
     expect(mocks.generateContent).toHaveBeenCalledTimes(1);
     const log = JSON.parse(warn.mock.calls[0][0] as string);
     expect(log.repairAttempts).toBe(0);
     expect(log.firstClaimDiagnostic).toEqual({
       claimIndex: 1,
-      kind: "experience",
-      evidenceBasis: "client_reported",
-      sourceAnswerIds: ["practice.experience"],
-      expectedGroups: [{ sourceAnswerIds: ["practice.experience", "practice.capability"], kind: "experience", evidenceBasis: "firm_reported_experience" }],
+      slot: "why_firm_wants_work",
+      kind: "unknown",
+      evidenceBasis: "unknown",
+      sourceAnswerIds: [],
+      groupIds: [],
+      expectedGroups: [],
     });
     expect(log.finalClaimDiagnostic).toEqual(log.firstClaimDiagnostic);
     const serializedLog = JSON.stringify(warn.mock.calls);
-    expect(serializedLog).toContain("client_reported_basis_mismatch");
+    expect(serializedLog).toContain("evidence_group_selection_invalid");
     expect(serializedLog).not.toContain(privateClaim);
     expect(serializedLog).not.toContain(privateAnswer);
     expect(serializedLog).not.toContain(JSON.stringify(request.answers));
@@ -438,7 +457,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(JSON.stringify(body)).not.toContain(privateAnswer);
   });
 
-  it("keeps basis-mismatch repair behavior unchanged in Production", async () => {
+  it("keeps invalid-group repair behavior unchanged in Production", async () => {
     process.env.VERCEL_ENV = "production";
     const invalid = structuredClone(MODEL_RESULT);
     invalid.brief.why_firm_wants_work.claims[0] = {
@@ -457,9 +476,9 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const log = JSON.parse(warn.mock.calls[0][0] as string);
     expect(log).toMatchObject({
       field: "why_firm_wants_work",
-      reason: "client_reported_basis_mismatch",
+      reason: "evidence_group_selection_invalid",
       finalField: "why_firm_wants_work",
-      finalReason: "client_reported_basis_mismatch",
+      finalReason: "evidence_group_selection_invalid",
       repairAttempts: 2,
     });
     expect(log).not.toHaveProperty("firstClaimDiagnostic");

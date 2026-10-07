@@ -1,6 +1,8 @@
 import { emptyAnswers } from "../brief";
 import { buildDefinitionSentence } from "../definition";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
+import { evidenceGroupIdsForStatement, type DesiredClientEvidenceSlot } from "../evidence-contract";
+import { providerTargetClaimIds } from "../provider-schema";
 import type { AnalysisResult, DesiredClientAnswers, DesiredClientBriefV4, EvidenceBasis, EvidenceLinkedStatement } from "../types";
 export function completeAnswers(): DesiredClientAnswers {
   const a = emptyAnswers(); a.revision = 3;
@@ -19,6 +21,7 @@ export function completeAnswers(): DesiredClientAnswers {
 const kindFor: Record<EvidenceBasis, EvidenceLinkedStatement["kind"]> = { firm_reported_recorded: "experience", firm_reported_estimate: "hypothesis", firm_reported_experience:"experience", firm_reported_observation:"experience", client_reported:"experience", firm_preference: "preference", source_observed: "experience", hypothesis: "hypothesis", unknown: "unknown" };
 export const evidence = (text: string, basis: EvidenceBasis, ...source_answer_ids: EvidenceLinkedStatement["source_answer_ids"]): EvidenceLinkedStatement => ({ text, kind: kindFor[basis], evidence_basis: basis, source_answer_ids });
 export function validBlueprint(answers: DesiredClientAnswers = completeAnswers()): AnalysisResult {
+ const grounded = buildStructuredBlueprintV4(answers);
  const brief: DesiredClientBriefV4 = {
  report_version:"dcm-blueprint-v4", definition_sentence:"",
  definition_components:{
@@ -32,17 +35,46 @@ export function validBlueprint(answers: DesiredClientAnswers = completeAnswers()
  why_client_chooses_firm:{claims:[evidence("Client choice criteria are not yet established.","unknown","client.choice_priorities")]},
  recognizable_circumstances:{claims:[evidence("Scope information is useful for lawyer review.","hypothesis","delivery.fit_signals")]},
  evidence_and_open_questions:{claims:[evidence("Neither demand nor acquisition cost is established.","unknown","opportunity.sources")]},
- decision_pathway:{
- trigger:evidence("The prompting situation has not been observed.","unknown","client.decision_context"),
- first_contact:evidence("The first-contact pattern has not been observed.","unknown","client.decision_context"),
- decision:evidence("Who decides and in what order remains open.","unknown","client.decision_context"),
- desired_progress:evidence("The client's progress is a hypothesis to validate.","hypothesis","client.goals")}
+ decision_pathway: grounded.decision_pathway
  };
- const grounded = buildStructuredBlueprintV4(answers);
  brief.definition_components.client = grounded.definition_components.client;
  brief.definition_components.client_matter = grounded.definition_components.client_matter;
  brief.definition_components.reasons = grounded.definition_components.reasons;
  brief.client_and_matter.claims[0] = grounded.client_and_matter.claims[0];
  brief.definition_sentence=buildDefinitionSentence(brief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
  return {brief,clarification_code:null};
+}
+
+/** Encode a persisted fixture into the provider-only group-ID transport. */
+export function providerBlueprint(result: AnalysisResult, answers: DesiredClientAnswers): unknown {
+ const slot = providerStatement;
+ const source = result.brief;
+ return { brief: {
+  ...source,
+  definition_components: {
+   client: slot("definition_client_type", source.definition_components.client, answers),
+   client_matter: slot("definition_client_matter", source.definition_components.client_matter, answers),
+   reasons: slot("definition_reasons", source.definition_components.reasons, answers),
+   outcome: slot("definition_outcome", source.definition_components.outcome, answers),
+  },
+  client_and_matter: { claim_ids: providerTargetClaimIds(answers) },
+  client_goals_needs: providerCard("client_goals_needs", source.client_goals_needs, answers),
+  why_firm_wants_work: providerCard("why_firm_wants_work", source.why_firm_wants_work, answers),
+  why_client_chooses_firm: providerCard("why_client_chooses_firm", source.why_client_chooses_firm, answers),
+  recognizable_circumstances: providerCard("recognizable_circumstances", source.recognizable_circumstances, answers),
+  evidence_and_open_questions: providerCard("evidence_and_open_questions", source.evidence_and_open_questions, answers),
+  decision_pathway: {
+   trigger: slot("decision_pathway.trigger", source.decision_pathway.trigger, answers),
+   first_contact: slot("decision_pathway.first_contact", source.decision_pathway.first_contact, answers),
+   decision: slot("decision_pathway.decision", source.decision_pathway.decision, answers),
+   desired_progress: slot("decision_pathway.desired_progress", source.decision_pathway.desired_progress, answers),
+  },
+ } };
+}
+
+export function providerStatement(slot: DesiredClientEvidenceSlot, statement: EvidenceLinkedStatement, answers: DesiredClientAnswers) {
+ return { text: statement.text, evidence_group_ids: evidenceGroupIdsForStatement(slot, statement, answers) };
+}
+export function providerCard(slot: DesiredClientEvidenceSlot, card: { claims: EvidenceLinkedStatement[] }, answers: DesiredClientAnswers) {
+ return { claims: card.claims.map(claim => providerStatement(slot, claim, answers)) };
 }
