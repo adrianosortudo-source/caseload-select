@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const sql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006111650_prospect_candidate_global_text_search_scoped.sql"), "utf8");
-const setIdentitySql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006133000_prospect_candidate_global_text_search_set_identity.sql"), "utf8");
-const indexOnlySql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006160000_prospect_candidate_global_text_search_index_only.sql"), "utf8");
-const directScopeSql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006170000_prospect_candidate_global_text_search_direct_scope.sql"), "utf8");
+const sql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006111650_prospect_candidate_global_text_search_scoped.sql"), "utf8").replaceAll("\r\n", "\n");
+const setIdentitySql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006133000_prospect_candidate_global_text_search_set_identity.sql"), "utf8").replaceAll("\r\n", "\n");
+const indexOnlySql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006160000_prospect_candidate_global_text_search_index_only.sql"), "utf8").replaceAll("\r\n", "\n");
+const directScopeSql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006170000_prospect_candidate_global_text_search_direct_scope.sql"), "utf8").replaceAll("\r\n", "\n");
 
 describe("global candidate text search scoping migration", () => {
   it("discovers identity groups from one selective anchor and searches other terms only inside that scope", () => {
