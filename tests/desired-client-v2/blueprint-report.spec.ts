@@ -1,9 +1,8 @@
 import { expect, test } from "@playwright/test";
 import { pathToFileURL } from "node:url";
-import { completeAnswers, providerBlueprint, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
+import { completeAnswers, mixedPaymentProviderBlueprint, negativeEconomicsAnswers, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResult } from "../../src/lib/desired-client/output";
-import { buildDesiredClientEvidenceGroups } from "../../src/lib/desired-client/evidence-contract";
-import { decodeProviderEvidenceGroups, decodeProviderTargetCard } from "../../src/lib/desired-client/provider-schema";
+import { startOfflineAnalysisRoute } from "./offline-analysis-route";
 import { REPORT_EDIT_LINKS } from "../../src/lib/desired-client/blueprint";
 import { REPORT_FOOTNOTE_COPY } from "../../src/lib/desired-client/copy";
 import { STAGE_DEFINITIONS } from "../../src/lib/desired-client/screens";
@@ -35,23 +34,6 @@ Object.assign(answers.repeatability, {
 const result = validateAnalysisResult(validBlueprint(answers), answers, [])!;
 if (!result) throw new Error("The fictional export fixture must satisfy the current report contract before browser assertions run.");
 
-function recoveredProviderResult(sourceAnswers: ReturnType<typeof completeAnswers>) {
-  const encoded = providerBlueprint(validBlueprint(sourceAnswers), sourceAnswers) as { brief: Record<string, unknown> };
-  const groups = buildDesiredClientEvidenceGroups("why_firm_wants_work", sourceAnswers);
-  const sourcePaths = ["practice.capability", "practice.experience", "practice.enjoys"] as const;
-  const evidence_group_ids = sourcePaths.map(path => {
-    const group = groups.find(candidate => candidate.source_answer_ids.includes(path));
-    if (!group) throw new Error(`Missing current firm-value evidence group for ${path}`);
-    return group.id;
-  });
-  encoded.brief.why_firm_wants_work = {
-    claims: [{ text: "The firm reports regular experience in business acquisition advice and transaction planning.", evidence_group_ids }],
-  };
-  const decoded = decodeProviderEvidenceGroups(decodeProviderTargetCard(encoded, sourceAnswers), sourceAnswers);
-  const recovered = validateAnalysisResult(decoded, sourceAnswers, []);
-  if (!recovered?.recoveredSections?.includes("why_firm_wants_work")) throw new Error("The mixed evidence fixture did not exercise application recovery.");
-  return recovered;
-}
 
 test("a reviewed six-section draft becomes a synthesized blueprint and HTML report", async ({ page }, testInfo) => {
   let analysisCalls = 0;
@@ -215,81 +197,116 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   }
 });
 
-test("a recovered firm-value section survives save, reopen, HTML export and print", async ({ page }, testInfo) => {
-  const savedAnswers = structuredClone(answers);
-  Object.assign(savedAnswers.delivery, { conditions: ["scope", "information"] });
-  const recoveredResult = recoveredProviderResult(savedAnswers);
-  let analysisPosts = 0;
-  await page.addInitScript(({ key, savedAnswers: initialAnswers }) => {
-    if (localStorage.getItem(key) !== null) return;
-    const now = Date.now();
-    localStorage.setItem(key, JSON.stringify({
-      schemaVersion: 2,
-      answers: initialAnswers,
-      currentStage: 7,
-      lastEditedAt: new Date(now).toISOString(),
-      expiresAt: new Date(now + 7 * 86400000).toISOString(),
-    }));
-  }, { key: storageKey, savedAnswers });
-  await page.route(route, async requestRoute => {
-    if (requestRoute.request().method() === "GET") {
-      await requestRoute.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: true, providerCallLimit: 3 }) });
-      return;
-    }
-    analysisPosts += 1;
-    const request = requestRoute.request().postDataJSON();
-    await requestRoute.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        ok: true,
-        requestId: request.requestId,
-        answerRevision: request.answerRevision,
-        reviewRunId: request.reviewRunId,
-        providerCallsUsed: 1,
-        providerCallLimit: 3,
-        result: recoveredResult,
-      }),
+test("the actual offline analysis HTTP route recovers mixed payment and survives save, reopen, HTML export and print", async ({ page }, testInfo) => {
+  const savedAnswers = negativeEconomicsAnswers();
+  const offline = await startOfflineAnalysisRoute(mixedPaymentProviderBlueprint(savedAnswers), testInfo.outputDir);
+  try {
+    let analysisPosts = 0;
+    await page.addInitScript(({ key, savedAnswers: initialAnswers }) => {
+      if (localStorage.getItem(key) !== null) return;
+      const now = Date.now();
+      localStorage.setItem(key, JSON.stringify({
+        schemaVersion: 2,
+        answers: initialAnswers,
+        currentStage: 7,
+        lastEditedAt: new Date(now).toISOString(),
+        expiresAt: new Date(now + 7 * 86400000).toISOString(),
+      }));
+    }, { key: storageKey, savedAnswers });
+    await page.route(route, async requestRoute => {
+      if (requestRoute.request().method() === "POST") analysisPosts += 1;
+      const response = await requestRoute.fetch({ url: offline.url });
+      expect(response.status()).toBe(200);
+      if (requestRoute.request().method() === "POST") {
+        const body = await response.json();
+        expect(body.result.recoveredSections).toEqual(["why_firm_wants_work"]);
+        expect(body.providerCallsUsed).toBe(1);
+        expect(body.result.brief.why_firm_wants_work.claims).toHaveLength(6);
+        await testInfo.attach("actual-offline-http-response", { body: await response.body(), contentType: "application/json" });
+      }
+      await requestRoute.fulfill({ response });
     });
-  });
 
-  await page.setViewportSize({ width: 1280, height: 1000 });
-  await page.goto("/tools/desired-client-matter");
-  await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
-  await page.getByRole("button", { name: "Create my Desired Client Blueprint", exact: true }).click();
-  const recovery = page.locator('[data-ui-component-content="desired-client-recovery-disclosure"]');
-  await expect(recovery).toContainText("Built from your answers");
-  await expect(recovery).toContainText("This section was rebuilt from your answers because the AI combined different evidence types.");
-  await expect(page.locator(".dc-report-meta")).toContainText("AI-assisted draft with a structured recovery");
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.goto("/tools/desired-client-matter");
+    await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
+    await page.getByRole("button", { name: "Create my Desired Client Blueprint", exact: true }).click();
+    const recovery = page.locator('[data-ui-component-content="desired-client-recovery-disclosure"]');
+    await expect(recovery).toContainText("Built from your answers");
+    await expect(recovery).toContainText("This section was rebuilt from your answers because the AI combined different evidence types.");
+    await expect(page.locator(".dc-report-meta")).toContainText("AI-assisted draft with a structured recovery");
 
-  const persisted = await page.evaluate(key => JSON.parse(localStorage.getItem(key) ?? "null"), storageKey) as { savedBrief?: { recoveredSections?: string[] } } | null;
-  expect(persisted?.savedBrief?.recoveredSections).toEqual(["why_firm_wants_work"]);
-  expect(analysisPosts).toBe(1);
-  await page.reload();
-  const reloadedDraft = await page.evaluate(key => JSON.parse(localStorage.getItem(key) ?? "null"), storageKey) as unknown;
-  const persistedCheck = validateSavedDraft(reloadedDraft);
-  expect(persistedCheck?.savedBrief).toBeDefined();
-  expect(persistedCheck?.savedBrief?.recoveredSections).toEqual(["why_firm_wants_work"]);
-  await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
-  await expect(page.locator('[data-ui-component-content="desired-client-recovery-disclosure"]')).toBeVisible();
+    for (const width of [1440, 1024, 768, 640, 375, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.evaluate(() => document.fonts.ready);
+      const failures = await recovery.evaluate(box => {
+        const issues: string[] = [];
+        const bounds = box.getBoundingClientRect();
+        const style = getComputedStyle(box);
+        const left = bounds.left + parseFloat(style.paddingLeft) + parseFloat(style.borderLeftWidth);
+        const right = bounds.right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth);
+        for (const copy of Array.from(box.querySelectorAll<HTMLElement>("[data-ui-copy]"))) {
+          const rect = copy.getBoundingClientRect();
+          if (Math.abs(rect.left - left) > 1 || Math.abs(rect.right - right) > 1) issues.push("copy width");
+          const lines: Array<{ top: number; left: number; right: number; words: number; firstWidth: number }> = [];
+          const walker = document.createTreeWalker(copy, NodeFilter.SHOW_TEXT);
+          let node: Node | null;
+          while ((node = walker.nextNode())) for (const word of (node.textContent ?? "").matchAll(/\S+/g)) {
+            const range = document.createRange();
+            range.setStart(node, word.index!); range.setEnd(node, word.index! + word[0].length);
+            const wordRect = range.getBoundingClientRect();
+            if (!wordRect.width || !wordRect.height) continue;
+            const line = lines.find(item => Math.abs(item.top - wordRect.top) < 1.5);
+            if (line) { line.words++; line.left = Math.min(line.left, wordRect.left); line.right = Math.max(line.right, wordRect.right); }
+            else lines.push({ top: wordRect.top, left: wordRect.left, right: wordRect.right, words: 1, firstWidth: wordRect.width });
+          }
+          lines.sort((a, b) => a.top - b.top);
+          if (lines.length > 1 && lines.at(-1)?.words === 1) issues.push("single-word final line");
+          for (let index = 0; index < lines.length - 1; index++) {
+            const line = lines[index];
+            if ((line.right - line.left) / (right - left) < 0.75 && right - line.right > lines[index + 1].firstWidth + 5) issues.push("avoidable short nonfinal line");
+          }
+        }
+        return issues;
+      });
+      expect(failures, "recovery disclosure layout at " + width).toEqual([]);
+      if (width === 1440 || width === 320) {
+        await page.screenshot({ path: testInfo.outputPath("recovery-disclosure-" + width + ".png"), fullPage: true });
+        await recovery.screenshot({ path: testInfo.outputPath("recovery-notice-" + width + ".png") });
+      }
+    }
 
-  const downloadReady = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download HTML report", exact: true }).click();
-  const download = await downloadReady;
-  const reportPath = testInfo.outputPath("recovered-section-report.html");
-  await download.saveAs(reportPath);
-  const exported = await import("node:fs/promises").then(fs => fs.readFile(reportPath, "utf8"));
-  expect(exported).toContain("Built from your answers");
-  expect(exported).toContain("This section was rebuilt from your answers because the AI combined different evidence types.");
+    const persisted = await page.evaluate(key => JSON.parse(localStorage.getItem(key) ?? "null"), storageKey) as { savedBrief?: { recoveredSections?: string[] } } | null;
+    expect(persisted?.savedBrief?.recoveredSections).toEqual(["why_firm_wants_work"]);
+    expect(analysisPosts).toBe(1);
+    await page.reload();
+    const reloadedDraft = await page.evaluate(key => JSON.parse(localStorage.getItem(key) ?? "null"), storageKey) as unknown;
+    const persistedCheck = validateSavedDraft(reloadedDraft);
+    expect(persistedCheck?.savedBrief).toBeDefined();
+    expect(persistedCheck?.savedBrief?.recoveredSections).toEqual(["why_firm_wants_work"]);
+    await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
+    await expect(page.locator('[data-ui-component-content="desired-client-recovery-disclosure"]')).toBeVisible();
 
-  const printPage = await page.context().newPage();
-  await printPage.goto(pathToFileURL(reportPath).href);
-  const exportedNotice = printPage.locator(".recovery-disclosure");
-  await expect(exportedNotice).toBeVisible();
-  await printPage.emulateMedia({ media: "print" });
-  await expect(exportedNotice).toBeVisible();
-  const printPdf = await printPage.pdf({ path: testInfo.outputPath("recovered-section-report.pdf"), printBackground: true });
-  expect(printPdf.byteLength).toBeGreaterThan(0);
-  await printPage.close();
-  expect(analysisPosts).toBe(1);
+    const downloadReady = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download HTML report", exact: true }).click();
+    const download = await downloadReady;
+    const reportPath = testInfo.outputPath("recovered-section-report.html");
+    await download.saveAs(reportPath);
+    const exported = await import("node:fs/promises").then(fs => fs.readFile(reportPath, "utf8"));
+    for (const fact of ["8000", "8500", "−C$500.00", "per matter", "recorded", "first invoice", "2 comparable matters per quarter", "An associate must be hired before increasing volume", "2 additional retained matters per quarter", "6 months"]) expect(exported).toContain(fact);
+    expect(exported).toContain("Built from your answers");
+    expect(exported).toContain("This section was rebuilt from your answers because the AI combined different evidence types.");
+
+    const printPage = await page.context().newPage();
+    await printPage.goto(pathToFileURL(reportPath).href);
+    const exportedNotice = printPage.locator(".recovery-disclosure");
+    await expect(exportedNotice).toBeVisible();
+    await printPage.emulateMedia({ media: "print" });
+    await expect(exportedNotice).toBeVisible();
+    const printPdf = await printPage.pdf({ path: testInfo.outputPath("recovered-section-report.pdf"), printBackground: true });
+    expect(printPdf.byteLength).toBeGreaterThan(0);
+    await printPage.close();
+    expect(analysisPosts).toBe(1);
+    expect(offline.providerCalls()).toBe(1);
+  } finally { await offline.close(); }
 });

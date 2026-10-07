@@ -320,11 +320,22 @@ export function safeEvidenceDiagnostic(slot: DesiredClientEvidenceSlot, value: u
   const sourceAnswerIds = rawPaths.filter((path): path is string => typeof path === "string" && paths.includes(path)).slice(0, 8);
   const expectedGroups = groups.filter(group => groupIds.includes(group.id) || group.source_answer_ids.some(path => sourceAnswerIds.includes(path)))
     .slice(0, 8).map(group => ({ id: group.id, kind: group.kind, evidenceBasis: group.evidence_basis, sourceAnswerIds: [...group.source_answer_ids] }));
+  const rawIds = Array.isArray(selection?.rawGroupIds) ? selection.rawGroupIds : null;
+  const uniqueIds = rawIds ? [...new Set(rawIds)] : null;
+  const resolvedIdCount = rawIds?.filter(id => typeof id === "string" && groups.some(group => group.id === id)).length ?? null;
   const validKinds = ["experience", "preference", "hypothesis", "unknown", "suggestion"];
   const validBases: EvidenceBasis[] = ["firm_reported_recorded", "firm_reported_estimate", "firm_reported_experience", "firm_reported_observation", "client_reported", "firm_preference", "source_observed", "hypothesis", "unknown"];
   return {
     slot,
-    claimIndex: Math.min(7, Math.max(1, claimIndex + 1)),
+    claimIndex: Math.min(32, Math.max(1, claimIndex + 1)),
+    claimIndexCapped: claimIndex >= 32,
+    selectionMetadataPresent: !!selection,
+    selectionShapeValid: selection?.validShape ?? false,
+    selectionFailure: selection?.failure ?? null,
+    rawGroupIdCount: rawIds === null ? null : Math.min(rawIds.length, 32),
+    uniqueGroupIdCount: uniqueIds === null ? null : Math.min(uniqueIds.length, 32),
+    resolvedGroupIdCount: resolvedIdCount === null ? null : Math.min(resolvedIdCount, 32),
+    groupIdCountsCapped: (rawIds?.length ?? 0) > 32,
     kind: typeof object.kind === "string" && validKinds.includes(object.kind) ? object.kind : "invalid",
     evidenceBasis: typeof object.evidence_basis === "string" && validBases.includes(object.evidence_basis as EvidenceBasis) ? object.evidence_basis : "invalid",
     sourceAnswerIds,

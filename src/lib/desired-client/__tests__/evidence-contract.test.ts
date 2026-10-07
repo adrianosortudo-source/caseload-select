@@ -253,6 +253,6 @@ describe("Desired Client evidence-group contract", () => {
     expect(diagnostic.sourceAnswerIds).not.toContain("private.answer.path");
     expect(JSON.stringify(diagnostic)).not.toContain("PRIVATE RAW CLAIM");
     expect(JSON.stringify(diagnostic)).not.toContain("private.answer.path");
-    expect(Object.keys(diagnostic).sort()).toEqual(["claimIndex", "evidenceBasis", "expectedGroups", "groupIds", "kind", "slot", "sourceAnswerIds"].sort());
+    expect(Object.keys(diagnostic).sort()).toEqual(["claimIndex", "claimIndexCapped", "evidenceBasis", "expectedGroups", "groupIdCountsCapped", "groupIds", "kind", "rawGroupIdCount", "resolvedGroupIdCount", "selectionFailure", "selectionMetadataPresent", "selectionShapeValid", "slot", "sourceAnswerIds", "uniqueGroupIdCount"].sort());
   });
 });

@@ -422,7 +422,7 @@ describe("AI Blueprint output contract", () => {
     excessive.why_firm_wants_work.claims.push(structuredClone(excessive.why_firm_wants_work.claims[0]));
     const failures: Array<{field:string;reason:string}> = [];
     expect(validateAnalysisResult({brief:excessive,clarification_code:null},answers,[],failure=>failures.push(failure))).toBeNull();
-    expect(failures).toContainEqual({field:"why_firm_wants_work",reason:"payment_claim_cannot_fit_without_dropping_other_claims"});
+    expect(failures).toContainEqual(expect.objectContaining({field:"why_firm_wants_work",reason:"payment_claim_cannot_fit_without_dropping_other_claims"}));
   });
   it("normalizes a grounded client-feedback payment-context paraphrase without accepting a changed source claim", () => {
     const answers = completeAnswers();

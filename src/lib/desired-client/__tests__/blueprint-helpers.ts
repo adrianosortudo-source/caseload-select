@@ -1,3 +1,4 @@
+import { validateAnalysisResult } from "../output";
 import { emptyAnswers } from "../brief";
 import { buildDefinitionSentence } from "../definition";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
@@ -87,4 +88,35 @@ export function providerStatement(slot: DesiredClientEvidenceSlot, statement: Ev
 }
 export function providerCard(slot: DesiredClientEvidenceSlot, card: { claims: EvidenceLinkedStatement[] }, answers: DesiredClientAnswers) {
  return { claims: card.claims.map(claim => providerStatement(slot, claim, answers)) };
+}
+
+/** Complete synthetic acquisition fixture from the exact-86 reproduction packet. */
+export function negativeEconomicsAnswers(): DesiredClientAnswers {
+ const answers = completeAnswers();
+ Object.assign(answers.value, {
+  fee_amount: "8000", direct_cost_amount: "8500", currency: "CAD", amount_basis: "recorded", amount_scope: "per_matter",
+  collected_fee: "15to50", team_hours: "16to40", payment: "predictable",
+  payment_context: "Clients told the firm that the first invoice was usually paid on schedule.", payment_context_basis: "client_feedback",
+ });
+ Object.assign(answers.repeatability, {
+  success_measure: "retained_matters", target: "2 additional retained matters per quarter", review_period: "6 months",
+  additional_matters: "2 comparable matters per quarter", staffing_constraint: "An associate must be hired before increasing volume.",
+ });
+ return answers;
+}
+
+export function mixedPaymentProviderBlueprint(answers: DesiredClientAnswers, paraphrase = true) {
+ const result = validateAnalysisResult(validBlueprint(answers), answers, [])!;
+ const encoded = providerBlueprint(result, answers) as { brief: { why_firm_wants_work: { claims: Array<{ text: string; evidence_group_ids: string[] }> } } };
+ const claims = encoded.brief.why_firm_wants_work.claims;
+ const payment = result.brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("value.payment"))!;
+ const context = result.brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("value.payment_context"))!;
+ const paymentIds = evidenceGroupIdsForStatement("why_firm_wants_work", payment, answers);
+ const contextIds = evidenceGroupIdsForStatement("why_firm_wants_work", context, answers);
+ if (paraphrase) claims.find(claim => claim.evidence_group_ids.includes(contextIds[0]))!.text = "Clients reported that their first invoice was usually paid on schedule.";
+ claims.push({
+  text: "The firm reports that payment is usually predictable. Clients told the firm that the first invoice was usually paid on schedule.",
+  evidence_group_ids: [...paymentIds, ...contextIds],
+ });
+ return encoded;
 }

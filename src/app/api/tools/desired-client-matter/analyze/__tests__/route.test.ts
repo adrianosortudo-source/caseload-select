@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { interviewClarificationSourceFingerprint, type AnalysisRequestEnvelope, type DesiredClientAnswers, type InterviewClarificationAnswer, type InterviewClarificationRequestEnvelope } from "@/lib/desired-client/types";
-import { completeAnswers, providerBlueprint, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
+import { completeAnswers, mixedPaymentProviderBlueprint, negativeEconomicsAnswers, providerBlueprint, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResponseResult, validateAnalysisResult } from "@/lib/desired-client/output";
 import type { AnalysisResult } from "@/lib/desired-client/types";
 import { buildDesiredClientEvidenceGroups } from "@/lib/desired-client/evidence-contract";
@@ -573,6 +573,14 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(log.repairAttempts).toBe(0);
     expect(log.firstClaimDiagnostic).toEqual({
       claimIndex: 1,
+      claimIndexCapped: false,
+      selectionMetadataPresent: true,
+      selectionShapeValid: true,
+      selectionFailure: "selection_shape_invalid",
+      rawGroupIdCount: 0,
+      uniqueGroupIdCount: 0,
+      resolvedGroupIdCount: 0,
+      groupIdCountsCapped: false,
       slot: "why_firm_wants_work",
       kind: "unknown",
       evidenceBasis: "unknown",
@@ -588,6 +596,50 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(serializedLog).not.toContain(JSON.stringify(request.answers));
     expect(JSON.stringify(body)).not.toContain(privateClaim);
     expect(JSON.stringify(body)).not.toContain(privateAnswer);
+  });
+
+  it("returns the fully recovered negative-economics HTTP response from one offline SDK call", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const answers = negativeEconomicsAnswers();
+    const request = { ...structuredClone(ENVELOPE), answerRevision: answers.revision, answers };
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(mixedPaymentProviderBlueprint(answers)));
+    const response = await POST(makeRequest(JSON.stringify(request)));
+    expect(response.status).toBe(200);
+    await expectNoStore(response);
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: true, requestId: request.requestId, answerRevision: answers.revision, reviewRunId: request.reviewRunId, providerCallsUsed: 1, providerCallLimit: 1 });
+    expect(body.result.recoveredSections).toEqual(["why_firm_wants_work"]);
+    expect(body.result.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work);
+    expect(validateAnalysisResponseResult(body.result, answers, [])).toEqual(body.result);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("logs the earlier blocked recovery gate and raw selection counts without answer or claim text", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const answers = negativeEconomicsAnswers();
+    const request = { ...structuredClone(ENVELOPE), answerRevision: answers.revision, answers };
+    const raw = mixedPaymentProviderBlueprint(answers);
+    const claims = raw.brief.why_firm_wants_work.claims;
+    const contextIndex = claims.findIndex(claim => claim.evidence_group_ids.some(id => id.includes("_payment_context")));
+    const privateId = "private-unrecognized-id-sentinel";
+    claims[contextIndex].evidence_group_ids.push(privateId);
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(raw));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const response = await POST(makeRequest(JSON.stringify(request)));
+    expect(response.status).toBe(502);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+    const log = JSON.parse(warn.mock.calls[0][0] as string);
+    expect(log).toMatchObject({ repairAttempts: 0, firstRecoveryDiagnostic: {
+      reason: "selection_unresolved", blockedClaimIndex: contextIndex + 1, cardClaimCount: 7,
+      blockedClaimDiagnostic: { selectionFailure: "unknown_group_id", rawGroupIdCount: 2, uniqueGroupIdCount: 2, resolvedGroupIdCount: 1 },
+    } });
+    expect(log.finalRecoveryDiagnostic).toEqual(log.firstRecoveryDiagnostic);
+    const serialized = JSON.stringify(log);
+    expect(serialized).not.toContain(privateId);
+    expect(serialized).not.toContain(answers.value.payment_context);
+    expect(serialized).not.toContain(claims[contextIndex].text);
+    expect(serialized).not.toContain(JSON.stringify(answers));
+    expect(await response.json()).not.toHaveProperty("recoveryDiagnostic");
   });
 
   it("keeps invalid-group repair behavior unchanged in Production", async () => {
@@ -616,6 +668,8 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     });
     expect(log).not.toHaveProperty("firstClaimDiagnostic");
     expect(log).not.toHaveProperty("finalClaimDiagnostic");
+    expect(log).not.toHaveProperty("firstRecoveryDiagnostic");
+    expect(log).not.toHaveProperty("finalRecoveryDiagnostic");
     expect(JSON.stringify(warn.mock.calls)).not.toContain("A private production-only claim sentinel");
   });
 

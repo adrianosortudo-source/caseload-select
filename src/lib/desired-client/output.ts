@@ -247,6 +247,7 @@ export type AnalysisValidationFailure = {
   reason: string;
   sourcePath?: AnswerReferencePath | `interview.followups.${number}`;
   claimDiagnostic?: AnalysisClaimDiagnostic;
+  recoveryDiagnostic?: WhyFirmRecoveryDiagnostic;
 };
 
 function diagnosticForClaim(value: unknown, claimIndex: number, answers: DesiredClientAnswers, slot: DesiredClientEvidenceSlot): AnalysisClaimDiagnostic {
@@ -507,54 +508,94 @@ function authenticMixedProviderClaimText(value: unknown, paths: readonly AnswerR
   return !paymentPaths || paymentClaimIsAuthentic({ text, source_answer_ids: [...paths] }, answers);
 }
 
-/** Recover only a valid, current in-slot selection rejected solely for mixed basis/kind. */
-function recoverMixedWhyFirmSelection(value: unknown, answers: DesiredClientAnswers): { value: unknown; recovered: boolean } {
+export type WhyFirmRecoveryDiagnostic = {
+  reason: "card_shape" | "card_claim_limit" | "claim_shape" | "metadata_missing" | "selection_slot" | "selection_shape" | "selection_count" | "selection_duplicate" | "selection_unresolved" | "source_overlap_or_limit" | "mixed_selection_status" | "mixed_text_not_authentic" | "selection_status" | "statement_not_valid" | "payment_not_authentic" | "payment_normalization_invalid" | "no_mixed_selection" | "replacement_limits" | "source_coverage" | "recovered";
+  cardClaimCount: number;
+  cardClaimCountCapped: boolean;
+  blockedClaimIndex?: number;
+  blockedClaimIndexCapped?: boolean;
+  blockedClaimDiagnostic?: AnalysisClaimDiagnostic;
+  statementReason?: string;
+  replacementClaimCount?: number;
+  missingSourceCount?: number;
+};
+
+/** Recover only current in-slot selections with authentic text and complete source coverage. */
+function recoverMixedWhyFirmSelection(value: unknown, answers: DesiredClientAnswers): { value: unknown; recovered: boolean; diagnostic?: WhyFirmRecoveryDiagnostic } {
   if (!record(value) || !record(value.brief)) return { value, recovered: false };
   const brief = value.brief;
   const card = brief.why_firm_wants_work;
-  if (!exact(card, ["claims"]) || !Array.isArray(card.claims) || card.claims.length < 1 || card.claims.length > 7) return { value, recovered: false };
+  const count = record(card) && Array.isArray(card.claims) ? card.claims.length : 0;
+  const counts = { cardClaimCount: Math.min(count, 32), cardClaimCountCapped: count > 32 };
+  const blocked = (reason: WhyFirmRecoveryDiagnostic["reason"], index?: number, details: Partial<Pick<WhyFirmRecoveryDiagnostic, "statementReason" | "replacementClaimCount" | "missingSourceCount">> = {}) => ({
+    value, recovered: false,
+    diagnostic: { reason, ...counts, ...(index === undefined ? {} : { blockedClaimIndex: Math.min(index + 1, 32), blockedClaimIndexCapped: index >= 32, blockedClaimDiagnostic: diagnosticForClaim((card as { claims: unknown[] }).claims[index], index, answers, "why_firm_wants_work") }), ...details },
+  });
+  if (!exact(card, ["claims"]) || !Array.isArray(card.claims)) return blocked("card_shape");
+  if (count < 1 || count > 7) return blocked("card_claim_limit");
 
   const groups = buildDesiredClientEvidenceGroups("why_firm_wants_work", answers);
   const groupsById = new Map(groups.map(group => [group.id, group]));
   const originalSources = new Set<AnswerReferencePath>();
   let foundMixedSelection = false;
-  for (const claim of card.claims) {
-    if (!record(claim) || !exact(claim, ["text", "kind", "source_answer_ids", "evidence_basis"])) return { value, recovered: false };
+  for (const [index, claim] of card.claims.entries()) {
+    if (!record(claim) || !exact(claim, ["text", "kind", "source_answer_ids", "evidence_basis"])) return blocked("claim_shape", index);
     const selection = getProviderEvidenceSelection(claim);
-    if (!selection || selection.slot !== "why_firm_wants_work" || !selection.validShape || !Array.isArray(selection.rawGroupIds) ||
-      selection.rawGroupIds.length < 1 || selection.rawGroupIds.length > 8 || selection.rawGroupIds.some(id => typeof id !== "string") ||
-      new Set(selection.rawGroupIds).size !== selection.rawGroupIds.length) return { value, recovered: false };
+    if (!selection) return blocked("metadata_missing", index);
+    if (selection.slot !== "why_firm_wants_work") return blocked("selection_slot", index);
+    if (!selection.validShape || !Array.isArray(selection.rawGroupIds) || selection.rawGroupIds.some(id => typeof id !== "string")) return blocked("selection_shape", index);
+    if (selection.rawGroupIds.length < 1 || selection.rawGroupIds.length > 8) return blocked("selection_count", index);
+    if (new Set(selection.rawGroupIds).size !== selection.rawGroupIds.length) return blocked("selection_duplicate", index);
     const selectedGroups = (selection.rawGroupIds as string[]).map(id => groupsById.get(id));
-    if (selectedGroups.some(group => !group)) return { value, recovered: false };
+    if (selectedGroups.some(group => !group)) return blocked("selection_unresolved", index);
     const resolvedGroups = selectedGroups as NonNullable<typeof selectedGroups[number]>[];
     const paths = resolvedGroups.flatMap(group => group.source_answer_ids);
-    if (paths.length < 1 || paths.length > 8 || new Set(paths).size !== paths.length) return { value, recovered: false };
+    if (paths.length < 1 || paths.length > 8 || new Set(paths).size !== paths.length) return blocked("source_overlap_or_limit", index);
     const first = resolvedGroups[0];
     const mixed = resolvedGroups.some(group => group.evidence_basis !== first.evidence_basis || group.kind !== first.kind);
     if (mixed) {
-      if (selection.valid || selection.failure !== "mixed_basis_or_kind" || !authenticMixedProviderClaimText(claim, paths, answers)) return { value, recovered: false };
+      if (selection.valid || selection.failure !== "mixed_basis_or_kind") return blocked("mixed_selection_status", index);
+      if (!authenticMixedProviderClaimText(claim, paths, answers)) return blocked("mixed_text_not_authentic", index);
       foundMixedSelection = true;
     } else {
-      if (!selection.valid || selection.failure || !validStatement(claim, answers, "why_firm_wants_work")) return { value, recovered: false };
+      if (!selection.valid || selection.failure) return blocked("selection_status", index);
       const paymentPaths = paths.some(path => ["value.payment", "value.payment_context", "value.payment_context_basis"].includes(path));
-      if (paymentPaths && !paymentClaimIsAuthentic(claim, answers)) return { value, recovered: false };
+      if (paymentPaths && !paymentClaimIsAuthentic(claim, answers)) return blocked("payment_not_authentic", index);
+      let statementReason: string | undefined;
+      if (!validStatement(claim, answers, "why_firm_wants_work", reason => { statementReason = reason; })) {
+        // Ordinary validation already canonicalizes authentic payment paraphrases.
+        // Check the original selectors and text first, then validate that same
+        // normalization here before a later mixed claim rebuilds the section.
+        if (!paymentPaths || !["payment_context_claim_mismatch", "payment_source_must_be_isolated"].includes(statementReason ?? "") ||
+          !authenticMixedProviderClaimText(claim, paths, answers) ||
+          !statementMatchesEvidenceGroups("why_firm_wants_work", claim as unknown as EvidenceLinkedStatement, answers)) {
+          return blocked("statement_not_valid", index, { statementReason });
+        }
+        const normalized = normalizePaymentEvidence({ why_firm_wants_work: { claims: [claim] } }, answers);
+        if (normalized.blocked || !validCard(normalized.brief.why_firm_wants_work, answers, "why_firm_wants_work")) return blocked("payment_normalization_invalid", index);
+      }
     }
     paths.forEach(path => originalSources.add(path));
   }
-  if (!foundMixedSelection) return { value, recovered: false };
+  if (!foundMixedSelection) return blocked("no_mixed_selection");
 
   const replacement = buildStructuredBlueprintV4(answers).why_firm_wants_work;
-  if (!replacement.claims.length || replacement.claims.length > 7 || replacement.claims.some(claim => !claim.source_answer_ids.length || claim.source_answer_ids.length > 8)) return { value, recovered: false };
+  const replacementCount = { replacementClaimCount: Math.min(replacement.claims.length, 32) };
+  if (!replacement.claims.length || replacement.claims.length > 7 || replacement.claims.some(claim => !claim.source_answer_ids.length || claim.source_answer_ids.length > 8)) return blocked("replacement_limits", undefined, replacementCount);
   const replacementSources = new Set(replacement.claims.flatMap(claim => claim.source_answer_ids));
-  if ([...originalSources].some(path => !replacementSources.has(path))) return { value, recovered: false };
+  const missingSourceCount = [...originalSources].filter(path => !replacementSources.has(path)).length;
+  if (missingSourceCount) return blocked("source_coverage", undefined, { ...replacementCount, missingSourceCount: Math.min(missingSourceCount, 32) });
 
   return {
     value: { ...value, brief: { ...brief, why_firm_wants_work: replacement } },
     recovered: true,
+    diagnostic: { reason: "recovered", ...counts, ...replacementCount, missingSourceCount: 0 },
   };
 }
 
-export function validateAnalysisResult(value: unknown, answers: DesiredClientAnswers, _eligibleCodes: readonly ClarificationCode[], reportFailure?: (failure: AnalysisValidationFailure) => void): AnalysisResult | null {
+export function validateAnalysisResult(value: unknown, answers: DesiredClientAnswers, _eligibleCodes: readonly ClarificationCode[], onFailure?: (failure: AnalysisValidationFailure) => void): AnalysisResult | null {
+  const recoveryState: { diagnostic?: WhyFirmRecoveryDiagnostic } = {};
+  const reportFailure = (failure: AnalysisValidationFailure) => onFailure?.({ ...failure, ...(failure.field === "why_firm_wants_work" && recoveryState.diagnostic ? { recoveryDiagnostic: recoveryState.diagnostic } : {}) });
   const reject = (field: string, reason: string) => { reportFailure?.({ field, reason }); return null; };
   if (!exact(value, ["brief", "clarification_code"])) return reject("report", "root_shape");
   if (value.clarification_code !== null) return reject("report", "unexpected_clarification_code");
@@ -562,6 +603,7 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   const inputBrief=value.brief;
   if(!exact(inputBrief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"]))return reject("report", "brief_shape");
   const recovery = recoverMixedWhyFirmSelection(value, answers);
+  recoveryState.diagnostic = recovery.diagnostic;
   const validatedValue = recovery.recovered ? recovery.value : value;
   const sourceBrief=(validatedValue as { brief: Record<string, unknown> }).brief;
   // Validate source claims before omission recovery. Payment claims may be

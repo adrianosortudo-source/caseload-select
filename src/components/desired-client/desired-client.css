@@ -182,7 +182,8 @@
 .dc-report-card h2{width:100%;margin:0;color:var(--dc-navy);font-size:1.1rem}
 .dc-report-recovery{display:grid;gap:.25rem;width:100%;padding:.55rem .65rem;border-inline-start:3px solid var(--dc-accent);background:#f5f3ee}
 .dc-report-recovery strong,.dc-report-recovery p{width:100%;margin:0}
-.dc-report-recovery p{text-wrap:pretty}
+.dc-brief .dc-report-recovery p{text-wrap:wrap}
+@media(max-width:360px){.dc-report-recovery{padding-inline:.5rem}}
 .dc-report-card__claims{display:grid;gap:.75rem;width:100%;min-width:0}
 .dc-report-claim{display:grid;gap:.35rem;width:100%;min-width:0;padding-top:.7rem;border-top:1px solid rgba(13,21,32,.12)}
 .dc-report-claim:first-child{padding-top:0;border-top:0}

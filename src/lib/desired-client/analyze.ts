@@ -41,6 +41,14 @@ function logRejectedOutput(
     if (process.env.VERCEL_ENV !== "preview" || !diagnostic) return undefined;
     return {
       claimIndex: diagnostic.claimIndex,
+      claimIndexCapped: diagnostic.claimIndexCapped,
+      selectionMetadataPresent: diagnostic.selectionMetadataPresent,
+      selectionShapeValid: diagnostic.selectionShapeValid,
+      selectionFailure: diagnostic.selectionFailure,
+      rawGroupIdCount: diagnostic.rawGroupIdCount,
+      uniqueGroupIdCount: diagnostic.uniqueGroupIdCount,
+      resolvedGroupIdCount: diagnostic.resolvedGroupIdCount,
+      groupIdCountsCapped: diagnostic.groupIdCountsCapped,
       slot: diagnostic.slot,
       kind: diagnostic.kind,
       evidenceBasis: diagnostic.evidenceBasis,
@@ -60,6 +68,8 @@ function logRejectedOutput(
     finalField: finalFailure.field.slice(0, 80),
     finalReason: finalFailure.reason.slice(0, 80),
     repairAttempts,
+    ...(process.env.VERCEL_ENV === "preview" && failure.recoveryDiagnostic ? { firstRecoveryDiagnostic: failure.recoveryDiagnostic } : {}),
+    ...(process.env.VERCEL_ENV === "preview" && finalFailure.recoveryDiagnostic ? { finalRecoveryDiagnostic: finalFailure.recoveryDiagnostic } : {}),
     ...(previewClaimDiagnostic(failure.claimDiagnostic) ? { firstClaimDiagnostic: previewClaimDiagnostic(failure.claimDiagnostic) } : {}),
     ...(previewClaimDiagnostic(finalFailure.claimDiagnostic) ? { finalClaimDiagnostic: previewClaimDiagnostic(finalFailure.claimDiagnostic) } : {}),
     ...(finishReason && /^[A-Z_]{1,40}$/.test(finishReason) ? { finishReason } : {}),
