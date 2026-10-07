@@ -366,8 +366,8 @@ describe("AI Blueprint output contract", () => {
     const brief = buildStructuredBlueprintV4(answers);
     const rationale = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("value.reasons"));
     const staffing = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
-    expect(rationale.source_answer_ids.length).toBeGreaterThan(0);
-    expect(rationale.evidence_basis).toBe("unknown");
+    expect(rationale?.source_answer_ids.length).toBeGreaterThan(0);
+    expect(rationale?.evidence_basis).toBe("unknown");
     expect(staffing).toMatchObject({ evidence_basis: "firm_preference", kind: "preference" });
     expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
   });
