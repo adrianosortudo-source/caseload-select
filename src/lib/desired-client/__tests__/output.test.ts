@@ -364,7 +364,7 @@ describe("AI Blueprint output contract", () => {
     answers.repeatability.additional_matters = "2 comparable matters per quarter";
     answers.repeatability.staffing_constraint = "An associate must be hired before increasing volume.";
     const brief = buildStructuredBlueprintV4(answers);
-    const rationale = brief.why_firm_wants_work.claims[0];
+    const rationale = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("value.reasons"));
     const staffing = brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
     expect(rationale.source_answer_ids.length).toBeGreaterThan(0);
     expect(rationale.evidence_basis).toBe("unknown");
