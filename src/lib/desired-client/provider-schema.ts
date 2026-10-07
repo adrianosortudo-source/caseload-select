@@ -39,7 +39,7 @@ function decodeStatement(value: unknown, slot: DesiredClientEvidenceSlot, answer
   const rawIds = source.evidence_group_ids;
   const selection = resolveEvidenceGroupSelection(slot, rawIds, answers);
   const safeGroupIds = Array.isArray(rawIds)
-    ? rawIds.filter((id): id is string => typeof id === "string" && groups.some(group => group.id === id)).slice(0, 8)
+    ? [...new Set(rawIds.filter((id): id is string => typeof id === "string" && groups.some(group => group.id === id)))].slice(0, 8)
     : [];
   const validShape = Object.keys(source).length === 2 && Object.hasOwn(source, "text") && Object.hasOwn(source, "evidence_group_ids");
   const decoded: Record<string, unknown> = {
@@ -48,7 +48,14 @@ function decodeStatement(value: unknown, slot: DesiredClientEvidenceSlot, answer
     source_answer_ids: selection.source_answer_ids,
     evidence_basis: selection.evidence_basis ?? "unknown",
   };
-  attachProviderEvidenceSelection(decoded, { slot, groupIds: safeGroupIds, valid: selection.valid && validShape });
+  attachProviderEvidenceSelection(decoded, {
+    slot,
+    groupIds: safeGroupIds,
+    rawGroupIds: Array.isArray(rawIds) ? [...rawIds] : rawIds,
+    valid: selection.valid && validShape,
+    failure: selection.failure ?? (!validShape ? "selection_shape_invalid" : undefined),
+    validShape,
+  });
   return decoded;
 }
 

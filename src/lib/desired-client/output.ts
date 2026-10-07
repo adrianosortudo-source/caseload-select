@@ -127,9 +127,10 @@ function normalizedGroundingToken(token: string): string {
   return lower;
 }
 
+const SENSITIVE_GROUNDING_TOKENS = new Set(["not", "no", "all", "only", "always", "never", "without", "cannot", "audited", "audit", "prove", "proves", "proven", "verified"]);
 function significantGroundingTokens(text: string): string[] {
   return text.toLocaleLowerCase("en-CA").split(/[^\p{L}\p{N}]+/u)
-    .filter((token) => token.length > 3 && !MIXED_CLAIM_STOP_WORDS.has(token) && !/^\d+$/u.test(token))
+    .filter((token) => (token.length > 3 || SENSITIVE_GROUNDING_TOKENS.has(token)) && !MIXED_CLAIM_STOP_WORDS.has(token) && !/^\d+$/u.test(token))
     .map(normalizedGroundingToken);
 }
 
@@ -148,6 +149,22 @@ function mixedPaymentClaimLanguageIsGrounded(text: string, paths: readonly strin
   const supportedTokens = new Set(supportedText.flatMap(significantGroundingTokens));
   return significantGroundingTokens(text).every((token) => supportedTokens.has(token));
 }
+
+function claimNegationMatchesSources(text: string, paths: readonly string[], answers: DesiredClientAnswers): boolean {
+  const negations = /\b(?:not|no|never|without|cannot|can\s+not|can\s*['’]t|do\s+not|don\s*['’]t|does\s+not|doesn\s*['’]t|is\s+not|isn\s*['’]t|are\s+not|aren\s*['’]t|was\s+not|wasn\s*['’]t|were\s+not|weren\s*['’]t|will\s+not|won\s*['’]t|hardly|rarely|seldom)\b/giu;
+  const markers = (value: string) => [...value.matchAll(negations)].map(() => "negation");
+  const claimMarkers = markers(text);
+  if (!claimMarkers.length) return true;
+  const sourceText = [
+    ...paths.flatMap((path) => answerTextForPath(path, answers)),
+    ...buildStructuredBlueprintV4(answers).why_firm_wants_work.claims
+      .filter((claim) => claim.source_answer_ids.some((path) => paths.includes(path)))
+      .map((claim) => claim.text),
+  ].join(" ");
+  return claimMarkers.length <= markers(sourceText).length;
+}
+
+const FALSE_AUDIT_ASSERTION = /\b(?:audited records? (?:prove|show|confirm)|records? (?:prove|show|confirm) (?:that )?(?:all|every)|(?:all|every) clients? (?:are )?proven)\b/iu;
 
 /**
  * Payment is an application-owned enum plus an optional free-text note. A
@@ -477,13 +494,76 @@ function normalizeGroundedFirmValueClaims(brief: Record<string, unknown>, answer
   return { brief: { ...brief, why_firm_wants_work: { ...card, claims: nextClaims } }, blocked: false };
 }
 
+function authenticMixedProviderClaimText(value: unknown, paths: readonly AnswerReferencePath[], answers: DesiredClientAnswers): boolean {
+  if (!record(value) || typeof value.text !== "string") return false;
+  const text = value.text.trim().replace(/\s+/gu, " ");
+  if (!text || text.length > 400 || wordCount(text) > 50 || BANNED.test(text) || paths.length < 1 || paths.length > 8) return false;
+  const paymentPaths = paths.some(path => ["value.payment", "value.payment_context", "value.payment_context_basis"].includes(path));
+  if (!citationSupportsNumericTokens(text, paths, answers) ||
+    !mixedPaymentClaimLanguageIsGrounded(text, paths, answers) ||
+    !claimNegationMatchesSources(text, paths, answers) ||
+    (hasNegativeContribution(answers) && assertsPositiveEconomics(text)) ||
+    (!paymentPaths && FALSE_AUDIT_ASSERTION.test(text))) return false;
+  return !paymentPaths || paymentClaimIsAuthentic({ text, source_answer_ids: [...paths] }, answers);
+}
+
+/** Recover only a valid, current in-slot selection rejected solely for mixed basis/kind. */
+function recoverMixedWhyFirmSelection(value: unknown, answers: DesiredClientAnswers): { value: unknown; recovered: boolean } {
+  if (!record(value) || !record(value.brief)) return { value, recovered: false };
+  const brief = value.brief;
+  const card = brief.why_firm_wants_work;
+  if (!exact(card, ["claims"]) || !Array.isArray(card.claims) || card.claims.length < 1 || card.claims.length > 7) return { value, recovered: false };
+
+  const groups = buildDesiredClientEvidenceGroups("why_firm_wants_work", answers);
+  const groupsById = new Map(groups.map(group => [group.id, group]));
+  const originalSources = new Set<AnswerReferencePath>();
+  let foundMixedSelection = false;
+  for (const claim of card.claims) {
+    if (!record(claim) || !exact(claim, ["text", "kind", "source_answer_ids", "evidence_basis"])) return { value, recovered: false };
+    const selection = getProviderEvidenceSelection(claim);
+    if (!selection || selection.slot !== "why_firm_wants_work" || !selection.validShape || !Array.isArray(selection.rawGroupIds) ||
+      selection.rawGroupIds.length < 1 || selection.rawGroupIds.length > 8 || selection.rawGroupIds.some(id => typeof id !== "string") ||
+      new Set(selection.rawGroupIds).size !== selection.rawGroupIds.length) return { value, recovered: false };
+    const selectedGroups = (selection.rawGroupIds as string[]).map(id => groupsById.get(id));
+    if (selectedGroups.some(group => !group)) return { value, recovered: false };
+    const resolvedGroups = selectedGroups as NonNullable<typeof selectedGroups[number]>[];
+    const paths = resolvedGroups.flatMap(group => group.source_answer_ids);
+    if (paths.length < 1 || paths.length > 8 || new Set(paths).size !== paths.length) return { value, recovered: false };
+    const first = resolvedGroups[0];
+    const mixed = resolvedGroups.some(group => group.evidence_basis !== first.evidence_basis || group.kind !== first.kind);
+    if (mixed) {
+      if (selection.valid || selection.failure !== "mixed_basis_or_kind" || !authenticMixedProviderClaimText(claim, paths, answers)) return { value, recovered: false };
+      foundMixedSelection = true;
+    } else {
+      if (!selection.valid || selection.failure || !validStatement(claim, answers, "why_firm_wants_work")) return { value, recovered: false };
+      const paymentPaths = paths.some(path => ["value.payment", "value.payment_context", "value.payment_context_basis"].includes(path));
+      if (paymentPaths && !paymentClaimIsAuthentic(claim, answers)) return { value, recovered: false };
+    }
+    paths.forEach(path => originalSources.add(path));
+  }
+  if (!foundMixedSelection) return { value, recovered: false };
+
+  const replacement = buildStructuredBlueprintV4(answers).why_firm_wants_work;
+  if (!replacement.claims.length || replacement.claims.length > 7 || replacement.claims.some(claim => !claim.source_answer_ids.length || claim.source_answer_ids.length > 8)) return { value, recovered: false };
+  const replacementSources = new Set(replacement.claims.flatMap(claim => claim.source_answer_ids));
+  if ([...originalSources].some(path => !replacementSources.has(path))) return { value, recovered: false };
+
+  return {
+    value: { ...value, brief: { ...brief, why_firm_wants_work: replacement } },
+    recovered: true,
+  };
+}
+
 export function validateAnalysisResult(value: unknown, answers: DesiredClientAnswers, _eligibleCodes: readonly ClarificationCode[], reportFailure?: (failure: AnalysisValidationFailure) => void): AnalysisResult | null {
   const reject = (field: string, reason: string) => { reportFailure?.({ field, reason }); return null; };
   if (!exact(value, ["brief", "clarification_code"])) return reject("report", "root_shape");
   if (value.clarification_code !== null) return reject("report", "unexpected_clarification_code");
-  const sourceBrief=value.brief;
   const cardNames=["client_and_matter","client_goals_needs","why_firm_wants_work","why_client_chooses_firm","recognizable_circumstances","evidence_and_open_questions"] as const;
-  if(!exact(sourceBrief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"]))return reject("report", "brief_shape");
+  const inputBrief=value.brief;
+  if(!exact(inputBrief,["report_version","definition_sentence","definition_components",...cardNames,"decision_pathway"]))return reject("report", "brief_shape");
+  const recovery = recoverMixedWhyFirmSelection(value, answers);
+  const validatedValue = recovery.recovered ? recovery.value : value;
+  const sourceBrief=(validatedValue as { brief: Record<string, unknown> }).brief;
   // Validate source claims before omission recovery. Payment claims may be
   // normalized for harmless wording or mixed-source separation, but their
   // evidence status and numeric content must still be authentic.
@@ -590,7 +670,11 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   if(typedBrief.definition_sentence.length>1600||expectedSentence.length>1600)return reject("definition_sentence", "sentence_length");
   const reportWords=[...cardNames.flatMap(field=>canonicalBrief[field].claims.map(claim=>claim.text)),...pathwayFields.map(field=>canonicalBrief.decision_pathway[field].text)].reduce((sum,text)=>sum+wordCount(text),wordCount(expectedSentence));
   if(reportWords>800)return reject("report", "word_limit");
-  return { clarification_code: null, brief: { ...canonicalBrief, definition_sentence: expectedSentence } };
+  return {
+    clarification_code: null,
+    brief: { ...canonicalBrief, definition_sentence: expectedSentence },
+    ...(recovery.recovered ? { recoveredSections: ["why_firm_wants_work"] } : {}),
+  };
 }
 
 const LINKED_STATEMENT_SCHEMA = { type: "object", properties: { text: { type: "string" }, evidence_group_ids: { type: "array", minItems: 1, maxItems: 8, items: { type: "string" } } }, required: ["text", "evidence_group_ids"] } as const;

@@ -9,6 +9,7 @@ export type BlueprintMetadata = {
   mode: SavedBrief["mode"];
   generatedAt: string;
   wordingReviewed: boolean;
+  recoveredSections?: SavedBrief["recoveredSections"];
   openClarificationCode?: SavedBrief["openClarificationCode"];
 };
 
@@ -29,6 +30,7 @@ export type BlueprintCard = {
   title: string;
   claims: EvidenceLinkedStatement[];
   sources: Array<{ statement: EvidenceLinkedStatement; path: AnswerReferencePath; question: string; answer: string | null }>;
+  recoveryDisclosure?: { label: string; description: string };
   contribution?: CalculatedContribution;
   opportunityBasis?: string;
 };
@@ -134,6 +136,12 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
       title,
       claims,
       sources: claims.flatMap((statement) => statement.source_answer_ids.map((path) => ({ ...getSourceDetails(path, answers), path, statement }))),
+      ...(brief.report_version === "dcm-blueprint-v4" && id === "whyWork" && meta.recoveredSections?.includes("why_firm_wants_work") ? {
+        recoveryDisclosure: {
+          label: "Built from your answers",
+          description: "This section was rebuilt from your answers because the AI combined different evidence types.",
+        },
+      } : {}),
       ...(contribution ? { contribution } : {}),
       ...(opportunityBasis ? { opportunityBasis } : {}),
     };
@@ -194,7 +202,9 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
     title,
     status: confirmed ? "Wording reviewed" : "Draft wording",
     evidenceStatus: evidenceStatus(brief),
-    modeLabel: meta.mode === "ai" ? "AI-assisted draft" : "Structured draft",
+    modeLabel: meta.recoveredSections?.includes("why_firm_wants_work")
+      ? "AI-assisted draft with a structured recovery"
+      : meta.mode === "ai" ? "AI-assisted draft" : "Structured draft",
     date: formatDate(meta.generatedAt),
     confirmed,
     definition: brief.report_version === "dcm-blueprint-v4" || brief.report_version === "dcm-blueprint-v2" ? brief.definition_sentence : buildDefinitionSentence(brief, confirmed),

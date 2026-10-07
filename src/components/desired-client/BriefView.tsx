@@ -98,6 +98,7 @@ export function BriefView({
     mode: saved.mode,
     generatedAt: saved.generatedAt,
     wordingReviewed: reviewed,
+    recoveredSections: saved.recoveredSections,
     openClarificationCode: saved.openClarificationCode,
   }) : null, [saved, answers, reviewed, currentBrief]);
   const text = createProfileDownload(saved, answers).content;
@@ -193,6 +194,10 @@ export function BriefView({
       <div className="dc-report-cards" data-ui-component-content="desired-client-blueprint-cards">
         {model.cards.map((card) => <section className="dc-report-card" key={card.id} data-ui-component-content={`desired-client-card-${card.id}`}>
           <h2 data-ui-copy="heading">{card.title}</h2>
+          {card.recoveryDisclosure && <div className="dc-report-recovery" data-ui-component-content="desired-client-recovery-disclosure">
+            <strong data-ui-copy="supporting">{card.recoveryDisclosure.label}</strong>
+            <p className="text-pretty" data-ui-copy="supporting">{card.recoveryDisclosure.description}</p>
+          </div>}
           <div className="dc-report-card__claims">
             {card.claims.map((claim, index) => <div className="dc-report-claim" key={`${card.id}-${index}`}>
               <p data-ui-copy="body">{claim.text}</p>

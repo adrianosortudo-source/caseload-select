@@ -1,12 +1,49 @@
 import { describe, expect, it } from "vitest";
 import { validateAnalysisResult } from "../output";
-import { completeAnswers, validBlueprint } from "./blueprint-helpers";
+import { completeAnswers, providerBlueprint, validBlueprint } from "./blueprint-helpers";
 import { evidence } from "./blueprint-helpers";
+import { buildDesiredClientEvidenceGroups } from "../evidence-contract";
+import { decodeProviderEvidenceGroups, decodeProviderTargetCard } from "../provider-schema";
 import { calculateContribution } from "../economics";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { buildDefinitionSentence } from "../definition";
 import { interviewClarificationSourceFingerprint } from "../types";
 import { validateDraftAnswers } from "../validation";
+
+function establishedAcquisitionAnswers() {
+  const answers = completeAnswers();
+  answers.practice.experience = "regular";
+  answers.practice.capability = "Business acquisition advice";
+  answers.practice.enjoys = "Transaction planning";
+  answers.client_context.geography = "Ontario";
+  answers.client_context.repeat_matter_pattern = "A business buyer needs an asset purchase agreement drafted or reviewed before final terms are agreed.";
+  answers.value.reasons = ["client_benefit", "fees", "skills"];
+  Object.assign(answers.value, {
+    fee_amount: "8000", direct_cost_amount: "8500", currency: "CAD", amount_basis: "recorded", amount_scope: "per_matter",
+    collected_fee: "15to50", team_hours: "16to40", payment: "predictable",
+    payment_context: "Clients told the firm that the first invoice was usually paid on schedule.", payment_context_basis: "client_feedback",
+  });
+  answers.delivery.capacity = "room";
+  Object.assign(answers.delivery, { conditions: ["scope", "information"] });
+  Object.assign(answers.repeatability, {
+    additional_matters: "2 comparable matters per quarter",
+    staffing_constraint: "An associate must be hired before increasing volume.",
+    success_measure: "retained_matters", target: "2 comparable matters retained per quarter", review_period: "6 months",
+  });
+  return answers;
+}
+
+function decodedMixedWhyFirmReport(answers: ReturnType<typeof establishedAcquisitionAnswers>, text: string, groupIds?: string[]) {
+  const encoded = providerBlueprint(validBlueprint(answers), answers) as { brief: Record<string, unknown> };
+  const groups = buildDesiredClientEvidenceGroups("why_firm_wants_work", answers);
+  const selected = groupIds ?? ["practice.capability", "practice.experience", "practice.enjoys"].map(path => {
+    const group = groups.find(candidate => candidate.source_answer_ids.includes(path as never));
+    if (!group) throw new Error(`Missing current firm-value evidence group for ${path}`);
+    return group.id;
+  });
+  encoded.brief.why_firm_wants_work = { claims: [{ text, evidence_group_ids: selected }] };
+  return decodeProviderEvidenceGroups(decodeProviderTargetCard(encoded, answers), answers);
+}
 describe("AI Blueprint output contract", () => {
   it("joins model fragments without repeating because or capitalizing a mid-sentence article", () => {
     const value = validBlueprint();
@@ -178,6 +215,60 @@ describe("AI Blueprint output contract", () => {
     expect(experience?.source_answer_ids).not.toContain("value.payment");
     expect(recovered.some(claim => claim.source_answer_ids.includes("value.payment") && claim.source_answer_ids.includes("practice.experience"))).toBe(false);
     expect(recovered.filter(claim => claim.source_answer_ids.includes("practice.experience"))).toHaveLength(1);
+  });
+  it("recovers a current mixed-basis firm-value claim from the full acquisition fixture without changing other report sections", () => {
+    const answers = establishedAcquisitionAnswers();
+    const baseline = validateAnalysisResult(validBlueprint(answers), answers, []);
+    expect(baseline).not.toBeNull();
+    const supplied = "The firm reports regular experience in business acquisition advice and transaction planning.";
+    const decoded = decodedMixedWhyFirmReport(answers, supplied) as Parameters<typeof validateAnalysisResult>[0];
+    const failures: Array<{ field: string; reason: string }> = [];
+    const result = validateAnalysisResult(decoded, answers, [], failure => failures.push({ field: failure.field, reason: failure.reason }));
+
+    expect(result, JSON.stringify(failures)).not.toBeNull();
+    expect(result!.recoveredSections).toEqual(["why_firm_wants_work"]);
+    expect(result?.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work);
+    expect(result!.brief.why_firm_wants_work.claims).toHaveLength(6);
+    expect(result!.brief.why_firm_wants_work.claims.length).toBeLessThanOrEqual(7);
+    expect(result!.brief.why_firm_wants_work.claims.every(claim => claim.source_answer_ids.length >= 1 && claim.source_answer_ids.length <= 8)).toBe(true);
+    expect(result!.brief.definition_components).toEqual(baseline!.brief.definition_components);
+    expect(result!.brief.client_and_matter).toEqual(baseline!.brief.client_and_matter);
+    expect(result!.brief.decision_pathway).toEqual(baseline!.brief.decision_pathway);
+    expect(result!.brief.client_goals_needs).toEqual(baseline!.brief.client_goals_needs);
+
+    const claims = result!.brief.why_firm_wants_work.claims;
+    const recoveredSources = new Set(claims.flatMap(claim => claim.source_answer_ids));
+    expect(recoveredSources.has("practice.capability")).toBe(true);
+    expect(recoveredSources.has("practice.experience")).toBe(true);
+    expect(recoveredSources.has("practice.enjoys")).toBe(true);
+    const experience = claims.find(claim => claim.source_answer_ids.includes("practice.experience"));
+    const preference = claims.find(claim => claim.source_answer_ids.includes("practice.enjoys"));
+    expect(experience?.evidence_basis).toBe("firm_reported_experience");
+    expect(preference?.evidence_basis).toBe("firm_preference");
+    expect(experience?.source_answer_ids).not.toContain("practice.enjoys");
+    expect(preference?.source_answer_ids).not.toContain("practice.experience");
+    expect(claims.some(claim => claim.source_answer_ids.includes("value.payment_context") && claim.text.includes(answers.value.payment_context))).toBe(true);
+    expect(claims.some(claim => claim.source_answer_ids.includes("delivery.conditions"))).toBe(true);
+    expect(claims.some(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"))).toBe(true);
+    expect(claims.some(claim => claim.source_answer_ids.includes("repeatability.target"))).toBe(false);
+  });
+
+  it.each([
+    "The firm does not report regular experience in business acquisition advice and transaction planning.",
+    "Audited records prove all clients need business acquisition advice.",
+    "The firm reports regular experience in business acquisition advice and transaction planning worth $2,000,000.",
+    "The firm reports regular experience in business acquisition advice and transaction planning, producing positive profit.",
+  ])("does not sanitize unsupported, negated, audited, numeric or positive-economics wording: %s", text => {
+    const answers = establishedAcquisitionAnswers();
+    const decoded = decodedMixedWhyFirmReport(answers, text) as Parameters<typeof validateAnalysisResult>[0];
+    expect(validateAnalysisResult(decoded, answers, [])).toBeNull();
+  });
+
+  it("rejects a previously current mixed-group selection after its source answer changes", () => {
+    const answers = establishedAcquisitionAnswers();
+    const decoded = decodedMixedWhyFirmReport(answers, "The firm reports regular experience in business acquisition advice and transaction planning.") as Parameters<typeof validateAnalysisResult>[0];
+    answers.practice.enjoys = "Estate planning";
+    expect(validateAnalysisResult(decoded, answers, [])).toBeNull();
   });
   it("accepts current capacity as a firm-reported observation and keeps staffing change as preference", () => {
     const answers = completeAnswers();

@@ -16,6 +16,15 @@ export type EvidenceGroup = {
   kind: EvidenceLinkedStatement["kind"];
   source_answer_ids: AnswerReferencePath[];
 };
+export type EvidenceGroupSelectionFailure = "selection_shape_invalid" | "duplicate_group_id" | "unknown_group_id" | "mixed_basis_or_kind" | "source_paths_overlap_or_exceed_limit";
+export type ProviderEvidenceSelection = {
+  slot: DesiredClientEvidenceSlot;
+  groupIds: string[];
+  rawGroupIds: unknown;
+  valid: boolean;
+  failure?: EvidenceGroupSelectionFailure;
+  validShape: boolean;
+};
 
 const FOLLOWUP_STAGES: Partial<Record<DesiredClientEvidenceSlot, readonly number[]>> = {
   client_and_matter: [1, 2], client_goals_needs: [2], why_firm_wants_work: [3],
@@ -251,25 +260,25 @@ export function isUnresolvedEvidenceSource(path: string, answers: DesiredClientA
   return unresolved(path as AnswerReferencePath, answers);
 }
 export function allowedEvidenceSlots(): readonly DesiredClientEvidenceSlot[] { return DESIRED_CLIENT_EVIDENCE_SLOTS; }
-export function getProviderEvidenceSelection(value: object): { slot: DesiredClientEvidenceSlot; groupIds: string[]; valid: boolean } | undefined {
+export function getProviderEvidenceSelection(value: object): ProviderEvidenceSelection | undefined {
   return providerSelections.get(value);
 }
-const providerSelections = new WeakMap<object, { slot: DesiredClientEvidenceSlot; groupIds: string[]; valid: boolean }>();
-export function attachProviderEvidenceSelection(value: object, selection: { slot: DesiredClientEvidenceSlot; groupIds: string[]; valid: boolean }): void {
+const providerSelections = new WeakMap<object, ProviderEvidenceSelection>();
+export function attachProviderEvidenceSelection(value: object, selection: ProviderEvidenceSelection): void {
   providerSelections.set(value, selection);
 }
 
-export function resolveEvidenceGroupSelection(slot: DesiredClientEvidenceSlot, groupIds: unknown, answers: DesiredClientAnswers): { valid: boolean; evidence_basis?: EvidenceBasis; kind?: EvidenceLinkedStatement["kind"]; source_answer_ids: AnswerReferencePath[]; groupIds: string[] } {
+export function resolveEvidenceGroupSelection(slot: DesiredClientEvidenceSlot, groupIds: unknown, answers: DesiredClientAnswers): { valid: boolean; failure?: EvidenceGroupSelectionFailure; evidence_basis?: EvidenceBasis; kind?: EvidenceLinkedStatement["kind"]; source_answer_ids: AnswerReferencePath[]; groupIds: string[] } {
   const groups = buildDesiredClientEvidenceGroups(slot, answers);
-  if (!Array.isArray(groupIds) || groupIds.length < 1 || groupIds.length > 8 || groupIds.some(id => typeof id !== "string")) return { valid: false, source_answer_ids: [], groupIds: [] };
+  if (!Array.isArray(groupIds) || groupIds.length < 1 || groupIds.length > 8 || groupIds.some(id => typeof id !== "string")) return { valid: false, failure: "selection_shape_invalid", source_answer_ids: [], groupIds: [] };
   const selectedIds = groupIds as string[];
-  if (new Set(selectedIds).size !== selectedIds.length) return { valid: false, source_answer_ids: [], groupIds: [] };
+  if (new Set(selectedIds).size !== selectedIds.length) return { valid: false, failure: "duplicate_group_id", source_answer_ids: [], groupIds: [] };
   const selected = selectedIds.map(id => groups.find(group => group.id === id));
-  if (selected.some(group => !group)) return { valid: false, source_answer_ids: [], groupIds: [] };
+  if (selected.some(group => !group)) return { valid: false, failure: "unknown_group_id", source_answer_ids: [], groupIds: [] };
   const first = selected[0]!;
-  if (selected.some(group => group!.evidence_basis !== first.evidence_basis || group!.kind !== first.kind)) return { valid: false, source_answer_ids: [], groupIds: selectedIds.filter(id => groups.some(group => group.id === id)) };
+  if (selected.some(group => group!.evidence_basis !== first.evidence_basis || group!.kind !== first.kind)) return { valid: false, failure: "mixed_basis_or_kind", source_answer_ids: [], groupIds: [...selectedIds] };
   const paths = selected.flatMap(group => group!.source_answer_ids);
-  if (paths.length > 8 || new Set(paths).size !== paths.length) return { valid: false, source_answer_ids: [], groupIds: selectedIds };
+  if (paths.length > 8 || new Set(paths).size !== paths.length) return { valid: false, failure: "source_paths_overlap_or_exceed_limit", source_answer_ids: [], groupIds: [...selectedIds] };
   return { valid: true, evidence_basis: first.evidence_basis, kind: first.kind, source_answer_ids: paths, groupIds: selectedIds };
 }
 

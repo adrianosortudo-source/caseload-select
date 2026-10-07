@@ -106,7 +106,10 @@ describe("Desired Client evidence-group contract", () => {
     expect(resolveEvidenceGroupSelection("why_firm_wants_work", [], answers).valid).toBe(false);
     expect(resolveEvidenceGroupSelection("why_firm_wants_work", ["eg_unknown"], answers).valid).toBe(false);
     expect(resolveEvidenceGroupSelection("why_firm_wants_work", [payment.id, payment.id], answers).valid).toBe(false);
-    expect(resolveEvidenceGroupSelection("why_firm_wants_work", [payment.id, context.id], answers).valid).toBe(false);
+    expect(resolveEvidenceGroupSelection("why_firm_wants_work", [payment.id, context.id], answers)).toMatchObject({ valid: false, failure: "mixed_basis_or_kind" });
+    expect(resolveEvidenceGroupSelection("why_firm_wants_work", [payment.id, payment.id], answers).failure).toBe("duplicate_group_id");
+    expect(resolveEvidenceGroupSelection("why_firm_wants_work", ["eg_unknown"], answers).failure).toBe("unknown_group_id");
+    expect(resolveEvidenceGroupSelection("why_firm_wants_work", [payment.id], answers).failure).toBeUndefined();
     expect(resolveEvidenceGroupSelection("recognizable_circumstances", [payment.id], answers).valid).toBe(false);
     expect(resolveEvidenceGroupSelection("why_firm_wants_work", [financial.id], answers).valid).toBe(true);
     const openFinancial = buildDesiredClientEvidenceGroups("evidence_and_open_questions", answers).find(group => group.id.includes("financial_recorded"))!;
@@ -226,11 +229,16 @@ describe("Desired Client evidence-group contract", () => {
     expect(resolveEvidenceGroupSelection("why_firm_wants_work", [current.id], answers).valid).toBe(true);
     expect(isSafeDiagnosticSourcePath("interview.followups.0", answers)).toBe(true);
     expect(isSafeDiagnosticSourcePath("interview.followups.1", answers)).toBe(false);
+    const decodedFollowup = decodeProviderEvidenceGroups({ brief: { why_firm_wants_work: { claims: [{ text: "The firm prefers this work.", evidence_group_ids: [current.id] }] } } }, answers) as { brief: { why_firm_wants_work: { claims: object[] } } };
 
     answers.value.reasons = ["skills"];
     expect(buildDesiredClientEvidenceGroups("why_firm_wants_work", answers).some(group => group.id === current.id)).toBe(false);
     expect(resolveEvidenceGroupSelection("why_firm_wants_work", [current.id], answers).valid).toBe(false);
     expect(isSafeDiagnosticSourcePath("interview.followups.0", answers)).toBe(false);
+    const staleDiagnostic = safeEvidenceDiagnostic("why_firm_wants_work", decodedFollowup.brief.why_firm_wants_work.claims[0], 0, answers);
+    expect(staleDiagnostic.sourceAnswerIds).not.toContain("interview.followups.0");
+    expect(staleDiagnostic.groupIds).not.toContain(current.id);
+    expect(staleDiagnostic.expectedGroups).toEqual([]);
 
     answers.interview.followups[0].source_answer_fingerprint = interviewClarificationSourceFingerprint(answers, [...paths]);
     answers.interview.followups[0].skipped = true;

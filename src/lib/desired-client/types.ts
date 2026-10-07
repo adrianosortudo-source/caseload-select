@@ -240,6 +240,7 @@ export interface LegacyDesiredClientBrief {
 export interface AnalysisResult {
   brief: DesiredClientBriefV4;
   clarification_code: ClarificationCode | null;
+  recoveredSections?: Array<"why_firm_wants_work">;
 }
 export interface AnalysisRequestEnvelope {
   schemaVersion: 4;
@@ -293,6 +294,7 @@ export interface SavedBrief {
   generatedAt: string;
   wordingReviewed: boolean;
   mode: "ai" | "structured";
+  recoveredSections?: Array<"why_firm_wants_work">;
   refreshedFrom?: { generatedAt: string; wordingReviewed: boolean; mode: "ai" | "structured" };
   openClarificationCode?: ClarificationCode;
 }

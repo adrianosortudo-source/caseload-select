@@ -295,6 +295,7 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const developmentNeedsPaths=knownPaths(answers,["practice.development_needs"]);
   const currentCapacityPaths=knownPaths(answers,["delivery.capacity","write_ins.capacity","repeatability.additional_matters"]);
   const deliveryPreferencePaths=knownPaths(answers,["repeatability.staffing_constraint","direction.less_note","direction.less_reason"]);
+  const deliveryConditionPaths=knownPaths(answers,["delivery.conditions","delivery.limit","write_ins.conditions","write_ins.limit"]);
   const rangePaths=knownPaths(answers,["value.collected_fee","value.team_hours"]);
   const paymentClaims=paymentEvidenceClaims(answers);
   const economicsClaim=economicsPaths.length?linked(`Matter economics supplied: ${economicsText}. ${answers.value.amount_basis==="recorded"||answers.value.amount_basis==="estimated"?"":"The evidence basis remains unconfirmed. "}These details do not establish net profit.`,answers.value.amount_basis==="recorded"?"firm_reported_recorded":answers.value.amount_basis==="estimated"?"firm_reported_estimate":"hypothesis",economicsPaths):null;
@@ -318,8 +319,11 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const deliveryPreferenceClaim=deliveryPreferencePaths.length
     ? linked(`Growth prerequisites and marketing trade-offs selected by the firm: ${facts(answers,deliveryPreferencePaths)}.`,"firm_preference",deliveryPreferencePaths)
     : null;
+  const deliveryConditionClaim=deliveryConditionPaths.length
+    ? linked(`Delivery conditions and limits selected by the firm: ${facts(answers,deliveryConditionPaths)}.`,"firm_preference",deliveryConditionPaths)
+    : null;
   const firmInterviewClaims=interviewClaims(answers,[3],"Clarification: ");
-  const preferenceClaims=[...(deliveryPreferenceClaim?[deliveryPreferenceClaim]:[]),...(developmentNeedsClaim?[developmentNeedsClaim]:[]),...(newToWorkClaim?[newToWorkClaim]:[]),...firmInterviewClaims];
+  const preferenceClaims=[...(deliveryPreferenceClaim?[deliveryPreferenceClaim]:[]),...(deliveryConditionClaim?[deliveryConditionClaim]:[]),...(developmentNeedsClaim?[developmentNeedsClaim]:[]),...(newToWorkClaim?[newToWorkClaim]:[]),...firmInterviewClaims];
   const preferenceSources=firmRationale.evidence_basis==="firm_preference"&&preferenceClaims.length
     ? [...new Set([...
       firmRationale.source_answer_ids,

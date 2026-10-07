@@ -6,7 +6,7 @@ import {buildStructuredBrief} from "../brief";
 import {buildStructuredBlueprintV4} from "../structured-blueprint";
 import {answerInterviewClarification,applyAnalysis,applyStructuredFallback,beginAiRun,canEnterStage,editAnswers,enterTool,failAnalysis,initialToolState,markReviewed,moveToStage,recordClarificationAttempt,showInterviewClarification} from "../state";
 import {interviewClarificationSourceFingerprint,type InterviewClarificationPrompt} from "../types";
-import {DRAFT_STORAGE_KEY,loadDraft,saveDraft} from "../storage";
+import {DRAFT_STORAGE_KEY,loadDraft,saveDraft,savedAnalysis} from "../storage";
 import {ReviewStep} from "@/components/desired-client/ReviewStep";
 import {BriefView} from "@/components/desired-client/BriefView";
 import {ResumePanel} from "@/components/desired-client/ResumePanel";
@@ -32,7 +32,7 @@ describe("draft lifecycle and migration",()=>{
  });
  it("preserves the last valid draft when storage fails or input is invalid",()=>{const {storage,values}=memory(),a=completeAnswers();const first=saveDraft(storage,a,6);expect(first.status).toBe("saved");const previous=values.get(DRAFT_STORAGE_KEY);const broken={...storage,setItem:()=>{throw new DOMException("quota","QuotaExceededError");}} as unknown as Storage;const failed=saveDraft(broken,{...a,revision:a.revision+1},6);expect(failed.status).toBe("unavailable");expect(values.get(DRAFT_STORAGE_KEY)).toBe(previous);const unreadable={...storage,getItem:()=>{throw new DOMException("blocked","SecurityError");},setItem:()=>{throw new Error("must not overwrite without reading the previous value");}} as unknown as Storage;expect(saveDraft(unreadable,{...a,revision:a.revision+1},6).status).toBe("unavailable");expect(values.get(DRAFT_STORAGE_KEY)).toBe(previous);const invalid=saveDraft(storage,{...a,revision:-1},6);expect(invalid.status).toBe("invalid");const tooManyLines=structuredClone(a);tooManyLines.practice.firm_type=Array.from({length:13},()=>"line").join("\n");expect(saveDraft(storage,tooManyLines,6).status).toBe("invalid");expect(values.get(DRAFT_STORAGE_KEY)).toBe(previous);});
  it("restores a valid structured report directly into the report view",()=>{const {storage}=memory(),answers=completeAnswers(),state=applyStructuredFallback({...initialToolState(),view:"review" as const,stage:7 as const,answers});expect(state.savedBrief).toBeTruthy();const saved=saveDraft(storage,state.answers,7,state.savedBrief??undefined);expect(saved.status).toBe("saved");const loaded=loadDraft(storage);expect(loaded.status).toBe("ready");if(loaded.status==="ready"){const entered=enterTool({answers:loaded.draft.answers,stage:loaded.draft.currentStage as 7,savedBrief:loaded.draft.savedBrief});expect(entered.view).toBe("brief");expect(entered.mode).toBe("structured");expect(entered.savedBrief?.brief.report_version).toBe("dcm-blueprint-v4");expect(entered.legacyBriefReplaced).toBe(false);}});
- it("keeps an unchanged reviewed AI report through navigation, failed regeneration and reload",()=>{
+  it("keeps an unchanged reviewed AI report through navigation, failed regeneration and reload",()=>{
   const {storage}=memory(),answers=completeAnswers(),generated=applyAnalysis({...initialToolState(),view:"review" as const,stage:7 as const,answers},validBlueprint(answers));
   expect(saveDraft(storage,generated.answers,7,generated.savedBrief??undefined).status).toBe("saved");
   const firstLoad=loadDraft(storage);
@@ -126,6 +126,29 @@ describe("draft lifecycle and migration",()=>{
     expect(html).toContain("Review this refreshed wording before using it in marketing.");
     expect(html).toContain("This saved structured blueprint was rebuilt from its saved answers");
    }
+  });
+  it("persists the recovered-section marker across save and reopen without marking its wording reviewed",()=>{
+   const {storage}=memory(),answers=completeAnswers(),result={brief:buildStructuredBlueprintV4(answers),clarification_code:null,recoveredSections:["why_firm_wants_work"] as Array<"why_firm_wants_work">};
+   const generated=applyAnalysis({...initialToolState(),view:"review" as const,stage:7 as const,answers},result);
+   expect(generated.savedBrief?.wordingReviewed).toBe(false);
+   expect(generated.savedBrief?.recoveredSections).toEqual(["why_firm_wants_work"]);
+   expect(saveDraft(storage,generated.answers,7,generated.savedBrief??undefined).status).toBe("saved");
+   const loaded=loadDraft(storage);
+   expect(loaded.status).toBe("ready");
+   if(loaded.status==="ready"){
+    const resumed=enterTool({answers:loaded.draft.answers,stage:7,savedBrief:loaded.draft.savedBrief});
+    expect(resumed.savedBrief?.recoveredSections).toEqual(["why_firm_wants_work"]);
+    expect(resumed.savedBrief?.wordingReviewed).toBe(false);
+    const html=renderToStaticMarkup(createElement(BriefView,{saved:resumed.savedBrief!,answers:resumed.answers,dismissedCode:null,reviewed:false,onReview:()=>{},onEdit:()=>{},onAnother:()=>{},onClear:()=>{},storageWarning:false}));
+    expect(html).toContain("This section was rebuilt from your answers because the AI combined different evidence types.");
+    expect(html).toContain("AI-assisted draft with a structured recovery");
+   }
+  });
+  it("revalidates recovered results before creating their saved representation",()=>{
+   const answers=completeAnswers(),result={brief:buildStructuredBlueprintV4(answers),clarification_code:null,recoveredSections:["why_firm_wants_work"] as Array<"why_firm_wants_work">};
+   const saved=savedAnalysis(result,answers);
+   expect(saved?.recoveredSections).toEqual(["why_firm_wants_work"]);
+   expect(saved?.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work);
   });
   it("revalidates changed AI wording, resets its approval, and preserves the earlier report provenance",()=>{
    const {storage}=memory(),answers=completeAnswers(),oldDate="2026-09-29T14:00:00.000Z",current=buildStructuredBlueprintV4(answers);

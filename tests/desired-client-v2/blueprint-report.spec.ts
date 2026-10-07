@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { pathToFileURL } from "node:url";
 import { completeAnswers, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResult } from "../../src/lib/desired-client/output";
+import { buildStructuredBlueprintV4 } from "../../src/lib/desired-client/structured-blueprint";
 import { REPORT_EDIT_LINKS } from "../../src/lib/desired-client/blueprint";
 import { REPORT_FOOTNOTE_COPY } from "../../src/lib/desired-client/copy";
 import { STAGE_DEFINITIONS } from "../../src/lib/desired-client/screens";
@@ -192,4 +193,74 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
     await page.getByRole("button", { name: "Create my Desired Client Blueprint", exact: true }).click();
     await expect(blueprintTitle).toBeVisible();
   }
+});
+
+test("a recovered firm-value section survives save, reopen, HTML export and print", async ({ page }, testInfo) => {
+  const savedAnswers = structuredClone(answers);
+  Object.assign(savedAnswers.delivery, { conditions: ["scope", "information"] });
+  const savedBrief = {
+    brief: buildStructuredBlueprintV4(savedAnswers),
+    sourceAnswersVersion: "dcm-v3.3",
+    sourceAnswersSnapshot: savedAnswers,
+    sourceBriefRevision: savedAnswers.revision,
+    generatedAt: "2026-10-07T10:00:00.000Z",
+    wordingReviewed: false,
+    mode: "ai",
+    recoveredSections: ["why_firm_wants_work"],
+  };
+  let analysisPosts = 0;
+  await page.addInitScript(({ key, savedAnswers: initialAnswers, initialBrief }) => {
+    const now = Date.now();
+    localStorage.setItem(key, JSON.stringify({
+      schemaVersion: 2,
+      answers: initialAnswers,
+      currentStage: 7,
+      lastEditedAt: new Date(now).toISOString(),
+      expiresAt: new Date(now + 7 * 86400000).toISOString(),
+      savedBrief: initialBrief,
+    }));
+  }, { key: storageKey, savedAnswers, initialBrief: savedBrief });
+  await page.route(route, async requestRoute => {
+    if (requestRoute.request().method() === "GET") {
+      await requestRoute.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: true }) });
+      return;
+    }
+    analysisPosts += 1;
+    await requestRoute.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ ok: false, error: { code: "AI_DISABLED" } }) });
+  });
+
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  await page.goto("/tools/desired-client-matter");
+  await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
+  const recovery = page.locator('[data-ui-component-content="desired-client-recovery-disclosure"]');
+  await expect(recovery).toContainText("Built from your answers");
+  await expect(recovery).toContainText("This section was rebuilt from your answers because the AI combined different evidence types.");
+  await expect(page.locator(".dc-report-meta")).toContainText("AI-assisted draft with a structured recovery");
+
+  const persisted = await page.evaluate(key => JSON.parse(localStorage.getItem(key) ?? "null"), storageKey) as { savedBrief?: { recoveredSections?: string[] } } | null;
+  expect(persisted?.savedBrief?.recoveredSections).toEqual(["why_firm_wants_work"]);
+  expect(analysisPosts).toBe(0);
+  await page.reload();
+  await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
+  await expect(page.locator('[data-ui-component-content="desired-client-recovery-disclosure"]')).toBeVisible();
+
+  const downloadReady = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download HTML report", exact: true }).click();
+  const download = await downloadReady;
+  const reportPath = testInfo.outputPath("recovered-section-report.html");
+  await download.saveAs(reportPath);
+  const exported = await import("node:fs/promises").then(fs => fs.readFile(reportPath, "utf8"));
+  expect(exported).toContain("Built from your answers");
+  expect(exported).toContain("This section was rebuilt from your answers because the AI combined different evidence types.");
+
+  const printPage = await page.context().newPage();
+  await printPage.goto(pathToFileURL(reportPath).href);
+  const exportedNotice = printPage.locator(".recovery-disclosure");
+  await expect(exportedNotice).toBeVisible();
+  await printPage.emulateMedia({ media: "print" });
+  await expect(exportedNotice).toBeVisible();
+  const printPdf = await printPage.pdf({ path: testInfo.outputPath("recovered-section-report.pdf"), printBackground: true });
+  expect(printPdf.byteLength).toBeGreaterThan(0);
+  await printPage.close();
+  expect(analysisPosts).toBe(0);
 });

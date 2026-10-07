@@ -146,7 +146,8 @@ export function recordAiAttempt(s:ToolState):ToolState { if(!s.reviewRunId||s.lo
 export function failAnalysis(s:ToolState, error:"unavailable"|"invalid"|"providerCallLimitReached",retryAllowed=false):ToolState { return { ...s,view:s.savedBrief?"brief":"review",mode:"ai",savedBrief:s.savedBrief,briefNeedsUpdate:s.reportNeedsRegeneration||s.briefNeedsUpdate,reviewed:s.reportNeedsRegeneration?false:s.reviewed,activeClarification:null,loading:false,retryAllowed,error }; }
 export function applyAnalysis(s:ToolState, result:AnalysisResult):ToolState {
   if(result.clarification_code && (s.providerCallsUsed>=s.providerCallLimit || !getEligibleClarificationCodes(s.answers,s.askedClarifications).includes(result.clarification_code))) return failAnalysis(s,"invalid");
-  const savedBrief:SavedBrief={brief:result.brief,sourceAnswersVersion:"dcm-v3.3",sourceAnswersSnapshot:structuredClone(s.answers),sourceBriefRevision:s.answers.revision,generatedAt:new Date().toISOString(),wordingReviewed:false,mode:"ai",...(result.clarification_code?{openClarificationCode:result.clarification_code}:{})};
+  const recovered = result.recoveredSections?.length === 1 && result.recoveredSections[0] === "why_firm_wants_work";
+  const savedBrief:SavedBrief={brief:result.brief,sourceAnswersVersion:"dcm-v3.3",sourceAnswersSnapshot:structuredClone(s.answers),sourceBriefRevision:s.answers.revision,generatedAt:new Date().toISOString(),wordingReviewed:false,mode:"ai",...(recovered?{recoveredSections:["why_firm_wants_work"]}:{}),...(result.clarification_code?{openClarificationCode:result.clarification_code}:{})};
   return { ...s,view:result.clarification_code?"clarification":"brief",savedBrief,briefNeedsUpdate:false,reviewed:false,reportNeedsRegeneration:false,activeClarification:result.clarification_code,loading:false,error:"",legacyBriefReplaced:false };
 }
 export function applyStructuredFallback(s:ToolState):ToolState {
