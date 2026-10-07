@@ -148,7 +148,10 @@ describe("draft lifecycle and migration",()=>{
    const answers=completeAnswers(),result={brief:buildStructuredBlueprintV4(answers),clarification_code:null,recoveredSections:["why_firm_wants_work"] as Array<"why_firm_wants_work">};
    const saved=savedAnalysis(result,answers);
    expect(saved?.recoveredSections).toEqual(["why_firm_wants_work"]);
-   expect(saved?.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work);
+   expect(saved?.brief.report_version).toBe("dcm-blueprint-v4");
+   if(saved?.brief.report_version==="dcm-blueprint-v4"){
+    expect(saved.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work);
+   }
   });
   it("revalidates changed AI wording, resets its approval, and preserves the earlier report provenance",()=>{
    const {storage}=memory(),answers=completeAnswers(),oldDate="2026-09-29T14:00:00.000Z",current=buildStructuredBlueprintV4(answers);
