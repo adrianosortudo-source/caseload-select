@@ -87,5 +87,5 @@ export function useUnifiedProspectViewState() {
     })];
   }
   const returnSearch = writeUnifiedProspectView(new URLSearchParams(navigationContext.search),state).toString();
-  return {field,returnTo:prospectListReturnPath(returnSearch ? "?" + returnSearch : "",navigationContext.hash)};
+  return {field,restored,returnTo:prospectListReturnPath(returnSearch ? "?" + returnSearch : "",navigationContext.hash)};
 }

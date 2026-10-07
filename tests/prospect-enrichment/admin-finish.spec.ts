@@ -18,9 +18,21 @@ async function fixtureTransport(page: Page) {
   });
 }
 
-async function openSecondPageFirm(page: Page) {
-  await page.goto("/dev/prospect-qualified-preview?adminFinish=1&cr_text=Adil+Law&cr_cursor=frozen%2F60004&cr_coverageRevision=60004#retained-context");
-  await page.getByRole("combobox", { name: "Practice area", exact: true }).selectOption("Corporate Matters");
+async function openSecondPageFirm(page: Page, coldBoot = false) {
+  let releaseScripts = () => {};
+  if (coldBoot) {
+    const scriptGate = new Promise<void>(resolve => { releaseScripts = resolve; });
+    await page.route(/\/_next\/static\/.+\.js(?:\?.*)?$/, async route => { await scriptGate; await route.continue(); });
+  }
+  const practice = page.getByRole("combobox", { name: "Practice area", exact: true });
+  try {
+    await page.goto("/dev/prospect-qualified-preview?adminFinish=1&cr_text=Adil+Law&cr_cursor=frozen%2F60004&cr_coverageRevision=60004#retained-context", {waitUntil:coldBoot ? "commit" : "load"});
+    // Model the CI trace's first interaction before client hydration/restoration.
+    if (coldBoot) await expect(practice).toBeDisabled();
+  } finally { releaseScripts(); }
+  await practice.selectOption("Corporate Matters");
+  await expect(practice).toHaveValue("Corporate Matters");
+  await expect.poll(() => new URL(page.url()).searchParams.get("up_practiceArea")).toBe("Corporate Matters");
   await page.getByRole("combobox", { name: "City", exact: true }).selectOption("Mississauga");
   await page.getByRole("button", { name: "More qualification filters", exact: true }).click();
   await expect(page.getByText("101 of 102 unified prospect records", { exact: true })).toBeVisible();
@@ -75,7 +87,7 @@ test("canonical service facet and exact identity isolate Adil from its unbound s
 
 test("browser history Back restores existing filters, advanced controls and page", async ({ page }, testInfo) => {
   await fixtureTransport(page);
-  await openSecondPageFirm(page);
+  await openSecondPageFirm(page,true);
   await page.goBack();
   await assertRestored(page);
   await page.screenshot({ path: testInfo.outputPath("history-restored-filter-page.png"), fullPage: true });

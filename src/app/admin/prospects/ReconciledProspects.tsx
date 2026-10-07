@@ -340,6 +340,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
         </p>
       </div>
 
+      <fieldset disabled={!viewState.restored} className="contents">
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-5" aria-label="Saved prospect record views">
         {([["all", "All records", quickCounts.all], ["downtown_1_10", "Downtown 1–10", quickCounts.downtownOneToTen], ["shared_registry", "Shared registry", quickCounts.sharedRegistry], ["audit_ready", "Audit ready", quickCounts.auditReady], ["identity_review", "Identity review", quickCounts.identityReview]] as const).map(([value, label, count]) => (
           <button key={value} type="button" onClick={() => setQuickView(value)} aria-pressed={quickView === value} className={`rounded border px-3 py-2 text-left text-sm font-semibold transition ${quickView === value ? "border-navy bg-navy text-white" : "border-border-brand bg-parchment/50 text-navy hover:bg-parchment"}`}>
@@ -388,6 +389,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
       {!customRange.valid && <p className="mt-2 text-xs text-red-fail">Use whole numbers of at least 1, with a minimum no greater than the maximum.</p>}
 
       {filterChips.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Active filters">{filterChips.map((chip) => <button key={chip.label} type="button" onClick={chip.clear} className="rounded-full border border-navy/20 bg-navy/5 px-3 py-1 text-xs font-medium text-navy">{chip.label} <span aria-hidden="true">x</span><span className="sr-only">, remove filter</span></button>)}<button type="button" onClick={clearFilters} className="px-2 py-1 text-xs font-semibold text-navy underline underline-offset-2">Clear filters</button></div>}
+      </fieldset>
       <p className="mt-4 w-full text-sm text-black/60" aria-live="polite" data-ui-copy="supporting">{filtered.length} of {records.length} unified prospect records</p>
 
       {records.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No reviewed expansion records have been added yet.</div> : filtered.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No firms match the current view and filters.</div> : (
@@ -435,7 +437,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
       /></div>}
       {filtered.length > PAGE_SIZE && <div className="mt-3 flex items-center justify-between gap-3 text-sm text-black/60">
         <span>Showing {displayedPage * PAGE_SIZE + 1}–{Math.min((displayedPage + 1) * PAGE_SIZE, filtered.length)}</span>
-        <div className="flex gap-2"><button type="button" disabled={displayedPage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Previous</button><button type="button" disabled={displayedPage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Next</button></div>
+        <div className="flex gap-2"><button type="button" disabled={!viewState.restored || displayedPage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Previous</button><button type="button" disabled={!viewState.restored || displayedPage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Next</button></div>
       </div>}
     </section>
   );
