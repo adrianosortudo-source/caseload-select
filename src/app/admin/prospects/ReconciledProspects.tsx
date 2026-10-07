@@ -38,7 +38,6 @@ import {
   prospectSources,
   type UnifiedIdentityState,
   type UnifiedProspectSource,
-  type UnifiedProspectQuickView,
 } from "./prospect-unified-view";
 import ProspectActivityPanel from "../agency-crm/ProspectActivityPanel";
 import { ProspectContactStatus } from "./ProspectContactStatus";
@@ -51,6 +50,7 @@ import ReconciledResearchProfile, { ReconciledIntakeEvidence } from "./Reconcile
 import { intakeChannelKind } from "@/lib/gta-prospect-intake-evidence";
 import { prospectProfileFields, prospectProfileFieldLabel, prospectProfileValueLabel } from "@/lib/gta-prospect-profile";
 import { PROSPECT_DATA_CHANGED_EVENT } from "./prospect-data-events";
+import { useUnifiedProspectViewState } from "@/lib/gta-prospect-view-state";
 
 export type RecordsResponse = {
   records?: ReconciledGtaProspect[];
@@ -61,7 +61,6 @@ export type RecordsResponse = {
   error?: string;
 };
 
-type QuickView = UnifiedProspectQuickView;
 type CountFilter = "" | "1-10" | "2-3" | LawyerCountBand;
 const PAGE_SIZE = 100;
 
@@ -155,34 +154,35 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
     fallbackReason: initialData.fallbackReason,
   } : null);
   const [error, setError] = useState<string | null>(null);
-  const [quickView, setQuickView] = useState<QuickView>("all");
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [query, setQuery] = useState("");
-  const [profileField, setProfileField] = useState("");
-  const [profileValue, setProfileValue] = useState("");
-  const [city, setCity] = useState("");
-  const [countFilter, setCountFilter] = useState<CountFilter>("");
-  const [customMinimum, setCustomMinimum] = useState("");
-  const [customMaximum, setCustomMaximum] = useState("");
-  const [practiceArea, setPracticeArea] = useState("");
-  const [advertising, setAdvertising] = useState<EvidenceAvailability | "">("");
-  const [gbp, setGbp] = useState<EvidenceAvailability | "">("");
-  const [advertisingActivity, setAdvertisingActivity] = useState<AdvertisingActivityState | "">("");
-  const [advertisingSourceType, setAdvertisingSourceType] = useState("");
-  const [gbpOpportunityType, setGbpOpportunityType] = useState("");
-  const [websiteOpportunityType, setWebsiteOpportunityType] = useState("");
-  const [intakeChannel, setIntakeChannel] = useState("");
-  const [lawyerCountConfidence, setLawyerCountConfidence] = useState<QualifiedProspectConfidence | "">("");
-  const [freshness, setFreshness] = useState<EvidenceFreshness | "">("");
-  const [qualification, setQualification] = useState<QualificationState | "">("");
-  const [cohortId, setCohortId] = useState("");
-  const [hasOwner, setHasOwner] = useState<boolean | "">("");
-  const [hasPublicEmail, setHasPublicEmail] = useState<boolean | "">("");
-  const [source, setSource] = useState<UnifiedProspectSource | "">("");
-  const [identity, setIdentity] = useState<UnifiedIdentityState | "">("");
-  const [ownerContact, setOwnerContact] = useState<OwnerContactFilter | "">("");
-  const [downtownGeography, setDowntownGeography] = useState<DowntownGeographyStatus | "">("");
-  const [page, setPage] = useState(0);
+  const viewState = useUnifiedProspectViewState();
+  const [quickView, setQuickView] = viewState.field("quickView");
+  const [showAdvanced, setShowAdvanced] = viewState.field("showAdvanced");
+  const [query, setQuery] = viewState.field("query");
+  const [profileField, setProfileField] = viewState.field("profileField");
+  const [profileValue, setProfileValue] = viewState.field("profileValue");
+  const [city, setCity] = viewState.field("city");
+  const [countFilter, setCountFilter] = viewState.field("countFilter");
+  const [customMinimum, setCustomMinimum] = viewState.field("customMinimum");
+  const [customMaximum, setCustomMaximum] = viewState.field("customMaximum");
+  const [practiceArea, setPracticeArea] = viewState.field("practiceArea");
+  const [advertising, setAdvertising] = viewState.field("advertising");
+  const [gbp, setGbp] = viewState.field("gbp");
+  const [advertisingActivity, setAdvertisingActivity] = viewState.field("advertisingActivity");
+  const [advertisingSourceType, setAdvertisingSourceType] = viewState.field("advertisingSourceType");
+  const [gbpOpportunityType, setGbpOpportunityType] = viewState.field("gbpOpportunityType");
+  const [websiteOpportunityType, setWebsiteOpportunityType] = viewState.field("websiteOpportunityType");
+  const [intakeChannel, setIntakeChannel] = viewState.field("intakeChannel");
+  const [lawyerCountConfidence, setLawyerCountConfidence] = viewState.field("lawyerCountConfidence");
+  const [freshness, setFreshness] = viewState.field("freshness");
+  const [qualification, setQualification] = viewState.field("qualification");
+  const [cohortId, setCohortId] = viewState.field("cohortId");
+  const [hasOwner, setHasOwner] = viewState.field("hasOwner");
+  const [hasPublicEmail, setHasPublicEmail] = viewState.field("hasPublicEmail");
+  const [source, setSource] = viewState.field("source");
+  const [identity, setIdentity] = viewState.field("identity");
+  const [ownerContact, setOwnerContact] = viewState.field("ownerContact");
+  const [downtownGeography, setDowntownGeography] = viewState.field("downtownGeography");
+  const [page, setPage] = viewState.field("page");
   const [contactStates, setContactStates] = useState<SourceContactStateMap>(new Map());
   const [contactStateLoading, setContactStateLoading] = useState(false);
   const [contactStateError, setContactStateError] = useState<string | null>(null);
@@ -319,6 +319,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   ].filter(Boolean) as { label: string; clear: () => void }[];
 
   function clearFilters() {
+    setPage(0);
     setQuery(""); setProfileField(""); setProfileValue(""); setCity(""); setCountFilter(""); setCustomMinimum(""); setCustomMaximum(""); setPracticeArea(""); setAdvertising(""); setGbp("");
     setAdvertisingActivity(""); setAdvertisingSourceType(""); setGbpOpportunityType(""); setWebsiteOpportunityType(""); setIntakeChannel("");
     setLawyerCountConfidence(""); setFreshness(""); setQualification(""); setCohortId(""); setHasOwner(""); setHasPublicEmail("");

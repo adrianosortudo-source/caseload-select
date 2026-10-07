@@ -2,6 +2,7 @@ import "server-only";
 import { isIntakeChannel, type GtaProspectIntakeChannel } from "@/lib/gta-prospect-intake-evidence";
 
 const RPC_NAME = "list_gta_prospect_supplemental_evidence_for_operator_v3";
+const REGISTRY_FALLBACK_RPC = "list_gta_prospect_supplemental_evidence_for_operator_v2";
 const sourceKey = /^[a-z0-9][a-z0-9-]{1,159}$/;
 const stableFirmId = /^FIRM-[0-9A-HJKMNP-TV-Z]{26}$/;
 const databaseFirmId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -112,5 +113,27 @@ export async function listGtaProspectSupplementalEvidenceForOperator(client?: Gt
   if (!Array.isArray(result.data)) throw error("RPC did not return an array");
   const records = result.data.map(row);
   if (new Set(records.map((record) => record.sourceRecordKey)).size !== records.length) throw error("duplicate source record keys");
-  return records;
+  // v3 owns the applied internal UUID. The existing service-only v2 RPC owns
+  // registry fallback and explicit unresolved/distinct-observation precedence.
+  // Keep all v3 business evidence; use only its missing identity's exact key.
+  const missing = new Map(records.filter(record => record.identity === null && record.firmId === null && record.canonicalDomain === null).map(record => [record.sourceRecordKey, record]));
+  if (!missing.size) return records;
+  const fallback = await reader.rpc(REGISTRY_FALLBACK_RPC);
+  if (fallback.error || !Array.isArray(fallback.data)) throw error("registry identity fallback could not be verified");
+  const identities = new Map<string, GtaProspectSupplementalEvidenceSummary>();
+  const seen = new Set<string>();
+  for (const value of fallback.data) {
+    if (!object(value) || typeof value.source_record_key !== "string" || !sourceKey.test(value.source_record_key) || seen.has(value.source_record_key)) throw error("registry fallback source keys are invalid");
+    seen.add(value.source_record_key);
+    const current = missing.get(value.source_record_key);
+    if (!current || value.identity_source !== "stable_identity_registry") continue;
+    if (Object.hasOwn(value, "database_firm_id")) throw error("registry fallback has an unexpected internal UUID");
+    const verified = row({ ...value, database_firm_id: current.databaseFirmId });
+    if (verified.identity?.confidence !== "high") throw error("registry identity is not high confidence");
+    identities.set(current.sourceRecordKey, verified);
+  }
+  return records.map(record => {
+    const identity = identities.get(record.sourceRecordKey);
+    return identity ? { ...record, firmId: identity.firmId, canonicalDomain: identity.canonicalDomain, identity: identity.identity } : record;
+  });
 }

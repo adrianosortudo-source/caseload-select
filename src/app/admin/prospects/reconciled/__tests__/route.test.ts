@@ -11,6 +11,7 @@ const h = vi.hoisted(() => {
     ownerFailure: null as Error | null,
     stableIdentities: [] as unknown[],
     supplemental: [] as unknown[],
+    services: [] as unknown[],
     geographyFailure: null as Error | null,
   };
   return {
@@ -24,6 +25,7 @@ const h = vi.hoisted(() => {
       return state.ownerContacts;
     }),
     stableRead: vi.fn(async () => state.stableIdentities),
+    serviceRead: vi.fn(async () => state.services),
     Unavailable,
     OwnerUnavailable: class OwnerUnavailable extends Error {},
   };
@@ -54,7 +56,14 @@ vi.mock("@/lib/gta-prospect-stable-identity-reader", () => ({
   listGtaProspectStableIdentitiesForOperator: h.stableRead,
 }));
 
+vi.mock("@/lib/gta-prospect-service-reader", async importOriginal => ({
+  ...await importOriginal<typeof import("@/lib/gta-prospect-service-reader")>(),
+  listGtaProspectCanonicalServices: h.serviceRead,
+}));
+
 import { GET } from "../route";
+import { filterReconciledGtaProspects } from "@/lib/gta-prospect-records";
+import { prospectIdentityState } from "../../prospect-unified-view";
 
 beforeEach(() => {
   h.state.session = null;
@@ -64,10 +73,12 @@ beforeEach(() => {
   h.state.ownerFailure = null;
   h.state.stableIdentities = [];
   h.state.supplemental = [];
+  h.state.services = [];
   h.state.geographyFailure = null;
   h.read.mockClear();
   h.ownerRead.mockClear();
   h.stableRead.mockClear();
+  h.serviceRead.mockClear();
 });
 
 describe("reviewed GTA prospects route", () => {
@@ -76,6 +87,7 @@ describe("reviewed GTA prospects route", () => {
     expect(response.status).toBe(401);
     expect(h.read).not.toHaveBeenCalled();
     expect(h.ownerRead).not.toHaveBeenCalled();
+    expect(h.serviceRead).not.toHaveBeenCalled();
   });
 
   it("returns the source-controlled fixture when the projection migration is unavailable", async () => {
@@ -285,6 +297,35 @@ describe("reviewed GTA prospects route", () => {
     const body = await response.json();
     const record = body.records.find((candidate: { id: string }) => candidate.id === sourceRecordKey);
     expect(record).toMatchObject({ databaseFirmId, firmId: null, canonicalDomain: null, firmIdentity: null, supplementalEvidence: { identity: null } });
+  });
+
+  it("discovers canonical-only Adil services by existing text/practice/city filters and only its exact firm UUID", async () => {
+    h.state.session = { role: "operator" };
+    const databaseFirmId = "de1e6289-836f-487c-9e98-913f88c3db73";
+    const sourceRecordKey = "q50-adillaw-ca";
+    h.state.records = [{ ...RECONCILED_GTA_PROSPECTS[0], id: sourceRecordKey, firmName: "Adil Law Professional Corporation", practiceAreas: ["corporate matters"], officeCities: ["Milton", "Mississauga"] }, { ...RECONCILED_GTA_PROSPECTS[0], id: "q50-same-name-unlinked", firmName: "Adil Law Professional Corporation", practiceAreas: [], officeCities: ["Toronto"] }];
+    h.state.supplemental = [{ sourceRecordKey, databaseFirmId, firmId: "FIRM-104E1V0P5A10C4P69D8B84YJQ7", canonicalDomain: "adillaw.ca", identity: { matchState: "confirmed", source: "stable_identity_registry", observedOn: "2026-09-27", confidence: "high" }, websiteIntake: null, qualification: null }];
+    h.state.stableIdentities = [{ sourceRecordKey, firmId: "FIRM-104E1V0P5A10C4P69D8B84YJQ7", canonicalDomain: "adillaw.ca", sourceUrl: "https://www.adillaw.ca/", observedOn: "2026-09-27", confidence: "high" }];
+    h.state.services = [{ id: "84000000-0000-4000-8000-000000000001", firmId: databaseFirmId, name: "Notary availability" }, { id: "84000000-0000-4000-8000-000000000002", firmId: databaseFirmId, name: "CORPORATE MATTERS" }];
+    const response = await GET();
+    const body = await response.json();
+    const record = body.records.find((r: { id: string }) => r.id === sourceRecordKey);
+    expect(response.status).toBe(200);
+    expect(record.practiceAreas).toEqual(["corporate matters", "Notary availability"]);
+    expect(prospectIdentityState(record)).toBe("linked");
+    expect(record.databaseFirmId).toBe(databaseFirmId);
+    expect(filterReconciledGtaProspects(body.records, { query: "Notary availability", practiceArea: "notary availability", city: "mississauga" }).map(r => r.id)).toEqual([sourceRecordKey]);
+    expect(filterReconciledGtaProspects(body.records, { practiceArea: "notary availability", city: "toronto" })).toEqual([]);
+    expect(h.serviceRead).toHaveBeenCalledWith({ firmIds: [databaseFirmId] });
+  });
+
+  it.each(["ledger_empty", "ledger_unavailable"])("fails visibly when canonical service lineage cannot be verified on %s", async fallback => {
+    h.state.session = { role: "operator" };
+    if (fallback === "ledger_unavailable") h.state.failure = new h.Unavailable();
+    h.serviceRead.mockRejectedValueOnce(new Error("Canonical prospect services could not be fully verified."));
+    const response = await GET();
+    expect(response.status).toBe(500);
+    await expect(response.json()).resolves.toEqual({ error: "GTA prospect research records could not be loaded." });
   });
 
   it("returns a visible server error for a real ledger failure rather than concealing it as fallback", async () => {

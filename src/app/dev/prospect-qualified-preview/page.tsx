@@ -7,11 +7,14 @@ import QualifiedProspectAuditPage from "@/app/admin/prospects/audits/[firmId]/pa
 
 import { SYNTHETIC_SUPPLEMENTAL_GBP_PROSPECTS, SYNTHETIC_SAME_NAME_UNLINKED, SYNTHETIC_ZAREI_PROFILE_LINK } from "./synthetic-supplemental";
 
+import { SYNTHETIC_ADMIN_FINISH_PROSPECTS } from "./admin-finish-synthetic";
+
 export const dynamic = "force-dynamic";
 
-export default async function ProspectQualifiedPreviewPage({ searchParams }: { searchParams: Promise<{ audit?: string; supplementalGbp?: string; zareiProfile?: string }> }) {
+export default async function ProspectQualifiedPreviewPage({ searchParams }: { searchParams: Promise<{ audit?: string; supplementalGbp?: string; zareiProfile?: string; adminFinish?: string }> }) {
   if (process.env.PROSPECT_QUALIFICATION_PREVIEW !== "1") return notFound();
-  const { audit, supplementalGbp, zareiProfile } = await searchParams;
+  const { audit, supplementalGbp, zareiProfile, adminFinish } = await searchParams;
+  if (adminFinish === "1") return <main className="min-h-screen bg-parchment p-4 sm:p-6"><ReconciledProspects initialData={{ records: SYNTHETIC_ADMIN_FINISH_PROSPECTS, source: "fixture" }} /></main>;
   if (supplementalGbp === "1") return <main className="min-h-screen bg-parchment p-4 sm:p-6"><ReconciledProspects initialData={{ records: SYNTHETIC_SUPPLEMENTAL_GBP_PROSPECTS, source: "fixture" }} /></main>;
   if (zareiProfile === "1") return <main className="min-h-screen bg-parchment p-4 sm:p-6"><ReconciledProspects initialData={{ records: [SYNTHETIC_ZAREI_PROFILE_LINK, SYNTHETIC_SAME_NAME_UNLINKED], source: "fixture" }} /></main>;
   if (audit) {

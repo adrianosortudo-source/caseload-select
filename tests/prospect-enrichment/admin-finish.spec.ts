@@ -1,0 +1,53 @@
+import { expect, test } from "@playwright/test";
+
+const firmPath = "/admin/prospects/firms/de1e6289-836f-487c-9e98-913f88c3db73";
+test("canonical service facet and exact identity isolate Adil from its unbound same-name twin", async ({ page }, testInfo) => {
+  await page.route("**/api/**", route => route.fulfill({ json: { states: [] } }));
+  await page.goto("/dev/prospect-qualified-preview?adminFinish=1");
+  const practice = page.getByRole("combobox", { name: "Practice area", exact: true });
+  await expect(practice.getByRole("option", { name: "Corporate Matters", exact: true })).toHaveCount(1);
+  await expect(practice.getByRole("option", { name: "Notary Availability", exact: true })).toHaveCount(1);
+  await page.getByPlaceholder("Firm, research, source, date, or status").fill("Notary availability");
+  await practice.selectOption("Notary Availability");
+  await page.getByRole("combobox", { name: "City", exact: true }).selectOption("Mississauga");
+  await expect(page.getByText("1 of 102 unified prospect records", { exact: true })).toBeVisible();
+  const row = page.getByRole("row").filter({ hasText: "Adil Law" });
+  await expect(row.getByText("Linked identity", { exact: true })).toBeVisible();
+  await expect(row.getByText("Identity review needed", { exact: true })).toHaveCount(0);
+  await row.getByText("Research profile", { exact: true }).click();
+  await expect(row.getByRole("link", { name: /^Open this firm['\u2019]s research profile$/ })).toHaveAttribute("href", firmPath);
+  await page.screenshot({ path: testInfo.outputPath("canonical-service-and-identity.png"), fullPage: true });
+  await page.getByRole("combobox", { name: "City", exact: true }).selectOption("Toronto");
+  await expect(page.getByText("0 of 102 unified prospect records", { exact: true })).toBeVisible();
+});
+
+test("Back from the exact firm restores existing filters, advanced controls and page", async ({ page }, testInfo) => {
+  await page.route("**/api/**", route => route.fulfill({ json: { states: [] } }));
+  await page.route("**" + firmPath, route => route.fulfill({ contentType: "text/html", body: "<!doctype html><html><body><main>Exact synthetic Adil firm destination</main></body></html>" }));
+  await page.goto("/dev/prospect-qualified-preview?adminFinish=1&cr_text=Adil+Law&cr_coverageRevision=60004#retained-context");
+  await page.getByRole("combobox", { name: "Practice area", exact: true }).selectOption("Corporate Matters");
+  await page.getByRole("combobox", { name: "City", exact: true }).selectOption("Mississauga");
+  await page.getByRole("button", { name: "More qualification filters", exact: true }).click();
+  await expect(page.getByText("101 of 102 unified prospect records", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await expect(page.getByText("Showing 101–101", { exact: true })).toBeVisible();
+  await expect.poll(() => new URL(page.url()).searchParams.get("up_page")).toBe("1");
+  const row = page.getByRole("row").filter({ hasText: "Adil Law" });
+  await row.getByText("Research profile", { exact: true }).click();
+  await row.getByRole("link", { name: /^Open this firm['\u2019]s research profile$/ }).click();
+  await expect(page).toHaveURL(new RegExp(firmPath + "$"));
+  await page.goBack();
+  await expect(page.getByRole("combobox", { name: "Practice area", exact: true })).toHaveValue("Corporate Matters");
+  await expect(page.getByRole("combobox", { name: "City", exact: true })).toHaveValue("Mississauga");
+  await expect(page.getByRole("combobox", { name: "Research field", exact: true })).toBeVisible();
+  await expect(page.getByText("Showing 101–101", { exact: true })).toBeVisible();
+  await expect(page.getByRole("row").filter({ hasText: "Adil Law" })).toHaveCount(1);
+  const restored = new URL(page.url());
+  expect(restored.searchParams.get("cr_text")).toBe("Adil Law");
+  expect(restored.searchParams.get("cr_coverageRevision")).toBe("60004");
+  expect(restored.hash).toBe("#retained-context");
+  await page.screenshot({ path: testInfo.outputPath("restored-filter-page.png"), fullPage: true });
+  await page.getByRole("button", { name: "Clear filters", exact: true }).click();
+  await expect.poll(() => new URL(page.url()).searchParams.has("up_page")).toBe(false);
+  await expect(page.getByText("Showing 1–100", { exact: true })).toBeVisible();
+});
