@@ -9,6 +9,7 @@ import {
   type DesiredClientEvidenceSlot,
 } from "../evidence-contract";
 import { decodeProviderEvidenceGroups, providerBlueprintSchema } from "../provider-schema";
+import { buildDesiredClientUserPrompt } from "../prompt";
 import { isSafeDiagnosticSourcePath } from "../output";
 import { interviewClarificationSourceFingerprint } from "../types";
 import type { AnswerReferencePath, DesiredClientAnswers, EvidenceLinkedStatement } from "../types";
@@ -17,20 +18,26 @@ const firstGroup = (answers: DesiredClientAnswers, slot: Parameters<typeof build
   buildDesiredClientEvidenceGroups(slot, answers).find(group => group.source_answer_ids.includes(sourcePath));
 
 describe("Desired Client evidence-group contract", () => {
-  it("uses one slot registry for the provider schema and decoded persisted report shape", () => {
+  it("keeps slot-specific registry IDs in the prompt and decodes them to the persisted report shape", () => {
     const answers = completeAnswers();
     const schema = providerBlueprintSchema(answers) as unknown as ProviderSchemaProbe;
-    const slots = [
-      ["definition_client_type", schema.properties.brief.properties.definition_components.properties.client.properties.evidence_group_ids.items.enum],
-      ["definition_client_matter", schema.properties.brief.properties.definition_components.properties.client_matter.properties.evidence_group_ids.items.enum],
-      ["definition_reasons", schema.properties.brief.properties.definition_components.properties.reasons.properties.evidence_group_ids.items.enum],
-      ["definition_outcome", schema.properties.brief.properties.definition_components.properties.outcome.properties.evidence_group_ids.items.enum],
-      ...["client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions"].map(slot => [slot, schema.properties.brief.properties[slot].properties.claims.items.properties.evidence_group_ids.items.enum]),
-      ...["trigger", "first_contact", "decision", "desired_progress"].map(field => [`decision_pathway.${field}`, schema.properties.brief.properties.decision_pathway.properties[field].properties.evidence_group_ids.items.enum]),
-    ] as Array<[string, string[]]>;
-    for (const [slot, enumIds] of slots) {
-      expect(enumIds).toEqual(buildDesiredClientEvidenceGroups(slot as DesiredClientEvidenceSlot, answers).map(group => group.id));
+    const envelope = { schemaVersion: 4 as const, operation: "generate" as const, requestId: "11111111-1111-4111-8111-111111111111", answerRevision: answers.revision, reviewRunId: "22222222-2222-4222-8222-222222222222", analysisIndex: 0 as const, aiConsent: true as const, answers, clarifications: [] };
+    const prompt = JSON.parse(buildDesiredClientUserPrompt(envelope, [])) as { evidence_groups_by_slot: Record<string, Array<{ evidence_group_id: string }>> };
+    const slots: Array<[DesiredClientEvidenceSlot, string[]]> = [
+      ["definition_client_type", prompt.evidence_groups_by_slot.definition_client_type.map(group => group.evidence_group_id)],
+      ["definition_client_matter", prompt.evidence_groups_by_slot.definition_client_matter.map(group => group.evidence_group_id)],
+      ["definition_reasons", prompt.evidence_groups_by_slot.definition_reasons.map(group => group.evidence_group_id)],
+      ["definition_outcome", prompt.evidence_groups_by_slot.definition_outcome.map(group => group.evidence_group_id)],
+      ...(["client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions"] as const).map(slot => [slot, prompt.evidence_groups_by_slot[slot].map(group => group.evidence_group_id)] as [DesiredClientEvidenceSlot, string[]]),
+      ...(["trigger", "first_contact", "decision", "desired_progress"] as const).map(field => [`decision_pathway.${field}`, prompt.evidence_groups_by_slot[`decision_pathway.${field}`].map(group => group.evidence_group_id)] as [DesiredClientEvidenceSlot, string[]]),
+    ];
+    for (const [slot, promptIds] of slots) {
+      expect(promptIds).toEqual(buildDesiredClientEvidenceGroups(slot, answers).map(group => group.id));
     }
+    const statementSchema = schema.properties.brief.properties.definition_components.properties.client.properties.evidence_group_ids;
+    expect(statementSchema.items).toEqual({ type: "string" });
+    expect(statementSchema).not.toHaveProperty("minItems");
+    expect(statementSchema).not.toHaveProperty("maxItems");
 
     const group = firstGroup(answers, "client_goals_needs", "client.goals")!;
     const decoded = decodeProviderEvidenceGroups({ brief: { client_goals_needs: { claims: [{ text: "The client wants to understand the available options.", evidence_group_ids: [group.id] }] } } }, answers) as unknown as { clarification_code: null; brief: { client_goals_needs: { claims: EvidenceLinkedStatement[] } } };

@@ -93,19 +93,13 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
   delete schema.properties.clarification_code;
   schema.required = ["brief"];
   const sections = schema.properties.brief.properties;
-  const canonical = buildStructuredBlueprintV4(answers);
-  const setStatement = (value: unknown, slot: DesiredClientEvidenceSlot, textDescription: string, exactText?: string) => {
-    const node = value as { required: string[]; properties: { text: { description?: string; enum?: string[] }; evidence_group_ids: { description?: string; items: { enum?: string[] }; minItems?: number; maxItems?: number } } };
-    const groups = buildDesiredClientEvidenceGroups(slot, answers);
+  const setStatement = (value: unknown, slot: DesiredClientEvidenceSlot, textDescription: string) => {
+    const node = value as { required: string[]; properties: { text: { description?: string }; evidence_group_ids: { description?: string } } };
     node.required = ["text", "evidence_group_ids"];
     const firstContactGap = slot === "decision_pathway.first_contact" && !answers.situation.contact && !answers.write_ins?.contact?.trim()
       ? " The answers do not establish first contact. State that gap plainly, select only the registered unanswered situation.contact group, and do not infer contact behaviour from the client's role, timing or decision context."
       : "";
     node.properties.text.description = `${textDescription}${firstContactGap} Use only the facts supported by the selected evidence groups. A number is valid only with the same value, unit, currency, range and period in a selected source; never calculate, round or invent a figure.`;
-    if (exactText !== undefined) node.properties.text.enum = [exactText];
-    node.properties.evidence_group_ids.items.enum = groups.map(group => group.id);
-    node.properties.evidence_group_ids.minItems = 1;
-    node.properties.evidence_group_ids.maxItems = Math.min(8, groups.length);
     node.properties.evidence_group_ids.description = "Select one or more registered evidence_group_ids for this exact slot. Each group already binds its source answer IDs, evidence basis and display kind. Groups may be bundled only when their basis and kind match, their source IDs do not overlap, and the claim preserves every supported fact. Do not return source_answer_ids, kind or evidence_basis; the application derives those fields.";
   };
   const textDescriptions: Record<string, string> = {
@@ -127,12 +121,10 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
   const definitionComponents = sections.definition_components as { properties: Record<string, unknown> };
   for (const [field, slot] of Object.entries(componentSlots) as Array<[keyof typeof componentSlots, typeof componentSlots[keyof typeof componentSlots]]>) {
     const statement = definitionComponents.properties[field];
-    setStatement(statement, slot, textDescriptions[slot], canonical.definition_components[field].text);
+    setStatement(statement, slot, textDescriptions[slot]);
   }
   for (const slot of ["client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions"] as const) {
-    const card = sections[slot] as { properties: { claims: { items: unknown; minItems?: number; maxItems?: number } } };
-    card.properties.claims.minItems = 1;
-    card.properties.claims.maxItems = slot === "why_firm_wants_work" ? 7 : 6;
+    const card = sections[slot] as { properties: { claims: { items: unknown } } };
     setStatement(card.properties.claims.items, slot, textDescriptions[slot]);
   }
   const pathway = sections.decision_pathway as { properties: Record<string, unknown> };
@@ -140,10 +132,9 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     const slot = `decision_pathway.${field}` as DesiredClientEvidenceSlot;
     setStatement(pathway.properties[field], slot, textDescriptions[slot]);
   }
-  const targetIds = providerTargetClaimIds(answers);
   sections.client_and_matter = {
     type: "object",
-    properties: { claim_ids: { type: "array", items: { type: "string", enum: targetIds }, minItems: targetIds.length, maxItems: targetIds.length,
+    properties: { claim_ids: { type: "array", items: { type: "string" },
       description: "Copy the complete ordered grounded_target_claim_ids list. The application resolves each reference to its confirmed claim and citations." } },
     required: ["claim_ids"],
   };
