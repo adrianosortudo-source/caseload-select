@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { pathToFileURL } from "node:url";
 import { completeAnswers, mixedPaymentProviderBlueprint, negativeEconomicsAnswers, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResult } from "../../src/lib/desired-client/output";
+import { buildStructuredBlueprintV4 } from "../../src/lib/desired-client/structured-blueprint";
 import { startOfflineAnalysisRoute } from "./offline-analysis-route";
 import { REPORT_EDIT_LINKS } from "../../src/lib/desired-client/blueprint";
 import { REPORT_FOOTNOTE_COPY } from "../../src/lib/desired-client/copy";
@@ -199,7 +200,14 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
 
 test("the actual offline analysis HTTP route recovers mixed payment and survives save, reopen, HTML export and print", async ({ page }, testInfo) => {
   const savedAnswers = negativeEconomicsAnswers();
-  const offline = await startOfflineAnalysisRoute(mixedPaymentProviderBlueprint(savedAnswers), testInfo.outputDir);
+  const providerOutput = mixedPaymentProviderBlueprint(savedAnswers);
+  const generatedClaims = (providerOutput as { brief: { why_firm_wants_work: { claims: Array<{ text: string }> } } }).brief.why_firm_wants_work.claims;
+  generatedClaims.forEach((claim,index) => {
+    claim.text = `DISCARDED_HTTP_SENTINEL_${index}: 99 clients, audited records prove positive contribution, and payment is not predictable.`;
+  });
+  const directionClaim = buildStructuredBlueprintV4(savedAnswers).why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("practice.direction"));
+  if (!directionClaim) throw new Error("The canonical report must include the selected growth direction.");
+  const offline = await startOfflineAnalysisRoute(providerOutput, testInfo.outputDir);
   try {
     let analysisPosts = 0;
     await page.addInitScript(({ key, savedAnswers: initialAnswers }) => {
@@ -222,6 +230,9 @@ test("the actual offline analysis HTTP route recovers mixed payment and survives
         expect(body.result.recoveredSections).toEqual(["why_firm_wants_work"]);
         expect(body.providerCallsUsed).toBe(1);
         expect(body.result.brief.why_firm_wants_work.claims).toHaveLength(6);
+        expect(JSON.stringify(body.result)).not.toContain("DISCARDED_HTTP_SENTINEL");
+        expect(JSON.stringify(body.result)).not.toContain("99 clients");
+        expect(JSON.stringify(body.result)).not.toContain("audited records prove");
         await testInfo.attach("actual-offline-http-response", { body: await response.body(), contentType: "application/json" });
       }
       await requestRoute.fulfill({ response });
@@ -234,6 +245,7 @@ test("the actual offline analysis HTTP route recovers mixed payment and survives
     const recovery = page.locator('[data-ui-component-content="desired-client-recovery-disclosure"]');
     await expect(recovery).toContainText("Built from your answers");
     await expect(recovery).toContainText("This section was rebuilt from your answers because the AI combined different evidence types.");
+    await expect(page.locator(".dc-brief")).toContainText(directionClaim.text);
     await expect(page.locator(".dc-report-meta")).toContainText("AI-assisted draft with a structured recovery");
 
     for (const width of [1440, 1024, 768, 640, 375, 320]) {
@@ -293,6 +305,10 @@ test("the actual offline analysis HTTP route recovers mixed payment and survives
     const reportPath = testInfo.outputPath("recovered-section-report.html");
     await download.saveAs(reportPath);
     const exported = await import("node:fs/promises").then(fs => fs.readFile(reportPath, "utf8"));
+    expect(exported).toContain(directionClaim.text);
+    expect(exported).not.toContain("DISCARDED_HTTP_SENTINEL");
+    expect(exported).not.toContain("99 clients");
+    expect(exported).not.toContain("audited records prove");
     for (const fact of ["8000", "8500", "−C$500.00", "per matter", "recorded", "first invoice", "2 comparable matters per quarter", "An associate must be hired before increasing volume", "2 additional retained matters per quarter", "6 months"]) expect(exported).toContain(fact);
     expect(exported).toContain("Built from your answers");
     expect(exported).toContain("This section was rebuilt from your answers because the AI combined different evidence types.");

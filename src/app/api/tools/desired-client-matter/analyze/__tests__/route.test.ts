@@ -602,7 +602,12 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     process.env.VERCEL_ENV = "preview";
     const answers = negativeEconomicsAnswers();
     const request = { ...structuredClone(ENVELOPE), answerRevision: answers.revision, answers };
-    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(mixedPaymentProviderBlueprint(answers)));
+    const providerOutput = mixedPaymentProviderBlueprint(answers);
+    const generatedClaims = (providerOutput as { brief: { why_firm_wants_work: { claims: Array<{ text: string }> } } }).brief.why_firm_wants_work.claims;
+    generatedClaims.forEach((claim, index) => {
+      claim.text = `DISCARDED_HTTP_SENTINEL_${index}: 99 clients, audited records prove positive contribution, and payment is not predictable.`;
+    });
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(providerOutput));
     const response = await POST(makeRequest(JSON.stringify(request)));
     expect(response.status).toBe(200);
     await expectNoStore(response);
@@ -610,6 +615,9 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(body).toMatchObject({ ok: true, requestId: request.requestId, answerRevision: answers.revision, reviewRunId: request.reviewRunId, providerCallsUsed: 1, providerCallLimit: 1 });
     expect(body.result.recoveredSections).toEqual(["why_firm_wants_work"]);
     expect(body.result.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work);
+    expect(JSON.stringify(body.result)).not.toContain("DISCARDED_HTTP_SENTINEL");
+    expect(JSON.stringify(body.result)).not.toContain("99 clients");
+    expect(JSON.stringify(body.result)).not.toContain("audited records prove");
     expect(validateAnalysisResponseResult(body.result, answers, [])).toEqual(body.result);
     expect(mocks.generateContent).toHaveBeenCalledTimes(1);
   });

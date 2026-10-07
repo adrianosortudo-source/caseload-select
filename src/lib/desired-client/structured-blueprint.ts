@@ -286,7 +286,11 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const reasonLabels=reasonPaths.flatMap(path=>path==="value.reasons"
     ?answers.value.reasons.filter(id=>id!=="undecided").map(id=>negativeEconomics&&id==="fees"?"fee sustainability as a firm preference":getReasonLabel(id,answers.focus.route))
     :[fragment(text(answers,path))]).filter(Boolean);
-  const firmRationale=reasonPaths.length?linked(`Reasons reported by the firm: ${reasonLabels.join("; ")||text(answers,"value.reasons")}.`,"firm_preference",reasonPaths):unknownClaim("The firm's reasons for wanting more of this work are not yet established.","value.reasons");
+  const directionPaths=knownPaths(answers,["practice.direction",...(answers.practice.direction==="other"?["write_ins.aim" as const]:[])]);
+  const directionPreference=directionPaths.length?"The firm prefers this selected growth direction: "+facts(answers,directionPaths)+".":"";
+  const firmRationalePaths=unique([...reasonPaths,...directionPaths]);
+  const rationaleText=[reasonPaths.length?"Reasons reported by the firm: "+(reasonLabels.join("; ")||text(answers,"value.reasons"))+".":"",directionPreference].filter(Boolean).join(" ");
+  const firmRationale=firmRationalePaths.length?linked(rationaleText,"firm_preference",firmRationalePaths):unknownClaim("The firm's reasons for wanting more of this work are not yet established.","value.reasons");
   const economicsPaths=knownPaths(answers,["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]);
   const contribution=calculateContribution(answers);
   const economicsText=economicsPaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")+(contribution?`; ${contribution.basis==="firm_reported_estimate"?"estimated":"firm-record-based"} contribution before overhead and acquisition costs: ${contribution.amount} per matter, calculated as collected fee less direct delivery cost`:"");

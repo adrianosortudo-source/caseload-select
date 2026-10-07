@@ -495,19 +495,6 @@ function normalizeGroundedFirmValueClaims(brief: Record<string, unknown>, answer
   return { brief: { ...brief, why_firm_wants_work: { ...card, claims: nextClaims } }, blocked: false };
 }
 
-function authenticMixedProviderClaimText(value: unknown, paths: readonly AnswerReferencePath[], answers: DesiredClientAnswers): boolean {
-  if (!record(value) || typeof value.text !== "string") return false;
-  const text = value.text.trim().replace(/\s+/gu, " ");
-  if (!text || text.length > 400 || wordCount(text) > 50 || BANNED.test(text) || paths.length < 1 || paths.length > 8) return false;
-  const paymentPaths = paths.some(path => ["value.payment", "value.payment_context", "value.payment_context_basis"].includes(path));
-  if (!citationSupportsNumericTokens(text, paths, answers) ||
-    !mixedPaymentClaimLanguageIsGrounded(text, paths, answers) ||
-    !claimNegationMatchesSources(text, paths, answers) ||
-    (hasNegativeContribution(answers) && assertsPositiveEconomics(text)) ||
-    (!paymentPaths && FALSE_AUDIT_ASSERTION.test(text))) return false;
-  return !paymentPaths || paymentClaimIsAuthentic({ text, source_answer_ids: [...paths] }, answers);
-}
-
 export type WhyFirmRecoveryDiagnostic = {
   reason: "card_shape" | "card_claim_limit" | "claim_shape" | "metadata_missing" | "selection_slot" | "selection_shape" | "selection_count" | "selection_duplicate" | "selection_unresolved" | "source_overlap_or_limit" | "mixed_selection_status" | "mixed_text_not_authentic" | "selection_status" | "statement_not_valid" | "payment_not_authentic" | "payment_normalization_invalid" | "no_mixed_selection" | "replacement_limits" | "source_coverage" | "recovered";
   cardClaimCount: number;
@@ -520,7 +507,7 @@ export type WhyFirmRecoveryDiagnostic = {
   missingSourceCount?: number;
 };
 
-/** Recover only current in-slot selections with authentic text and complete source coverage. */
+/** Recover only current in-slot selections with complete source coverage. Discarded wording is not consulted. */
 function recoverMixedWhyFirmSelection(value: unknown, answers: DesiredClientAnswers): { value: unknown; recovered: boolean; diagnostic?: WhyFirmRecoveryDiagnostic } {
   if (!record(value) || !record(value.brief)) return { value, recovered: false };
   const brief = value.brief;
@@ -555,25 +542,9 @@ function recoverMixedWhyFirmSelection(value: unknown, answers: DesiredClientAnsw
     const mixed = resolvedGroups.some(group => group.evidence_basis !== first.evidence_basis || group.kind !== first.kind);
     if (mixed) {
       if (selection.valid || selection.failure !== "mixed_basis_or_kind") return blocked("mixed_selection_status", index);
-      if (!authenticMixedProviderClaimText(claim, paths, answers)) return blocked("mixed_text_not_authentic", index);
       foundMixedSelection = true;
     } else {
       if (!selection.valid || selection.failure) return blocked("selection_status", index);
-      const paymentPaths = paths.some(path => ["value.payment", "value.payment_context", "value.payment_context_basis"].includes(path));
-      if (paymentPaths && !paymentClaimIsAuthentic(claim, answers)) return blocked("payment_not_authentic", index);
-      let statementReason: string | undefined;
-      if (!validStatement(claim, answers, "why_firm_wants_work", reason => { statementReason = reason; })) {
-        // Ordinary validation already canonicalizes authentic payment paraphrases.
-        // Check the original selectors and text first, then validate that same
-        // normalization here before a later mixed claim rebuilds the section.
-        if (!paymentPaths || !["payment_context_claim_mismatch", "payment_source_must_be_isolated"].includes(statementReason ?? "") ||
-          !authenticMixedProviderClaimText(claim, paths, answers) ||
-          !statementMatchesEvidenceGroups("why_firm_wants_work", claim as unknown as EvidenceLinkedStatement, answers)) {
-          return blocked("statement_not_valid", index, { statementReason });
-        }
-        const normalized = normalizePaymentEvidence({ why_firm_wants_work: { claims: [claim] } }, answers);
-        if (normalized.blocked || !validCard(normalized.brief.why_firm_wants_work, answers, "why_firm_wants_work")) return blocked("payment_normalization_invalid", index);
-      }
     }
     paths.forEach(path => originalSources.add(path));
   }
