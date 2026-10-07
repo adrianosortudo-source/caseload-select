@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const sql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006111650_prospect_candidate_global_text_search_scoped.sql"), "utf8");
 const setIdentitySql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006133000_prospect_candidate_global_text_search_set_identity.sql"), "utf8");
 const indexOnlySql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006160000_prospect_candidate_global_text_search_index_only.sql"), "utf8");
+const directScopeSql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006170000_prospect_candidate_global_text_search_direct_scope.sql"), "utf8");
 
 describe("global candidate text search scoping migration", () => {
   it("discovers identity groups from one selective anchor and searches other terms only inside that scope", () => {
@@ -37,6 +38,20 @@ describe("global candidate text search scoping migration", () => {
     expect(indexOnlySql).not.toContain("prospect_candidate_projection_issues i ON true");
     expect(indexOnlySql).not.toContain("strpos(lower(h.original_json::text)");
   });
+  it("keeps text-only searches in direct indexed candidate scope", () => {
+    expect(directScopeSql).toContain("CREATE INDEX IF NOT EXISTS prospect_candidate_identity_search");
+    expect(directScopeSql).toContain("anchor_candidates AS MATERIALIZED");
+    expect(directScopeSql).toContain("FROM anchor_candidates\n    UNION ALL\n    SELECT candidate_id,'candidate:'||candidate_id::text");
+    expect(directScopeSql).toContain("FROM candidate_scope scope\n    WHERE NOT EXISTS (SELECT 1 FROM text_terms)");
+    expect(directScopeSql).toContain("scope.group_key IN (SELECT group_key FROM matched_groups)");
+    expect(directScopeSql).toContain("search_document @@ terms.query");
+    expect(directScopeSql).toContain("identity_links_for_candidates");
+    expect(directScopeSql).toContain("LIMIT 128");
+    expect(directScopeSql).not.toContain("max(id)");
+    expect(directScopeSql).toContain("ORDER BY id DESC LIMIT 1");
+    expect(directScopeSql).not.toContain("prospect_candidate_projection_issues");
+  });
+
   it("retains transaction boundaries and service-role-only execution", () => {
     expect(sql).toMatch(/^BEGIN;$/m);
     expect(sql).toMatch(/^COMMIT;$/m);
