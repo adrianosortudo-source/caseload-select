@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { validatedProspectListReturnPath } from "@/lib/gta-prospect-return-path";
 import { researchEvidenceFields, researchFirmHeading, appendResearchHistoryPage } from "@/lib/prospect-enrichment-presentation";
 import { Suspense, useCallback, useEffect, useState } from "react";
 import CandidateResearchList from "./CandidateResearchList";
@@ -54,7 +55,7 @@ function ProfileChoice({ choice }: { choice: ProspectEnrichmentEvidence }) {
   </article>;
 }
 
-export default function ProspectResearchDetail({ firmId, initialData }: { firmId: string; initialData?: ProspectEnrichmentFirmDetail }) {
+export default function ProspectResearchDetail({ firmId, initialData, returnTo }: { firmId: string; initialData?: ProspectEnrichmentFirmDetail; returnTo?: string }) {
   const [detail, setDetail] = useState<ProspectEnrichmentFirmDetail | null>(initialData ?? null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
@@ -70,7 +71,7 @@ export default function ProspectResearchDetail({ firmId, initialData }: { firmId
   }
   const heading = detail ? researchFirmHeading(detail) : null;
   return <div className="min-w-0 space-y-4" data-testid="prospect-research-detail">
-    <Link href="/admin/prospects" className="text-sm text-navy underline underline-offset-2">Back to prospect list</Link>
+    <Link href={validatedProspectListReturnPath(returnTo)} className="text-sm text-navy underline underline-offset-2">Back to prospect list</Link>
     {error && <ResearchError message={error} retry={() => void load()} />}
     {!detail && !error && <p role="status" className="text-sm text-black/60">Loading research profile…</p>}
     {detail && <><header data-ui-component-content="research-detail-heading"><h1 className="w-full text-pretty text-sm font-bold text-navy min-[360px]:text-base sm:text-xl lg:text-2xl" data-ui-copy="heading">{detail.firm.displayName}</h1><p className="mt-2 w-full text-pretty text-sm text-black/60" data-ui-copy="supporting">Firm research profile</p>{detail.firm.websiteUrl && <a className="mt-3 block break-all text-sm text-navy underline" href={detail.firm.websiteUrl} target="_blank" rel="noopener noreferrer">{detail.firm.websiteUrl}</a>}{heading && <div className="mt-3 space-y-2 text-sm"><p className="w-full" data-ui-copy="supporting">Domain: {heading.domains.join(", ") || (heading.identityState === "error" ? "Could not verify" : "Not recorded")}</p><p className="w-full text-pretty" data-ui-copy="supporting">{heading.complete ? "Latest evidence: " : "Latest evidence loaded: "}{heading.latestObservation.replace(/^Observed /, "")}</p><p className="w-full" data-ui-copy="supporting">{heading.freshness}. {!heading.complete ? "Evidence may be incomplete." : ""}</p></div>}<details className="mt-3"><summary className="cursor-pointer text-sm text-black/60">Firm identity details</summary><dl className="mt-2 space-y-2 break-all font-mono text-xs"><div><dt>Database UUID</dt><dd>{detail.firm.id}</dd></div><div><dt>Stable firm ID</dt><dd>{heading?.stableIds.join(", ") || (heading?.identityState === "error" ? "Could not verify" : "Not recorded")}</dd></div><div><dt>Source key</dt><dd>{detail.firm.sourceRecordKey}</dd></div><div><dt>Revision</dt><dd>{detail.firm.revision}</dd></div></dl></details></header>

@@ -43,7 +43,7 @@ describe("GTA prospect research operator read projection contract", () => {
     );
     expect(route).toContain("records: [...records, ...missingFixtures].sort(compareRecords)");
     expect(route).toContain('source: merged.missingFixtureCount > 0 ? "hybrid" : "ledger"');
-    expect(route).toContain('if (records.length === 0) return fixtureResponse("ledger_empty", ownerContacts)');
+    expect(route).toContain('if (records.length === 0) return await fixtureResponse("ledger_empty", ownerContacts)');
     expect(route).toContain("ledger_unavailable");
     expect(route).not.toContain("fixture_seed_incomplete");
     expect(sourceLabels).toContain('ReconciledProspectSource = "fixture" | "ledger" | "hybrid"');

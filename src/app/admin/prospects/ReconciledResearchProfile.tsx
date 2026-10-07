@@ -2,6 +2,7 @@
 
 import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
 import { ResearchJson } from "./ResearchEvidence";
+import { prospectFirmResearchHref, prospectListReturnPath } from "@/lib/gta-prospect-return-path";
 
 export function ReconciledIntakeEvidence({ record }: { record: ReconciledGtaProspect }) {
   const intake = record.supplementalEvidence?.websiteIntake;
@@ -15,10 +16,13 @@ export function ReconciledIntakeEvidence({ record }: { record: ReconciledGtaPros
 }
 
 /** Available for every returned source record, including records without a firm UUID. */
-export default function ReconciledResearchProfile({ record }: { record: ReconciledGtaProspect }) {
+export default function ReconciledResearchProfile({ record, returnTo }: { record: ReconciledGtaProspect; returnTo?: string }) {
   return <details className="mt-3 min-w-0" data-testid="retained-research-profile">
     <summary className="cursor-pointer text-xs font-semibold text-navy">Research profile</summary>
-    {record.databaseFirmId && <a className="inline-block text-xs font-semibold text-navy underline" href={`/admin/prospects/firms/${encodeURIComponent(record.databaseFirmId)}`}>Open this firm’s research profile</a>}
+    {record.databaseFirmId && <a className="inline-block text-xs font-semibold text-navy underline" href={prospectFirmResearchHref(record.databaseFirmId,returnTo)} onClick={event => {
+      // Capture sibling candidate controls as well as the persisted list controls.
+      event.currentTarget.href = prospectFirmResearchHref(record.databaseFirmId!,prospectListReturnPath(window.location.search,window.location.hash));
+    }}>Open this firm’s research profile</a>}
     <div className="mt-3 space-y-3" data-ui-component-content="research-retained-profile">
       <p className="w-full text-pretty text-xs text-black/60" data-ui-copy="supporting">Retained research for this source record. Selection does not remove its evidence.</p>
       {record.supplementalEvidence?.websiteIntake?.readWarning && <p role="status" className="text-xs font-semibold text-amber-900">Intake evidence held for review. Original values remain below.</p>}

@@ -24,3 +24,10 @@ export const SYNTHETIC_ADMIN_FINISH_PROSPECTS = attachGtaProspectCanonicalServic
   { id: "a3209764-f370-40ed-b177-b2b2ad14d2a7", firmId: adil.databaseFirmId!, name: "Notary availability" },
   { id: "84000000-0000-4000-8000-000000000001", firmId: adil.databaseFirmId!, name: "CORPORATE MATTERS" },
 ]);
+
+export const SYNTHETIC_ADMIN_FINISH_DETAIL: import("@/lib/prospect-enrichment-reader").ProspectEnrichmentFirmDetail = {
+  firm: { id: adil.databaseFirmId!, displayName: "Adil Law", websiteUrl: adil.websiteUrl,
+    sourceRecordKey: adil.id, revision: "synthetic-admin-finish-only" },
+  sections: [], complete: true, revisionStable: true, profileChoices: [],
+  readAt: "2026-10-07T00:00:00Z", rendererVersion: "prospect-enrichment/v1",
+};

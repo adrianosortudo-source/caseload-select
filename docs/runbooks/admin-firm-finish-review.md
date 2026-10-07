@@ -3,7 +3,7 @@
 Base: released main 234859ee4595bffc427a7c72d84128893a89cfd0 (PR393).
 Branch: codex/admin-firm-search-finish-20261007. One owner and isolated worktree.
 
-The list previously omitted canonical services such as Adil's Notary availability, discarded a registered identity when v3 had no supplemental identity observation, and reset existing filters/page after returning from a firm. The repair projects saved service names through the existing practice/text filters, restores only an exact-key high-confidence registry identity using installed v2 while retaining v3's UUID/business evidence, and persists existing controls under up_ query parameters. Candidate cr_ parameters and unrelated navigation context remain intact.
+The list previously omitted canonical services such as Adil's Notary availability, discarded a registered identity when v3 had no supplemental identity observation, and reset existing filters/page after returning from a firm. The repair projects saved service names through the existing practice/text filters, restores only an exact-key high-confidence registry identity using installed v2 while retaining v3's UUID/business evidence, and persists existing controls under up_ query parameters. The actual firm detail Back control receives a bounded, validated local list URL. Candidate cr_ parameters, frozen cursor and unrelated navigation context remain intact.
 
 ## Diff-to-scope mapping recorded before push
 
@@ -14,13 +14,20 @@ The list previously omitted canonical services such as Adil's Notary availabilit
 | src/lib/gta-prospect-supplemental-evidence-reader.ts | Defect2: guarded installed v2 registry fallback for missing exact v3 identity |
 | src/lib/gta-prospect-view-state.ts | Defect3: existing control/page URL codec and history restoration |
 | src/app/admin/prospects/ReconciledProspects.tsx | Defect3: use persisted control state and clear pagination with filters |
+| src/lib/gta-prospect-return-path.ts | Defect3: bounded local Admin list return target; reject external, malformed or oversized URLs |
+| src/app/admin/prospects/ReconciledResearchProfile.tsx | Defect3: exact firm UUID link carries current list/candidate return context |
+| src/app/admin/prospects/ProspectResearchDetail.tsx | Defect3: actual visible Back control uses the validated local return target |
+| src/app/admin/prospects/firms/[firmId]/page.tsx | Defect3: pass validated return context after the unchanged operator gate |
 | src/lib/__tests__/gta-prospect-service-reader.test.ts | Direct defect1 provenance, retraction, wrong-firm, paging, dedup and existing-filter regressions |
 | src/app/admin/prospects/reconciled/__tests__/route.test.ts | Direct defect1/2 authorization, exact Adil/city binding and visible failure regressions; prior guards retained |
 | src/lib/__tests__/gta-prospect-supplemental-evidence-reader.test.ts | Direct defect2 exact-key fallback, explicit unresolved/distinct precedence and business-evidence preservation |
 | src/lib/__tests__/gta-prospect-view-state.test.ts | Direct defect3 codec, false values, namespace isolation and invalid-value regressions |
+| src/lib/__tests__/gta-prospect-return-path.test.ts | Direct defect3 safe local return/cursor round trip and unsafe/oversized target rejection |
+| src/app/admin/prospects/reconciled/__tests__/supplemental-read-path.test.ts | Model only the added external read transport; retain every original actual-reader, lossless evidence, no-network and authorization assertion; add combined service/registry regressions |
+| src/lib/__tests__/gta-prospect-research-read-projection-contract.test.ts | Preserve the source/security contract while recognizing the required awaited fixture response |
 | src/app/dev/prospect-qualified-preview/admin-finish-synthetic.ts | Direct synthetic acceptance fixture; gated preview only, no ingestion |
 | src/app/dev/prospect-qualified-preview/page.tsx | Existing preview gate selects the direct acceptance fixture |
-| tests/prospect-enrichment/admin-finish.spec.ts | Direct rendered service/identity, exact firm link, Back/filter/page and clear regressions; existing CI browser directory |
+| tests/prospect-enrichment/admin-finish.spec.ts | Direct rendered service/identity, exact firm link, actual detail Back control plus browser-history Back, frozen candidate context/filter/page and clear regressions; existing CI browser directory |
 | docs/runbooks/admin-firm-finish-contract.md | Finite finish scope, authority and deadlines |
 | docs/runbooks/admin-firm-finish-checkpoint.md | Current execution checkpoint |
 | docs/runbooks/admin-firm-finish-review.md | This pre-push scope review and verification/release boundary |
@@ -29,9 +36,9 @@ No unmapped file may enter the push. No migration, research import, record mutat
 
 ## Verification boundary
 
-Focused Vitest: 104 tests passed across canonical service, supplemental identity, route, view-state and existing record-filter suites. The route regressions exposed and now cover both async fixture failures. Prior null-identity and PR392/393 correctness guards are retained.
+Focused Vitest: 138 tests passed across eight files covering canonical service, supplemental identity, actual combined read path, route, view-state, bounded return-target security, source contract and existing record filters. The route regressions exposed and now cover both async fixture failures. Prior null-identity and PR392/393 correctness guards are retained. The first PR394 CI run exposed eleven failures in two unchanged test fixtures: their RPC-only mock lacked the installed v2 read and canonical service transport, and the source-string assertion expected an unawaited fixture response. Only external transport and that exact source spelling were updated; original correctness assertions remain and two combined-reader regressions were added.
 
-Both browser tests passed; final TypeScript passed; scoped lint passed with four warnings and zero errors. Source hashes and these results are recorded in the execution receipt before push. The synthetic browser check uses the real list component and history, with only contact API and exact detail destination mocked. It verifies navigation to the UUID and returning to the retained view; it does not establish live firm-detail data acceptance. Browser startup used a temporary Webpack configuration because Turbopack rejected the local reused dependency junction. A TypeScript check during browser startup saw a transient missing generated routes file; the check after server completion passed without a source/configuration change.
+The latest browser, TypeScript and lint results are recorded in the execution checkpoint and receipt before push. The direct browser regressions render the real list and detail components with gated synthetic data, and exercise both the actual visible Back link and browser-history Back. Only external data/route transport is substituted; live firm-detail/source acceptance remains required after approved release. Browser startup uses a temporary Webpack configuration because Turbopack rejected the local reused dependency junction. An initial TypeScript check during browser startup saw a transient missing generated routes file; the completed original check passed without a source/configuration change.
 
 The documented real-database route is the existing CI Publication concurrency integration tests job: fresh isolated Supabase stack, all migrations, test:prospect-enrichment-integration and test:prospect-enrichment-rendered. Local disposable loopback Postgres 127.0.0.1:55436 returned ECONNREFUSED. No shared database, port or secret was changed; required exact-head CI supplies real-database verification.
 

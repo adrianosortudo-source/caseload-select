@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type Dispatch, type SetStateAction } from "react";
+import { prospectListReturnPath } from "./gta-prospect-return-path";
 import type { EvidenceAvailability, LawyerCountBand, OwnerContactFilter } from "@/lib/gta-prospect-records";
 import type { DowntownGeographyStatus } from "@/lib/downtown-toronto-cohort";
 import type { AdvertisingActivityState, EvidenceFreshness, QualificationState, QualifiedProspectConfidence } from "@/lib/qualified-gta-prospects";
@@ -61,8 +62,14 @@ export function writeUnifiedProspectView(search: URLSearchParams, state: Unified
 export function useUnifiedProspectViewState() {
   const [state,setState] = useState<UnifiedProspectViewState>(defaults);
   const [restored,setRestored] = useState(false);
+  const [navigationContext,setNavigationContext] = useState({search:"",hash:""});
   useEffect(() => {
-    const restore = () => { setState(readUnifiedProspectView(new URLSearchParams(window.location.search))); setRestored(true); };
+    const restore = () => {
+      const {search,hash} = window.location;
+      setState(readUnifiedProspectView(new URLSearchParams(search)));
+      setNavigationContext({search,hash});
+      setRestored(true);
+    };
     restore();
     window.addEventListener("popstate",restore);
     return () => window.removeEventListener("popstate",restore);
@@ -79,5 +86,6 @@ export function useUnifiedProspectViewState() {
       return Object.is(value,current[key]) ? current : { ...current,[key]:value };
     })];
   }
-  return {field};
+  const returnSearch = writeUnifiedProspectView(new URLSearchParams(navigationContext.search),state).toString();
+  return {field,returnTo:prospectListReturnPath(returnSearch ? "?" + returnSearch : "",navigationContext.hash)};
 }

@@ -1,16 +1,16 @@
 # Scoped Admin finish checkpoint
 
-Updated October 7, 2026 20:08 UTC. Scoped implementation and local acceptance are complete; draft PR/exact-head CI remain.
+Updated October7 2026 20:48UTC. Combined implementation is complete in the single owned draft PR394; final-head CI and separate merge approval remain.
 
-- Owner worktree: D:/00_Work/01_CaseLoad_Select/.worktrees/admin-firm-search-finish-20261007
-- Branch: codex/admin-firm-search-finish-20261007. Base: 234859ee4595bffc427a7c72d84128893a89cfd0, released PR393.
-- Creation session20230 was reconciled: checkout complete and clean; only the owned initializing flag was cleared. No recreation or reset.
-- Written fixes: UUID-scoped canonical service projection into existing practice/search; installed v2 registry fallback preserving v3 UUID/business evidence; existing filter/page history persistence under up_ parameters.
-- Focused validation: 104 unit tests passed across five files; two rendered service/identity/Back tests passed; final TypeScript passed; scoped lint passed with four warnings and zero errors. Browser server stopped.
-- Demonstrated fixes during verification: await both fixture response paths so reader failures stay under the existing visible 500 handler; accept the existing curly apostrophe in the browser link locator.
-- No migrations, record writes, credentials/settings changes, push, PR or merge. Walker/Baker/Brar actions paused; Afonso identity held. Desired Client and Luna work untouched.
-- Local loopback Postgres 127.0.0.1:55436 is unavailable. Existing isolated fresh-Supabase CI provides the real-database gate; no shared local database/port/secret was changed.
-- Next: final diff/scope and hash receipt, authorized push and one draft PR, final-head required CI. Return before merge for the delegated release gate.
-- Freeze: October8 21:00UTC; deadline: October9 21:00UTC.
+- Worktree: D:/00_Work/01_CaseLoad_Select/.worktrees/admin-firm-search-finish-20261007. Branch: codex/admin-firm-search-finish-20261007. Base/current main last verified20:45UTC: 234859ee4595bffc427a7c72d84128893a89cfd0 (released PR393).
+- Draft: https://github.com/adrianosortudo-source/caseload-select/pull/394. Initial head fcceb81dbe11e2e22494b4542d983450eb24d45a; follow-up commit binds the complete 22-file scope map and new receipt.
+- Three fixes: bounded UUID-scoped applied/non-retracted canonical services in existing practice/text filters; installed v2 exact-key registry fallback preserving v3 UUID/business evidence and explicit identity precedence; existing filters/page in history plus the actual detail Back control with a validated local return target.
+- Final focused validation: 138 tests passed in eight files; all three browser regressions passed (1.4minutes), including real list/detail components and the actual visible Back control, browser-history Back, candidate text/frozen cursor/coverage/hash, exact Adil UUID, service/city filtering, facet deduplication and clear-to-first-page. Screenshots visually inspected. Scoped lint: four warnings, zero errors. Final TypeScript passed after the generated-cache repair.
+- Head1 CI run37680466585 found eleven failures in two unchanged transport/source test fixtures. Corrected mocks replace only external transport, retain every original actual-reader, lossless-evidence, no-network and authorization assertion, and add two combined-reader cases. Source contract now recognizes awaited fixture errors. Nine other CI jobs and both deployments passed; the PostgreSQL contract step passed, with the old job still installing Chromium at the last read. Final-head CI is required; no obsolete-head rerun.
+- Browser trace evidence resolved typography and transport issues: literal en-dash count locators and real loopback HTTP rather than fulfilled documents that blocked local-network JavaScript hydration. No expected counts or correctness assertion was dropped. Two typechecks confirmed stale trailing bytes in generated .next/dev/types/routes.d.ts; Next CLI generated valid production types, then only that malformed development cache was replaced by the syntax-validated generated file. The final check follows that repair. No tracked source/config was changed for this issue.
+- No migrations, record writes, production changes, credentials/settings changes or merge. Walker/Baker/Brar actions paused; Afonso identity held. Desired Client and stopped Luna work untouched. No Adil or installed migration replay.
+- Local disposable Postgres127.0.0.1:55436 returned ECONNREFUSED. Existing isolated fresh-Supabase CI supplies the real-database gate; no shared database/port/secret change.
+- Next: commit/push the coherent scoped changes to the existing draft PR, inspect all eleven CI jobs and both deployments at that exact head, then return at the separate user merge gate. Authenticated deployed-main live service/source/identity/Back and candidate-search acceptance remains after approved release.
+- Freeze October8 21:00UTC; deadline October9 21:00UTC. Full Admin backlog acceptance is separate.
 
-Read docs/runbooks/admin-firm-finish-contract.md for the finite scope. Do not resume broad inventory or additional fact-family projection.
+Read docs/runbooks/admin-firm-finish-contract.md for the finite scope; docs/runbooks/admin-firm-finish-review.md maps every changed file.
