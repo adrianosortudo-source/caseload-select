@@ -115,7 +115,7 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
       <h1 tabIndex={-1} data-ui-copy="heading">{STAGE_DEFINITIONS[stage-1].heading}</h1>
       <p data-ui-copy="body">{STAGE_DEFINITIONS[stage-1].explanation}</p>
     </div>
-    {notice&&<p className="dc-alert" role="status" data-ui-copy="supporting">{notice}</p>}
+    {notice&&<div className="dc-alert dc-alert--notice" role="status" data-ui-component-content="desired-client-followup-notice">{notice.split(/(?<=\.)\s+/u).map((sentence,index)=><p key={`${index}-${sentence}`} data-ui-copy="supporting">{sentence}</p>)}</div>}
     <div className="dc-stage__layout"><div className="dc-stage__questions" data-ui-component-content={`desired-client-stage-questions-${stage}`}>
       {stage===1&&<>
         {radio("dc-practice-direction","What do you want this profile to help your firm do?",PRACTICE_DIRECTION_OPTIONS,answers.practice.direction,(a,v)=>{

@@ -55,24 +55,26 @@ describe("v4 provenance and client pathway", () => {
   });
   it("does not let client-choice feedback certify the decision pathway", () => {
     const a=completeAnswers(); a.client.choice_basis="client_feedback";
-    const result=validBlueprint();
+    let result=validBlueprint(a);
     result.brief.decision_pathway.trigger=evidence("Clients report a planned transaction.","client_reported","situation.trigger","client.choice_basis");
     expect(validateAnalysisResult(result,a,[])).toBeNull();
     a.client.pathway_basis="client_feedback";
+    result=validBlueprint(a);
     result.brief.decision_pathway.trigger.source_answer_ids=["situation.trigger","client.pathway_basis"];
     expect(validateAnalysisResult(result,a,[])).not.toBeNull();
     a.client.choice_priorities=["clear_fees"];
+    result=validBlueprint(a);
     result.brief.decision_pathway.trigger=evidence("Clients report a planned purchase and clear fees matter to them.","client_reported","situation.trigger","client.pathway_basis","client.choice_priorities","client.choice_basis");
     expect(validateAnalysisResult(result,a,[])).toBeNull();
   });
   it("does not let pathway observations certify client-choice factors", () => {
-    const a=completeAnswers(); a.client.pathway_basis="firm_observation";
-    const result=validBlueprint();
+    const a=completeAnswers(); a.client.pathway_basis="firm_observation"; a.client.choice_detail="Clear explanations";
+    let result=validBlueprint(a);
     result.brief.why_client_chooses_firm.claims=[evidence("Clients value clear explanations.","firm_reported_observation","client.choice_detail","client.pathway_basis")];
-    a.client.choice_detail="Clear explanations";
     expect(validateAnalysisResult(result,a,[])).toBeNull();
     a.client.choice_basis="firm_observation";
-    result.brief.why_client_chooses_firm.claims[0].source_answer_ids=["client.choice_detail","client.choice_basis"];
+    result=validBlueprint(a);
+    result.brief.why_client_chooses_firm.claims=[evidence("Clients value clear explanations.","firm_reported_observation","client.choice_detail","client.choice_basis")];
     expect(validateAnalysisResult(result,a,[])).not.toBeNull();
   });
   it("rejects invented numbers and no-evidence presented as observed demand", () => {

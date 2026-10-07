@@ -1,5 +1,5 @@
 import { BLUEPRINT_RESPONSE_SCHEMA } from "./output";
-import { attachProviderEvidenceSelection, buildDesiredClientEvidenceGroups, DESIRED_CLIENT_EVIDENCE_SLOTS, resolveEvidenceGroupSelection, type DesiredClientEvidenceSlot } from "./evidence-contract";
+import { attachProviderEvidenceSelection, buildDesiredClientEvidenceGroups, resolveEvidenceGroupSelection, type DesiredClientEvidenceSlot } from "./evidence-contract";
 import { buildStructuredBlueprintV4 } from "./structured-blueprint";
 import type { DesiredClientAnswers } from "./types";
 
@@ -87,7 +87,7 @@ export function decodeProviderEvidenceGroups(value: unknown, answers: DesiredCli
 
 export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown {
   const schema = providerStructureSchema(BLUEPRINT_RESPONSE_SCHEMA) as unknown as {
-    properties: { clarification_code?: unknown; brief: { properties: Record<string, any>; required: string[] } };
+    properties: { clarification_code?: unknown; brief: { properties: Record<string, unknown>; required: string[] } };
     required: string[];
   };
   delete schema.properties.clarification_code;
@@ -124,8 +124,9 @@ export function providerBlueprintSchema(answers: DesiredClientAnswers): unknown 
     "decision_pathway.desired_progress": "One concise statement, at most 30 words and 240 characters, about progress the client seeks.",
   };
   const componentSlots = { client: "definition_client_type", client_matter: "definition_client_matter", reasons: "definition_reasons", outcome: "definition_outcome" } as const;
+  const definitionComponents = sections.definition_components as { properties: Record<string, unknown> };
   for (const [field, slot] of Object.entries(componentSlots) as Array<[keyof typeof componentSlots, typeof componentSlots[keyof typeof componentSlots]]>) {
-    const statement = (sections.definition_components.properties as Record<string, unknown>)[field];
+    const statement = definitionComponents.properties[field];
     setStatement(statement, slot, textDescriptions[slot], canonical.definition_components[field].text);
   }
   for (const slot of ["client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions"] as const) {

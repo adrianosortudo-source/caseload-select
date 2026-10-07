@@ -384,7 +384,9 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
 
   it("does not log provider-supplied answer paths or model text", async () => {
     process.env.VERCEL_ENV = "preview";
-    const invalid = providerBlueprint(MODEL_RESULT, B0) as any;
+    const invalid = providerBlueprint(MODEL_RESULT, B0) as {
+      brief: { definition_components: { client: { text: string; evidence_group_ids: string[]; source_answer_ids?: string[] } } };
+    };
     invalid.brief.definition_components.client.text = "Ontario business owners";
     invalid.brief.definition_components.client.evidence_group_ids = [];
     invalid.brief.definition_components.client.source_answer_ids = ["practice.firm_type"];
