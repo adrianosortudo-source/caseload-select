@@ -6,7 +6,7 @@ import { buildDraftPreview } from "@/lib/desired-client/brief";
 import { validateAnalysisResult } from "@/lib/desired-client/output";
 import { getEligibleClarificationCodes } from "@/lib/desired-client/clarifications";
 import { clearDraft, loadDraft, saveDraft, type DraftLoadResult } from "@/lib/desired-client/storage";
-import { advanceStage, answerClarification, answerInterviewClarification, applyAnalysis, applyStructuredFallback, beginAiRun, canEnterStage, commitComparison, editAnswers, enterTool, failAnalysis, initialToolState, markReviewed, moveToStage, recordAiAttempt, recordClarificationAttempt, recordGenerationCalls, showInterviewClarification, type ToolState } from "@/lib/desired-client/state";
+import { advanceStage, answerClarification, answerInterviewClarification, applyAnalysis, applyStructuredFallback, beginAiRun, canEnterStage, commitComparison, editAnswers, enterTool, failAnalysis, initialToolState, markReviewed, moveToStage, recordAiAttempt, recordClarificationAttempt, showInterviewClarification, type ToolState } from "@/lib/desired-client/state";
 import { STAGE_DEFINITIONS, type StageId } from "@/lib/desired-client/screens";
 import { isInterviewClarificationAskPrompt, normalizeInterviewClarificationContinuePrompt } from "@/lib/desired-client/interview-clarification-contract";
 import type { AnalysisFailureEnvelope, AnalysisRequestEnvelope, AnalysisSuccessEnvelope, DesiredClientAnswers, InterviewClarificationRequestEnvelope, InterviewClarificationSuccessEnvelope, InterviewStage, PendingWorkComparison, SavedDraft } from "@/lib/desired-client/types";
@@ -67,7 +67,7 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
  const start=(draft?:SavedDraft)=>{if(!draft&&savedDraft){setReplacePrompt(true);return;}abortRef.current?.abort();setNotice("");commit(enterTool(draft?{answers:draft.answers,stage:draft.currentStage as StageId,savedBrief:draft.savedBrief,reportNeedsRegeneration:draft.reportNeedsRegeneration}:undefined));};
  const updateAnswers=(edit:(a:import("@/lib/desired-client/types").DesiredClientAnswers)=>import("@/lib/desired-client/types").DesiredClientAnswers)=>{abortRef.current?.abort();commit(editAnswers(stateRef.current,edit));};
  const sendAnalysis=useCallback(async(snapshot:ToolState)=>{
-   if(!snapshot.reviewRunId||snapshot.requestCount<1||snapshot.requestCount>3||snapshot.generationCallsUsed>=3||!snapshot.loading)return;
+   if(!snapshot.reviewRunId||snapshot.requestCount<1||snapshot.requestCount>3||!snapshot.loading)return;
     const requestId=crypto.randomUUID(),controller=new AbortController();abortRef.current=controller;setAnalysisReference(null);
     const reportFailure=(phase:string,status?:number,diagnostic?:{field:string;reason:string},code?:unknown)=>{
       setAnalysisReference(requestId);
@@ -76,36 +76,32 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
     };
    let timedOut=false;
    const timeout=window.setTimeout(()=>{timedOut=true;controller.abort();},27000);
-   let responseGenerationCalls:number|null=null;
    const request:AnalysisRequestEnvelope={schemaVersion:4,operation:"generate",requestId,answerRevision:snapshot.answers.revision,reviewRunId:snapshot.reviewRunId,analysisIndex:(snapshot.requestCount-1) as 0|1|2,aiConsent:true,answers:snapshot.answers,clarifications:[]};
    const sameRequest=(current:ToolState)=>current.reviewRunId===snapshot.reviewRunId&&current.answers.revision===snapshot.answers.revision&&current.requestCount===snapshot.requestCount;
    try{
      const response=await fetch("/api/tools/desired-client-matter/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(request),signal:controller.signal});
-     const generationHeader=response.headers.get("X-Desired-Client-Generation-Calls");
-     if(generationHeader!==null&&/^[0-3]$/.test(generationHeader))responseGenerationCalls=Number(generationHeader);
      let payload:unknown;
      try{payload=await response.json();}catch{payload=null;}
-     let current=stateRef.current;
+     const current=stateRef.current;
      if(controller.signal.aborted||!sameRequest(current))return;
-     current=recordGenerationCalls(current,responseGenerationCalls??3-current.generationCallsUsed);
       if(!payload||typeof payload!=="object"||!("ok" in payload)) { reportFailure("response_shape",response.status);commit(failAnalysis(current,"invalid"));return; }
      if(!response.ok||payload.ok!==true){
         const failure=payload as Partial<AnalysisFailureEnvelope>;
         const code=failure.error?.code;
         reportFailure("api_error",response.status,failure.error?.diagnostic,code);
        if(code==="AI_DISABLED")setAiAvailable(false);
-       const retry=(code==="AI_UNAVAILABLE"||code==="INVALID_AI_OUTPUT")&&current.requestCount<3&&current.generationCallsUsed<3;
+       const retry=(code==="AI_UNAVAILABLE"||code==="INVALID_AI_OUTPUT")&&current.requestCount<3;
        commit(failAnalysis(current,code==="INVALID_AI_OUTPUT"?"invalid":"unavailable",retry));return;
      }
      const success=payload as AnalysisSuccessEnvelope;
-      if(success.requestId!==requestId||success.answerRevision!==request.answerRevision||success.reviewRunId!==request.reviewRunId){reportFailure("response_identity",response.status);commit(failAnalysis(current,"invalid",current.requestCount<3&&current.generationCallsUsed<3));return;}
+      if(success.requestId!==requestId||success.answerRevision!==request.answerRevision||success.reviewRunId!==request.reviewRunId){reportFailure("response_identity",response.status);commit(failAnalysis(current,"invalid",current.requestCount<3));return;}
       let validationFailure:{field:string;reason:string}|undefined;
       const result=validateAnalysisResult(success.result,current.answers,getEligibleClarificationCodes(current.answers,current.askedClarifications).slice(0,1),failure=>{validationFailure??={field:failure.field,reason:failure.reason};});
-      if(!result){reportFailure("client_validation",response.status,validationFailure);commit(failAnalysis(current,"invalid",current.requestCount<3&&current.generationCallsUsed<3));return;}
+      if(!result){reportFailure("client_validation",response.status,validationFailure);commit(failAnalysis(current,"invalid",current.requestCount<3));return;}
      commit(applyAnalysis(current,result));
    }catch{
      const current=stateRef.current;
-      if(sameRequest(current)&&(timedOut||!controller.signal.aborted)){reportFailure(timedOut?"timeout":"network");const exhausted=recordGenerationCalls(current,3-current.generationCallsUsed);commit(failAnalysis(exhausted,"unavailable",false));}
+      if(sameRequest(current)&&(timedOut||!controller.signal.aborted)){reportFailure(timedOut?"timeout":"network");commit(failAnalysis(current,"unavailable",current.requestCount<3));}
    }finally{window.clearTimeout(timeout);if(abortRef.current===controller)abortRef.current=null;}
  },[commit]);
  const requestStageClarification=useCallback(async()=>{

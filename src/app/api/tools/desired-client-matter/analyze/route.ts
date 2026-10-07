@@ -129,13 +129,9 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
   // v4 creates the complete blueprint in one response. Follow-ups happen
   // during discovery through the separate clarify operation, never afterward.
   const eligibleCodes: [] = [];
-  const outcome = await runDesiredClientAnalysis(validation.value, eligibleCodes, async () =>
-    (await checkRateLimit("desiredClientGeneration", validation.value.reviewRunId)).ok,
-  );
-  const generationHeaders = { "X-Desired-Client-Generation-Calls": String(outcome.providerCallsUsed) };
-  if (outcome.mode === "rate_limited") return fail(validation.value.requestId, "RATE_LIMITED", 429, generationHeaders);
-  if (outcome.mode === "unavailable") return fail(validation.value.requestId, "AI_UNAVAILABLE", 502, generationHeaders);
-  if (outcome.mode === "invalid_output") return fail(validation.value.requestId, "INVALID_AI_OUTPUT", 502, generationHeaders, outcome.diagnostic);
+  const outcome = await runDesiredClientAnalysis(validation.value, eligibleCodes);
+  if (outcome.mode === "unavailable") return fail(validation.value.requestId, "AI_UNAVAILABLE", 502);
+  if (outcome.mode === "invalid_output") return fail(validation.value.requestId, "INVALID_AI_OUTPUT", 502, {}, outcome.diagnostic);
 
   const response: AnalysisSuccessEnvelope = {
     ok: true,
@@ -149,5 +145,5 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
     outcome: "success",
     model: desiredClientModelId(),
   });
-  return NextResponse.json(response, { headers: { ...NO_STORE, ...generationHeaders } });
+  return NextResponse.json(response, { headers: NO_STORE });
 }

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { completeAnswers, evidence, providerBlueprint, providerCard, providerStatement, validBlueprint, type ProviderSchemaProbe } from "./blueprint-helpers";
 import { decodeProviderTargetCard, providerBlueprintSchema, providerTargetClaimIds } from "../provider-schema";
-import { runDesiredClientAnalysis as runAnalysisWithBudget } from "../analyze";
+import { runDesiredClientAnalysis as runAnalysis } from "../analyze";
 import { validateAnalysisResult } from "../output";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { buildBlueprintViewModel } from "../blueprint";
@@ -94,7 +94,7 @@ vi.mock("@google/generative-ai", () => ({ GoogleGenerativeAI: class {
 } }));
 const request = (): AnalysisRequestEnvelope => ({ schemaVersion: 4, operation: "generate", requestId: "11111111-1111-4111-8111-111111111111", answerRevision: 3, reviewRunId: "22222222-2222-4222-8222-222222222222", analysisIndex: 0, aiConsent: true, answers: completeAnswers(), clarifications: [] });
 const runDesiredClientAnalysis = (input: AnalysisRequestEnvelope, eligibleCodes: readonly ClarificationCode[]) =>
-  runAnalysisWithBudget(input, eligibleCodes, async () => true);
+  runAnalysis(input, eligibleCodes);
 
 describe("provider output contract", () => {
   beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("GOOGLE_AI_API_KEY", "test-only"); });
@@ -609,24 +609,5 @@ describe("provider output contract", () => {
     expect(pathway?.evidence_basis).toBe("firm_reported_observation");
     expect(choiceIds).not.toContain(pathway?.id);
     expect(pathwayIds).not.toContain(choice?.id);
-  });
-  it("counts each authorized provider call and stops before a denied repair call", async () => {
-    vi.stubEnv("VERCEL_ENV", "production");
-    const invalid = validBlueprint();
-    invalid.brief.why_firm_wants_work.claims[0] = {
-      text: "Unsupported private repair-budget claim",
-      source_answer_ids: ["practice.experience"],
-      evidence_basis: "client_reported",
-      kind: "experience",
-    };
-    provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(invalid) } });
-    const reserve = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
-
-    const outcome = await runAnalysisWithBudget(request(), [], reserve);
-
-    expect(outcome.mode).toBe("rate_limited");
-    expect(outcome.providerCallsUsed).toBe(2);
-    expect(reserve).toHaveBeenCalledTimes(3);
-    expect(provider.generate).toHaveBeenCalledTimes(2);
   });
 });

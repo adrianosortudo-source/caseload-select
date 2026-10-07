@@ -10,7 +10,7 @@ export type ToolView = "welcome" | "questions" | "comparison" | "review" | "clar
 export interface ToolState {
   view: ToolView; mode: "ai" | "structured" | null; answers: DesiredClientAnswers; stage: StageId;
   visitedStages: StageId[]; stagesToRevisit: StageId[]; comparisonStep: 1|2|3; comparisonDraft: PendingWorkComparison|null;
-  savedBrief: SavedBrief|null; briefNeedsUpdate:boolean; reviewed: boolean; aiConsent: boolean; reviewRunId: string|null; requestCount: number; generationCallsUsed:number;
+  savedBrief: SavedBrief|null; briefNeedsUpdate:boolean; reviewed: boolean; aiConsent: boolean; reviewRunId: string|null; requestCount: number;
   reportNeedsRegeneration: boolean;
   askedClarifications: ClarificationCode[]; activeClarification: ClarificationCode|null; dismissedCode: ClarificationCode|null;
   interviewRunId:string|null; interviewPrompt:Extract<InterviewClarificationPrompt,{outcome:"ask"}>|null; clarificationLoading:boolean;
@@ -18,7 +18,7 @@ export interface ToolState {
   legacyBriefReplaced:boolean;
 }
 const emptyMap = () => ({ CLIENT_MATTER_UNCLEAR:null, VALUE_EFFORT_CONFLICT:null, CAPACITY_CONFLICT:null, REPEATABILITY_UNPROVEN:null, OPPORTUNITY_UNSUPPORTED:null });
-export function initialToolState(): ToolState { return { view:"welcome", mode:null, answers:emptyAnswers(), stage:1, visitedStages:[], stagesToRevisit:[], comparisonStep:1, comparisonDraft:null, savedBrief:null, briefNeedsUpdate:false, reviewed:false, aiConsent:false, reviewRunId:null, requestCount:0, generationCallsUsed:0, reportNeedsRegeneration:false, askedClarifications:[], activeClarification:null, dismissedCode:null, interviewRunId:null, interviewPrompt:null, clarificationLoading:false, loading:false, retryAllowed:false, error:"", storageMessage:"", copyFailed:false,legacyBriefReplaced:false }; }
+export function initialToolState(): ToolState { return { view:"welcome", mode:null, answers:emptyAnswers(), stage:1, visitedStages:[], stagesToRevisit:[], comparisonStep:1, comparisonDraft:null, savedBrief:null, briefNeedsUpdate:false, reviewed:false, aiConsent:false, reviewRunId:null, requestCount:0, reportNeedsRegeneration:false, askedClarifications:[], activeClarification:null, dismissedCode:null, interviewRunId:null, interviewPrompt:null, clarificationLoading:false, loading:false, retryAllowed:false, error:"", storageMessage:"", copyFailed:false,legacyBriefReplaced:false }; }
 export function enterTool(restored?:{answers:DesiredClientAnswers;stage:StageId;savedBrief?:SavedBrief;reportNeedsRegeneration?:boolean}):ToolState {
   const savedBrief=restored?.savedBrief;
   const stage=restored?.stage??1;
@@ -78,7 +78,7 @@ export function editAnswers(s:ToolState, edit:(answers:DesiredClientAnswers)=>De
   const changedStage:StageId = areaChanged || workChanged ? 2 : s.stage;
   const downstream = ([2,3,4,5,6] as StageId[]).filter((stage) => stage > changedStage && s.visitedStages.includes(stage));
   const visitedStages = s.visitedStages.filter((stage) => stage <= changedStage);
-  return { ...s,answers,savedBrief:null,briefNeedsUpdate:!!s.savedBrief||s.briefNeedsUpdate,reviewed:false,reviewRunId:null,requestCount:0,generationCallsUsed:0,askedClarifications:[],activeClarification:null,dismissedCode:null,interviewRunId:areaChanged||workChanged?null:s.interviewRunId,interviewPrompt:null,clarificationLoading:false,loading:false,error:areaChanged||workChanged?"focusChanged":"",visitedStages,stagesToRevisit:[...new Set([...s.stagesToRevisit,...downstream])],view:"questions",stage:changedStage };
+  return { ...s,answers,savedBrief:null,briefNeedsUpdate:!!s.savedBrief||s.briefNeedsUpdate,reviewed:false,reviewRunId:null,requestCount:0,askedClarifications:[],activeClarification:null,dismissedCode:null,interviewRunId:areaChanged||workChanged?null:s.interviewRunId,interviewPrompt:null,clarificationLoading:false,loading:false,error:areaChanged||workChanged?"focusChanged":"",visitedStages,stagesToRevisit:[...new Set([...s.stagesToRevisit,...downstream])],view:"questions",stage:changedStage };
 }
 export function recordClarificationAttempt(s:ToolState, stage:1|2|3|4|5|6, runId:string):ToolState {
   const answers=structuredClone(s.answers);
@@ -96,7 +96,7 @@ export function answerInterviewClarification(s:ToolState, answer:string, choiceI
   const record:InterviewClarificationAnswer={id:prompt.id,stage:prompt.stage,purpose:prompt.purpose,source_answer_ids:prompt.source_answer_ids,source_answer_fingerprint:interviewClarificationSourceFingerprint(s.answers,prompt.source_answer_ids),question:prompt.question,answer:skipped?"":answer.replace(/\r\n?/g,"\n").trim(),...(choiceId?{choiceId}:{}),skipped,reflection:prompt.reflection};
   const answers=structuredClone(s.answers); answers.interview.followups=[...answers.interview.followups,record]; answers.revision++;
   const next=advanceStage({ ...s, answers, view:"questions", interviewPrompt:null, clarificationLoading:false });
-  return { ...next, savedBrief:null, briefNeedsUpdate:!!s.savedBrief||s.briefNeedsUpdate, reviewed:false, reviewRunId:null, requestCount:0, generationCallsUsed:0, askedClarifications:[], error:"" };
+  return { ...next, savedBrief:null, briefNeedsUpdate:!!s.savedBrief||s.briefNeedsUpdate, reviewed:false, reviewRunId:null, requestCount:0, askedClarifications:[], error:"" };
 }
 export function updateComparisonDraft(s:ToolState, draft:PendingWorkComparison|null, step?:1|2|3):ToolState { return { ...s,comparisonDraft:draft,comparisonStep:step??s.comparisonStep,view:"comparison",error:"" }; }
 export function commitComparison(s:ToolState, certainty:"chosen"|"provisional"):ToolState {
@@ -123,21 +123,16 @@ export function commitComparison(s:ToolState, certainty:"chosen"|"provisional"):
   if(answers.value.fee_effort===null) answers.value.fee_effort=selected.fee_effort;
   if(answers.delivery.capacity===null) answers.delivery.capacity=selected.capacity;
   answers.revision=before.revision+1; answers.clarifications=emptyMap();
-  return { ...s,answers,view:"questions",stage:2,visitedStages:[1,2],stagesToRevisit:[3,4,5,6],comparisonDraft:null,savedBrief:null,briefNeedsUpdate:!!s.savedBrief||s.briefNeedsUpdate,reviewed:false,reviewRunId:null,requestCount:0,generationCallsUsed:0,askedClarifications:[],activeClarification:null,dismissedCode:null,loading:false,error:workChanged?"focusChanged":"changed" };
+  return { ...s,answers,view:"questions",stage:2,visitedStages:[1,2],stagesToRevisit:[3,4,5,6],comparisonDraft:null,savedBrief:null,briefNeedsUpdate:!!s.savedBrief||s.briefNeedsUpdate,reviewed:false,reviewRunId:null,requestCount:0,askedClarifications:[],activeClarification:null,dismissedCode:null,loading:false,error:workChanged?"focusChanged":"changed" };
 }
-export function beginReview(s:ToolState):ToolState { return canEnterStage(s,7)?{ ...s,view:"review",stage:7,savedBrief:null,reviewed:false,error:"",reviewRunId:null,requestCount:0,generationCallsUsed:0,askedClarifications:[],activeClarification:null,dismissedCode:null }:s; }
+export function beginReview(s:ToolState):ToolState { return canEnterStage(s,7)?{ ...s,view:"review",stage:7,savedBrief:null,reviewed:false,error:"",reviewRunId:null,requestCount:0,askedClarifications:[],activeClarification:null,dismissedCode:null }:s; }
 export function beginAiRun(s:ToolState, createId:()=>string):ToolState {
   if(!canEnterStage(s,7)) return s;
   const answers=structuredClone(s.answers), cleared=Object.values(answers.clarifications).some(v=>v!==null);
   answers.clarifications=emptyMap(); if(cleared) answers.revision++;
-  return { ...s,answers,aiConsent:true,reviewRunId:createId(),requestCount:1,generationCallsUsed:0,askedClarifications:[],activeClarification:null,dismissedCode:null,savedBrief:null,briefNeedsUpdate:false,reviewed:false,loading:true,retryAllowed:false,error:"" };
+  return { ...s,answers,aiConsent:true,reviewRunId:createId(),requestCount:1,askedClarifications:[],activeClarification:null,dismissedCode:null,savedBrief:null,briefNeedsUpdate:false,reviewed:false,loading:true,retryAllowed:false,error:"" };
 }
-export function recordGenerationCalls(s:ToolState, count:number):ToolState {
-  if(!Number.isSafeInteger(count)||count<0) return s;
-  const generationCallsUsed=Math.min(3,s.generationCallsUsed+count);
-  return generationCallsUsed===s.generationCallsUsed?s:{...s,generationCallsUsed};
-}
-export function recordAiAttempt(s:ToolState):ToolState { if(!s.reviewRunId||s.loading||!s.retryAllowed||s.requestCount>=3||s.generationCallsUsed>=3) return s; return { ...s,view:"review",stage:7,requestCount:s.requestCount+1,loading:true,retryAllowed:false,error:"" }; }
+export function recordAiAttempt(s:ToolState):ToolState { if(!s.reviewRunId||s.loading||!s.retryAllowed||s.requestCount>=3) return s; return { ...s,view:"review",stage:7,requestCount:s.requestCount+1,loading:true,retryAllowed:false,error:"" }; }
 export function failAnalysis(s:ToolState, error:"unavailable"|"invalid",retryAllowed=false):ToolState { return { ...s,view:"review",mode:"ai",savedBrief:null,briefNeedsUpdate:false,reviewed:false,activeClarification:null,loading:false,retryAllowed,error }; }
 export function applyAnalysis(s:ToolState, result:AnalysisResult):ToolState {
   if(result.clarification_code && (s.requestCount>=3 || !getEligibleClarificationCodes(s.answers,s.askedClarifications).includes(result.clarification_code))) return failAnalysis(s,"invalid");
@@ -160,7 +155,7 @@ export function answerClarification(s:ToolState, choice:string):ToolState {
   const custom=!canonical&&choice.trim().length>0&&choice.length<=220;
   if(!canonical&&!custom) return { ...s,error:"invalid" };
   if(choice==="open"||choice==="skip"||s.requestCount>=3) return { ...s,view:"brief",dismissedCode:code,activeClarification:null,reviewRunId:null,loading:false,error:"" };
-  if(code==="CLIENT_MATTER_UNCLEAR"&&choice==="choose_specific") return { ...s,view:"questions",stage:2,reviewRunId:null,requestCount:0,generationCallsUsed:0,askedClarifications:[],activeClarification:null,loading:false,error:"" };
+  if(code==="CLIENT_MATTER_UNCLEAR"&&choice==="choose_specific") return { ...s,view:"questions",stage:2,reviewRunId:null,requestCount:0,askedClarifications:[],activeClarification:null,loading:false,error:"" };
   const answers=structuredClone(s.answers);
   answers.clarifications[code]=choice as NonNullable<DesiredClientAnswers["clarifications"][ClarificationCode]>;
   if(code==="CAPACITY_CONFLICT"&&choice==="limited_now") answers.delivery.capacity="limited";
