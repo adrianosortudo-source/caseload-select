@@ -169,7 +169,7 @@ test("a spent local follow-up budget is explained accurately and wraps at every 
   await page.getByRole("button", { name: "Continue", exact: true }).click();
   const notice = page.locator(".dc-stage > .dc-alert");
   await expect(notice.locator("p")).toHaveText([
-    "AI follow-up checks have reached the draft limit.",
+    "The local follow-up request budget has reached its limit.",
     "Your answers are saved.",
     "Continue without AI follow-up.",
   ]);
