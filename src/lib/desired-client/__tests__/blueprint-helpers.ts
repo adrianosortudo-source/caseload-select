@@ -40,6 +40,7 @@ export function validBlueprint(answers: DesiredClientAnswers = completeAnswers()
  brief.definition_components.client = grounded.definition_components.client;
  brief.definition_components.client_matter = grounded.definition_components.client_matter;
  brief.definition_components.reasons = grounded.definition_components.reasons;
+ brief.definition_components.outcome = grounded.definition_components.outcome;
  brief.client_and_matter.claims[0] = grounded.client_and_matter.claims[0];
  brief.definition_sentence=buildDefinitionSentence(brief,false,answers.client.goal_detail,answers.client.goals.includes("unknown"));
  return {brief,clarification_code:null};

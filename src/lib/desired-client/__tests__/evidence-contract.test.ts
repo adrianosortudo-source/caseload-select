@@ -121,6 +121,9 @@ describe("Desired Client evidence-group contract", () => {
     expect(resolveEvidenceGroupSelection("why_firm_wants_work", [decision.id], answers).valid).toBe(false);
     expect(resolveEvidenceGroupSelection("decision_pathway.decision", [capacity.id], answers).valid).toBe(false);
     expect(resolveEvidenceGroupSelection("evidence_and_open_questions", [capacity.id], answers).valid).toBe(false);
+    const goal = firstGroup(answers, "client_goals_needs", "client.goals")!;
+    expect(goal.evidence_basis).toBe("hypothesis");
+    expect(goal.source_answer_ids).not.toContain("client.pathway_basis");
   });
 
   it("keeps recorded opportunity evidence tied to a source, period, basis and actual figure", () => {
