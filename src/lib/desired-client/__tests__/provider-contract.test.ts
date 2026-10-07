@@ -1,69 +1,91 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { completeAnswers, evidence, providerBlueprint, providerCard, providerStatement, validBlueprint } from "./blueprint-helpers";
+import { completeAnswers, evidence, providerBlueprint, providerCard, providerStatement, validBlueprint, type ProviderSchemaProbe } from "./blueprint-helpers";
 import { decodeProviderTargetCard, providerBlueprintSchema, providerTargetClaimIds } from "../provider-schema";
-import { runDesiredClientAnalysis } from "../analyze";
+import { runDesiredClientAnalysis as runAnalysisWithBudget } from "../analyze";
 import { validateAnalysisResult } from "../output";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { buildBlueprintViewModel } from "../blueprint";
 import { buildDesiredClientEvidenceGroups, evidenceGroupIdsForStatement } from "../evidence-contract";
 import { interviewClarificationSourceFingerprint } from "../types";
-import type { AnalysisRequestEnvelope } from "../types";
+import type { AnalysisRequestEnvelope, ClarificationCode } from "../types";
 
 const provider = vi.hoisted(() => ({ configure: vi.fn(), generate: vi.fn() }));
 vi.mock("server-only", () => ({}));
 vi.mock("@google/generative-ai", () => ({ GoogleGenerativeAI: class {
   getGenerativeModel(config: { systemInstruction?: string }) {
     provider.configure(config);
-    const repairSlot = /Repair only ([a-z_.]+)/.exec(config.systemInstruction ?? "")?.[1] ?? "";
-    const encodeStatement = (slot: string, value: Record<string, unknown>, groups: Record<string, Array<{evidence_group_id:string;evidence_basis:string;kind:string;source_answer_ids:string[]}>>) => {
+    const repairSlot = /Repair only ([a-z_]+(?:\.[a-z_]+)*)\./.exec(config.systemInstruction ?? "")?.[1] ?? "";
+    type ProviderEvidenceGroup = { evidence_group_id: string; evidence_basis: string; kind: string; source_answer_ids: string[] };
+    type ProviderPrompt = {
+      evidence_groups_by_slot?: Record<string, ProviderEvidenceGroup[]>;
+      grounded_target?: { client_and_matter_claims?: Array<{ text: string }> };
+      grounded_target_claim_ids?: string[];
+    };
+    type JsonObject = Record<string, unknown>;
+    const asObject = (value: unknown): JsonObject | undefined => value && typeof value === "object" && !Array.isArray(value) ? value as JsonObject : undefined;
+    const objectArray = (value: unknown): JsonObject[] => Array.isArray(value) ? value.map(asObject).filter((item): item is JsonObject => !!item) : [];
+    const stringArray = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+    const encodeStatement = (slot: string, value: JsonObject, groups: Record<string, ProviderEvidenceGroup[]>) => {
       if (Array.isArray(value.evidence_group_ids)) return value;
-      const sources = Array.isArray(value.source_answer_ids) ? value.source_answer_ids : [];
+      const sources = stringArray(value.source_answer_ids);
       const selected = (groups[slot] ?? []).filter(group => group.evidence_basis === value.evidence_basis && group.kind === value.kind && group.source_answer_ids.every(path => sources.includes(path)));
       const flattened = selected.flatMap(group => group.source_answer_ids);
       return { text: value.text, evidence_group_ids: flattened.length === sources.length && flattened.every(path => sources.includes(path)) ? selected.map(group => group.evidence_group_id) : [] };
     };
-    const adapt = (source: unknown, prompt: Record<string, any>) => {
-      if (!source || typeof source !== "object" || Array.isArray(source)) return source;
+    const adapt = (source: unknown, prompt: ProviderPrompt) => {
+      const sourceRecord = asObject(source);
+      if (!sourceRecord) return source;
       const groups = prompt.evidence_groups_by_slot ?? {};
-      const report = (source as Record<string, any>).brief;
-      if (!report || typeof report !== "object") {
-        if (repairSlot === "client_and_matter" && Array.isArray((source as Record<string, any>).claims)) {
-          const expected = (prompt.grounded_target?.client_and_matter_claims ?? []).map((claim: {text:string}) => claim.text);
-          const actual = (source as Record<string, any>).claims.map((claim: {text:string}) => claim.text);
+      const report = asObject(sourceRecord.brief);
+      if (!report) {
+        if (repairSlot === "client_and_matter" && Array.isArray(sourceRecord.claims)) {
+          const expected = prompt.grounded_target?.client_and_matter_claims?.map((claim) => claim.text) ?? [];
+          const actual = objectArray(sourceRecord.claims).map((claim) => claim.text);
           return expected.length === actual.length && expected.every((text: string, index: number) => text === actual[index])
             ? { claim_ids: prompt.grounded_target_claim_ids }
             : { claim_ids: ["invalid_target_claim"] };
         }
-        if (Array.isArray((source as Record<string, any>).claims) && repairSlot) {
+        if (Array.isArray(sourceRecord.claims) && repairSlot) {
           const slot = repairSlot.startsWith("definition_components.")
-            ? ({ client: "definition_client_type", client_matter: "definition_client_matter", reasons: "definition_reasons", outcome: "definition_outcome" } as Record<string,string>)[repairSlot.split(".")[1]]
+            ? ({ client: "definition_client_type", client_matter: "definition_client_matter", reasons: "definition_reasons", outcome: "definition_outcome" } as Record<string, string>)[repairSlot.split(".")[1]]
             : repairSlot.startsWith("decision_pathway.") ? repairSlot : repairSlot;
-          return { claims: (source as Record<string, any>).claims.map((claim: Record<string, unknown>) => encodeStatement(slot, claim, groups)) };
+          return { claims: objectArray(sourceRecord.claims).map((claim) => encodeStatement(slot, claim, groups)) };
         }
-        if (repairSlot.startsWith("decision_pathway.") && "text" in (source as Record<string, any>)) return encodeStatement(repairSlot, source as Record<string, unknown>, groups);
+        if (repairSlot.startsWith("decision_pathway.") && "text" in sourceRecord) return encodeStatement(repairSlot, sourceRecord, groups);
         return source;
       }
-      const brief = report as Record<string, any>;
+      const brief = report;
       const componentSlots = { client: "definition_client_type", client_matter: "definition_client_matter", reasons: "definition_reasons", outcome: "definition_outcome" };
-      const definition_components = { ...brief.definition_components };
-      for (const [field, slot] of Object.entries(componentSlots)) if (definition_components[field]) definition_components[field] = encodeStatement(slot, definition_components[field], groups);
-      const cards = ["client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions"];
-      const targetTexts = (prompt.grounded_target?.client_and_matter_claims ?? []).map((claim: {text:string}) => claim.text);
-      const actualTargetTexts = (brief.client_and_matter?.claims ?? []).map((claim: {text:string}) => claim.text);
+      const definition_components = { ...(asObject(brief.definition_components) ?? {}) };
+      for (const [field, slot] of Object.entries(componentSlots)) {
+        const statement = asObject(definition_components[field]);
+        if (statement) definition_components[field] = encodeStatement(slot, statement, groups);
+      }
+      const cards = ["client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions"] as const;
+      const targetTexts = prompt.grounded_target?.client_and_matter_claims?.map((claim) => claim.text) ?? [];
+      const targetCard = asObject(brief.client_and_matter);
+      const actualTargetTexts = objectArray(targetCard?.claims).map((claim) => claim.text);
       const expectedTargetIds = prompt.grounded_target_claim_ids ?? [];
-      const selectedTargetIds = brief.client_and_matter?.claim_ids ?? [];
+      const selectedTargetIds = stringArray(targetCard?.claim_ids);
       const targetMatches = Array.isArray(selectedTargetIds) && selectedTargetIds.length === expectedTargetIds.length && selectedTargetIds.every((id: string, index: number) => id === expectedTargetIds[index]) ||
         targetTexts.length === actualTargetTexts.length && targetTexts.every((text: string, index: number) => text === actualTargetTexts[index]);
-      const mapped = { ...brief, definition_components, client_and_matter: { claim_ids: targetMatches ? prompt.grounded_target_claim_ids : ["invalid_target_claim"] } };
-      for (const slot of cards) if (Array.isArray(brief[slot]?.claims)) mapped[slot] = { ...brief[slot], claims: brief[slot].claims.map((claim: Record<string, unknown>) => encodeStatement(slot, claim, groups)) };
-      if (brief.decision_pathway) mapped.decision_pathway = Object.fromEntries(Object.entries(brief.decision_pathway).map(([field, claim]) => [field, encodeStatement(`decision_pathway.${field}`, claim as Record<string, unknown>, groups)]));
-      return { brief: mapped };
+      const mapped: JsonObject = { ...brief, definition_components, client_and_matter: { claim_ids: targetMatches ? prompt.grounded_target_claim_ids : ["invalid_target_claim"] } };
+      for (const slot of cards) {
+        const card = asObject(brief[slot]);
+        if (card && Array.isArray(card.claims)) mapped[slot] = { ...card, claims: objectArray(card.claims).map((claim) => encodeStatement(slot, claim, groups)) };
+      }
+      const pathway = asObject(brief.decision_pathway);
+      if (pathway) mapped.decision_pathway = Object.fromEntries(Object.entries(pathway).flatMap(([field, claim]) => {
+        const statement = asObject(claim);
+        return statement ? [[field, encodeStatement(`decision_pathway.${field}`, statement, groups)]] : [];
+      }));
+      return { ...sourceRecord, brief: mapped };
     };
     return { generateContent: async (input: string) => {
       const result = await provider.generate(input);
       try {
-        const prompt = JSON.parse(input) as Record<string, any>;
-        const parsed = JSON.parse(result.response.text());
+        const prompt = JSON.parse(input) as ProviderPrompt;
+        const parsed: unknown = JSON.parse(result.response.text());
         const adapted = adapt(parsed, prompt);
         return { ...result, response: { ...result.response, text: () => JSON.stringify(adapted) } };
       } catch { return result; }
@@ -71,6 +93,8 @@ vi.mock("@google/generative-ai", () => ({ GoogleGenerativeAI: class {
   }
 } }));
 const request = (): AnalysisRequestEnvelope => ({ schemaVersion: 4, operation: "generate", requestId: "11111111-1111-4111-8111-111111111111", answerRevision: 3, reviewRunId: "22222222-2222-4222-8222-222222222222", analysisIndex: 0, aiConsent: true, answers: completeAnswers(), clarifications: [] });
+const runDesiredClientAnalysis = (input: AnalysisRequestEnvelope, eligibleCodes: readonly ClarificationCode[]) =>
+  runAnalysisWithBudget(input, eligibleCodes, async () => true);
 
 describe("provider output contract", () => {
   beforeEach(() => { vi.clearAllMocks(); vi.stubEnv("GOOGLE_AI_API_KEY", "test-only"); });
@@ -79,7 +103,7 @@ describe("provider output contract", () => {
     provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(providerBlueprint(validBlueprint(input.answers), input.answers)) } });
     expect((await runDesiredClientAnalysis(input, [])).mode).toBe("live");
     const config = provider.configure.mock.calls[0][0];
-    expect(config.systemInstruction).toContain('"two matters" and "2 matters"');
+    expect(config.systemInstruction).toContain("Use only application-listed evidence groups for the exact output slot");
     expect(config.generationConfig.responseSchema).toEqual(providerBlueprintSchema(request().answers));
     const targetSelection = config.generationConfig.responseSchema.properties.brief.properties.client_and_matter;
     expect(targetSelection.required).toEqual(["claim_ids"]);
@@ -90,21 +114,21 @@ describe("provider output contract", () => {
     expect(definitionClient.evidence_group_ids.items.enum).toHaveLength(1);
     expect(definitionClient).not.toHaveProperty("evidence_basis");
     expect(definitionClient).not.toHaveProperty("source_answer_ids");
-    expect(config.generationConfig.responseSchema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.text.description).toContain('"two matters" and "2 matters"');
+    expect(config.generationConfig.responseSchema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.text.description).toContain("Use only the facts supported by the selected evidence groups");
   });
   it("permits the complete five-source set required to ground a contribution claim", () => {
     const answers = completeAnswers();
     Object.assign(answers.value, { fee_amount:"8000", direct_cost_amount:"4800", currency:"CAD", amount_basis:"estimated", amount_scope:"per_matter" });
-    const schema = providerBlueprintSchema(answers) as any;
+    const schema = providerBlueprintSchema(answers) as unknown as ProviderSchemaProbe;
     const selections = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_group_ids;
     expect(selections.maxItems).toBeGreaterThanOrEqual(1);
-    expect(selections.items.enum.some((id: string) => id.includes("financial_recorded"))).toBe(true);
+    expect(selections.items.enum.some((id: string) => id.includes("financial_estimated"))).toBe(true);
     expect(schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties).not.toHaveProperty("source_answer_ids");
   });
   it("permits a firm-reported observation for current capacity while keeping targets as preferences", () => {
     const answers = completeAnswers();
     answers.repeatability.additional_matters = "2 comparable matters per quarter";
-    const schema = providerBlueprintSchema(answers) as any;
+    const schema = providerBlueprintSchema(answers) as unknown as ProviderSchemaProbe;
     const selections = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_group_ids;
     expect(selections.items.enum.some((id: string) => id.includes("current_capacity"))).toBe(true);
     expect(schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties).not.toHaveProperty("evidence_basis");
@@ -118,7 +142,7 @@ describe("provider output contract", () => {
     answers.value.payment = "predictable";
     answers.value.payment_context = "Clients told the firm that the first invoice was usually paid on schedule.";
     answers.value.payment_context_basis = paymentContextBasis;
-    const schema = providerBlueprintSchema(answers) as any;
+    const schema = providerBlueprintSchema(answers) as unknown as ProviderSchemaProbe;
     const selections = schema.properties.brief.properties.why_firm_wants_work.properties.claims.items.properties.evidence_group_ids.items.enum as string[];
     const context = buildDesiredClientEvidenceGroups("why_firm_wants_work", answers).find(group => group.id.includes("payment_context"));
     expect(selections).toContain(context?.id);
@@ -175,18 +199,18 @@ describe("provider output contract", () => {
     expect(guidance).toContain("an owner or founder");
   });
   it("aligns matter guidance with the quoted description used by the formatter", () => {
-    const schema=providerBlueprintSchema(completeAnswers());
+    const schema=providerBlueprintSchema(completeAnswers()) as unknown as ProviderSchemaProbe;
     const serialized=JSON.stringify(schema);
     expect(serialized).toContain("specific client situation, legal engagement and timing");
     expect(serialized).toContain("evidence_group_ids");
-    expect(serialized).not.toContain("source_answer_ids");
+    expect(schema.properties.brief.properties.definition_components.properties.client.properties).not.toHaveProperty("source_answer_ids");
   });
   it("separates client feedback from firm-observed decision evidence when their bases differ", () => {
     const answers = completeAnswers();
     answers.client.choice_priorities = ["clear_fees"];
     answers.client.choice_basis = "client_feedback";
     answers.client.pathway_basis = "firm_observation";
-    const schema = providerBlueprintSchema(answers) as any;
+    const schema = providerBlueprintSchema(answers) as unknown as ProviderSchemaProbe;
     const choiceSchema = schema.properties.brief.properties.why_client_chooses_firm.properties.claims.items.properties.evidence_group_ids.items.enum as string[];
     const choiceGroups = buildDesiredClientEvidenceGroups("why_client_chooses_firm", answers).filter(group => choiceSchema.includes(group.id));
     expect(choiceGroups.some(group => group.evidence_basis === "client_reported" && group.source_answer_ids.includes("client.choice_basis"))).toBe(true);
@@ -203,7 +227,7 @@ describe("provider output contract", () => {
     answers.client.pathway_basis = "firm_observation";
     answers.client.decision_context = "The owner decides, with an accountant involved.";
     answers.situation.contact = null;
-    const schema = providerBlueprintSchema(answers) as any;
+    const schema = providerBlueprintSchema(answers) as unknown as ProviderSchemaProbe;
     const firstContact = schema.properties.brief.properties.decision_pathway.properties.first_contact.properties;
     const groupIds = firstContact.evidence_group_ids.items.enum as string[];
     const groups = buildDesiredClientEvidenceGroups("decision_pathway.first_contact", answers).filter(group => groupIds.includes(group.id));
@@ -217,7 +241,7 @@ describe("provider output contract", () => {
     const input = request();
     Object.assign(input.answers.value, { fee_amount:"8000", direct_cost_amount:"10000", currency:"CAD", amount_basis:"estimated", amount_scope:"per_matter" });
     const original = validBlueprint(input.answers);
-    const compact = providerBlueprint(original, input.answers) as {brief:Record<string,any>};
+    const compact = providerBlueprint(original, input.answers) as unknown as {brief:{definition_components:{reasons:{evidence_group_ids:string[]}}}};
     provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(compact) } });
     const outcome = await runDesiredClientAnalysis(input, []);
     expect(outcome.mode).toBe("live");
@@ -251,6 +275,7 @@ describe("provider output contract", () => {
     input.answers.repeatability.target = "2 comparable matters retained";
     input.answers.repeatability.review_period = "after six months";
     const canonical = validBlueprint(input.answers);
+    canonical.brief.recognizable_circumstances = buildStructuredBlueprintV4(input.answers).recognizable_circumstances;
     provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(providerBlueprint(canonical, input.answers)) } });
 
     const outcome = await runDesiredClientAnalysis(input, []);
@@ -264,7 +289,7 @@ describe("provider output contract", () => {
     const staffing = whyWork.find(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"));
     expect(economics?.text).toContain("fee amount: 8000");
     expect(economics?.text).toContain("direct cost amount: 8500");
-    expect(economics?.text).toContain("-C$500.00");
+    expect(economics?.text).toContain("−C$500.00");
     expect(economics?.text).toContain("before overhead and acquisition costs");
     expect(economics?.text).toContain("do not establish net profit");
     expect(economics?.text).not.toMatch(/profitable|positive contribution/iu);
@@ -281,8 +306,8 @@ describe("provider output contract", () => {
     expect(brief.definition_components.outcome.text).toContain("2 comparable matters retained");
     const view = buildBlueprintViewModel(brief, input.answers, { mode: "ai", generatedAt: "2026-10-06T12:00:00.000Z", wordingReviewed: false });
     const whyWorkView = view.cards.find(card => card.id === "whyWork");
-    expect(whyWorkView?.contribution).toMatchObject({ amount: "-C$500.00", margin: { amount: "-6.25%" } });
-    expect(view.conditions.some(condition => condition.includes("negative contribution of -C$500.00"))).toBe(true);
+    expect(whyWorkView?.contribution).toMatchObject({ amount: "−C$500.00", margin: { amount: "−6.25%" } });
+    expect(view.conditions.some(condition => condition.includes("negative contribution of −C$500.00"))).toBe(true);
     expect(view.progressReview.target).toBe("2 comparable matters retained");
     expect(view.progressReview.reviewPeriod).toBe("after six months");
     expect(view.sourceDetails.some(detail => detail.answers.some(source => source.path === "delivery.conditions"))).toBe(true);
@@ -291,7 +316,7 @@ describe("provider output contract", () => {
     const input=request();
     Object.assign(input.answers.value,{fee_amount:"4800",direct_cost_amount:"8000",currency:"CAD",amount_basis:"estimated",amount_scope:"per_matter"});
     const invalid=validBlueprint(input.answers);
-    invalid.brief.why_firm_wants_work.claims[0]=evidence("These fees support the effort and make the work profitable.","firm_preference","value.reasons","value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope");
+    invalid.brief.why_firm_wants_work.claims[0]=evidence("These fees support the effort and make the work profitable.","firm_reported_estimate","value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope");
     const repaired={claims:[
       evidence("The firm prefers this work because it fits its selected skills.","firm_preference","value.reasons"),
       evidence("The estimated comparable fee is below direct delivery cost; resolve this conflict before increasing volume.","firm_reported_estimate","value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"),
@@ -334,9 +359,11 @@ describe("provider output contract", () => {
     const target = buildStructuredBlueprintV4(input.answers).client_and_matter;
     expect(target.claims).toHaveLength(2);
     const reordered={brief:{client_and_matter:{claim_ids:["target_claim_2","target_claim_1"]}}};
-    expect(decodeProviderTargetCard(reordered,input.answers)).toBe(reordered);
+    expect(decodeProviderTargetCard(reordered,input.answers)).toMatchObject({brief:{client_and_matter:{provider_target_selection_invalid:true}}});
     const invalid = validBlueprint(input.answers);
-    provider.generate.mockResolvedValueOnce({response:{text:()=>JSON.stringify(providerBlueprint(invalid,input.answers))}})
+    const incompleteTarget = providerBlueprint(invalid,input.answers) as {brief:{client_and_matter:{claim_ids:string[]}}};
+    incompleteTarget.brief.client_and_matter.claim_ids = ["target_claim_1"];
+    provider.generate.mockResolvedValueOnce({response:{text:()=>JSON.stringify(incompleteTarget)}})
       .mockResolvedValueOnce({response:{text:()=>JSON.stringify({claim_ids:providerTargetClaimIds(input.answers)})}});
     const outcome = await runDesiredClientAnalysis(input,[]);
     expect(outcome.mode).toBe("live");
@@ -345,7 +372,7 @@ describe("provider output contract", () => {
     expect(card.minItems).toBe(2); expect(card.maxItems).toBe(2);
     expect(card.items.enum).toEqual(["target_claim_1","target_claim_2"]);
     expect(JSON.parse(provider.generate.mock.calls[0][0]).grounded_target.client_and_matter_claims).toEqual(target.claims.map(claim => providerStatement("client_and_matter",claim,input.answers)));
-    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("including a current stage-two clarification");
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("Do not replace, omit, paraphrase or merge a current stage-two clarification");
     if(outcome.mode==="live") expect(outcome.result.brief.client_and_matter).toEqual(target);
   });
   it("resolves an explicit confirmed target reference without replacing other AI claims", async () => {
@@ -358,7 +385,7 @@ describe("provider output contract", () => {
     expect(provider.generate).toHaveBeenCalledTimes(1);
     const prompt=JSON.parse(provider.generate.mock.calls[0][0]);
     expect(prompt.grounded_target_claim_ids).toEqual(["target_claim_1"]);
-    expect(prompt.instruction).toContain("all other cards remain AI-written grounded analysis");
+    expect(prompt.instruction).toContain("Return exact text and registered evidence_group_ids");
     if(outcome.mode==="live") {
       expect(outcome.result.brief.client_and_matter).toEqual(buildStructuredBlueprintV4(input.answers).client_and_matter);
       expect(outcome.result.brief.client_goals_needs).toEqual(original.brief.client_goals_needs);
@@ -371,7 +398,7 @@ describe("provider output contract", () => {
     {claim_ids:["target_claim_1"],text:"Canadian billionaires"},
   ])("never resolves a missing, invented, duplicate or expanded target selection: %j", card => {
     const original={brief:{client_and_matter:card}};
-    expect(decodeProviderTargetCard(original,completeAnswers())).toBe(original);
+    expect(decodeProviderTargetCard(original,completeAnswers())).toMatchObject({brief:{client_and_matter:{provider_target_selection_invalid:true}}});
     const result=validBlueprint();
     (result.brief as unknown as Record<string,unknown>).client_and_matter=card;
     expect(validateAnalysisResult(decodeProviderTargetCard(result,completeAnswers()),completeAnswers(),[])).toBeNull();
@@ -411,7 +438,7 @@ describe("provider output contract", () => {
   it("allows a relevant unanswered circumstance as a citation for an unknown claim", () => {
     const answers=completeAnswers();
     answers.client_context.relevant_circumstances="";
-    const schema=providerBlueprintSchema(answers) as any;
+    const schema=providerBlueprintSchema(answers) as unknown as ProviderSchemaProbe;
     const permitted=schema.properties.brief.properties.recognizable_circumstances.properties.claims.items.properties.evidence_group_ids.items.enum as string[];
     const groups=buildDesiredClientEvidenceGroups("recognizable_circumstances",answers).filter(group=>permitted.includes(group.id));
     expect(groups.some(group=>group.source_answer_ids.includes("client_context.relevant_circumstances")&&group.evidence_basis==="unknown")).toBe(true);
@@ -438,14 +465,14 @@ describe("provider output contract", () => {
   it("repairs only the rejected card and revalidates the complete result", async () => {
     const original = validBlueprint();
     const invalid = structuredClone(original);
-    invalid.brief.client_and_matter.claims[0].text = "The business owner wants advice within 987 days.";
+    invalid.brief.client_goals_needs.claims[0].text = "The client wants advice within 987 days.";
     provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(invalid) } })
       .mockResolvedValueOnce({ response: { text: () => JSON.stringify(original.brief.client_and_matter) } });
     const outcome = await runDesiredClientAnalysis(request(), []);
     expect(outcome.mode).toBe("live");
     expect(provider.generate).toHaveBeenCalledTimes(2);
-    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("unsupported_numeric_claim");
-    if (outcome.mode === "live") expect(outcome.result.brief.client_goals_needs).toEqual(original.brief.client_goals_needs);
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("The fragment failed unsupported_numeric_claim");
+    if (outcome.mode === "live") expect(outcome.result.brief.client_and_matter).toEqual(original.brief.client_and_matter);
   });
   it("repairs an over-limit evidence card with focused shape and claim-count guidance", async () => {
     const original = validBlueprint();
@@ -479,7 +506,7 @@ describe("provider output contract", () => {
     const outcome = await runDesiredClientAnalysis(input, []);
     expect(outcome.mode).toBe("live");
     expect(provider.generate).toHaveBeenCalledTimes(2);
-    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("Separate each known statement from any unanswered or unknown finding");
+    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("Select only registered evidence_group_ids for the exact slot");
     if (outcome.mode === "live") {
       expect(outcome.result.brief.client_goals_needs.claims).toHaveLength(2);
       expect(outcome.result.brief.client_goals_needs.claims[1].evidence_basis).toBe("unknown");
@@ -521,33 +548,15 @@ describe("provider output contract", () => {
     expect(outcome.mode).toBe("live");
     expect(provider.generate).toHaveBeenCalledTimes(2);
     const instruction = provider.configure.mock.calls[1][0].systemInstruction;
-    expect(instruction).toContain("A chosen strength or its proposed benefit is a firm preference");
-    expect(instruction).toContain("Do not add an unrelated experience citation to upgrade a selected strength");
+    expect(instruction).toContain("Select only registered evidence_group_ids for the exact slot");
     if (outcome.mode === "live") expect(outcome.result.brief.why_client_chooses_firm.claims[0].evidence_basis).toBe("firm_preference");
   });
   it("repairs an unsupported first-contact claim as an explicit evidence gap", async () => {
     const input = request();
     input.answers.client.pathway_basis = "firm_observation";
     input.answers.client.decision_context = "The owner decides, with an accountant involved.";
-    const invalid = validBlueprint();
-    invalid.brief.decision_pathway.trigger = {
-      text: "The firm observes that a planned business purchase prompts the need for legal advice.",
-      source_answer_ids: ["situation.trigger", "client.pathway_basis"],
-      evidence_basis: "firm_reported_observation",
-      kind: "experience",
-    };
-    invalid.brief.decision_pathway.decision = {
-      text: "The firm observes that the owner decides, with an accountant involved.",
-      source_answer_ids: ["client.decision_context", "client.pathway_basis"],
-      evidence_basis: "firm_reported_observation",
-      kind: "experience",
-    };
-    invalid.brief.decision_pathway.first_contact = {
-      text: "The buyer initiates contact during the planning stage.",
-      source_answer_ids: ["situation.timing", "client.pathway_basis"],
-      evidence_basis: "client_reported",
-      kind: "experience",
-    };
+    const invalid = providerBlueprint(validBlueprint(input.answers), input.answers) as {brief:{decision_pathway:Record<string,{evidence_group_ids:string[]}>}};
+    invalid.brief.decision_pathway.first_contact.evidence_group_ids = [];
     const repaired = {
       text: "Who initiates first contact and how the buyer reaches the firm are not established.",
       source_answer_ids: ["situation.contact"],
@@ -568,13 +577,8 @@ describe("provider output contract", () => {
   it("repairs a pathway basis to match the firm's selected observation source", async () => {
     const input = request();
     input.answers.client.pathway_basis = "firm_observation";
-    const invalid = validBlueprint();
-    invalid.brief.decision_pathway.trigger = {
-      text: "The client reports that a planned purchase prompts them to seek legal advice.",
-      source_answer_ids: ["situation.trigger", "client.pathway_basis"],
-      evidence_basis: "client_reported",
-      kind: "experience",
-    };
+    const invalid = providerBlueprint(validBlueprint(input.answers), input.answers) as {brief:{decision_pathway:Record<string,{evidence_group_ids:string[]}>}};
+    invalid.brief.decision_pathway.trigger.evidence_group_ids = [];
     const repaired = {
       text: "The firm observes that a planned business purchase can prompt a need for legal advice.",
       source_answer_ids: ["situation.trigger", "client.pathway_basis"],
@@ -596,7 +600,7 @@ describe("provider output contract", () => {
     answers.client.choice_priorities = ["clear_fees"];
     answers.client.pathway_basis = "firm_observation";
     answers.client.decision_context = "The owner decides, with accountant input.";
-    const schema = providerBlueprintSchema(answers) as any;
+    const schema = providerBlueprintSchema(answers) as unknown as ProviderSchemaProbe;
     const choiceIds = schema.properties.brief.properties.why_client_chooses_firm.properties.claims.items.properties.evidence_group_ids.items.enum as string[];
     const pathwayIds = schema.properties.brief.properties.decision_pathway.properties.decision.properties.evidence_group_ids.items.enum as string[];
     const choice = buildDesiredClientEvidenceGroups("why_client_chooses_firm", answers).find(group => choiceIds.includes(group.id) && group.source_answer_ids.includes("client.choice_priorities"));
@@ -605,5 +609,24 @@ describe("provider output contract", () => {
     expect(pathway?.evidence_basis).toBe("firm_reported_observation");
     expect(choiceIds).not.toContain(pathway?.id);
     expect(pathwayIds).not.toContain(choice?.id);
+  });
+  it("counts each authorized provider call and stops before a denied repair call", async () => {
+    vi.stubEnv("VERCEL_ENV", "production");
+    const invalid = validBlueprint();
+    invalid.brief.why_firm_wants_work.claims[0] = {
+      text: "Unsupported private repair-budget claim",
+      source_answer_ids: ["practice.experience"],
+      evidence_basis: "client_reported",
+      kind: "experience",
+    };
+    provider.generate.mockResolvedValue({ response: { text: () => JSON.stringify(invalid) } });
+    const reserve = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    const outcome = await runAnalysisWithBudget(request(), [], reserve);
+
+    expect(outcome.mode).toBe("rate_limited");
+    expect(outcome.providerCallsUsed).toBe(2);
+    expect(reserve).toHaveBeenCalledTimes(3);
+    expect(provider.generate).toHaveBeenCalledTimes(2);
   });
 });

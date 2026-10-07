@@ -37,8 +37,8 @@ const SLOT_PREFIXES: Record<DesiredClientEvidenceSlot, readonly string[]> = {
   recognizable_circumstances: ["client_context.", "delivery.fit_signals", "delivery.conditions", "delivery.limit", "situation.trigger", "write_ins.fit_signals", "write_ins.conditions", "write_ins.limit"],
   evidence_and_open_questions: ["*"],
   "decision_pathway.trigger": ["situation.trigger", "write_ins.trigger", "client.pathway_basis"],
-  "decision_pathway.first_contact": ["situation.contact", "write_ins.contact", "client.pathway_basis"],
-  "decision_pathway.decision": ["client.decision_context", "client.decision_needs", "client.pathway_basis", "write_ins.decision_needs"],
+  "decision_pathway.first_contact": ["situation.timing", "situation.contact", "situation.role", "write_ins.contact", "client.pathway_basis"],
+  "decision_pathway.decision": ["client.decision_context", "client.decision_needs", "situation.contact", "client.pathway_basis", "write_ins.decision_needs"],
   "decision_pathway.desired_progress": ["client.goals", "client.goal_detail", "client.pathway_basis", "write_ins.goals"],
 };
 
@@ -117,11 +117,13 @@ function defaultBasis(slot: DesiredClientEvidenceSlot, path: string, answers: De
     const item = answers.interview.followups[Number(path.slice("interview.followups.".length))];
     return item && item.stage <= 3 ? "firm_preference" : "hypothesis";
   }
-  if (["practice.experience", "practice.capability", "practice.client_strength_support"].includes(path)) return "firm_reported_experience";
+  if (path === "practice.experience") return ["regular", "occasional", "adjacent"].includes(answers.practice.experience ?? "") ? "firm_reported_experience" : "firm_preference";
+  if (["practice.capability", "practice.client_strength_support"].includes(path)) return "firm_reported_experience";
   if (["practice.client_strength", "practice.client_strength_effect"].includes(path)) return "firm_preference";
+  if (["practice.development_needs", "practice.enjoys", "value.reasons", "value.fee_effort", "direction.aim", "direction.evidence", "direction.less", "direction.less_reason", "direction.less_note", "repeatability.target", "repeatability.review_period", "repeatability.success_measure", "repeatability.success_other", "repeatability.staffing_constraint"].includes(path)) return "firm_preference";
   if (path === "opportunity.sources") return "source_observed";
   if (["delivery.capacity", "write_ins.capacity", "repeatability.additional_matters"].includes(path)) return "firm_reported_observation";
-  if (["value.collected_fee", "value.team_hours"].includes(path) && answers.focus.route === "established") return "firm_reported_observation";
+  if (["value.collected_fee", "value.team_hours"].includes(path)) return answers.focus.route === "established" ? "firm_reported_observation" : "hypothesis";
   if (slot === "why_firm_wants_work" || slot === "why_client_chooses_firm" || slot.startsWith("definition_")) return "firm_preference";
   return "hypothesis";
 }
@@ -146,9 +148,9 @@ export function buildDesiredClientEvidenceGroups(slot: DesiredClientEvidenceSlot
   };
 
   if (slot === "why_firm_wants_work") {
-    const capacity = ["delivery.capacity", "write_ins.capacity", "repeatability.additional_matters"].filter(path => allowed.has(path) && !unresolved(path as AnswerReferencePath, answers));
+    const capacity = (["delivery.capacity", "write_ins.capacity", "repeatability.additional_matters"] as AnswerReferencePath[]).filter(path => allowed.has(path) && !unresolved(path, answers));
     if (capacity.length) add("current_capacity", "firm_reported_observation", capacity);
-    const ranges = ["value.collected_fee", "value.team_hours"].filter(path => allowed.has(path) && !unresolved(path as AnswerReferencePath, answers));
+    const ranges = (["value.collected_fee", "value.team_hours"] as AnswerReferencePath[]).filter(path => allowed.has(path) && !unresolved(path, answers));
     if (ranges.length && answers.focus.route === "established") add("current_fee_or_effort_range", "firm_reported_observation", ranges);
   }
 
@@ -157,63 +159,71 @@ export function buildDesiredClientEvidenceGroups(slot: DesiredClientEvidenceSlot
     if (payment && allowed.has("value.payment")) add("payment", payment.evidence_basis, payment.source_answer_ids);
     const context = paymentContextEvidenceClaim(answers);
     if (context && allowed.has("value.payment_context") && allowed.has("value.payment_context_basis")) add("payment_context", context.evidence_basis, context.source_answer_ids);
-    const financial = ["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"];
+    const financial = ["value.fee_amount", "value.direct_cost_amount", "value.currency", "value.amount_basis", "value.amount_scope"] as AnswerReferencePath[];
     if ((answers.value.amount_basis === "recorded" || answers.value.amount_basis === "estimated") &&
       hasActualAmount(answers.value.fee_amount) && hasActualAmount(answers.value.direct_cost_amount) && answers.value.currency.trim() && answers.value.amount_scope &&
       financial.every(path => allowed.has(path))) {
       add(`financial_${answers.value.amount_basis}`, answers.value.amount_basis === "recorded" ? "firm_reported_recorded" : "firm_reported_estimate", financial);
     }
-    const opportunityFigures = ["opportunity.sources", "opportunity.data_basis", "opportunity.period", "opportunity.enquiry_count", "opportunity.retained_count", "opportunity.conversion", "opportunity.acquisition_cost"]
-      .filter(path => allowed.has(path) && !unresolved(path as AnswerReferencePath, answers));
+    const opportunityFigures = (["opportunity.sources", "opportunity.data_basis", "opportunity.period", "opportunity.enquiry_count", "opportunity.retained_count", "opportunity.conversion", "opportunity.acquisition_cost"] as AnswerReferencePath[])
+      .filter(path => allowed.has(path) && !unresolved(path, answers));
     if ((answers.opportunity.data_basis === "recorded" || answers.opportunity.data_basis === "estimated") &&
-      opportunityFigures.some(path => ["opportunity.enquiry_count", "opportunity.retained_count", "opportunity.conversion", "opportunity.acquisition_cost"].includes(path))) {
+      opportunityFigures.some(path => path === "opportunity.enquiry_count" || path === "opportunity.retained_count" || path === "opportunity.conversion" || path === "opportunity.acquisition_cost")) {
       add(`opportunity_${answers.opportunity.data_basis}`, answers.opportunity.data_basis === "recorded" ? "firm_reported_recorded" : "firm_reported_estimate", opportunityFigures);
     }
   }
 
   const isChoiceSlot = slot === "why_client_chooses_firm" || slot === "evidence_and_open_questions";
   if (isChoiceSlot) {
-    const details = ["client.choice_priorities", "client.choice_detail"].filter(path => allowed.has(path) && !unresolved(path as AnswerReferencePath, answers));
-    if (details.length) {
-      const basisPath = "client.choice_basis";
-      const basis = clientBasis(answers.client.choice_basis);
-      const paths = [...details, ...(allowed.has(basisPath) ? [basisPath] : [])];
-      add("client_choice", basis, paths);
+    const details = (["client.choice_priorities", "client.choice_detail"] as AnswerReferencePath[]).filter(path => allowed.has(path) && !unresolved(path, answers));
+    const basisPath = "client.choice_basis" as AnswerReferencePath;
+    const basis = clientBasis(answers.client.choice_basis);
+    if (details.length && basis !== "unknown") {
+      add("client_choice", basis, [...details, ...(allowed.has(basisPath) ? [basisPath] : [])]);
+    } else if (details.length && allowed.has(basisPath)) {
+      add("client_choice_details_unknown", "unknown", [...details, basisPath]);
+    } else {
+      if (allowed.has(basisPath)) add("client_choice_unknown", "unknown", [basisPath]);
     }
+  }
+
+  if (slot === "evidence_and_open_questions" && clientBasis(answers.client.pathway_basis) === "unknown" && allowed.has("client.pathway_basis")) {
+    add("pathway_evidence_basis_unknown", "unknown", ["client.pathway_basis"]);
   }
 
   if (slot.startsWith("decision_pathway.")) {
     const field = slot.slice("decision_pathway.".length);
-    const detailPaths: Record<string, string[]> = {
-      trigger: ["situation.trigger", "write_ins.trigger"], first_contact: ["situation.contact", "write_ins.contact"],
-      decision: ["client.decision_context", "client.decision_needs", "write_ins.decision_needs"],
+    const detailPaths: Record<string, AnswerReferencePath[]> = {
+      trigger: ["situation.trigger", "write_ins.trigger"], first_contact: ["situation.timing", "situation.contact", "situation.role", "write_ins.contact"],
+      decision: ["client.decision_context", "client.decision_needs", "situation.contact", "write_ins.decision_needs"],
       desired_progress: ["client.goals", "client.goal_detail", "write_ins.goals"],
     };
-    const details = (detailPaths[field] ?? []).filter(path => allowed.has(path) && !unresolved(path as AnswerReferencePath, answers));
-    const basisPath = "client.pathway_basis";
-    if (details.length) {
-      const basis = answers.client.pathway_basis ? pathwayBasis(answers.client.pathway_basis) : "unknown";
-      const paths = [...details, ...(allowed.has(basisPath) ? [basisPath] : [])];
-      add(`pathway_${field}`, basis, paths);
+    const details = (detailPaths[field] ?? []).filter(path => allowed.has(path) && !unresolved(path, answers));
+    const basisPath = "client.pathway_basis" as AnswerReferencePath;
+    const basis = answers.client.pathway_basis ? pathwayBasis(answers.client.pathway_basis) : "unknown";
+    if (details.length && basis !== "unknown") {
+      add(`pathway_${field}`, basis, [...details, ...(allowed.has(basisPath) ? [basisPath] : [])]);
+    } else if (details.length && allowed.has(basisPath)) {
+      add(`pathway_${field}_details_unknown`, "unknown", [...details, basisPath]);
+    } else {
+      if (allowed.has(basisPath)) add(`pathway_${field}_unknown`, "unknown", [basisPath]);
     }
   }
 
   if (slot === "client_goals_needs") {
-    const pathSets: Array<[string, string[]]> = [
+    const pathSets: Array<[string, AnswerReferencePath[]]> = [
       ["goals", ["client.goals", "client.goal_detail", "write_ins.goals"]],
       ["concerns", ["client.concerns", "write_ins.concerns"]],
       ["decision_needs", ["client.decision_needs", "client.decision_context", "write_ins.decision_needs"]],
     ];
     for (const [name, candidates] of pathSets) {
-      const details = candidates.filter(path => allowed.has(path) && !unresolved(path as AnswerReferencePath, answers));
-      if (details.length) {
-        add(`client_${name}`, "hypothesis", details);
-      }
+      const details = candidates.filter(path => allowed.has(path) && !unresolved(path, answers));
+      details.forEach((path, index) => add(`client_${name}_${index + 1}`, "hypothesis", [path]));
     }
   }
 
   const pathsForGeneric = allowedPaths.filter(path => !consumed.has(path));
-  const byBasis = new Map<EvidenceBasis, string[]>();
+  const byBasis = new Map<EvidenceBasis, AnswerReferencePath[]>();
   for (const path of pathsForGeneric) {
     if (["client.pathway_basis", "client.choice_basis", "value.payment_context_basis"].includes(path)) continue;
     if (isFollowup(path)) {

@@ -263,7 +263,8 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
   const disallowedPath = paths.find((path) => typeof path === "string" && !allowedPaths.has(path));
   if (typeof disallowedPath === "string" && isSafeSourcePath(disallowedPath)) return reject("source_answer_path_not_allowed_for_slot", disallowedPath);
   const evidenceSlot = providerSelection?.slot ?? slot as DesiredClientEvidenceSlot;
-  if (!DESIRED_CLIENT_EVIDENCE_SLOTS.includes(evidenceSlot) || !statementMatchesEvidenceGroups(evidenceSlot, value as EvidenceLinkedStatement, answers)) {
+  if (!DESIRED_CLIENT_EVIDENCE_SLOTS.includes(evidenceSlot) ||
+    providerSelection && !statementMatchesEvidenceGroups(evidenceSlot, value as unknown as EvidenceLinkedStatement, answers)) {
     return reject("evidence_group_selection_invalid");
   }
   const combinedPayment = paymentEvidenceClaims(answers).find(claim => claim.source_answer_ids.includes("value.payment") && claim.source_answer_ids.includes("value.payment_context"));
@@ -509,7 +510,7 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
         }
         return reject("why_firm_wants_work", "claim_not_valid");
       }
-      const repairablePaymentWording = failure?.reason === "payment_source_must_be_isolated" || failure?.reason === "payment_context_claim_mismatch";
+      const repairablePaymentWording = failure?.reason === "payment_source_must_be_isolated" || failure?.reason === "payment_context_claim_mismatch" || failure?.reason === "evidence_group_selection_invalid";
       const expectedPayment = paymentEvidenceClaim(answers);
       const expectedContext = paymentContextEvidenceClaim(answers);
       const paymentStatusMatches = !claim.source_answer_ids.includes("value.payment") ||

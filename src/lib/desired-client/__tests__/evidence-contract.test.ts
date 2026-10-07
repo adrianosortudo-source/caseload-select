@@ -1,24 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { completeAnswers } from "./blueprint-helpers";
+import { completeAnswers, evidence, type ProviderSchemaProbe } from "./blueprint-helpers";
 import {
   buildDesiredClientEvidenceGroups,
   getProviderEvidenceSelection,
   resolveEvidenceGroupSelection,
   safeEvidenceDiagnostic,
   statementMatchesEvidenceGroups,
+  type DesiredClientEvidenceSlot,
 } from "../evidence-contract";
 import { decodeProviderEvidenceGroups, providerBlueprintSchema } from "../provider-schema";
 import { isSafeDiagnosticSourcePath } from "../output";
 import { interviewClarificationSourceFingerprint } from "../types";
-import type { DesiredClientAnswers } from "../types";
+import type { AnswerReferencePath, DesiredClientAnswers, EvidenceLinkedStatement } from "../types";
 
-const firstGroup = (answers: DesiredClientAnswers, slot: Parameters<typeof buildDesiredClientEvidenceGroups>[0], sourcePath: string) =>
+const firstGroup = (answers: DesiredClientAnswers, slot: Parameters<typeof buildDesiredClientEvidenceGroups>[0], sourcePath: AnswerReferencePath) =>
   buildDesiredClientEvidenceGroups(slot, answers).find(group => group.source_answer_ids.includes(sourcePath));
 
 describe("Desired Client evidence-group contract", () => {
   it("uses one slot registry for the provider schema and decoded persisted report shape", () => {
     const answers = completeAnswers();
-    const schema = providerBlueprintSchema(answers) as any;
+    const schema = providerBlueprintSchema(answers) as unknown as ProviderSchemaProbe;
     const slots = [
       ["definition_client_type", schema.properties.brief.properties.definition_components.properties.client.properties.evidence_group_ids.items.enum],
       ["definition_client_matter", schema.properties.brief.properties.definition_components.properties.client_matter.properties.evidence_group_ids.items.enum],
@@ -28,11 +29,11 @@ describe("Desired Client evidence-group contract", () => {
       ...["trigger", "first_contact", "decision", "desired_progress"].map(field => [`decision_pathway.${field}`, schema.properties.brief.properties.decision_pathway.properties[field].properties.evidence_group_ids.items.enum]),
     ] as Array<[string, string[]]>;
     for (const [slot, enumIds] of slots) {
-      expect(enumIds).toEqual(buildDesiredClientEvidenceGroups(slot as any, answers).map(group => group.id));
+      expect(enumIds).toEqual(buildDesiredClientEvidenceGroups(slot as DesiredClientEvidenceSlot, answers).map(group => group.id));
     }
 
     const group = firstGroup(answers, "client_goals_needs", "client.goals")!;
-    const decoded = decodeProviderEvidenceGroups({ brief: { client_goals_needs: { claims: [{ text: "The client wants to understand the available options.", evidence_group_ids: [group.id] }] } } }, answers) as any;
+    const decoded = decodeProviderEvidenceGroups({ brief: { client_goals_needs: { claims: [{ text: "The client wants to understand the available options.", evidence_group_ids: [group.id] }] } } }, answers) as unknown as { clarification_code: null; brief: { client_goals_needs: { claims: EvidenceLinkedStatement[] } } };
     expect(decoded.clarification_code).toBeNull();
     expect(decoded.brief.client_goals_needs.claims[0]).toEqual({
       text: "The client wants to understand the available options.",
@@ -42,6 +43,50 @@ describe("Desired Client evidence-group contract", () => {
     });
     expect(Object.keys(decoded.brief.client_goals_needs.claims[0]).sort()).toEqual(["evidence_basis", "kind", "source_answer_ids", "text"]);
     expect(getProviderEvidenceSelection(decoded.brief.client_goals_needs.claims[0])).toMatchObject({ slot: "client_goals_needs", groupIds: [group.id], valid: true });
+  });
+
+  it("keeps pre-registry app-built claims valid when the model cites only the relevant goal source", () => {
+    const answers = completeAnswers();
+    const goal = firstGroup(answers, "client_goals_needs", "client.goals")!;
+    expect(goal.source_answer_ids).toEqual(["client.goals"]);
+    const legacyClaim = evidence("The client wants to understand their options.", "hypothesis", "client.goals");
+    expect(statementMatchesEvidenceGroups("client_goals_needs", legacyClaim, answers)).toBe(true);
+  });
+
+  it("decodes provider group IDs before validation and rejects provider-forged citation fields", () => {
+    const answers = completeAnswers();
+    const group = firstGroup(answers, "client_goals_needs", "client.goals")!;
+    const decoded = decodeProviderEvidenceGroups({brief:{client_goals_needs:{claims:[{
+      text:"The client wants to understand their options.",
+      evidence_group_ids:[group.id],
+      source_answer_ids:["opportunity.sources"],
+      evidence_basis:"unknown",
+      kind:"unknown",
+    }]}}}, answers) as {brief:{client_goals_needs:{claims:EvidenceLinkedStatement[]}}};
+    const statement = decoded.brief.client_goals_needs.claims[0];
+    expect(statement).toMatchObject({
+      kind:group.kind,
+      evidence_basis:group.evidence_basis,
+      source_answer_ids:group.source_answer_ids,
+    });
+    expect(Object.keys(statement).sort()).toEqual(["evidence_basis","kind","source_answer_ids","text"]);
+    expect(getProviderEvidenceSelection(statement)).toMatchObject({slot:"client_goals_needs",groupIds:[group.id],valid:false});
+    expect(statementMatchesEvidenceGroups("client_goals_needs", statement, answers)).toBe(false);
+  });
+
+  it("rejects a provider selection after its source answer changes", () => {
+    const answers = completeAnswers();
+    const group = firstGroup(answers, "client_goals_needs", "client.goals")!;
+    const decoded = decodeProviderEvidenceGroups({brief:{client_goals_needs:{claims:[{
+      text:"The client wants to understand their options.",
+      evidence_group_ids:[group.id],
+    }]}}}, answers) as {brief:{client_goals_needs:{claims:EvidenceLinkedStatement[]}}};
+    const statement = decoded.brief.client_goals_needs.claims[0];
+    expect(getProviderEvidenceSelection(statement)?.valid).toBe(true);
+    expect(statementMatchesEvidenceGroups("client_goals_needs", statement, answers)).toBe(true);
+    answers.client.goals = ["complete"];
+    expect(resolveEvidenceGroupSelection("client_goals_needs", [group.id], answers).valid).toBe(false);
+    expect(statementMatchesEvidenceGroups("client_goals_needs", statement, answers)).toBe(false);
   });
 
   it("rejects empty, unknown, duplicate, stale, out-of-slot and mixed-basis selections", () => {
@@ -101,6 +146,23 @@ describe("Desired Client evidence-group contract", () => {
     };
     expect(statementMatchesEvidenceGroups("why_firm_wants_work", statement, answers)).toBe(true);
     expect(statement.text).toContain(answers.value.payment_context);
+  });
+
+  it("keeps supplied choice and pathway details visible when their basis is unknown", () => {
+    const answers = completeAnswers();
+    answers.client.choice_priorities = ["clear_fees"];
+    answers.client.choice_detail = "The client asked for a predictable fee and a clear closing timetable.";
+    answers.client.choice_basis = "unknown";
+    const choice = firstGroup(answers, "why_client_chooses_firm", "client.choice_detail")!;
+    expect(choice.evidence_basis).toBe("unknown");
+    expect(choice.source_answer_ids).toEqual(["client.choice_priorities", "client.choice_detail", "client.choice_basis"]);
+    expect(resolveEvidenceGroupSelection("why_client_chooses_firm", [choice.id], answers).valid).toBe(true);
+
+    answers.client.pathway_basis = "unknown";
+    const firstContact = firstGroup(answers, "decision_pathway.first_contact", "situation.timing")!;
+    expect(firstContact.evidence_basis).toBe("unknown");
+    expect(firstContact.source_answer_ids).toEqual(["situation.timing", "situation.role", "client.pathway_basis"]);
+    expect(resolveEvidenceGroupSelection("decision_pathway.first_contact", [firstContact.id], answers).valid).toBe(true);
   });
 
   it("keeps capacity observations, staffing preferences and pathway evidence in their own slots", () => {

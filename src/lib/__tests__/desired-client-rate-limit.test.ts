@@ -42,11 +42,13 @@ const NEW_BUCKETS = [
   ["desiredClientAnalyze", 20],
   ["desiredClientDaily", 100],
   ["desiredClientGlobal", 2000],
+  ["desiredClientGeneration", 3],
 ] as const;
 const NEW_BUCKET_WINDOWS: Record<(typeof NEW_BUCKETS)[number][0], number> = {
   desiredClientAnalyze: 600,
   desiredClientDaily: 86400,
   desiredClientGlobal: 86400,
+  desiredClientGeneration: 86400,
 };
 const NEW_BUCKET_FLAG_CASES = NEW_BUCKETS.flatMap(([bucket, limit]) =>
   (["true", "false"] as const).map((flag) => [bucket, limit, flag] as const),

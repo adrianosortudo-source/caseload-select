@@ -4,6 +4,15 @@ import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { evidenceGroupIdsForStatement, type DesiredClientEvidenceSlot } from "../evidence-contract";
 import { providerTargetClaimIds } from "../provider-schema";
 import type { AnalysisResult, DesiredClientAnswers, DesiredClientBriefV4, EvidenceBasis, EvidenceLinkedStatement } from "../types";
+export type ProviderSchemaProbe = {
+ properties: Record<string, ProviderSchemaProbe>;
+ items: ProviderSchemaProbe;
+ enum: string[];
+ maxItems: number;
+ minItems: number;
+ description: string;
+ required: string[];
+};
 export function completeAnswers(): DesiredClientAnswers {
   const a = emptyAnswers(); a.revision = 3;
   a.focus = { ...a.focus, area: "business", work: "business_acquisitions", service_area: "Ontario", route: "established", certainty: "chosen" };

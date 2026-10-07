@@ -17,9 +17,12 @@ const REQUEST_TIMEOUT_MS = 24_000;
 const REPAIRABLE_CARDS = ["client_and_matter", "client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions"];
 
 export type DesiredClientAnalysisOutcome =
-  | { mode: "live"; result: AnalysisResult }
-  | { mode: "invalid_output"; diagnostic: { field: string; reason: string } }
-  | { mode: "unavailable" };
+  | { mode: "live"; result: AnalysisResult; providerCallsUsed: number }
+  | { mode: "invalid_output"; diagnostic: { field: string; reason: string }; providerCallsUsed: number }
+  | { mode: "unavailable"; providerCallsUsed: number }
+  | { mode: "rate_limited"; providerCallsUsed: number };
+
+export type ReserveGenerationCall = () => Promise<boolean>;
 
 export function desiredClientModelId(): string { return MODEL; }
 
@@ -64,10 +67,17 @@ function logRejectedOutput(
 export async function runDesiredClientAnalysis(
   request: AnalysisRequestEnvelope,
   eligibleCodes: readonly ClarificationCode[],
+  reserveGenerationCall: ReserveGenerationCall,
 ): Promise<DesiredClientAnalysisOutcome> {
   const apiKey = process.env.GOOGLE_AI_API_KEY?.trim() || process.env.GEMINI_API_KEY?.trim();
-  if (!apiKey) return { mode: "unavailable" };
+  if (!apiKey) return { mode: "unavailable", providerCallsUsed: 0 };
   const startedAt = Date.now();
+  let providerCallsUsed = 0;
+  const generateContent = async (model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>, content: string) => {
+    if (!(await reserveGenerationCall())) return null;
+    providerCallsUsed += 1;
+    return model.generateContent(content);
+  };
   try {
     const client = new GoogleGenerativeAI(apiKey);
     const model = client.getGenerativeModel({
@@ -88,13 +98,14 @@ export async function runDesiredClientAnalysis(
     ).map(claim => ({ text: claim.text, evidence_group_ids: evidenceGroupIdsForStatement("why_firm_wants_work", claim, request.answers) }));
     userPrompt.grounded_target_claim_ids = providerTargetClaimIds(request.answers);
     userPrompt.instruction += " The grounded_target definition fields contain canonical text and registered evidence_group_ids; copy both exactly and omit kind, evidence_basis and source_answer_ids. For client_and_matter return only {claim_ids: grounded_target_claim_ids}, in the supplied order. The application resolves those IDs to the confirmed target and any current followup before validation. For why_firm_wants_work, copy every applicable canonical payment or payment-context text and evidence_group_ids exactly. Preserve all supplied commercial and capacity facts within the seven-claim limit.";
-    const response = await model.generateContent(JSON.stringify(userPrompt));
+    const response = await generateContent(model, JSON.stringify(userPrompt));
+    if (!response) return { mode: "rate_limited", providerCallsUsed };
     const finishReason = response.response.candidates?.[0]?.finishReason;
     let parsed: unknown;
     try { parsed = JSON.parse(response.response.text()); }
     catch {
       logRejectedOutput(request.requestId, { field: "report", reason: "invalid_json" }, undefined, 0, finishReason, request.answers);
-      return { mode: "invalid_output", diagnostic: { field: "report", reason: "invalid_json" } };
+      return { mode: "invalid_output", diagnostic: { field: "report", reason: "invalid_json" }, providerCallsUsed };
     }
     let validationFailure: AnalysisValidationFailure | null = null;
     const validate = () => {
@@ -153,7 +164,8 @@ export async function runDesiredClientAnalysis(
         generationConfig: { temperature: 0.2, maxOutputTokens: 1600, responseMimeType: "application/json", responseSchema: fragmentSchema as never, thinkingConfig: { thinkingBudget: 256 } } as GenerationConfig,
       }, { timeout: remaining });
       repairAttempts++;
-      const repaired = await repairModel.generateContent(JSON.stringify({ ...userPrompt, invalid_fragment: fragment }));
+      const repaired = await generateContent(repairModel, JSON.stringify({ ...userPrompt, invalid_fragment: fragment }));
+      if (!repaired) return { mode: "rate_limited", providerCallsUsed };
       let replacement: unknown;
       try { replacement = JSON.parse(repaired.response.text()); } catch { break; }
       if (parts.length === 2) (root.brief[parts[0]] as Record<string, unknown>)[parts[1]] = replacement;
@@ -173,12 +185,12 @@ export async function runDesiredClientAnalysis(
         request.answers,
       );
     }
-    if (result) return { mode: "live", result };
+    if (result) return { mode: "live", result, providerCallsUsed };
     const finalFailure = validationFailure as AnalysisValidationFailure | null;
     return { mode: "invalid_output", diagnostic: {
       field: (finalFailure?.field ?? firstFailure?.field ?? "report").slice(0, 80),
       reason: (finalFailure?.reason ?? firstFailure?.reason ?? "unclassified_validation_failure").slice(0, 80),
-    } };
+    }, providerCallsUsed };
   } catch (error) {
     // Provider exceptions can contain submitted text. Never log their messages.
     console.warn(JSON.stringify({
@@ -187,7 +199,7 @@ export async function runDesiredClientAnalysis(
       model: MODEL,
       ...safeProviderFailureMetadata(error),
     }));
-    return { mode: "unavailable" };
+    return { mode: "unavailable", providerCallsUsed };
   }
 }
 

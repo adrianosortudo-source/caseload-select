@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   getGenerativeModel: vi.fn(),
   generateContent: vi.fn(),
   checkRateLimit: vi.fn(),
+  generationCallsByRun: new Map<string, number>(),
   ipFromRequest: vi.fn(() => "203.0.113.42"),
   rateLimitHeaders: vi.fn(() => ({ "Retry-After": "60", "X-RateLimit-Limit": "20" })),
 }));
@@ -94,6 +95,14 @@ beforeEach(() => {
   mocks.getGenerativeModel.mockReset().mockReturnValue({ generateContent: mocks.generateContent });
   mocks.generateContent.mockReset().mockResolvedValue(providerResponse(MODEL_RESULT));
   mocks.checkRateLimit.mockReset().mockResolvedValue({ ok: true, active: true, remaining: 19, reset: Date.now() + 60_000, limit: 20 });
+  mocks.generationCallsByRun.clear();
+  mocks.checkRateLimit.mockImplementation(async (bucket: string, identity: string) => {
+    if (bucket !== "desiredClientGeneration") return { ok: true, active: true, remaining: 19, reset: Date.now() + 60_000, limit: 20 };
+    const used = mocks.generationCallsByRun.get(identity) ?? 0;
+    if (used >= 3) return { ok: false, active: true, remaining: 0, reset: Date.now() + 60_000, limit: 3 };
+    mocks.generationCallsByRun.set(identity, used + 1);
+    return { ok: true, active: true, remaining: 2 - used, reset: Date.now() + 60_000, limit: 3 };
+  });
   mocks.ipFromRequest.mockClear().mockReturnValue("203.0.113.42");
   mocks.rateLimitHeaders.mockClear();
   vi.spyOn(console, "info").mockImplementation(() => undefined);
@@ -203,7 +212,9 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
       ["desiredClientAnalyze", "203.0.113.42"],
       ["desiredClientDaily", "203.0.113.42"],
       ["desiredClientGlobal", "all"],
+      ["desiredClientGeneration", ENVELOPE.reviewRunId],
     ]);
+    expect(response.headers.get("X-Desired-Client-Generation-Calls")).toBe("1");
     expect(mocks.GoogleGenerativeAI).toHaveBeenCalledWith("test-provider-key");
     const [modelOptions, requestOptions] = mocks.getGenerativeModel.mock.calls[0];
     expect(modelOptions).toMatchObject({ model: "gemini-2.5-flash", generationConfig: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 512 } } });
@@ -472,6 +483,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
 
     expect(response.status).toBe(502);
+    expect(response.headers.get("X-Desired-Client-Generation-Calls")).toBe("3");
     expect(mocks.generateContent).toHaveBeenCalledTimes(3);
     const log = JSON.parse(warn.mock.calls[0][0] as string);
     expect(log).toMatchObject({
@@ -484,6 +496,13 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(log).not.toHaveProperty("firstClaimDiagnostic");
     expect(log).not.toHaveProperty("finalClaimDiagnostic");
     expect(JSON.stringify(warn.mock.calls)).not.toContain("A private production-only claim sentinel");
+
+    const retryRequest = { ...ENVELOPE, requestId: "33333333-3333-4333-8333-333333333333", analysisIndex: 1 as const };
+    const denied = await POST(makeRequest(JSON.stringify(retryRequest)));
+    expect(denied.status).toBe(429);
+    expect((await denied.json()).error.code).toBe("RATE_LIMITED");
+    expect(denied.headers.get("X-Desired-Client-Generation-Calls")).toBe("0");
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
   });
 
   it.each([

@@ -70,9 +70,10 @@ describe("AI Blueprint output contract", () => {
   it("accepts a digit rendering of a cited written-out count but rejects a changed value", () => {
     const answers = completeAnswers();
     answers.repeatability.target = "Proposed target: two additional retained buyer-side acquisition matters per quarter.";
-    const value = validBlueprint();
+    const value = validBlueprint(answers);
     value.brief.evidence_and_open_questions.claims = [evidence("The proposed target of 2 additional retained buyer-side acquisition matters per quarter needs firm approval.", "firm_preference", "repeatability.target")];
-    expect(validateAnalysisResult(value, answers, [])).not.toBeNull();
+    const failures: Array<{ field: string; reason: string }> = [];
+    expect(validateAnalysisResult(value, answers, [], failure => failures.push({ field: failure.field, reason: failure.reason })), JSON.stringify(failures)).not.toBeNull();
     value.brief.evidence_and_open_questions.claims[0] = evidence("The proposed target of 3 additional retained buyer-side acquisition matters per quarter needs firm approval.", "firm_preference", "repeatability.target");
     expect(validateAnalysisResult(value, answers, [])).toBeNull();
   });
@@ -240,7 +241,8 @@ describe("AI Blueprint output contract", () => {
       expect(staffing?.evidence_basis).toBe("firm_preference");
       if (route === "new") expect(JSON.stringify(brief)).toContain("The team enjoys the strategic work and wants to test repeatable demand.");
       expect(validateDraftAnswers(answers)).toBe(true);
-      expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
+      const failures: Array<{ field: string; reason: string }> = [];
+      expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [], failure => failures.push({ field: failure.field, reason: failure.reason })), JSON.stringify(failures)).not.toBeNull();
     }
   });
   it("keeps an unresolved rationale separate from a current capacity preference", () => {
@@ -303,7 +305,8 @@ describe("AI Blueprint output contract", () => {
     const built=buildStructuredBlueprintV4(answers);
     expect(built.why_firm_wants_work.claims).toHaveLength(7);
     expect(validateDraftAnswers(answers)).toBe(true);
-    expect(validateAnalysisResult({brief:built,clarification_code:null},answers,[])).not.toBeNull();
+    const builtFailures: Array<{field:string;reason:string}> = [];
+    expect(validateAnalysisResult({brief:built,clarification_code:null},answers,[],failure=>builtFailures.push({field:failure.field,reason:failure.reason})),JSON.stringify(builtFailures)).not.toBeNull();
     const excessive=structuredClone(built);
     excessive.why_firm_wants_work.claims.push(structuredClone(excessive.why_firm_wants_work.claims[0]));
     const failures: Array<{field:string;reason:string}> = [];
@@ -543,9 +546,16 @@ describe("AI Blueprint output contract", () => {
     expect(malformedFailures[0]).toEqual({field:"evidence_and_open_questions",reason:"card_shape"});
   });
   it("accepts six grounded cards with distinct evidence labels", () => { const value = validBlueprint(); expect(validateAnalysisResult(value, completeAnswers(), [])).not.toBeNull(); expect(value.brief.evidence_and_open_questions.claims[0].evidence_basis).toBe("unknown"); expect(value.brief.why_firm_wants_work.claims[0].evidence_basis).toBe("firm_preference"); });
+  it("reopens a saved report with its existing goal citations when additional goal detail is present", () => {
+    const answers = completeAnswers();
+    const saved = JSON.parse(JSON.stringify(validBlueprint(answers)));
+    expect(answers.client.goal_detail).toBeTruthy();
+    expect(saved.brief.client_goals_needs.claims[0].source_answer_ids).toEqual(["client.goals"]);
+    expect(validateAnalysisResult(saved, answers, [])).not.toBeNull();
+  });
   it("uses explicit client geography, not the firm's service area, for target identity", () => { const answers=completeAnswers(); answers.focus.service_area="Ontario"; const firmServiceAreaOnly=validBlueprint(answers); expect(firmServiceAreaOnly.brief.definition_components.client.text).toBe("an owner or founder"); expect(validateAnalysisResult(firmServiceAreaOnly,answers,[])).not.toBeNull(); answers.client_context.geography="Ontario"; const clientLocation=validBlueprint(answers); expect(clientLocation.brief.definition_components.client.text).toBe("an owner or founder in Ontario"); expect(validateAnalysisResult(clientLocation,answers,[])).not.toBeNull(); });
-  it("reports only a safe field and rule when rejecting model output", () => { const failures: Array<{field:string;reason:string}> = []; const value = validBlueprint(); value.brief.client_and_matter.claims[0].text = "x".repeat(701); expect(validateAnalysisResult(value,completeAnswers(),[],failure=>failures.push(failure))).toBeNull(); expect(failures).toEqual([{field:"client_and_matter",reason:"statement_text_budget_or_format"}]); expect(JSON.stringify(failures)).not.toContain("x".repeat(701)); });
-  it("reports recognized disallowed citation paths while keeping unknown paths and answer text out of diagnostics", () => { const answers=completeAnswers(), unknown=validBlueprint(), disallowed=validBlueprint(); unknown.brief.definition_components.client.source_answer_ids=["client.identity" as never]; disallowed.brief.definition_components.client.source_answer_ids=["practice.firm_type"]; const failures:Array<{field:string;reason:string;sourcePath?:string}>=[]; expect(validateAnalysisResult(unknown,answers,[],failure=>failures.push(failure))).toBeNull(); expect(failures.at(-1)).toEqual({field:"definition_components.client",reason:"source_answer_path_unrecognized"}); expect(validateAnalysisResult(disallowed,answers,[],failure=>failures.push(failure))).toBeNull(); expect(failures.at(-1)).toEqual({field:"definition_components.client",reason:"source_answer_path_not_allowed_for_slot",sourcePath:"practice.firm_type"}); expect(JSON.stringify(failures)).not.toContain("client.identity"); expect(JSON.stringify(failures)).not.toContain(answers.practice.firm_type); });
+  it("reports only whitelisted diagnostics when rejecting model output", () => { const failures: Array<{field:string;reason:string;claimDiagnostic?:{slot:string;claimIndex:number;kind:string;evidenceBasis:string;sourceAnswerIds:string[];groupIds:string[];expectedGroups:Array<{id:string;kind:string;evidenceBasis:string;sourceAnswerIds:string[]}>}}> = []; const value = validBlueprint(); value.brief.client_and_matter.claims[0].text = "x".repeat(701); expect(validateAnalysisResult(value,completeAnswers(),[],failure=>failures.push(failure))).toBeNull(); expect(failures).toHaveLength(1); expect(failures[0]).toMatchObject({field:"client_and_matter",reason:"statement_text_budget_or_format",claimDiagnostic:{slot:"client_and_matter",claimIndex:1,sourceAnswerIds:["client_context.repeat_matter_pattern"],groupIds:[]}}); expect(JSON.stringify(failures)).not.toContain("x".repeat(701)); });
+  it("reports only safe source ids, group ids and rule diagnostics", () => { const answers=completeAnswers(), unknown=validBlueprint(), disallowed=validBlueprint(); unknown.brief.definition_components.client.source_answer_ids=["client.identity" as never]; disallowed.brief.definition_components.client.source_answer_ids=["practice.firm_type"]; const failures:Array<{field:string;reason:string;sourcePath?:string;claimDiagnostic?:{slot:string;claimIndex:number;kind:string;evidenceBasis:string;sourceAnswerIds:string[];groupIds:string[];expectedGroups:Array<{id:string;kind:string;evidenceBasis:string;sourceAnswerIds:string[]}>}}>=[]; expect(validateAnalysisResult(unknown,answers,[],failure=>failures.push(failure))).toBeNull(); expect(failures.at(-1)).toMatchObject({field:"definition_components.client",reason:"source_answer_path_unrecognized",claimDiagnostic:{slot:"definition_client_type",claimIndex:1,sourceAnswerIds:[],groupIds:[],expectedGroups:[]}}); expect(validateAnalysisResult(disallowed,answers,[],failure=>failures.push(failure))).toBeNull(); expect(failures.at(-1)).toMatchObject({field:"definition_components.client",reason:"source_answer_path_not_allowed_for_slot",sourcePath:"practice.firm_type",claimDiagnostic:{slot:"definition_client_type",claimIndex:1,sourceAnswerIds:[],groupIds:[],expectedGroups:[]}}); expect(JSON.stringify(failures)).not.toContain("client.identity"); expect(JSON.stringify(failures)).not.toContain(answers.practice.firm_type); });
   it("rejects legacy answer-list schemas, extra keys, and wrong versions", () => { const good = validBlueprint(), answers = completeAnswers(); expect(validateAnalysisResult({ brief: { definition: {}, client_goals: [], firm_reasons: [], marketing: {} }, clarification_code: null }, answers, [])).toBeNull(); expect(validateAnalysisResult({ ...good, unexpected: true }, answers, [])).toBeNull(); expect(validateAnalysisResult({ ...good, brief: { ...good.brief, report_version: "dcm-blueprint-v1" } }, answers, [])).toBeNull(); });
   it("rejects unsupported citations and slot overflow, and replaces model sentence wording with the application formatter", () => { const answers = completeAnswers(), good = validBlueprint(answers); const fabricated = structuredClone(good); fabricated.brief.why_firm_wants_work.claims[0].source_answer_ids = ["focus.industry" as never]; expect(validateAnalysisResult(fabricated, answers, [])).toBeNull(); const sentence = structuredClone(good); sentence.brief.definition_sentence = "A conflicting sentence written by the model."; const checked=validateAnalysisResult(sentence, answers, []); expect(checked?.brief.definition_sentence).toContain("on matters matching the firm's description: “A business buyer"); expect(checked?.brief.definition_sentence).toContain("because the firm cites client benefit, a fit with the firm's skills and fees usually worthwhile for the effort"); expect(checked?.brief.definition_sentence).not.toContain("progress will be assessed"); const long = structuredClone(good); long.brief.client_and_matter.claims[0].text = "x ".repeat(101); expect(validateAnalysisResult(long, answers, [])).toBeNull(); });
   it("rejects an unknown claim cited only to known information and an incorrect evidence basis", () => { const answers = completeAnswers(), good = validBlueprint(); answers.opportunity.source_detail = "Monthly enquiry log"; const wrongUnknown = structuredClone(good); wrongUnknown.brief.evidence_and_open_questions.claims[0].source_answer_ids = ["opportunity.source_detail"]; expect(validateAnalysisResult(wrongUnknown, answers, [])).toBeNull(); const mismatch = structuredClone(good); mismatch.brief.why_firm_wants_work.claims[0].evidence_basis = "firm_reported_recorded"; expect(validateAnalysisResult(mismatch, answers, [])).toBeNull(); });
@@ -616,8 +626,9 @@ describe("AI Blueprint output contract", () => {
     const economics=["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"] as const;
     result.brief.why_firm_wants_work.claims=[evidence("The work is not profitable at the supplied fee and direct cost.","firm_reported_estimate",...economics)];
     expect(validateAnalysisResult(result,answers,[])).not.toBeNull();
-    result.brief.why_firm_wants_work.claims=[evidence("Before growing this work, the firm needs to establish positive contribution.","firm_preference","value.reasons","delivery.capacity")];
-    expect(validateAnalysisResult(result,answers,[])).not.toBeNull();
+    result.brief.why_firm_wants_work.claims=[evidence("Before growing this work, the firm needs to establish positive contribution.","firm_reported_estimate","value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope")];
+    const preferenceFailures: Array<{field:string;reason:string}> = [];
+    expect(validateAnalysisResult(result,answers,[],failure=>preferenceFailures.push({field:failure.field,reason:failure.reason})),JSON.stringify(preferenceFailures)).not.toBeNull();
     result.brief.why_firm_wants_work.claims=[evidence("Positive contribution remains to be verified.","firm_reported_estimate",...economics)];
     expect(validateAnalysisResult(result,answers,[])).not.toBeNull();
     result.brief.why_firm_wants_work.claims=[evidence("The work is not profitable, but fees are worthwhile.","firm_reported_estimate",...economics)];
@@ -639,6 +650,7 @@ describe("AI Blueprint output contract", () => {
     const result = validBlueprint(answers);
     result.brief.definition_sentence = buildDefinitionSentence(result.brief, false, answers.client.goal_detail);
     expect(result.brief.definition_sentence.split(/\s+/).length).toBeGreaterThan(85);
-    expect(validateAnalysisResult(result, answers, [])).not.toBeNull();
+    const failures: Array<{ field: string; reason: string }> = [];
+    expect(validateAnalysisResult(result, answers, [], failure => failures.push({ field: failure.field, reason: failure.reason })), JSON.stringify(failures)).not.toBeNull();
   });
 });

@@ -290,7 +290,9 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const economicsPaths=knownPaths(answers,["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]);
   const contribution=calculateContribution(answers);
   const economicsText=economicsPaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")+(contribution?`; ${contribution.basis==="firm_reported_estimate"?"estimated":"firm-record-based"} contribution before overhead and acquisition costs: ${contribution.amount} per matter, calculated as collected fee less direct delivery cost`:"");
-  const experiencePaths=knownPaths(answers,["practice.experience","practice.capability","practice.development_needs"]);
+  const practiceExperiencePaths=knownPaths(answers,["practice.experience"]);
+  const experiencePaths=unique([...knownPaths(answers,["practice.capability"]),...(answers.practice.experience==="new"?[]:practiceExperiencePaths)]);
+  const developmentNeedsPaths=knownPaths(answers,["practice.development_needs"]);
   const currentCapacityPaths=knownPaths(answers,["delivery.capacity","write_ins.capacity","repeatability.additional_matters"]);
   const deliveryPreferencePaths=knownPaths(answers,["repeatability.staffing_constraint","direction.less_note","direction.less_reason"]);
   const rangePaths=knownPaths(answers,["value.collected_fee","value.team_hours"]);
@@ -299,6 +301,12 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const rangeClaim=rangePaths.length?linked(`${answers.focus.route==="established"?"The firm reports":"Working assumption to test"}: fee range or team time: ${rangePaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")}. Basis not specified.`,answers.focus.route==="established"?"firm_reported_observation":"hypothesis",rangePaths):null;
   const currentCapacityClaim=currentCapacityPaths.length
     ? linked(`Current capacity assessment reported by the firm: ${facts(answers,currentCapacityPaths)}.`,"firm_reported_observation",currentCapacityPaths)
+    : null;
+  const developmentNeedsClaim=developmentNeedsPaths.length
+    ? linked(`Development needs selected by the firm: ${facts(answers,developmentNeedsPaths)}.`,"firm_preference",developmentNeedsPaths)
+    : null;
+  const newToWorkClaim=answers.practice.experience==="new"&&practiceExperiencePaths.length
+    ? linked("The firm is new to this work.","firm_preference",practiceExperiencePaths)
     : null;
   // Payment and its context remain separate when their evidence bases differ.
   // The firm-value card has a seven-claim allowance for this bounded case, so
@@ -311,7 +319,7 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
     ? linked(`Growth prerequisites and marketing trade-offs selected by the firm: ${facts(answers,deliveryPreferencePaths)}.`,"firm_preference",deliveryPreferencePaths)
     : null;
   const firmInterviewClaims=interviewClaims(answers,[3],"Clarification: ");
-  const preferenceClaims=[...(deliveryPreferenceClaim?[deliveryPreferenceClaim]:[]),...firmInterviewClaims];
+  const preferenceClaims=[...(deliveryPreferenceClaim?[deliveryPreferenceClaim]:[]),...(developmentNeedsClaim?[developmentNeedsClaim]:[]),...(newToWorkClaim?[newToWorkClaim]:[]),...firmInterviewClaims];
   const preferenceSources=firmRationale.evidence_basis==="firm_preference"&&preferenceClaims.length
     ? [...new Set([...
       firmRationale.source_answer_ids,
@@ -322,31 +330,36 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
     ? linked(`${firmRationale.text} ${preferenceClaims.map(claim=>claim.text).join(" ")}`,"firm_preference",preferenceSources)
     : firmRationale;
   const whyFirmClaims=[rationaleWithDelivery,
-     ...(experiencePaths.length?[linked(`Experience and development reported by the firm: ${facts(answers,experiencePaths)}.`,["regular","occasional","adjacent"].includes(answers.practice.experience??"")?"firm_reported_experience":"firm_preference",experiencePaths)]:[]),
+     ...(experiencePaths.length?[linked(`Experience and capability reported by the firm: ${facts(answers,experiencePaths)}.`,"firm_reported_experience",experiencePaths)]:[]),
      ...commercialClaims,
      ...paymentClaims,
      ...(!rangeAndCapacityClaim&&currentCapacityClaim?[currentCapacityClaim]:[]),
       ...(preferenceClaims.length&&rationaleWithDelivery===firmRationale?preferenceClaims:[])];
 
   const choiceBasis=insightBasis(answers.client.choice_basis);
-  const choicePaths=knownPaths(answers,["client.choice_priorities","client.choice_detail","client.choice_basis"]);
-  const clientChoice=choicePaths.length&&choiceBasis!=="unknown"?linked(`Client choice factors ${answers.client.choice_basis==="client_feedback"?"reported by clients":answers.client.choice_basis==="firm_observation"?"observed by the firm":"treated as a hypothesis"}: ${facts(answers,choicePaths)}.`,choiceBasis,choicePaths):unknownClaim("Why this client would choose this firm is not yet established.","client.choice_basis");
+  const choiceDetails=knownPaths(answers,["client.choice_priorities","client.choice_detail"]);
+  const choicePaths=choiceDetails.length&&choiceBasis!=="unknown"?unique([...choiceDetails,"client.choice_basis"]):[];
+  const clientChoice=choiceDetails.length&&choiceBasis!=="unknown"?linked(`Client choice factors ${answers.client.choice_basis==="client_feedback"?"reported by clients":answers.client.choice_basis==="firm_observation"?"observed by the firm":"treated as a hypothesis"}: ${facts(answers,choiceDetails)}.`,choiceBasis,choicePaths):unknownClaim("Why this client would choose this firm is not yet established.","client.choice_basis");
   const strengthPaths=knownPaths(answers,["practice.client_strength","practice.client_strength_effect"]);
   const strength=answers.practice.client_strength&&answers.practice.client_strength!=="unknown"&&strengthPaths.length
     ?linked(`Firm-selected strength: ${fragment(getAnswerLabel("practice.client_strength",answers))}. ${clean(answers.practice.client_strength_effect)?`Practical effect described by the firm: ${fragment(answers.practice.client_strength_effect)}.`:"Its effect on this matter still needs to be described."}`,"firm_preference",strengthPaths)
     :unknownClaim("A relevant firm strength has not yet been identified.","practice.client_strength");
-  const supportPaths=knownPaths(answers,["practice.client_strength_support","practice.capability","practice.experience"]);
+  const supportPaths=knownPaths(answers,["practice.client_strength_support","practice.capability",...(answers.practice.experience==="new"?[]:["practice.experience" as AnswerReferencePath])]);
   const strengthSupport=clean(answers.practice.client_strength_support)||clean(answers.practice.capability)?linked(`Support reported by the firm: ${facts(answers,supportPaths)}. This is not independent verification or a comparative claim.`,"firm_reported_experience",supportPaths):unknownClaim("Supporting experience or evidence for the stated strength was not supplied.","practice.client_strength_support");
   const whyClientClaims=[clientChoice,strength,strengthSupport,...interviewClaims(answers,[4],"Clarification: ")].slice(0,6);
 
   const pathwayBasis=insightBasis(answers.client.pathway_basis);
   const pathway=(label:string,paths:AnswerReferencePath[],missing:string):EvidenceLinkedStatement=>{
     const available=knownPaths(answers,paths);
-    if(pathwayBasis==="unknown")return unknownClaim(`${missing} The basis for the supplied pathway information is still open.`,"client.pathway_basis");
-    if(!available.length)return unknownClaim(missing,paths[0]??"client.pathway_basis");
     const pathwayLabels:Partial<Record<AnswerReferencePath,string>>={"situation.trigger":"Trigger","write_ins.trigger":"Additional trigger","situation.timing":"Stage","situation.contact":"First contact","situation.role":"Client role","client.decision_context":"Decision context","client.decision_needs":"Information needed","client.goals":"Client goal","client.goal_detail":"Practical benefit"};
+    if(pathwayBasis==="unknown"){
+      if(!available.length)return unknownClaim(`${missing} The basis for the supplied pathway information is still open.`,"client.pathway_basis");
+      const supplied=available.map(path=>`${pathwayLabels[path]??"Context"}: ${fragment(text(answers,path))}`).join("; ");
+      return linked(bounded(`Firm-supplied, unverified ${label.toLowerCase()}: ${supplied}.`,240,30),"unknown",unique([...available,"client.pathway_basis"]));
+    }
+    if(!available.length)return unknownClaim(missing,paths[0]??"client.pathway_basis");
     const fact=available.map(path=>`${pathwayLabels[path]??"Context"}: ${fragment(text(answers,path))}`).join("; ");
-    return linked(`${label}: ${fact}.`,pathwayBasis,unique([...available,"client.pathway_basis"]));
+    return linked(bounded(`${label}: ${fact}.`,240,30),pathwayBasis,unique([...available,"client.pathway_basis"]));
   };
   const decisionPathway={
     trigger:pathway("Situation prompting legal help",["situation.trigger","write_ins.trigger"],"What prompts the client to seek legal help is not established."),
