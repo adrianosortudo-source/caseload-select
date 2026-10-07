@@ -677,6 +677,28 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   };
 }
 
+/** Validate an application response, which may carry recovery metadata created after model validation.
+ * Model output continues to go through validateAnalysisResult's strict two-key root contract. */
+export function validateAnalysisResponseResult(value: unknown, answers: DesiredClientAnswers, eligibleCodes: readonly ClarificationCode[], reportFailure?: (failure: AnalysisValidationFailure) => void): AnalysisResult | null {
+  if (!record(value) || !Object.hasOwn(value, "recoveredSections")) {
+    return validateAnalysisResult(value, answers, eligibleCodes, reportFailure);
+  }
+  const reject = (reason: string) => { reportFailure?.({ field: "report", reason }); return null; };
+  if (!exact(value, ["brief", "clarification_code", "recoveredSections"])) return reject("root_shape");
+  const recovery = value.recoveredSections;
+  if (!Array.isArray(recovery) || recovery.length !== 1 || recovery[0] !== "why_firm_wants_work") {
+    return reject("recovery_metadata_invalid");
+  }
+
+  const validated = validateAnalysisResult({ brief: value.brief, clarification_code: value.clarification_code }, answers, eligibleCodes, reportFailure);
+  if (!validated) return null;
+  const deterministicCard = buildStructuredBlueprintV4(answers).why_firm_wants_work;
+  if (JSON.stringify(validated.brief.why_firm_wants_work) !== JSON.stringify(deterministicCard)) {
+    return reject("recovery_metadata_not_grounded");
+  }
+  return { ...validated, recoveredSections: ["why_firm_wants_work"] };
+}
+
 const LINKED_STATEMENT_SCHEMA = { type: "object", properties: { text: { type: "string" }, evidence_group_ids: { type: "array", minItems: 1, maxItems: 8, items: { type: "string" } } }, required: ["text", "evidence_group_ids"] } as const;
 const EVIDENCE_CARD_SCHEMA = { type: "object", properties: { claims: { type: "array", minItems: 1, maxItems: 6, items: LINKED_STATEMENT_SCHEMA } }, required: ["claims"] } as const;
 const WHY_FIRM_EVIDENCE_CARD_SCHEMA = { type: "object", properties: { claims: { type: "array", minItems: 1, maxItems: 7, items: LINKED_STATEMENT_SCHEMA } }, required: ["claims"] } as const;

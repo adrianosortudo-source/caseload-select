@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateAnalysisResult } from "../output";
+import { validateAnalysisResponseResult, validateAnalysisResult } from "../output";
 import { completeAnswers, providerBlueprint, validBlueprint } from "./blueprint-helpers";
 import { evidence } from "./blueprint-helpers";
 import { buildDesiredClientEvidenceGroups } from "../evidence-contract";
@@ -251,6 +251,26 @@ describe("AI Blueprint output contract", () => {
     expect(claims.some(claim => claim.source_answer_ids.includes("delivery.conditions"))).toBe(true);
     expect(claims.some(claim => claim.source_answer_ids.includes("repeatability.staffing_constraint"))).toBe(true);
     expect(claims.some(claim => claim.source_answer_ids.includes("repeatability.target"))).toBe(false);
+  });
+
+  it("passes application-owned recovery metadata through client revalidation while rejecting model self-assertion", () => {
+    const answers = establishedAcquisitionAnswers();
+    const decoded = decodedMixedWhyFirmReport(answers, "The firm reports regular experience in business acquisition advice and transaction planning.") as Parameters<typeof validateAnalysisResult>[0];
+    const recovered = validateAnalysisResult(decoded, answers, []);
+    expect(recovered?.recoveredSections).toEqual(["why_firm_wants_work"]);
+
+    const responseResult = validateAnalysisResponseResult(recovered, answers, []);
+    expect(responseResult?.recoveredSections).toEqual(["why_firm_wants_work"]);
+    expect(responseResult?.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work);
+
+    const selfAsserted = { ...validBlueprint(answers), recoveredSections: ["why_firm_wants_work"] as const };
+    expect(validateAnalysisResult(selfAsserted, answers, [])).toBeNull();
+    expect(validateAnalysisResponseResult(selfAsserted, answers, [])).toBeNull();
+
+    const tampered = structuredClone(recovered!);
+    tampered.brief.why_firm_wants_work.claims[0].text += " Unsupported extra claim.";
+    expect(validateAnalysisResponseResult(tampered, answers, [])).toBeNull();
+    expect(validateAnalysisResponseResult({ ...recovered, recoveredSections: ["other"] }, answers, [])).toBeNull();
   });
 
   it.each([

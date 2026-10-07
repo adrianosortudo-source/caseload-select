@@ -2,8 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { interviewClarificationSourceFingerprint, type AnalysisRequestEnvelope, type DesiredClientAnswers, type InterviewClarificationAnswer, type InterviewClarificationRequestEnvelope } from "@/lib/desired-client/types";
 import { completeAnswers, providerBlueprint, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
-import { validateAnalysisResult } from "@/lib/desired-client/output";
+import { validateAnalysisResponseResult, validateAnalysisResult } from "@/lib/desired-client/output";
 import type { AnalysisResult } from "@/lib/desired-client/types";
+import { buildDesiredClientEvidenceGroups } from "@/lib/desired-client/evidence-contract";
+import { buildStructuredBlueprintV4 } from "@/lib/desired-client/structured-blueprint";
 
 const mocks = vi.hoisted(() => ({
   GoogleGenerativeAI: vi.fn(),
@@ -252,6 +254,34 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(prompt).not.toContain("203.0.113.42");
     expect(prompt).not.toContain("app.caseloadselect.ca");
     await expectNoStore(response);
+  });
+
+  it("returns recovery metadata derived by server validation and rejects provider self-assertion", async () => {
+    const encoded = providerBlueprint(validBlueprint(B0), B0) as { brief: Record<string, unknown> };
+    const groups = buildDesiredClientEvidenceGroups("why_firm_wants_work", B0);
+    const paths = ["practice.capability", "practice.experience", "practice.enjoys"] as const;
+    const evidenceGroupIds = paths.map(path => {
+      const group = groups.find(candidate => candidate.source_answer_ids.includes(path));
+      if (!group) throw new Error(`Missing test evidence group for ${path}`);
+      return group.id;
+    });
+    encoded.brief.why_firm_wants_work = {
+      claims: [{ text: "The firm reports regular experience in business acquisition advice and transaction planning.", evidence_group_ids: evidenceGroupIds }],
+    };
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(encoded));
+
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.result.recoveredSections).toEqual(["why_firm_wants_work"]);
+    expect(body.result.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(B0).why_firm_wants_work);
+    expect(validateAnalysisResponseResult(body.result, B0, [])?.recoveredSections).toEqual(["why_firm_wants_work"]);
+
+    const selfAsserted = { ...providerBlueprint(validBlueprint(B0), B0) as Record<string, unknown>, recoveredSections: ["why_firm_wants_work"] };
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(selfAsserted));
+    const rejected = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, reviewRunId: "33333333-3333-4333-8333-333333333333" })));
+    expect(rejected.status).toBe(502);
+    expect(await rejected.json()).toMatchObject({ error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "report", reason: "root_shape" } } });
   });
 
   it("allows only one concurrent provider request for a review run", async () => {

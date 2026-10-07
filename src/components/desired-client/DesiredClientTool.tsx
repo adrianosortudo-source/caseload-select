@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { COMMON_COPY, STORAGE_COPY } from "@/lib/desired-client/copy";
 
 import { buildDraftPreview } from "@/lib/desired-client/brief";
-import { validateAnalysisResult } from "@/lib/desired-client/output";
+import { validateAnalysisResponseResult } from "@/lib/desired-client/output";
 import { getEligibleClarificationCodes } from "@/lib/desired-client/clarifications";
 import { clearDraft, loadDraft, saveDraft, type DraftLoadResult } from "@/lib/desired-client/storage";
 import { advanceStage, answerClarification, answerInterviewClarification, applyAnalysis, applyStructuredFallback, beginAiRun, canEnterStage, commitComparison, editAnswers, enterTool, failAnalysis, initialToolState, markReviewed, moveToStage, recordAiAttempt, recordClarificationAttempt, showInterviewClarification, type ToolState } from "@/lib/desired-client/state";
@@ -111,7 +111,7 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
      const success=payload as AnalysisSuccessEnvelope;
       if(success.requestId!==requestId||success.answerRevision!==request.answerRevision||success.reviewRunId!==request.reviewRunId){reportFailure("response_identity",response.status);commit(failAnalysis(current,"invalid",current.requestCount<3&&current.providerCallsUsed<current.providerCallLimit));return;}
       let validationFailure:{field:string;reason:string}|undefined;
-      const result=validateAnalysisResult(success.result,current.answers,getEligibleClarificationCodes(current.answers,current.askedClarifications).slice(0,1),failure=>{validationFailure??={field:failure.field,reason:failure.reason};});
+      const result=validateAnalysisResponseResult(success.result,current.answers,getEligibleClarificationCodes(current.answers,current.askedClarifications).slice(0,1),failure=>{validationFailure??={field:failure.field,reason:failure.reason};});
       if(!result){reportFailure("client_validation",response.status,validationFailure);commit(failAnalysis(current,"invalid",current.requestCount<3&&current.providerCallsUsed<current.providerCallLimit));return;}
      commit(applyAnalysis(current,result));
    }catch{

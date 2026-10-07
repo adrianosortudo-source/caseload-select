@@ -1,11 +1,13 @@
 import { expect, test } from "@playwright/test";
 import { pathToFileURL } from "node:url";
-import { completeAnswers, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
+import { completeAnswers, providerBlueprint, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResult } from "../../src/lib/desired-client/output";
-import { buildStructuredBlueprintV4 } from "../../src/lib/desired-client/structured-blueprint";
+import { buildDesiredClientEvidenceGroups } from "../../src/lib/desired-client/evidence-contract";
+import { decodeProviderEvidenceGroups, decodeProviderTargetCard } from "../../src/lib/desired-client/provider-schema";
 import { REPORT_EDIT_LINKS } from "../../src/lib/desired-client/blueprint";
 import { REPORT_FOOTNOTE_COPY } from "../../src/lib/desired-client/copy";
 import { STAGE_DEFINITIONS } from "../../src/lib/desired-client/screens";
+import { validateSavedDraft } from "../../src/lib/desired-client/storage";
 
 const route = "**/api/tools/desired-client-matter/analyze";
 const storageKey = "cls-desired-client-v2";
@@ -32,6 +34,24 @@ Object.assign(answers.repeatability, {
 });
 const result = validateAnalysisResult(validBlueprint(answers), answers, [])!;
 if (!result) throw new Error("The fictional export fixture must satisfy the current report contract before browser assertions run.");
+
+function recoveredProviderResult(sourceAnswers: ReturnType<typeof completeAnswers>) {
+  const encoded = providerBlueprint(validBlueprint(sourceAnswers), sourceAnswers) as { brief: Record<string, unknown> };
+  const groups = buildDesiredClientEvidenceGroups("why_firm_wants_work", sourceAnswers);
+  const sourcePaths = ["practice.capability", "practice.experience", "practice.enjoys"] as const;
+  const evidence_group_ids = sourcePaths.map(path => {
+    const group = groups.find(candidate => candidate.source_answer_ids.includes(path));
+    if (!group) throw new Error(`Missing current firm-value evidence group for ${path}`);
+    return group.id;
+  });
+  encoded.brief.why_firm_wants_work = {
+    claims: [{ text: "The firm reports regular experience in business acquisition advice and transaction planning.", evidence_group_ids }],
+  };
+  const decoded = decodeProviderEvidenceGroups(decodeProviderTargetCard(encoded, sourceAnswers), sourceAnswers);
+  const recovered = validateAnalysisResult(decoded, sourceAnswers, []);
+  if (!recovered?.recoveredSections?.includes("why_firm_wants_work")) throw new Error("The mixed evidence fixture did not exercise application recovery.");
+  return recovered;
+}
 
 test("a reviewed six-section draft becomes a synthesized blueprint and HTML report", async ({ page }, testInfo) => {
   let analysisCalls = 0;
@@ -198,18 +218,10 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
 test("a recovered firm-value section survives save, reopen, HTML export and print", async ({ page }, testInfo) => {
   const savedAnswers = structuredClone(answers);
   Object.assign(savedAnswers.delivery, { conditions: ["scope", "information"] });
-  const savedBrief = {
-    brief: buildStructuredBlueprintV4(savedAnswers),
-    sourceAnswersVersion: "dcm-v3.3",
-    sourceAnswersSnapshot: savedAnswers,
-    sourceBriefRevision: savedAnswers.revision,
-    generatedAt: "2026-10-07T10:00:00.000Z",
-    wordingReviewed: false,
-    mode: "ai",
-    recoveredSections: ["why_firm_wants_work"],
-  };
+  const recoveredResult = recoveredProviderResult(savedAnswers);
   let analysisPosts = 0;
-  await page.addInitScript(({ key, savedAnswers: initialAnswers, initialBrief }) => {
+  await page.addInitScript(({ key, savedAnswers: initialAnswers }) => {
+    if (localStorage.getItem(key) !== null) return;
     const now = Date.now();
     localStorage.setItem(key, JSON.stringify({
       schemaVersion: 2,
@@ -217,21 +229,34 @@ test("a recovered firm-value section survives save, reopen, HTML export and prin
       currentStage: 7,
       lastEditedAt: new Date(now).toISOString(),
       expiresAt: new Date(now + 7 * 86400000).toISOString(),
-      savedBrief: initialBrief,
     }));
-  }, { key: storageKey, savedAnswers, initialBrief: savedBrief });
+  }, { key: storageKey, savedAnswers });
   await page.route(route, async requestRoute => {
     if (requestRoute.request().method() === "GET") {
-      await requestRoute.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: true }) });
+      await requestRoute.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: true, providerCallLimit: 3 }) });
       return;
     }
     analysisPosts += 1;
-    await requestRoute.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ ok: false, error: { code: "AI_DISABLED" } }) });
+    const request = requestRoute.request().postDataJSON();
+    await requestRoute.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        requestId: request.requestId,
+        answerRevision: request.answerRevision,
+        reviewRunId: request.reviewRunId,
+        providerCallsUsed: 1,
+        providerCallLimit: 3,
+        result: recoveredResult,
+      }),
+    });
   });
 
   await page.setViewportSize({ width: 1280, height: 1000 });
   await page.goto("/tools/desired-client-matter");
   await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
+  await page.getByRole("button", { name: "Create my Desired Client Blueprint", exact: true }).click();
   const recovery = page.locator('[data-ui-component-content="desired-client-recovery-disclosure"]');
   await expect(recovery).toContainText("Built from your answers");
   await expect(recovery).toContainText("This section was rebuilt from your answers because the AI combined different evidence types.");
@@ -239,8 +264,12 @@ test("a recovered firm-value section survives save, reopen, HTML export and prin
 
   const persisted = await page.evaluate(key => JSON.parse(localStorage.getItem(key) ?? "null"), storageKey) as { savedBrief?: { recoveredSections?: string[] } } | null;
   expect(persisted?.savedBrief?.recoveredSections).toEqual(["why_firm_wants_work"]);
-  expect(analysisPosts).toBe(0);
+  expect(analysisPosts).toBe(1);
   await page.reload();
+  const reloadedDraft = await page.evaluate(key => JSON.parse(localStorage.getItem(key) ?? "null"), storageKey) as unknown;
+  const persistedCheck = validateSavedDraft(reloadedDraft);
+  expect(persistedCheck?.savedBrief).toBeDefined();
+  expect(persistedCheck?.savedBrief?.recoveredSections).toEqual(["why_firm_wants_work"]);
   await page.getByRole("button", { name: "Continue my saved draft", exact: true }).click();
   await expect(page.locator('[data-ui-component-content="desired-client-recovery-disclosure"]')).toBeVisible();
 
@@ -262,5 +291,5 @@ test("a recovered firm-value section survives save, reopen, HTML export and prin
   const printPdf = await printPage.pdf({ path: testInfo.outputPath("recovered-section-report.pdf"), printBackground: true });
   expect(printPdf.byteLength).toBeGreaterThan(0);
   await printPage.close();
-  expect(analysisPosts).toBe(0);
+  expect(analysisPosts).toBe(1);
 });
