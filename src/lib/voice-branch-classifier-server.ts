@@ -16,6 +16,7 @@ const VALID_BRANCHES: readonly VoiceFineBranch[] = [
   'court_or_counsel',
   'vendor',
   'wrong_number',
+  'caller_declined',
   'unclear',
 ];
 
