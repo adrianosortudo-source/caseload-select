@@ -4,11 +4,42 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
 import ReconciledProspects, { type RecordsResponse } from "../../ReconciledProspects";
 
+type SyntheticRead = {
+  select(columns: string): SyntheticRead;
+  eq(column: string, value: string): SyntheticRead;
+  in(column: string, values: readonly string[]): SyntheticRead;
+  gt(column: string, value: string): SyntheticRead;
+  order(column: string): SyntheticRead;
+  limit(value: number): Promise<{ data: Record<string, unknown>[]; error: null }>;
+};
+
 const h = vi.hoisted(() => {
-  const state = { authorized: true, research: [] as unknown[], supplemental: [] as unknown[], identities: [] as unknown[] };
+  const state = { authorized: true, research: [] as unknown[], supplemental: [] as unknown[], identities: [] as unknown[], registryFallback: [] as unknown[], tables: {} as Record<string, Record<string, unknown>[]> };
   return {
     state,
+    from: vi.fn((table: string) => {
+      if (!["prospect_service_observations", "prospect_enrichment_packages", "prospect_enrichment_items", "prospect_enrichment_item_targets", "prospect_enrichment_events"].includes(table)) throw new Error("Unexpected table in synthetic route test: " + table);
+      let columns = "";
+      const filters: ((row: Record<string, unknown>) => boolean)[] = [];
+      const orders: string[] = [];
+      const builder: SyntheticRead = {
+        select(value) { columns = value; return builder; },
+        eq(column, value) { filters.push(row => row[column] === value); return builder; },
+        in(column, values) { filters.push(row => values.includes(String(row[column]))); return builder; },
+        gt(column, value) { filters.push(row => String(row[column]) > value); return builder; },
+        order(column) { orders.push(column); return builder; },
+        async limit(value) {
+          const rows = (state.tables[table] ?? []).filter(row => filters.every(filter => filter(row))).sort((left, right) => {
+            for (const column of orders) { const compared = String(left[column]).localeCompare(String(right[column])); if (compared) return compared; }
+            return 0;
+          }).slice(0, value).map(row => Object.fromEntries(columns.split(",").map(column => [column, row[column]])));
+          return { data: rows, error: null };
+        },
+      };
+      return builder;
+    }),
     rpc: vi.fn(async (name: string) => {
+      if (name === "list_gta_prospect_supplemental_evidence_for_operator_v2") return { data: state.registryFallback, error: null };
       if (name === "list_gta_prospect_research_with_contacts_for_operator") return { data: state.research, error: null };
       if (name === "list_gta_prospect_supplemental_evidence_for_operator_v3") return { data: state.supplemental, error: null };
       if (name === "list_gta_prospect_stable_identities_for_operator") return { data: state.identities, error: null };
@@ -24,7 +55,7 @@ const h = vi.hoisted(() => {
 vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: async () => h.state.authorized ? { role: "operator" } : null }));
 vi.mock("@/lib/preview-qa-auth", () => ({ getPreviewQaReadSession: async () => null }));
 // Keep every actual reader and the actual route; replace only their external transport.
-vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: { rpc: h.rpc } }));
+vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: { rpc: h.rpc, from: h.from } }));
 // Isolate unrelated static cohorts so every record in this response is synthetic.
 vi.mock("../../reconciled-prospects", () => ({ RECONCILED_GTA_PROSPECTS: [] }));
 vi.mock("@/lib/legacy-gta-prospect-source", () => ({ legacyGtaSourceRecords: () => [] }));
@@ -36,6 +67,7 @@ vi.mock("@/lib/qualified-gta-prospects", () => ({
 }));
 
 import { GET } from "../route";
+import { filterReconciledGtaProspects } from "@/lib/gta-prospect-records";
 
 function research(id: string) {
   return {
@@ -65,6 +97,9 @@ beforeEach(() => {
   h.state.research = [];
   h.state.supplemental = [];
   h.state.identities = [];
+  h.state.registryFallback = [];
+  h.state.tables = {};
+  h.from.mockClear();
   h.rpc.mockClear();
   vi.stubGlobal("fetch", vi.fn(() => { throw new Error("Network is prohibited in this synthetic route test"); }));
 });
@@ -153,6 +188,7 @@ describe("reconciled GET with actual rich supplemental reader", () => {
     const response = await GET();
     expect(response.status).toBe(401);
     expect(h.rpc).not.toHaveBeenCalled();
+    expect(h.from).not.toHaveBeenCalled();
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -233,6 +269,77 @@ describe("all returned research states and structured intake through actual GET"
     // The full criteria are asserted on the route object above; the browser
     // acceptance opens the native disclosure before checking this nested raw state.
     expect(html).not.toContain("synced");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+
+describe("actual canonical and registry readers through the operator route", () => {
+  const uuid = (n: number) => `84000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+
+  it("uses bounded service transport and preserves applied provenance, retractions and exact-firm isolation", async () => {
+    const key = "synthetic-canonical-services", otherKey = "synthetic-other-firm";
+    h.state.research = [research(key), research(otherKey)];
+    h.state.supplemental = [supplemental(key, { originalStatus: "held" }), { ...supplemental(otherKey, { originalStatus: "not_selected" }), database_firm_id: uuid(2) }];
+    h.state.tables = {
+      prospect_service_observations: [
+        { id: uuid(10), firm_id: uuid(1), service_name: "Notary availability" },
+        { id: uuid(11), firm_id: uuid(1), service_name: "Retracted service" },
+        { id: uuid(12), firm_id: uuid(1), service_name: "Unapplied service" },
+        { id: uuid(13), firm_id: uuid(1), service_name: "Legacy canonical service" },
+        { id: uuid(14), firm_id: uuid(2), service_name: "Other-firm service" },
+      ],
+      prospect_enrichment_packages: [
+        { id: uuid(20), firm_id: uuid(1), state: "applied" },
+        { id: uuid(21), firm_id: uuid(1), state: "ready_for_review" },
+        { id: uuid(22), firm_id: uuid(1), state: "applied" },
+      ],
+      prospect_enrichment_items: [
+        { id: uuid(30), package_id: uuid(20) }, { id: uuid(31), package_id: uuid(20) }, { id: uuid(32), package_id: uuid(21) },
+      ],
+      prospect_enrichment_item_targets: [10, 11, 12].map((target, index) => ({ item_id: uuid(30 + index), target_table: "prospect_service_observations", target_id: uuid(target) })),
+      prospect_enrichment_events: [{ id: uuid(40), package_id: uuid(22), event_type: "evidence_retracted", details: { targetTable: "prospect_service_observations", targetId: uuid(11) } }],
+    };
+    const response = await GET();
+    expect(response.status).toBe(200);
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
+    const body = await response.json() as { records: ReconciledGtaProspect[] };
+    const current = body.records.find(record => record.id === key)!;
+    const other = body.records.find(record => record.id === otherKey)!;
+    expect(current.practiceAreas).toEqual(["Family law", "Notary availability", "Legacy canonical service"]);
+    expect(other.practiceAreas).toEqual(["Family law", "Other-firm service"]);
+    expect(current.supplementalEvidence?.qualification?.criteria).toEqual({ originalStatus: "held" });
+    expect(filterReconciledGtaProspects(body.records, { query: "Notary availability", practiceArea: "notary availability", city: "Toronto" }).map(record => record.id)).toEqual([key]);
+    expect(h.from.mock.calls.map(([table]) => table)).toEqual(["prospect_service_observations", "prospect_enrichment_packages", "prospect_enrichment_item_targets", "prospect_enrichment_items", "prospect_enrichment_events"]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("uses only the missing exact-key registry identity and preserves explicit distinct identity and v3 evidence", async () => {
+    const key = "synthetic-registry-fallback", distinctKey = "synthetic-distinct-identity";
+    const firstStable = "FIRM-00000000000000000000000001", otherStable = "FIRM-00000000000000000000000002";
+    h.state.research = [research(key), research(distinctKey)];
+    const current = supplemental(key, { originalStatus: "held", eligibleAdvertisingTag: false });
+    h.state.supplemental = [current, { ...supplemental(distinctKey, { originalStatus: "rejected" }), database_firm_id: uuid(2), identity_match_state: "distinct", identity_observed_on: "2026-09-24", identity_confidence: "high", identity_source: "supplemental_observation" }];
+    const registry = (sourceKey: string, stableId: string, domain: string) => {
+      const row = Object.fromEntries(Object.entries(supplemental(sourceKey, { replacement: "must not replace v3 criteria" })).filter(([name]) => name !== "database_firm_id"));
+      return { ...row, firm_id: stableId, canonical_domain: domain, identity_match_state: "confirmed", identity_observed_on: "2026-09-27", identity_confidence: "high", identity_source: "stable_identity_registry", qualification_state: "qualified" };
+    };
+    h.state.registryFallback = [registry(key, firstStable, "registry.example.test"), registry(distinctKey, otherStable, "distinct.example.test")];
+    h.state.identities = [
+      { source_record_key: key, stable_firm_id: firstStable, canonical_domain: "registry.example.test", source_url: "https://registry.example.test/", observed_on: "2026-09-27", confidence: "high" },
+      { source_record_key: distinctKey, stable_firm_id: otherStable, canonical_domain: "distinct.example.test", source_url: "https://distinct.example.test/", observed_on: "2026-09-27", confidence: "high" },
+    ];
+    const response = await GET();
+    expect(response.status).toBe(200);
+    const body = await response.json() as { records: ReconciledGtaProspect[] };
+    expect(body.records).toHaveLength(2);
+    const linked = body.records.find(record => record.id === key)!;
+    const distinct = body.records.find(record => record.id === distinctKey)!;
+    expect(linked).toMatchObject({ databaseFirmId: current.database_firm_id, firmId: firstStable, canonicalDomain: "registry.example.test", supplementalEvidence: { identity: { source: "stable_identity_registry", matchState: "confirmed" }, qualification: { state: "needs_evidence", criteria: current.qualification_criteria } } });
+    expect(distinct).toMatchObject({ databaseFirmId: uuid(2), firmId: null, canonicalDomain: null, supplementalEvidence: { identity: { matchState: "distinct", source: "supplemental_observation" } } });
+    const calls = h.rpc.mock.calls.map(([name]) => name);
+    expect(calls.filter(name => name === "list_gta_prospect_supplemental_evidence_for_operator_v2")).toHaveLength(1);
+    expect(calls.indexOf("list_gta_prospect_supplemental_evidence_for_operator_v3")).toBeLessThan(calls.indexOf("list_gta_prospect_supplemental_evidence_for_operator_v2"));
     expect(fetch).not.toHaveBeenCalled();
   });
 });

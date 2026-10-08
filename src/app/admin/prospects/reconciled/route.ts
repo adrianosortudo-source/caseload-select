@@ -26,6 +26,7 @@ import {
   type GtaProspectStableIdentity,
 } from "@/lib/gta-prospect-stable-identity-reader";
 import type { ReconciledGtaProspect } from "@/lib/gta-prospect-records";
+import { attachGtaProspectCanonicalServices, listGtaProspectCanonicalServices } from "@/lib/gta-prospect-service-reader";
 import { RECONCILED_GTA_PROSPECTS } from "../reconciled-prospects";
 import {
   mergeQualifiedProspects,
@@ -187,6 +188,11 @@ async function stableIdentitiesForPresentation(): Promise<readonly GtaProspectSt
   }
 }
 
+async function withCanonicalServices(records: readonly ReconciledGtaProspect[]): Promise<ReconciledGtaProspect[]> {
+  const services = await listGtaProspectCanonicalServices({ firmIds: records.flatMap(record => record.databaseFirmId ? [record.databaseFirmId] : []) });
+  return attachGtaProspectCanonicalServices(records, services);
+}
+
 async function fixtureResponse(
   fallbackReason: ReconciledProspectFallbackReason,
   ownerContacts?: readonly GtaProspectOwnerContactSummary[],
@@ -195,10 +201,10 @@ async function fixtureResponse(
   const resolvedOwnerContacts = ownerContacts ?? await ownerContactsForPresentation();
   return NextResponse.json<RecordsResponse>(
     {
-    records: attachStableIdentities(
+    records: await withCanonicalServices(attachStableIdentities(
       attachSupplementalEvidence(attachDowntownGeography(attachOwnerContacts(combineUnifiedGtaProspects(merged.records), resolvedOwnerContacts), await downtownGeographyForPresentation()), await supplementalEvidenceForPresentation()),
       await stableIdentitiesForPresentation(),
-    ),
+    )),
       source: "fixture",
       sourceCounts: { ledger: 0, fixture: RECONCILED_GTA_PROSPECTS.length },
       qualifiedImport: merged.report,
@@ -236,16 +242,16 @@ export async function GET() {
       supplementalEvidenceForPresentation(),
       stableIdentitiesForPresentation(),
     ]);
-    if (records.length === 0) return fixtureResponse("ledger_empty", ownerContacts);
+    if (records.length === 0) return await fixtureResponse("ledger_empty", ownerContacts);
 
     const merged = mergeLedgerAndFixtureRecords(records);
     const qualified = mergeQualifiedProspects(merged.records);
     return NextResponse.json<RecordsResponse>(
       {
-        records: attachStableIdentities(
+        records: await withCanonicalServices(attachStableIdentities(
           attachSupplementalEvidence(attachDowntownGeography(attachOwnerContacts(combineUnifiedGtaProspects(qualified.records), ownerContacts), geography), supplementalEvidence),
           stableIdentities,
-        ),
+        )),
         source: merged.missingFixtureCount > 0 ? "hybrid" : "ledger",
         sourceCounts: { ledger: records.length, fixture: merged.missingFixtureCount },
         qualifiedImport: qualified.report,
@@ -253,7 +259,10 @@ export async function GET() {
       { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch (error) {
-    if (error instanceof GtaProspectLedgerUnavailableError) return fixtureResponse("ledger_unavailable");
+    if (error instanceof GtaProspectLedgerUnavailableError) {
+      try { return await fixtureResponse("ledger_unavailable"); }
+      catch (fallbackError) { error = fallbackError; }
+    }
     console.error("[gta-prospect-research] operator read failed", error);
     return NextResponse.json({ error: "GTA prospect research records could not be loaded." }, { status: 500 });
   }

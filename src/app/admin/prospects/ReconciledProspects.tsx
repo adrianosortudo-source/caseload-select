@@ -38,7 +38,6 @@ import {
   prospectSources,
   type UnifiedIdentityState,
   type UnifiedProspectSource,
-  type UnifiedProspectQuickView,
 } from "./prospect-unified-view";
 import ProspectActivityPanel from "../agency-crm/ProspectActivityPanel";
 import { ProspectContactStatus } from "./ProspectContactStatus";
@@ -51,6 +50,7 @@ import ReconciledResearchProfile, { ReconciledIntakeEvidence } from "./Reconcile
 import { intakeChannelKind } from "@/lib/gta-prospect-intake-evidence";
 import { prospectProfileFields, prospectProfileFieldLabel, prospectProfileValueLabel } from "@/lib/gta-prospect-profile";
 import { PROSPECT_DATA_CHANGED_EVENT } from "./prospect-data-events";
+import { useUnifiedProspectViewState } from "@/lib/gta-prospect-view-state";
 
 export type RecordsResponse = {
   records?: ReconciledGtaProspect[];
@@ -61,7 +61,6 @@ export type RecordsResponse = {
   error?: string;
 };
 
-type QuickView = UnifiedProspectQuickView;
 type CountFilter = "" | "1-10" | "2-3" | LawyerCountBand;
 const PAGE_SIZE = 100;
 
@@ -155,34 +154,35 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
     fallbackReason: initialData.fallbackReason,
   } : null);
   const [error, setError] = useState<string | null>(null);
-  const [quickView, setQuickView] = useState<QuickView>("all");
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [query, setQuery] = useState("");
-  const [profileField, setProfileField] = useState("");
-  const [profileValue, setProfileValue] = useState("");
-  const [city, setCity] = useState("");
-  const [countFilter, setCountFilter] = useState<CountFilter>("");
-  const [customMinimum, setCustomMinimum] = useState("");
-  const [customMaximum, setCustomMaximum] = useState("");
-  const [practiceArea, setPracticeArea] = useState("");
-  const [advertising, setAdvertising] = useState<EvidenceAvailability | "">("");
-  const [gbp, setGbp] = useState<EvidenceAvailability | "">("");
-  const [advertisingActivity, setAdvertisingActivity] = useState<AdvertisingActivityState | "">("");
-  const [advertisingSourceType, setAdvertisingSourceType] = useState("");
-  const [gbpOpportunityType, setGbpOpportunityType] = useState("");
-  const [websiteOpportunityType, setWebsiteOpportunityType] = useState("");
-  const [intakeChannel, setIntakeChannel] = useState("");
-  const [lawyerCountConfidence, setLawyerCountConfidence] = useState<QualifiedProspectConfidence | "">("");
-  const [freshness, setFreshness] = useState<EvidenceFreshness | "">("");
-  const [qualification, setQualification] = useState<QualificationState | "">("");
-  const [cohortId, setCohortId] = useState("");
-  const [hasOwner, setHasOwner] = useState<boolean | "">("");
-  const [hasPublicEmail, setHasPublicEmail] = useState<boolean | "">("");
-  const [source, setSource] = useState<UnifiedProspectSource | "">("");
-  const [identity, setIdentity] = useState<UnifiedIdentityState | "">("");
-  const [ownerContact, setOwnerContact] = useState<OwnerContactFilter | "">("");
-  const [downtownGeography, setDowntownGeography] = useState<DowntownGeographyStatus | "">("");
-  const [page, setPage] = useState(0);
+  const viewState = useUnifiedProspectViewState();
+  const [quickView, setQuickView] = viewState.field("quickView");
+  const [showAdvanced, setShowAdvanced] = viewState.field("showAdvanced");
+  const [query, setQuery] = viewState.field("query");
+  const [profileField, setProfileField] = viewState.field("profileField");
+  const [profileValue, setProfileValue] = viewState.field("profileValue");
+  const [city, setCity] = viewState.field("city");
+  const [countFilter, setCountFilter] = viewState.field("countFilter");
+  const [customMinimum, setCustomMinimum] = viewState.field("customMinimum");
+  const [customMaximum, setCustomMaximum] = viewState.field("customMaximum");
+  const [practiceArea, setPracticeArea] = viewState.field("practiceArea");
+  const [advertising, setAdvertising] = viewState.field("advertising");
+  const [gbp, setGbp] = viewState.field("gbp");
+  const [advertisingActivity, setAdvertisingActivity] = viewState.field("advertisingActivity");
+  const [advertisingSourceType, setAdvertisingSourceType] = viewState.field("advertisingSourceType");
+  const [gbpOpportunityType, setGbpOpportunityType] = viewState.field("gbpOpportunityType");
+  const [websiteOpportunityType, setWebsiteOpportunityType] = viewState.field("websiteOpportunityType");
+  const [intakeChannel, setIntakeChannel] = viewState.field("intakeChannel");
+  const [lawyerCountConfidence, setLawyerCountConfidence] = viewState.field("lawyerCountConfidence");
+  const [freshness, setFreshness] = viewState.field("freshness");
+  const [qualification, setQualification] = viewState.field("qualification");
+  const [cohortId, setCohortId] = viewState.field("cohortId");
+  const [hasOwner, setHasOwner] = viewState.field("hasOwner");
+  const [hasPublicEmail, setHasPublicEmail] = viewState.field("hasPublicEmail");
+  const [source, setSource] = viewState.field("source");
+  const [identity, setIdentity] = viewState.field("identity");
+  const [ownerContact, setOwnerContact] = viewState.field("ownerContact");
+  const [downtownGeography, setDowntownGeography] = viewState.field("downtownGeography");
+  const [page, setPage] = viewState.field("page");
   const [contactStates, setContactStates] = useState<SourceContactStateMap>(new Map());
   const [contactStateLoading, setContactStateLoading] = useState(false);
   const [contactStateError, setContactStateError] = useState<string | null>(null);
@@ -319,6 +319,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
   ].filter(Boolean) as { label: string; clear: () => void }[];
 
   function clearFilters() {
+    setPage(0);
     setQuery(""); setProfileField(""); setProfileValue(""); setCity(""); setCountFilter(""); setCustomMinimum(""); setCustomMaximum(""); setPracticeArea(""); setAdvertising(""); setGbp("");
     setAdvertisingActivity(""); setAdvertisingSourceType(""); setGbpOpportunityType(""); setWebsiteOpportunityType(""); setIntakeChannel("");
     setLawyerCountConfidence(""); setFreshness(""); setQualification(""); setCohortId(""); setHasOwner(""); setHasPublicEmail("");
@@ -339,6 +340,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
         </p>
       </div>
 
+      <fieldset disabled={!viewState.restored} className="contents">
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-5" aria-label="Saved prospect record views">
         {([["all", "All records", quickCounts.all], ["downtown_1_10", "Downtown 1–10", quickCounts.downtownOneToTen], ["shared_registry", "Shared registry", quickCounts.sharedRegistry], ["audit_ready", "Audit ready", quickCounts.auditReady], ["identity_review", "Identity review", quickCounts.identityReview]] as const).map(([value, label, count]) => (
           <button key={value} type="button" onClick={() => setQuickView(value)} aria-pressed={quickView === value} className={`rounded border px-3 py-2 text-left text-sm font-semibold transition ${quickView === value ? "border-navy bg-navy text-white" : "border-border-brand bg-parchment/50 text-navy hover:bg-parchment"}`}>
@@ -387,6 +389,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
       {!customRange.valid && <p className="mt-2 text-xs text-red-fail">Use whole numbers of at least 1, with a minimum no greater than the maximum.</p>}
 
       {filterChips.length > 0 && <div className="mt-3 flex flex-wrap items-center gap-2" aria-label="Active filters">{filterChips.map((chip) => <button key={chip.label} type="button" onClick={chip.clear} className="rounded-full border border-navy/20 bg-navy/5 px-3 py-1 text-xs font-medium text-navy">{chip.label} <span aria-hidden="true">x</span><span className="sr-only">, remove filter</span></button>)}<button type="button" onClick={clearFilters} className="px-2 py-1 text-xs font-semibold text-navy underline underline-offset-2">Clear filters</button></div>}
+      </fieldset>
       <p className="mt-4 w-full text-sm text-black/60" aria-live="polite" data-ui-copy="supporting">{filtered.length} of {records.length} unified prospect records</p>
 
       {records.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No reviewed expansion records have been added yet.</div> : filtered.length === 0 ? <div className="mt-3 rounded border border-dashed border-border-brand bg-parchment/50 px-4 py-5 text-sm text-black/60">No firms match the current view and filters.</div> : (
@@ -407,7 +410,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
                 <td className="px-3 py-3 text-black/75">{dossier ? <><span className="font-medium">GBP: {gbpOpportunityLabels[dossier.gbpOpportunity.type] ?? titleCase(dossier.gbpOpportunity.type)}</span><span className="mt-1 block text-xs text-black/55">Website: {dossier.websiteAndIntake.opportunityTypes.map((value) => websiteOpportunityLabels[value] ?? titleCase(value)).join(", ")}</span></> : supplemental?.qualification ? <><span className="font-medium">GBP: {getLegacyCriterion(supplemental.qualification.criteria, "gbpEvidence") === true ? "Supported evidence" : getLegacyCriterion(supplemental.qualification.criteria, "gbpEvidence") === false ? "Needs evidence" : "Not assessed"}</span><span className="mt-1 block text-xs text-black/55">Qualification: {titleCase(supplemental.qualification.state)}</span></> : <span className="text-black/50">Not assessed</span>}</td>
                 <td className="px-3 py-3 text-xs leading-5 text-black/70"><ReconciledIntakeEvidence record={record} /></td>
                 <td className="px-3 py-3 text-xs leading-5"><EvidenceLink availability={record.advertisingEvidence} href={record.advertisingSourceUrl} label="Advertising" /><br /><EvidenceLink availability={record.gbpEvidence} href={record.gbpSourceUrl} label="GBP" />{dossier && <span className="mt-1 block text-black/55">{dossier.evidenceIds.length} registered sources</span>}</td>
-                <td className="px-3 py-3">{dossier ? <><a href={`/admin/prospects/audits/${encodeURIComponent(dossier.firmId)}`} className="inline-flex rounded bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-navy/90">Open audit</a><span className="mt-2 block text-xs text-black/55">Qualified and audit ready</span></> : <span className="text-xs text-black/50">Audit unavailable</span>}<ReconciledResearchProfile record={record} /></td>
+                <td className="px-3 py-3">{dossier ? <><a href={`/admin/prospects/audits/${encodeURIComponent(dossier.firmId)}`} className="inline-flex rounded bg-navy px-3 py-2 text-xs font-semibold text-white hover:bg-navy/90">Open audit</a><span className="mt-2 block text-xs text-black/55">Qualified and audit ready</span></> : <span className="text-xs text-black/50">Audit unavailable</span>}<ReconciledResearchProfile record={record} returnTo={viewState.returnTo} /></td>
               </tr>;
             })}</tbody>
           </table>
@@ -434,7 +437,7 @@ export default function ReconciledProspects({ initialData }: { initialData?: Rec
       /></div>}
       {filtered.length > PAGE_SIZE && <div className="mt-3 flex items-center justify-between gap-3 text-sm text-black/60">
         <span>Showing {displayedPage * PAGE_SIZE + 1}–{Math.min((displayedPage + 1) * PAGE_SIZE, filtered.length)}</span>
-        <div className="flex gap-2"><button type="button" disabled={displayedPage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Previous</button><button type="button" disabled={displayedPage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Next</button></div>
+        <div className="flex gap-2"><button type="button" disabled={!viewState.restored || displayedPage === 0} onClick={() => setPage((current) => Math.max(0, current - 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Previous</button><button type="button" disabled={!viewState.restored || displayedPage >= pageCount - 1} onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} className="rounded border border-border-brand px-3 py-2 font-semibold text-navy disabled:cursor-not-allowed disabled:opacity-50">Next</button></div>
       </div>}
     </section>
   );
