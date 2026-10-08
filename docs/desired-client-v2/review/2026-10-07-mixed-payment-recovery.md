@@ -26,6 +26,6 @@ The focused offline recovery, builder and storage suites passed: 101 tests. The 
 
 The full-project `tsc --noEmit` check passed after regenerating malformed ignored `.next/dev/types` files left by the browser development server. `git diff --check` passed.
 
-The actual offline HTTP-response-to-screen-to-save/reopen-to-HTML-export-and-print browser regression passed locally. It uses the offline test handler and makes no live provider calls. Final-head CI has not yet run; the repair must be pushed to PR #384’s actual head branch before checking all required jobs.
+The actual offline HTTP-response-to-screen-to-save/reopen-to-HTML-export-and-print browser regression passed locally. It uses the offline test handler and makes no live provider calls. Required CI must pass on the exact final PR #384 head; use the PR's current check summary rather than inferring success from an earlier SHA or local run.
 
 The reported Library reproduction artifact was not available to these offline tests. Do not claim the exact POST payload or unlogged generated sentence was reproduced; the local fixture is a complete synthetic reproduction of the supplied negative-economics facts. No live provider call, database action, configuration change, merge or production deployment occurred. PR #384 remains open and unmerged.
