@@ -511,27 +511,30 @@ describe("provider output contract", () => {
     expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("The fragment failed unsupported_numeric_claim");
     if (outcome.mode === "live") expect(outcome.result.brief.client_and_matter).toEqual(original.brief.client_and_matter);
   });
-  it("repairs an over-limit evidence card with focused shape and claim-count guidance", async () => {
-    const original = validBlueprint();
+  it("rebuilds an over-limit evidence card from the current answers without a wording repair", async () => {
+    const input=request();
+    const original = validBlueprint(input.answers);
     const invalid = structuredClone(original);
-    invalid.brief.evidence_and_open_questions.claims = Array.from({length:7}, () => structuredClone(original.brief.evidence_and_open_questions.claims[0]));
-    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(invalid) } })
-      .mockResolvedValueOnce({ response: { text: () => JSON.stringify(original.brief.evidence_and_open_questions) } });
-    const outcome = await runDesiredClientAnalysis(request(), []);
+    invalid.brief.evidence_and_open_questions.claims = Array.from({length:7}, () => ({
+      ...structuredClone(original.brief.evidence_and_open_questions.claims[0]),
+      text:"The firm has 900 invented years of proven demand.",
+    }));
+    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(invalid) } });
+    const outcome = await runDesiredClientAnalysis(input, []);
     expect(outcome.mode).toBe("live");
-    expect(provider.generate).toHaveBeenCalledTimes(2);
-    const repairInstruction = provider.configure.mock.calls[1][0].systemInstruction;
-    expect(repairInstruction).toContain("Return exactly one card object with only a claims array and one to six grounded claims");
-    expect(repairInstruction).toContain("preserve all supplied facts and material conditions that belong in this card");
-    if (outcome.mode === "live") expect(outcome.result.brief.evidence_and_open_questions).toEqual(original.brief.evidence_and_open_questions);
+    expect(provider.generate).toHaveBeenCalledTimes(1);
+    if (outcome.mode === "live") {
+      expect(outcome.result.brief.evidence_and_open_questions).toEqual(buildStructuredBlueprintV4(input.answers).evidence_and_open_questions);
+      expect(JSON.stringify(outcome.result.brief.evidence_and_open_questions)).not.toContain("900 invented");
+      expect(JSON.stringify(outcome.result.brief.evidence_and_open_questions)).not.toContain("proven demand");
+    }
   });
-  it("targets mixed-basis feedback after the over-limit repair and accepts separately grounded claims", async () => {
+  it("rebuilds payment evidence with separate bases and sources after mixed provider wording", async () => {
     const input = request();
     input.answers = negativeEconomicsAnswers();
     input.answerRevision = input.answers.revision;
     const original = validBlueprint(input.answers);
     const initial = providerBlueprint(original, input.answers) as { brief: Record<string, { claims: Array<Record<string, unknown>> }> };
-    initial.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => structuredClone(initial.brief.evidence_and_open_questions.claims[0]));
 
     const groups = buildDesiredClientEvidenceGroups("evidence_and_open_questions", input.answers);
     const paymentGroup = groups.find(group => group.source_answer_ids.includes("value.payment"));
@@ -540,34 +543,16 @@ describe("provider output contract", () => {
     expect(contextGroup).toBeDefined();
     expect(`${paymentGroup?.evidence_basis}/${paymentGroup?.kind}`).not.toBe(`${contextGroup?.evidence_basis}/${contextGroup?.kind}`);
 
-    const canonicalPaymentClaims = buildStructuredBlueprintV4(input.answers).why_firm_wants_work.claims
-      .filter(claim => claim.source_answer_ids.includes("value.payment") || claim.source_answer_ids.includes("value.payment_context"));
-    const separatedPaymentClaims = canonicalPaymentClaims.map(claim => ({
-      text: claim.text,
-      evidence_group_ids: evidenceGroupIdsForStatement("evidence_and_open_questions", claim, input.answers),
-    }));
-    expect(separatedPaymentClaims.every(claim => claim.evidence_group_ids.length > 0)).toBe(true);
-
-    const validSourceClaim = providerBlueprint(original, input.answers) as { brief: Record<string, { claims: Array<Record<string, unknown>> }> };
-    const baseClaim = structuredClone(validSourceClaim.brief.evidence_and_open_questions.claims[0]);
-    const mixedClaim = {
+    initial.brief.evidence_and_open_questions.claims = [{
       text: "Synthetic mixed-selector fixture; no provider wording is being reproduced.",
       evidence_group_ids: [paymentGroup!.id, contextGroup!.id],
-    };
-    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(initial) } })
-      .mockResolvedValueOnce({ response: { text: () => JSON.stringify({ claims: [baseClaim, mixedClaim] }) } })
-      .mockResolvedValueOnce({ response: { text: () => JSON.stringify({ claims: [baseClaim, ...separatedPaymentClaims] }) } });
+    }];
+    provider.generate.mockResolvedValueOnce({ response: { text: () => JSON.stringify(initial) } });
 
     const outcome = await runDesiredClientAnalysis(input, []);
 
     expect(outcome.mode).toBe("live");
-    expect(provider.generate).toHaveBeenCalledTimes(3);
-    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("one to six grounded claims");
-    const targetedRepair = provider.configure.mock.calls[2][0].systemInstruction as string;
-    expect(targetedRepair).toContain("claim 2");
-    expect(targetedRepair).toContain(`${paymentGroup!.id} (${paymentGroup!.evidence_basis}/${paymentGroup!.kind})`);
-    expect(targetedRepair).toContain(`${contextGroup!.id} (${contextGroup!.evidence_basis}/${contextGroup!.kind})`);
-    expect(targetedRepair).toContain("Split statements supported by different groups into separate claims");
+    expect(provider.generate).toHaveBeenCalledTimes(1);
     if (outcome.mode === "live") {
       const payment = outcome.result.brief.evidence_and_open_questions.claims.find(claim => claim.source_answer_ids.includes("value.payment"));
       const context = outcome.result.brief.evidence_and_open_questions.claims.find(claim => claim.source_answer_ids.includes("value.payment_context"));
@@ -575,6 +560,7 @@ describe("provider output contract", () => {
       expect(context?.evidence_basis).toBe("client_reported");
       expect(payment?.source_answer_ids).not.toContain("value.payment_context");
       expect(context?.source_answer_ids).not.toContain("value.payment");
+      expect(JSON.stringify(outcome.result.brief.evidence_and_open_questions)).not.toContain("Synthetic mixed-selector fixture");
       expect(outcome.result.brief.client_and_matter).toEqual(original.brief.client_and_matter);
       const canonicalFirmCard = buildStructuredBlueprintV4(input.answers).why_firm_wants_work;
       expect(outcome.result.brief.why_firm_wants_work.claims).toHaveLength(canonicalFirmCard.claims.length);
@@ -605,16 +591,16 @@ describe("provider output contract", () => {
       expect(outcome.result.brief.client_goals_needs.claims[1].evidence_basis).toBe("unknown");
     }
   });
-  it("gives the provider and fragment repair the validator's demand-gap classification", async () => {
+  it("rebuilds the demand gap on its unknown basis without repairing discarded provider wording", async () => {
     const input = request();
     input.answers.opportunity.sources = ["no_evidence"];
     input.answers.opportunity.uncertainty = "Referral demand has not been verified.";
     const invalid = validBlueprint(input.answers);
     invalid.brief.evidence_and_open_questions.claims = [evidence("Referral demand still needs verification.", "firm_preference", "opportunity.uncertainty")];
-    const repaired = {claims:[evidence("Referral demand has not been verified.", "unknown", "opportunity.uncertainty")]};
-    provider.generate.mockResolvedValueOnce({response:{text:()=>JSON.stringify(invalid)}})
-      .mockResolvedValueOnce({response:{text:()=>JSON.stringify(repaired)}});
-    expect((await runDesiredClientAnalysis(input, [])).mode).toBe("live");
+    provider.generate.mockResolvedValueOnce({response:{text:()=>JSON.stringify(invalid)}});
+    const outcome=await runDesiredClientAnalysis(input, []);
+    expect(outcome.mode).toBe("live");
+    expect(provider.generate).toHaveBeenCalledTimes(1);
     const prompt = JSON.parse(provider.generate.mock.calls[0][0]);
     const groups = prompt.evidence_groups_by_slot.evidence_and_open_questions as Array<{ evidence_group_id:string; source_answer_ids:string[]; evidence_basis:string }>;
     const gapGroup = groups.find(group => group.source_answer_ids.includes("opportunity.uncertainty"));
@@ -628,7 +614,12 @@ describe("provider output contract", () => {
     expect(groups.map(group => group.evidence_group_id)).toContain(gapGroup?.evidence_group_id);
     expect(groups.map(group => group.evidence_group_id)).toContain(noEvidenceGroup?.evidence_group_id);
     expect(schema.properties.brief.properties.evidence_and_open_questions.properties.claims.items.properties.evidence_group_ids.description).toContain("application derives those fields");
-    expect(provider.configure.mock.calls[1][0].systemInstruction).toContain("Select only registered evidence_group_ids for the exact slot");
+    if(outcome.mode==="live"){
+      const uncertainty=outcome.result.brief.evidence_and_open_questions.claims.find(claim=>claim.source_answer_ids.includes("opportunity.uncertainty"));
+      expect(uncertainty).toMatchObject({evidence_basis:"unknown",kind:"unknown"});
+      expect(uncertainty?.text).toContain(input.answers.opportunity.uncertainty.replace(/[.!?]+$/u,""));
+      expect(uncertainty?.text).not.toContain("Referral demand still needs verification.");
+    }
   });
   it("repairs a selected strength wrongly labelled as experience without upgrading its evidence", async () => {
     const input = request();

@@ -590,7 +590,10 @@ function recoverMixedWhyFirmSelection(value: unknown, answers: DesiredClientAnsw
     Object.values(node).forEach(item => findClaims(item, found));
     return found;
   };
-  const reportClaims = findClaims({ ...brief, why_firm_wants_work: replacement });
+  // The evidence card is rebuilt later from current answers. It cannot count
+  // toward recovery coverage because its provider-authored contents are discarded.
+  const { evidence_and_open_questions: _discardedEvidenceCard, ...retainedBrief } = brief;
+  const reportClaims = findClaims({ ...retainedBrief, why_firm_wants_work: replacement });
   const absentPaths: AnswerReferencePath[] = [];
   const unfaithfulPaths: AnswerReferencePath[] = [];
   for (const path of originalSources) {
@@ -705,12 +708,39 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   if (record(brief.client_and_matter) && exact(brief.client_and_matter, ["provider_target_selection_invalid"]) && brief.client_and_matter.provider_target_selection_invalid === true) {
     return reject("client_and_matter", "target_card_not_grounded_in_confirmed_answers");
   }
-  for(const field of cardNames)if(!validCard(brief[field],answers,field,(reason,sourcePath,claimDiagnostic)=>reportFailure?.({field,reason,...(sourcePath?{sourcePath}:{}),...(claimDiagnostic?{claimDiagnostic}:{})})))return null;
+  for(const field of cardNames)if(field!=="evidence_and_open_questions"&&!validCard(brief[field],answers,field,(reason,sourcePath,claimDiagnostic)=>reportFailure?.({field,reason,...(sourcePath?{sourcePath}:{}),...(claimDiagnostic?{claimDiagnostic}:{})})))return null;
   const pathway=brief.decision_pathway;
   if(!exact(pathway,["trigger","first_contact","decision","desired_progress"]))return reject("decision_pathway", "pathway_shape");
   const pathwayFields=["trigger","first_contact","decision","desired_progress"] as const;
   for(const field of pathwayFields)if(!validStatement(pathway[field],answers,`decision_pathway.${field}`,(reason,sourcePath)=>reportFailure?.({field:`decision_pathway.${field}`,reason,...(sourcePath?{sourcePath}:{}),claimDiagnostic:diagnosticForClaim(pathway[field],0,answers,`decision_pathway.${field}`)})))return null;
   const typedBrief=brief as unknown as DesiredClientBriefV4;
+  const faithfullyCoveredEvidenceSourcePaths=new Set<AnswerReferencePath>();
+  const evidenceCoverageGroups=buildDesiredClientEvidenceGroups("evidence_and_open_questions",answers);
+  const recordCoverage=(claims:readonly unknown[])=>{
+    const groups=evidenceCoverageGroups;
+    for(const claim of claims){
+      if(!record(claim)||!Array.isArray(claim.source_answer_ids))continue;
+      for(const path of claim.source_answer_ids){
+        if(typeof path!=="string")continue;
+        const group=groups.find(candidate=>candidate.evidence_basis===claim.evidence_basis&&candidate.kind===claim.kind&&candidate.source_answer_ids.includes(path as AnswerReferencePath));
+        if(group&&selectedSourceIsFaithfullyRepresented(path as AnswerReferencePath,claim,group,answers))faithfullyCoveredEvidenceSourcePaths.add(path as AnswerReferencePath);
+      }
+    }
+  };
+  const definitionClaims=[typedBrief.definition_components.client,typedBrief.definition_components.client_matter,typedBrief.definition_components.reasons,typedBrief.definition_components.outcome];
+  definitionClaims.forEach(claim=>recordCoverage([claim]));
+  const coverageCards=[
+    ["client_and_matter",typedBrief.client_and_matter],
+    ["client_goals_needs",typedBrief.client_goals_needs],
+    ["why_firm_wants_work",typedBrief.why_firm_wants_work],
+    ["why_client_chooses_firm",typedBrief.why_client_chooses_firm],
+    ["recognizable_circumstances",typedBrief.recognizable_circumstances],
+  ] as const;
+  for(const [,card] of coverageCards)recordCoverage(card.claims);
+  for(const field of pathwayFields)recordCoverage([typedBrief.decision_pathway[field]]);
+  const deterministicEvidence=buildStructuredBlueprintV4(answers,{faithfullyCoveredEvidenceSourcePaths}).evidence_and_open_questions;
+  if(deterministicEvidence.claims.length>6)return reject("evidence_and_open_questions","card_claim_limit_exceeded");
+  if(!validCard(deterministicEvidence,answers,"evidence_and_open_questions",(reason,sourcePath,claimDiagnostic)=>reportFailure?.({field:"evidence_and_open_questions",reason,...(sourcePath?{sourcePath}:{}),...(claimDiagnostic?{claimDiagnostic}:{})})))return reject("evidence_and_open_questions","canonical_card_not_valid");
   // A broad practice-area citation cannot support an invented client segment
   // or engagement. Require the model's target fields to match the specific
   // client and matter rebuilt from the firm's answers, including provenance.
@@ -742,6 +772,7 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
     : typedBrief.definition_components.outcome;
   const canonicalBrief = {
     ...typedBrief,
+    evidence_and_open_questions:deterministicEvidence,
     definition_components: {
       ...typedBrief.definition_components,
       outcome: canonicalOutcome,

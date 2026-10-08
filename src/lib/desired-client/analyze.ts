@@ -14,7 +14,7 @@ import { evidenceGroupIdsForStatement } from "./evidence-contract";
 
 const MODEL = "gemini-2.5-flash";
 const REQUEST_TIMEOUT_MS = 24_000;
-const REPAIRABLE_CARDS = ["client_and_matter", "client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions"];
+const REPAIRABLE_CARDS = ["client_and_matter", "client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances"];
 
 export type DesiredClientAnalysisOutcome =
   | { mode: "live"; result: AnalysisResult; providerCallsUsed: number; providerCallLimit: number }

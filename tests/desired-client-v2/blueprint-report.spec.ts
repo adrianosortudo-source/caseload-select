@@ -3,6 +3,7 @@ import { pathToFileURL } from "node:url";
 import { completeAnswers, mixedPaymentProviderBlueprint, negativeEconomicsAnswers, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResult } from "../../src/lib/desired-client/output";
 import { buildStructuredBlueprintV4 } from "../../src/lib/desired-client/structured-blueprint";
+import { buildDesiredClientEvidenceGroups } from "../../src/lib/desired-client/evidence-contract";
 import { startOfflineAnalysisRoute } from "./offline-analysis-route";
 import { REPORT_EDIT_LINKS } from "../../src/lib/desired-client/blueprint";
 import { REPORT_FOOTNOTE_COPY } from "../../src/lib/desired-client/copy";
@@ -200,8 +201,19 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
 
 test("the actual offline analysis HTTP route recovers mixed payment and survives save, reopen, HTML export and print", async ({ page }, testInfo) => {
   const savedAnswers = negativeEconomicsAnswers();
-  const providerOutput = mixedPaymentProviderBlueprint(savedAnswers);
-  const generatedClaims = (providerOutput as { brief: { why_firm_wants_work: { claims: Array<{ text: string }> } } }).brief.why_firm_wants_work.claims;
+  const providerOutput = mixedPaymentProviderBlueprint(savedAnswers) as unknown as { brief: {
+    why_firm_wants_work: { claims: Array<{ text: string }> };
+    evidence_and_open_questions: { claims: Array<{ text: string; evidence_group_ids: string[] }> };
+  } };
+  const checklistGroups = buildDesiredClientEvidenceGroups("evidence_and_open_questions", savedAnswers);
+  const paymentGroup = checklistGroups.find(group => group.source_answer_ids.includes("value.payment"));
+  const contextGroup = checklistGroups.find(group => group.source_answer_ids.includes("value.payment_context"));
+  if (!paymentGroup || !contextGroup) throw new Error("The current payment sources must remain registered separately.");
+  providerOutput.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => ({
+    text: "DISCARDED_HTTP_CHECKLIST_SENTINEL: 99 clients; payment and client feedback are one source.",
+    evidence_group_ids: [paymentGroup.id, contextGroup.id],
+  }));
+  const generatedClaims = providerOutput.brief.why_firm_wants_work.claims;
   generatedClaims.forEach((claim,index) => {
     claim.text = `DISCARDED_HTTP_SENTINEL_${index}: 99 clients, audited records prove positive contribution, and payment is not predictable.`;
   });
@@ -230,6 +242,14 @@ test("the actual offline analysis HTTP route recovers mixed payment and survives
         expect(body.result.recoveredSections).toEqual(["why_firm_wants_work"]);
         expect(body.providerCallsUsed).toBe(1);
         expect(body.result.brief.why_firm_wants_work.claims).toHaveLength(7);
+        expect(body.result.brief.evidence_and_open_questions.claims.length).toBeLessThanOrEqual(6);
+        const payment = body.result.brief.evidence_and_open_questions.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("value.payment"));
+        const context = body.result.brief.evidence_and_open_questions.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("value.payment_context"));
+        expect(payment).toMatchObject({ evidence_basis: "firm_reported_observation", source_answer_ids: ["value.payment"] });
+        expect(context).toMatchObject({ evidence_basis: "client_reported", source_answer_ids: ["value.payment_context", "value.payment_context_basis"] });
+        expect(payment.source_answer_ids).not.toContain("value.payment_context");
+        expect(context.source_answer_ids).not.toContain("value.payment");
+        expect(JSON.stringify(body.result.brief.evidence_and_open_questions)).not.toContain("DISCARDED_HTTP_CHECKLIST_SENTINEL");
         const retainedUnknown = body.result.brief.why_firm_wants_work.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("practice.development_needs"));
         expect(retainedUnknown).toMatchObject({ kind: "unknown", evidence_basis: "unknown" });
         expect(retainedUnknown.text).toContain("development needs");

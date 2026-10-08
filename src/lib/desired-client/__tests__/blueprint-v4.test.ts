@@ -77,14 +77,18 @@ describe("v4 provenance and client pathway", () => {
     result.brief.why_client_chooses_firm.claims=[evidence("Clients value clear explanations.","firm_reported_observation","client.choice_detail","client.choice_basis")];
     expect(validateAnalysisResult(result,a,[])).not.toBeNull();
   });
-  it("rejects invented numbers and no-evidence presented as observed demand", () => {
+  it("rejects invented numbers and rebuilds no-evidence without presenting it as demand", () => {
     const a=completeAnswers(), result=validBlueprint();
     result.brief.why_firm_wants_work.claims[0].text="The firm has 20 years of experience.";
     expect(validateAnalysisResult(result,a,[])).toBeNull();
     a.opportunity.sources=["no_evidence"];
-    const other=validBlueprint();
+    const other=validBlueprint(a);
     other.brief.evidence_and_open_questions.claims=[evidence("Observed demand exists.","source_observed","opportunity.sources")];
-    expect(validateAnalysisResult(other,a,[])).toBeNull();
+    const rebuilt=validateAnalysisResult(other,a,[]);
+    const noEvidence=rebuilt?.brief.evidence_and_open_questions.claims.find(claim=>claim.source_answer_ids.includes("opportunity.sources"));
+    expect(noEvidence).toMatchObject({evidence_basis:"unknown",kind:"unknown"});
+    expect(noEvidence?.text).not.toContain("Observed demand exists");
+    expect(noEvidence?.text).toMatch(/not established|unknown/iu);
   });
   it("preserves supplied economics, delivery needs and discovery detail in fallback", () => {
     const a=completeAnswers();

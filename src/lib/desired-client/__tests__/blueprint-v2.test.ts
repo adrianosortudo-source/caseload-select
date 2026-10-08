@@ -39,9 +39,13 @@ describe("Desired Client Blueprint v4 contract", () => {
     const mismatch = structuredClone(candidate); mismatch.brief.why_firm_wants_work.claims[0].evidence_basis = "firm_reported_recorded";
     expect(validateAnalysisResult(mismatch, answers, [])).toBeNull();
   });
-  it("requires unknown statements to cite an answer path that is explicitly unknown", () => {
+  it("rebuilds a provider evidence claim with the current answer basis", () => {
     const answers = completeAnswers(), candidate = validBlueprint(); answers.opportunity.source_detail = "Monthly enquiry log";
     candidate.brief.evidence_and_open_questions.claims[0].source_answer_ids = ["opportunity.source_detail"];
-    expect(validateAnalysisResult(candidate, answers, [])).toBeNull();
+    const result=validateAnalysisResult(candidate, answers, []);
+    const detail=result?.brief.evidence_and_open_questions.claims.find(claim=>claim.source_answer_ids.includes("opportunity.source_detail"));
+    expect(detail).toMatchObject({evidence_basis:"hypothesis",kind:"hypothesis"});
+    expect(detail?.text).toContain("Monthly enquiry log");
+    expect(detail?.evidence_basis).not.toBe("unknown");
   });
 });

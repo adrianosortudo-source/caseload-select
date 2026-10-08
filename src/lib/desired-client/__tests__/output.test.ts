@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { validateAnalysisResponseResult, validateAnalysisResult } from "../output";
-import { completeAnswers, providerBlueprint, validBlueprint } from "./blueprint-helpers";
+import { completeAnswers, negativeEconomicsAnswers, providerBlueprint, validBlueprint } from "./blueprint-helpers";
 import { evidence } from "./blueprint-helpers";
 import { buildDesiredClientEvidenceGroups } from "../evidence-contract";
 import { decodeProviderEvidenceGroups, decodeProviderTargetCard } from "../provider-schema";
@@ -9,6 +9,7 @@ import { buildStructuredBlueprintV4 } from "../structured-blueprint";
 import { buildDefinitionSentence } from "../definition";
 import { interviewClarificationSourceFingerprint } from "../types";
 import { validateDraftAnswers } from "../validation";
+import { getAnswerLabel } from "../catalog";
 
 function establishedAcquisitionAnswers() {
   const answers = completeAnswers();
@@ -104,15 +105,17 @@ describe("AI Blueprint output contract", () => {
     answers.client_context.repeat_matter_pattern = "A Canadian billionaire preparing a leveraged buyout who needs acquisition counsel before final terms are agreed.";
     expect(validateAnalysisResult(validBlueprint(answers), answers, [])).not.toBeNull();
   });
-  it("accepts a digit rendering of a cited written-out count but rejects a changed value", () => {
+  it("rebuilds the evidence card from the current target and discards provider wording", () => {
     const answers = completeAnswers();
     answers.repeatability.target = "Proposed target: two additional retained buyer-side acquisition matters per quarter.";
     const value = validBlueprint(answers);
     value.brief.evidence_and_open_questions.claims = [evidence("The proposed target of 2 additional retained buyer-side acquisition matters per quarter needs firm approval.", "firm_preference", "repeatability.target")];
-    const failures: Array<{ field: string; reason: string }> = [];
-    expect(validateAnalysisResult(value, answers, [], failure => failures.push({ field: failure.field, reason: failure.reason })), JSON.stringify(failures)).not.toBeNull();
-    value.brief.evidence_and_open_questions.claims[0] = evidence("The proposed target of 3 additional retained buyer-side acquisition matters per quarter needs firm approval.", "firm_preference", "repeatability.target");
-    expect(validateAnalysisResult(value, answers, [])).toBeNull();
+    value.brief.evidence_and_open_questions.claims[0] = evidence("The proposed target of 3 additional retained buyer-side acquisition matters per quarter is proven.", "firm_preference", "repeatability.target");
+    const result=validateAnalysisResult(value, answers, []);
+    expect(result).not.toBeNull();
+    expect(JSON.stringify(result!.brief.evidence_and_open_questions)).toContain("two additional retained buyer-side acquisition matters per quarter");
+    expect(JSON.stringify(result!.brief.evidence_and_open_questions)).not.toContain("3 additional retained");
+    expect(JSON.stringify(result!.brief.evidence_and_open_questions)).not.toContain("is proven");
   });
   it("preserves payment answers as an observation, a testable hypothesis, or an unknown", () => {
     const answers=completeAnswers();
@@ -215,6 +218,43 @@ describe("AI Blueprint output contract", () => {
     expect(experience?.source_answer_ids).not.toContain("value.payment");
     expect(recovered.some(claim => claim.source_answer_ids.includes("value.payment") && claim.source_answer_ids.includes("practice.experience"))).toBe(false);
     expect(recovered.filter(claim => claim.source_answer_ids.includes("practice.experience"))).toHaveLength(1);
+  });
+  it("does not count the discarded provider evidence card as coverage during mixed recovery", () => {
+    const answers = completeAnswers();
+    const baseline = validBlueprint(answers);
+    baseline.brief.recognizable_circumstances.claims = [evidence(
+      "The buyer needs an agreement reviewed before committing.",
+      "hypothesis",
+      "client_context.repeat_matter_pattern",
+    )];
+    const groups = buildDesiredClientEvidenceGroups("why_firm_wants_work", answers);
+    const mixedIds = ["practice.capability", "practice.experience", "practice.enjoys", "delivery.fit_signals"].map(path => {
+      const group = groups.find(candidate => candidate.source_answer_ids.includes(path as never));
+      if (!group) throw new Error(`Missing current firm-value evidence group for ${path}`);
+      return group.id;
+    });
+    const evidenceGroup = buildDesiredClientEvidenceGroups("evidence_and_open_questions", answers)
+      .find(group => group.source_answer_ids.includes("delivery.fit_signals"));
+    expect(evidenceGroup).toBeDefined();
+    const encoded = providerBlueprint(baseline, answers) as { brief: Record<string, unknown> };
+    encoded.brief.why_firm_wants_work = { claims: [{ text: "Discarded mixed provider wording.", evidence_group_ids: mixedIds }] };
+    encoded.brief.evidence_and_open_questions = { claims: [{
+      text: `The firm selected ${getAnswerLabel("delivery.fit_signals", answers)} as an inquiry signal.`,
+      evidence_group_ids: [evidenceGroup!.id],
+    }] };
+    const decoded = decodeProviderEvidenceGroups(decodeProviderTargetCard(encoded, answers), answers);
+    const result = validateAnalysisResult(decoded, answers, []);
+    expect(result).not.toBeNull();
+    expect(result!.brief.why_firm_wants_work.claims.some(claim =>
+      claim.source_answer_ids.includes("delivery.fit_signals") && claim.text.includes(getAnswerLabel("delivery.fit_signals", answers)!),
+    )).toBe(true);
+    expect(result!.brief.evidence_and_open_questions.claims.some(claim => claim.source_answer_ids.includes("delivery.fit_signals"))).toBe(false);
+  });
+  it("continues normal validation for unsupported content in an AI-authored section",()=>{
+    const answers=completeAnswers();
+    const candidate=validBlueprint(answers);
+    candidate.brief.client_goals_needs.claims[0].text="The client will decide within 27 days.";
+    expect(validateAnalysisResult(candidate,answers,[])).toBeNull();
   });
   it("recovers a current mixed-basis firm-value claim from the full acquisition fixture without changing other report sections", () => {
     const answers = establishedAcquisitionAnswers();
@@ -652,33 +692,62 @@ describe("AI Blueprint output contract", () => {
     asserted.brief.why_firm_wants_work.claims = [evidence("Payment is predictable for every client.", "firm_reported_observation", "value.payment")];
     expect(validateAnalysisResult(asserted, answers, [])).toBeNull();
   });
-  it("keeps a supplied demand uncertainty as an explicit gap rather than treating its text as proof", () => {
+  it("keeps supplied opportunity uncertainty on the unknown basis and discards provider relabelling", () => {
     const answers = completeAnswers(); answers.opportunity.uncertainty = "Demand for this agreement engagement has not yet been verified.";
     const value = validBlueprint();
     value.brief.evidence_and_open_questions.claims = [evidence(answers.opportunity.uncertainty, "unknown", "opportunity.uncertainty")];
-    expect(validateAnalysisResult(value, answers, [])).not.toBeNull();
     value.brief.evidence_and_open_questions.claims[0] = evidence("Demand for this agreement engagement is established.", "firm_preference", "opportunity.uncertainty");
-    expect(validateAnalysisResult(value, answers, [])).toBeNull();
+    const result=validateAnalysisResult(value, answers, []);
+    const uncertainty=result?.brief.evidence_and_open_questions.claims.find(claim=>claim.source_answer_ids.includes("opportunity.uncertainty"));
+    expect(uncertainty).toMatchObject({evidence_basis:"unknown",kind:"unknown"});
+    expect(uncertainty?.text).toContain(answers.opportunity.uncertainty.replace(/[.!?]+$/u,""));
+    expect(uncertainty?.text).toMatch(/unknown/iu);
   });
-  it("distinguishes malformed evidence cards from empty and over-limit claim lists", () => {
+  it("rebuilds empty, malformed, and over-limit provider evidence cards", () => {
     const answers = completeAnswers();
     const empty = validBlueprint();
     empty.brief.evidence_and_open_questions.claims = [];
-    const emptyFailures: Array<{field:string;reason:string}> = [];
-    expect(validateAnalysisResult(empty, answers, [], failure => emptyFailures.push(failure))).toBeNull();
-    expect(emptyFailures[0]).toEqual({field:"evidence_and_open_questions",reason:"card_claims_empty"});
+    const emptyResult=validateAnalysisResult(empty, answers, []);
+    expect(emptyResult?.brief.evidence_and_open_questions.claims.length).toBeGreaterThan(0);
+    expect(emptyResult?.brief.evidence_and_open_questions.claims.length).toBeLessThanOrEqual(6);
 
     const excessive = validBlueprint();
     excessive.brief.evidence_and_open_questions.claims = Array.from({length:7}, () => structuredClone(excessive.brief.evidence_and_open_questions.claims[0]));
-    const excessiveFailures: Array<{field:string;reason:string}> = [];
-    expect(validateAnalysisResult(excessive, answers, [], failure => excessiveFailures.push(failure))).toBeNull();
-    expect(excessiveFailures[0]).toEqual({field:"evidence_and_open_questions",reason:"card_claim_limit_exceeded"});
+    const excessiveResult=validateAnalysisResult(excessive, answers, []);
+    expect(excessiveResult?.brief.evidence_and_open_questions.claims.length).toBeLessThanOrEqual(6);
+    expect(JSON.stringify(excessiveResult?.brief.evidence_and_open_questions)).not.toContain("DISCARDED");
 
     const malformed = validBlueprint();
     Object.assign(malformed.brief.evidence_and_open_questions, {summary:"unrecognized field"});
-    const malformedFailures: Array<{field:string;reason:string}> = [];
-    expect(validateAnalysisResult(malformed, answers, [], failure => malformedFailures.push(failure))).toBeNull();
-    expect(malformedFailures[0]).toEqual({field:"evidence_and_open_questions",reason:"card_shape"});
+    const malformedResult=validateAnalysisResult(malformed, answers, []);
+    expect(malformedResult?.brief.evidence_and_open_questions.claims.length).toBeLessThanOrEqual(6);
+    expect(malformedResult?.brief.evidence_and_open_questions).not.toHaveProperty("summary");
+  });
+  it("omits financial checklist support only when the validated report faithfully includes every current source",()=>{
+    const answers=negativeEconomicsAnswers();
+    answers.opportunity.source_detail="Monthly enquiry log";
+    const supported=buildStructuredBlueprintV4(answers).why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.fee_amount"));
+    expect(supported).toBeDefined();
+    const withActualCoverage=validBlueprint(answers);
+    withActualCoverage.brief.definition_components.outcome=evidence("a measure of retained matters, with the target still to be set","firm_preference","repeatability.success_measure");
+    withActualCoverage.brief.why_firm_wants_work.claims.push({ ...supported!, text:`Firm-reported financial inputs: fee amount ${answers.value.fee_amount}; direct cost amount ${answers.value.direct_cost_amount}; ${getAnswerLabel("value.currency",answers)}; ${getAnswerLabel("value.amount_basis",answers)}; ${getAnswerLabel("value.amount_scope",answers)}.` });
+    const covered=validateAnalysisResult(withActualCoverage,answers,[]);
+    expect(covered).not.toBeNull();
+    const actualEconomics=covered!.brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.fee_amount"));
+    expect(actualEconomics?.source_answer_ids).toEqual(expect.arrayContaining(["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]));
+    expect(actualEconomics?.text).toContain("8000"); expect(actualEconomics?.text).toContain("8500");
+    expect(covered!.brief.evidence_and_open_questions.claims.some(claim=>claim.source_answer_ids.includes("value.fee_amount"))).toBe(false);
+
+    const withoutAiEconomics=validBlueprint(answers);
+    expect(withoutAiEconomics.brief.why_firm_wants_work.claims.some(claim=>claim.source_answer_ids.includes("value.fee_amount"))).toBe(false);
+    expect(JSON.stringify(withoutAiEconomics.brief.why_firm_wants_work)).not.toContain("8000");
+    const canonical=validateAnalysisResult(withoutAiEconomics,answers,[]);
+    expect(canonical).not.toBeNull();
+    const canonicalEconomics=canonical!.brief.why_firm_wants_work.claims.find(claim=>claim.source_answer_ids.includes("value.fee_amount"));
+    expect(canonicalEconomics?.source_answer_ids).toEqual(expect.arrayContaining(["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]));
+    expect(canonicalEconomics?.text).toContain("8000");
+    expect(canonicalEconomics?.text).toContain("8500");
+    expect(JSON.stringify(canonical!.brief.evidence_and_open_questions)).not.toContain("DISCARDED");
   });
   it("accepts six grounded cards with distinct evidence labels", () => { const value = validBlueprint(); expect(validateAnalysisResult(value, completeAnswers(), [])).not.toBeNull(); expect(value.brief.evidence_and_open_questions.claims[0].evidence_basis).toBe("unknown"); expect(value.brief.why_firm_wants_work.claims[0].evidence_basis).toBe("firm_preference"); });
   it("reopens a saved report with its existing goal citations when additional goal detail is present", () => {
@@ -693,7 +762,7 @@ describe("AI Blueprint output contract", () => {
   it("reports only safe source ids, group ids and rule diagnostics", () => { const answers=completeAnswers(), unknown=validBlueprint(), disallowed=validBlueprint(); unknown.brief.definition_components.client.source_answer_ids=["client.identity" as never]; disallowed.brief.definition_components.client.source_answer_ids=["practice.firm_type"]; const failures:Array<{field:string;reason:string;sourcePath?:string;claimDiagnostic?:{slot:string;claimIndex:number;kind:string;evidenceBasis:string;sourceAnswerIds:string[];groupIds:string[];expectedGroups:Array<{id:string;kind:string;evidenceBasis:string;sourceAnswerIds:string[]}>}}>=[]; expect(validateAnalysisResult(unknown,answers,[],failure=>failures.push(failure))).toBeNull(); expect(failures.at(-1)).toMatchObject({field:"definition_components.client",reason:"source_answer_path_unrecognized",claimDiagnostic:{slot:"definition_client_type",claimIndex:1,sourceAnswerIds:[],groupIds:[],expectedGroups:[]}}); expect(validateAnalysisResult(disallowed,answers,[],failure=>failures.push(failure))).toBeNull(); expect(failures.at(-1)).toMatchObject({field:"definition_components.client",reason:"source_answer_path_not_allowed_for_slot",sourcePath:"practice.firm_type",claimDiagnostic:{slot:"definition_client_type",claimIndex:1,sourceAnswerIds:[],groupIds:[],expectedGroups:[]}}); expect(JSON.stringify(failures)).not.toContain("client.identity"); expect(JSON.stringify(failures)).not.toContain(answers.practice.firm_type); });
   it("rejects legacy answer-list schemas, extra keys, and wrong versions", () => { const good = validBlueprint(), answers = completeAnswers(); expect(validateAnalysisResult({ brief: { definition: {}, client_goals: [], firm_reasons: [], marketing: {} }, clarification_code: null }, answers, [])).toBeNull(); expect(validateAnalysisResult({ ...good, unexpected: true }, answers, [])).toBeNull(); expect(validateAnalysisResult({ ...good, brief: { ...good.brief, report_version: "dcm-blueprint-v1" } }, answers, [])).toBeNull(); });
   it("rejects unsupported citations and slot overflow, and replaces model sentence wording with the application formatter", () => { const answers = completeAnswers(), good = validBlueprint(answers); const fabricated = structuredClone(good); fabricated.brief.why_firm_wants_work.claims[0].source_answer_ids = ["focus.industry" as never]; expect(validateAnalysisResult(fabricated, answers, [])).toBeNull(); const sentence = structuredClone(good); sentence.brief.definition_sentence = "A conflicting sentence written by the model."; const checked=validateAnalysisResult(sentence, answers, []); expect(checked?.brief.definition_sentence).toContain("on matters matching the firm's description: “A business buyer"); expect(checked?.brief.definition_sentence).toContain("because the firm cites client benefit, a fit with the firm's skills and fees usually worthwhile for the effort"); expect(checked?.brief.definition_sentence).not.toContain("progress will be assessed"); const long = structuredClone(good); long.brief.client_and_matter.claims[0].text = "x ".repeat(101); expect(validateAnalysisResult(long, answers, [])).toBeNull(); });
-  it("rejects an unknown claim cited only to known information and an incorrect evidence basis", () => { const answers = completeAnswers(), good = validBlueprint(); answers.opportunity.source_detail = "Monthly enquiry log"; const wrongUnknown = structuredClone(good); wrongUnknown.brief.evidence_and_open_questions.claims[0].source_answer_ids = ["opportunity.source_detail"]; expect(validateAnalysisResult(wrongUnknown, answers, [])).toBeNull(); const mismatch = structuredClone(good); mismatch.brief.why_firm_wants_work.claims[0].evidence_basis = "firm_reported_recorded"; expect(validateAnalysisResult(mismatch, answers, [])).toBeNull(); });
+  it("rebuilds a known opportunity detail with its current basis and still rejects an incorrect firm-value basis", () => { const answers = completeAnswers(), good = validBlueprint(); answers.opportunity.source_detail = "Monthly enquiry log"; const relabelled = structuredClone(good); relabelled.brief.evidence_and_open_questions.claims[0] = evidence("Monthly enquiry log is audited evidence.","unknown","opportunity.source_detail"); const result=validateAnalysisResult(relabelled, answers, []); expect(result?.brief.evidence_and_open_questions.claims.find(claim=>claim.source_answer_ids.includes("opportunity.source_detail"))).toMatchObject({evidence_basis:"hypothesis",kind:"hypothesis"}); const mismatch = structuredClone(good); mismatch.brief.why_firm_wants_work.claims[0].evidence_basis = "firm_reported_recorded"; expect(validateAnalysisResult(mismatch, answers, [])).toBeNull(); });
   it("rejects AI citations to a follow-up after its cited answers have changed",()=>{const answers=completeAnswers(),paths=["value.reasons"] as const;answers.interview.clarification_count=1;answers.interview.clarified_stages=[3];answers.interview.followups=[{id:"11111111-1111-4111-8111-111111111111",stage:3,purpose:"firm_desirability",source_answer_ids:[...paths],source_answer_fingerprint:interviewClarificationSourceFingerprint(answers,paths),question:"Why does the firm want this work?",answer:"The work lets us use our transaction experience.",skipped:false}];const fresh=validBlueprint();fresh.brief.why_firm_wants_work.claims=[evidence("The work lets us use our transaction experience.","firm_preference","interview.followups.0")];expect(validateAnalysisResult(fresh,answers,[])).not.toBeNull();answers.value.reasons=["client_benefit"];expect(validateAnalysisResult(fresh,answers,[])).toBeNull();});
   it("accepts only an application-calculated contribution with all five economics sources", () => {
     const answers = completeAnswers();

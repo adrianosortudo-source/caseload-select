@@ -122,7 +122,7 @@ describe("complete negative-economics mixed payment recovery", () => {
   expect(JSON.stringify(failures)).not.toContain("private-unrecognized-id-sentinel");
  });
 
- it.each(["client_and_matter", "client_goals_needs", "why_client_chooses_firm", "recognizable_circumstances", "evidence_and_open_questions"] as const)(
+ it.each(["client_and_matter", "client_goals_needs", "why_firm_wants_work", "why_client_chooses_firm", "recognizable_circumstances"] as const)(
   "still rejects invalid content in untouched section %s through normal validation", section => {
    const answers = negativeEconomicsAnswers();
    const candidate = validBlueprint(answers);

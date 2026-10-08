@@ -5,7 +5,7 @@ import { completeAnswers, mixedPaymentProviderBlueprint, negativeEconomicsAnswer
 import { validateAnalysisResponseResult, validateAnalysisResult } from "@/lib/desired-client/output";
 import { DRAFT_STORAGE_KEY, loadDraft, saveDraft, savedAnalysis } from "@/lib/desired-client/storage";
 import type { AnalysisResult, DesiredClientBriefV4 } from "@/lib/desired-client/types";
-import { buildDesiredClientEvidenceGroups, evidenceGroupIdsForStatement } from "@/lib/desired-client/evidence-contract";
+import { buildDesiredClientEvidenceGroups } from "@/lib/desired-client/evidence-contract";
 import { buildStructuredBlueprintV4 } from "@/lib/desired-client/structured-blueprint";
 
 const mocks = vi.hoisted(() => ({
@@ -332,27 +332,30 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(mocks.generateContent).toHaveBeenCalledTimes(1);
   });
 
-  it("repairs an over-limit evidence card in Preview and returns a client-valid report", async () => {
+  it("rebuilds an over-limit evidence card in Preview without a wording repair", async () => {
     process.env.VERCEL_ENV = "preview";
     const invalid = structuredClone(MODEL_RESULT);
-    invalid.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => structuredClone(invalid.brief.evidence_and_open_questions.claims[0]));
-    const repaired = (providerBlueprint(MODEL_RESULT, B0) as { brief: Record<string, unknown> }).brief.evidence_and_open_questions;
-    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid)).mockResolvedValueOnce(rawProviderResponse(repaired));
+    invalid.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => ({
+      ...structuredClone(invalid.brief.evidence_and_open_questions.claims[0]),
+      text: "DISCARDED_ROUTE_EVIDENCE_SENTINEL: 99 clients prove demand.",
+    }));
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body).toMatchObject({ ok: true, providerCallsUsed: 2, providerCallLimit: 3 });
+    expect(body).toMatchObject({ ok: true, providerCallsUsed: 1, providerCallLimit: 3 });
     expect(validateAnalysisResponseResult(body.result, B0, [])).toEqual(body.result);
-    expect(body.result.brief.evidence_and_open_questions).toEqual(MODEL_RESULT.brief.evidence_and_open_questions);
-    expect(body.result.brief.evidence_and_open_questions.claims).toHaveLength(1);
+    expect(body.result.brief.evidence_and_open_questions).toEqual(buildStructuredBlueprintV4(B0).evidence_and_open_questions);
+    expect(body.result.brief.evidence_and_open_questions.claims.length).toBeLessThanOrEqual(6);
+    expect(JSON.stringify(body.result.brief.evidence_and_open_questions)).not.toContain("DISCARDED_ROUTE_EVIDENCE_SENTINEL");
     expect(savedAnalysis(body.result, B0)?.brief).toEqual(body.result.brief);
-    expect(mocks.generateContent).toHaveBeenCalledTimes(2);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
   });
 
   it("keeps Preview within the same three-total-call ceiling", async () => {
     process.env.VERCEL_ENV = "preview";
     const invalid = structuredClone(MODEL_RESULT);
-    invalid.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => structuredClone(invalid.brief.evidence_and_open_questions.claims[0]));
+    invalid.brief.client_goals_needs.claims[0].text = "The client will decide within 27 days.";
     mocks.generateContent.mockResolvedValue(providerResponse(invalid));
     const first = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(first.status).toBe(502);
@@ -652,7 +655,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(mocks.generateContent).toHaveBeenCalledTimes(1);
   });
 
-  it("returns and saves the report after an over-limit card is repaired into separate evidence bases", async () => {
+  it("rebuilds an over-limit evidence card into separate bases and saves the report", async () => {
     const answers = negativeEconomicsAnswers();
     const request = { ...structuredClone(ENVELOPE), answerRevision: answers.revision, answers };
     const original = validBlueprint(answers);
@@ -663,24 +666,22 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const contextGroup = groups.find(group => group.source_answer_ids.includes("value.payment_context"));
     expect(paymentGroup).toBeDefined();
     expect(contextGroup).toBeDefined();
-    const baseClaim = structuredClone(providerBlueprint(original, answers) as { brief: Record<string, { claims: Array<Record<string, unknown>> }> }).brief.evidence_and_open_questions.claims[0];
-    const mixedClaim = { text: "Synthetic mixed-selector fixture; provider wording is not reproduced.", evidence_group_ids: [paymentGroup!.id, contextGroup!.id] };
-    const separatedPaymentClaims = buildStructuredBlueprintV4(answers).why_firm_wants_work.claims
-      .filter(claim => claim.source_answer_ids.includes("value.payment") || claim.source_answer_ids.includes("value.payment_context"))
-      .map(claim => ({ text: claim.text, evidence_group_ids: evidenceGroupIdsForStatement("evidence_and_open_questions", claim, answers) }));
-    expect(separatedPaymentClaims.every(claim => claim.evidence_group_ids.length > 0)).toBe(true);
-    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(initial))
-      .mockResolvedValueOnce(rawProviderResponse({ claims: [baseClaim, mixedClaim] }))
-      .mockResolvedValueOnce(rawProviderResponse({ claims: [baseClaim, ...separatedPaymentClaims] }));
+    initial.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => ({
+      ...structuredClone(initial.brief.evidence_and_open_questions.claims[0]),
+      text: "DISCARDED_NEGATIVE_ECONOMICS_EVIDENCE_SENTINEL: payment and client feedback are one source.",
+    }));
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(initial));
 
     const response = await POST(makeRequest(JSON.stringify(request)));
 
     expect(response.status).toBe(200);
     await expectNoStore(response);
     const body = await response.json();
-    expect(body).toMatchObject({ ok: true, requestId: request.requestId, answerRevision: answers.revision, reviewRunId: request.reviewRunId, providerCallsUsed: 3, providerCallLimit: 3 });
-    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+    expect(body).toMatchObject({ ok: true, requestId: request.requestId, answerRevision: answers.revision, reviewRunId: request.reviewRunId, providerCallsUsed: 1, providerCallLimit: 3 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
     expect(validateAnalysisResponseResult(body.result, answers, [])).toEqual(body.result);
+    expect(body.result.brief.evidence_and_open_questions.claims.length).toBeLessThanOrEqual(6);
+    expect(JSON.stringify(body.result.brief.evidence_and_open_questions)).not.toContain("DISCARDED_NEGATIVE_ECONOMICS_EVIDENCE_SENTINEL");
     const payment = body.result.brief.evidence_and_open_questions.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("value.payment"));
     const context = body.result.brief.evidence_and_open_questions.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("value.payment_context"));
     expect(payment).toMatchObject({ evidence_basis: "firm_reported_observation", source_answer_ids: ["value.payment"] });
