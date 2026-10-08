@@ -8,7 +8,7 @@ The October 7 15:00:48.837 UTC request 7e5a7a27-048b-411d-98f3-03d6d209b33d on 8
 
 The later October 7 request fa8422fd-3172-4907-93e5-6baab7a26cb1 on d430fd99 failed as mixed_text_not_authentic at the first claim. The card had seven claims and three valid, resolved source IDs for that selection. The generated sentence was not logged, so this record does not claim to reproduce it. Neither live failure's recovery cause is established.
 
-Two of the approved three live calls were used before the stop. One remains unspent, and the stopped live test requires fresh approval before that call can be used. This repair and its tests used zero live provider calls.
+The three-call live-test allowance is exhausted. The latest ledger records 15 generation attempts and 2 clarification operations, including the 40fdef live failure. This offline repair and its tests used zero live provider calls. Do not make further provider requests or reset counters; any later bounded live acceptance must be coordinated under fresh user approval.
 
 ## Offline diagnosis and repair
 

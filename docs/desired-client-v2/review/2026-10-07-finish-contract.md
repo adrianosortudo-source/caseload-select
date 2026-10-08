@@ -13,7 +13,7 @@ Only a valid, current, complete mixed selector in why_firm_wants_work may trigge
 
 Before each push, run focused Desired Client tests and focused TypeScript. On the final pushed head, require all CI checks and the direct browser regression for HTTP response to screen to save/reopen to existing export/print. Before release, require a successful real AI journey that demonstrates useful synthesis from the interview answers; HTTP success or an all-structured substitute is insufficient.
 
-One live-test call remains unspent, but testing is stopped after the previous failure. Obtain fresh approval before using it. Do not merge, change production configuration or change credentials.
+The three-call live-test allowance is exhausted. The latest ledger records 15 generation attempts and 2 clarification operations, including the 40fdef live failure. This offline repair used zero provider calls. Do not make further provider requests or reset counters; any later bounded live acceptance must be coordinated under fresh user approval. Do not merge, change production configuration or change credentials.
 
 ## File-to-gate map
 
