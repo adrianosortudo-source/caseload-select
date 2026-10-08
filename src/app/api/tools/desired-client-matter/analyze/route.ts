@@ -20,12 +20,12 @@ function desiredClientAiEnabled(): boolean {
     Boolean(process.env.UPSTASH_REDIS_REST_URL?.trim()) && Boolean(process.env.UPSTASH_REDIS_REST_TOKEN?.trim());
 }
 
-function desiredClientProviderCallLimit(): 1 | 3 {
-  return process.env.VERCEL_ENV === "preview" ? 1 : 3;
+function desiredClientProviderCallLimit(): 3 {
+  return 3;
 }
 
 /** Exposes only the enabled state so the tool can set honest expectations. */
-export async function GET(): Promise<NextResponse<{ enabled: boolean; providerCallLimit: 1 | 3 }>> {
+export async function GET(): Promise<NextResponse<{ enabled: boolean; providerCallLimit: 3 }>> {
   return NextResponse.json({ enabled: desiredClientAiEnabled(), providerCallLimit: desiredClientProviderCallLimit() }, { headers: NO_STORE });
 }
 

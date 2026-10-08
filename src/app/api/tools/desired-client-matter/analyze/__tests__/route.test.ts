@@ -3,6 +3,7 @@ import type { NextRequest } from "next/server";
 import { interviewClarificationSourceFingerprint, type AnalysisRequestEnvelope, type DesiredClientAnswers, type InterviewClarificationAnswer, type InterviewClarificationRequestEnvelope } from "@/lib/desired-client/types";
 import { completeAnswers, mixedPaymentProviderBlueprint, negativeEconomicsAnswers, providerBlueprint, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResponseResult, validateAnalysisResult } from "@/lib/desired-client/output";
+import { savedAnalysis } from "@/lib/desired-client/storage";
 import type { AnalysisResult } from "@/lib/desired-client/types";
 import { buildDesiredClientEvidenceGroups } from "@/lib/desired-client/evidence-contract";
 import { buildStructuredBlueprintV4 } from "@/lib/desired-client/structured-blueprint";
@@ -145,7 +146,7 @@ describe("GET /api/tools/desired-client-matter/analyze readiness", () => {
     await expectNoStore(enabled);
     process.env.VERCEL_ENV="preview";
     const preview=await GET();
-    expect(await preview.json()).toEqual({enabled:true,providerCallLimit:1});
+    expect(await preview.json()).toEqual({enabled:true,providerCallLimit:3});
     delete process.env.VERCEL_ENV;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
     const incomplete=await GET();
@@ -331,18 +332,35 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(mocks.generateContent).toHaveBeenCalledTimes(1);
   });
 
-  it("keeps Preview at one total generation call including later retries", async () => {
+  it("repairs an over-limit evidence card in Preview and returns a client-valid report", async () => {
     process.env.VERCEL_ENV = "preview";
     const invalid = structuredClone(MODEL_RESULT);
-    invalid.brief.why_firm_wants_work.claims[0].text = "x".repeat(701);
-    mocks.generateContent.mockImplementation(async () => providerResponse(invalid));
+    invalid.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => structuredClone(invalid.brief.evidence_and_open_questions.claims[0]));
+    const repaired = (providerBlueprint(MODEL_RESULT, B0) as { brief: Record<string, unknown> }).brief.evidence_and_open_questions;
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid)).mockResolvedValueOnce(rawProviderResponse(repaired));
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: true, providerCallsUsed: 2, providerCallLimit: 3 });
+    expect(validateAnalysisResponseResult(body.result, B0, [])).toEqual(body.result);
+    expect(body.result.brief.evidence_and_open_questions).toEqual(MODEL_RESULT.brief.evidence_and_open_questions);
+    expect(body.result.brief.evidence_and_open_questions.claims).toHaveLength(1);
+    expect(savedAnalysis(body.result, B0)?.brief).toEqual(body.result.brief);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps Preview within the same three-total-call ceiling", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const invalid = structuredClone(MODEL_RESULT);
+    invalid.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => structuredClone(invalid.brief.evidence_and_open_questions.claims[0]));
+    mocks.generateContent.mockResolvedValue(providerResponse(invalid));
     const first = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(first.status).toBe(502);
-    expect(await first.json()).toMatchObject({ providerCallsUsed: 1, providerCallLimit: 1 });
+    expect(await first.json()).toMatchObject({ providerCallsUsed: 3, providerCallLimit: 3 });
     const retry = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, requestId: "33333333-3333-4333-8333-333333333333", analysisIndex: 1 })));
     expect(retry.status).toBe(429);
-    expect(await retry.json()).toMatchObject({ error: { code: "PROVIDER_CALL_LIMIT_REACHED" }, providerCallsUsed: 1, providerCallLimit: 1 });
-    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+    expect(await retry.json()).toMatchObject({ error: { code: "PROVIDER_CALL_LIMIT_REACHED" }, providerCallsUsed: 3, providerCallLimit: 3 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
   });
 
   it("normalizes a provider ask and carries its answered history into the next request", async () => {
@@ -566,7 +584,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
       requestId: ENVELOPE.requestId,
       error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "why_firm_wants_work", reason: "evidence_group_selection_invalid" } },
       providerCallsUsed: 1,
-      providerCallLimit: 1,
+      providerCallLimit: 3,
     });
     expect(mocks.generateContent).toHaveBeenCalledTimes(1);
     const log = JSON.parse(warn.mock.calls[0][0] as string);
@@ -612,7 +630,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(response.status).toBe(200);
     await expectNoStore(response);
     const body = await response.json();
-    expect(body).toMatchObject({ ok: true, requestId: request.requestId, answerRevision: answers.revision, reviewRunId: request.reviewRunId, providerCallsUsed: 1, providerCallLimit: 1 });
+    expect(body).toMatchObject({ ok: true, requestId: request.requestId, answerRevision: answers.revision, reviewRunId: request.reviewRunId, providerCallsUsed: 1, providerCallLimit: 3 });
     expect(body.result.recoveredSections).toEqual(["why_firm_wants_work"]);
     const canonicalCard = buildStructuredBlueprintV4(answers).why_firm_wants_work;
     expect(body.result.brief.why_firm_wants_work.claims.slice(0, canonicalCard.claims.length)).toEqual(canonicalCard.claims);

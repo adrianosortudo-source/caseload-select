@@ -13,7 +13,7 @@ Only a valid, current, complete mixed selector in why_firm_wants_work may trigge
 
 Before each push, run focused Desired Client tests and focused TypeScript. On the final pushed head, require all CI checks and the direct browser regression for HTTP response to screen to save/reopen to existing export/print. Before release, require a successful real AI journey that demonstrates useful synthesis from the interview answers; HTTP success or an all-structured substitute is insufficient.
 
-The three-call live-test allowance is exhausted. The latest ledger records 15 generation attempts and 2 clarification operations, including the 40fdef live failure. This offline repair used zero provider calls. Do not make further provider requests or reset counters; any later bounded live acceptance must be coordinated under fresh user approval. Do not merge, change production configuration or change credentials.
+The historical ledger records 16 generation attempts and 2 clarification operations; earlier allowances are exhausted. Make no provider calls during offline verification. A separate acceptance plan is pending, capped at 3 total calls, and may run only after this candidate passes offline, CI and browser gates. Do not reset counters, merge, or change production configuration or credentials.
 
 ## File-to-gate map
 
@@ -21,7 +21,7 @@ The three-call live-test allowance is exhausted. The latest ledger records 15 ge
 
 - src/lib/desired-client/evidence-contract.ts: source-specific evidence-basis and destination-card mapping for firm type and delivery fit; covered by mixed-payment-recovery.test.ts selector matrix and invalid-selection cases.
 
-- src/lib/desired-client/structured-blueprint.ts: selected growth direction is a firm preference, firm type remains experience-attributed, and unanswered rationale remains separate; covered by output.test.ts and mixed-payment-recovery.test.ts.
+- src/lib/desired-client/structured-blueprint.ts: the selected growth direction is a firm preference, while experience/capability retain their own attribution; covered by mixed-payment-recovery.test.ts and output.test.ts.
 
 - src/lib/desired-client/storage.ts: valid recovered response marker and unknown claim survive save/reopen validation; covered by state-storage.test.ts and blueprint-report.spec.ts.
 
@@ -31,16 +31,16 @@ The three-call live-test allowance is exhausted. The latest ledger records 15 ge
 
 - src/lib/desired-client/__tests__/output.test.ts: grounded recovery wording, source fidelity, unknown rationale, direction preference and seven-claim boundary.
 
-- src/app/api/tools/desired-client-matter/analyze/__tests__/route.test.ts: recovered server response contains canonical wording only.
+- src/lib/desired-client/analyze.ts: Preview uses the same already-bounded repair loop; covered by provider-contract.test.ts and the route regression below.
+
+- src/app/api/tools/desired-client-matter/analyze/route.ts: Preview and production share the existing three-total-call limit; covered by route.test.ts readiness, scoped-repair and ceiling tests.
+
+- src/app/api/tools/desired-client-matter/analyze/__tests__/route.test.ts: seven-claim overflow is repaired in the mocked HTTP path and passes client response validation; adjacent storage and browser regressions cover save/reopen/export/print.
 
 - tests/desired-client-v2/blueprint-report.spec.ts: HTTP response to screen, save/reopen, export and print browser path.
 
-- docs/desired-client-v2/review/2026-10-07-mixed-payment-recovery.md: bounded offline diagnosis and failure-cause evidence limits.
-
-- docs/desired-client-v2/review/2026-10-07-finish-contract.md: scope, deadlines, release gates and this file map.
-
-- docs/desired-client-v2/review/2026-10-07-mixed-payment-recovery.md: failure evidence, bounded diagnosis and current offline/browser/typecheck results.
+- docs/desired-client-v2/review/2026-10-07-mixed-payment-recovery.md: bounded offline diagnosis, evidence limits and current live-test ledger.
 
 ## Checkpoints
 
-Next checkpoint: Thursday, October 8, 2026, 4:30 p.m. Toronto time, to assess exact-head CI and the remaining real-AI release gate before the 5:00 p.m. code freeze. Target completion is Friday, October 9, at 5:00 p.m. If fresh live-test approval or provider availability is missing, keep release blocked and report the Friday threat.
+Next checkpoint: Thursday, October 8, 2026, 9:00 a.m. Toronto time, to review completion of focused offline checks, the browser path and exact-head CI status. Code freeze is 5:00 p.m. that day. Target completion remains Friday, October 9, at 5:00 p.m. The separate capped acceptance plan remains pending until those gates pass; missing that window threatens Friday completion.

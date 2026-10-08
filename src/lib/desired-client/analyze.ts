@@ -127,8 +127,7 @@ export async function runDesiredClientAnalysis(
     let result = validate();
     const firstFailure = validationFailure as AnalysisValidationFailure | null;
     let repairAttempts = 0;
-    const stopPreviewRepairs = process.env.VERCEL_ENV === "preview" && !result;
-    for (let attempt = 0; !stopPreviewRepairs && !result && validationFailure && attempt < 2; attempt++) {
+    for (let attempt = 0; !result && validationFailure && attempt < 2; attempt++) {
       const failure = validationFailure as AnalysisValidationFailure;
       const parts = failure.field.split(".");
       const repairable = REPAIRABLE_CARDS.includes(parts[0]) && parts.length === 1 ||
