@@ -8,7 +8,7 @@ export const DESIRED_CLIENT_ANSWER_PATHS: AnswerReferencePath[] = [
   "client_context.geography", "client_context.relevant_circumstances", "client_context.community_focus", "client_context.language_service_needs", "client_context.repeat_matter_pattern", "client_context.discovery_behaviour",
   "situation.trigger", "situation.timing", "situation.role", "situation.role_other", "situation.contact",
   "client.goals", "client.goal_detail", "client.concerns", "client.decision_needs", "client.decision_context", "client.pathway_basis", "client.choice_priorities", "client.choice_detail", "client.choice_basis",
-  "value.reasons", "value.fee_effort", "value.collected_fee", "value.team_hours", "value.payment", "value.currency", "value.fee_amount", "value.direct_cost_amount", "value.amount_basis", "value.amount_scope",
+  "value.reasons", "value.fee_effort", "value.collected_fee", "value.team_hours", "value.payment", "value.payment_context", "value.payment_context_basis", "value.currency", "value.fee_amount", "value.direct_cost_amount", "value.amount_basis", "value.amount_scope",
   "delivery.conditions", "delivery.capacity", "delivery.limit", "delivery.fit_signals",
   "direction.aim", "direction.evidence", "direction.less", "direction.less_reason", "direction.less_note",
   "opportunity.sources", "opportunity.data_basis", "opportunity.source_detail", "opportunity.period", "opportunity.enquiry_count", "opportunity.retained_count", "opportunity.conversion", "opportunity.acquisition_cost", "opportunity.uncertainty",

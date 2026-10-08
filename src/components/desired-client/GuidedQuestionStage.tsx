@@ -2,14 +2,14 @@
 
 import type { ReactNode } from "react";
 import {
-  AREA_ORDER, CAPACITY_LABELS, COLLECTED_FEE_LABELS, CONDITION_LABELS, CONTACT_LABELS, FIT_SIGNAL_OPTIONS,
+  AREA_ORDER, CAPACITY_LABELS, CLIENT_INSIGHT_BASIS_LABELS, COLLECTED_FEE_LABELS, CONDITION_LABELS, CONTACT_LABELS, FIT_SIGNAL_OPTIONS,
   LIMIT_LABELS, PAYMENT_LABELS, REASON_LABELS, TEAM_HOURS_LABELS, TIMING_LABELS,
   TRIGGER_EXAMPLES, TRIGGER_OPTIONS, getAreaLabel, getFeeEffortLabel, getReasonLabel,
   getRoleOptions, getWorkOptions,
 } from "@/lib/desired-client/catalog";
 import { COMMON_COPY, PRIVACY_FIELD_COPY } from "@/lib/desired-client/copy";
 import { STAGE_DEFINITIONS, type StageId } from "@/lib/desired-client/screens";
-import type { AreaId, DesiredClientAnswers, OpportunitySourceId, SuccessMeasureId, WriteInKey } from "@/lib/desired-client/types";
+import type { AreaId, ClientInsightBasis, DesiredClientAnswers, OpportunitySourceId, SuccessMeasureId, WriteInKey } from "@/lib/desired-client/types";
 import { ChoiceGroup, type ChoiceGroupOption } from "./ChoiceGroup";
 
 type Change = (edit: (answers: DesiredClientAnswers) => DesiredClientAnswers) => void;
@@ -115,7 +115,7 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
       <h1 tabIndex={-1} data-ui-copy="heading">{STAGE_DEFINITIONS[stage-1].heading}</h1>
       <p data-ui-copy="body">{STAGE_DEFINITIONS[stage-1].explanation}</p>
     </div>
-    {notice&&<p className="dc-alert" role="status" data-ui-copy="supporting">{notice}</p>}
+    {notice&&<div className="dc-alert dc-alert--notice" role="status" data-ui-component-content="desired-client-followup-notice">{notice.split(/(?<=\.)\s+/u).map((sentence,index)=><p key={`${index}-${sentence}`} data-ui-copy="supporting">{sentence}</p>)}</div>}
     <div className="dc-stage__layout"><div className="dc-stage__questions" data-ui-component-content={`desired-client-stage-questions-${stage}`}>
       {stage===1&&<>
         {radio("dc-practice-direction","What do you want this profile to help your firm do?",PRACTICE_DIRECTION_OPTIONS,answers.practice.direction,(a,v)=>{
@@ -190,6 +190,8 @@ export function GuidedQuestionStage({stage,answers,onEdit,onBack,onNext,onCompar
           {radio("dc-fee-range","Typical collected fee or range",entries(COLLECTED_FEE_LABELS),answers.value.collected_fee,(a,v)=>{a.value.collected_fee=v as typeof a.value.collected_fee;},"Use the firm's experience where available. Exclude disbursements.",false)}
           {radio("dc-hours","Total team time",entries(TEAM_HOURS_LABELS),answers.value.team_hours,(a,v)=>{a.value.team_hours=v as typeof a.value.team_hours;},"Include the people involved, not only lawyer time.",false)}
           {radio("dc-payment","How predictable is payment?",entries(PAYMENT_LABELS),answers.value.payment,(a,v)=>{a.value.payment=v as typeof a.value.payment;},undefined,false)}
+          {text("Add payment context (optional)",answers.value.payment_context,(a,v)=>{a.value.payment_context=v;if(!v.trim())a.value.payment_context_basis=null;},"For example, note a pattern the firm has observed or a payment preference it wants to test. Do not include identifying client details.",400,true)}
+          {answers.value.payment_context.trim()&&radio("dc-payment-context-basis","What is the source of this context?",entries(CLIENT_INSIGHT_BASIS_LABELS),answers.value.payment_context_basis,(a,v)=>{a.value.payment_context_basis=v as ClientInsightBasis;},"Keep client feedback, firm observation, hypothesis and unknown distinct.",false)}
           <div className="dc-field-grid">
             {text("Collected fee amount (optional)",answers.value.fee_amount,(a,v)=>{a.value.fee_amount=v;},"For a calculation, enter one amount collected for the same matter or typical matter as the cost below. Ranges can be recorded but are not calculated.",80)}
             {text("Direct delivery cost (optional)",answers.value.direct_cost_amount,(a,v)=>{a.value.direct_cost_amount=v;},"Use the same matter, currency and recorded or estimated basis as the fee. Exclude overhead and acquisition costs. Do not deduct write-offs again from a fee already reported as collected.",80)}

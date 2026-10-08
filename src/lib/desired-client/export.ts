@@ -25,8 +25,21 @@ function currentView(saved: SavedBrief, answers: DesiredClientAnswers) {
     mode: saved.mode,
     generatedAt: saved.generatedAt,
     wordingReviewed: saved.wordingReviewed,
+    recoveredSections: saved.recoveredSections,
     openClarificationCode: saved.openClarificationCode,
   });
+}
+
+function contributionText(contribution: NonNullable<ReturnType<typeof buildBlueprintViewModel>["cards"][number]["contribution"]>): string[] {
+  return [
+    `${contribution.label}: ${contribution.amount} (${EVIDENCE_BASIS_LABELS[contribution.basis]}, ${contribution.scope})`,
+    contribution.margin ? `${contribution.margin.label}: ${contribution.margin.amount}` : "Contribution margin not calculated because collected fees are zero.",
+    "Calculated as collected fees less direct delivery costs; overhead and acquisition costs are excluded. This is not net profit.",
+  ];
+}
+
+function contributionHtml(contribution: NonNullable<ReturnType<typeof buildBlueprintViewModel>["cards"][number]["contribution"]>): string {
+  return `<div class="calculated"><div><strong>${escapeHtml(contribution.label)}:</strong> <span>${escapeHtml(contribution.amount)}</span></div>${contribution.margin ? `<div class="calculated-margin"><strong>${escapeHtml(contribution.margin.label)}:</strong> <span>${escapeHtml(contribution.margin.amount)}</span></div>` : "<p>Contribution margin not calculated because collected fees are zero.</p>"}<small>${escapeHtml(EVIDENCE_BASIS_LABELS[contribution.basis])} · ${escapeHtml(contribution.scope)}. Calculated as collected fees less direct delivery costs; overhead and acquisition costs are excluded. This is not net profit.</small></div>`;
 }
 
 function legacyText(brief: LegacyDesiredClientBriefV1): string {
@@ -63,9 +76,7 @@ export function formatBriefText(saved: SavedBrief, answers: DesiredClientAnswers
     "",
     "OUR DESIRED-CLIENT DEFINITION",
     view.definition,
-    "",
-    "CONDITIONS AND UNRESOLVED QUESTIONS",
-    ...(view.conditions.length ? view.conditions.map((condition) => `- ${condition}`) : ["No material constraint or uncertainty was recorded in these answers."]),
+    ...(view.conditions.length ? ["", "CONDITIONS AND UNRESOLVED QUESTIONS", ...view.conditions.map((condition) => `- ${condition}`)] : []),
     "",
     "PROGRESS REVIEW",
     `Measure: ${view.progressReview.metric}`,
@@ -74,7 +85,7 @@ export function formatBriefText(saved: SavedBrief, answers: DesiredClientAnswers
     `Status: ${view.progressReview.status}`,
     ...(view.decisionPathway && "client" in view.definitionComponents ? ["", "CLIENT TYPE", view.definitionComponents.client.text, "", "CLIENT SITUATION AND MATTER", view.definitionComponents.client_matter.text] : []),
     ...(view.decisionPathway ? ["", "CLIENT DECISION PATHWAY · WORKING INTERPRETATION", ...decisionPathwayEntries(view).map(([label, statement]) => `${label} [${EVIDENCE_BASIS_LABELS[statement.evidence_basis]}]: ${statement.text}`)] : []),
-    ...view.cards.flatMap((card) => ["", card.title.toUpperCase(), ...card.claims.map((claim) => `${EVIDENCE_BASIS_LABELS[claim.evidence_basis]}: ${claim.text}`), ...(card.contribution ? [`${card.contribution.label}: ${card.contribution.amount} (${EVIDENCE_BASIS_LABELS[card.contribution.basis]}, ${card.contribution.scope})`] : [])]),
+    ...view.cards.flatMap((card) => ["", card.title.toUpperCase(), ...(card.recoveryDisclosure ? [card.recoveryDisclosure.label, card.recoveryDisclosure.description] : []), ...card.claims.map((claim) => `${EVIDENCE_BASIS_LABELS[claim.evidence_basis]}: ${claim.text}`), ...(card.contribution ? contributionText(card.contribution) : [])]),
     ...(view.decisionPathway ? [] : ["", "POINTS STILL TO RESOLVE", ...(view.openQuestions.length ? view.openQuestions.map((item) => `- ${item.text}`) : ["- No specific open question was recorded"])]),
     "",
     "Evidence labels describe the source and certainty of the information. Firm-reported information has not been independently audited.",
@@ -87,8 +98,9 @@ export function formatBriefMarkdown(saved: SavedBrief, answers: DesiredClientAns
   const cards = view.cards.flatMap((card) => [
     `## ${card.title}`,
     "",
+    ...(card.recoveryDisclosure ? [`**${card.recoveryDisclosure.label}**`, "", card.recoveryDisclosure.description, ""] : []),
     ...card.claims.flatMap((claim) => [`**Evidence:** ${EVIDENCE_BASIS_LABELS[claim.evidence_basis]}`, "", claim.text, "", `**Sources:** ${claim.source_answer_ids.join(", ") || "No linked answer"}`, ""]),
-    ...(card.contribution ? [`**${card.contribution.label}:** ${card.contribution.amount} (${EVIDENCE_BASIS_LABELS[card.contribution.basis]}, ${card.contribution.scope})`, ""] : []),
+    ...(card.contribution ? [...contributionText(card.contribution).map((line, index) => index === 0 ? `**${line}**` : line), ""] : []),
     ...(card.opportunityBasis ? [`**Numerical and source result basis:** ${card.opportunityBasis}`, ""] : []),
   ]);
   const decisionPathway = view.decisionPathway ? [
@@ -113,10 +125,7 @@ export function formatBriefMarkdown(saved: SavedBrief, answers: DesiredClientAns
     "## Client definition",
     "",
     emphasizedMarkdown(view.definition, view.definitionComponents),
-    "",
-    "## Conditions and unresolved questions",
-    "",
-    ...(view.conditions.length ? view.conditions.map((condition) => `- ${condition}`) : ["No material constraint or uncertainty was recorded in these answers."]),
+    ...(view.conditions.length ? ["", "## Conditions and unresolved questions", "", ...view.conditions.map((condition) => `- ${condition}`)] : []),
     "",
     "## Progress review",
     "",
@@ -208,10 +217,10 @@ export function formatBriefHtml(saved: SavedBrief, answers: DesiredClientAnswers
   const legacy = !isCurrentBrief(saved.brief);
   const body = legacy ? legacyHtml(saved.brief as LegacyDesiredClientBriefV1, saved, answers) : (() => {
     const view = currentView(saved, answers);
-    const cards = view.cards.map((card) => `<section class="card"><h2>${escapeHtml(card.title)}</h2>${card.claims.map((claim) => `<div class="claim"><span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[claim.evidence_basis])}</span><p>${escapeHtml(claim.text)}</p></div>`).join("")}${card.contribution ? `<div class="calculated"><strong>${escapeHtml(card.contribution.label)}:</strong> ${escapeHtml(card.contribution.amount)} <span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[card.contribution.basis])}</span><small>Per matter</small></div>` : ""}${card.opportunityBasis ? `<p class="opportunity-basis">Numeric and source results: <span class="evidence">${escapeHtml(card.opportunityBasis)}</span></p>` : ""}</section>`).join("");
+    const cards = view.cards.map((card) => `<section class="card"><h2>${escapeHtml(card.title)}</h2>${card.recoveryDisclosure ? `<div class="recovery-disclosure"><strong>${escapeHtml(card.recoveryDisclosure.label)}</strong><p>${escapeHtml(card.recoveryDisclosure.description)}</p></div>` : ""}${card.claims.map((claim) => `<div class="claim"><span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[claim.evidence_basis])}</span><p>${escapeHtml(claim.text)}</p></div>`).join("")}${card.contribution ? contributionHtml(card.contribution) : ""}${card.opportunityBasis ? `<p class="opportunity-basis">Numeric and source results: <span class="evidence">${escapeHtml(card.opportunityBasis)}</span></p>` : ""}</section>`).join("");
     const decisionPathway = view.decisionPathway ? `<section class="decision-pathway" aria-labelledby="decision-pathway-title"><div class="decision-pathway-heading"><h2 id="decision-pathway-title">Client decision pathway</h2><span>Working interpretation · review with the firm</span></div><div class="decision-pathway-steps">${decisionPathwayEntries(view).map(([label, statement]) => `<article><h3>${escapeHtml(label)}</h3><p>${escapeHtml(statement.text)}</p><span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[statement.evidence_basis])}</span></article>`).join("")}</div></section>` : "";
     const questions = !view.decisionPathway && view.openQuestions.length ? `<section class="open-questions"><h2>Points still to resolve</h2><ul>${view.openQuestions.map((item) => `<li>${escapeHtml(item.text)} <span class="evidence">${escapeHtml(EVIDENCE_BASIS_LABELS[item.evidence_basis])}</span></li>`).join("")}</ul></section>` : "";
-    const conditions = `<section class="conditions"><h2>Conditions and unresolved questions</h2>${view.conditions.length ? `<ul>${view.conditions.map((condition) => `<li>${escapeHtml(condition)}</li>`).join("")}</ul>` : "<p>No material constraint or uncertainty was recorded in these answers.</p>"}</section>`;
+    const conditions = view.conditions.length ? `<section class="conditions"><h2>Conditions and unresolved questions</h2><ul>${view.conditions.map((condition) => `<li>${escapeHtml(condition)}</li>`).join("")}</ul></section>` : "";
     const progress = `<section class="progress"><h2>Progress review</h2><dl>${[["Measure",view.progressReview.metric],["Target",view.progressReview.target],["Review period",view.progressReview.reviewPeriod],["Status",view.progressReview.status]].map(([label,value])=>`<div><dt>${label}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl></section>`;
     return `<header><p class="eyebrow">CASELOAD SELECT · DESIRED CLIENT &amp; MATTER BLUEPRINT</p><h1>${escapeHtml(view.title)}</h1><p class="meta">${escapeHtml(view.modeLabel)} · Created ${escapeHtml(view.date)}</p><p class="status"><strong>${escapeHtml(view.status)}</strong><span>${escapeHtml(view.evidenceStatus)}</span></p></header><main><section class="definition"><h2>Client definition</h2><p>${emphasizedSentence(view.definition, view.definitionComponents)}</p></section>${conditions}${progress}${decisionPathway}<div class="cards">${cards}</div>${questions}<p class="footnote">${escapeHtml(REPORT_FOOTNOTE_COPY)}</p><details class="supporting"><summary>Supporting answers and sources</summary>${sourceMarkup(saved, answers)}</details></main>`;
   })();

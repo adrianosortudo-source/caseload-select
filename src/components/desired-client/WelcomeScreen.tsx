@@ -20,6 +20,10 @@ export function WelcomeScreen({ onStart, aiAvailable = null }: WelcomeScreenProp
       <p className="dc-welcome__description" data-ui-copy="body">
         {WELCOME_COPY.description}
       </p>
+      <div className="dc-welcome__positioning" data-ui-component-content="desired-client-welcome-positioning">
+        <p data-ui-copy="body">{WELCOME_COPY.definition}</p>
+        {WELCOME_COPY.ambition.map((paragraph) => <p key={paragraph} data-ui-copy="body">{paragraph}</p>)}
+      </div>
       {aiAvailable === false
         ? <p className="dc-welcome__availability" role="status" data-ui-copy="supporting">AI-assisted drafting and follow-up questions are currently unavailable. You can still complete the exercise and create a structured Desired Client Blueprint from your answers.</p>
         : <p className="dc-welcome__supporting" data-ui-copy="supporting">{WELCOME_COPY.aiDisclosure}</p>}

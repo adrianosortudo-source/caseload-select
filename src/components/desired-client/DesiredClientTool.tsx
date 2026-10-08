@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { COMMON_COPY, STORAGE_COPY } from "@/lib/desired-client/copy";
 
 import { buildDraftPreview } from "@/lib/desired-client/brief";
-import { validateAnalysisResult } from "@/lib/desired-client/output";
+import { validateAnalysisResponseResult } from "@/lib/desired-client/output";
 import { getEligibleClarificationCodes } from "@/lib/desired-client/clarifications";
 import { clearDraft, loadDraft, saveDraft, type DraftLoadResult } from "@/lib/desired-client/storage";
 import { advanceStage, answerClarification, answerInterviewClarification, applyAnalysis, applyStructuredFallback, beginAiRun, canEnterStage, commitComparison, editAnswers, enterTool, failAnalysis, initialToolState, markReviewed, moveToStage, recordAiAttempt, recordClarificationAttempt, showInterviewClarification, type ToolState } from "@/lib/desired-client/state";
@@ -29,6 +29,17 @@ export function aiAvailabilityFromProbe(responseOk:boolean,value:unknown):boolea
   if(!responseOk||!value||typeof value!=="object"||Array.isArray(value)||!("enabled" in value)||typeof (value as {enabled?:unknown}).enabled!=="boolean")return null;
   return (value as {enabled:boolean}).enabled;
 }
+export function providerCallLimitFromProbe(value:unknown):1|3|null {
+  if(!value||typeof value!=="object"||Array.isArray(value))return null;
+  const limit=(value as {providerCallLimit?:unknown}).providerCallLimit;
+  return limit===1||limit===3?limit:null;
+}
+export function providerCallUsageFromResponse(value:unknown):{providerCallsUsed:number;providerCallLimit:1|3}|null {
+  if(!value||typeof value!=="object"||Array.isArray(value))return null;
+  const body=value as {providerCallsUsed?:unknown;providerCallLimit?:unknown};
+  if(typeof body.providerCallsUsed!=="number"||!Number.isSafeInteger(body.providerCallsUsed)||(body.providerCallLimit!==1&&body.providerCallLimit!==3)||body.providerCallsUsed<0||body.providerCallsUsed>body.providerCallLimit)return null;
+  return {providerCallsUsed:body.providerCallsUsed,providerCallLimit:body.providerCallLimit};
+}
 export function reserveClarificationRequest(budget:ClarificationRequestBudget,runId:string):boolean {
   if(budget.runId!==runId){budget.runId=runId;budget.count=0;}
   if(budget.count>=6)return false;
@@ -45,7 +56,7 @@ export function advanceWithoutClarification(state:ToolState,runId:string,failure
 }
 export function clarificationNoticeFor(error:ToolState["error"],aiAvailable?:boolean|null):string {
   if(error==="focusChanged")return COMMON_COPY.workChanged;
-  if(error==="clarificationLimitReached")return "This draft has reached its limit for AI follow-up checks. Your answers are saved, and you can continue without another AI follow-up.";
+  if(error==="clarificationLimitReached")return "The local follow-up request budget has reached its limit. Your answers are saved. Continue without AI follow-up.";
   if(error==="clarificationUnavailable"&&aiAvailable===false)return "AI follow-ups are unavailable. Your answers are saved. Continue below.";
   if(error==="clarificationUnavailable")return "AI could not complete a follow-up this time. Your answers are saved, and you can continue.";
   return "";
@@ -59,15 +70,15 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
  const interviewRequestBudget=useRef<{runId:string|null;count:number}>({runId:null,count:0});
  const commit=useCallback((next:ToolState)=>{stateRef.current=next;setState(next);},[]);
  useEffect(()=>{if(initialized.current)return;initialized.current=true;try{const loaded=loadDraft(window.localStorage);setNotice(noticeFor(loaded.status,loaded.status==="ready"&&loaded.migrated));if(loaded.status==="ready")setSavedDraft(loaded.draft);if(loaded.status==="expired"||loaded.status==="corrupt")clearDraft(window.localStorage);}catch{setNotice(STORAGE_COPY.unavailable);}},[]);
- useEffect(()=>{const controller=new AbortController();void fetch("/api/tools/desired-client-matter/analyze",{method:"GET",cache:"no-store",signal:controller.signal}).then(async response=>{const value:unknown=await response.json();setAiAvailable(aiAvailabilityFromProbe(response.ok,value));}).catch(()=>{if(!controller.signal.aborted)setAiAvailable(null);});return()=>controller.abort();},[]);
- useEffect(()=>{if(state.view==="welcome"||!state.mode)return;try{const result=saveDraft(window.localStorage,state.answers,state.stage,state.savedBrief??undefined);if(result.status==="saved"){setSavedDraft(result.draft);if(state.storageMessage!=="saved")commit({...state,storageMessage:"saved"});}else if(state.storageMessage!==result.status)commit({...state,storageMessage:result.status});}catch{if(state.storageMessage!=="unavailable")commit({...state,storageMessage:"unavailable"});}},[state.answers,state.stage,state.savedBrief,state.mode,state.view,state.storageMessage,commit]);
+ useEffect(()=>{const controller=new AbortController();void fetch("/api/tools/desired-client-matter/analyze",{method:"GET",cache:"no-store",signal:controller.signal}).then(async response=>{const value:unknown=await response.json();setAiAvailable(aiAvailabilityFromProbe(response.ok,value));const limit=providerCallLimitFromProbe(value);if(limit)commit({...stateRef.current,providerCallLimit:limit});}).catch(()=>{if(!controller.signal.aborted)setAiAvailable(null);});return()=>controller.abort();},[commit]);
+ useEffect(()=>{if(state.view==="welcome"||!state.mode)return;try{const result=saveDraft(window.localStorage,state.answers,state.stage,state.savedBrief??undefined,Date.now(),state.reportNeedsRegeneration);if(result.status==="saved"){setSavedDraft(result.draft);if(stateRef.current.storageMessage!=="saved")commit({...stateRef.current,storageMessage:"saved"});}else if(stateRef.current.storageMessage!==result.status)commit({...stateRef.current,storageMessage:result.status});}catch{if(stateRef.current.storageMessage!=="unavailable")commit({...stateRef.current,storageMessage:"unavailable"});}},[state.answers,state.stage,state.savedBrief,state.mode,state.view,state.storageMessage,state.loading,state.error,state.reportNeedsRegeneration,state.reviewed,commit]);
  useEffect(()=>()=>{abortRef.current?.abort();},[]);
  useEffect(()=>{if(!embedded)return;const bridge=createDesiredClientEmbedBridge();if(!bridge)return;embedBridge.current=bridge;const root=document.querySelector(".dc-app");if(!(root instanceof HTMLElement))return;const stop=bridge.observeContent(root);return()=>{stop();embedBridge.current=null;};},[embedded]);
  useEffect(()=>{if(embedded)embedBridge.current?.announceStepChange();const frame=window.requestAnimationFrame(()=>{const heading=document.querySelector(".dc-app h1");if(!(heading instanceof HTMLElement))return;heading.setAttribute("tabindex","-1");heading.focus({preventScroll:true});if(!embedded&&state.view!=="welcome"){const reduced=window.matchMedia("(prefers-reduced-motion: reduce)").matches;heading.scrollIntoView({behavior:reduced?"auto":"smooth",block:"start"});}});return()=>window.cancelAnimationFrame(frame);},[embedded,state.view,state.stage,state.comparisonStep]);
  const start=(draft?:SavedDraft)=>{if(!draft&&savedDraft){setReplacePrompt(true);return;}abortRef.current?.abort();setNotice("");commit(enterTool(draft?{answers:draft.answers,stage:draft.currentStage as StageId,savedBrief:draft.savedBrief,reportNeedsRegeneration:draft.reportNeedsRegeneration}:undefined));};
  const updateAnswers=(edit:(a:import("@/lib/desired-client/types").DesiredClientAnswers)=>import("@/lib/desired-client/types").DesiredClientAnswers)=>{abortRef.current?.abort();commit(editAnswers(stateRef.current,edit));};
  const sendAnalysis=useCallback(async(snapshot:ToolState)=>{
-   if(!snapshot.reviewRunId||snapshot.requestCount<1||snapshot.requestCount>3||!snapshot.loading)return;
+   if(!snapshot.reviewRunId||snapshot.requestCount<1||snapshot.requestCount>3||snapshot.providerCallsUsed<0||snapshot.providerCallsUsed>=snapshot.providerCallLimit||!snapshot.loading)return;
     const requestId=crypto.randomUUID(),controller=new AbortController();abortRef.current=controller;setAnalysisReference(null);
     const reportFailure=(phase:string,status?:number,diagnostic?:{field:string;reason:string},code?:unknown)=>{
       setAnalysisReference(requestId);
@@ -76,32 +87,36 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
     };
    let timedOut=false;
    const timeout=window.setTimeout(()=>{timedOut=true;controller.abort();},27000);
-   const request:AnalysisRequestEnvelope={schemaVersion:4,operation:"generate",requestId,answerRevision:snapshot.answers.revision,reviewRunId:snapshot.reviewRunId,analysisIndex:(snapshot.requestCount-1) as 0|1|2,aiConsent:true,answers:snapshot.answers,clarifications:[]};
+   const request:AnalysisRequestEnvelope={schemaVersion:4,operation:"generate",requestId,answerRevision:snapshot.answers.revision,reviewRunId:snapshot.reviewRunId,analysisIndex:snapshot.providerCallsUsed as 0|1|2,aiConsent:true,answers:snapshot.answers,clarifications:[]};
    const sameRequest=(current:ToolState)=>current.reviewRunId===snapshot.reviewRunId&&current.answers.revision===snapshot.answers.revision&&current.requestCount===snapshot.requestCount;
    try{
      const response=await fetch("/api/tools/desired-client-matter/analyze",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(request),signal:controller.signal});
      let payload:unknown;
      try{payload=await response.json();}catch{payload=null;}
-     const current=stateRef.current;
-     if(controller.signal.aborted||!sameRequest(current))return;
+     const beforeUsage=stateRef.current;
+     if(controller.signal.aborted||!sameRequest(beforeUsage))return;
+     const usage=providerCallUsageFromResponse(payload);
+     const current=usage?{...beforeUsage,...usage}:beforeUsage;
+     if(usage)commit(current);
       if(!payload||typeof payload!=="object"||!("ok" in payload)) { reportFailure("response_shape",response.status);commit(failAnalysis(current,"invalid"));return; }
      if(!response.ok||payload.ok!==true){
         const failure=payload as Partial<AnalysisFailureEnvelope>;
         const code=failure.error?.code;
         reportFailure("api_error",response.status,failure.error?.diagnostic,code);
        if(code==="AI_DISABLED")setAiAvailable(false);
-       const retry=(code==="AI_UNAVAILABLE"||code==="INVALID_AI_OUTPUT")&&current.requestCount<3;
-       commit(failAnalysis(current,code==="INVALID_AI_OUTPUT"?"invalid":"unavailable",retry));return;
+       const retry=(code==="AI_UNAVAILABLE"||code==="INVALID_AI_OUTPUT"||code==="ANALYSIS_RUN_BUSY"||code==="ANALYSIS_RUN_SEQUENCE_CONFLICT")&&current.requestCount<3&&current.providerCallsUsed<current.providerCallLimit;
+       const error=code==="INVALID_AI_OUTPUT"?"invalid":code==="PROVIDER_CALL_LIMIT_REACHED"?"providerCallLimitReached":"unavailable";
+       commit(failAnalysis(current,error,retry));return;
      }
      const success=payload as AnalysisSuccessEnvelope;
-      if(success.requestId!==requestId||success.answerRevision!==request.answerRevision||success.reviewRunId!==request.reviewRunId){reportFailure("response_identity",response.status);commit(failAnalysis(current,"invalid",current.requestCount<3));return;}
+      if(success.requestId!==requestId||success.answerRevision!==request.answerRevision||success.reviewRunId!==request.reviewRunId){reportFailure("response_identity",response.status);commit(failAnalysis(current,"invalid",current.requestCount<3&&current.providerCallsUsed<current.providerCallLimit));return;}
       let validationFailure:{field:string;reason:string}|undefined;
-      const result=validateAnalysisResult(success.result,current.answers,getEligibleClarificationCodes(current.answers,current.askedClarifications).slice(0,1),failure=>{validationFailure??={field:failure.field,reason:failure.reason};});
-      if(!result){reportFailure("client_validation",response.status,validationFailure);commit(failAnalysis(current,"invalid",current.requestCount<3));return;}
+      const result=validateAnalysisResponseResult(success.result,current.answers,getEligibleClarificationCodes(current.answers,current.askedClarifications).slice(0,1),failure=>{validationFailure??={field:failure.field,reason:failure.reason};});
+      if(!result){reportFailure("client_validation",response.status,validationFailure);commit(failAnalysis(current,"invalid",current.requestCount<3&&current.providerCallsUsed<current.providerCallLimit));return;}
      commit(applyAnalysis(current,result));
    }catch{
      const current=stateRef.current;
-      if(sameRequest(current)&&(timedOut||!controller.signal.aborted)){reportFailure(timedOut?"timeout":"network");commit(failAnalysis(current,"unavailable",current.requestCount<3));}
+      if(sameRequest(current)&&(timedOut||!controller.signal.aborted)){reportFailure(timedOut?"timeout":"network");commit(failAnalysis(current,"unavailable",current.requestCount<3&&current.providerCallsUsed<current.providerCallLimit));}
    }finally{window.clearTimeout(timeout);if(abortRef.current===controller)abortRef.current=null;}
  },[commit]);
  const requestStageClarification=useCallback(async()=>{
@@ -148,7 +163,7 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
  const createAnother=()=>{clearStored();};
  const startReplacement=()=>{setReplacePrompt(false);const cleared=clearStored();if(cleared)commit(enterTool());};
  const resetNotice=()=>setNotice("");
- const navigateStage=(stage:StageId)=>{abortRef.current?.abort();const moved=moveToStage(stateRef.current,stage);commit({...moved,reviewRunId:null,loading:false,retryAllowed:false});};
+ const navigateStage=(stage:StageId)=>{abortRef.current?.abort();const moved=moveToStage(stateRef.current,stage);commit({...moved,reviewRunId:null,providerCallsUsed:0,loading:false,retryAllowed:false});};
  const editStage=(stage:1|2|3|4|5|6)=>navigateStage(stage);
  const nextStage=()=>{if(stateRef.current.clarificationLoading)return;void requestStageClarification();};
  const backStage=()=>{const s=stateRef.current;if(s.stage===1){commit({...s,view:"welcome",mode:null});return;}commit(moveToStage(s,(s.stage-1) as StageId));};
@@ -171,9 +186,9 @@ export default function DesiredClientTool({embedded=false}:{embedded?:boolean}) 
     {state.view==="interviewClarification"&&state.interviewPrompt&&<InterviewClarificationStep prompt={state.interviewPrompt} onAnswer={onInterviewAnswer} onSkip={onInterviewSkip}/>}
     {state.view==="comparison"&&state.answers.focus.area&&<ComparisonStep area={state.answers.focus.area} draft={state.comparisonDraft} step={state.comparisonStep} onDraft={comparisonDraft} onStep={step=>commit({...stateRef.current,comparisonStep:step})} onBack={abandonComparison} onCommit={onCompareCommit}/>}
     {state.view==="clarification"&&state.activeClarification&&<ClarificationStep code={state.activeClarification} onAnswer={onAnswerClarification}/>}
-     {state.view==="review"&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration} failureReference={analysisReference}/>}
-    {state.view==="brief"&&state.savedBrief&&<BriefView saved={state.savedBrief} answers={state.answers} dismissedCode={state.dismissedCode} reviewed={state.reviewed} onReview={value=>commit(markReviewed(stateRef.current,value))} onEdit={editStage} onAnother={createAnother} onClear={clearStored} storageWarning={state.storageMessage==="unavailable"}/>}
-     {state.view==="brief"&&!state.savedBrief&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration} failureReference={analysisReference}/>}
+     {state.view==="review"&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration} providerCallsUsed={state.providerCallsUsed} providerCallLimit={state.providerCallLimit} failureReference={analysisReference}/>}
+    {state.view==="brief"&&state.savedBrief&&<BriefView saved={state.savedBrief} answers={state.answers} dismissedCode={state.dismissedCode} reviewed={state.reviewed} onReview={value=>commit(markReviewed(stateRef.current,value))} onEdit={editStage} onAnother={createAnother} onClear={clearStored} onRetry={retryAI} analysisLoading={state.loading} analysisError={state.error==="unavailable"||state.error==="invalid"||state.error==="providerCallLimitReached"?state.error:""} retryAllowed={state.retryAllowed} providerCallsUsed={state.providerCallsUsed} providerCallLimit={state.providerCallLimit} storageWarning={state.storageMessage==="unavailable"}/>}
+     {state.view==="brief"&&!state.savedBrief&&<ReviewStep answers={state.answers} onCreate={onPrimary} onRetry={retryAI} onCreateStructured={createStructured} onEdit={editStage} briefNeedsUpdate={state.briefNeedsUpdate} loading={state.loading} error={state.error==="clarificationUnavailable"||state.error==="clarificationLimitReached"?"":state.error} retryAllowed={state.retryAllowed} legacyBriefReplaced={state.legacyBriefReplaced} aiAvailable={aiAvailable!==false} reportNeedsRegeneration={state.reportNeedsRegeneration} providerCallsUsed={state.providerCallsUsed} providerCallLimit={state.providerCallLimit} failureReference={analysisReference}/>}
    </div>
    {embedded&&<a className="dc-open-window" href="/tools/desired-client-matter" target="_blank" rel="noreferrer">Open the tool in its own window</a>}
  </div>;

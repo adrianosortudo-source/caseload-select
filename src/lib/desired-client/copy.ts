@@ -1,6 +1,13 @@
 export const WELCOME_COPY = {
   heading: "Define your desired client",
   description: "A firm can have a full calendar and still be building the wrong practice. This guided exercise helps you choose the client situation and matter you would want more of, explain why it suits your firm, and set a direction you can use in marketing.",
+  definition: "The Desired Client brings the specific legal mandate the firm most wants more of because it offers its strongest credible combination of fees, margin, return on lawyer time and repeatable commercial value.",
+  ambition: [
+    "That must be an ambitious target, not whatever is easiest to deliver today.",
+    "Capacity constraints identify what must change; they shouldn't automatically lower the ambition.",
+    "Highest fee and highest margin are not necessarily the same.",
+    "We should deliberately seek the strongest opportunity, then substantiate why it is superior rather than assume the biggest number wins.",
+  ],
   time: "Plan for about 10 minutes for a first draft. Comparing two types of work or adding detail will take longer.",
   process: "Six guided sections take you from the practice you want to build to the client situation, matter, value, fit signals, opportunity and measure of success. Choose from examples, write your own answer, or mark something as not yet known.",
   preparation: "Think about work you would gladly handle again, what the team put into it, and what made it worthwhile. Records are not required. You can share estimates or leave figures unknown.",
@@ -17,7 +24,7 @@ export const STORAGE_COPY = {
   unavailable: "This browser could not save your progress. You can still finish and download your answers.",
   expired: "Your saved draft expired after seven days without changes. Start a new draft to continue.",
   invalid: "Your saved draft could not be restored. Start a new draft to continue.",
-  briefNeedsRefresh: "A previous blueprint could not be reopened after a version update. Your answers are still saved. Create a new blueprint from them, then review it before use.",
+  briefNeedsRefresh: "A previous blueprint is no longer available as a current report. Your answers are still saved. Create a new blueprint from them, then review it before use.",
   resume: "Continue my saved draft",
   new: "Start a new draft",
   clearSaved: "Clear saved draft",
@@ -46,6 +53,9 @@ export const COMMON_COPY = {
   aiUnavailable: "AI could not create the blueprint just now. Your answers are still here. Retry or continue with a clearly labelled structured draft.",
   aiInvalid: "AI did not return a usable blueprint. Your answers are still here. Retry or continue with a clearly labelled structured draft.",
   structuredInvalid: "The structured blueprint could not be assembled from these answers. Your answers are still here. Review the matter details and try again.",
+  providerCallLimitReached: "The server has used the maximum AI generation calls for this review. Your answers and any saved blueprint remain available.",
+  previousBlueprintAvailable: "The saved blueprint and its review status remain available while this new draft is attempted.",
+  providerCallsUsed: (used: number, limit: number) => `Server generation calls used for this review: ${used} of ${limit}.`,
   briefChanged: "Your answers changed. Create the blueprint again so it reflects the updated direction.",
   workChanged: "Your selected work changed. Review the client situation, value, fit, opportunity and repeatability sections again.",
 } as const;

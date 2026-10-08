@@ -1,7 +1,7 @@
 "use client";
 
 import { REVIEW_COPY, COMMON_COPY, WELCOME_COPY, STORAGE_COPY } from "@/lib/desired-client/copy";
-import { AREA_CATALOG, CAPACITY_LABELS, COLLECTED_FEE_LABELS, CONDITION_LABELS, DECISION_NEED_LABELS, DEVELOPMENT_NEED_LABELS, FIT_SIGNAL_LABELS, GOAL_LABELS, LESS_WORK_REASON_LABELS, LIMIT_LABELS, PAYMENT_LABELS, PRACTICE_EXPERIENCE_LABELS, PRACTICE_DIRECTION_LABELS, REASON_LABELS, TEAM_HOURS_LABELS, TIMING_LABELS, TRIGGER_LABELS, getFeeEffortLabel, getRoleLabel, getWorkLabel } from "@/lib/desired-client/catalog";
+import { AREA_CATALOG, CAPACITY_LABELS, CLIENT_INSIGHT_BASIS_LABELS, COLLECTED_FEE_LABELS, CONDITION_LABELS, DECISION_NEED_LABELS, DEVELOPMENT_NEED_LABELS, FIT_SIGNAL_LABELS, GOAL_LABELS, LESS_WORK_REASON_LABELS, LIMIT_LABELS, PAYMENT_LABELS, PRACTICE_EXPERIENCE_LABELS, PRACTICE_DIRECTION_LABELS, REASON_LABELS, TEAM_HOURS_LABELS, TIMING_LABELS, TRIGGER_LABELS, getFeeEffortLabel, getRoleLabel, getWorkLabel } from "@/lib/desired-client/catalog";
 import { STAGE_DEFINITIONS, getMissingFieldsForStage } from "@/lib/desired-client/screens";
 import { createAnswersDownload } from "@/lib/desired-client/export";
 import { calculateContribution } from "@/lib/desired-client/economics";
@@ -14,9 +14,9 @@ const CLIENT_CHOICE:Record<string,string>={relevant_experience:"Experience with 
 const FIRM_STRENGTH:Record<string,string>={matter_experience:"Relevant experience with this matter",specialist_knowledge:"Specific knowledge the matter calls for",clear_advice:"Clear explanation of options and consequences",practical_approach:"A practical approach to the client's goal",responsive_service:"A service approach that fits the client's needs",language_or_community:"Language or community-informed service",other:"Another strength",unknown:"Not established yet"};
 const filled=(...values:Array<string|null|undefined>)=>values.filter((value):value is string=>Boolean(value?.trim()));
 const valueLabel=(value:string|null|undefined,labels:Record<string,string>)=>value?labels[value]??value:"";
-export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,briefNeedsUpdate,loading,error,retryAllowed,legacyBriefReplaced=false,aiAvailable=true,reportNeedsRegeneration=false,failureReference=null}:{
+export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,briefNeedsUpdate,loading,error,retryAllowed,legacyBriefReplaced=false,aiAvailable=true,reportNeedsRegeneration=false,providerCallsUsed=0,providerCallLimit=3,failureReference=null}:{
   answers:DesiredClientAnswers; onCreate:()=>void; onRetry:()=>void; onEdit:(stage:Stage)=>void; onCreateStructured?:()=>void;
-  briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged";retryAllowed:boolean;legacyBriefReplaced?:boolean;aiAvailable?:boolean;reportNeedsRegeneration?:boolean;failureReference?:string|null;
+  briefNeedsUpdate:boolean; loading:boolean; error:""|"unavailable"|"invalid"|"structuredInvalid"|"changed"|"focusChanged"|"providerCallLimitReached";retryAllowed:boolean;legacyBriefReplaced?:boolean;aiAvailable?:boolean;reportNeedsRegeneration?:boolean;providerCallsUsed?:number;providerCallLimit?:number;failureReference?:string|null;
 }) {
   const area=answers.focus.area;
   const work=answers.focus.work==="other"?answers.focus.work_other:area&&answers.focus.work?getWorkLabel(area,answers.focus.work):"";
@@ -28,6 +28,8 @@ export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,b
     answers.value.collected_fee?COLLECTED_FEE_LABELS[answers.value.collected_fee]:"",
     answers.value.team_hours?TEAM_HOURS_LABELS[answers.value.team_hours]:"",
     answers.value.payment?PAYMENT_LABELS[answers.value.payment]:"",
+    answers.value.payment_context.trim()?`Payment context: ${answers.value.payment_context}`:"",
+    answers.value.payment_context.trim()?`Payment context source: ${answers.value.payment_context_basis?CLIENT_INSIGHT_BASIS_LABELS[answers.value.payment_context_basis]:"Basis not specified"}`:"",
     answers.value.fee_amount?(answers.value.currency?answers.value.currency+" ":"")+answers.value.fee_amount+" ("+valueLabel(answers.value.amount_basis,{"recorded":"recorded","estimated":"estimated","unknown":"basis unknown"})+")":"",
     answers.value.direct_cost_amount?"Direct cost: "+(answers.value.currency?answers.value.currency+" ":"")+answers.value.direct_cost_amount:"",
     valueLabel(answers.value.amount_scope,{per_matter:"Amounts are per matter",range:"Amounts are ranges across matters",other:"Amount basis described by the firm"}),
@@ -66,10 +68,12 @@ export function ReviewStep({answers,onCreate,onRetry,onEdit,onCreateStructured,b
     <h1 data-ui-copy="heading">{REVIEW_COPY.heading}</h1>
     {reportNeedsRegeneration&&<p className="dc-alert" role="status" data-ui-copy="supporting">{STORAGE_COPY.briefNeedsRefresh}</p>}
     <p data-ui-copy="body">{REVIEW_COPY.note}</p>
-    {briefNeedsUpdate&&<p className="dc-alert" data-ui-copy="body">{COMMON_COPY.briefChanged}</p>}
+    {briefNeedsUpdate&&!reportNeedsRegeneration&&<p className="dc-alert" data-ui-copy="body">{COMMON_COPY.briefChanged}</p>}
     {legacyBriefReplaced&&<p className="dc-alert" data-ui-copy="body">{WELCOME_COPY.legacyBriefReplaced}</p>}
     {error==="unavailable"&&<p className="dc-alert" role="alert" data-ui-copy="body">{COMMON_COPY.aiUnavailable}</p>}
     {error==="invalid"&&<p className="dc-alert" role="alert" data-ui-copy="body">{COMMON_COPY.aiInvalid}</p>}
+    {error==="providerCallLimitReached"&&<p className="dc-alert" role="alert" data-ui-copy="body">{COMMON_COPY.providerCallLimitReached}</p>}
+    {providerCallsUsed>0&&<p className="dc-analysis-usage" role="status" data-ui-copy="supporting">{COMMON_COPY.providerCallsUsed(providerCallsUsed,providerCallLimit)}</p>}
     {(error==="unavailable"||error==="invalid")&&failureReference&&<p className="dc-analysis-reference" data-ui-copy="supporting">If you contact us about this, include reference <code>{failureReference}</code>.</p>}
     {error==="structuredInvalid"&&<p className="dc-alert" role="alert" data-ui-copy="body">{COMMON_COPY.structuredInvalid}</p>}
     <section className="dc-review__definition-check" aria-label="Practice direction confirmation summary">

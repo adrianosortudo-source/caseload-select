@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import { buildBlueprintViewModel, EVIDENCE_BASIS_LABELS, REPORT_EDIT_LINKS } from "@/lib/desired-client/blueprint";
 import { createHtmlDownload, createProfileDownload } from "@/lib/desired-client/export";
-import { REPORT_FOOTNOTE_COPY } from "@/lib/desired-client/copy";
+import { COMMON_COPY, REPORT_FOOTNOTE_COPY, REVIEW_COPY } from "@/lib/desired-client/copy";
 import type { ClarificationCode, DesiredClientAnswers, DesiredClientBrief, DesiredClientBriefV4, SavedBrief } from "@/lib/desired-client/types";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 
@@ -62,6 +62,12 @@ export function BriefView({
   onEdit,
   onAnother,
   onClear,
+  onRetry = () => undefined,
+  analysisLoading = false,
+  analysisError = "",
+  retryAllowed = false,
+  providerCallsUsed = 0,
+  providerCallLimit = 3,
   storageWarning,
 }: {
   saved: SavedBrief;
@@ -72,6 +78,12 @@ export function BriefView({
   onEdit: (stage: 1 | 2 | 3 | 4 | 5 | 6) => void;
   onAnother: () => void;
   onClear: () => void;
+  onRetry?: () => void;
+  analysisLoading?: boolean;
+  analysisError?: "" | "unavailable" | "invalid" | "providerCallLimitReached";
+  retryAllowed?: boolean;
+  providerCallsUsed?: number;
+  providerCallLimit?: number;
   storageWarning: boolean;
 }) {
   const [copied, setCopied] = useState(false);
@@ -86,6 +98,7 @@ export function BriefView({
     mode: saved.mode,
     generatedAt: saved.generatedAt,
     wordingReviewed: reviewed,
+    recoveredSections: saved.recoveredSections,
     openClarificationCode: saved.openClarificationCode,
   }) : null, [saved, answers, reviewed, currentBrief]);
   const text = createProfileDownload(saved, answers).content;
@@ -123,6 +136,12 @@ export function BriefView({
         : <><p className="dc-eyebrow" data-ui-copy="supporting">CASELOAD SELECT · DESIRED CLIENT &amp; MATTER BLUEPRINT</p><h1 data-ui-copy="heading">{model!.title}</h1><p className="dc-report-meta" data-ui-copy="supporting">{model!.modeLabel} · Created {model!.date}</p><div className="dc-report-status"><strong data-ui-copy="supporting">{model!.status}</strong><span data-ui-copy="supporting">{model!.evidenceStatus}</span></div></>}
     </header>
     {storageWarning && <p className="dc-alert dc-screen-only" data-ui-copy="supporting">This browser could not save your progress. You can still finish and download your blueprint.</p>}
+    {analysisLoading && <p className="dc-alert dc-screen-only" role="status" data-ui-copy="supporting">{COMMON_COPY.previousBlueprintAvailable}</p>}
+    {analysisError === "unavailable" && <p className="dc-alert dc-screen-only" role="alert" data-ui-copy="supporting">{COMMON_COPY.aiUnavailable} {COMMON_COPY.previousBlueprintAvailable}</p>}
+    {analysisError === "invalid" && <p className="dc-alert dc-screen-only" role="alert" data-ui-copy="supporting">{COMMON_COPY.aiInvalid} {COMMON_COPY.previousBlueprintAvailable}</p>}
+    {analysisError === "providerCallLimitReached" && <p className="dc-alert dc-screen-only" role="alert" data-ui-copy="supporting">{COMMON_COPY.providerCallLimitReached}</p>}
+    {(analysisLoading || analysisError) && <p className="dc-report-meta dc-screen-only" role="status" data-ui-copy="supporting">{COMMON_COPY.providerCallsUsed(providerCallsUsed, providerCallLimit)}</p>}
+    {analysisError && retryAllowed && <div className="dc-actions dc-screen-only"><button type="button" className="dc-button dc-button--primary" onClick={onRetry}>{REVIEW_COPY.tryAgain}</button></div>}
     {!legacy && saved.refreshedFrom && <p className="dc-alert dc-report-refresh" role="status" data-ui-component-content="desired-client-report-refresh" data-ui-copy="supporting">{saved.refreshedFrom.mode === "ai" ? "This saved AI blueprint was revalidated from its saved answers" : "This saved structured blueprint was rebuilt from its saved answers"} on {new Date(saved.generatedAt).toLocaleDateString("en-CA")}. {saved.refreshedFrom.mode === "structured" ? "No AI generation was used. " : "No new AI request was made. "}The wording changed during the refresh, so review it again. The earlier version was {saved.refreshedFrom.wordingReviewed ? "marked as reviewed" : "not marked as reviewed"}. {reviewed ? "You have reviewed the refreshed wording." : "Review this refreshed wording before using it in marketing."}</p>}
     {legacy && report ? <>
       <section className="dc-report-definition" data-ui-component-content="desired-client-legacy-definition"><h2 data-ui-copy="supporting">Desired client portrait</h2><p data-ui-copy="body">{report.portrait.text}</p><span className="dc-evidence-label">Original classification: {report.portrait.kind}</span></section>
@@ -139,11 +158,19 @@ export function BriefView({
         <h2 data-ui-copy="supporting">Client definition</h2>
         <p data-ui-copy="body">{definitionSegments(model.definition, model.definitionComponents)}</p>
       </section>
-      <section className="dc-report-conditions" aria-labelledby="dc-conditions-title" data-ui-component-content="desired-client-conditions">
-        <h2 id="dc-conditions-title" data-ui-copy="heading">Conditions to resolve</h2>
-        <p data-ui-copy="supporting">Resolve these constraints or evidence gaps before treating this direction as ready to grow.</p>
-        {model.conditions.length ? <ul>{model.conditions.map((condition, index) => <li key={`${index}-${condition}`} data-ui-copy="body">{condition}</li>)}</ul> : <p data-ui-copy="supporting">No material constraint or uncertainty was recorded in these answers.</p>}
+      <section className="dc-definition-review dc-screen-only" aria-labelledby="dc-definition-review-title" data-ui-component-content="desired-client-definition-review">
+        <h2 id="dc-definition-review-title" data-ui-copy="heading">Does this describe the clients and work your firm wants more of?</h2>
+        <div className="dc-definition-review__actions">
+          <button className="dc-button dc-button--primary" type="button" onClick={() => onReview(true)}>{reviewed ? "This definition reflects our direction" : "Yes, this reflects our direction"}</button>
+          <button className="dc-button dc-button--secondary" type="button" onClick={() => onEdit(2)}>Edit the definition</button>
+        </div>
+        <p className="dc-report-review__note" data-ui-copy="supporting">Confirming this wording records a review of the definition only. It does not verify the firm&apos;s experience, economics, market demand, or proposed target.</p>
       </section>
+      {model.conditions.length > 0 && <section className="dc-report-conditions" aria-labelledby="dc-conditions-title" data-ui-component-content="desired-client-conditions">
+        <h2 id="dc-conditions-title" data-ui-copy="heading">Conditions and unresolved questions</h2>
+        <p data-ui-copy="supporting">Resolve these constraints or evidence gaps before treating this direction as ready to grow.</p>
+        <ul>{model.conditions.map((condition, index) => <li key={`${index}-${condition}`} data-ui-copy="body">{condition}</li>)}</ul>
+      </section>}
       <section className="dc-report-progress" aria-labelledby="dc-progress-title" data-ui-component-content="desired-client-progress-review">
         <h2 id="dc-progress-title" data-ui-copy="heading">Progress review</h2>
         <dl>
@@ -167,12 +194,20 @@ export function BriefView({
       <div className="dc-report-cards" data-ui-component-content="desired-client-blueprint-cards">
         {model.cards.map((card) => <section className="dc-report-card" key={card.id} data-ui-component-content={`desired-client-card-${card.id}`}>
           <h2 data-ui-copy="heading">{card.title}</h2>
+          {card.recoveryDisclosure && <div className="dc-report-recovery" data-ui-component-content="desired-client-recovery-disclosure">
+            <strong data-ui-copy="supporting">{card.recoveryDisclosure.label}</strong>
+            <p className="text-pretty" data-ui-copy="supporting">{card.recoveryDisclosure.description}</p>
+          </div>}
           <div className="dc-report-card__claims">
             {card.claims.map((claim, index) => <div className="dc-report-claim" key={`${card.id}-${index}`}>
               <p data-ui-copy="body">{claim.text}</p>
               <span className="dc-evidence-label" data-ui-copy="supporting">{EVIDENCE_BASIS_LABELS[claim.evidence_basis]}</span>
             </div>)}
-            {card.contribution && <div className="dc-calculated-metric"><strong>{card.contribution.label}</strong><span>{card.contribution.amount}</span><small>{EVIDENCE_BASIS_LABELS[card.contribution.basis]} · {card.contribution.scope}</small></div>}
+            {card.contribution && <div className="dc-calculated-metric">
+              <strong>{card.contribution.label}</strong><span>{card.contribution.amount}</span>
+              {card.contribution.margin ? <div className="dc-calculated-metric__margin"><strong>{card.contribution.margin.label}</strong><span>{card.contribution.margin.amount}</span></div> : <small>Contribution margin not calculated because collected fees are zero.</small>}
+              <small>{EVIDENCE_BASIS_LABELS[card.contribution.basis]} · {card.contribution.scope}. Calculated as collected fees less direct delivery costs; overhead and acquisition costs are excluded. This is not net profit.</small>
+            </div>}
             {card.opportunityBasis && <span className="dc-evidence-label dc-opportunity-basis">Numeric and source results: {card.opportunityBasis}</span>}
           </div>
         </section>)}
@@ -193,11 +228,10 @@ export function BriefView({
       </details>
     </>}
 
-    <div className="dc-report-review dc-screen-only">
+    {legacy && <div className="dc-report-review dc-screen-only">
       <p data-ui-copy="body">Have you reviewed this draft wording?</p>
-      <label className="dc-reviewed"><input type="checkbox" checked={reviewed} onChange={(event) => onReview(event.currentTarget.checked)} /><span>{legacy ? "I have reviewed this original report wording." : "I have reviewed this draft wording."}</span></label>
-      {!legacy && <p className="dc-report-review__note" data-ui-copy="supporting">Reviewing wording does not verify the firm&apos;s experience, establish its economics, or approve a proposed target. The firm remains responsible for those decisions.</p>}
-    </div>
+      <label className="dc-reviewed"><input type="checkbox" checked={reviewed} onChange={(event) => onReview(event.currentTarget.checked)} /><span>I have reviewed this original report wording.</span></label>
+    </div>}
     {copied && <p role="status" className="dc-screen-only">Profile copied.</p>}
     {copyFailed && <><p role="status" className="dc-screen-only">The profile could not be copied automatically. Select and copy the profile text below.</p><textarea className="dc-screen-only" ref={fallback} aria-label="Select and copy profile" readOnly value={text} /></>}
     {htmlFailed && <p className="dc-alert dc-screen-only" role="status">The HTML report could not be prepared. Your answers are still saved.</p>}
@@ -208,6 +242,6 @@ export function BriefView({
     </div>
     {!legacy && <div className="dc-actions dc-report-edit-links dc-screen-only" aria-label="Edit blueprint answers">{REPORT_EDIT_LINKS.map(([stage, label]) => <button key={stage} className="dc-button dc-button--secondary" onClick={() => onEdit(stage)}>{label}</button>)}</div>}
     <div className="dc-actions dc-screen-only"><button className="dc-button dc-button--secondary" onClick={() => setConfirm("another")}>Start another</button><button className="dc-button dc-button--secondary" onClick={() => setConfirm("clear")}>Clear draft</button></div>
-    {confirm && <ConfirmationDialog open onClose={() => setConfirm(null)} labelledBy="dc-confirm-title"><h2 id="dc-confirm-title">{confirm === "another" ? "Replace the draft saved in this browser?" : "Clear the draft and blueprint saved in this browser?"}</h2>{confirm === "another" && <p>Download your blueprint first if you want to keep a copy.</p>}<button className="dc-button dc-button--primary" onClick={() => { confirm === "another" ? onAnother() : onClear(); setConfirm(null); }}>{confirm === "another" ? "Replace draft" : "Clear draft"}</button><button className="dc-button dc-button--secondary" onClick={() => setConfirm(null)}>Keep draft</button></ConfirmationDialog>}
+    {confirm && <ConfirmationDialog open onClose={() => setConfirm(null)} labelledBy="dc-confirm-title"><h2 id="dc-confirm-title">{confirm === "another" ? "Replace the draft saved in this browser?" : "Clear the draft and blueprint saved in this browser?"}</h2>{confirm === "another" && <p>Download your blueprint first if you want to keep a copy.</p>}<button className="dc-button dc-button--primary" onClick={() => { if (confirm === "another") onAnother(); else onClear(); setConfirm(null); }}>{confirm === "another" ? "Replace draft" : "Clear draft"}</button><button className="dc-button dc-button--secondary" onClick={() => setConfirm(null)}>Keep draft</button></ConfirmationDialog>}
   </article>;
 }

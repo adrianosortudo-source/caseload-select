@@ -199,6 +199,12 @@ export const TEAM_HOURS_LABELS: Record<TeamHoursId, string> = {
 export const PAYMENT_LABELS: Record<PaymentId, string> = {
   predictable: "Usually predictable", varies: "Depends on the matter", uncertain: "Often uncertain", unknown: "Not established",
 };
+export const CLIENT_INSIGHT_BASIS_LABELS = {
+  client_feedback: "Clients have told the firm",
+  firm_observation: "The firm has observed this",
+  firm_hypothesis: "The firm is testing a hypothesis",
+  unknown: "Not established",
+} as const;
 export const CAPACITY_LABELS: Record<CapacityId, string> = {
   room: "Yes, with the current team", limited: "A limited amount", change: "Only after building capacity",
   unknown: "We need to establish that",
@@ -321,7 +327,7 @@ function labelReference(path: AnswerReferencePath, value: unknown, answers: Desi
   if (path === "value.team_hours") return TEAM_HOURS_LABELS[value as TeamHoursId];
   if (path === "value.payment") return PAYMENT_LABELS[value as PaymentId];
   if (path === "client.goals") return GOAL_LABELS[value as GoalId];
-  if (path === "client.choice_basis" || path === "client.pathway_basis") return ({ client_feedback:"Clients have told the firm", firm_observation:"The firm has observed this", firm_hypothesis:"The firm is testing a hypothesis", unknown:"Not established" } as Record<string,string>)[value] ?? value;
+  if (path === "client.choice_basis" || path === "client.pathway_basis" || path === "value.payment_context_basis") return CLIENT_INSIGHT_BASIS_LABELS[value as keyof typeof CLIENT_INSIGHT_BASIS_LABELS] ?? value;
   if (path.startsWith("interview.followups.")) return value === "unknown" ? "Not established" : value;
   if (path === "client.choice_priorities") return ({
     relevant_experience:"Relevant matter experience", clear_options:"Clear options", clear_fees:"Clear scope and fees", communication:"Clear communication", availability:"Timely availability", approach:"Suitable approach", language:"Preferred language", community:"Community understanding", other:"Another client priority", unknown:"Not established",
@@ -381,6 +387,7 @@ export function resolveAnswerReference(path: AnswerReferencePath, answers: Desir
   return { value: value?.trim() || null, present, unknown };
 }
 export function getAnswerLabel(path: AnswerReferencePath, answers: DesiredClientAnswers): string | null {
+  if (path === "value.payment_context_basis" && answers.value.payment_context.trim() && !answers.value.payment_context_basis) return "Basis not specified";
   return resolveAnswerReference(path, answers).value;
 }
 export function getCandidateOptionLabel(candidate: ComparisonCandidate, field: keyof ComparisonCandidate, area: AreaId): string {

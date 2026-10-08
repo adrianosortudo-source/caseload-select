@@ -4,14 +4,14 @@ import type { DesiredClientAnswers } from "./types";
 
 export function emptyAnswers(): DesiredClientAnswers {
   return {
-    schema_version: "dcm-v3.2", revision: 0,
+    schema_version: "dcm-v3.3", revision: 0,
     interview: { ai_clarification_consent: false, clarification_count: 0, clarified_stages: [], followups: [] },
     focus: { area: null, work: null, work_other: "", service_area: "", certainty: null, route: null, comparison: null },
     practice: { direction: null, firm_type: "", capability: "", enjoys: "", experience: null, development_needs: [], client_strength: null, client_strength_effect: "", client_strength_support: "" },
     client_context: { geography: "", relevant_circumstances: "", community_focus: "", language_service_needs: "", repeat_matter_pattern: "", discovery_behaviour: "" },
     situation: { trigger: null, timing: null, role: null, role_other: "", contact: null },
     client: { goals: [], goal_detail: "", concerns: [], decision_needs: [], decision_context: "", pathway_basis: null, choice_priorities: [], choice_detail: "", choice_basis: null },
-    value: { reasons: [], fee_effort: null, collected_fee: null, team_hours: null, payment: null, currency: "", fee_amount: "", direct_cost_amount: "", amount_basis: null, amount_scope: null },
+    value: { reasons: [], fee_effort: null, collected_fee: null, team_hours: null, payment: null, payment_context: "", payment_context_basis: null, currency: "", fee_amount: "", direct_cost_amount: "", amount_basis: null, amount_scope: null },
     delivery: { conditions: [], capacity: null, limit: null, fit_signals: [] },
     direction: { aim: null, evidence: [], less: null, less_reason: null, less_note: "" },
     opportunity: { sources: [], data_basis: null, source_detail: "", period: "", enquiry_count: "", retained_count: "", conversion: "", acquisition_cost: "", uncertainty: "" },

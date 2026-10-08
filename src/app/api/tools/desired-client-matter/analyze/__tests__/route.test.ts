@@ -1,14 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { NextRequest } from "next/server";
 import { interviewClarificationSourceFingerprint, type AnalysisRequestEnvelope, type DesiredClientAnswers, type InterviewClarificationAnswer, type InterviewClarificationRequestEnvelope } from "@/lib/desired-client/types";
-import { completeAnswers, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
-import { validateAnalysisResult } from "@/lib/desired-client/output";
+import { completeAnswers, mixedPaymentProviderBlueprint, negativeEconomicsAnswers, providerBlueprint, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
+import { validateAnalysisResponseResult, validateAnalysisResult } from "@/lib/desired-client/output";
+import { DRAFT_STORAGE_KEY, loadDraft, saveDraft, savedAnalysis } from "@/lib/desired-client/storage";
+import type { AnalysisResult, DesiredClientBriefV4 } from "@/lib/desired-client/types";
+import { buildDesiredClientEvidenceGroups } from "@/lib/desired-client/evidence-contract";
+import { buildStructuredBlueprintV4 } from "@/lib/desired-client/structured-blueprint";
 
 const mocks = vi.hoisted(() => ({
   GoogleGenerativeAI: vi.fn(),
   getGenerativeModel: vi.fn(),
   generateContent: vi.fn(),
   checkRateLimit: vi.fn(),
+  reserveDesiredClientProviderCall: vi.fn(),
+  releaseDesiredClientProviderRun: vi.fn(),
+  providerBudget: new Map<string, { revision: number; answerFingerprint: string; used: number; ownerToken: string | null }>(),
   ipFromRequest: vi.fn(() => "203.0.113.42"),
   rateLimitHeaders: vi.fn(() => ({ "Retry-After": "60", "X-RateLimit-Limit": "20" })),
 }));
@@ -18,6 +25,8 @@ vi.mock("@google/generative-ai", async (importOriginal) => {
 });
 vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: mocks.checkRateLimit,
+  reserveDesiredClientProviderCall: mocks.reserveDesiredClientProviderCall,
+  releaseDesiredClientProviderRun: mocks.releaseDesiredClientProviderRun,
   ipFromRequest: mocks.ipFromRequest,
   rateLimitHeaders: mocks.rateLimitHeaders,
 }));
@@ -57,10 +66,10 @@ function makeClarificationRequest(): InterviewClarificationRequestEnvelope {
     answers,
   };
 }
-const MODEL_RESULT = validBlueprint();
+const MODEL_RESULT = validBlueprint(B0);
 const EXPECTED_RESULT = validateAnalysisResult(MODEL_RESULT, B0, []);
 const ORIGINAL_ENV = new Map<string, string | undefined>();
-const ENV_KEYS = ["DESIRED_CLIENT_AI_ENABLED", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN"];
+const ENV_KEYS = ["DESIRED_CLIENT_AI_ENABLED", "GOOGLE_AI_API_KEY", "GEMINI_API_KEY", "UPSTASH_REDIS_REST_URL", "UPSTASH_REDIS_REST_TOKEN", "VERCEL_ENV"];
 
 function browserHeaders(extra: Record<string, string> = {}): Headers {
   return new Headers({ "content-type": "application/json", origin: "https://app.caseloadselect.ca", "sec-fetch-site": "same-origin", ...extra });
@@ -69,7 +78,17 @@ function makeRequest(body: string, extra: Record<string, string> = {}): NextRequ
   return new Request(ROUTE, { method: "POST", headers: browserHeaders(extra), body }) as unknown as NextRequest;
 }
 async function expectNoStore(response: Response) { expect(response.headers.get("cache-control")).toBe("no-store"); }
-function providerResponse(value: unknown) { return { response: { text: () => JSON.stringify(value) } }; }
+function providerResponse(value: unknown, answers: DesiredClientAnswers = B0) {
+  if (value && typeof value === "object" && !Array.isArray(value) && "brief" in value) {
+    const source = value as AnalysisResult;
+    const root = value as Record<string, unknown>;
+    const encoded = providerBlueprint(source, answers) as Record<string, unknown>;
+    if (root.clarification_code !== null && root.clarification_code !== undefined) encoded.clarification_code = root.clarification_code;
+    value = encoded;
+  }
+  return { response: { text: () => JSON.stringify(value) } };
+}
+function rawProviderResponse(value: unknown) { return { response: { text: () => JSON.stringify(value) } }; }
 
 beforeEach(() => {
   for (const key of ENV_KEYS) ORIGINAL_ENV.set(key, process.env[key]);
@@ -78,10 +97,31 @@ beforeEach(() => {
   delete process.env.GEMINI_API_KEY;
   process.env.UPSTASH_REDIS_REST_URL = "https://redis.invalid";
   process.env.UPSTASH_REDIS_REST_TOKEN = "test-redis-token";
+  delete process.env.VERCEL_ENV;
   mocks.GoogleGenerativeAI.mockReset().mockImplementation(() => ({ getGenerativeModel: mocks.getGenerativeModel }));
   mocks.getGenerativeModel.mockReset().mockReturnValue({ generateContent: mocks.generateContent });
   mocks.generateContent.mockReset().mockResolvedValue(providerResponse(MODEL_RESULT));
   mocks.checkRateLimit.mockReset().mockResolvedValue({ ok: true, active: true, remaining: 19, reset: Date.now() + 60_000, limit: 20 });
+  mocks.providerBudget.clear();
+  mocks.reserveDesiredClientProviderCall.mockReset().mockImplementation(async (input: { reviewRunId: string; answerRevision: number; expectedCallsUsed: number; limit: number; answerFingerprint: string; ownerToken: string }) => {
+    let run = mocks.providerBudget.get(input.reviewRunId);
+    if (run && (run.revision !== input.answerRevision || run.answerFingerprint !== input.answerFingerprint)) return { status: "stale", callsUsed: run.used };
+    if (!run && input.expectedCallsUsed !== 0) return { status: "sequence_conflict", callsUsed: 0 };
+    if (!run) {
+      run = { revision: input.answerRevision, answerFingerprint: input.answerFingerprint, used: 0, ownerToken: null };
+      mocks.providerBudget.set(input.reviewRunId, run);
+    }
+    if (run.ownerToken && run.ownerToken !== input.ownerToken) return { status: "busy", callsUsed: run.used };
+    run.ownerToken = input.ownerToken;
+    if (run.used >= input.limit) return { status: "exhausted", callsUsed: run.used };
+    if (run.used !== input.expectedCallsUsed) return { status: "sequence_conflict", callsUsed: run.used };
+    run.used += 1;
+    return { status: "reserved", callsUsed: run.used };
+  });
+  mocks.releaseDesiredClientProviderRun.mockReset().mockImplementation(async (runId: string, ownerToken: string) => {
+    const run = mocks.providerBudget.get(runId);
+    if (run?.ownerToken === ownerToken) run.ownerToken = null;
+  });
   mocks.ipFromRequest.mockClear().mockReturnValue("203.0.113.42");
   mocks.rateLimitHeaders.mockClear();
   vi.spyOn(console, "info").mockImplementation(() => undefined);
@@ -95,18 +135,22 @@ afterEach(() => {
 });
 
 describe("GET /api/tools/desired-client-matter/analyze readiness", () => {
-  it("reports only whether live AI is ready and does not cache the result", async () => {
+  it("reports AI readiness and the server generation-call limit without caching", async () => {
     process.env.DESIRED_CLIENT_AI_ENABLED="false";
     const disabled=await GET();
-    expect(await disabled.json()).toEqual({enabled:false});
+    expect(await disabled.json()).toEqual({enabled:false,providerCallLimit:3});
     await expectNoStore(disabled);
     process.env.DESIRED_CLIENT_AI_ENABLED="true";
     const enabled=await GET();
-    expect(await enabled.json()).toEqual({enabled:true});
+    expect(await enabled.json()).toEqual({enabled:true,providerCallLimit:3});
     await expectNoStore(enabled);
+    process.env.VERCEL_ENV="preview";
+    const preview=await GET();
+    expect(await preview.json()).toEqual({enabled:true,providerCallLimit:3});
+    delete process.env.VERCEL_ENV;
     delete process.env.UPSTASH_REDIS_REST_TOKEN;
     const incomplete=await GET();
-    expect(await incomplete.json()).toEqual({enabled:false});
+    expect(await incomplete.json()).toEqual({enabled:false,providerCallLimit:3});
     await expectNoStore(incomplete);
   });
 });
@@ -154,6 +198,14 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     await expectNoStore(response);
   });
 
+  it("fails closed without a provider call when the atomic budget store is unavailable", async () => {
+    mocks.reserveDesiredClientProviderCall.mockResolvedValueOnce({ status: "unavailable", callsUsed: 0 });
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: { code: "AI_UNAVAILABLE" }, providerCallsUsed: 0, providerCallLimit: 3 });
+    expect(mocks.generateContent).not.toHaveBeenCalled();
+  });
+
   it("requires the current v3 answer contract and does not accept legacy schema envelopes", async () => {
     const oldEnvelope = { ...ENVELOPE, schemaVersion: 2 };
     const oldAnswers = { ...ENVELOPE, answers: { ...B0, schema_version: "dcm-v2.2" } };
@@ -180,7 +232,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(response.status).toBe(200);
     const body = await response.json();
-    expect(body).toMatchObject({ ok: true, requestId: ENVELOPE.requestId, answerRevision: 1, reviewRunId: ENVELOPE.reviewRunId, result: EXPECTED_RESULT });
+    expect(body).toMatchObject({ ok: true, requestId: ENVELOPE.requestId, answerRevision: 1, reviewRunId: ENVELOPE.reviewRunId, providerCallsUsed: 1, providerCallLimit: 3, result: EXPECTED_RESULT });
     expect(body.result.brief.report_version).toBe("dcm-blueprint-v4");
     expect(body.result.brief.definition_sentence).toContain("The firm wants to attract and serve");
     expect(Object.keys(body.result.brief)).toEqual([
@@ -203,6 +255,115 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(prompt).not.toContain("203.0.113.42");
     expect(prompt).not.toContain("app.caseloadselect.ca");
     await expectNoStore(response);
+  });
+
+  it("returns recovery metadata derived by server validation and rejects provider self-assertion", async () => {
+    const encoded = providerBlueprint(validBlueprint(B0), B0) as { brief: Record<string, unknown> };
+    const groups = buildDesiredClientEvidenceGroups("why_firm_wants_work", B0);
+    const paths = ["practice.capability", "practice.experience", "practice.enjoys"] as const;
+    const evidenceGroupIds = paths.map(path => {
+      const group = groups.find(candidate => candidate.source_answer_ids.includes(path));
+      if (!group) throw new Error(`Missing test evidence group for ${path}`);
+      return group.id;
+    });
+    encoded.brief.why_firm_wants_work = {
+      claims: [{ text: "The firm reports regular experience in business acquisition advice and transaction planning.", evidence_group_ids: evidenceGroupIds }],
+    };
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(encoded));
+
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.result.recoveredSections).toEqual(["why_firm_wants_work"]);
+    expect(body.result.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(B0).why_firm_wants_work);
+    expect(validateAnalysisResponseResult(body.result, B0, [])?.recoveredSections).toEqual(["why_firm_wants_work"]);
+
+    const selfAsserted = { ...providerBlueprint(validBlueprint(B0), B0) as Record<string, unknown>, recoveredSections: ["why_firm_wants_work"] };
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(selfAsserted));
+    const rejected = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, reviewRunId: "33333333-3333-4333-8333-333333333333" })));
+    expect(rejected.status).toBe(502);
+    expect(await rejected.json()).toMatchObject({ error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "report", reason: "root_shape" } } });
+  });
+
+  it("allows only one concurrent provider request for a review run", async () => {
+    const [first, duplicate] = await Promise.all([
+      POST(makeRequest(JSON.stringify(ENVELOPE))),
+      POST(makeRequest(JSON.stringify(ENVELOPE))),
+    ]);
+    expect([first.status, duplicate.status].sort()).toEqual([200, 409]);
+    const rejected = first.status === 409 ? await first.json() : await duplicate.json();
+    expect(rejected.error.code).toBe("ANALYSIS_RUN_BUSY");
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("caps primary and repair generations at three for one review run", async () => {
+    const invalid = structuredClone(MODEL_RESULT);
+    invalid.brief.why_firm_wants_work.claims[0].text = "x".repeat(701);
+    mocks.generateContent.mockImplementation(async () => providerResponse(invalid));
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(response.status).toBe(502);
+    expect(await response.json()).toMatchObject({ providerCallsUsed: 3, providerCallLimit: 3 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+
+    const retry = { ...ENVELOPE, requestId: "33333333-3333-4333-8333-333333333333", analysisIndex: 2 as const };
+    const denied = await POST(makeRequest(JSON.stringify(retry)));
+    expect(denied.status).toBe(429);
+    expect(await denied.json()).toMatchObject({ error: { code: "PROVIDER_CALL_LIMIT_REACHED" }, providerCallsUsed: 3, providerCallLimit: 3 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+  });
+
+  it("rejects a repeated sequence index without spending another provider call", async () => {
+    const first = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(first.status).toBe(200);
+    const replay = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, requestId: "33333333-3333-4333-8333-333333333333" })));
+    expect(replay.status).toBe(409);
+    expect(await replay.json()).toMatchObject({ error: { code: "ANALYSIS_RUN_SEQUENCE_CONFLICT" }, providerCallsUsed: 1 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects changed answers on an existing run even when the revision is replayed", async () => {
+    const first = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(first.status).toBe(200);
+    const changedAnswers = structuredClone(B0);
+    changedAnswers.practice.firm_type = "A different Ontario business law firm";
+    const stale = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, requestId: "33333333-3333-4333-8333-333333333333", analysisIndex: 1, answers: changedAnswers })));
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ error: { code: "ANALYSIS_RUN_STALE" }, providerCallsUsed: 1 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("rebuilds an over-limit evidence card in Preview without a wording repair", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const invalid = structuredClone(MODEL_RESULT);
+    invalid.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => ({
+      ...structuredClone(invalid.brief.evidence_and_open_questions.claims[0]),
+      text: "DISCARDED_ROUTE_EVIDENCE_SENTINEL: 99 clients prove demand.",
+    }));
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: true, providerCallsUsed: 1, providerCallLimit: 3 });
+    expect(validateAnalysisResponseResult(body.result, B0, [])).toEqual(body.result);
+    expect(body.result.brief.evidence_and_open_questions).toEqual(buildStructuredBlueprintV4(B0).evidence_and_open_questions);
+    expect(body.result.brief.evidence_and_open_questions.claims.length).toBeLessThanOrEqual(6);
+    expect(JSON.stringify(body.result.brief.evidence_and_open_questions)).not.toContain("DISCARDED_ROUTE_EVIDENCE_SENTINEL");
+    expect(savedAnalysis(body.result, B0)?.brief).toEqual(body.result.brief);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps Preview within the same three-total-call ceiling", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const invalid = structuredClone(MODEL_RESULT);
+    invalid.brief.client_goals_needs.claims[0].text = "The client will decide within 27 days.";
+    mocks.generateContent.mockResolvedValue(providerResponse(invalid));
+    const first = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+    expect(first.status).toBe(502);
+    expect(await first.json()).toMatchObject({ providerCallsUsed: 3, providerCallLimit: 3 });
+    const retry = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, requestId: "33333333-3333-4333-8333-333333333333", analysisIndex: 1 })));
+    expect(retry.status).toBe(429);
+    expect(await retry.json()).toMatchObject({ error: { code: "PROVIDER_CALL_LIMIT_REACHED" }, providerCallsUsed: 3, providerCallLimit: 3 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
   });
 
   it("normalizes a provider ask and carries its answered history into the next request", async () => {
@@ -300,14 +461,14 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
   it("rejects legacy post-draft clarification codes because v4 follow-ups happen during discovery", async () => {
     const answers = { ...B0, delivery: { ...B0.delivery, capacity: "change" as const } };
     mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CAPACITY_CONFLICT" }));
-    const early = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 1 })));
+    const early = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, reviewRunId: "33333333-3333-4333-8333-333333333333", answers, analysisIndex: 0 })));
     expect(early.status).toBe(502);
     expect((await early.json()).error.code).toBe("INVALID_AI_OUTPUT");
     const earlyPrompt = JSON.parse(mocks.generateContent.mock.calls[0][0] as string);
     expect(earlyPrompt.eligible_codes).toEqual([]);
 
     mocks.generateContent.mockResolvedValueOnce(providerResponse({ ...MODEL_RESULT, clarification_code: "CAPACITY_CONFLICT" }));
-    const final = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, answers, analysisIndex: 2 })));
+    const final = await POST(makeRequest(JSON.stringify({ ...ENVELOPE, reviewRunId: "44444444-4444-4444-8444-444444444444", answers, analysisIndex: 0 })));
     expect(final.status).toBe(502);
     expect((await final.json()).error.code).toBe("INVALID_AI_OUTPUT");
     const finalPrompt = JSON.parse(mocks.generateContent.mock.calls[1][0] as string);
@@ -331,7 +492,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(response.status).toBe(502);
     const body = await response.json();
-    expect(body).toEqual({ ok: false, requestId: ENVELOPE.requestId, error: { code: "AI_UNAVAILABLE" } });
+    expect(body).toEqual({ ok: false, requestId: ENVELOPE.requestId, error: { code: "AI_UNAVAILABLE" }, providerCallsUsed: 1, providerCallLimit: 3 });
     expect(JSON.stringify(body)).not.toContain("private prompt sentinel");
     await expectNoStore(response);
   });
@@ -346,7 +507,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
 
   it("logs safe rejection details when blueprint validation fails", async () => {
     const invalid = structuredClone(MODEL_RESULT);
-    invalid.brief.client_and_matter.claims[0].text = "x".repeat(701);
+    invalid.brief.why_firm_wants_work.claims[0].text = "x".repeat(701);
     mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
@@ -354,15 +515,16 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const failure = await response.json();
     expect(failure).toEqual({
       ok: false, requestId: ENVELOPE.requestId,
-      error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "client_and_matter", reason: "card_shape" } },
+      error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "why_firm_wants_work", reason: "card_shape" } },
+      providerCallsUsed: 3, providerCallLimit: 3,
     });
     expect(JSON.parse(warn.mock.calls[0][0] as string)).toEqual({
       event: "[desired-client] analysis output rejected",
       requestId: ENVELOPE.requestId,
       model: "gemini-2.5-flash",
-      field: "client_and_matter",
+      field: "why_firm_wants_work",
       reason: "statement_text_budget_or_format",
-      finalField: "client_and_matter",
+      finalField: "why_firm_wants_work",
       finalReason: "card_shape",
       repairAttempts: 2,
     });
@@ -370,26 +532,277 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(JSON.stringify(failure)).not.toContain("x".repeat(701));
   });
 
-  it("logs a registered disallowed source path without logging answer or model text", async () => {
-    const invalid = structuredClone(MODEL_RESULT);
+  it("does not log provider-supplied answer paths or model text", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const invalid = providerBlueprint(MODEL_RESULT, B0) as {
+      brief: { definition_components: { client: { text: string; evidence_group_ids: string[]; source_answer_ids?: string[] } } };
+    };
+    invalid.brief.definition_components.client.text = "Ontario business owners";
+    invalid.brief.definition_components.client.evidence_group_ids = [];
     invalid.brief.definition_components.client.source_answer_ids = ["practice.firm_type"];
-    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(invalid)).mockResolvedValue(rawProviderResponse(invalid.brief.definition_components.client));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(response.status).toBe(502);
-    expect(JSON.parse(warn.mock.calls[0][0] as string)).toEqual({
+    const log = JSON.parse(warn.mock.calls[0][0] as string);
+    expect(log).toMatchObject({
       event: "[desired-client] analysis output rejected",
       requestId: ENVELOPE.requestId,
       model: "gemini-2.5-flash",
       field: "definition_components.client",
-      reason: "source_answer_path_not_allowed_for_slot",
-      sourcePath: "practice.firm_type",
+      reason: "evidence_group_selection_invalid",
       finalField: "definition_components.client",
-      finalReason: "statement_shape",
+      finalReason: "evidence_group_selection_invalid",
       repairAttempts: 2,
     });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+    expect(log).not.toHaveProperty("sourcePath");
+    expect(log.firstClaimDiagnostic).toMatchObject({ slot: "definition_client_type", claimIndex: 1, sourceAnswerIds: [], groupIds: [], expectedGroups: [] });
     expect(JSON.stringify(warn.mock.calls)).not.toContain(JSON.stringify(ENVELOPE.answers));
-    expect(JSON.stringify(warn.mock.calls)).not.toContain(invalid.brief.definition_components.client.text);
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("Ontario business owners");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("practice.firm_type");
+  });
+
+  it("rejects a non-registered why-firm selection after bounded Preview repairs without exposing text", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const invalid = structuredClone(MODEL_RESULT);
+    const privateClaim = "private diagnostic claim text sentinel";
+    invalid.brief.why_firm_wants_work.claims[0] = {
+      text: privateClaim,
+      kind: "experience",
+      source_answer_ids: ["practice.experience"],
+      evidence_basis: "client_reported",
+    };
+    const privateAnswer = "private diagnostic answer text sentinel";
+    const request = structuredClone(ENVELOPE);
+    request.answers.client.goal_detail = privateAnswer;
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid)).mockResolvedValue(rawProviderResponse({ claims: invalid.brief.why_firm_wants_work.claims }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const response = await POST(makeRequest(JSON.stringify(request)));
+
+    expect(response.status).toBe(502);
+    const body = await response.json();
+    expect(body).toEqual({
+      ok: false,
+      requestId: ENVELOPE.requestId,
+      error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "why_firm_wants_work", reason: "evidence_group_selection_invalid" } },
+      providerCallsUsed: 3,
+      providerCallLimit: 3,
+    });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+    const log = JSON.parse(warn.mock.calls[0][0] as string);
+    expect(log.repairAttempts).toBe(2);
+    expect(log.firstClaimDiagnostic).toEqual({
+      claimIndex: 1,
+      claimIndexCapped: false,
+      selectionMetadataPresent: true,
+      selectionShapeValid: true,
+      selectionFailure: "selection_shape_invalid",
+      rawGroupIdCount: 0,
+      uniqueGroupIdCount: 0,
+      resolvedGroupIdCount: 0,
+      groupIdCountsCapped: false,
+      slot: "why_firm_wants_work",
+      kind: "unknown",
+      evidenceBasis: "unknown",
+      sourceAnswerIds: [],
+      groupIds: [],
+      expectedGroups: [],
+    });
+    expect(log.finalClaimDiagnostic).toMatchObject({
+      slot: "why_firm_wants_work",
+      selectionFailure: "selection_shape_invalid",
+      selectionMetadataPresent: true,
+      selectionShapeValid: false,
+      sourceAnswerIds: [],
+      groupIds: [],
+      expectedGroups: [],
+    });
+    const serializedLog = JSON.stringify(warn.mock.calls);
+    expect(serializedLog).toContain("evidence_group_selection_invalid");
+    expect(serializedLog).not.toContain(privateClaim);
+    expect(serializedLog).not.toContain(privateAnswer);
+    expect(serializedLog).not.toContain(JSON.stringify(request.answers));
+    expect(JSON.stringify(body)).not.toContain(privateClaim);
+    expect(JSON.stringify(body)).not.toContain(privateAnswer);
+  });
+
+  it("returns the fully recovered negative-economics HTTP response from one offline SDK call", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const answers = negativeEconomicsAnswers();
+    const request = { ...structuredClone(ENVELOPE), answerRevision: answers.revision, answers };
+    const providerOutput = mixedPaymentProviderBlueprint(answers);
+    const generatedClaims = (providerOutput as { brief: { why_firm_wants_work: { claims: Array<{ text: string }> } } }).brief.why_firm_wants_work.claims;
+    generatedClaims.forEach((claim, index) => {
+      claim.text = `DISCARDED_HTTP_SENTINEL_${index}: 99 clients, audited records prove positive contribution, and payment is not predictable.`;
+    });
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(providerOutput));
+    const response = await POST(makeRequest(JSON.stringify(request)));
+    expect(response.status).toBe(200);
+    await expectNoStore(response);
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: true, requestId: request.requestId, answerRevision: answers.revision, reviewRunId: request.reviewRunId, providerCallsUsed: 1, providerCallLimit: 3 });
+    expect(body.result.recoveredSections).toEqual(["why_firm_wants_work"]);
+    const canonicalCard = buildStructuredBlueprintV4(answers).why_firm_wants_work;
+    expect(body.result.brief.why_firm_wants_work.claims.slice(0, canonicalCard.claims.length)).toEqual(canonicalCard.claims);
+    expect(body.result.brief.why_firm_wants_work.claims).toHaveLength(7);
+    expect(body.result.brief.why_firm_wants_work.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("practice.development_needs"))).toMatchObject({ kind: "unknown", evidence_basis: "unknown", text: expect.stringContaining("development needs") });
+    expect(JSON.stringify(body.result)).not.toContain("DISCARDED_HTTP_SENTINEL");
+    expect(JSON.stringify(body.result)).not.toContain("99 clients");
+    expect(JSON.stringify(body.result)).not.toContain("audited records prove");
+    expect(validateAnalysisResponseResult(body.result, answers, [])).toEqual(body.result);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("rebuilds an over-limit evidence card into separate bases and saves the report", async () => {
+    const answers = negativeEconomicsAnswers();
+    const request = { ...structuredClone(ENVELOPE), answerRevision: answers.revision, answers };
+    const original = validBlueprint(answers);
+    const initial = providerBlueprint(original, answers) as { brief: Record<string, { claims: Array<Record<string, unknown>> }> };
+    initial.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => structuredClone(initial.brief.evidence_and_open_questions.claims[0]));
+    const groups = buildDesiredClientEvidenceGroups("evidence_and_open_questions", answers);
+    const paymentGroup = groups.find(group => group.source_answer_ids.includes("value.payment"));
+    const contextGroup = groups.find(group => group.source_answer_ids.includes("value.payment_context"));
+    expect(paymentGroup).toBeDefined();
+    expect(contextGroup).toBeDefined();
+    initial.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => ({
+      ...structuredClone(initial.brief.evidence_and_open_questions.claims[0]),
+      text: "DISCARDED_NEGATIVE_ECONOMICS_EVIDENCE_SENTINEL: payment and client feedback are one source.",
+    }));
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(initial));
+
+    const response = await POST(makeRequest(JSON.stringify(request)));
+
+    expect(response.status).toBe(200);
+    await expectNoStore(response);
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: true, requestId: request.requestId, answerRevision: answers.revision, reviewRunId: request.reviewRunId, providerCallsUsed: 1, providerCallLimit: 3 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+    expect(validateAnalysisResponseResult(body.result, answers, [])).toEqual(body.result);
+    expect(body.result.brief.evidence_and_open_questions.claims.length).toBeLessThanOrEqual(6);
+    expect(JSON.stringify(body.result.brief.evidence_and_open_questions)).not.toContain("DISCARDED_NEGATIVE_ECONOMICS_EVIDENCE_SENTINEL");
+    const payment = body.result.brief.evidence_and_open_questions.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("value.payment"));
+    const context = body.result.brief.evidence_and_open_questions.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("value.payment_context"));
+    expect(payment).toMatchObject({ evidence_basis: "firm_reported_observation", source_answer_ids: ["value.payment"] });
+    expect(context).toMatchObject({ evidence_basis: "client_reported", source_answer_ids: ["value.payment_context", "value.payment_context_basis"] });
+    expect(body.result.brief.client_and_matter).toEqual(original.brief.client_and_matter);
+
+    const recovered = savedAnalysis(body.result, answers);
+    expect(recovered).toBeDefined();
+    expect(recovered).not.toHaveProperty("recoveredSections");
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value); },
+      removeItem: (key: string) => { store.delete(key); },
+      clear: () => store.clear(),
+      key: (index: number) => [...store.keys()][index] ?? null,
+      get length() { return store.size; },
+    } as Storage;
+    expect(saveDraft(storage, answers, 7, recovered).status).toBe("saved");
+    expect(store.has(DRAFT_STORAGE_KEY)).toBe(true);
+    const reopened = loadDraft(storage);
+    expect(reopened.status).toBe("ready");
+    if (reopened.status === "ready") {
+      expect(reopened.draft.savedBrief).not.toHaveProperty("recoveredSections");
+      const reopenedBrief = reopened.draft.savedBrief?.brief as DesiredClientBriefV4 | undefined;
+      expect(reopenedBrief?.report_version).toBe("dcm-blueprint-v4");
+      expect(reopenedBrief?.evidence_and_open_questions.claims).toEqual(body.result.brief.evidence_and_open_questions.claims);
+    }
+  });
+
+  it("logs the earlier blocked recovery gate and raw selection counts without answer or claim text", async () => {
+    process.env.VERCEL_ENV = "preview";
+    const answers = negativeEconomicsAnswers();
+    const request = { ...structuredClone(ENVELOPE), answerRevision: answers.revision, answers };
+    const raw = mixedPaymentProviderBlueprint(answers);
+    const claims = raw.brief.why_firm_wants_work.claims;
+    const contextIndex = claims.findIndex(claim => claim.evidence_group_ids.some(id => id.includes("_payment_context")));
+    const privateId = "private-unrecognized-id-sentinel";
+    claims[contextIndex].evidence_group_ids.push(privateId);
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(raw)).mockResolvedValue(rawProviderResponse({ claims }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    const response = await POST(makeRequest(JSON.stringify(request)));
+    expect(response.status).toBe(502);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+    const log = JSON.parse(warn.mock.calls[0][0] as string);
+    expect(log).toMatchObject({ repairAttempts: 2, firstRecoveryDiagnostic: {
+      reason: "selection_unresolved", blockedClaimIndex: contextIndex + 1, cardClaimCount: 7,
+      blockedClaimDiagnostic: { selectionFailure: "unknown_group_id", rawGroupIdCount: 2, uniqueGroupIdCount: 2, resolvedGroupIdCount: 1 },
+    } });
+    expect(log.finalRecoveryDiagnostic).toEqual(log.firstRecoveryDiagnostic);
+    const serialized = JSON.stringify(log);
+    expect(serialized).not.toContain(privateId);
+    expect(serialized).not.toContain(answers.value.payment_context);
+    expect(serialized).not.toContain(claims[contextIndex].text);
+    expect(serialized).not.toContain(JSON.stringify(answers));
+    expect(await response.json()).not.toHaveProperty("recoveryDiagnostic");
+  });
+
+  it("keeps invalid-group repair behavior unchanged in Production", async () => {
+    process.env.VERCEL_ENV = "production";
+    const invalid = structuredClone(MODEL_RESULT);
+    invalid.brief.why_firm_wants_work.claims[0] = {
+      text: "A private production-only claim sentinel",
+      kind: "experience",
+      source_answer_ids: ["practice.experience"],
+      evidence_basis: "client_reported",
+    };
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid)).mockResolvedValue(providerResponse({ claims: invalid.brief.why_firm_wants_work.claims }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
+
+    expect(response.status).toBe(502);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+    const log = JSON.parse(warn.mock.calls[0][0] as string);
+    expect(log).toMatchObject({
+      field: "why_firm_wants_work",
+      reason: "evidence_group_selection_invalid",
+      finalField: "why_firm_wants_work",
+      finalReason: "evidence_group_selection_invalid",
+      repairAttempts: 2,
+    });
+    expect(log).not.toHaveProperty("firstClaimDiagnostic");
+    expect(log).not.toHaveProperty("finalClaimDiagnostic");
+    expect(log).not.toHaveProperty("firstRecoveryDiagnostic");
+    expect(log).not.toHaveProperty("finalRecoveryDiagnostic");
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("A private production-only claim sentinel");
+  });
+
+  it.each([
+    ["unbounded numeric suffix", `interview.followups.${"9".repeat(512)}`],
+    ["unknown followup index", "interview.followups.999"],
+  ])("omits %s from Preview diagnostics after bounded retries", async (_label, unsafeSourceId) => {
+    process.env.VERCEL_ENV = "preview";
+    const invalid = structuredClone(MODEL_RESULT);
+    const privateClaim = "private unsupported followup claim sentinel";
+    invalid.brief.why_firm_wants_work.claims[0] = {
+      text: privateClaim,
+      kind: "experience",
+      source_answer_ids: [unsafeSourceId as never],
+      evidence_basis: "client_reported",
+    };
+    const privateAnswer = "private unsupported followup answer sentinel";
+    const request = structuredClone(ENVELOPE);
+    request.answers.client.goal_detail = privateAnswer;
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid)).mockResolvedValue(rawProviderResponse({ claims: invalid.brief.why_firm_wants_work.claims }));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    const response = await POST(makeRequest(JSON.stringify(request)));
+
+    expect(response.status).toBe(502);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+    const log = JSON.parse(warn.mock.calls[0][0] as string);
+    expect(log.repairAttempts).toBe(2);
+    expect(log.firstClaimDiagnostic).toMatchObject({ sourceAnswerIds: [], expectedGroups: [] });
+    expect(log).not.toHaveProperty("sourcePath");
+    const serializedLog = JSON.stringify(warn.mock.calls);
+    expect(serializedLog).not.toContain(unsafeSourceId);
+    expect(serializedLog).not.toContain(privateClaim);
+    expect(serializedLog).not.toContain(privateAnswer);
+    expect(JSON.stringify(await response.json())).not.toContain(unsafeSourceId);
   });
 
   it("rejects a request without explicit AI consent", async () => {

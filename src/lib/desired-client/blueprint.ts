@@ -9,6 +9,7 @@ export type BlueprintMetadata = {
   mode: SavedBrief["mode"];
   generatedAt: string;
   wordingReviewed: boolean;
+  recoveredSections?: SavedBrief["recoveredSections"];
   openClarificationCode?: SavedBrief["openClarificationCode"];
 };
 
@@ -29,6 +30,7 @@ export type BlueprintCard = {
   title: string;
   claims: EvidenceLinkedStatement[];
   sources: Array<{ statement: EvidenceLinkedStatement; path: AnswerReferencePath; question: string; answer: string | null }>;
+  recoveryDisclosure?: { label: string; description: string };
   contribution?: CalculatedContribution;
   opportunityBasis?: string;
 };
@@ -55,6 +57,14 @@ const formatDate = (value: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? "Date not recorded" : date.toLocaleDateString("en-CA");
 };
+
+const MATTER_COUNTS: Record<string, number> = { zero: 0, none: 0, no: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12 };
+function parseMatterVolume(value: string): { count: number; period: string } | null {
+  const match = value.trim().toLocaleLowerCase("en-CA").match(/^(?:about\s+|roughly\s+|up to\s+|at most\s+)?(\d{1,3}|zero|none|no|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(?:\s+(?:additional|retained|new|acquisition|buyer-side|seller-side|buyer|seller|business|family|completed|signed|closed))*?(?:\s+(?:matters?|cases?|transactions?))?\s+(?:per|each|every)\s+(week|month|quarter|year)\b/u);
+  if (!match) return null;
+  const count = /^\d+$/u.test(match[1]) ? Number(match[1]) : MATTER_COUNTS[match[1]];
+  return Number.isFinite(count) ? { count, period: match[2] } : null;
+}
 
 const CARD_DEFINITIONS = [
   ["practice", "Practice we are building", "practice_context"],
@@ -126,6 +136,12 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
       title,
       claims,
       sources: claims.flatMap((statement) => statement.source_answer_ids.map((path) => ({ ...getSourceDetails(path, answers), path, statement }))),
+      ...(brief.report_version === "dcm-blueprint-v4" && id === "whyWork" && meta.recoveredSections?.includes("why_firm_wants_work") ? {
+        recoveryDisclosure: {
+          label: "Built from your answers",
+          description: "This section was rebuilt from your answers because the AI combined different evidence types.",
+        },
+      } : {}),
       ...(contribution ? { contribution } : {}),
       ...(opportunityBasis ? { opportunityBasis } : {}),
     };
@@ -160,8 +176,15 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
   if (answers.delivery.capacity === "limited") conditions.push("Current capacity is limited; confirm what volume the team can support.");
   if (answers.delivery.capacity === "change") conditions.push("The team reported that growth depends on a delivery change.");
   if (answers.repeatability.staffing_constraint.trim()) conditions.push(`Before increasing volume, the firm identified this prerequisite: ${answers.repeatability.staffing_constraint.trim()}`);
-  if (answers.repeatability.additional_matters.trim() && /^(0|none|no additional|zero)\b/i.test(answers.repeatability.additional_matters.trim())) conditions.push("The firm reported no additional matter capacity at present.");
-  if (contributionResult && hasNegativeContribution(answers)) conditions.push(`The supplied fee and direct-cost figures calculate to a negative contribution of ${contributionResult.amount} before overhead and acquisition costs; resolve this conflict before treating the work as commercially attractive.`);
+  const capacityVolume = parseMatterVolume(answers.repeatability.additional_matters);
+  const targetVolume = parseMatterVolume(answers.repeatability.target);
+  const targetExceedsCapacity = Boolean(capacityVolume && targetVolume && capacityVolume.period === targetVolume.period && targetVolume.count > capacityVolume.count);
+  if (capacityVolume?.count === 0) conditions.push("The firm reported no additional matter capacity at present.");
+  if (targetExceedsCapacity && capacityVolume && targetVolume) conditions.push(`The proposed target of ${targetVolume.count} matter${targetVolume.count === 1 ? "" : "s"} per ${targetVolume.period} exceeds the stated additional capacity of ${capacityVolume.count} matter${capacityVolume.count === 1 ? "" : "s"} per ${capacityVolume.period}; resolve the mismatch before treating the target as available volume.`);
+  if (!capacityVolume && answers.repeatability.additional_matters.trim() && /^(0|none|no additional|zero)\b/i.test(answers.repeatability.additional_matters.trim())) conditions.push("The firm reported no additional matter capacity at present.");
+  if (contributionResult && hasNegativeContribution(answers)) conditions.push(answers.value.reasons.includes("fees")
+    ? `The firm selected fee sustainability as a reason to pursue this work, but the supplied fee and direct-cost figures calculate to a negative contribution of ${contributionResult.amount} before overhead and acquisition costs; reconcile this mismatch before treating fee sustainability as commercially supported.`
+    : `The supplied fee and direct-cost figures calculate to a negative contribution of ${contributionResult.amount} before overhead and acquisition costs; resolve this conflict before treating the work as commercially attractive.`);
   else if ((answers.value.fee_amount.trim() || answers.value.direct_cost_amount.trim()) && !contributionResult) conditions.push("The supplied financial figures could not be compared on the same currency, scope and per-matter basis.");
   if (answers.opportunity.uncertainty.trim()) conditions.push(`Demand uncertainty reported by the firm: ${answers.opportunity.uncertainty.trim()}`);
   if (answers.opportunity.sources.includes("unknown") || answers.opportunity.sources.includes("no_evidence")) conditions.push("Demand and acquisition evidence still need to be established.");
@@ -179,7 +202,9 @@ export function buildBlueprintViewModel(brief: DesiredClientBrief | DesiredClien
     title,
     status: confirmed ? "Wording reviewed" : "Draft wording",
     evidenceStatus: evidenceStatus(brief),
-    modeLabel: meta.mode === "ai" ? "AI-assisted draft" : "Structured draft",
+    modeLabel: meta.recoveredSections?.includes("why_firm_wants_work")
+      ? "AI-assisted draft with a structured recovery"
+      : meta.mode === "ai" ? "AI-assisted draft" : "Structured draft",
     date: formatDate(meta.generatedAt),
     confirmed,
     definition: brief.report_version === "dcm-blueprint-v4" || brief.report_version === "dcm-blueprint-v2" ? brief.definition_sentence : buildDefinitionSentence(brief, confirmed),

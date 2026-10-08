@@ -1,6 +1,6 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
+import { checkRateLimit, ipFromRequest, rateLimitHeaders, releaseDesiredClientProviderRun, reserveDesiredClientProviderCall } from "@/lib/rate-limit";
 import { desiredClientModelId, runDesiredClientAnalysis } from "@/lib/desired-client/analyze";
 import { runInterviewClarification, validateInterviewClarificationRequest } from "@/lib/desired-client/interview-clarification";
 import { validateAnalysisRequest } from "@/lib/desired-client/validation";
@@ -20,14 +20,18 @@ function desiredClientAiEnabled(): boolean {
     Boolean(process.env.UPSTASH_REDIS_REST_URL?.trim()) && Boolean(process.env.UPSTASH_REDIS_REST_TOKEN?.trim());
 }
 
-/** Exposes only the enabled state so the tool can set honest expectations. */
-export async function GET(): Promise<NextResponse<{ enabled: boolean }>> {
-  return NextResponse.json({ enabled: desiredClientAiEnabled() }, { headers: NO_STORE });
+function desiredClientProviderCallLimit(): 3 {
+  return 3;
 }
 
-function fail(requestId: string, code: AnalysisFailureCode, status: number, extraHeaders: Record<string, string> = {}, diagnostic?: { field: string; reason: string }): NextResponse<AnalysisFailureEnvelope> {
+/** Exposes only the enabled state so the tool can set honest expectations. */
+export async function GET(): Promise<NextResponse<{ enabled: boolean; providerCallLimit: 3 }>> {
+  return NextResponse.json({ enabled: desiredClientAiEnabled(), providerCallLimit: desiredClientProviderCallLimit() }, { headers: NO_STORE });
+}
+
+function fail(requestId: string, code: AnalysisFailureCode, status: number, extraHeaders: Record<string, string> = {}, diagnostic?: { field: string; reason: string }, usage?: { providerCallsUsed: number; providerCallLimit: number }): NextResponse<AnalysisFailureEnvelope> {
   const safeDiagnostic = diagnostic && /^[a-z0-9_.]{1,80}$/.test(diagnostic.field) && /^[a-z0-9_]{1,80}$/.test(diagnostic.reason) ? diagnostic : undefined;
-  return NextResponse.json({ ok: false, requestId, error: { code, ...(safeDiagnostic ? { diagnostic: safeDiagnostic } : {}) } }, { status, headers: { ...NO_STORE, ...extraHeaders } });
+  return NextResponse.json({ ok: false, requestId, error: { code, ...(safeDiagnostic ? { diagnostic: safeDiagnostic } : {}) }, ...(usage ?? {}) }, { status, headers: { ...NO_STORE, ...extraHeaders } });
 }
 
 function requestIdFromBody(value: unknown): string {
@@ -129,15 +133,42 @@ export async function POST(request: NextRequest): Promise<NextResponse<AnalysisF
   // v4 creates the complete blueprint in one response. Follow-ups happen
   // during discovery through the separate clarify operation, never afterward.
   const eligibleCodes: [] = [];
-  const outcome = await runDesiredClientAnalysis(validation.value, eligibleCodes);
-  if (outcome.mode === "unavailable") return fail(validation.value.requestId, "AI_UNAVAILABLE", 502);
-  if (outcome.mode === "invalid_output") return fail(validation.value.requestId, "INVALID_AI_OUTPUT", 502, {}, outcome.diagnostic);
+  const providerCallLimit = desiredClientProviderCallLimit();
+  const ownerToken = randomUUID();
+  const answerFingerprint = createHash("sha256").update(JSON.stringify(validation.value.answers)).digest("hex");
+  let outcome: Awaited<ReturnType<typeof runDesiredClientAnalysis>>;
+  try {
+    outcome = await runDesiredClientAnalysis(validation.value, eligibleCodes, providerCallLimit, async (expectedCallsUsed) =>
+      reserveDesiredClientProviderCall({
+        reviewRunId: validation.value.reviewRunId,
+        answerRevision: validation.value.answerRevision,
+        expectedCallsUsed,
+        limit: providerCallLimit,
+        answerFingerprint,
+        ownerToken,
+      }),
+    );
+  } finally {
+    await releaseDesiredClientProviderRun(validation.value.reviewRunId, ownerToken);
+  }
+  const usage = { providerCallsUsed: outcome.providerCallsUsed, providerCallLimit: outcome.providerCallLimit };
+  if (outcome.mode === "budget_rejected") {
+    const code: AnalysisFailureCode = outcome.reason === "exhausted" ? "PROVIDER_CALL_LIMIT_REACHED" :
+      outcome.reason === "stale" ? "ANALYSIS_RUN_STALE" :
+      outcome.reason === "busy" ? "ANALYSIS_RUN_BUSY" :
+      outcome.reason === "sequence_conflict" ? "ANALYSIS_RUN_SEQUENCE_CONFLICT" : "AI_UNAVAILABLE";
+    const status = outcome.reason === "exhausted" ? 429 : outcome.reason === "unavailable" ? 503 : 409;
+    return fail(validation.value.requestId, code, status, {}, undefined, usage);
+  }
+  if (outcome.mode === "unavailable") return fail(validation.value.requestId, "AI_UNAVAILABLE", 502, {}, undefined, usage);
+  if (outcome.mode === "invalid_output") return fail(validation.value.requestId, "INVALID_AI_OUTPUT", 502, {}, outcome.diagnostic, usage);
 
   const response: AnalysisSuccessEnvelope = {
     ok: true,
     requestId: validation.value.requestId,
     answerRevision: validation.value.answerRevision,
     reviewRunId: validation.value.reviewRunId,
+    ...usage,
     result: outcome.result,
   };
   console.info("[desired-client] analysis complete", {

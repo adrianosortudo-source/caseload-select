@@ -60,7 +60,7 @@ export function validateInterviewClarificationRequest(input: unknown): Validatio
     (input.clarificationIndex as number) < 0 || (input.clarificationIndex as number) >= INTERVIEW_CLARIFICATION_LIMITS.maximumFollowups ||
     !Number.isInteger(input.stage) || Number(input.stage) < 1 || Number(input.stage) > 6 || !record(input.answers)) return { valid: false };
   const a = input.answers;
-  if (a.schema_version !== "dcm-v3.2" || a.revision !== input.answerRevision || !validateDraftAnswers(a) ||
+  if (a.schema_version !== "dcm-v3.3" || a.revision !== input.answerRevision || !validateDraftAnswers(a) ||
     !exact(a.interview, ["ai_clarification_consent", "clarification_count", "clarified_stages", "followups"]) || a.interview.ai_clarification_consent !== true ||
     !Number.isInteger(a.interview.clarification_count) || a.interview.clarification_count !== input.clarificationIndex ||
     !Array.isArray(a.interview.clarified_stages) || a.interview.clarified_stages.length !== input.clarificationIndex ||

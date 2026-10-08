@@ -11,21 +11,24 @@ function comparable() {
 describe("comparable matter economics",()=>{
   it("calculates contribution with explicit shared scope, currency and evidence basis",()=>{
     const a=comparable();
-    expect(calculateContribution(a)).toMatchObject({amount:"$9,000.00",currency:"CAD",scope:"per matter",basis:"firm_reported_estimate"});
+    expect(calculateContribution(a)).toMatchObject({amount:"C$9,000.00",margin:{label:"Contribution margin on collected fees",amount:"50.00%"},currency:"CAD",scope:"per matter",basis:"firm_reported_estimate"});
     a.value.amount_basis="recorded";
     expect(calculateContribution(a)?.basis).toBe("firm_reported_recorded");
   });
-  it("preserves negative contribution and zero collected fees without introducing a rate",()=>{
+  it("calculates negative contribution margin and omits the rate when collected fees are zero",()=>{
     const a=comparable(); a.value.fee_amount="0"; a.value.direct_cost_amount="250";
     const result=calculateContribution(a);
-    expect(result?.amount).toBe("-$250.00");
-    expect(result).not.toHaveProperty("rate"); expect(result).not.toHaveProperty("margin");
+    expect(result?.amount).toBe("−C$250.00");
+    expect(result?.margin).toBeNull();
+    a.value.fee_amount="8000"; a.value.direct_cost_amount="8500";
+    expect(calculateContribution(a)?.margin).toEqual({label:"Contribution margin on collected fees",amount:"−6.25%"});
+    a.value.fee_amount="0"; a.value.direct_cost_amount="250";
     a.value.fee_amount="250";
-    expect(calculateContribution(a)?.amount).toBe("$0.00");
+    expect(calculateContribution(a)).toMatchObject({amount:"C$0.00",margin:{amount:"0.00%"}});
   });
   it("subtracts decimal amounts in cents",()=>{
     const a=comparable();a.value.fee_amount="0.30";a.value.direct_cost_amount="0.20";
-    expect(calculateContribution(a)?.amount).toBe("$0.10");
+    expect(calculateContribution(a)?.amount).toBe("C$0.10");
   });
   it.each(["", "18,00", "1,2", "18000-20000", "18k", "NaN", "Infinity", "1e5", "-1", "12.345", "9007199254740992"])("does not calculate an invalid or ambiguous fee %s",fee=>{
     const a=comparable();a.value.fee_amount=fee;expect(calculateContribution(a)).toBeNull();
@@ -39,7 +42,7 @@ describe("comparable matter economics",()=>{
     const a=comparable();a.value.fee_amount="0";a.value.direct_cost_amount="250";
     const b=buildStructuredBlueprintV4(a);
     const claim=b.why_firm_wants_work.claims.find(c=>c.text.includes("calculated as collected fee"));
-    expect(claim?.text).toContain("estimated contribution before overhead and acquisition costs: -$250.00 per matter");
+    expect(claim?.text).toContain("estimated contribution before overhead and acquisition costs: −C$250.00 per matter");
     expect(claim?.text).toContain("do not establish net profit");
     expect(claim?.evidence_basis).toBe("firm_reported_estimate");
     expect(claim?.source_answer_ids).toEqual(expect.arrayContaining(["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]));

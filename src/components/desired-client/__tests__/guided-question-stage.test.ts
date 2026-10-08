@@ -27,6 +27,24 @@ function FitSignalStage() {
   });
 }
 
+function PaymentContextStage() {
+  const [answers, setAnswers] = useState<DesiredClientAnswers>(() => {
+    const initial = emptyAnswers();
+    initial.value.payment = "predictable";
+    return initial;
+  });
+
+  return createElement(GuidedQuestionStage, {
+    stage: 3,
+    answers,
+    onEdit: (edit) => setAnswers(edit),
+    onBack: () => undefined,
+    onNext: () => undefined,
+    onCompare: () => undefined,
+    error: false,
+  });
+}
+
 function FocusStage({aiAvailable}:{aiAvailable:boolean|null}) {
   const [answers,setAnswers]=useState<DesiredClientAnswers>(()=>emptyAnswers());
   return createElement(GuidedQuestionStage,{
@@ -54,6 +72,19 @@ describe("GuidedQuestionStage write-in choice limits", () => {
 
     expect(screen.getByRole("alert").textContent).toContain("including your written answer");
     expect((screen.getByLabelText("Another fit signal (optional)") as HTMLInputElement).value).toBe(writtenAnswer);
+  });
+});
+
+describe("GuidedQuestionStage optional payment context", () => {
+  it("keeps the note and its optional source control inside the payment question", () => {
+    render(createElement(PaymentContextStage));
+
+    expect(screen.getByRole("radio", { name: "Usually predictable" })).toBeTruthy();
+    const note = screen.getByLabelText("Add payment context (optional)") as HTMLTextAreaElement;
+    fireEvent.change(note, { target: { value: "In the last ten matters, clients usually paid on schedule.\nThe firm observed this." } });
+    expect((screen.getByLabelText("Add payment context (optional)") as HTMLTextAreaElement).value).toBe("In the last ten matters, clients usually paid on schedule.\nThe firm observed this.");
+    expect(screen.getByRole("radio", { name: "The firm has observed this" })).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "The firm is testing a hypothesis" })).toBeTruthy();
   });
 });
 
