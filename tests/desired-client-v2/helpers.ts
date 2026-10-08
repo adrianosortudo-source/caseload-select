@@ -38,7 +38,7 @@ export async function layoutFailures(page: Page | Frame, copySelector = '[data-u
       const box = el.parentElement?.closest<HTMLElement>('[data-ui-component-content]');
       const rect = el.getBoundingClientRect();
       const controlLabel = el.matches('.dc-option__label, .dc-reviewed > span');
-      const intrinsicControl = el.matches('button, .dc-badge');
+      const intrinsicControl = el.matches('button, .dc-badge, .dc-evidence-label');
       if (controlLabel) {
         // Native choice controls reserve only the input and its gap. Their text
         // must fill the remaining label content track; wrapping is still checked.
@@ -75,12 +75,15 @@ export async function layoutFailures(page: Page | Frame, copySelector = '[data-u
         }
       }
       lines.sort((a, b) => a.y - b.y);
-      if (!el.matches('h1,h2,h3,h4') && lines.length > 1 && lines.at(-1)!.words.length === 1) out.push('Single-word last line in ' + el.tagName.toLowerCase() + ': ' + text);
+      if (lines.length > 1 && lines.at(-1)!.words.length === 1) out.push('Single-word last line in ' + el.tagName.toLowerCase() + ': ' + text);
       for (let i = 0; i < lines.length - 1; i++) {
         const current = lines[i].words, following = lines[i + 1].words[0];
         const used = Math.max(...current.map(w => w.right)) - Math.min(...current.map(w => w.left));
         const remaining = contentRight - Math.max(...current.map(w => w.right));
-        if (!el.matches('h1,h2,h3,h4') && used / contentWidth < .75 && following && following.width + 6 < remaining)
+        // Moving a word off a two-word final line would create the orphan
+        // this same gate forbids; that line is not avoidably short.
+        const wouldOrphan = i === lines.length - 2 && lines[i + 1].words.length <= 2;
+        if (!wouldOrphan && used / contentWidth < .75 && following && following.width + 6 < remaining)
           out.push('Avoidably short nonfinal line in ' + el.tagName.toLowerCase() + ': ' + text);
       }
     }

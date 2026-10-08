@@ -1,5 +1,7 @@
 "use client";
 
+import Image from "next/image";
+
 import { useMemo, useRef, useState } from "react";
 import { buildBlueprintViewModel, EVIDENCE_BASIS_LABELS, REPORT_EDIT_LINKS } from "@/lib/desired-client/blueprint";
 import { createHtmlDownload, createProfileDownload } from "@/lib/desired-client/export";
@@ -131,6 +133,7 @@ export function BriefView({
   const report = legacyBrief;
   return <article className={`dc-brief${legacy ? " dc-brief--legacy" : " dc-brief--blueprint"}`} data-ui-component-content="desired-client-blueprint">
     <header className="dc-brief__header" data-ui-component-content="desired-client-blueprint-header">
+      <Image className="dc-report-logo" src="/brand/logos/lockup-horizontal-tagline-light-transparent.png" alt="CaseLoad Select. Sign better cases." width={240} height={48} unoptimized />
       {legacy
         ? <><p className="dc-eyebrow" data-ui-copy="supporting">ORIGINAL REPORT VERSION</p><h1 data-ui-copy="heading">Desired Client Blueprint</h1><p className="dc-report-status" data-ui-copy="supporting">Original dcm-blueprint-v1 · {saved.mode === "ai" ? "AI-assisted" : "Structured"} · {new Date(saved.generatedAt).toLocaleDateString("en-CA")}</p></>
         : <><p className="dc-eyebrow" data-ui-copy="supporting">CASELOAD SELECT · DESIRED CLIENT &amp; MATTER BLUEPRINT</p><h1 data-ui-copy="heading">{model!.title}</h1><p className="dc-report-meta" data-ui-copy="supporting">{model!.modeLabel} · Created {model!.date}</p><div className="dc-report-status"><strong data-ui-copy="supporting">{model!.status}</strong><span data-ui-copy="supporting">{model!.evidenceStatus}</span></div></>}
@@ -169,7 +172,7 @@ export function BriefView({
       {model.conditions.length > 0 && <section className="dc-report-conditions" aria-labelledby="dc-conditions-title" data-ui-component-content="desired-client-conditions">
         <h2 id="dc-conditions-title" data-ui-copy="heading">Conditions and unresolved questions</h2>
         <p data-ui-copy="supporting">Resolve these constraints or evidence gaps before treating this direction as ready to grow.</p>
-        <ul>{model.conditions.map((condition, index) => <li key={`${index}-${condition}`} data-ui-copy="body">{condition}</li>)}</ul>
+        <ul data-ui-component-content="desired-client-condition-list">{model.conditions.map((condition, index) => <li key={`${index}-${condition}`} data-ui-copy="body">{condition}</li>)}</ul>
       </section>}
       <section className="dc-report-progress" aria-labelledby="dc-progress-title" data-ui-component-content="desired-client-progress-review">
         <h2 id="dc-progress-title" data-ui-copy="heading">Progress review</h2>
@@ -187,7 +190,7 @@ export function BriefView({
           ["First contact", model.decisionPathway.first_contact],
           ["Decision", model.decisionPathway.decision],
           ["Desired progress", model.decisionPathway.desired_progress],
-        ] as const).map(([label, statement]) => <div className="dc-report-decision-pathway__step" key={label}>
+        ] as const).map(([label, statement]) => <div className="dc-report-decision-pathway__step" data-ui-component-content="desired-client-pathway-step" key={label}>
           <h3 data-ui-copy="supporting">{label}</h3><p data-ui-copy="body">{statement.text}</p><span className="dc-evidence-label" data-ui-copy="supporting">{EVIDENCE_BASIS_LABELS[statement.evidence_basis]}</span>
         </div>)}</div>
       </section>}
@@ -199,7 +202,7 @@ export function BriefView({
             <p className="text-pretty" data-ui-copy="supporting">{card.recoveryDisclosure.description}</p>
           </div>}
           <div className="dc-report-card__claims">
-            {card.claims.map((claim, index) => <div className="dc-report-claim" key={`${card.id}-${index}`}>
+            {card.claims.map((claim, index) => <div className="dc-report-claim" data-ui-component-content="desired-client-report-claim" key={`${card.id}-${index}`}>
               <p data-ui-copy="body">{claim.text}</p>
               <span className="dc-evidence-label" data-ui-copy="supporting">{EVIDENCE_BASIS_LABELS[claim.evidence_basis]}</span>
             </div>)}

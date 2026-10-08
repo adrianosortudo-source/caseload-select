@@ -2,6 +2,7 @@
 import { STORAGE_COPY } from "@/lib/desired-client/copy";
 import type { SavedDraft } from "@/lib/desired-client/types";
 export function ResumePanel({ draft,onResume,onNew,onClear,notice,onNoticeDismiss }: { draft:SavedDraft|null;onResume:()=>void;onNew:()=>void;onClear:()=>void;notice:string;onNoticeDismiss:()=>void }) {
+  if (!draft && !notice) return null;
   return <section className="dc-resume" data-ui-component-content="desired-client-resume" aria-label="Saved draft">
     {notice&&<div role="status" className="dc-alert"><p data-ui-copy="body">{notice}</p><button className="dc-button dc-button--secondary" onClick={onNoticeDismiss}>Dismiss</button></div>}
     {draft?.reportNeedsRegeneration&&<p className="dc-alert" role="status" data-ui-copy="supporting">{STORAGE_COPY.briefNeedsRefresh}</p>}
