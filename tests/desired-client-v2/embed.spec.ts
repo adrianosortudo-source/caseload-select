@@ -16,7 +16,7 @@ test('iframe uses verified messages, grows and shrinks, and preserves the public
     const el = document.querySelector('iframe')!;
     window.dispatchEvent(new MessageEvent('message', { origin: 'https://unrelated.example', source: el.contentWindow, data: { type: 'desired-client:height', version: 1, height: 16000 } }));
     window.dispatchEvent(new MessageEvent('message', { origin: appOrigin, source: window, data: { type: 'desired-client:height', version: 1, height: 15000 } }));
-  });
+  }, appOrigin);
   expect(await dimensions()).toEqual(before);
   await frame.getByRole('button', { name: 'Build my profile', exact: true }).first().click();
   const practiceHeight = (await dimensions()).height;
@@ -40,6 +40,7 @@ test('iframe uses verified messages, grows and shrinks, and preserves the public
 
 for (const width of [1440, 1024, 768, 640, 390, 375, 320]) {
   test('embedded welcome reflows at ' + width + 'px', async ({ page }) => {
+    const appOrigin = new URL(test.info().project.use.baseURL ?? 'http://localhost:3301').origin;
     await page.setViewportSize({ width, height: 1000 });
     await page.goto('http://localhost:3300/tools/desired-client-matter.html');
     const frame = page.frameLocator('iframe[data-desired-client-frame]');

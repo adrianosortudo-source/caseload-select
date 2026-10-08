@@ -295,3 +295,9 @@
 .dc-landing .hero .dc-resume .dc-button--secondary{color:var(--parchment);border-color:var(--parchment)}
 
 @media(max-width:1100px){.dc-landing .steps{grid-template-columns:minmax(0,1fr);gap:32px}}
+
+.dc-landing .profile-intro,.dc-landing .detail-text{font-size:16px;text-wrap:pretty}
+.dc-landing .definition-aside p{text-wrap:wrap}
+@media(max-width:1190px){.dc-landing .detail-grid{grid-template-columns:minmax(0,1fr)}}
+
+@media(min-width:621px) and (max-width:767px){.dc-landing .topic-card h3{font-size:18px}}

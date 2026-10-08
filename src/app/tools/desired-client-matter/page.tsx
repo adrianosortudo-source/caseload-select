@@ -20,7 +20,7 @@ export default async function DesiredClientMatterPage({ searchParams }: PageProp
       {!embedded && (
         <header className="dc-site-header">
           <nav aria-label="CaseLoad Select">
-            <div className="dc-identity"><a href="https://caseloadselect.ca" aria-label="CaseLoad Select home"><Image className="dc-brand-logo" src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select. Sign better cases." width={280} height={55} unoptimized priority /></a><span className="dc-tool-tag">Desired Client</span></div>
+            <div className="dc-identity"><a href="https://caseloadselect.ca" aria-label="CaseLoad Select home"><Image className="dc-brand-logo" src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select. Sign better cases." width={833} height={160} unoptimized priority /></a><span className="dc-tool-tag">Desired Client</span></div>
             <a href="https://caseloadselect.ca/tools.html">Back to tools</a>
           </nav>
         </header>

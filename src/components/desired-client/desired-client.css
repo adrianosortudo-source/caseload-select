@@ -360,3 +360,11 @@
 
 @media(max-width:390px){.dc-option{padding:.5rem}.dc-option:has(.dc-option__input:checked){padding:calc(.5rem - 1px)}.dc-optional{padding:.75rem}.dc-route .dc-question__legend{font-size:1.125rem;text-wrap:pretty}}
 .dc-brief .dc-report-claim p,.dc-brief .dc-report-decision-pathway__step p{text-wrap:wrap}
+
+.dc-brief .dc-report-claim p,.dc-brief .dc-report-decision-pathway__step p{text-wrap:pretty}
+.dc-route .dc-review>p:first-of-type{font-size:1rem;text-wrap:pretty}
+.dc-route .dc-text-field>span[data-ui-copy]{text-wrap:pretty}
+@media(max-width:390px){.dc-route .dc-option__label{font-size:.9375rem;letter-spacing:-.015em}}
+@media(max-width:340px){.dc-app:not(:has(.dc-landing)){padding-inline:.25rem}.dc-option{flex-direction:column;gap:.375rem}.dc-route .dc-option__label{font-size:.890625rem;letter-spacing:0}}
+
+.dc-brief .dc-report-recovery p{font-size:.875rem;text-wrap:pretty}

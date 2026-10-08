@@ -15,12 +15,14 @@ The presentation is scoped to Desired Client. Questions, answers, validation, so
 - Baseline screenshots: landing, questionnaire, review and report at 1440, 1024, 768, 640, 390, 375 and 320 pixels, retained in the local task evidence directory.
 - Initial after audit: all seven widths, six preview topics, all six questionnaire stages, review and report. No page-level horizontal overflow was reported. Wrapping/content-track defects were reported and received subsequent presentation repairs.
 
-## Incomplete checks: no pass claimed
+## Exact-head CI and correction checkpoint
 
-- Local TypeScript failed because the incomplete Next.js package lacks declaration files. Error examples: TS7016 for next/server and next/dist/lib/metadata/types/metadata-interface.js. A bounded restoration of the exact locked Next 16.2.9 tarball is in progress from integrity-verified local cache. Registry metadata lookup failed ENOTCACHED; no version or configuration change was made.
-- The first direct browser run was interrupted after wrapping failures and a local test-output module-resolution issue. The latter was corrected in the external QA harness by writing generated offline route bundles beneath the worktree.
-- The first embedded run failed because a temporary Windows fixture root was not normalized before the existing path guard. The external fixture was corrected; the retry was interrupted when the isolated server disconnected.
-- The latest website-family refinement needs fresh rendered screenshots and complete browser flow verification, including keyboard/focus, dialog, generation loading/failure, saved report reopen, copy, offline HTML and print. Existing deterministic mocks avoid paid AI calls.
-- CI and preview must validate the exact branch head before visual signoff. This draft must not be merged or promoted to production without separate approval.
+- Initial draft head af580f25095e45a67b88402974f5aecb66782999 passed the full unit suite (626 files passed, 20 skipped), lint, self-contained assets, render-service checks, Secure Import and operator-login rendered gates, engine sync/language parity and the real Postgres concurrency suite.
+- That head failed Desired Client rendered wrapping and two embed-test TypeScript errors. Scoped fixes preserve every functional assertion: correct the evaluate argument and per-test app origin, measure actual hyphenated word fragments, restore natural wrapping, widen narrow-screen choice tracks and use the official logo intrinsic ratios.
+- Exact locked Next 16.2.9 was successfully restored from the integrity-verified offline cache. TypeScript subsequently passed locally before these final bounded corrections. No dependency versions, lockfiles or configuration changed.
+- Fresh local browser validation encountered a cold Next route compilation timeout under low available memory. That interrupted run is not a pass. The independent seven-width audit also timed out at initial navigation before collecting fresh evidence. The stalled local server was stopped. This delay is not a permanent filesystem failure: subsequent Git reads completed. Full verification will use exact-head remote CI and the deployed preview.
+- External local QA uses the standard localhost:3301 origin so the real offline HTTP fixture keeps its existing origin guard. No production route or access control was changed.
+- Targeted syntax check: all five changed TypeScript files parsed with zero syntax errors; this does not replace project typecheck.
+- Draft PR 395 remains unmerged. Final exact-head CI, fresh screenshots, complete browser flows and deployed preview verification are still pending.
 
-Local evidence is retained at C:/Users/adria/Documents/Codex/2026-10-08/task-7/visual-evidence. The exact dependency repair log is C:/Users/adria/Documents/Codex/2026-10-08/task-7/next-package-repair.log. No broad rebaseline or exemption for headings was introduced. The copy measurement helper now recognizes intrinsic evidence badges and checks actual report content tracks; it does not demand a change that would turn a two-word final line into the orphan it forbids.
+Local evidence is retained at C:/Users/adria/Documents/Codex/2026-10-08/task-7/visual-evidence. The dependency repair log is next-package-repair.log. No broad rebaseline, heading exemption, manual line break or copy-width cap was introduced.

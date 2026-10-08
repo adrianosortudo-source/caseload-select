@@ -45,7 +45,8 @@ export async function layoutFailures(page: Page | Frame, copySelector = '[data-u
         const label = el.parentElement!, input = label.querySelector('input')!;
         const lr = label.getBoundingClientRect(), ir = input.getBoundingClientRect(), cs = getComputedStyle(label);
         const right = lr.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);
-        const left = ir.right + parseFloat(cs.columnGap || cs.gap || '0');
+        const stacked = cs.flexDirection === 'column';
+        const left = stacked ? lr.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth) : ir.right + parseFloat(cs.columnGap || cs.gap || '0');
         if (Math.abs(rect.left - left) > 1.5 || Math.abs(rect.right - right) > 1.5)
           out.push('Narrow control label: ' + text);
       } else if (box && !intrinsicControl) {
@@ -67,11 +68,14 @@ export async function layoutFailures(page: Page | Frame, copySelector = '[data-u
           const range = document.createRange();
           range.setStart(node, match.index!);
           range.setEnd(node, match.index! + match[0].length);
-          const r = range.getBoundingClientRect();
-          if (r.width === 0 || r.height === 0) continue;
-          let line = lines.find(l => Math.abs(l.y - r.top) < 2);
-          if (!line) { line = { y: r.top, words: [] }; lines.push(line); }
-          line.words.push({ left: r.left, right: r.right, width: r.width });
+          // A naturally hyphenated word can occupy multiple rendered lines.
+          // Its union bounding box hides the second fragment and miscounts it.
+          for (const r of range.getClientRects()) {
+            if (r.width === 0 || r.height === 0) continue;
+            let line = lines.find(l => Math.abs(l.y - r.top) < 2);
+            if (!line) { line = { y: r.top, words: [] }; lines.push(line); }
+            line.words.push({ left: r.left, right: r.right, width: r.width });
+          }
         }
       }
       lines.sort((a, b) => a.y - b.y);

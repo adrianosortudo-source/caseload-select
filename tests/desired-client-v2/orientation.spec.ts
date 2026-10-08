@@ -253,7 +253,10 @@ test("canonical branding spans the landing, questionnaire, review, failure, repo
       await page.setViewportSize({ width, height: 1000 });
       await fontsAndSurfaces();
       expect(await layoutFailures(page, selector), `${state} at ${width}px`).toEqual([]);
-      await page.screenshot({ path: testInfo.outputPath(`branding-${state}-${width}.png`), fullPage: true });
+      // Assertions cover every width. Keep transient-state captures compact enough
+      // to finish within the real analysis timeout on slower local machines.
+      if (["welcome", "start", "review", "report"].includes(state) || width === 1440 || width === 320)
+        await page.screenshot({ path: testInfo.outputPath(`branding-${state}-${width}.png`), fullPage: true, style: "nextjs-portal{visibility:hidden}" });
     }
   };
   await page.goto("/tools/desired-client-matter");

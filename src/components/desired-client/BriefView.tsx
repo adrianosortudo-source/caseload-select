@@ -133,7 +133,7 @@ export function BriefView({
   const report = legacyBrief;
   return <article className={`dc-brief${legacy ? " dc-brief--legacy" : " dc-brief--blueprint"}`} data-ui-component-content="desired-client-blueprint">
     <header className="dc-brief__header" data-ui-component-content="desired-client-blueprint-header">
-      <Image className="dc-report-logo" src="/brand/logos/lockup-horizontal-tagline-light-transparent.png" alt="CaseLoad Select. Sign better cases." width={240} height={48} unoptimized />
+      <Image className="dc-report-logo" src="/brand/logos/lockup-horizontal-tagline-light-transparent.png" alt="CaseLoad Select. Sign better cases." width={834} height={165} unoptimized />
       {legacy
         ? <><p className="dc-eyebrow" data-ui-copy="supporting">ORIGINAL REPORT VERSION</p><h1 data-ui-copy="heading">Desired Client Blueprint</h1><p className="dc-report-status" data-ui-copy="supporting">Original dcm-blueprint-v1 · {saved.mode === "ai" ? "AI-assisted" : "Structured"} · {new Date(saved.generatedAt).toLocaleDateString("en-CA")}</p></>
         : <><p className="dc-eyebrow" data-ui-copy="supporting">CASELOAD SELECT · DESIRED CLIENT &amp; MATTER BLUEPRINT</p><h1 data-ui-copy="heading">{model!.title}</h1><p className="dc-report-meta" data-ui-copy="supporting">{model!.modeLabel} · Created {model!.date}</p><div className="dc-report-status"><strong data-ui-copy="supporting">{model!.status}</strong><span data-ui-copy="supporting">{model!.evidenceStatus}</span></div></>}
