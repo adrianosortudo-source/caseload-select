@@ -161,6 +161,18 @@ export async function runDesiredClientAnalysis(
         : ["card_not_object", "card_shape", "claims_not_array", "card_claims_empty", "card_claim_limit_exceeded"].includes(failure.reason)
         ? " Return exactly one card object with only a claims array and one to " + (parts[0] === "why_firm_wants_work" ? "seven" : "six") + " grounded claims. If there are too many details, combine only closely related statements that share an evidence basis; preserve all supplied facts and material conditions that belong in this card. Never mix known facts with unknowns or omit a consequential condition. If no known claim is supported, state the relevant evidence gap using only an unanswered or no-evidence source."
         : "";
+      const claimDiagnostic = failure.claimDiagnostic;
+      if (failure.reason === "evidence_group_selection_invalid" && claimDiagnostic?.selectionFailure === "mixed_basis_or_kind" && claimDiagnostic.selectionMetadataPresent && claimDiagnostic.selectionShapeValid) {
+        const conflictingGroups = claimDiagnostic.expectedGroups
+          .filter(group => claimDiagnostic.groupIds.includes(group.id))
+          .map(group => `${group.id} (${group.evidenceBasis}/${group.kind})`);
+        const distinctBases = new Set(claimDiagnostic.expectedGroups
+          .filter(group => claimDiagnostic.groupIds.includes(group.id))
+          .map(group => `${group.evidenceBasis}/${group.kind}`));
+        if (conflictingGroups.length > 1 && distinctBases.size > 1) {
+          repairGuidance += ` The validator identified claim ${claimDiagnostic.claimIndex} as selecting registered groups with incompatible evidence bases or kinds: ${conflictingGroups.join(", ")}. Keep one evidence basis and kind per claim. Split statements supported by different groups into separate claims, each with its matching registered evidence_group_ids; preserve all supplied facts and their source attribution.`;
+        }
+      }
       if (parts[0] === "why_firm_wants_work") repairGuidance += " This card allows up to seven grounded claims. Copy every applicable canonical payment or payment-context statement from grounded_payment_claims exactly, including its evidence_group_ids. Keep those statements separate from other fact groups, preserve every supplied commercial and capacity fact, and do not drop delivery conditions. Do not include progress targets or review periods in this card; those belong in the report's progress-review section.";
       const root = parsed as { brief: Record<string, unknown> };
       let fragment = root.brief[parts[0]];

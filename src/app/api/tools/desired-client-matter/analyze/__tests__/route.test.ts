@@ -3,9 +3,9 @@ import type { NextRequest } from "next/server";
 import { interviewClarificationSourceFingerprint, type AnalysisRequestEnvelope, type DesiredClientAnswers, type InterviewClarificationAnswer, type InterviewClarificationRequestEnvelope } from "@/lib/desired-client/types";
 import { completeAnswers, mixedPaymentProviderBlueprint, negativeEconomicsAnswers, providerBlueprint, validBlueprint } from "@/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResponseResult, validateAnalysisResult } from "@/lib/desired-client/output";
-import { savedAnalysis } from "@/lib/desired-client/storage";
-import type { AnalysisResult } from "@/lib/desired-client/types";
-import { buildDesiredClientEvidenceGroups } from "@/lib/desired-client/evidence-contract";
+import { DRAFT_STORAGE_KEY, loadDraft, saveDraft, savedAnalysis } from "@/lib/desired-client/storage";
+import type { AnalysisResult, DesiredClientBriefV4 } from "@/lib/desired-client/types";
+import { buildDesiredClientEvidenceGroups, evidenceGroupIdsForStatement } from "@/lib/desired-client/evidence-contract";
 import { buildStructuredBlueprintV4 } from "@/lib/desired-client/structured-blueprint";
 
 const mocks = vi.hoisted(() => ({
@@ -650,6 +650,65 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(JSON.stringify(body.result)).not.toContain("audited records prove");
     expect(validateAnalysisResponseResult(body.result, answers, [])).toEqual(body.result);
     expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns and saves the report after an over-limit card is repaired into separate evidence bases", async () => {
+    const answers = negativeEconomicsAnswers();
+    const request = { ...structuredClone(ENVELOPE), answerRevision: answers.revision, answers };
+    const original = validBlueprint(answers);
+    const initial = providerBlueprint(original, answers) as { brief: Record<string, { claims: Array<Record<string, unknown>> }> };
+    initial.brief.evidence_and_open_questions.claims = Array.from({ length: 7 }, () => structuredClone(initial.brief.evidence_and_open_questions.claims[0]));
+    const groups = buildDesiredClientEvidenceGroups("evidence_and_open_questions", answers);
+    const paymentGroup = groups.find(group => group.source_answer_ids.includes("value.payment"));
+    const contextGroup = groups.find(group => group.source_answer_ids.includes("value.payment_context"));
+    expect(paymentGroup).toBeDefined();
+    expect(contextGroup).toBeDefined();
+    const baseClaim = structuredClone(providerBlueprint(original, answers) as { brief: Record<string, { claims: Array<Record<string, unknown>> }> }).brief.evidence_and_open_questions.claims[0];
+    const mixedClaim = { text: "Synthetic mixed-selector fixture; provider wording is not reproduced.", evidence_group_ids: [paymentGroup!.id, contextGroup!.id] };
+    const separatedPaymentClaims = buildStructuredBlueprintV4(answers).why_firm_wants_work.claims
+      .filter(claim => claim.source_answer_ids.includes("value.payment") || claim.source_answer_ids.includes("value.payment_context"))
+      .map(claim => ({ text: claim.text, evidence_group_ids: evidenceGroupIdsForStatement("evidence_and_open_questions", claim, answers) }));
+    expect(separatedPaymentClaims.every(claim => claim.evidence_group_ids.length > 0)).toBe(true);
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(initial))
+      .mockResolvedValueOnce(rawProviderResponse({ claims: [baseClaim, mixedClaim] }))
+      .mockResolvedValueOnce(rawProviderResponse({ claims: [baseClaim, ...separatedPaymentClaims] }));
+
+    const response = await POST(makeRequest(JSON.stringify(request)));
+
+    expect(response.status).toBe(200);
+    await expectNoStore(response);
+    const body = await response.json();
+    expect(body).toMatchObject({ ok: true, requestId: request.requestId, answerRevision: answers.revision, reviewRunId: request.reviewRunId, providerCallsUsed: 3, providerCallLimit: 3 });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
+    expect(validateAnalysisResponseResult(body.result, answers, [])).toEqual(body.result);
+    const payment = body.result.brief.evidence_and_open_questions.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("value.payment"));
+    const context = body.result.brief.evidence_and_open_questions.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("value.payment_context"));
+    expect(payment).toMatchObject({ evidence_basis: "firm_reported_observation", source_answer_ids: ["value.payment"] });
+    expect(context).toMatchObject({ evidence_basis: "client_reported", source_answer_ids: ["value.payment_context", "value.payment_context_basis"] });
+    expect(body.result.brief.client_and_matter).toEqual(original.brief.client_and_matter);
+
+    const recovered = savedAnalysis(body.result, answers);
+    expect(recovered).toBeDefined();
+    expect(recovered).not.toHaveProperty("recoveredSections");
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, value); },
+      removeItem: (key: string) => { store.delete(key); },
+      clear: () => store.clear(),
+      key: (index: number) => [...store.keys()][index] ?? null,
+      get length() { return store.size; },
+    } as Storage;
+    expect(saveDraft(storage, answers, 7, recovered).status).toBe("saved");
+    expect(store.has(DRAFT_STORAGE_KEY)).toBe(true);
+    const reopened = loadDraft(storage);
+    expect(reopened.status).toBe("ready");
+    if (reopened.status === "ready") {
+      expect(reopened.draft.savedBrief).not.toHaveProperty("recoveredSections");
+      const reopenedBrief = reopened.draft.savedBrief?.brief as DesiredClientBriefV4 | undefined;
+      expect(reopenedBrief?.report_version).toBe("dcm-blueprint-v4");
+      expect(reopenedBrief?.evidence_and_open_questions.claims).toEqual(body.result.brief.evidence_and_open_questions.claims);
+    }
   });
 
   it("logs the earlier blocked recovery gate and raw selection counts without answer or claim text", async () => {
