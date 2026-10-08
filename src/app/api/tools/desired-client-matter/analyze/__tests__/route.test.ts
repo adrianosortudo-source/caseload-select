@@ -614,7 +614,10 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const body = await response.json();
     expect(body).toMatchObject({ ok: true, requestId: request.requestId, answerRevision: answers.revision, reviewRunId: request.reviewRunId, providerCallsUsed: 1, providerCallLimit: 1 });
     expect(body.result.recoveredSections).toEqual(["why_firm_wants_work"]);
-    expect(body.result.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work);
+    const canonicalCard = buildStructuredBlueprintV4(answers).why_firm_wants_work;
+    expect(body.result.brief.why_firm_wants_work.claims.slice(0, canonicalCard.claims.length)).toEqual(canonicalCard.claims);
+    expect(body.result.brief.why_firm_wants_work.claims).toHaveLength(7);
+    expect(body.result.brief.why_firm_wants_work.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("practice.development_needs"))).toMatchObject({ kind: "unknown", evidence_basis: "unknown", text: expect.stringContaining("development needs") });
     expect(JSON.stringify(body.result)).not.toContain("DISCARDED_HTTP_SENTINEL");
     expect(JSON.stringify(body.result)).not.toContain("99 clients");
     expect(JSON.stringify(body.result)).not.toContain("audited records prove");

@@ -127,6 +127,8 @@ function defaultBasis(slot: DesiredClientEvidenceSlot, path: string, answers: De
     return item && item.stage <= 3 ? "firm_preference" : "hypothesis";
   }
   if (path === "practice.experience") return ["regular", "occasional", "adjacent"].includes(answers.practice.experience ?? "") ? "firm_reported_experience" : "firm_preference";
+  if (path === "practice.firm_type") return "firm_reported_experience";
+  if (path === "delivery.fit_signals") return "hypothesis";
   if (["practice.capability", "practice.client_strength_support"].includes(path)) return "firm_reported_experience";
   if (["practice.client_strength", "practice.client_strength_effect"].includes(path)) return "firm_preference";
   if (["practice.development_needs", "practice.enjoys", "value.reasons", "value.fee_effort", "direction.aim", "direction.evidence", "direction.less", "direction.less_reason", "direction.less_note", "repeatability.target", "repeatability.review_period", "repeatability.success_measure", "repeatability.success_other", "repeatability.staffing_constraint"].includes(path)) return "firm_preference";

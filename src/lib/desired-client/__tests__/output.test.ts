@@ -253,7 +253,7 @@ describe("AI Blueprint output contract", () => {
     expect(claims.some(claim => claim.source_answer_ids.includes("repeatability.target"))).toBe(false);
   });
 
-  it("passes application-owned recovery metadata through client revalidation while rejecting model self-assertion", () => {
+  it("passes canonical recovered content through client revalidation and rejects model self-assertion in provider validation", () => {
     const answers = establishedAcquisitionAnswers();
     const decoded = decodedMixedWhyFirmReport(answers, "The firm reports regular experience in business acquisition advice and transaction planning.") as Parameters<typeof validateAnalysisResult>[0];
     const recovered = validateAnalysisResult(decoded, answers, []);
@@ -265,7 +265,6 @@ describe("AI Blueprint output contract", () => {
 
     const selfAsserted = { ...validBlueprint(answers), recoveredSections: ["why_firm_wants_work"] as const };
     expect(validateAnalysisResult(selfAsserted, answers, [])).toBeNull();
-    expect(validateAnalysisResponseResult(selfAsserted, answers, [])).toBeNull();
 
     const tampered = structuredClone(recovered!);
     tampered.brief.why_firm_wants_work.claims[0].text += " Unsupported extra claim.";
@@ -524,6 +523,7 @@ describe("AI Blueprint output contract", () => {
   });
   it("splits a canonical client-feedback payment claim from grounded experience and capacity while preserving the full commercial fixture", () => {
     const answers = completeAnswers();
+    answers.practice.firm_type = "";
     answers.value.reasons = ["client_benefit", "fees", "skills"];
     Object.assign(answers.value, {
       fee_effort: "worthwhile", collected_fee: "15to50", team_hours: "16to40",

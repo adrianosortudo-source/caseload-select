@@ -218,6 +218,37 @@ function paymentClaimIsAuthentic(value: unknown, answers: DesiredClientAnswers):
   return true;
 }
 
+function selectedSourceIsFaithfullyRepresented(path: AnswerReferencePath, claim: unknown, group: ReturnType<typeof buildDesiredClientEvidenceGroups>[number], answers: DesiredClientAnswers): boolean {
+  if (!record(claim) || typeof claim.text !== "string" || claim.evidence_basis !== group.evidence_basis || claim.kind !== group.kind) return false;
+  if (!claimNegationMatchesSources(claim.text, [path], answers)) return false;
+  if (registryIsUnresolvedEvidenceSource(path, answers)) return claim.evidence_basis === "unknown" && claim.kind === "unknown" && /\b(?:unknown|not established|not supplied|not specified|not defined|unspecified|not yet)\b/iu.test(claim.text);
+  const expected = getAnswerLabel(path, answers) ?? answerTextForPath(path, answers).find(value => value.trim()) ?? "";
+  if (!expected.trim()) return false;
+  const expectedTokens = significantGroundingTokens(expected);
+  const actualTokens = new Set(significantGroundingTokens(claim.text));
+  return expectedTokens.length ? expectedTokens.every(token => actualTokens.has(token)) : claim.text.toLocaleLowerCase("en-CA").includes(expected.toLocaleLowerCase("en-CA"));
+}
+
+function structuredRecoveryClaim(paths: AnswerReferencePath[], group: ReturnType<typeof buildDesiredClientEvidenceGroups>[number], answers: DesiredClientAnswers): EvidenceLinkedStatement {
+  const unresolvedPaths = paths.filter(path => registryIsUnresolvedEvidenceSource(path, answers));
+  const labelForPath = (path: string) => path.slice(path.indexOf(".") + 1).replaceAll("_", " ");
+  if (unresolvedPaths.length) {
+    return {
+      text: `The interview has not specified: ${unresolvedPaths.map(labelForPath).join("; ")}.`,
+      kind: "unknown", evidence_basis: "unknown", source_answer_ids: paths,
+    };
+  }
+  const facts = paths.map(path => {
+    const label = labelForPath(path);
+    const value = getAnswerLabel(path, answers) ?? answerTextForPath(path, answers).find(item => item.trim()) ?? "";
+    return `${label}: ${value}`;
+  });
+  const attribution = group.evidence_basis === "client_reported" ? "Client-reported answer" :
+    group.evidence_basis === "firm_reported_observation" || group.evidence_basis === "firm_reported_recorded" || group.evidence_basis === "firm_reported_estimate" || group.evidence_basis === "firm_reported_experience" ? "Firm-reported answer" :
+    group.evidence_basis === "hypothesis" ? "Working answer to confirm" : "Firm-selected answer";
+  return { text: `${attribution}: ${facts.join("; ")}.`, kind: group.kind, evidence_basis: group.evidence_basis, source_answer_ids: paths };
+}
+
 /** Match common written-out counts only when a nearby quantity word makes the
  * numeric meaning clear. This keeps “two matters” equivalent to “2 matters”
  * without treating every prose use of “one” or “first” as a figure. */
@@ -336,7 +367,7 @@ function validStatement(value: unknown, answers: DesiredClientAnswers, slot: str
     value.kind !== "experience" ||
     (slot === "practice_current_practice"
       ? paths.length !== 1 || paths[0] !== "practice.firm_type"
-      : !paths.some((path) => path === "practice.experience" || path === "practice.capability" || path === "practice.client_strength_support"))
+      : !paths.some((path) => path === "practice.experience" || path === "practice.capability" || path === "practice.client_strength_support" || path === "practice.firm_type"))
   )) return reject("experience_basis_mismatch", paths[0] as SafeSourcePath);
   if (value.evidence_basis === "client_reported" || value.evidence_basis === "firm_reported_observation") {
     const expected = value.evidence_basis === "client_reported" ? "client_feedback" : "firm_observation";
@@ -524,6 +555,7 @@ function recoverMixedWhyFirmSelection(value: unknown, answers: DesiredClientAnsw
   const groups = buildDesiredClientEvidenceGroups("why_firm_wants_work", answers);
   const groupsById = new Map(groups.map(group => [group.id, group]));
   const originalSources = new Set<AnswerReferencePath>();
+  const selectedGroupByPath = new Map<AnswerReferencePath, (typeof groups)[number]>();
   let foundMixedSelection = false;
   for (const [index, claim] of card.claims.entries()) {
     if (!record(claim) || !exact(claim, ["text", "kind", "source_answer_ids", "evidence_basis"])) return blocked("claim_shape", index);
@@ -546,19 +578,58 @@ function recoverMixedWhyFirmSelection(value: unknown, answers: DesiredClientAnsw
     } else {
       if (!selection.valid || selection.failure) return blocked("selection_status", index);
     }
-    paths.forEach(path => originalSources.add(path));
+    paths.forEach(path => { originalSources.add(path); selectedGroupByPath.set(path, resolvedGroups.find(group => group.source_answer_ids.includes(path))!); });
   }
   if (!foundMixedSelection) return blocked("no_mixed_selection");
 
   const replacement = buildStructuredBlueprintV4(answers).why_firm_wants_work;
+  const findClaims = (node: unknown, found: Record<string, unknown>[] = []): Record<string, unknown>[] => {
+    if (Array.isArray(node)) { node.forEach(item => findClaims(item, found)); return found; }
+    if (!record(node)) return found;
+    if (Array.isArray(node.source_answer_ids) && typeof node.text === "string") found.push(node);
+    Object.values(node).forEach(item => findClaims(item, found));
+    return found;
+  };
+  const reportClaims = findClaims({ ...brief, why_firm_wants_work: replacement });
+  const absentPaths: AnswerReferencePath[] = [];
+  const unfaithfulPaths: AnswerReferencePath[] = [];
+  for (const path of originalSources) {
+    const carrying = reportClaims.filter(claim => Array.isArray(claim.source_answer_ids) && claim.source_answer_ids.includes(path));
+    const group = selectedGroupByPath.get(path);
+    if (!group) { unfaithfulPaths.push(path); continue; }
+    if (carrying.some(claim => selectedSourceIsFaithfullyRepresented(path, claim, group, answers))) continue;
+    if (carrying.length) unfaithfulPaths.push(path);
+    else absentPaths.push(path);
+  }
+  if (unfaithfulPaths.length) return blocked("source_coverage", undefined, { replacementClaimCount: Math.min(replacement.claims.length, 32), missingSourceCount: Math.min(unfaithfulPaths.length, 32) });
+
+  const byBasis = new Map<string, { group: (typeof groups)[number]; paths: AnswerReferencePath[] }>();
+  for (const path of absentPaths) {
+    const group = selectedGroupByPath.get(path)!;
+    const key = `${group.evidence_basis}:${group.kind}`;
+    const current = byBasis.get(key) ?? { group, paths: [] };
+    current.paths.push(path);
+    byBasis.set(key, current);
+  }
+  for (const { group, paths } of byBasis.values()) {
+    for (let offset = 0; offset < paths.length; offset += 8) {
+      const sourcePaths = paths.slice(offset, offset + 8);
+      const generated = structuredRecoveryClaim(sourcePaths, { ...group, source_answer_ids: sourcePaths }, answers);
+      const mergeIndex = replacement.claims.findIndex(claim => claim.evidence_basis === generated.evidence_basis && claim.kind === generated.kind &&
+        new Set([...claim.source_answer_ids, ...generated.source_answer_ids]).size <= 8);
+      if (mergeIndex >= 0) {
+        const existing = replacement.claims[mergeIndex];
+        replacement.claims[mergeIndex] = { ...existing, text: `${existing.text} ${generated.text}`, source_answer_ids: [...existing.source_answer_ids, ...generated.source_answer_ids] };
+      } else if (replacement.claims.length < 7) replacement.claims.push(generated);
+      else return blocked("replacement_limits", undefined, { replacementClaimCount: Math.min(replacement.claims.length + 1, 32), missingSourceCount: Math.min(absentPaths.length, 32) });
+    }
+  }
   const replacementCount = { replacementClaimCount: Math.min(replacement.claims.length, 32) };
   if (!replacement.claims.length || replacement.claims.length > 7 || replacement.claims.some(claim => !claim.source_answer_ids.length || claim.source_answer_ids.length > 8)) return blocked("replacement_limits", undefined, replacementCount);
-  const replacementSources = new Set(replacement.claims.flatMap(claim => claim.source_answer_ids));
-  const missingSourceCount = [...originalSources].filter(path => !replacementSources.has(path)).length;
-  if (missingSourceCount) return blocked("source_coverage", undefined, { ...replacementCount, missingSourceCount: Math.min(missingSourceCount, 32) });
+  const recoveredBrief = { ...brief, why_firm_wants_work: replacement };
 
   return {
-    value: { ...value, brief: { ...brief, why_firm_wants_work: replacement } },
+    value: { ...value, brief: recoveredBrief },
     recovered: true,
     diagnostic: { reason: "recovered", ...counts, ...replacementCount, missingSourceCount: 0 },
   };
@@ -690,6 +761,53 @@ export function validateAnalysisResult(value: unknown, answers: DesiredClientAns
   };
 }
 
+function sameStatement(left: unknown, right: unknown): boolean { return JSON.stringify(left) === JSON.stringify(right); }
+
+function isGroundedRecoveredCard(value: unknown, answers: DesiredClientAnswers): boolean {
+  if (!exact(value, ["claims"]) || !Array.isArray(value.claims) || value.claims.length < 1 || value.claims.length > 7) return false;
+  const baseClaims = buildStructuredBlueprintV4(answers).why_firm_wants_work.claims;
+  const groups = buildDesiredClientEvidenceGroups("why_firm_wants_work", answers);
+  const claims = value.claims as unknown[];
+  const used = new Set<number>();
+  const groupsFor = (paths: AnswerReferencePath[], basis: EvidenceBasis, kind: EvidenceLinkedStatement["kind"]) => {
+    if (!paths.length || paths.length > 8 || new Set(paths).size !== paths.length) return false;
+    return paths.every(path => groups.some(group => group.evidence_basis === basis && group.kind === kind && group.source_answer_ids.includes(path)));
+  };
+  const expectedFallback = (paths: AnswerReferencePath[], basis: EvidenceBasis, kind: EvidenceLinkedStatement["kind"]) => {
+    if (!groupsFor(paths, basis, kind)) return null;
+    return structuredRecoveryClaim(paths, { slot: "why_firm_wants_work", evidence_basis: basis, kind, source_answer_ids: paths, id: "" }, answers);
+  };
+  for (const base of baseClaims) {
+    const exactIndex = claims.findIndex((claim, index) => !used.has(index) && sameStatement(claim, base));
+    if (exactIndex >= 0) { used.add(exactIndex); continue; }
+    const extendedIndex = claims.findIndex((candidate, index) => {
+      if (used.has(index) || !record(candidate) || !Array.isArray(candidate.source_answer_ids) || typeof candidate.text !== "string" ||
+        candidate.evidence_basis !== base.evidence_basis || candidate.kind !== base.kind) return false;
+      const sources = candidate.source_answer_ids as unknown[];
+      if (!base.source_answer_ids.every(path => sources.includes(path))) return false;
+      const added = sources.filter((path): path is AnswerReferencePath => typeof path === "string" && !base.source_answer_ids.includes(path as AnswerReferencePath));
+      if (!added.length || sources.length !== base.source_answer_ids.length + added.length || !groupsFor(added, base.evidence_basis, base.kind)) return false;
+      const fallback = expectedFallback(added, base.evidence_basis, base.kind);
+      return !!fallback && sameStatement(candidate, { ...base, text: `${base.text} ${fallback.text}`, source_answer_ids: [...base.source_answer_ids, ...added] });
+    });
+    if (extendedIndex < 0) return false;
+    used.add(extendedIndex);
+  }
+  for (let index = 0; index < claims.length; index += 1) {
+    if (used.has(index)) continue;
+    const claim = claims[index];
+    if (!record(claim) || typeof claim.text !== "string" || !Array.isArray(claim.source_answer_ids) ||
+      !BASIS.includes(claim.evidence_basis as EvidenceBasis) || !KIND.includes(claim.kind as typeof KIND[number])) return false;
+    const paths = claim.source_answer_ids as unknown[];
+    if (paths.some(path => typeof path !== "string")) return false;
+    const sourcePaths = paths as AnswerReferencePath[];
+    const fallback = expectedFallback(sourcePaths, claim.evidence_basis as EvidenceBasis, claim.kind as EvidenceLinkedStatement["kind"]);
+    if (!fallback || !sameStatement(claim, fallback)) return false;
+    used.add(index);
+  }
+  return used.size === claims.length;
+}
+
 /** Validate an application response, which may carry recovery metadata created after model validation.
  * Model output continues to go through validateAnalysisResult's strict two-key root contract. */
 export function validateAnalysisResponseResult(value: unknown, answers: DesiredClientAnswers, eligibleCodes: readonly ClarificationCode[], reportFailure?: (failure: AnalysisValidationFailure) => void): AnalysisResult | null {
@@ -705,8 +823,7 @@ export function validateAnalysisResponseResult(value: unknown, answers: DesiredC
 
   const validated = validateAnalysisResult({ brief: value.brief, clarification_code: value.clarification_code }, answers, eligibleCodes, reportFailure);
   if (!validated) return null;
-  const deterministicCard = buildStructuredBlueprintV4(answers).why_firm_wants_work;
-  if (JSON.stringify(validated.brief.why_firm_wants_work) !== JSON.stringify(deterministicCard)) {
+  if (!isGroundedRecoveredCard(validated.brief.why_firm_wants_work, answers)) {
     return reject("recovery_metadata_not_grounded");
   }
   return { ...validated, recoveredSections: ["why_firm_wants_work"] };

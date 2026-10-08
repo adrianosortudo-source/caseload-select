@@ -1,6 +1,6 @@
 import { buildStructuredBrief } from "./brief";
 import { getEligibleClarificationCodes } from "./clarifications";
-import { validateAnalysisResult } from "./output";
+import { validateAnalysisResponseResult, validateAnalysisResult } from "./output";
 import { resolveAnswerReference } from "./catalog";
 import { validateDraftAnswers, validateLegacyV22DraftAnswers, validateLegacyV31DraftAnswers, validateLegacyV32DraftAnswers } from "./validation";
 import { migrateV21Answers, migrateV22Answers, migrateV30Answers, migrateV31Answers, migrateV32Answers } from "./migration";
@@ -64,13 +64,16 @@ function restoreSavedBrief(value: unknown, answers: DesiredClientAnswers): Saved
   const priorRefresh = value.refreshedFrom;
   const recoveredSections = value.recoveredSections;
   if (recoveredSections !== undefined && (!Array.isArray(recoveredSections) || recoveredSections.length !== 1 || recoveredSections[0] !== "why_firm_wants_work" || value.mode !== "ai")) return undefined;
+  const recoveredResult = recoveredSections
+    ? validateAnalysisResponseResult({ brief: value.brief, clarification_code: null, recoveredSections }, answers, [])
+    : undefined;
+  if (recoveredSections && !recoveredResult) return undefined;
   if (priorRefresh !== undefined && (!isRecord(priorRefresh) || !["generatedAt|wordingReviewed", "generatedAt|mode|wordingReviewed"].includes(Object.keys(priorRefresh).sort().join("|")) || typeof priorRefresh.generatedAt !== "string" || !Number.isFinite(Date.parse(priorRefresh.generatedAt)) || typeof priorRefresh.wordingReviewed !== "boolean" || (priorRefresh.mode !== undefined && priorRefresh.mode !== "ai" && priorRefresh.mode !== "structured"))) return undefined;
   const refreshedFrom: SavedBrief["refreshedFrom"] = isRecord(priorRefresh) ? { generatedAt: new Date(Date.parse(priorRefresh.generatedAt as string)).toISOString(), wordingReviewed: priorRefresh.wordingReviewed as boolean, mode: priorRefresh.mode === "ai" || priorRefresh.mode === "structured" ? priorRefresh.mode : value.mode as SavedBrief["mode"] } : undefined;
   const isLegacyV1 = isRecord(value.brief) && value.brief.report_version === "dcm-blueprint-v1";
   if (!isLegacyV1 && openClarificationCode !== undefined && (typeof openClarificationCode !== "string" || !getEligibleClarificationCodes(answers).includes(openClarificationCode as ClarificationCode))) return undefined;
   const brief = value.brief;
-  if (recoveredSections && (!isRecord(brief) || brief.report_version !== "dcm-blueprint-v4" ||
-    !sameJson(brief.why_firm_wants_work, buildStructuredBrief(answers).why_firm_wants_work))) return undefined;
+  if (recoveredSections && (!isRecord(brief) || brief.report_version !== "dcm-blueprint-v4")) return undefined;
   if (isRecord(brief) && brief.report_version === "dcm-blueprint-v1") {
     const snapshot = value.sourceAnswersSnapshot;
     if (value.sourceAnswersVersion !== "dcm-v2.2" || !isRecord(snapshot) || snapshot.schema_version !== "dcm-v2.2" ||
@@ -101,7 +104,7 @@ function restoreSavedBrief(value: unknown, answers: DesiredClientAnswers): Saved
     const refreshRecord = reportMatchesCurrentBuilder ? refreshedFrom : (refreshedFrom ?? { generatedAt: new Date(Date.parse(value.generatedAt as string)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "structured" as const });
     return { brief: rebuilt, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: reportMatchesCurrentBuilder ? new Date(Date.parse(value.generatedAt as string)).toISOString() : new Date().toISOString(), wordingReviewed: reportMatchesCurrentBuilder ? value.wordingReviewed : false, mode: "structured", ...(refreshRecord ? { refreshedFrom: refreshRecord } : {}), ...(openClarificationCode ? { openClarificationCode: openClarificationCode as ClarificationCode } : {}) };
   }
-  const result = validateAnalysisResult({ brief, clarification_code: null }, answers, []);
+  const result = recoveredResult ?? validateAnalysisResult({ brief, clarification_code: null }, answers, []);
   if (!result) return undefined;
   const wordingChanged = !sameJson(brief, result.brief);
   const refreshRecord = wordingChanged ? (refreshedFrom ?? { generatedAt: new Date(Date.parse(value.generatedAt)).toISOString(), wordingReviewed: value.wordingReviewed, mode: "ai" as const }) : refreshedFrom;
@@ -209,9 +212,11 @@ function hydrateLegacyFollowupFingerprints(input: DesiredClientAnswers): Desired
 }
 export function clearDraft(storage: Storage): boolean { try { storage.removeItem(DRAFT_STORAGE_KEY); return true; } catch { return false; } }
 export function savedAnalysis(result: AnalysisResult, answers: DesiredClientAnswers): SavedBrief | undefined {
-  const checked = validateAnalysisResult({ brief: result.brief, clarification_code: result.clarification_code }, answers, []);
-  const recovered = result.recoveredSections?.length === 1 && result.recoveredSections[0] === "why_firm_wants_work" &&
-    sameJson(result.brief.why_firm_wants_work, buildStructuredBrief(answers).why_firm_wants_work);
+  const recoveryRequested = result.recoveredSections?.length === 1 && result.recoveredSections[0] === "why_firm_wants_work";
+  const checked = recoveryRequested
+    ? validateAnalysisResponseResult({ brief: result.brief, clarification_code: result.clarification_code, recoveredSections: ["why_firm_wants_work"] }, answers, [])
+    : validateAnalysisResult({ brief: result.brief, clarification_code: result.clarification_code }, answers, []);
+  const recovered = !!checked?.recoveredSections?.includes("why_firm_wants_work");
   return checked ? { brief: checked.brief, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: structuredClone(answers), sourceBriefRevision: answers.revision, generatedAt: new Date().toISOString(), wordingReviewed: false, mode: "ai", ...(recovered ? { recoveredSections: ["why_firm_wants_work"] as Array<"why_firm_wants_work"> } : {}) } : undefined;
 }
 

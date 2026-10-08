@@ -229,7 +229,10 @@ test("the actual offline analysis HTTP route recovers mixed payment and survives
         const body = await response.json();
         expect(body.result.recoveredSections).toEqual(["why_firm_wants_work"]);
         expect(body.providerCallsUsed).toBe(1);
-        expect(body.result.brief.why_firm_wants_work.claims).toHaveLength(6);
+        expect(body.result.brief.why_firm_wants_work.claims).toHaveLength(7);
+        const retainedUnknown = body.result.brief.why_firm_wants_work.claims.find((claim: { source_answer_ids: string[] }) => claim.source_answer_ids.includes("practice.development_needs"));
+        expect(retainedUnknown).toMatchObject({ kind: "unknown", evidence_basis: "unknown" });
+        expect(retainedUnknown.text).toContain("development needs");
         expect(JSON.stringify(body.result)).not.toContain("DISCARDED_HTTP_SENTINEL");
         expect(JSON.stringify(body.result)).not.toContain("99 clients");
         expect(JSON.stringify(body.result)).not.toContain("audited records prove");
@@ -246,6 +249,7 @@ test("the actual offline analysis HTTP route recovers mixed payment and survives
     await expect(recovery).toContainText("Built from your answers");
     await expect(recovery).toContainText("This section was rebuilt from your answers because the AI combined different evidence types.");
     await expect(page.locator(".dc-brief")).toContainText(directionClaim.text);
+    await expect(page.locator(".dc-brief")).toContainText("The interview has not specified: development needs.");
     await expect(page.locator(".dc-report-meta")).toContainText("AI-assisted draft with a structured recovery");
 
     for (const width of [1440, 1024, 768, 640, 375, 320]) {
@@ -306,6 +310,7 @@ test("the actual offline analysis HTTP route recovers mixed payment and survives
     await download.saveAs(reportPath);
     const exported = await import("node:fs/promises").then(fs => fs.readFile(reportPath, "utf8"));
     expect(exported).toContain(directionClaim.text);
+    expect(exported).toContain("The interview has not specified: development needs.");
     expect(exported).not.toContain("DISCARDED_HTTP_SENTINEL");
     expect(exported).not.toContain("99 clients");
     expect(exported).not.toContain("audited records prove");

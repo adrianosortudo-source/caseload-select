@@ -1,8 +1,9 @@
 import { validateAnalysisResult } from "../output";
 import { emptyAnswers } from "../brief";
 import { buildDefinitionSentence } from "../definition";
+import { getAnswerLabel } from "../catalog";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
-import { evidenceGroupIdsForStatement, type DesiredClientEvidenceSlot } from "../evidence-contract";
+import { buildDesiredClientEvidenceGroups, evidenceGroupIdsForStatement, type DesiredClientEvidenceSlot } from "../evidence-contract";
 import { providerTargetClaimIds } from "../provider-schema";
 import type { AnalysisResult, DesiredClientAnswers, DesiredClientBriefV4, EvidenceBasis, EvidenceLinkedStatement } from "../types";
 export type ProviderSchemaProbe = {
@@ -43,7 +44,7 @@ export function validBlueprint(answers: DesiredClientAnswers = completeAnswers()
  client_goals_needs:{claims:[evidence("The client wants to understand their options.","hypothesis","client.goals")]},
  why_firm_wants_work:{claims:[evidence("The firm values this work's fit with its skills.","firm_preference","value.reasons")]},
  why_client_chooses_firm:{claims:[evidence("Client choice criteria are not yet established.","unknown","client.choice_priorities")]},
- recognizable_circumstances:{claims:[evidence("Scope information is useful for lawyer review.","hypothesis","delivery.fit_signals")]},
+  recognizable_circumstances:{claims:[evidence(getAnswerLabel("delivery.fit_signals", answers) ?? "The relevant circumstance remains to be confirmed.","hypothesis","delivery.fit_signals")]},
  evidence_and_open_questions:{claims:[evidence("Neither demand nor acquisition cost is established.","unknown","opportunity.sources")]},
  decision_pathway: grounded.decision_pathway
  };
@@ -107,16 +108,25 @@ export function negativeEconomicsAnswers(): DesiredClientAnswers {
 
 export function mixedPaymentProviderBlueprint(answers: DesiredClientAnswers, paraphrase = true) {
  const result = validateAnalysisResult(validBlueprint(answers), answers, [])!;
- const encoded = providerBlueprint(result, answers) as { brief: { why_firm_wants_work: { claims: Array<{ text: string; evidence_group_ids: string[] }> } } };
+ const encoded = providerBlueprint(result, answers) as { brief: {
+  why_firm_wants_work: { claims: Array<{ text: string; evidence_group_ids: string[] }> };
+  recognizable_circumstances: { claims: Array<{ text: string; evidence_group_ids: string[] }> };
+ } };
  const claims = encoded.brief.why_firm_wants_work.claims;
  const payment = result.brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("value.payment"))!;
  const context = result.brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("value.payment_context"))!;
  const paymentIds = evidenceGroupIdsForStatement("why_firm_wants_work", payment, answers);
  const contextIds = evidenceGroupIdsForStatement("why_firm_wants_work", context, answers);
+ const fitSignalGroup = buildDesiredClientEvidenceGroupsForTest(answers).find(group => group.source_answer_ids.includes("delivery.fit_signals"));
+ const developmentNeedsGroup = buildDesiredClientEvidenceGroupsForTest(answers).find(group => group.source_answer_ids.includes("practice.development_needs"));
  if (paraphrase) claims.find(claim => claim.evidence_group_ids.includes(contextIds[0]))!.text = "Clients reported that their first invoice was usually paid on schedule.";
  claims.push({
   text: "The firm reports that payment is usually predictable. Clients told the firm that the first invoice was usually paid on schedule.",
-  evidence_group_ids: [...paymentIds, ...contextIds],
+  evidence_group_ids: [...paymentIds, ...contextIds, ...(fitSignalGroup ? [fitSignalGroup.id] : []), ...(developmentNeedsGroup ? [developmentNeedsGroup.id] : [])],
  });
  return encoded;
+}
+
+function buildDesiredClientEvidenceGroupsForTest(answers: DesiredClientAnswers) {
+ return buildDesiredClientEvidenceGroups("why_firm_wants_work", answers);
 }

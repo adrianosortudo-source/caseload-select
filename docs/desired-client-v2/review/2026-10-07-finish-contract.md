@@ -17,9 +17,15 @@ One live-test call remains unspent, but testing is stopped after the previous fa
 
 ## File-to-gate map
 
-- src/lib/desired-client/output.ts: mixed-section recovery and selector validation; covered by mixed-payment-recovery.test.ts.
+- src/lib/desired-client/output.ts: mixed-section selector gates, evidence-faithful coverage checks, full discard/rebuild, and response guarding; covered by mixed-payment-recovery.test.ts and output.test.ts.
 
-- src/lib/desired-client/structured-blueprint.ts: direction preference remains separate from unresolved rationale; covered by output.test.ts.
+- src/lib/desired-client/evidence-contract.ts: source-specific evidence-basis and destination-card mapping for firm type and delivery fit; covered by mixed-payment-recovery.test.ts selector matrix and invalid-selection cases.
+
+- src/lib/desired-client/structured-blueprint.ts: selected growth direction is a firm preference, firm type remains experience-attributed, and unanswered rationale remains separate; covered by output.test.ts and mixed-payment-recovery.test.ts.
+
+- src/lib/desired-client/storage.ts: valid recovered response marker and unknown claim survive save/reopen validation; covered by state-storage.test.ts and blueprint-report.spec.ts.
+
+- src/lib/desired-client/__tests__/blueprint-helpers.ts: realistic labeled answer fixture and mixed selector carrying payment, client context, fit signal and unresolved development-needs sources; consumed by the recovery and output tests.
 
 - src/lib/desired-client/__tests__/mixed-payment-recovery.test.ts: complete negative-economics fixture, selector rejection, source coverage and discarded wording.
 
@@ -33,6 +39,8 @@ One live-test call remains unspent, but testing is stopped after the previous fa
 
 - docs/desired-client-v2/review/2026-10-07-finish-contract.md: scope, deadlines, release gates and this file map.
 
+- docs/desired-client-v2/review/2026-10-07-mixed-payment-recovery.md: failure evidence, bounded diagnosis and current offline/browser/typecheck results.
+
 ## Checkpoints
 
-Next checkpoint: Thursday, October 8, 2026, 4:30 p.m. Toronto time, to assess verification before the 5:00 p.m. code freeze. Target completion is Friday, October 9, at 5:00 p.m. If fresh live-test approval or provider availability is missing, keep release blocked and report the Friday threat.
+Next checkpoint: Thursday, October 8, 2026, 4:30 p.m. Toronto time, to assess exact-head CI and the remaining real-AI release gate before the 5:00 p.m. code freeze. Target completion is Friday, October 9, at 5:00 p.m. If fresh live-test approval or provider availability is missing, keep release blocked and report the Friday threat.

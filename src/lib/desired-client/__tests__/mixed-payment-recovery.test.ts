@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { validateAnalysisResult, validateAnalysisResponseResult, type AnalysisValidationFailure } from "../output";
-import { mixedPaymentProviderBlueprint, negativeEconomicsAnswers, validBlueprint } from "./blueprint-helpers";
+import { mixedPaymentProviderBlueprint, negativeEconomicsAnswers, providerBlueprint, validBlueprint } from "./blueprint-helpers";
 import { buildStructuredBlueprintV4 } from "../structured-blueprint";
-import { buildDesiredClientEvidenceGroups, getProviderEvidenceSelection, safeEvidenceDiagnostic } from "../evidence-contract";
+import { buildDesiredClientEvidenceGroups, getProviderEvidenceSelection, isUnresolvedEvidenceSource, safeEvidenceDiagnostic } from "../evidence-contract";
 import { decodeProviderEvidenceGroups, decodeProviderTargetCard } from "../provider-schema";
 
 function setup(paraphrase = true) {
@@ -32,17 +32,31 @@ describe("complete negative-economics mixed payment recovery", () => {
   expect(result, JSON.stringify(failures)).not.toBeNull();
   expect(result!.recoveredSections).toEqual(["why_firm_wants_work"]);
   const builder = buildStructuredBlueprintV4(answers);
-  expect(result!.brief.why_firm_wants_work).toEqual(builder.why_firm_wants_work);
-  expect(result!.brief.why_firm_wants_work.claims).toHaveLength(6);
+  expect(result!.brief.why_firm_wants_work.claims.slice(0, builder.why_firm_wants_work.claims.length)).toEqual(builder.why_firm_wants_work.claims);
+  expect(result!.brief.why_firm_wants_work.claims).toHaveLength(7);
   const baseline = validateAnalysisResult(validBlueprint(answers), answers, [])!;
   for (const key of Object.keys(baseline.brief) as Array<keyof typeof baseline.brief>) {
    if (key !== "why_firm_wants_work") expect(result!.brief[key]).toEqual(baseline.brief[key]);
   }
   const claims = result!.brief.why_firm_wants_work.claims;
+  const unknownDevelopment = claims.find(claim => claim.source_answer_ids.includes("practice.development_needs"));
+  expect(unknownDevelopment).toMatchObject({ kind: "unknown", evidence_basis: "unknown", text: expect.stringContaining("development needs") });
+  expect(unknownDevelopment?.text).toMatch(/not specified|unspecified|unknown/iu);
   const selectedPaths = buildDesiredClientEvidenceGroups("why_firm_wants_work", answers)
    .filter(group => raw.brief.why_firm_wants_work.claims.some(claim => claim.evidence_group_ids.includes(group.id)))
    .flatMap(group => group.source_answer_ids);
-  for (const path of selectedPaths) expect(claims.some(claim => claim.source_answer_ids.includes(path))).toBe(true);
+  const retainedSources = new Set<string>();
+  const collectSources = (node: unknown): void => {
+   if (Array.isArray(node)) { node.forEach(collectSources); return; }
+   if (!node || typeof node !== "object") return;
+   const value = node as Record<string, unknown>;
+   if (Array.isArray(value.source_answer_ids)) value.source_answer_ids.forEach(path => { if (typeof path === "string") retainedSources.add(path); });
+   Object.values(value).forEach(collectSources);
+  };
+  collectSources(result);
+  for (const path of selectedPaths) expect(retainedSources.has(path)).toBe(true);
+  expect(selectedPaths).toContain("delivery.fit_signals");
+  expect(result!.brief.recognizable_circumstances.claims.some(claim => claim.source_answer_ids.includes("delivery.fit_signals"))).toBe(true);
   expect(claims.every(claim => claim.source_answer_ids.length <= 8)).toBe(true);
   expect(JSON.stringify(result)).not.toContain("DISCARDED_GENERATED_SENTINEL");
   expect(JSON.stringify(result)).not.toContain("99 clients");
@@ -53,6 +67,8 @@ describe("complete negative-economics mixed payment recovery", () => {
   expect(selectedDirection?.text).toContain("Grow work the firm is equipped to handle");
   expect(claims.some(claim => claim.source_answer_ids.includes("practice.enjoys"))).toBe(true);
   expect(claims.some(claim => claim.source_answer_ids.includes("practice.capability"))).toBe(true);
+  const firmType = claims.find(claim => claim.source_answer_ids.includes("practice.firm_type"));
+  expect(firmType).toMatchObject({ evidence_basis: "firm_reported_experience", text: expect.stringContaining(answers.practice.firm_type) });
   expect(claims.find(claim => claim.source_answer_ids.includes("value.payment"))?.evidence_basis).toBe("firm_reported_observation");
   expect(claims.find(claim => claim.source_answer_ids.includes("value.payment_context"))).toMatchObject({ evidence_basis: "client_reported", text: expect.stringContaining(answers.value.payment_context) });
   expect(JSON.stringify(result)).toContain("8000");
@@ -74,7 +90,7 @@ describe("complete negative-economics mixed payment recovery", () => {
   }
   const { result } = inspect(decode(), answers);
   expect(result?.recoveredSections).toEqual(["why_firm_wants_work"]);
-  expect(result?.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work);
+  expect(result?.brief.why_firm_wants_work?.claims.slice(0, buildStructuredBlueprintV4(answers).why_firm_wants_work.claims.length)).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work.claims);
  });
 
  it("keeps ordinary payment normalization working without a recovery marker", () => {
@@ -97,7 +113,7 @@ describe("complete negative-economics mixed payment recovery", () => {
   if (mutation === "wrong_slot") mixed.evidence_group_ids.push(buildDesiredClientEvidenceGroups("evidence_and_open_questions", answers)[0].id);
   if (mutation === "selection_count") mixed.evidence_group_ids = buildDesiredClientEvidenceGroups("why_firm_wants_work", answers).slice(0, 9).map(group => group.id);
   if (mutation === "over_limit") claims.push(structuredClone(claims[0]));
-  if (mutation === "source_coverage") claims[0] = { text: "The firm prefers this work.", evidence_group_ids: [buildDesiredClientEvidenceGroups("why_firm_wants_work", answers).find(group => group.source_answer_ids.includes("direction.evidence"))!.id] };
+  if (mutation === "source_coverage") raw.brief.recognizable_circumstances.claims[0].text = "A routine matter may proceed normally.";
   const { result, diagnostic, failures } = inspect(decode(), answers);
   expect(result).toBeNull();
   expect(diagnostic?.reason).toBe(reason);
@@ -124,6 +140,62 @@ describe("complete negative-economics mixed payment recovery", () => {
   expect(diagnostic).toMatchObject({ reason: "metadata_missing", blockedClaimIndex: 1, cardClaimCount: 7 });
  });
 
+ it("recovers each currently permitted why-firm source across known, blank and unknown answers within selector limits", () => {
+  const answers = negativeEconomicsAnswers();
+  const groups = buildDesiredClientEvidenceGroups("why_firm_wants_work", answers);
+  const paths = [...new Set(groups.flatMap(group => group.source_answer_ids))];
+  expect(paths).toHaveLength(32);
+  for (const candidate of groups) {
+   const anchor = groups.find(group => group.evidence_basis !== candidate.evidence_basis &&
+    group.kind !== candidate.kind && !group.source_answer_ids.some(path => candidate.source_answer_ids.includes(path))) ??
+    groups.find(group => group.evidence_basis !== candidate.evidence_basis && !group.source_answer_ids.some(path => candidate.source_answer_ids.includes(path)));
+   expect(anchor, `missing mixed-basis anchor for ${candidate.source_answer_ids.join(",")}`).toBeDefined();
+   const raw = providerBlueprint(validBlueprint(answers), answers) as { brief: { why_firm_wants_work: { claims: Array<Record<string, unknown>> } } };
+   raw.brief.why_firm_wants_work.claims = [{ text: "DISCARDED_SELECTOR_MATRIX_SENTINEL", evidence_group_ids: [anchor!.id, candidate.id] }];
+   const decoded = decodeProviderEvidenceGroups(decodeProviderTargetCard(raw, answers), answers);
+   const { result, failures } = inspect(decoded, answers);
+   expect(result, `${candidate.id}: ${JSON.stringify(failures)}`).not.toBeNull();
+   const selectedPaths = [...new Set([...anchor!.source_answer_ids, ...candidate.source_answer_ids])];
+   const returned = new Set<string>();
+   const collect = (node: unknown): void => {
+    if (Array.isArray(node)) { node.forEach(collect); return; }
+    if (!node || typeof node !== "object") return;
+    const item = node as Record<string, unknown>;
+    if (Array.isArray(item.source_answer_ids)) item.source_answer_ids.forEach(path => { if (typeof path === "string") returned.add(path); });
+    Object.values(item).forEach(collect);
+   };
+   collect(result);
+   for (const path of selectedPaths) {
+    expect(returned.has(path), `${candidate.id} omitted ${path}`).toBe(true);
+    if (isUnresolvedEvidenceSource(path, answers)) {
+     const unknownClaim = JSON.stringify(result!.brief).includes(path)
+      ? Object.values(result!.brief).flatMap(value => value && typeof value === "object" && "claims" in value ? (value as { claims: Array<Record<string, unknown>> }).claims : [])
+       .find(claim => Array.isArray(claim.source_answer_ids) && claim.source_answer_ids.includes(path) && claim.evidence_basis === "unknown" && claim.kind === "unknown")
+      : undefined;
+     expect(unknownClaim, `${candidate.id} did not retain ${path} as unknown`).toBeDefined();
+     expect(String(unknownClaim?.text)).toMatch(/unknown|not established|not supplied|not specified|not defined|unspecified|not yet/iu);
+    }
+   }
+   expect(JSON.stringify(result)).not.toContain("DISCARDED_SELECTOR_MATRIX_SENTINEL");
+  }
+ });
+
+ it("does not count a cross-card citation with unrelated wording as source coverage", () => {
+  const { answers, raw, decode } = setup();
+  raw.brief.recognizable_circumstances.claims[0].text = "A routine matter may proceed normally.";
+  const { result, diagnostic } = inspect(decode(), answers);
+  expect(result).toBeNull();
+  expect(diagnostic).toMatchObject({ reason: "source_coverage", missingSourceCount: 1 });
+ });
+
+ it("does not count a cross-card citation that reverses the selected fit signal", () => {
+  const { answers, raw, decode } = setup();
+  raw.brief.recognizable_circumstances.claims[0].text = "The client is not open to agreeing the scope and next step.";
+  const { result, diagnostic } = inspect(decode(), answers);
+  expect(result).toBeNull();
+  expect(diagnostic).toMatchObject({ reason: "source_coverage", missingSourceCount: 1 });
+ });
+
  it("rejects stale payment groups after decode", () => {
   const { answers, raw, decode } = setup();
   const decoded = decode();
@@ -140,7 +212,7 @@ describe("complete negative-economics mixed payment recovery", () => {
   mixed.evidence_group_ids.push(mixed.evidence_group_ids[0], "private-unrecognized-id-sentinel");
   const claim = decode().brief.why_firm_wants_work.claims[6];
   const diagnostic = safeEvidenceDiagnostic("why_firm_wants_work", claim, 8, answers);
-  expect(diagnostic).toMatchObject({ claimIndex: 9, claimIndexCapped: false, selectionFailure: "duplicate_group_id", rawGroupIdCount: 4, uniqueGroupIdCount: 3, resolvedGroupIdCount: 3, groupIdCountsCapped: false });
+  expect(diagnostic).toMatchObject({ claimIndex: 9, claimIndexCapped: false, selectionFailure: "duplicate_group_id", rawGroupIdCount: 6, uniqueGroupIdCount: 5, resolvedGroupIdCount: 5, groupIdCountsCapped: false });
   expect(JSON.stringify(diagnostic)).not.toContain("private-unrecognized-id-sentinel");
   expect(safeEvidenceDiagnostic("why_firm_wants_work", claim, 99, answers)).toMatchObject({ claimIndex: 32, claimIndexCapped: true });
   mixed.evidence_group_ids = Array.from({ length: 100 }, () => "private-unrecognized-id-sentinel");

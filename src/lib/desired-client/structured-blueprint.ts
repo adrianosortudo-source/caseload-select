@@ -286,7 +286,7 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const reasonLabels=reasonPaths.flatMap(path=>path==="value.reasons"
     ?answers.value.reasons.filter(id=>id!=="undecided").map(id=>negativeEconomics&&id==="fees"?"fee sustainability as a firm preference":getReasonLabel(id,answers.focus.route))
     :[fragment(text(answers,path))]).filter(Boolean);
-  const directionPaths=knownPaths(answers,["practice.direction",...(answers.practice.direction==="other"?["write_ins.aim" as const]:[])]);
+  const directionPaths=knownPaths(answers,["practice.direction", ...(answers.practice.direction==="other"?["write_ins.aim" as const]:[])]);
   const directionPreference=directionPaths.length?"The firm prefers this selected growth direction: "+facts(answers,directionPaths)+".":"";
   const firmRationalePaths=reasonPaths;
   const rationaleText=reasonPaths.length?"Reasons reported by the firm: "+(reasonLabels.join("; ")||text(answers,"value.reasons"))+".":"";
@@ -296,10 +296,11 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const contribution=calculateContribution(answers);
   const economicsText=economicsPaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")+(contribution?`; ${contribution.basis==="firm_reported_estimate"?"estimated":"firm-record-based"} contribution before overhead and acquisition costs: ${contribution.amount} per matter, calculated as collected fee less direct delivery cost`:"");
   const practiceExperiencePaths=knownPaths(answers,["practice.experience"]);
+  const practiceTypePaths=knownPaths(answers,["practice.firm_type"]);
   const experiencePaths=unique([...knownPaths(answers,["practice.capability"]),...(answers.practice.experience==="new"?[]:practiceExperiencePaths)]);
   const developmentNeedsPaths=knownPaths(answers,["practice.development_needs"]);
   const currentCapacityPaths=knownPaths(answers,["delivery.capacity","write_ins.capacity","repeatability.additional_matters"]);
-  const deliveryPreferencePaths=knownPaths(answers,["repeatability.staffing_constraint","direction.less_note","direction.less_reason"]);
+  const deliveryPreferencePaths=knownPaths(answers,["repeatability.staffing_constraint","direction.less","direction.less_note","direction.less_reason"]);
   const deliveryConditionPaths=knownPaths(answers,["delivery.conditions","delivery.limit","write_ins.conditions","write_ins.limit"]);
   const rangePaths=knownPaths(answers,["value.collected_fee","value.team_hours"]);
   const paymentClaims=paymentEvidenceClaims(answers);
@@ -338,8 +339,13 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const rationaleWithDelivery=preferenceClaims.length&&preferenceSources.length>0&&preferenceSources.length<=8
     ? linked(`${firmRationale.text} ${preferenceClaims.map(claim=>claim.text).join(" ")}`,"firm_preference",preferenceSources)
     : firmRationale;
+  const firmExperienceSources=unique([...practiceTypePaths,...experiencePaths]);
+  const firmExperienceText=[
+    ...(practiceTypePaths.length?[`Firm type described by the firm: ${facts(answers,practiceTypePaths)}.`]:[]),
+    ...(experiencePaths.length?[`Experience and capability reported by the firm: ${facts(answers,experiencePaths)}.`]:[]),
+  ].join(" ");
   const whyFirmClaims=[rationaleWithDelivery,
-     ...(experiencePaths.length?[linked(`Experience and capability reported by the firm: ${facts(answers,experiencePaths)}.`,"firm_reported_experience",experiencePaths)]:[]),
+     ...(firmExperienceSources.length?[linked(firmExperienceText,"firm_reported_experience",firmExperienceSources)]:[]),
      ...commercialClaims,
      ...paymentClaims,
      ...(!rangeAndCapacityClaim&&currentCapacityClaim?[currentCapacityClaim]:[]),
