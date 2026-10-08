@@ -537,7 +537,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     invalid.brief.definition_components.client.text = "Ontario business owners";
     invalid.brief.definition_components.client.evidence_group_ids = [];
     invalid.brief.definition_components.client.source_answer_ids = ["practice.firm_type"];
-    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(invalid));
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(invalid)).mockResolvedValue(rawProviderResponse(invalid.brief.definition_components.client));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const response = await POST(makeRequest(JSON.stringify(ENVELOPE)));
     expect(response.status).toBe(502);
@@ -550,8 +550,9 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
       reason: "evidence_group_selection_invalid",
       finalField: "definition_components.client",
       finalReason: "evidence_group_selection_invalid",
-      repairAttempts: 0,
+      repairAttempts: 2,
     });
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
     expect(log).not.toHaveProperty("sourcePath");
     expect(log.firstClaimDiagnostic).toMatchObject({ slot: "definition_client_type", claimIndex: 1, sourceAnswerIds: [], groupIds: [], expectedGroups: [] });
     expect(JSON.stringify(warn.mock.calls)).not.toContain(JSON.stringify(ENVELOPE.answers));
@@ -559,7 +560,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain("practice.firm_type");
   });
 
-  it("rejects a non-registered why-firm selection in Preview without exposing text or spending repair calls", async () => {
+  it("rejects a non-registered why-firm selection after bounded Preview repairs without exposing text", async () => {
     process.env.VERCEL_ENV = "preview";
     const invalid = structuredClone(MODEL_RESULT);
     const privateClaim = "private diagnostic claim text sentinel";
@@ -572,7 +573,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const privateAnswer = "private diagnostic answer text sentinel";
     const request = structuredClone(ENVELOPE);
     request.answers.client.goal_detail = privateAnswer;
-    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid)).mockResolvedValue(rawProviderResponse({ claims: invalid.brief.why_firm_wants_work.claims }));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     const response = await POST(makeRequest(JSON.stringify(request)));
@@ -583,12 +584,12 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
       ok: false,
       requestId: ENVELOPE.requestId,
       error: { code: "INVALID_AI_OUTPUT", diagnostic: { field: "why_firm_wants_work", reason: "evidence_group_selection_invalid" } },
-      providerCallsUsed: 1,
+      providerCallsUsed: 3,
       providerCallLimit: 3,
     });
-    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
     const log = JSON.parse(warn.mock.calls[0][0] as string);
-    expect(log.repairAttempts).toBe(0);
+    expect(log.repairAttempts).toBe(2);
     expect(log.firstClaimDiagnostic).toEqual({
       claimIndex: 1,
       claimIndexCapped: false,
@@ -606,7 +607,15 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
       groupIds: [],
       expectedGroups: [],
     });
-    expect(log.finalClaimDiagnostic).toEqual(log.firstClaimDiagnostic);
+    expect(log.finalClaimDiagnostic).toMatchObject({
+      slot: "why_firm_wants_work",
+      selectionFailure: "selection_shape_invalid",
+      selectionMetadataPresent: true,
+      selectionShapeValid: false,
+      sourceAnswerIds: [],
+      groupIds: [],
+      expectedGroups: [],
+    });
     const serializedLog = JSON.stringify(warn.mock.calls);
     expect(serializedLog).toContain("evidence_group_selection_invalid");
     expect(serializedLog).not.toContain(privateClaim);
@@ -652,13 +661,13 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const contextIndex = claims.findIndex(claim => claim.evidence_group_ids.some(id => id.includes("_payment_context")));
     const privateId = "private-unrecognized-id-sentinel";
     claims[contextIndex].evidence_group_ids.push(privateId);
-    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(raw));
+    mocks.generateContent.mockResolvedValueOnce(rawProviderResponse(raw)).mockResolvedValue(rawProviderResponse({ claims }));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const response = await POST(makeRequest(JSON.stringify(request)));
     expect(response.status).toBe(502);
-    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
     const log = JSON.parse(warn.mock.calls[0][0] as string);
-    expect(log).toMatchObject({ repairAttempts: 0, firstRecoveryDiagnostic: {
+    expect(log).toMatchObject({ repairAttempts: 2, firstRecoveryDiagnostic: {
       reason: "selection_unresolved", blockedClaimIndex: contextIndex + 1, cardClaimCount: 7,
       blockedClaimDiagnostic: { selectionFailure: "unknown_group_id", rawGroupIdCount: 2, uniqueGroupIdCount: 2, resolvedGroupIdCount: 1 },
     } });
@@ -705,7 +714,7 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
   it.each([
     ["unbounded numeric suffix", `interview.followups.${"9".repeat(512)}`],
     ["unknown followup index", "interview.followups.999"],
-  ])("omits %s from Preview diagnostics and does not retry", async (_label, unsafeSourceId) => {
+  ])("omits %s from Preview diagnostics after bounded retries", async (_label, unsafeSourceId) => {
     process.env.VERCEL_ENV = "preview";
     const invalid = structuredClone(MODEL_RESULT);
     const privateClaim = "private unsupported followup claim sentinel";
@@ -718,15 +727,15 @@ describe("POST /api/tools/desired-client-matter/analyze", () => {
     const privateAnswer = "private unsupported followup answer sentinel";
     const request = structuredClone(ENVELOPE);
     request.answers.client.goal_detail = privateAnswer;
-    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid));
+    mocks.generateContent.mockResolvedValueOnce(providerResponse(invalid)).mockResolvedValue(rawProviderResponse({ claims: invalid.brief.why_firm_wants_work.claims }));
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
     const response = await POST(makeRequest(JSON.stringify(request)));
 
     expect(response.status).toBe(502);
-    expect(mocks.generateContent).toHaveBeenCalledTimes(1);
+    expect(mocks.generateContent).toHaveBeenCalledTimes(3);
     const log = JSON.parse(warn.mock.calls[0][0] as string);
-    expect(log.repairAttempts).toBe(0);
+    expect(log.repairAttempts).toBe(2);
     expect(log.firstClaimDiagnostic).toMatchObject({ sourceAnswerIds: [], expectedGroups: [] });
     expect(log).not.toHaveProperty("sourcePath");
     const serializedLog = JSON.stringify(warn.mock.calls);
