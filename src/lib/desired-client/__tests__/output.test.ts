@@ -286,12 +286,18 @@ describe("AI Blueprint output contract", () => {
     expect(result?.brief.why_firm_wants_work).toEqual(buildStructuredBlueprintV4(answers).why_firm_wants_work);
     const canonicalText = result?.brief.why_firm_wants_work.claims.map(claim => claim.text).join(" ") ?? "";
     expect(canonicalText).not.toContain(generatedText);
+    expect(canonicalText).not.toMatch(/audited records|\$2,000,000|positive profit|does not report regular experience/iu);
     const sourceIds = result?.brief.why_firm_wants_work.claims.flatMap(claim => claim.source_answer_ids) ?? [];
     expect(sourceIds).toEqual(expect.arrayContaining(["practice.capability", "practice.experience", "practice.enjoys", "practice.direction", "value.fee_amount", "value.direct_cost_amount", "value.payment", "value.payment_context", "delivery.capacity", "repeatability.staffing_constraint"]));
     const experience = result?.brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("practice.experience"));
     const direction = result?.brief.why_firm_wants_work.claims.find(claim => claim.source_answer_ids.includes("practice.direction"));
     expect(experience?.evidence_basis).toBe("firm_reported_experience");
     expect(direction?.evidence_basis).toBe("firm_preference");
+    expect(direction?.kind).toBe("preference");
+    expect(direction?.source_answer_ids).toContain("practice.direction");
+    expect(direction?.source_answer_ids).not.toContain("practice.capability");
+    expect(direction?.source_answer_ids).not.toContain("practice.experience");
+    expect(direction?.text).toContain("The firm prefers this selected growth direction: Grow work the firm is equipped to handle.");
   });
 
   it("rejects a previously current mixed-group selection after its source answer changes", () => {
@@ -370,7 +376,8 @@ describe("AI Blueprint output contract", () => {
     const answers = completeAnswers();
     answers.value.reasons = ["undecided"];
     answers.value.fee_effort = "unknown";
-    answers.practice.enjoys = "";
+    answers.practice.enjoys = "Transaction planning";
+    answers.practice.capability = "Business acquisition advice";
     answers.repeatability.additional_matters = "2 comparable matters per quarter";
     answers.repeatability.staffing_constraint = "An associate must be hired before increasing volume.";
     const brief = buildStructuredBlueprintV4(answers);
@@ -382,6 +389,8 @@ describe("AI Blueprint output contract", () => {
     expect(direction).toMatchObject({ evidence_basis: "firm_preference", kind: "preference" });
     expect(direction?.text).toContain("The firm prefers this selected growth direction:");
     expect(direction?.source_answer_ids).not.toContain("practice.capability");
+    expect(brief.why_firm_wants_work.claims.some(claim => claim.source_answer_ids.includes("practice.enjoys") && claim.text.includes("Transaction planning"))).toBe(true);
+    expect(brief.why_firm_wants_work.claims.some(claim => claim.source_answer_ids.includes("practice.capability") && claim.text.includes("Business acquisition advice"))).toBe(true);
     expect(staffing).toMatchObject({ evidence_basis: "firm_preference", kind: "preference" });
     expect(validateAnalysisResult({ brief, clarification_code: null }, answers, [])).not.toBeNull();
   });

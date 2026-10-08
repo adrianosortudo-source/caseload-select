@@ -279,7 +279,8 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const needPaths=knownPaths(answers,["client.concerns","client.decision_needs","client.decision_context","client_context.language_service_needs","client_context.community_focus"]);
   const goalsClaims=[progress,...(needPaths.length?[linked(`Needs, concerns or decision participants noted by the firm: ${facts(answers,needPaths)}.`,"hypothesis",needPaths)]:[]),...interviewClaims(answers,[2],"Additional context supplied: ")].slice(0,6);
 
-  const reasonPaths=knownPaths(answers,["value.reasons","write_ins.reasons","practice.enjoys","value.fee_effort","write_ins.fee_effort"]).filter((path)=>path!=="value.reasons"||!answers.value.reasons.includes("undecided"));
+  const reasonPaths=knownPaths(answers,["value.reasons","write_ins.reasons","value.fee_effort","write_ins.fee_effort"]).filter((path)=>path!=="value.reasons"||!answers.value.reasons.includes("undecided"));
+  const enjoymentPaths=knownPaths(answers,["practice.enjoys"]);
   const negativeEconomics=hasNegativeContribution(answers);
   // Preserve the firm's fee preference as a preference; do not restate it as
   // a positive financial result when the comparable figures calculate negative.
@@ -292,6 +293,7 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
   const rationaleText=reasonPaths.length?"Reasons reported by the firm: "+(reasonLabels.join("; ")||text(answers,"value.reasons"))+".":"";
   const firmRationale=firmRationalePaths.length?linked(rationaleText,"firm_preference",firmRationalePaths):unknownClaim("The firm's reasons for wanting more of this work are not yet established.","value.reasons");
   const directionClaim=directionPaths.length?linked(directionPreference,"firm_preference",directionPaths):null;
+  const enjoymentClaim=enjoymentPaths.length?linked(`Work the firm says it enjoys: ${facts(answers,enjoymentPaths)}.`,"firm_preference",enjoymentPaths):null;
   const economicsPaths=knownPaths(answers,["value.fee_amount","value.direct_cost_amount","value.currency","value.amount_basis","value.amount_scope"]);
   const contribution=calculateContribution(answers);
   const economicsText=economicsPaths.map(path=>`${path.split(".")[1].replaceAll("_"," ")}: ${text(answers,path)}`).join("; ")+(contribution?`; ${contribution.basis==="firm_reported_estimate"?"estimated":"firm-record-based"} contribution before overhead and acquisition costs: ${contribution.amount} per matter, calculated as collected fee less direct delivery cost`:"");
@@ -329,7 +331,7 @@ export function buildStructuredBlueprintV4(answers:DesiredClientAnswers):Desired
     ? linked(`Delivery conditions and limits selected by the firm: ${facts(answers,deliveryConditionPaths)}.`,"firm_preference",deliveryConditionPaths)
     : null;
   const firmInterviewClaims=interviewClaims(answers,[3],"Clarification: ");
-  const preferenceClaims=[...(directionClaim?[directionClaim]:[]),...(deliveryPreferenceClaim?[deliveryPreferenceClaim]:[]),...(deliveryConditionClaim?[deliveryConditionClaim]:[]),...(developmentNeedsClaim?[developmentNeedsClaim]:[]),...(newToWorkClaim?[newToWorkClaim]:[]),...firmInterviewClaims];
+  const preferenceClaims=[...(directionClaim?[directionClaim]:[]),...(enjoymentClaim?[enjoymentClaim]:[]),...(deliveryPreferenceClaim?[deliveryPreferenceClaim]:[]),...(deliveryConditionClaim?[deliveryConditionClaim]:[]),...(developmentNeedsClaim?[developmentNeedsClaim]:[]),...(newToWorkClaim?[newToWorkClaim]:[]),...firmInterviewClaims];
   const preferenceSources=firmRationale.evidence_basis==="firm_preference"&&preferenceClaims.length
     ? [...new Set([...
       firmRationale.source_answer_ids,
