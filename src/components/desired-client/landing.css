@@ -318,6 +318,5 @@
 
 @media(min-width:381px) and (max-width:390px){.dc-landing .hero{width:calc(100% - 32px)}}
 
-/* Keep the same text measure when an iframe or scrollbar reduces the panel. */
-.dc-landing .profile-body{container-type:inline-size}
-@container(max-width:300px){.dc-landing .detail-text{font-size:clamp(14px,5.32cqi,15.5px)}}
+/* Compact detail copy retains a usable measure on the narrowest direct view. */
+@media(min-width:311px) and (max-width:340px){.dc-landing .detail-text{font-size:14px}}
