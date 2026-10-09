@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { exportedLayout } from "./helpers";
 import { pathToFileURL } from "node:url";
 import { completeAnswers, mixedPaymentProviderBlueprint, negativeEconomicsAnswers, validBlueprint } from "../../src/lib/desired-client/__tests__/blueprint-helpers";
 import { validateAnalysisResult } from "../../src/lib/desired-client/output";
@@ -99,6 +100,11 @@ test("a reviewed six-section draft becomes a synthesized blueprint and HTML repo
   await printPage.goto(pathToFileURL(reportPath).href);
   await expect(printPage.locator("article.page")).toHaveCount(1);
   await expect(printPage.getByRole("heading", { level: 1 })).toContainText("Business & commercial");
+  for (const width of [1440, 1024, 768, 640, 390, 375, 320]) {
+    await printPage.setViewportSize({ width, height: 1000 });
+    await exportedLayout(printPage);
+  }
+  await printPage.setViewportSize({ width: 1440, height: 1000 });
   await printPage.emulateMedia({ media: "print" });
   const printPdf = await printPage.pdf({
     path: testInfo.outputPath("blueprint-negative-report-print-preview.pdf"),
@@ -342,7 +348,12 @@ test("the actual offline analysis HTTP route recovers mixed payment and survives
     await printPage.goto(pathToFileURL(reportPath).href);
     const exportedNotice = printPage.locator(".recovery-disclosure");
     await expect(exportedNotice).toBeVisible();
-    await printPage.emulateMedia({ media: "print" });
+    for (const width of [1440, 1024, 768, 640, 390, 375, 320]) {
+    await printPage.setViewportSize({ width, height: 1000 });
+    await exportedLayout(printPage);
+  }
+  await printPage.setViewportSize({ width: 1440, height: 1000 });
+  await printPage.emulateMedia({ media: "print" });
     await expect(exportedNotice).toBeVisible();
     const printPdf = await printPage.pdf({ path: testInfo.outputPath("recovered-section-report.pdf"), printBackground: true });
     expect(printPdf.byteLength).toBeGreaterThan(0);

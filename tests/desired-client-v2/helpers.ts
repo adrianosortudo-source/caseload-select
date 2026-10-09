@@ -129,3 +129,16 @@ export async function establishedToReview(page: Page, screenshotPrefix?: string)
   await next(page);
   await expect(page.getByRole('heading', { name: 'Review your direction' })).toBeVisible();
 }
+
+export async function exportedLayout(page: Page) {
+  // Each status item has its own complete row; measure its text separately.
+  const selector = 'header h1,header .eyebrow,header .meta,header .status > *,main h2,main h3,main p,main li,main dd';
+  await page.evaluate((selector) => {
+    const boxes = 'header,.definition,.card,.legacy-card,.claim,.conditions,.conditions ul,.progress,.progress dl>div,.decision-pathway-heading,.decision-pathway-steps article,.recovery-disclosure,.source-entry,main';
+    for (const copy of document.querySelectorAll<HTMLElement>(selector)) {
+      const box = copy.parentElement?.closest<HTMLElement>(boxes);
+      if (box) box.dataset.uiComponentContent = 'export-' + box.className;
+    }
+  }, selector);
+  expect(await layoutFailures(page, selector)).toEqual([]);
+}

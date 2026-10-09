@@ -2,7 +2,7 @@ import { completeAnswers, validBlueprint } from "../../src/lib/desired-client/__
 import { validateAnalysisResult } from "../../src/lib/desired-client/output";
 import { pathToFileURL } from "node:url";
 import { expect, test } from "@playwright/test";
-import { capture, layout, layoutFailures, settled } from "./helpers";
+import { capture, exportedLayout, layout, layoutFailures, settled } from "./helpers";
 import { STAGE_DEFINITIONS } from "../../src/lib/desired-client/screens";
 
 for (const width of [1440, 1024, 768, 640, 390, 375, 320]) {
@@ -332,6 +332,7 @@ test("canonical branding spans the landing, questionnaire, review, failure, repo
   await exported.evaluate(() => document.fonts.ready);
   for (const width of widths) {
     await exported.setViewportSize({ width, height: 1000 });
+    await exportedLayout(exported);
     expect(await exported.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     expect(await exported.evaluate(() => document.fonts.check('800 16px "DC Manrope"') && document.fonts.check('400 16px "DC DM Sans"') && document.fonts.check('600 16px "DC Oxanium"'))).toBe(true);
     await exported.screenshot({ path: testInfo.outputPath(`branding-html-${width}.png`), fullPage: true });
