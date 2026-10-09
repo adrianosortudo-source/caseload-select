@@ -20,7 +20,7 @@ export async function capture(page: Page, name: string) {
   await fs.mkdir(EVIDENCE, { recursive: true });
   await page.screenshot({ path: path.join(EVIDENCE, name + '.png'), fullPage: true });
 }
-export async function layoutFailures(page: Page | Frame, copySelector = '[data-ui-copy]') {
+export async function layoutFailures(page: Page | Frame, copySelector = '[data-ui-copy]', diagnostics = true) {
   await settled(page);
   const failures = await page.evaluate((selector) => {
     const out: string[] = [];
@@ -93,7 +93,7 @@ export async function layoutFailures(page: Page | Frame, copySelector = '[data-u
     }
     return out;
   }, copySelector);
-  if (failures.length) console.info('Rendered copy failure metrics', await page.evaluate(({ selector, failures }) => ({
+  if (diagnostics && failures.length) console.info('Rendered copy failure metrics', await page.evaluate(({ selector, failures }) => ({
     viewport: innerWidth,
     contentWidth: document.documentElement.clientWidth,
     pixels: devicePixelRatio,
@@ -102,6 +102,33 @@ export async function layoutFailures(page: Page | Frame, copySelector = '[data-u
       return { text: el.textContent?.trim(), width: el.getBoundingClientRect().width, font: style.fontFamily, size: style.fontSize, weight: style.fontWeight, wrap: style.textWrap };
     }),
   }), { selector: copySelector, failures }));
+  if (diagnostics && failures.length) {
+    const probe = await page.evaluate(({ selector, failures }) => {
+      const failed = Array.from(document.querySelectorAll<HTMLElement>(selector)).filter(el => failures.some(failure => failure.endsWith(el.textContent?.trim() ?? '')));
+      if (failed.some(el => el.matches('.detail-text'))) return '.dc-landing .detail-text';
+      if (failed.some(el => el.matches('.claim p'))) return '.claim p:not(.card:last-child .claim:last-child p)';
+      return null;
+    }, { selector: copySelector, failures });
+    if (probe) {
+      const tabs = page.getByRole('tab');
+      const topicCount = probe.includes('detail-text') ? await tabs.count() : 0;
+      const selected = topicCount ? await tabs.evaluateAll(elements => elements.findIndex(el => el.getAttribute('aria-selected') === 'true')) : -1;
+      const trials: { size: number; failureCount: number }[] = [];
+      for (const size of [14, 14.5, 15, 15.5, 15.75, 16, 16.25, 16.5, 16.75, 17, 17.25, 17.5, 17.75, 18]) {
+        const tag = await page.addStyleTag({ content: `${probe}{font-size:${size}px!important}` });
+        let failureCount = 0;
+        for (let topic = 0; topic < Math.max(1, topicCount); topic++) {
+          if (topicCount) await tabs.nth(topic).click();
+          failureCount += (await layoutFailures(page, copySelector, false)).length;
+        }
+        trials.push({ size, failureCount });
+        await tag.evaluate(el => el.remove());
+      }
+      if (selected >= 0) await tabs.nth(selected).click();
+      await settled(page);
+      console.info('Diagnostic typography trials (original assertions still fail)', { probe, trials });
+    }
+  }
   return failures;
 }
 export async function layout(page: Page | Frame, copySelector?: string) {
