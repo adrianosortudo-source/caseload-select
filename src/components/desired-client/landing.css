@@ -312,3 +312,8 @@
 @media(max-width:310px){.dc-landing .profile-intro,.dc-landing .note-text,.dc-landing .detail-text{font-size:15px}.dc-landing .definition-copy{font-size:18.5px}.dc-landing .topic-card p{font-size:15.5px}.dc-landing .closing p{font-size:15.5px}}
 
 @media(min-width:311px) and (max-width:359px){.dc-app--embedded .dc-landing .profile-intro{font-size:17px}.dc-app--embedded .dc-landing .detail-text{font-size:15px}.dc-app--embedded .dc-landing .note-text{font-size:16px}}
+
+@media(min-width:346px) and (max-width:359px){.dc-app--embedded .dc-landing .profile-intro{font-size:16px}}
+@media(max-width:310px){.dc-app--embedded .dc-landing .profile-intro{font-size:15.5px}}
+
+@media(min-width:381px) and (max-width:390px){.dc-landing .container{width:calc(100% - 32px)}}

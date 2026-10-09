@@ -343,6 +343,11 @@ test("canonical branding spans the landing, questionnaire, review, failure, repo
   const pdf = await exported.pdf({ path: testInfo.outputPath("branding-report-print.pdf"), printBackground: true });
   expect(pdf.byteLength).toBeGreaterThan(0);
   await exported.close();
+  await page.emulateMedia({ media: "print" });
+  await expect(page.locator(".dc-report-logo")).toBeVisible();
+  const appPrint = await page.pdf({ path: testInfo.outputPath("branding-app-print.pdf"), printBackground: true });
+  expect(appPrint.byteLength).toBeGreaterThan(0);
+  await page.emulateMedia({ media: "screen" });
   await page.getByRole("button", { name: /Print/ }).click();
   expect(await page.evaluate(() => (window as Window & { printRequested?: boolean }).printRequested)).toBe(true);
   await page.getByRole("button", { name: "Edit the definition", exact: true }).click();

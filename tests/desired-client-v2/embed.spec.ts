@@ -1,5 +1,19 @@
-import { expect, test } from '@playwright/test';
-import { capture, layout } from './helpers';
+import { expect, test, type Page, type Frame } from '@playwright/test';
+import { capture, layout, settled } from './helpers';
+
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/tools/desired-client-matter/analyze', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: false }) }));
+});
+
+async function settleEmbedded(page: Page, child: Frame) {
+  await settled(child);
+  await expect.poll(async () => {
+    const content = await child.evaluate(() => document.documentElement.scrollHeight);
+    const frame = await page.locator('iframe[data-desired-client-frame]').evaluate(el => el.getBoundingClientRect().height);
+    return Math.abs(frame - content);
+  }).toBeLessThanOrEqual(2);
+  await settled(child);
+}
 
 test('iframe uses verified messages, grows and shrinks, and preserves the public wrapper', async ({ page }) => {
   const appOrigin = new URL(test.info().project.use.baseURL ?? 'http://localhost:3301').origin;
@@ -11,6 +25,7 @@ test('iframe uses verified messages, grows and shrinks, and preserves the public
   expect(child).toBeTruthy();
   const dimensions = async () => page.locator('iframe[data-desired-client-frame]').evaluate(el => ({ height: el.getBoundingClientRect().height, style: el.style.height }));
   await expect.poll(async () => (await dimensions()).style).not.toBe('');
+  await settleEmbedded(page, child!);
   const before = await dimensions();
   await page.evaluate((appOrigin) => {
     const el = document.querySelector('iframe')!;
@@ -33,6 +48,7 @@ test('iframe uses verified messages, grows and shrinks, and preserves the public
   await frame.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(frame.getByRole('heading', { name: 'What work does the firm want to build around?', exact: true })).toBeVisible();
   await expect.poll(async () => (await dimensions()).height).toBeLessThan(focusHeight);
+  await settleEmbedded(page, child!);
   const stable = (await dimensions()).height;
   await page.waitForTimeout(500);
   expect((await dimensions()).height).toBe(stable);
@@ -45,9 +61,16 @@ for (const width of [1440, 1024, 768, 640, 390, 375, 320]) {
     await page.goto('http://localhost:3300/tools/desired-client-matter.html');
     const frame = page.frameLocator('iframe[data-desired-client-frame]');
     await expect(frame.getByRole('button', { name: 'Build my profile', exact: true }).first()).toBeVisible();
-    await layout(page);
     const child = page.frames().find(f => f.url().startsWith(appOrigin + '/'))!;
-    await layout(child);
+    await settleEmbedded(page, child);
+    await layout(page);
+    for (let tab = 0; tab < 6; tab++) {
+      await child.getByRole('tab').nth(tab).click();
+      await settleEmbedded(page, child);
+      await layout(child);
+    }
+    await child.getByRole('tab').first().click();
+    await settleEmbedded(page, child);
     expect(await child.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await capture(page, width + '-embedded-welcome');
   });
