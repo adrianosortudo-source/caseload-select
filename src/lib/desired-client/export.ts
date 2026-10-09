@@ -237,7 +237,7 @@ export function formatBriefHtml(saved: SavedBrief, answers: DesiredClientAnswers
     @media screen and (max-width:1100px){.decision-pathway-steps,.progress dl{grid-template-columns:repeat(2,minmax(0,1fr))}}
     @media screen and (max-width:960px){.cards,.decision-pathway-steps,.progress dl{grid-template-columns:minmax(0,1fr)}}
     @media screen and (max-width:390px){body{font-size:16px}.page{padding:10px}h1{font-size:1.5rem}.claim p,.decision-pathway-steps p{font-size:16px}.conditions,.progress{padding-inline:.75rem}.conditions li{font-size:14px}}
-    @media screen and (min-width:381px) and (max-width:390px){.claim p{font-size:15.5px}}
+    @media screen and (min-width:381px) and (max-width:390px){.card:last-child .claim p{font-size:16.25px}}
     @media screen and (max-width:340px){body{font-size:16.5px}.page{padding:.75rem}.conditions h2{font-size:1rem}.claim p,.decision-pathway-steps p{font-size:16.5px}.card:last-child .claim:last-child p{font-size:17.5px}}
   </style></head><body><article class="page"><img class="brand-logo" src="${EXPORT_BRAND_LOGO}" alt="CaseLoad Select. Sign better cases.">${body}</article></body></html>`;
 }
