@@ -23,5 +23,5 @@ export function ConfirmationDialog({ open, labelledBy, onClose, children }: {
     if (open && !dialog.open) dialog.showModal();
     else if (!open && dialog.open) dialog.close();
   }, [open]);
-  return <dialog ref={dialogRef} className="dc-dialog" aria-modal="true" aria-labelledby={labelledBy}>{children}</dialog>;
+  return <dialog ref={dialogRef} className="dc-dialog" data-ui-component-content="desired-client-confirmation" aria-modal="true" aria-labelledby={labelledBy}>{children}</dialog>;
 }

@@ -349,11 +349,11 @@ test("the actual offline analysis HTTP route recovers mixed payment and survives
     const exportedNotice = printPage.locator(".recovery-disclosure");
     await expect(exportedNotice).toBeVisible();
     for (const width of [1440, 1024, 768, 640, 390, 375, 320]) {
-    await printPage.setViewportSize({ width, height: 1000 });
-    await exportedLayout(printPage);
-  }
-  await printPage.setViewportSize({ width: 1440, height: 1000 });
-  await printPage.emulateMedia({ media: "print" });
+      await printPage.setViewportSize({ width, height: 1000 });
+      await exportedLayout(printPage);
+    }
+    await printPage.setViewportSize({ width: 1440, height: 1000 });
+    await printPage.emulateMedia({ media: "print" });
     await expect(exportedNotice).toBeVisible();
     const printPdf = await printPage.pdf({ path: testInfo.outputPath("recovered-section-report.pdf"), printBackground: true });
     expect(printPdf.byteLength).toBeGreaterThan(0);

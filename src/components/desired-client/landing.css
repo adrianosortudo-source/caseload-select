@@ -15,7 +15,7 @@
 .dc-landing h2{font-size:clamp(30px,4vw,52px);line-height:1.16;letter-spacing:-.035em}
 .dc-landing h3{font-size:20px;line-height:1.3;letter-spacing:-.02em}
 .dc-landing [hidden]{display:none!important}
-.dc-landing .container{width:min(1240px,calc(100% - 96px));margin-inline:auto}
+.dc-landing .container{max-width:none;width:min(1240px,calc(100% - 96px));margin-inline:auto}
 .dc-landing .eyebrow{font-family:var(--font-label);font-weight:600;font-size:13px;line-height:1.5;letter-spacing:.08em;text-transform:uppercase}
 .dc-landing .terminal-word{white-space:nowrap}
 .dc-landing .terminal-square{display:inline-block;width:.22em;height:.22em;margin-left:.12em;position:relative;top:.1em;vertical-align:top;background:var(--gold)}
@@ -116,7 +116,7 @@
 .dc-landing .step-head{gap:9px}
 .dc-landing .step-head h3{font-size:18px}
 }
-@media(max-width:960px){.dc-landing .hero{grid-template-columns:1fr;gap:40px;padding-block:64px}
+@media(max-width:1100px){.dc-landing .hero{grid-template-columns:1fr;gap:40px;padding-block:64px}
 .dc-landing .hero-copy{width:100%}
 .dc-landing .hero-intro{font-size:18px}
 .dc-landing .hero-actions{margin-top:24px}
@@ -283,7 +283,7 @@
 .dc-landing .footer-brand,.dc-landing .footer-copy,.dc-landing .footer-copy p,.dc-landing .dc-details summary,.dc-landing .dc-availability,.dc-landing .dc-resume{color:var(--parchment)}
 .dc-landing .dc-details,.dc-landing .dc-availability,.dc-landing .dc-resume{border-color:var(--body)}
 .dc-landing .hero :is(a,button,[tabindex]):focus-visible,.dc-landing .closing :is(a,button):focus-visible,.dc-landing .site-footer summary:focus-visible{outline-color:var(--parchment)}
-@media(max-width:960px){.dc-landing .hero{padding-block:56px 64px}}
+@media(max-width:1100px){.dc-landing .hero{padding-block:56px 64px}}
 @media(max-width:620px){.dc-landing .hero{padding-block:40px 56px}.dc-landing .topics-section,.dc-landing .process-section{padding-block:48px}.dc-landing .closing{padding-block:48px}.dc-landing .hero .button-secondary{justify-self:start}.dc-landing .profile-intro{font-size:15px}}
 
 .dc-landing{--parchment:var(--cream)}
@@ -294,15 +294,21 @@
 .dc-landing .hero .dc-resume .dc-button--primary{background:var(--parchment);color:var(--ink);border-color:var(--parchment)}
 .dc-landing .hero .dc-resume .dc-button--secondary{color:var(--parchment);border-color:var(--parchment)}
 
-@media(max-width:1100px){.dc-landing .steps{grid-template-columns:minmax(0,1fr);gap:32px}}
+@media(max-width:1190px){.dc-landing .steps{grid-template-columns:minmax(0,1fr);gap:32px}}
 
 .dc-landing .profile-intro{font-size:17px;text-wrap:pretty}
 .dc-landing .detail-text{font-size:16px;text-wrap:pretty}
 .dc-landing .definition-aside p{text-wrap:pretty}
-@media(max-width:960px){.dc-landing .definition-aside p{font-size:17px}}
-@media(max-width:620px){.dc-landing .profile-intro{font-size:16.5px}}
+@media(max-width:1100px){.dc-landing .definition-aside p{font-size:17px}}
+@media(max-width:620px){.dc-landing .profile-intro{font-size:17px}}
 @media(max-width:380px){.dc-landing .profile-intro{font-size:16px}.dc-landing .detail-text{font-size:15.5px}}
 @media(max-width:340px){.dc-landing .container{width:calc(100% - 28px)}}
 @media(max-width:1190px){.dc-landing .detail-grid{grid-template-columns:minmax(0,1fr)}}
 
 @media(min-width:621px) and (max-width:767px){.dc-landing .topic-card h3{font-size:18px}}
+
+@media(max-width:310px){.dc-landing .container{width:calc(100% - 4px)}.dc-landing .hero h1{font-size:36px}.dc-landing .topic-card h3{font-size:18px}}
+
+@media(max-width:310px){.dc-landing .profile-intro,.dc-landing .note-text,.dc-landing .detail-text{font-size:15px}.dc-landing .definition-copy{font-size:18.5px}.dc-landing .topic-card p{font-size:15.5px}.dc-landing .closing p{font-size:15.5px}}
+
+@media(min-width:311px) and (max-width:359px){.dc-app--embedded .dc-landing .profile-intro{font-size:17px}.dc-app--embedded .dc-landing .detail-text{font-size:15px}.dc-app--embedded .dc-landing .note-text{font-size:16px}}
