@@ -252,7 +252,7 @@ test("canonical branding spans the landing, questionnaire, review, failure, repo
     for (const width of widths) {
       await page.setViewportSize({ width, height: 1000 });
       await fontsAndSurfaces();
-      expect(await layoutFailures(page, selector), `${state} at ${width}px`).toEqual([]);
+      expect.soft(await layoutFailures(page, selector), `${state} at ${width}px`).toEqual([]);
       // Assertions cover every width. Keep transient-state captures compact enough
       // to finish within the real analysis timeout on slower local machines.
       if (["welcome", "start", "review", "report"].includes(state) || width === 1440 || width === 320)

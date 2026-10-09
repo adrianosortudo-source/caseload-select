@@ -149,5 +149,5 @@ export async function exportedLayout(page: Page) {
       if (box) box.dataset.uiComponentContent = 'export-' + box.className;
     }
   }, selector);
-  expect(await layoutFailures(page, selector), `Export at ${page.viewportSize()?.width}px`).toEqual([]);
+  expect.soft(await layoutFailures(page, selector), `Export at ${page.viewportSize()?.width}px`).toEqual([]);
 }
