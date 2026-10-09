@@ -379,3 +379,4 @@
 @media screen and (min-width:961px) and (max-width:1100px){.dc-route [data-ui-component-content="desired-client-ai-follow-up"] .dc-option__label{font-size:1.0625rem}}
 
 .dc-analysis-reference code{font:inherit;letter-spacing:inherit}
+@media print{html:has(.dc-route),body:has(.dc-route){height:auto;background:#fff}}
