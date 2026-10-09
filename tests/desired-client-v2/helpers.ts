@@ -93,6 +93,15 @@ export async function layoutFailures(page: Page | Frame, copySelector = '[data-u
     }
     return out;
   }, copySelector);
+  if (failures.length) console.info('Rendered copy failure metrics', await page.evaluate(({ selector, failures }) => ({
+    viewport: innerWidth,
+    contentWidth: document.documentElement.clientWidth,
+    pixels: devicePixelRatio,
+    copy: Array.from(document.querySelectorAll<HTMLElement>(selector)).filter(el => failures.some(failure => failure.endsWith(el.textContent?.trim() ?? ''))).map(el => {
+      const style = getComputedStyle(el);
+      return { text: el.textContent?.trim(), width: el.getBoundingClientRect().width, font: style.fontFamily, size: style.fontSize, weight: style.fontWeight, wrap: style.textWrap };
+    }),
+  }), { selector: copySelector, failures }));
   return failures;
 }
 export async function layout(page: Page | Frame, copySelector?: string) {
