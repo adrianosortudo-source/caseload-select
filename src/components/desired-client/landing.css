@@ -278,4 +278,7 @@
 /* Compact detail copy retains a usable measure on the narrowest direct view. */
 @media(min-width:311px) and (max-width:340px){.dc-landing .detail-text{font-size:14px}}
 
-@media(max-width:620px){.dc-landing .profile-body{padding-inline:16px}}
+@media(max-width:620px){.dc-landing .profile-body{padding-inline:12px}}
+
+.dc-landing .detail-text{font-size:14.5px}
+@media(max-width:340px){.dc-landing .detail-text{font-size:14px}}
