@@ -15,6 +15,16 @@ import { serializeSyntheticComparisonExport } from "../fixtures/comparison-signi
 import { wholeFirmRunId, WHOLE_FIRM_PROFILE } from "../profiles";
 import { createHash } from "node:crypto";
 
+type RecoveryFixture = {
+  originalRequestFileBase64: string;
+  originalPriorStateFileBase64: string;
+  comparisonRequest: {
+    manifest: { entries: unknown[]; manifestSha256: string; expectedPackageCount: number };
+    packages: Array<{ envelope: { packageId: string }; payloadSha256: string }>;
+  };
+  manifestChunks: unknown[];
+  heldEvidence: Array<{ entryId: string; evidenceSha256: string; issues: Array<{ reason: string }>; [key: string]: unknown }>;
+};
 async function workspace(t: { after: (fn: () => Promise<void>) => void }) {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), ".tmp");
   await fs.mkdir(root, { recursive: true });
@@ -23,7 +33,7 @@ async function workspace(t: { after: (fn: () => Promise<void>) => void }) {
   return temp;
 }
 
-let exactRecoveryFixturePromise: Promise<any> | null = null;
+let exactRecoveryFixturePromise: Promise<RecoveryFixture> | null = null;
 function exactRecoveryFixture() {
   if (!exactRecoveryFixturePromise) exactRecoveryFixturePromise = (async () => {
     const compressed = await fs.readFile(new URL("../fixtures/casey-moss-held-recovery-source.json.gz", import.meta.url));
@@ -39,7 +49,7 @@ async function recoveryContext(t: { after: (fn: () => Promise<void>) => void }) 
   await fs.mkdir(manifestDir, { recursive: true });
   await fs.writeFile(path.join(manifestDir, CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestKey + ".request.json"), requestBytes);
   await fs.writeFile(path.join(manifestDir, CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestKey + ".state.json"), priorStateBytes);
-  const packages = source.comparisonRequest.packages.map((p: any) => ({ clientPackageId: p.envelope.packageId, payloadSha256: p.payloadSha256 }));
+  const packages = source.comparisonRequest.packages.map(p => ({ clientPackageId: p.envelope.packageId, payloadSha256: p.payloadSha256 }));
   const approval: DeliveryApproval = {
     schemaVersion: "prospect-whole-firm-delivery-approval/v1", scope: "whole-firm-run",
     targetOrigin: "https://admin.caseloadselect.ca", projectId: "ssxryjxifwiivghglqer",
@@ -104,7 +114,7 @@ test("single-request recovery authorization is exact to the frozen request hashe
     { ...authorization, authorizationReference: "" },
     { ...authorization, secondAttempt: true },
   ]) { const changedBytes = Buffer.from(JSON.stringify(changed)); assert.throws(() => validateCaseyMossRecoveryAuthorization(changedBytes, createHash("sha256").update(changedBytes).digest("hex")), /held_evidence_recovery_authorization_invalid/); }
-  const { authorizationReference: _removed, ...missing } = authorization;
+  const missing = Object.fromEntries(Object.entries(authorization).filter(([key]) => key !== "authorizationReference"));
   const missingBytes = Buffer.from(JSON.stringify(missing));
   assert.throws(() => validateCaseyMossRecoveryAuthorization(missingBytes, createHash("sha256").update(missingBytes).digest("hex")), /held_evidence_recovery_authorization_invalid/);
   assert.throws(() => validateCaseyMossRecoveryAuthorization(bytes, "0".repeat(64)), /held_evidence_recovery_authorization_hash_mismatch/);
@@ -129,7 +139,7 @@ test("Casey request, evidence and open-run comparison pins derive from the uncha
   assert.equal(source.comparisonRequest.manifest.expectedPackageCount, pin.expectedPackageCount);
   assert.equal(source.comparisonRequest.packages.length, pin.expectedPackageCount);
   assert.equal(wholeFirmRunId(pin.sourceManifestSha256), pin.runId);
-  const storedEvidence = source.heldEvidence.find((item: any) => item.entryId === pin.entryId);
+  const storedEvidence = source.heldEvidence.find(item => item.entryId === pin.entryId);
   assert.ok(storedEvidence); assert.equal(storedEvidence.evidenceSha256, pin.evidenceSha256);
   const runbookPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../docs/runbooks/prospect-projection-repair-single-request-recovery.md");
   const runbook = await fs.readFile(runbookPath, "utf8");
@@ -149,9 +159,9 @@ test("the open-run recovery CLI accepts the exact resume comparison without a pa
   const outbox = path.join(WHOLE_FIRM_PROFILE.outputRoot, "runs", "casey-moss-recovery-dry-run");
   const args = ["recover-held-evidence", "--profile", "whole-firm", "--outbox", outbox,
     "--manifest-chunks", chunksPath, "--held-evidence", heldPath, "--packages", packagesPath, "--snapshot", snapshotPath];
-  const result = await main(args);
-  assert.equal((result as any).dryRun, true); assert.equal((result as any).command, "recover-held-evidence");
-  assert.equal((result as any).key, null); assert.equal((result as any).networkRequests, 0);
+  const result = await main(args) as Record<string, unknown>;
+  assert.equal(result.dryRun, true); assert.equal(result.command, "recover-held-evidence");
+  assert.equal(result.key, null); assert.equal(result.networkRequests, 0);
   await assert.rejects(main([...args, "--key", "unused"]), /held_evidence_recovery_cli_scope_invalid/);
 });
 test("one-use recovery preserves exact prior state, records 5 to 6, sends unchanged bytes, and denies repeat", async t => {
@@ -187,7 +197,7 @@ test("saved request, held evidence and prior state drift fail closed before netw
     await fs.writeFile(path.join(dir, CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestKey + ".state.json"), JSON.stringify({ ...JSON.parse(ctx.priorStateBytes.toString("utf8")), attempts: 4 }));
     const noSend = (async () => { calls++; throw Error("must not send"); }) as typeof fetch;
     await assert.rejects(recoverCaseyMossHeldEvidenceOnce(recoveryOptions(ctx, noSend)), /saved_state_hash_mismatch/); assert.equal(calls, 0); });
-  await t.test("held evidence", async t => { const ctx = await recoveryContext(t), changed = structuredClone(ctx.source.heldEvidence), entry = changed.find((item: any) => item.entryId === CASEY_MOSS_HELD_EVIDENCE_RECOVERY.entryId); entry.issues[0].reason += " tampered"; let calls = 0;
+  await t.test("held evidence", async t => { const ctx = await recoveryContext(t), changed = structuredClone(ctx.source.heldEvidence), entry = changed.find(item => item.entryId === CASEY_MOSS_HELD_EVIDENCE_RECOVERY.entryId); entry.issues[0].reason += " tampered"; let calls = 0;
     const noSend = (async () => { calls++; throw Error("must not send"); }) as typeof fetch;
     await assert.rejects(recoverCaseyMossHeldEvidenceOnce({ ...recoveryOptions(ctx, noSend), heldEvidence: changed }), /held_evidence_manifest_mismatch/); assert.equal(calls, 0); });
 });
