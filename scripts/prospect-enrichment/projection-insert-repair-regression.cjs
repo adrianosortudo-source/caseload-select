@@ -1,7 +1,6 @@
 "use strict";
 // Local regression only: refuses remote DBs and fixtures below one million rows.
 const fs = require("node:fs"),
-  path = require("node:path"),
   crypto = require("node:crypto");
 const { performance } = require("node:perf_hooks");
 const options = {};

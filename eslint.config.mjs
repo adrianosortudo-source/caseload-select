@@ -28,7 +28,7 @@ const eslintConfig = [
   {
     // Standalone CommonJS scripts (no "type": "module" in package.json) —
     // require() is the correct import mechanism here, not a lint violation.
-    files: ["scripts/**/*.js", "supabase/*.js"],
+    files: ["scripts/**/*.js", "supabase/*.js", "scripts/prospect-enrichment/projection-insert-repair-regression.cjs"],
     rules: {
       "@typescript-eslint/no-require-imports": "off",
     },
