@@ -43,8 +43,9 @@ function mappedStage(value: number): number {
 function migratedLegacyDraft(value: unknown, now: number): SavedDraft | null {
   if (!validDraftEnvelope(value, now)) return null;
   const schema = isRecord(value.answers) ? value.answers.schema_version : null;
-  const answers = schema === "dcm-v2.1" ? migrateV21Answers(value.answers) : schema === "dcm-v2.2" ? migrateV22Answers(value.answers) : schema === "dcm-v3.0" ? migrateV30Answers(value.answers) : schema === "dcm-v3.1" ? migrateV31Answers(value.answers) : schema === "dcm-v3.2" ? migrateV32Answers(value.answers) : null;
-  if (!answers) return null;
+  const migratedAnswers = schema === "dcm-v2.1" ? migrateV21Answers(value.answers) : schema === "dcm-v2.2" ? migrateV22Answers(value.answers) : schema === "dcm-v3.0" ? migrateV30Answers(value.answers) : schema === "dcm-v3.1" ? migrateV31Answers(value.answers) : schema === "dcm-v3.2" ? migrateV32Answers(value.answers) : null;
+  if (!migratedAnswers) return null;
+  const answers = withoutPersistedClarificationConsent(migratedAnswers);
   const edited = Date.parse(value.lastEditedAt as string), expires = Date.parse(value.expiresAt as string);
   const stage = schema === "dcm-v3.0" ? Math.min(Number(value.currentStage), 2) : schema === "dcm-v3.1" ? Math.min(Number(value.currentStage), 4) : schema === "dcm-v3.2" ? Number(value.currentStage) : mappedStage(Number(value.currentStage));
   let savedBrief: SavedBrief | undefined;
