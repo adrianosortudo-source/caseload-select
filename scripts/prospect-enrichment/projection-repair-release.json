@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "prospect-projection-repair-release/v1",
+  "projectRef": "ssxryjxifwiivghglqer",
+  "reviewOnly": true,
+  "approvalGranted": false,
+  "migration": {
+    "path": "supabase/migrations/20261009191000_prospect_candidate_projection_insert_reuse.sql",
+    "version": "20261009191000",
+    "name": "prospect_candidate_projection_insert_reuse",
+    "bytes": 8337,
+    "sha256": "01a95245ecd1604ffde65ec4b82adfe1e7fca8b6cc7bd4ce6e46e53a8b173928"
+  }
+}

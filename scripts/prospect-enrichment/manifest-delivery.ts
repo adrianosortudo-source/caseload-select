@@ -160,6 +160,166 @@ export async function submitManifestChunks(options: { outbox: string; chunks: un
   }
 }
 
+export const CASEY_MOSS_HELD_EVIDENCE_RECOVERY = Object.freeze({
+  requestKey: "pe-held-evidence-v1-5d4d1767f39d2be1a8d50c7289a6b57905dfe41135a98c4d3b9d4b4fc5578c57",
+  requestFileSha256: "d8370d1516c79cfcb78062918b0292a6bfd728109541ba2111be8992826f0e69",
+  requestBodySha256: "ced28dd6b0aee352ba96f85ef409f1a6d03b9ed04901a6e292dc1fc95f0bbfa5",
+  evidenceSha256: "54196cbbafa96b95a66b7a6beca9208c48652601d74aa2a1a1a6c236e3460be9",
+  priorStateSha256: "a56fb9f4cfab2b91ad876a09cb4c63628ef21fdba6149900d09854f30f077de7",
+  comparisonRequestSha256: "7a9ab00e3cb5912449c8fd7e7b742daf35eeb3f4e7f28b5c905637cb20a2d40d",
+  entryId: "entry-14e1fc6dc59123aeeea89ed7aad8a22ae678af0b261e2b0d07675d954487ff2f",
+  runId: "run-2a85614af50ae60be67addd30ace5ea6b098fa783429e374",
+  expectedPackageCount: 28,
+  sourceManifestSha256: "fb5f2d02f2ff5ee9379def3397b543479be17a84bc2c5446e704dfee2938832f",
+  runManifestSha256: "c64a287b1262f9efb52b4a3b93192e4846706ce3d8e6ceafd7bc0eedb0deaa21",
+});
+type HeldEvidenceRecoveryAuthorization = {
+  schemaVersion: "prospect-held-evidence-recovery-authorization/v1";
+  requestKey: string; requestBodySha256: string; evidenceSha256: string;
+  sourceManifestSha256: string; runManifestSha256: string; authorizationReference: string;
+};
+const exactRecordKeys = (value: unknown, keys: string[]) =>
+  object(value) && JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
+
+export function validateCaseyMossRecoveryAuthorization(bytes: Uint8Array, authorizationSha256: string): HeldEvidenceRecoveryAuthorization {
+  if (typeof authorizationSha256 !== "string" || !/^[a-f0-9]{64}$/.test(authorizationSha256) || sha256(bytes) !== authorizationSha256) {
+    throw Error("held_evidence_recovery_authorization_hash_mismatch");
+  }
+  const value: unknown = JSON.parse(Buffer.from(bytes).toString("utf8"));
+  const required = ["schemaVersion", "requestKey", "requestBodySha256", "evidenceSha256", "sourceManifestSha256", "runManifestSha256", "authorizationReference"];
+  if (!exactRecordKeys(value, required) || !object(value) || value.schemaVersion !== "prospect-held-evidence-recovery-authorization/v1" ||
+      value.requestKey !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestKey ||
+      value.requestBodySha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestBodySha256 ||
+      value.evidenceSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.evidenceSha256 ||
+      value.sourceManifestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.sourceManifestSha256 ||
+      value.runManifestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.runManifestSha256 ||
+      typeof value.authorizationReference !== "string" || !value.authorizationReference.trim()) {
+    throw Error("held_evidence_recovery_authorization_invalid");
+  }
+  return value as HeldEvidenceRecoveryAuthorization;
+}
+async function appendRecoveryAudit(file: string, event: Record<string, unknown>): Promise<void> {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const handle = await fs.open(file, "a");
+  try { await handle.writeFile(canonicalJson(event) + "\n", "utf8"); await handle.sync(); }
+  finally { await handle.close(); }
+}
+
+async function atomicBytes(file: string, bytes: Uint8Array): Promise<void> {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const temp = file + "." + randomUUID() + ".tmp";
+  const handle = await fs.open(temp, "wx");
+  try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }
+  await fs.rename(temp, file);
+}
+
+/** One exact, separately authorized attempt for the exhausted held-evidence request. */
+export async function recoverCaseyMossHeldEvidenceOnce(options: {
+  outbox: string; chunks: unknown; heldEvidence: unknown; approval: DeliveryApproval; authorizationBytes: Uint8Array;
+  authorizationSha256: string; profile?: EnrichmentProfile; confirmation: string; token: string; now?: string;
+  fetcher?: typeof fetch; beforeNetwork?: () => void;
+}) {
+  if (options.confirmation !== "RECOVER-CASEY-MOSS-HELD-EVIDENCE-ONCE") throw Error("explicit_held_evidence_recovery_confirmation_required");
+  if (!options.token.trim()) throw Error("missing_agent_token");
+  const profile = options.profile ?? "legacy-backfill";
+  if (profile !== "whole-firm") throw Error("held_evidence_recovery_profile_invalid");
+  const authorization = validateCaseyMossRecoveryAuthorization(options.authorizationBytes, options.authorizationSha256);
+  const { chunks, requests } = prepareManifestRequests(options.chunks, profile, options.heldEvidence);
+  checkManifestApproval(chunks, options.approval, profile);
+  const request = requests.find(item => item.requestKey === CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestKey);
+  if (!request || request.endpoint !== "held-evidence" || requests.filter(item => item.requestKey === request.requestKey).length !== 1 ||
+      request.bodySha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestBodySha256 ||
+      request.heldEvidence?.evidenceSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.evidenceSha256 ||
+      request.heldEvidence?.entryId !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.entryId ||
+      request.heldEvidence?.runId !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.runId ||
+      chunks[0].runId !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.runId ||
+      chunks[0].expectedPackageCount !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.expectedPackageCount ||
+      chunks[0].sourceManifestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.sourceManifestSha256 ||
+      chunks[0].runManifestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.runManifestSha256 ||
+      authorization.requestKey !== request.requestKey || authorization.requestBodySha256 !== request.bodySha256 ||
+      authorization.evidenceSha256 !== request.heldEvidence?.evidenceSha256 ||
+      authorization.sourceManifestSha256 !== chunks[0].sourceManifestSha256 ||
+      authorization.runManifestSha256 !== chunks[0].runManifestSha256) throw Error("held_evidence_recovery_request_binding_mismatch");
+  const dir = path.join(options.outbox, "manifests", chunks[0].runManifestSha256);
+  const stateFile = path.join(dir, request.requestKey + ".state.json"), requestFile = path.join(dir, request.requestKey + ".request.json");
+  const lockFile = path.join(options.outbox, "submission.lock"), owner = randomUUID(), now = options.now ?? new Date().toISOString();
+  options.beforeNetwork?.();
+  await fs.mkdir(options.outbox, { recursive: true });
+  let lock; try { lock = await fs.open(lockFile, "wx"); } catch { throw Error("outbox_submission_locked"); }
+  await lock.writeFile(JSON.stringify({ owner, processId: process.pid, runId: chunks[0].runId, requestKey: request.requestKey, startedAt: now, operation: "held-evidence-recovery" }));
+  await lock.close();
+  const recoveryDir = path.join(options.outbox, "recovery-authorizations");
+  const authorizationPath = path.join(recoveryDir, request.requestKey + ".json"), attemptPath = path.join(recoveryDir, request.requestKey + ".attempt.json");
+  const auditPath = path.join(options.outbox, "recovery-audit.jsonl");
+  try {
+    await fs.mkdir(recoveryDir, { recursive: true });
+    const savedRequestBytes = await fs.readFile(requestFile);
+    if (sha256(savedRequestBytes) !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestFileSha256) throw Error("held_evidence_recovery_saved_request_hash_mismatch");
+    const savedRequest = JSON.parse(savedRequestBytes.toString("utf8")) as ManifestRequest;
+    if (canonicalJson(savedRequest) !== canonicalJson(request)) throw Error("held_evidence_recovery_saved_request_mismatch");
+    const stateBytes = await fs.readFile(stateFile);
+    if (sha256(stateBytes) !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.priorStateSha256) throw Error("held_evidence_recovery_saved_state_hash_mismatch");
+    const state = JSON.parse(stateBytes.toString("utf8")) as ManifestDeliveryState;
+    if (state.requestKey !== request.requestKey || state.state !== "retry_exhausted" || state.attempts !== 5 ||
+        state.lastStatus !== 503 || state.lastError !== "http_503" || state.receipt !== null || state.nextAttemptAt !== null) {
+      throw Error("held_evidence_recovery_retry_history_mismatch");
+    }
+    try { options.beforeNetwork?.(); }
+    catch {
+      await appendRecoveryAudit(auditPath, { event: "held_evidence_recovery_not_sent", requestKey: request.requestKey,
+        requestBodySha256: request.bodySha256, authorizationSha256: options.authorizationSha256,
+        state, reason: "fresh_comparison_revalidation_failed", networkRequests: 0, at: now });
+      return { requestKey: request.requestKey, state: state.state, outcome: "not_sent", attempts: state.attempts, httpStatus: state.lastStatus, networkRequests: 0 };
+    }
+    await immutable(authorizationPath, { authorizationSha256: options.authorizationSha256, authorizationReference: authorization.authorizationReference,
+      requestKey: request.requestKey, requestBodySha256: request.bodySha256, evidenceSha256: request.heldEvidence!.evidenceSha256,
+      sourceManifestSha256: chunks[0].sourceManifestSha256, runManifestSha256: chunks[0].runManifestSha256 });
+    const attempt = await fs.open(attemptPath, "wx");
+    await attempt.writeFile(canonicalJson({ requestKey: request.requestKey, requestBodySha256: request.bodySha256, authorizedAt: now, attemptNumber: state.attempts + 1 }) + "\n", "utf8");
+    await attempt.sync(); await attempt.close();
+    await appendRecoveryAudit(auditPath, { event: "held_evidence_recovery_started", requestKey: request.requestKey, previousState: state,
+      previousStateSha256: CASEY_MOSS_HELD_EVIDENCE_RECOVERY.priorStateSha256,
+      requestBodySha256: request.bodySha256, evidenceSha256: request.heldEvidence!.evidenceSha256,
+      authorizationSha256: options.authorizationSha256, authorizationReference: authorization.authorizationReference, attemptNumber: state.attempts + 1, at: now });
+    const next: ManifestDeliveryState = { ...state, attempts: state.attempts + 1, lastStatus: null, lastError: null, updatedAt: now };
+    await atomicJson(stateFile, next);
+    try { options.beforeNetwork?.(); }
+    catch {
+      await atomicBytes(stateFile, stateBytes);
+      await appendRecoveryAudit(auditPath, { event: "held_evidence_recovery_not_sent", requestKey: request.requestKey,
+        requestBodySha256: request.bodySha256, authorizationSha256: options.authorizationSha256,
+        state, reason: "fresh_comparison_revalidation_failed_after_durable_write", networkRequests: 0, at: new Date().toISOString() });
+      await fs.unlink(attemptPath);
+      return { requestKey: request.requestKey, state: state.state, outcome: "not_sent", attempts: state.attempts, httpStatus: state.lastStatus, networkRequests: 0 };
+    }
+    let response: Response | null = null;
+    try {
+      response = await (options.fetcher ?? fetch)(PRODUCTION_ORIGIN + "/api/internal/prospect-enrichment/runs/held-evidence", {
+        method: "POST", headers: { Authorization: "Bearer " + options.token.trim(), "Content-Type": "application/json", "Idempotency-Key": request.requestKey },
+        body: request.body, redirect: "error", signal: AbortSignal.timeout(20_000),
+      });
+    } catch { next.lastError = "network_or_timeout"; next.state = "retry_exhausted"; next.nextAttemptAt = null; }
+    if (response) {
+      next.lastStatus = response.status;
+      if ([200, 201].includes(response.status)) {
+        let receipt: unknown; try { receipt = await response.json(); } catch { receipt = null; }
+        if (!verifyReceipt(receipt, chunks, request)) { next.state = "manual_review"; next.lastError = "manifest_receipt_mismatch"; next.nextAttemptAt = null; }
+        else { next.state = "received"; next.receipt = receipt; next.nextAttemptAt = null; }
+      } else if ([429, 502, 503, 504].includes(response.status)) {
+        next.state = "retry_exhausted"; next.lastError = "http_" + response.status; next.nextAttemptAt = null;
+      } else { next.state = "manual_review"; next.lastError = "http_" + response.status; next.nextAttemptAt = null; }
+    }
+    await atomicJson(stateFile, next);
+    await appendRecoveryAudit(auditPath, { event: "held_evidence_recovery_finished", requestKey: request.requestKey,
+      requestBodySha256: request.bodySha256, authorizationSha256: options.authorizationSha256,
+      attemptNumber: next.attempts, state: next.state, httpStatus: next.lastStatus, error: next.lastError, at: new Date().toISOString() });
+    return { requestKey: request.requestKey, state: next.state, outcome: "attempted", attempts: next.attempts,
+      httpStatus: next.lastStatus, error: next.lastError, networkRequests: 1 };
+  } finally {
+    const current = JSON.parse(await fs.readFile(lockFile, "utf8"));
+    if (current.owner === owner) await fs.unlink(lockFile);
+  }
+}
 export function assertManifestPackage(chunks: ManifestChunk[], entry: OutboxEntry): void {
   const matches = chunks.flatMap(c => c.entries).filter(e => e.clientPackageId === entry.envelope.packageId);
   const expected = matches[0];

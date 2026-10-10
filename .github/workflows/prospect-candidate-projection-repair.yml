@@ -1,0 +1,280 @@
+name: Reviewed singleton prospect projection write repair
+
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_source_sha:
+        description: Exact reviewed 40-character current main commit containing the source-pinned repair.
+        required: true
+        type: string
+      reviewed_receipt_sha256:
+        description: Exact SHA-256 of scripts/prospect-enrichment/projection-repair-release.json.
+        required: true
+        type: string
+      use_temporary_database_credential:
+        description: Require the existing protected short-lived database credential flow.
+        required: true
+        default: true
+        type: boolean
+      confirmation:
+        description: Enter APPLY-PROSPECT-PROJECTION-INSERT-REPAIR-V1 exactly after separate production approval.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: gta-prospect-migrations-production
+  cancel-in-progress: false
+
+env:
+  PROJECT_REF: ssxryjxifwiivghglqer
+  REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+  REVIEWED_RECEIPT_SHA256: ${{ inputs.reviewed_receipt_sha256 }}
+  USE_TEMPORARY_DATABASE_CREDENTIAL: ${{ inputs.use_temporary_database_credential }}
+  REPAIR_CONFIRMATION: ${{ inputs.confirmation }}
+
+jobs:
+  preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
+    name: Protected read-only singleton reconciliation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Production prospect migrations
+    outputs:
+      artifact_id: ${{ steps.upload.outputs.artifact-id }}
+      artifact_digest: ${{ steps.upload.outputs.artifact-digest }}
+      migration_sha256: ${{ steps.bind.outputs.migration_sha256 }}
+    steps:
+      - name: Check out exact reviewed current main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.reviewed_source_sha }}
+          fetch-depth: 0
+      - name: Verify exact source and review-only receipt before credential access
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$REVIEWED_SOURCE_SHA" = "$(git rev-parse HEAD)"
+          test "$REVIEWED_SOURCE_SHA" = "$GITHUB_SHA"
+          git fetch --no-tags origin main
+          test "$REVIEWED_SOURCE_SHA" = "$(git rev-parse origin/main)"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs source > "$RUNNER_TEMP/source-proof.json"
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.117.0
+      - name: Acquire protected temporary credential for read-only preflight
+        env:
+          CREDENTIAL_GATE: candidate-projection-repair
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned database TLS trust
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Capture full ledger and original function catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs ledger-query > "$RUNNER_TEMP/ledger.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/ledger.sql" --output json --agent no > "$RUNNER_TEMP/full-ledger.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs ledger "$RUNNER_TEMP/full-ledger.json" "$GITHUB_WORKSPACE" pre > "$RUNNER_TEMP/full-ledger-check.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs catalog-query > "$RUNNER_TEMP/catalog.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/catalog.sql" --output json --agent no > "$RUNNER_TEMP/pre-catalog.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs catalog "$RUNNER_TEMP/pre-catalog.json" pre > "$RUNNER_TEMP/pre-catalog-check.json"
+      - name: Require exact one-file CLI dry-run and source staging proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/projection-migrations" > "$RUNNER_TEMP/stage-proof.json"
+          (cd "$RUNNER_TEMP/projection-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/preflight-plan.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs plan "$RUNNER_TEMP/preflight-plan.json" pre > "$RUNNER_TEMP/plan-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs verify-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/projection-migrations" "$RUNNER_TEMP/stage-proof.json" > "$RUNNER_TEMP/stage-check.json"
+      - name: Bind exact review evidence to source, run and single migration
+        id: bind
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/candidate-projection-repair-binding.mjs create "$RUNNER_TEMP"
+          cat "$RUNNER_TEMP/preflight-binding.json"
+      - name: Upload immutable source-bound read-only evidence
+        id: upload
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prospect-candidate-projection-repair-preflight
+          path: |
+            ${{ runner.temp }}/preflight-binding.json
+            ${{ runner.temp }}/source-proof.json
+            ${{ runner.temp }}/full-ledger.json
+            ${{ runner.temp }}/full-ledger-check.json
+            ${{ runner.temp }}/pre-catalog.json
+            ${{ runner.temp }}/pre-catalog-check.json
+            ${{ runner.temp }}/preflight-plan.json
+            ${{ runner.temp }}/plan-check.json
+            ${{ runner.temp }}/stage-proof.json
+            ${{ runner.temp }}/stage-check.json
+          if-no-files-found: error
+          retention-days: 7
+      - name: Publish exact pending scope for the separate writer review
+        env:
+          ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '### Projection write repair preflight\n\nArtifact %s, digest %s, run %s, source %s, receipt %s.\n\nRead-only preflight found the exact pending migration `20261009191000_prospect_candidate_projection_insert_reuse.sql`; its original two-function catalog hashes, ACLs, invoker flags and empty search paths match the pinned baseline. The CLI dry-run contains only that migration, with no seeds or roles. No migration or request recovery was executed. The next job requires a separate protected review and repeats live preconditions.\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$GITHUB_RUN_ID" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
+
+  verify_preflight:
+    name: Independently validate immutable preflight evidence
+    needs: preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact_id }}
+      EXPECTED_ARTIFACT_DIGEST: ${{ needs.preflight.outputs.artifact_digest }}
+      EXPECTED_MIGRATION_SHA256: ${{ needs.preflight.outputs.migration_sha256 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.reviewed_source_sha }}
+          fetch-depth: 0
+      - name: Fetch exact main ref for source verification
+        run: git fetch --no-tags origin main
+      - name: Verify same-run immutable artifact metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$EXPECTED_ARTIFACT_ID" > "$RUNNER_TEMP/artifact-metadata.json"
+          node --input-type=module -e 'import fs from "node:fs";const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(String(m.id)!==process.env.EXPECTED_ARTIFACT_ID||m.name!=="prospect-candidate-projection-repair-preflight"||m.expired||String(m.workflow_run?.id)!==process.env.GITHUB_RUN_ID||m.workflow_run?.head_sha!==process.env.REVIEWED_SOURCE_SHA||m.digest!=="sha256:"+process.env.EXPECTED_ARTIFACT_DIGEST)process.exit(1)' "$RUNNER_TEMP/artifact-metadata.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.preflight.outputs.artifact_id }}
+          path: ${{ runner.temp }}/projection-preflight
+          merge-multiple: true
+      - name: Revalidate exact source, hashes, ledger hole, catalog, plan and no-write binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/candidate-projection-repair-binding.mjs verify "$RUNNER_TEMP/projection-preflight"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs source > "$RUNNER_TEMP/source-proof.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs ledger "$RUNNER_TEMP/projection-preflight/full-ledger.json" "$GITHUB_WORKSPACE" pre > "$RUNNER_TEMP/ledger-check.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs catalog "$RUNNER_TEMP/projection-preflight/pre-catalog.json" pre > "$RUNNER_TEMP/catalog-check.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs plan "$RUNNER_TEMP/projection-preflight/preflight-plan.json" pre > "$RUNNER_TEMP/plan-check.json"
+      - name: Publish independent validation for second protected review
+        run: printf 'All artifact files match their recorded hashes and same-run source binding. The full ledger has the exact singleton pending version, the original function catalog matches the pinned hashes and security properties, and the dry-run contains one migration only. No database credential or write was used in this validation job.\n' >> "$GITHUB_STEP_SUMMARY"
+
+  apply:
+    name: Second review and guarded singleton writer with complete read-back
+    needs: [preflight, verify_preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: Production prospect migrations
+    env:
+      EXPECTED_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact_id }}
+      EXPECTED_ARTIFACT_DIGEST: ${{ needs.preflight.outputs.artifact_digest }}
+      EXPECTED_MIGRATION_SHA256: ${{ needs.preflight.outputs.migration_sha256 }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.reviewed_source_sha }}
+          fetch-depth: 0
+      - name: Recheck exact current main and source after protected writer review
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$REVIEWED_SOURCE_SHA" = "$(git rev-parse HEAD)"
+          test "$REVIEWED_SOURCE_SHA" = "$GITHUB_SHA"
+          git fetch --no-tags origin main
+          test "$REVIEWED_SOURCE_SHA" = "$(git rev-parse origin/main)"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs source > "$RUNNER_TEMP/source-proof.json"
+      - name: Verify artifact identity again after protected writer review
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$EXPECTED_ARTIFACT_ID" > "$RUNNER_TEMP/artifact-metadata.json"
+          node --input-type=module -e 'import fs from "node:fs";const m=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));if(String(m.id)!==process.env.EXPECTED_ARTIFACT_ID||m.name!=="prospect-candidate-projection-repair-preflight"||m.expired||String(m.workflow_run?.id)!==process.env.GITHUB_RUN_ID||m.workflow_run?.head_sha!==process.env.REVIEWED_SOURCE_SHA||m.digest!=="sha256:"+process.env.EXPECTED_ARTIFACT_DIGEST)process.exit(1)' "$RUNNER_TEMP/artifact-metadata.json"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          artifact-ids: ${{ needs.preflight.outputs.artifact_id }}
+          path: ${{ runner.temp }}/projection-preflight
+          merge-multiple: true
+      - name: Revalidate immutable preflight evidence before fresh credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/candidate-projection-repair-binding.mjs verify "$RUNNER_TEMP/projection-preflight"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs source > "$RUNNER_TEMP/source-proof.json"
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.117.0
+      - name: Acquire fresh protected credential after the second review
+        env:
+          CREDENTIAL_GATE: candidate-projection-repair
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned database TLS trust
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Recheck exact pending ledger, original catalog and singleton dry-run before writing
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs ledger-query > "$RUNNER_TEMP/live-ledger.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/live-ledger.sql" --output json --agent no > "$RUNNER_TEMP/live-ledger.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs ledger "$RUNNER_TEMP/live-ledger.json" "$GITHUB_WORKSPACE" pre > "$RUNNER_TEMP/live-ledger-check.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs catalog-query > "$RUNNER_TEMP/live-catalog.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/live-catalog.sql" --output json --agent no > "$RUNNER_TEMP/live-catalog.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs catalog "$RUNNER_TEMP/live-catalog.json" pre > "$RUNNER_TEMP/live-catalog-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/projection-migrations" > "$RUNNER_TEMP/stage-proof.json"
+          (cd "$RUNNER_TEMP/projection-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/live-plan.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs plan "$RUNNER_TEMP/live-plan.json" pre > "$RUNNER_TEMP/live-plan-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs verify-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/projection-migrations" "$RUNNER_TEMP/stage-proof.json" > "$RUNNER_TEMP/stage-check.json"
+      - name: Apply only the reviewed singleton migration
+        id: apply_migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'apply_started=true' >> "$GITHUB_OUTPUT"
+          (cd "$RUNNER_TEMP/projection-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault)
+      - name: Verify exact ledger version, function bodies, unchanged security and empty dry-run
+        if: always() && steps.apply_migration.outputs.apply_started == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs ledger-query > "$RUNNER_TEMP/post-ledger.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/post-ledger.sql" --output json --agent no > "$RUNNER_TEMP/post-ledger.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs ledger "$RUNNER_TEMP/post-ledger.json" "$GITHUB_WORKSPACE" post > "$RUNNER_TEMP/post-ledger-check.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs catalog-query > "$RUNNER_TEMP/post-catalog.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/post-catalog.sql" --output json --agent no > "$RUNNER_TEMP/post-catalog.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs catalog "$RUNNER_TEMP/post-catalog.json" post > "$RUNNER_TEMP/post-catalog-check.json"
+          (cd "$RUNNER_TEMP/projection-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/post-plan.json"
+          node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs plan "$RUNNER_TEMP/post-plan.json" post > "$RUNNER_TEMP/post-plan-check.json"
+      - name: Preserve complete read-back and writer evidence on success or uncertainty
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prospect-candidate-projection-repair-writer-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/projection-preflight
+            ${{ runner.temp }}/live-ledger.json
+            ${{ runner.temp }}/live-ledger-check.json
+            ${{ runner.temp }}/live-catalog.json
+            ${{ runner.temp }}/live-catalog-check.json
+            ${{ runner.temp }}/live-plan.json
+            ${{ runner.temp }}/live-plan-check.json
+            ${{ runner.temp }}/post-ledger.json
+            ${{ runner.temp }}/post-ledger-check.json
+            ${{ runner.temp }}/post-catalog.json
+            ${{ runner.temp }}/post-catalog-check.json
+            ${{ runner.temp }}/post-plan.json
+            ${{ runner.temp }}/post-plan-check.json
+          if-no-files-found: warn
+          retention-days: 7
+      - name: Publish verified migration-only completion
+        if: success()
+        run: printf 'The exact singleton migration, full source-version ledger, both function body hashes, original ACLs, invoker flags, empty search paths and empty post-apply dry-run are verified. No request recovery or firm intake was executed.\n' >> "$GITHUB_STEP_SUMMARY"

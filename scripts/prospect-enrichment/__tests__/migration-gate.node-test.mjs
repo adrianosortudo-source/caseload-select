@@ -8,7 +8,7 @@ import yaml from "js-yaml";
 import {
   CONFIRMATION, MIGRATION_PATHS, PROJECT_REF, RELEASE_PATH,
   PREVIEW_MIGRATION_PATHS, QUALIFICATION_HISTORY, QUALIFICATION_HISTORY_CONFIRMATION,
-  CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, CANDIDATE_READER_REPAIR_PATHS, CANDIDATE_REGISTRATION_REPAIR_PATH, HISTORICAL_LEDGER_NAME_ALIASES,
+  CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, CANDIDATE_READER_REPAIR_PATHS, CANDIDATE_REGISTRATION_REPAIR_PATH, CANDIDATE_PROJECTION_REPAIR_PATH, HISTORICAL_LEDGER_NAME_ALIASES,
   compareQualificationCatalogs, stageProductionWorkdir, stagePrerequisiteWorkdir, verifyFullMigrationLedger, verifyQualificationRepairAuthorization,
   createReleaseManifest, findProjectEnvFiles, ledgerQuery, sha256, verifyConfirmation, verifyDirectDatabaseUrl, verifyExecutionGate,
   verifyLedgerStatements, verifyMigrationLedger, verifyMigrationPlan, verifyReleaseManifest,
@@ -94,7 +94,7 @@ test("migration inventory contains only exact production and receipt-bound revie
   assert.ok(!MIGRATION_PATHS.includes(documentedCoverage));
   for (const changed of [{ ...coverageReview, productionApplicationApproved: true }, { ...coverageReview, reviewOnly: false }, { ...coverageReview, prerequisiteCatalogReview: "complete" }, { ...coverageReview, migration: { ...coverageReview.migration, sha256: "0".repeat(64) } }, { ...coverageReview, prerequisiteCandidateReceiptSha256: "0".repeat(64) }]) assert.throws(() => verifyCoverageReviewOnlyReceipt(changed, coverageBytes, candidateReceiptBytes, candidateBytes));
   assert.throws(() => verifyMigrationPlan({ ...plan("pre"), migrations: [...plan("pre").migrations, path.posix.basename(documentedCoverage)] }, manifest, "pre"), /unexpected_pending/);
-  assert.deepEqual([...MIGRATION_PATHS, documentedAddition, documentedCoverage, "supabase/migrations/20260924185000_prospect_enrichment_registration_rpc_reliability.sql", CANDIDATE_READER_TIMEOUT_PATH, ...CANDIDATE_READER_REPAIR_PATHS].sort(), featurePaths, "any other feature migration requires explicit release review");
+  assert.deepEqual([...MIGRATION_PATHS, documentedAddition, documentedCoverage, CANDIDATE_REGISTRATION_REPAIR_PATH, CANDIDATE_READER_TIMEOUT_PATH, ...CANDIDATE_READER_REPAIR_PATHS, CANDIDATE_PROJECTION_REPAIR_PATH].sort(), featurePaths, "any other feature migration requires explicit release review");
   assert.deepEqual(Buffer.from(fs.readFileSync(path.join(root, candidateMigrationPath), "utf8").replace(/\r\n/g, "\n")), candidateBytes);
   assert.ok(!MIGRATION_PATHS.includes(documentedAddition), "candidate review receipt must not authorize production application");
   for (const changed of [{ ...reviewOnly, productionApplicationApproved: true }, { ...reviewOnly, reviewOnly: false }, { ...reviewOnly, migration: { ...reviewOnly.migration, sha256: "0".repeat(64) } }]) {
