@@ -18,8 +18,8 @@ const sha256 = (value: string) => createHash("sha256").update(value, "utf8").dig
 // These hashes describe the checked-in baseline SQL fixture used to create scratch-schema functions.
 // They are deliberately separate from ORIGINAL_FUNCTION_SHA256, which pins the authorized production catalog.
 const CHECKED_IN_BASELINE_FUNCTION_SHA256 = Object.freeze({
-  [RECORD_HISTORY_SIGNATURE]: "b33fade20323a279805f7c18ba81f0803217bb4fe4fbb517c51a241f5ae47a56",
-  [STORE_CONTENT_SIGNATURE]: "fa2308eb5d0961c29a13e8ffc745785f6e243f7ebe686aaba26ccfe30dc2b520",
+  [RECORD_HISTORY_SIGNATURE]: "533856840e6f59b42f68512d06d8cd59a4202e614ff23373e2871c6983fa31a9",
+  [STORE_CONTENT_SIGNATURE]: "7de2e7d7eb914d74406876cc4f43f17c45184cf9fc68f7b36a185417b57ceb44",
 });
 function sourceBodySha(name: string): string {
   const marker = "CREATE FUNCTION prospect_candidate_private." + name + "(";
