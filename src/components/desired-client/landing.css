@@ -253,8 +253,8 @@
 
 @media(max-width:1190px){.dc-landing .steps{grid-template-columns:minmax(0,1fr);gap:32px}}
 
-.dc-landing .profile-intro{font-size:16px;text-wrap:pretty}
-.dc-landing .detail-text{font-size:15px;text-wrap:pretty}
+.dc-landing .profile-intro{font-size:16px}
+.dc-landing .detail-text{font-size:15px}
 .dc-landing .definition-aside p{text-wrap:pretty}
 @media(max-width:1100px){.dc-landing .definition-aside p{font-size:17px}}
 @media(max-width:620px){.dc-landing .profile-intro{font-size:16px}.dc-landing .detail-text{font-size:15px}}
