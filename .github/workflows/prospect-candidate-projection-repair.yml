@@ -96,7 +96,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node --input-type=module -e 'import fs from "node:fs";import crypto from "node:crypto";const h=p=>crypto.createHash("sha256").update(fs.readFileSync(p)).digest("hex");const x={schemaVersion:"prospect-projection-repair-preflight/v1",runId:process.env.GITHUB_RUN_ID,runAttempt:process.env.GITHUB_RUN_ATTEMPT,sourceSha:process.env.REVIEWED_SOURCE_SHA,receiptSha256:process.env.REVIEWED_RECEIPT_SHA256,migrationSha256:"01a95245ecd1604ffde65ec4b82adfe1e7fca8b6cc7bd4ce6e46e53a8b173928",productionWrites:0,recoveryAttempts:0,files:{source:"source-proof.json",ledger:"full-ledger.json",ledgerCheck:"full-ledger-check.json",catalog:"pre-catalog.json",catalogCheck:"pre-catalog-check.json",plan:"preflight-plan.json",planCheck:"plan-check.json",stage:"stage-proof.json",stageCheck:"stage-check.json"}};x.sha256=Object.fromEntries(Object.values(x.files).map(n=>[n,h(process.env.RUNNER_TEMP+"/"+n)]));fs.writeFileSync(process.env.RUNNER_TEMP+"/preflight-binding.json",JSON.stringify(x,null,2)+"\n");fs.appendFileSync(process.env.GITHUB_OUTPUT,"migration_sha256="+x.migrationSha256+"\n");'
+          node scripts/prospect-enrichment/candidate-projection-repair-binding.mjs create "$RUNNER_TEMP"
           cat "$RUNNER_TEMP/preflight-binding.json"
       - name: Upload immutable source-bound read-only evidence
         id: upload
@@ -158,7 +158,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node --input-type=module -e 'import fs from "node:fs";import crypto from "node:crypto";const d=process.argv[1],b=JSON.parse(fs.readFileSync(d+"/preflight-binding.json","utf8")),h=p=>crypto.createHash("sha256").update(fs.readFileSync(d+"/"+p)).digest("hex");if(b.schemaVersion!=="prospect-projection-repair-preflight/v1"||b.runId!==process.env.GITHUB_RUN_ID||b.runAttempt!=="1"||b.sourceSha!==process.env.REVIEWED_SOURCE_SHA||b.receiptSha256!==process.env.REVIEWED_RECEIPT_SHA256||b.migrationSha256!==process.env.EXPECTED_MIGRATION_SHA256||b.productionWrites!==0||b.recoveryAttempts!==0)process.exit(1);for(const [k,v] of Object.entries(b.sha256))if(h(b.files[k])!==v)process.exit(1)' "$RUNNER_TEMP/projection-preflight"
+          node scripts/prospect-enrichment/candidate-projection-repair-binding.mjs verify "$RUNNER_TEMP/projection-preflight"
           node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs source > "$RUNNER_TEMP/source-proof.json"
           node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs ledger "$RUNNER_TEMP/projection-preflight/full-ledger.json" "$GITHUB_WORKSPACE" pre > "$RUNNER_TEMP/ledger-check.json"
           node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs catalog "$RUNNER_TEMP/projection-preflight/pre-catalog.json" pre > "$RUNNER_TEMP/catalog-check.json"
@@ -207,7 +207,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node --input-type=module -e 'import fs from "node:fs";import crypto from "node:crypto";const d=process.argv[1],b=JSON.parse(fs.readFileSync(d+"/preflight-binding.json","utf8")),h=p=>crypto.createHash("sha256").update(fs.readFileSync(d+"/"+p)).digest("hex");if(b.runId!==process.env.GITHUB_RUN_ID||b.sourceSha!==process.env.REVIEWED_SOURCE_SHA||b.receiptSha256!==process.env.REVIEWED_RECEIPT_SHA256||b.migrationSha256!==process.env.EXPECTED_MIGRATION_SHA256||b.productionWrites!==0||b.recoveryAttempts!==0)process.exit(1);for(const [k,v] of Object.entries(b.sha256))if(h(b.files[k])!==v)process.exit(1)' "$RUNNER_TEMP/projection-preflight"
+          node scripts/prospect-enrichment/candidate-projection-repair-binding.mjs verify "$RUNNER_TEMP/projection-preflight"
           node scripts/prospect-enrichment/candidate-projection-repair-gate.mjs source > "$RUNNER_TEMP/source-proof.json"
       - name: Install pinned Supabase CLI
         uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3

@@ -15,15 +15,17 @@ The only eligible request is the original `domain:caseyandmoss.com` held-evidenc
 
 The source request, request body, held evidence, entry, run, both manifest hashes and state file must be re-read and hash-verified immediately before any attempt. A receipt, changed hash, changed state, identity/source conflict, signature failure or any unexpected ledger/catalog state stops the procedure.
 
+The separate recovery authorization file must use schema `prospect-held-evidence-recovery-authorization/v1` and contain exactly `requestKey`, `requestBodySha256`, `evidenceSha256`, `sourceManifestSha256`, `runManifestSha256`, and a non-empty `authorizationReference` in addition to `schemaVersion`. Supply its actual SHA-256 with `--recovery-authorization-sha256`; the CLI verifies both the raw file hash and every pinned request/manifest value. The existing manifest delivery approval is still required separately.
+
 ## Required gates
 
 1. The exact projection migration must already be present in the production migration ledger. Verify its source statements and both function bodies, original ACLs, invoker flags and empty search paths from the protected writer receipt.
 2. Obtain fresh signed comparison evidence for this exact request and confirm there is no existing receipt or conflicting stored body. Confirm the sole-writer lock and inspect the original attempt history.
 3. Obtain separate explicit approval to attempt this exact request once. Migration approval does not authorize request recovery.
-4. Use only a supported wrapper operation that records a one-use, request-key-bound recovery authorization in an append-only audit record. It must preserve all five failed attempts and their HTTP 503 receipts/history, accept only the exact request and body hashes above, and permit no second recovery attempt.
+4. Use only the supported recover-held-evidence CLI operation. It requires a separate action-time authorization file pinned by SHA-256, binds it to the exact request, body, evidence, source-manifest and run-manifest hashes above, checks the original five-attempt/HTTP 503 state under the submission lock, preserves that state in an append-only audit event, and creates an exclusive one-use attempt marker before networking. The marker cannot be reset or replayed. The operation sends only the unchanged held-evidence request; it does not finalize the manifest or submit a package.
 5. Send the unchanged original request through the existing protected held-evidence endpoint. Never insert held or package rows by SQL, invoke an intake RPC directly, edit local retry state, reset an attempt counter, change the request key, or replay any other firm's request.
 6. Preserve the complete response and audit receipt. Independently read back the exact held body, source/run/entry lineage, all projected fields and source tuples, search vectors and canonical body/hash. Require idempotent replay evidence without sending a second request.
 
 ## Current execution blocker
 
-The current request wrapper rejects `retry_exhausted` and has no supported one-use recovery operation. Therefore step 4 is not currently satisfiable and **no request attempt is permitted**. Do not simulate support with an environment variable, edited state file, direct SQL, hand-built HTTP request or raw intake call. A separately reviewed change to the supported wrapper and its tests is required before this runbook can be executed. The protected migration workflow does not execute this recovery.
+The one-use wrapper is implemented as the explicitly named recover-held-evidence CLI command. It remains unavailable for execution until the projection migration is separately released through its protected workflow and a fresh, separate action-time authorization file and SHA-256 are provided for this exact recovery. No request attempt has been executed. The protected migration workflow does not execute this recovery.

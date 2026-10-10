@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import yaml from "js-yaml";
 import { CANDIDATE_PROJECTION_REPAIR_PATH } from "../migration-gate.mjs";
+import { PREFLIGHT_FILES, createPreflightBinding, verifyPreflightBinding } from "../candidate-projection-repair-binding.mjs";
 import {
   REPAIR_PATH, REPAIR_SHA256, RELEASE_PATH, RECORD_HISTORY_SIGNATURE, STORE_CONTENT_SIGNATURE,
   ORIGINAL_FUNCTION_SHA256, REPAIR_CONFIRMATION, verifyProjectionRepairReceipt, verifyProjectionRepairSource,
@@ -23,6 +24,23 @@ const baseEnv = {
   REPAIR_CONFIRMATION, REVIEWED_SOURCE_SHA: "a".repeat(40), GITHUB_SHA: "a".repeat(40), REVIEWED_RECEIPT_SHA256: "b".repeat(64),
 };
 
+
+test("preflight binding producer and both validators share file-keyed hashes and reject missing or tampered files", t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "projection-repair-binding-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  for (const file of Object.values(PREFLIGHT_FILES)) fs.writeFileSync(path.join(dir, file), "fixture:" + file);
+  const environment = { GITHUB_RUN_ID: "42", GITHUB_RUN_ATTEMPT: "1", REVIEWED_SOURCE_SHA: "a".repeat(40), REVIEWED_RECEIPT_SHA256: "b".repeat(64) };
+  const binding = createPreflightBinding(dir, environment);
+  assert.deepEqual(Object.keys(binding.sha256).sort(), Object.keys(PREFLIGHT_FILES).sort());
+  assert.deepEqual(binding.files, PREFLIGHT_FILES);
+  const expected = { ...environment, EXPECTED_MIGRATION_SHA256: binding.migrationSha256 };
+  assert.equal(verifyPreflightBinding(dir, binding, expected).fileCount, Object.keys(PREFLIGHT_FILES).length);
+  const missing = structuredClone(binding);
+  delete missing.files.catalogCheck;
+  assert.throws(() => verifyPreflightBinding(dir, missing, expected), /candidate_projection_repair_binding_invalid/);
+  fs.writeFileSync(path.join(dir, PREFLIGHT_FILES.catalog), "tampered");
+  assert.throws(() => verifyPreflightBinding(dir, binding, expected), /candidate_projection_repair_binding_hash_mismatch/);
+});
 test("review-only receipt is pinned to the exact existing migration and never grants activation", () => {
   assert.equal(sha(source), REPAIR_SHA256);
   assert.equal(verifyProjectionRepairReceipt(receipt, source).productionApplicationApproved, false);
@@ -122,7 +140,9 @@ test("production workflow is manual, current-main-only, two-review and migration
   assert.match(apply.run, /supabase db push .*--yes --include-all --skip-vault/);
   assert.ok(workflow.jobs.apply.steps.find(step => (step.name ?? "").includes("Recheck exact pending ledger")));
   assert.ok(workflow.jobs.apply.steps.find(step => (step.name ?? "").includes("Verify exact ledger version")));
-  assert.ok(workflow.jobs.preflight.steps.some(step => /recoveryAttempts:0/.test(step.run ?? "")));
+  assert.ok(workflow.jobs.preflight.steps.some(step => /candidate-projection-repair-binding.mjs create/.test(step.run ?? "")));
+  const bindingValidators = [workflow.jobs.verify_preflight, workflow.jobs.apply].flatMap(job => job.steps).filter(step => /candidate-projection-repair-binding.mjs verify/.test(step.run ?? ""));
+  assert.equal(bindingValidators.length, 2);
   assert.ok(CANDIDATE_PROJECTION_REPAIR_PATH.endsWith("20261009191000_prospect_candidate_projection_insert_reuse.sql"));
   const text = JSON.stringify(workflow);
   assert.doesNotMatch(text, /vercel deploy --prod|migration repair --status applied/);

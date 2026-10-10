@@ -95,6 +95,10 @@ export function projectionRepairCatalogQuery() {
   ORDER BY p.proname;\n`;
 }
 
+export function normalizeProjectionIdentityArguments(value) {
+  return typeof value === "string" ? value.replace(/\s*,\s*/g, ",") : value;
+}
+
 export function verifyProjectionRepairCatalog(rows, phase = "pre", migrationBytes = fs.readFileSync(path.join(ROOT, REPAIR_PATH))) {
   const signatures = [RECORD_HISTORY_SIGNATURE, STORE_CONTENT_SIGNATURE];
   if (!["pre", "post"].includes(phase) || !Array.isArray(rows) || rows.length !== 2) fail("candidate_projection_repair_catalog_invalid");
@@ -104,7 +108,7 @@ export function verifyProjectionRepairCatalog(rows, phase = "pre", migrationByte
     const signature = signatures[index];
     if (!exact(row, ["signature", "functionName", "identityArguments", "owner", "securityDefiner", "settings", "acl", "bodySha256"]) ||
         row.signature !== signature || row.functionName !== (index === 0 ? "record_history" : "store_revision_content") ||
-        row.identityArguments !== signature.slice(signature.indexOf("(") + 1, -1) || row.owner !== "postgres" ||
+        normalizeProjectionIdentityArguments(row.identityArguments) !== signature.slice(signature.indexOf("(") + 1, -1) || row.owner !== "postgres" ||
         row.securityDefiner !== false || !same(row.settings, ['search_path=""']) || row.acl !== "{postgres=X/postgres}" ||
         row.bodySha256 !== expectedHashes[signature]) fail("candidate_projection_repair_catalog_invalid");
   }

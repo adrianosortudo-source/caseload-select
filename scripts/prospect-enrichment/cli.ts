@@ -12,7 +12,7 @@ import { runWholeFirmOfflineHandoff } from "./offline-handoff";
 import { assertManifestRegistrationBinding, assertFinalizedComparisonReader, verifyAndSerializeComparisonExport } from "./comparison-export";
 import { serializeComparisonRequest, writeComparisonRequest } from "./comparison-request";
 import { assertFrozenWholeFirmPackageMissing, assertFrozenWholeFirmRunCompatibility, CHILD5_FROZEN_COMPATIBILITY } from "./frozen-whole-firm-compatibility";
-import { prepareManifestRequests, submitManifestChunks, assertManifestPackage, checkManifestApproval, validateManifestChunks } from "./manifest-delivery";
+import { prepareManifestRequests, recoverCaseyMossHeldEvidenceOnce, submitManifestChunks, assertManifestPackage, checkManifestApproval, validateManifestChunks } from "./manifest-delivery";
 import { buildExpectedRunManifest, buildHeldCandidateEvidence, chunkExpectedRunManifest } from "./run-manifest";
 import { archivedDocuments, extractCandidates, inventory, type SourceManifest } from "./inventory";
 import { DEFAULT_OUTPUT, DEFAULT_ROOTS, object, protocolHash, sha256, within } from "./model";
@@ -41,13 +41,16 @@ const HELP = `Prospect enrichment local tools (dry-run by default)
   receipt --key KEY --outbox DIR --token-file FILE --execute
   verify-replay --key KEY --outbox DIR --manifest-chunks FILE --held-evidence FILE --packages FILE --snapshot FILE
          --approval FILE --approval-sha256 HASH --token-file FILE --execute --confirm VERIFY-IDENTICAL-PROSPECT-REPLAY
+  recover-held-evidence --outbox DIR --manifest-chunks FILE --held-evidence FILE --packages FILE --snapshot FILE
+         --approval FILE --approval-sha256 HASH --recovery-authorization FILE --recovery-authorization-sha256 HASH
+         --token-file FILE --execute --confirm RECOVER-CASEY-MOSS-HELD-EVIDENCE-ONCE
 Whole-firm commands require --profile whole-firm and use a separate private D: output root.
 Whole-firm submit additionally requires --manifest SOURCE_MANIFEST and a finalized-run comparison.
 register-manifest accepts a fresh signed bootstrap/resume comparison, or a finalized-run comparison for exact finalization-receipt recovery. It registers inventory and held bodies only; it never submits packages.
 Use --manifest-only instead of --key only for whole-firm snapshots with zero packages. Default profile remains legacy-backfill.
 register-manifest registers the expected inventory and held bodies only. submit requires that finalized inventory and a fresh finalized-run comparison, then stages one package. Neither command reviews/applies canonical evidence.
 Approval documents must record a real exact user authorization; a file alone does not grant it.`;
-const valueFlags = new Set(["manifest", "run-dir", "file", "packages", "snapshot", "output", "key", "outbox", "approval", "approval-sha256", "token-file", "confirm", "actions", "manifest-chunks", "held-evidence", "profile", "coordinator-state", "exclusions"]);
+const valueFlags = new Set(["manifest", "run-dir", "file", "packages", "snapshot", "output", "key", "outbox", "approval", "approval-sha256", "token-file", "confirm", "actions", "manifest-chunks", "held-evidence", "profile", "coordinator-state", "exclusions", "recovery-authorization", "recovery-authorization-sha256"]);
 function args(argv: string[]) {
   const [command = "help", ...rest] = argv, options: Record<string, string | boolean> = {};
   for (let i = 0; i < rest.length; i++) {
@@ -246,7 +249,7 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     return { key: result.entry.key, payloadSha256: result.entry.payloadSha256, state: result.state.state, replay: result.replay, networkRequests: 0 };
   }
   if (command === "status") return readState(privateOutput(required(options, "outbox")), required(options, "key"));
-  if (command === "submit" || command === "receipt" || command === "verify-replay") {
+  if (command === "submit" || command === "receipt" || command === "verify-replay" || command === "recover-held-evidence") {
     const outbox = privateOutput(required(options, "outbox"));
     const manifestOnly = options["manifest-only"] === true;
     if (manifestOnly && (command !== "submit" || profile !== "whole-firm" || options.key !== undefined)) throw Error("manifest_only_scope_invalid");
@@ -302,17 +305,25 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     }
     if (options.execute !== true) return { dryRun: true, command, key, manifestRequests: command === "submit" ? prepared?.requests.length ?? 0 : 0, networkRequests: 0,
       ...(child5Compatibility ? { compatibilityPath: "child5-exact-frozen-hash-bound/v1" } : {}),
-      requiredConfirmation: command === "submit" ? "SUBMIT-APPROVED-PROSPECT-RESEARCH" : command === "verify-replay" ? "VERIFY-IDENTICAL-PROSPECT-REPLAY" : null };
+      requiredConfirmation: command === "submit" ? "SUBMIT-APPROVED-PROSPECT-RESEARCH" : command === "verify-replay" ? "VERIFY-IDENTICAL-PROSPECT-REPLAY" : command === "recover-held-evidence" ? "RECOVER-CASEY-MOSS-HELD-EVIDENCE-ONCE" : null };
     let approval: DeliveryApproval | null = null;
     if (command !== "receipt") {
       const bytes = frozenApprovalBytes ?? await fs.readFile(required(options, "approval"));
       if (sha256(bytes) !== required(options, "approval-sha256")) throw Error("approval_file_hash_mismatch");
       approval = JSON.parse(bytes.toString("utf8"));
-      const expectedConfirmation = command === "submit" ? "SUBMIT-APPROVED-PROSPECT-RESEARCH" : "VERIFY-IDENTICAL-PROSPECT-REPLAY";
-      if (required(options, "confirm") !== expectedConfirmation) throw Error(command === "submit" ? "explicit_submission_confirmation_required" : "explicit_replay_verification_confirmation_required");
+      const expectedConfirmation = command === "submit" ? "SUBMIT-APPROVED-PROSPECT-RESEARCH" : command === "recover-held-evidence" ? "RECOVER-CASEY-MOSS-HELD-EVIDENCE-ONCE" : "VERIFY-IDENTICAL-PROSPECT-REPLAY";
+      if (required(options, "confirm") !== expectedConfirmation) throw Error(command === "submit" ? "explicit_submission_confirmation_required" : command === "recover-held-evidence" ? "explicit_held_evidence_recovery_confirmation_required" : "explicit_replay_verification_confirmation_required");
       if (queued) checkApproval(queued, approval!, profile);
     }
     const token = (await fs.readFile(required(options, "token-file"), "utf8")).trim();
+    if (command === "recover-held-evidence") {
+      if (profile !== "legacy-backfill") throw Error("held_evidence_recovery_profile_invalid");
+      assertFinalizedBinding();
+      const authorizationBytes = await fs.readFile(required(options, "recovery-authorization"));
+      return recoverCaseyMossHeldEvidenceOnce({ outbox, chunks: prepared!.chunks, heldEvidence, approval: approval!,
+        authorizationBytes, authorizationSha256: required(options, "recovery-authorization-sha256"), profile,
+        confirmation: required(options, "confirm"), token, beforeNetwork: assertFinalizedBinding });
+    }
     if (command === "submit") {
       assertFinalizedBinding();
       const registration = await submitManifestChunks({ outbox, profile, chunks: prepared!.chunks, heldEvidence, approval: approval!, confirmation: required(options, "confirm"), token, beforeNetwork: assertFinalizedBinding });

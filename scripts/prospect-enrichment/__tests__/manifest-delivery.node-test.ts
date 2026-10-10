@@ -9,6 +9,8 @@ import { buildExpectedRunManifest, buildHeldCandidateEvidence, chunkExpectedRunM
 import { assertManifestPackage, prepareManifestRequests, submitManifestChunks, validateManifestChunks, type ManifestChunk, type ManifestReceipt } from "../manifest-delivery";
 import { enqueue, type ApprovalManifest } from "../outbox";
 import { protocolHash, within } from "../model";
+import { CASEY_MOSS_HELD_EVIDENCE_RECOVERY, validateCaseyMossRecoveryAuthorization } from "../manifest-delivery";
+import { createHash } from "node:crypto";
 
 async function workspace(t: { after: (fn: () => Promise<void>) => void }) {
   const root = path.join(path.dirname(fileURLToPath(import.meta.url)), ".tmp");
@@ -30,6 +32,27 @@ function receipt(chunk: ManifestChunk, finalize: boolean): ManifestReceipt {
   const count = finalize ? chunk.chunkCount : chunk.chunkIndex + 1;
   return { outcome: finalize ? "finalized" : "chunk_registered", runId: chunk.runId, runKey: chunk.runId, sourceManifestSha256: chunk.sourceManifestSha256, manifestSha256: chunk.runManifestSha256, registeredChunkCount: count, expectedChunkCount: chunk.chunkCount, receivedEntryCount: count, expectedEntryCount: chunk.expectedEntryCount, receivedPackageCount: count, expectedPackageCount: chunk.expectedPackageCount, manifestState: finalize ? "finalized" : "open" };
 }
+
+test("single-request recovery authorization is exact to the frozen request hashes and rejects missing or changed scope", () => {
+  const authorization = {
+    schemaVersion: "prospect-held-evidence-recovery-authorization/v1",
+    ...CASEY_MOSS_HELD_EVIDENCE_RECOVERY,
+    authorizationReference: "synthetic-explicit-action-time-approval",
+  };
+  const bytes = Buffer.from(JSON.stringify(authorization));
+  const digest = createHash("sha256").update(bytes).digest("hex");
+  assert.deepEqual(validateCaseyMossRecoveryAuthorization(bytes, digest), authorization);
+  for (const changed of [
+    { ...authorization, requestBodySha256: "0".repeat(64) },
+    { ...authorization, evidenceSha256: "0".repeat(64) },
+    { ...authorization, authorizationReference: "" },
+    { ...authorization, secondAttempt: true },
+  ]) { const changedBytes = Buffer.from(JSON.stringify(changed)); assert.throws(() => validateCaseyMossRecoveryAuthorization(changedBytes, createHash("sha256").update(changedBytes).digest("hex")), /held_evidence_recovery_authorization_invalid/); }
+  const { authorizationReference: _removed, ...missing } = authorization;
+  const missingBytes = Buffer.from(JSON.stringify(missing));
+  assert.throws(() => validateCaseyMossRecoveryAuthorization(missingBytes, createHash("sha256").update(missingBytes).digest("hex")), /held_evidence_recovery_authorization_invalid/);
+  assert.throws(() => validateCaseyMossRecoveryAuthorization(bytes, "0".repeat(64)), /held_evidence_recovery_authorization_hash_mismatch/);
+});
 test("manifest registration prepares a stable run key and exact final replay without network access", () => {
   const { chunks } = fixture(), a = prepareManifestRequests(chunks), b = prepareManifestRequests(JSON.parse(JSON.stringify(chunks)));
   assert.deepEqual(a.requests, b.requests);
