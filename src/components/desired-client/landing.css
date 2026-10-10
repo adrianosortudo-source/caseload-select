@@ -286,4 +286,4 @@
 .dc-landing .profile-body{padding-inline:16px}
 @media(max-width:620px){.dc-landing .profile-body{padding-inline:8px}}
 @media(max-width:340px){.dc-landing .container{width:calc(100% - 20px)}.dc-landing .product-area{width:calc(100% + 8px);margin-inline:-4px}.dc-landing .profile-body{padding-inline:4px}.dc-landing .profile-intro{font-size:14.5px}.dc-landing .definition{padding:16px}}
-@media(min-width:381px) and (max-width:768px){.dc-route .dc-landing .profile-intro{font-size:16px;text-wrap:wrap}}
+@media(min-width:381px) and (max-width:768px){.dc-route .dc-landing .profile-intro{font-size:16px;text-wrap:wrap}.dc-landing .profile-body{padding-inline:20px}}@media(min-width:381px) and (max-width:620px){.dc-landing .profile-body{padding-inline:12px}}
