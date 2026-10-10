@@ -26,8 +26,14 @@ function savedBriefMatchesAnswers(saved:SavedBrief|null,answers:DesiredClientAns
 }
 export function initialToolState(): ToolState { return { view:"welcome", mode:null, answers:emptyAnswers(), stage:1, visitedStages:[], stagesToRevisit:[], comparisonStep:1, comparisonDraft:null, savedBrief:null, briefNeedsUpdate:false, reviewed:false, aiConsent:false, reviewRunId:null, requestCount:0, providerCallsUsed:0, providerCallLimit:3, reportNeedsRegeneration:false, askedClarifications:[], activeClarification:null, dismissedCode:null, interviewRunId:null, interviewPrompt:null, clarificationLoading:false, loading:false, retryAllowed:false, error:"", storageMessage:"", copyFailed:false,legacyBriefReplaced:false }; }
 export function enterTool(restored?:{answers:DesiredClientAnswers;stage:StageId;savedBrief?:SavedBrief;reportNeedsRegeneration?:boolean}):ToolState {
-  const answers=restored?.answers??emptyAnswers();
-  const restoredBrief=restored?.savedBrief;
+  const rawAnswers=restored?.answers??emptyAnswers();
+  const answers=rawAnswers.interview.ai_clarification_consent
+    ? { ...rawAnswers, interview: { ...rawAnswers.interview, ai_clarification_consent:false } }
+    : rawAnswers;
+  const rawBrief=restored?.savedBrief;
+  const restoredBrief=rawBrief?.sourceAnswersSnapshot?.interview?.ai_clarification_consent
+    ? { ...rawBrief, sourceAnswersSnapshot: { ...rawBrief.sourceAnswersSnapshot, interview: { ...rawBrief.sourceAnswersSnapshot.interview, ai_clarification_consent:false } } }
+    : rawBrief;
   const savedBrief=restoredBrief&&savedBriefMatchesAnswers(restoredBrief,answers)?restoredBrief:undefined;
   const reportNeedsRegeneration=restored?.reportNeedsRegeneration===true||(restoredBrief!==undefined&&!savedBrief);
   const stage=restored?.stage??1;

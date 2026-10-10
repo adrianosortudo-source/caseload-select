@@ -14,6 +14,52 @@ function memory(){const values=new Map<string,string>();return {values,storage:{
 function legacyV22(a=completeAnswers()):Record<string,unknown>{return {schema_version:"dcm-v2.2",revision:a.revision,focus:a.focus,situation:a.situation,client:{goals:a.client.goals,concerns:a.client.concerns,decision_needs:a.client.decision_needs},value:{reasons:a.value.reasons,fee_effort:a.value.fee_effort,collected_fee:a.value.collected_fee,team_hours:a.value.team_hours,payment:a.value.payment},delivery:a.delivery,direction:{aim:a.direction.aim,evidence:a.direction.evidence,less:a.direction.less,less_note:a.direction.less_note},clarifications:{FOCUS_UNCLEAR:null,CLIENT_GOAL_UNCLEAR:null,CURRENT_CAPACITY_CONFLICT:null,FEE_EFFORT_CONFLICT:null,EXPERIENCE_DIRECTION_CONFLICT:null}};}
 function legacyV1Brief(){const s=(text:string)=>({text,kind:"preference",source_answer_ids:["focus.work","situation.role","situation.trigger"]});return {report_version:"dcm-blueprint-v1",portrait:s("The firm wants to grow business acquisitions for business owners facing a planned transaction."),client_need:s("The owner wants to understand the transaction and decide what to do."),firm_value:s("The work fits the firm's skills and preferred direction."),marketing:{message:s("Understand the transaction before deciding."),content:s("What buyers should clarify before binding terms."),next_step:s("Discuss the planned acquisition.")},open_questions:[]};}
 describe("draft lifecycle and migration",()=>{
+ it("keeps follow-up consent in the live answers but out of saved answers and report snapshots",()=>{
+  const {storage}=memory(),answers=completeAnswers();answers.interview.ai_clarification_consent=true;
+  const report=savedAnalysis(validBlueprint(answers),answers)!;report.wordingReviewed=true;
+  const now=Date.now(),saved=saveDraft(storage,answers,7,report,now);
+  expect(saved.status).toBe("saved");
+  expect(answers.interview.ai_clarification_consent).toBe(true);
+  if(saved.status==="saved"){
+   expect(saved.draft.answers.interview.ai_clarification_consent).toBe(false);
+   expect(saved.draft.savedBrief?.sourceAnswersSnapshot?.interview.ai_clarification_consent).toBe(false);
+   expect(saved.draft.savedBrief?.wordingReviewed).toBe(true);
+   const loaded=loadDraft(storage,now+1);
+   expect(loaded.status).toBe("ready");
+   if(loaded.status==="ready"){
+    const resumed=enterTool({answers:loaded.draft.answers,stage:7,savedBrief:loaded.draft.savedBrief});
+    expect(resumed.answers.interview.ai_clarification_consent).toBe(false);
+    expect(resumed.savedBrief?.generatedAt).toBe(report.generatedAt);
+    expect(resumed.reviewed).toBe(true);
+    expect(resumed.reportNeedsRegeneration).toBe(false);
+   }
+  }
+ });
+ it("clears legacy persisted consent on reload without changing report review or expiry",()=>{
+  const {storage,values}=memory(),answers=completeAnswers();answers.interview.ai_clarification_consent=true;
+  const report=savedAnalysis(validBlueprint(answers),answers)!;report.wordingReviewed=true;
+  const now=Date.now(),lastEditedAt=new Date(now-5000).toISOString(),expiresAt=new Date(now+100000).toISOString();
+  storage.setItem(DRAFT_STORAGE_KEY,JSON.stringify({schemaVersion:2,answers,currentStage:7,lastEditedAt,expiresAt,savedBrief:report}));
+  const loaded=loadDraft(storage,now);
+  expect(loaded.status).toBe("ready");
+  if(loaded.status==="ready"){
+   expect(loaded.migrated).toBe(true);
+   expect(loaded.draft.answers.interview.ai_clarification_consent).toBe(false);
+   expect(loaded.draft.savedBrief?.sourceAnswersSnapshot?.interview.ai_clarification_consent).toBe(false);
+   expect(loaded.draft.savedBrief?.wordingReviewed).toBe(true);
+   expect(loaded.draft.savedBrief?.generatedAt).toBe(report.generatedAt);
+   expect(loaded.draft.reportNeedsRegeneration).toBeUndefined();
+   expect(loaded.draft.lastEditedAt).toBe(lastEditedAt);
+   expect(loaded.draft.expiresAt).toBe(expiresAt);
+   const persisted=JSON.parse(values.get(DRAFT_STORAGE_KEY)!);
+   expect(persisted.answers.interview.ai_clarification_consent).toBe(false);
+   const resumed=enterTool({answers:loaded.draft.answers,stage:loaded.draft.currentStage,savedBrief:loaded.draft.savedBrief,reportNeedsRegeneration:loaded.draft.reportNeedsRegeneration});
+   expect(resumed.answers.interview.ai_clarification_consent).toBe(false);
+   expect(resumed.savedBrief?.brief).toEqual(report.brief);
+   expect(resumed.reviewed).toBe(true);
+   expect(resumed.reportNeedsRegeneration).toBe(false);
+  }
+ });
  it("resets all dependent v3.3 discovery answers when focus changes",()=>{const a=completeAnswers();a.client.choice_priorities=["clear_fees"];a.client.choice_basis="firm_hypothesis";a.client.choice_detail="Fast advice";a.client.goal_detail="Understand the options";a.client.decision_context="Before committing";a.client.pathway_basis="firm_observation";a.client_context.discovery_behaviour="Searches for a referral";a.value.payment="predictable";a.value.payment_context="Recent invoices were paid on schedule.";a.value.payment_context_basis="firm_observation";a.write_ins={trigger:"Offer received",fit_signals:"Can share information"};const state={...initialToolState(),view:"brief" as const,answers:a,savedBrief:{brief:buildStructuredBrief(a),sourceBriefRevision:a.revision,generatedAt:new Date().toISOString(),wordingReviewed:true,mode:"structured" as const},reviewed:true};const next=editAnswers(state,d=>({...d,focus:{...d.focus,area:"employment"}}));expect(next.answers.situation.trigger).toBeNull();expect(next.answers.client.decision_needs).toEqual([]);expect(next.answers.client.choice_priorities).toEqual([]);expect(next.answers.client.choice_basis).toBeNull();expect(next.answers.client.choice_detail).toBe("");expect(next.answers.client.goal_detail).toBe("");expect(next.answers.client.decision_context).toBe("");expect(next.answers.client.pathway_basis).toBeNull();expect(next.answers.client_context.discovery_behaviour).toBe("");expect(next.answers.value.payment).toBeNull();expect(next.answers.value.payment_context).toBe("");expect(next.answers.value.payment_context_basis).toBeNull();expect(next.answers.delivery.fit_signals).toEqual([]);expect(next.answers.write_ins?.trigger).toBeUndefined();expect(next.savedBrief).toBeNull();expect(next.reviewed).toBe(false);});
  it("preserves the firm's practice direction and marketing trade-offs when the matter focus is chosen",()=>{const a=completeAnswers();a.direction={aim:"narrower",evidence:["preference"],less:"within",less_reason:"preference",less_note:"Routine one-off reviews"};const state={...initialToolState(),view:"questions" as const,stage:2 as const,answers:a};const next=editAnswers(state,d=>({...d,focus:{...d.focus,area:"business",work:"business_agreements"}}));expect(next.answers.direction).toEqual(a.direction);});
  it("migrates a strict v2.1 draft, preserves its TTL and maps its last section to the nearest new section",()=>{const {storage}=memory(),a=completeAnswers(),v22=legacyV22(a);const legacy={...v22,schema_version:"dcm-v2.1",situation:{timing:a.situation.timing,role:a.situation.role,role_other:a.situation.role_other,contact:a.situation.contact},client:{goals:a.client.goals,concerns:a.client.concerns},delivery:{conditions:a.delivery.conditions,capacity:a.delivery.capacity,limit:a.delivery.limit}} as Record<string,unknown>;const now=Date.now(),record={schemaVersion:2,answers:legacy,currentStage:6,lastEditedAt:new Date(now-1000).toISOString(),expiresAt:new Date(now+100000).toISOString()};storage.setItem(DRAFT_STORAGE_KEY,JSON.stringify(record));const loaded=loadDraft(storage,now);expect(loaded.status).toBe("ready");if(loaded.status==="ready"){expect(loaded.migrated).toBe(true);expect(loaded.draft.answers.schema_version).toBe("dcm-v3.3");expect(loaded.draft.answers.value.payment).toBe(a.value.payment);expect(loaded.draft.answers.value.payment_context).toBe("");expect(loaded.draft.answers.value.payment_context_basis).toBeNull();expect(loaded.draft.currentStage).toBe(5);expect(loaded.draft.savedBrief).toBeUndefined();expect(Date.parse(loaded.draft.expiresAt)).toBe(now+100000);} });

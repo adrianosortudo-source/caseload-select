@@ -85,6 +85,40 @@ test("known-disabled AI hides follow-up consent and continues without a request"
   expect(postRequests).toBe(0);
 });
 
+test("a saved follow-up opt-in is reset on resume and works again after fresh opt-in",async({page})=>{
+  let postRequests=0;
+  await page.route("**/api/tools/desired-client-matter/analyze",async apiRoute=>{
+    if(apiRoute.request().method()==="GET"){
+      await apiRoute.fulfill({status:200,contentType:"application/json",body:JSON.stringify({enabled:true})});
+      return;
+    }
+    postRequests+=1;
+    await apiRoute.fulfill({status:503,contentType:"application/json",body:JSON.stringify({ok:false,error:{code:"AI_DISABLED"}})});
+  });
+
+  const answers=completeAnswers();answers.interview.ai_clarification_consent=true;
+  const now=Date.now();
+  await page.addInitScript(({key,savedAnswers,createdAt})=>{
+    localStorage.setItem(key,JSON.stringify({schemaVersion:2,answers:savedAnswers,currentStage:1,lastEditedAt:new Date(createdAt).toISOString(),expiresAt:new Date(createdAt+7*86400000).toISOString()}));
+  },{key:"cls-desired-client-v2",savedAnswers:answers,createdAt:now});
+  await page.goto("/tools/desired-client-matter");
+  await page.getByRole("button",{name:"Continue my saved draft",exact:true}).click();
+
+  const consent=page.getByRole("checkbox",{name:/Allow up to three short AI follow-up questions/});
+  await expect(consent).not.toBeChecked();
+  const persisted=await page.evaluate(()=>JSON.parse(localStorage.getItem("cls-desired-client-v2")??"null"));
+  expect(persisted.answers.interview.ai_clarification_consent).toBe(false);
+  await page.getByRole("button",{name:"Continue",exact:true}).click();
+  await expect(page.getByText(STAGE_DEFINITIONS[1].explanation)).toBeVisible();
+  expect(postRequests).toBe(0);
+
+  await page.getByRole("button",{name:STAGE_DEFINITIONS[0].label}).click();
+  await consent.check();
+  await page.getByRole("button",{name:"Continue",exact:true}).click();
+  await expect(page.locator(".dc-stage > .dc-alert")).toContainText("AI follow-ups are unavailable");
+  expect(postRequests).toBe(1);
+});
+
 test("an explicit AI_DISABLED follow-up response updates availability without spending a question",async({page})=>{
   let postRequests=0;
   await page.route("**/api/tools/desired-client-matter/analyze",async apiRoute=>{
