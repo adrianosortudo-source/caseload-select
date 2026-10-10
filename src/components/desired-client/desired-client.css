@@ -348,7 +348,7 @@
 @media(max-width:768px){.dc-stage__intro h1{font-size:1.875rem}}
 @media(max-width:390px){.dc-stage__intro h1{font-size:1.625rem}.dc-route .dc-question__legend{font-size:1.2rem;text-wrap:wrap}}
 
-.dc-site-header{background:var(--dc-ink)}
+.dc-site-header{background:var(--dc-navy)}
 .dc-site-header nav{min-height:72px}
 .dc-site-header .dc-brand-logo{width:204px}
 .dc-button{min-height:48px}

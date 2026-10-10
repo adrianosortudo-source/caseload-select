@@ -249,59 +249,16 @@
 .dc-landing .steps p{font-size:15px;text-wrap:pretty}
 @media(max-width:620px){.dc-landing .detail-text,.dc-landing .profile-intro{font-size:15.5px}}
 
-/* Website family: a continuous Ink opening, editorial sections and flat closing. */
-.dc-landing .hero-band,.dc-landing .closing-band{background:var(--ink);color:var(--parchment)}
-.dc-landing .hero{padding-block:72px 80px}
-.dc-landing .hero h1,.dc-landing .hero .eyebrow,.dc-landing .app-title,.dc-landing .profile-title{color:var(--parchment)}
-.dc-landing .hero-intro,.dc-landing .hero-meta,.dc-landing .preview-caption{color:var(--parchment)}
-.dc-landing .button{min-height:48px}
-.dc-landing .hero .button-primary,.dc-landing .closing .button-primary{background:var(--parchment);border-color:var(--parchment);color:var(--ink)}
-.dc-landing .hero .button-primary:hover,.dc-landing .closing .button-primary:hover{background:var(--gold);border-color:var(--gold)}
-.dc-landing .hero .button-secondary{background:transparent;border:0;color:var(--parchment);padding-inline:0;text-decoration:underline;text-underline-offset:5px}
-.dc-landing .product-frame{background:transparent;border:0;box-shadow:none}
-.dc-landing .app-header,.dc-landing .preview-tabs,.dc-landing .app-footer{background:transparent;border-color:var(--body);color:var(--parchment)}
-.dc-landing .app-header{padding-inline:0}
-.dc-landing .app-subtitle,.dc-landing .example-tag,.dc-landing .profile-kicker,.dc-landing .detail-label{color:var(--parchment)}
-.dc-landing .example-tag{border-color:var(--body);background:transparent}
-.dc-landing .preview-tab{background:transparent;color:var(--parchment);border-color:var(--body)}
-.dc-landing .preview-tab[aria-selected="true"]{background:var(--gold);color:var(--ink)}
-.dc-landing .profile-body{padding-inline:0;color:var(--parchment)}
-.dc-landing .profile-intro,.dc-landing .detail-text,.dc-landing .note-text,.dc-landing .note-title{color:var(--parchment)}
-.dc-landing .chip{color:var(--parchment);background:transparent;border-color:var(--body)}
-.dc-landing .detail-grid,.dc-landing .profile-note{border-color:var(--body)}
-.dc-landing .profile-note{background:transparent;padding-inline:0}
-.dc-landing .app-footer{padding-inline:0}
-.dc-landing .definition{background:var(--parchment);color:var(--ink);border:0;border-block:1px solid var(--line);padding-inline:0}
-.dc-landing .definition .eyebrow{color:var(--navy)}
-.dc-landing .definition-copy{color:var(--ink)}
-.dc-landing .definition-aside,.dc-landing .pillars{border-color:var(--line)}
-.dc-landing .definition-aside p,.dc-landing .pillar{color:var(--body)}
-.dc-landing .topics-section,.dc-landing .process-section{padding-block:72px}
-.dc-landing .closing{background:transparent;border:0;padding-block:64px}
-.dc-landing .closing h2,.dc-landing .closing p{color:var(--parchment)}
-.dc-landing .site-footer{background:var(--ink);color:var(--parchment);border-color:var(--body)}
-.dc-landing .footer-brand,.dc-landing .footer-copy,.dc-landing .footer-copy p,.dc-landing .dc-details summary,.dc-landing .dc-availability,.dc-landing .dc-resume{color:var(--parchment)}
-.dc-landing .dc-details,.dc-landing .dc-availability,.dc-landing .dc-resume{border-color:var(--body)}
-.dc-landing .hero :is(a,button,[tabindex]):focus-visible,.dc-landing .closing :is(a,button):focus-visible,.dc-landing .site-footer summary:focus-visible{outline-color:var(--parchment)}
-@media(max-width:1100px){.dc-landing .hero{padding-block:56px 64px}}
-@media(max-width:620px){.dc-landing .hero{padding-block:40px 56px}.dc-landing .topics-section,.dc-landing .process-section{padding-block:48px}.dc-landing .closing{padding-block:48px}.dc-landing .hero .button-secondary{justify-self:start}.dc-landing .profile-intro{font-size:15px}}
 
-.dc-landing{--parchment:var(--cream)}
-
-.dc-landing .preview-tab:not([aria-selected="true"]):hover{background:var(--navy);color:var(--parchment)}
-.dc-landing .hero .dc-resume h2{color:var(--parchment)}
-.dc-landing .hero .dc-resume .dc-alert{color:var(--ink)}
-.dc-landing .hero .dc-resume .dc-button--primary{background:var(--parchment);color:var(--ink);border-color:var(--parchment)}
-.dc-landing .hero .dc-resume .dc-button--secondary{color:var(--parchment);border-color:var(--parchment)}
 
 @media(max-width:1190px){.dc-landing .steps{grid-template-columns:minmax(0,1fr);gap:32px}}
 
-.dc-landing .profile-intro{font-size:17px;text-wrap:pretty}
-.dc-landing .detail-text{font-size:16px;text-wrap:pretty}
+.dc-landing .profile-intro{font-size:16px;text-wrap:pretty}
+.dc-landing .detail-text{font-size:15px;text-wrap:pretty}
 .dc-landing .definition-aside p{text-wrap:pretty}
 @media(max-width:1100px){.dc-landing .definition-aside p{font-size:17px}}
-@media(max-width:620px){.dc-landing .profile-intro{font-size:17px}}
-@media(max-width:380px){.dc-landing .profile-intro{font-size:16px}.dc-landing .detail-text{font-size:15.5px}}
+@media(max-width:620px){.dc-landing .profile-intro{font-size:16px}.dc-landing .detail-text{font-size:15px}}
+@media(max-width:380px){.dc-landing .profile-intro{font-size:15px}.dc-landing .detail-text{font-size:15px}}
 @media(max-width:340px){.dc-landing .container{width:calc(100% - 28px)}}
 @media(max-width:1190px){.dc-landing .detail-grid{grid-template-columns:minmax(0,1fr)}}
 
