@@ -51,6 +51,17 @@ export function assertFinalizedComparisonReader(snapshot: unknown, expectedReque
   }
 }
 
+/** Exact recovery is bound to the still-open run through its signed resume reader. */
+export function assertOpenRunRecoveryBinding(snapshot: unknown, expectedRequestSha256: string): asserts snapshot is ComparisonSnapshot {
+  if (!object(snapshot) || !object(snapshot.provenance) ||
+      snapshot.provenance.reader !== "admin-prospect-enrichment-bootstrap-resume/v1" ||
+      snapshot.provenance.operatorAuthenticated !== true ||
+      snapshot.provenance.sourceArtifactSha256 !== expectedRequestSha256 ||
+      !Array.isArray(snapshot.packages) || snapshot.packages.length !== 0) {
+    throw new Error("open_run_recovery_comparison_required");
+  }
+}
+
 /** Serializes an actual supported-reader result. This function grants no auth and performs no I/O. */
 export function serializeComparisonExport(input: unknown, now = new Date().toISOString(), signingKey?:ComparisonSigningKey): { snapshot: ComparisonSnapshot; body: string; bodySha256: string } {
   if (!validContent(input)) throw new Error("comparison_export_schema_invalid");
