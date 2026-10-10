@@ -50,7 +50,7 @@
 .dc-landing .profile-intro{font-size:16px;line-height:1.68;margin-top:14px;color:var(--body)}
 .dc-landing .chips{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
 .dc-landing .chip{font-family:var(--font-label);font-weight:600;font-size:11px;color:var(--body);background:var(--cream);padding:5px 8px;line-height:1.5}
-.dc-landing .detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}
+.dc-landing .detail-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:18px;margin-top:24px;padding-top:18px;border-top:1px solid var(--line)}
 .dc-landing .detail-label{font-family:var(--font-label);font-size:12px;line-height:1.5;letter-spacing:.02em;font-weight:600;text-transform:uppercase;color:var(--navy);margin-bottom:8px}
 .dc-landing .detail-text{font-size:15px;line-height:1.68;color:var(--body)}
 .dc-landing .profile-note{margin-top:24px;padding-top:18px;border-top:1px solid var(--line);display:block}
@@ -285,4 +285,4 @@
 
 .dc-landing .profile-body{padding-inline:16px}
 @media(max-width:620px){.dc-landing .profile-body{padding-inline:8px}}
-@media(max-width:340px){.dc-landing .container{width:calc(100% - 20px)}}
+@media(max-width:340px){.dc-landing .container{width:calc(100% - 20px)}.dc-landing .product-area{width:calc(100% + 8px);margin-inline:-4px}.dc-landing .profile-body{padding-inline:4px}.dc-landing .profile-intro{font-size:14.5px}.dc-landing .definition{padding:16px}}
