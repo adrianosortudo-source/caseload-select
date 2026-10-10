@@ -18,6 +18,17 @@ function stableJson(value: unknown): string {
 }
 const sameJson = (a: unknown, b: unknown) => stableJson(a) === stableJson(b);
 
+function withoutPersistedClarificationConsent(answers: DesiredClientAnswers): DesiredClientAnswers {
+  if (!answers.interview.ai_clarification_consent) return answers;
+  return { ...answers, interview: { ...answers.interview, ai_clarification_consent: false } };
+}
+
+function withoutPersistedClarificationConsentInBrief(value: unknown): unknown {
+  if (!isRecord(value) || !isRecord(value.sourceAnswersSnapshot) || !isRecord(value.sourceAnswersSnapshot.interview)
+    || value.sourceAnswersSnapshot.interview.ai_clarification_consent !== true) return value;
+  return { ...value, sourceAnswersSnapshot: { ...value.sourceAnswersSnapshot, interview: { ...value.sourceAnswersSnapshot.interview, ai_clarification_consent: false } } };
+}
+
 function validDraftEnvelope(value: unknown, now: number): value is Record<string, unknown> {
   if (!isRecord(value) || value.schemaVersion !== 2 || !Number.isInteger(value.currentStage) || Number(value.currentStage) < 1 || Number(value.currentStage) > 7 ||
       typeof value.lastEditedAt !== "string" || typeof value.expiresAt !== "string") return false;
@@ -32,8 +43,9 @@ function mappedStage(value: number): number {
 function migratedLegacyDraft(value: unknown, now: number): SavedDraft | null {
   if (!validDraftEnvelope(value, now)) return null;
   const schema = isRecord(value.answers) ? value.answers.schema_version : null;
-  const answers = schema === "dcm-v2.1" ? migrateV21Answers(value.answers) : schema === "dcm-v2.2" ? migrateV22Answers(value.answers) : schema === "dcm-v3.0" ? migrateV30Answers(value.answers) : schema === "dcm-v3.1" ? migrateV31Answers(value.answers) : schema === "dcm-v3.2" ? migrateV32Answers(value.answers) : null;
-  if (!answers) return null;
+  const migratedAnswers = schema === "dcm-v2.1" ? migrateV21Answers(value.answers) : schema === "dcm-v2.2" ? migrateV22Answers(value.answers) : schema === "dcm-v3.0" ? migrateV30Answers(value.answers) : schema === "dcm-v3.1" ? migrateV31Answers(value.answers) : schema === "dcm-v3.2" ? migrateV32Answers(value.answers) : null;
+  if (!migratedAnswers) return null;
+  const answers = withoutPersistedClarificationConsent(migratedAnswers);
   const edited = Date.parse(value.lastEditedAt as string), expires = Date.parse(value.expiresAt as string);
   const stage = schema === "dcm-v3.0" ? Math.min(Number(value.currentStage), 2) : schema === "dcm-v3.1" ? Math.min(Number(value.currentStage), 4) : schema === "dcm-v3.2" ? Number(value.currentStage) : mappedStage(Number(value.currentStage));
   let savedBrief: SavedBrief | undefined;
@@ -43,7 +55,7 @@ function migratedLegacyDraft(value: unknown, now: number): SavedDraft | null {
       : schema === "dcm-v3.2" && isRecord(value.savedBrief.sourceAnswersSnapshot) && value.savedBrief.sourceAnswersVersion === "dcm-v3.2" && validateLegacyV32DraftAnswers(value.savedBrief.sourceAnswersSnapshot)
       ? { ...value.savedBrief, sourceAnswersVersion: "dcm-v3.3", sourceAnswersSnapshot: migrateV32Answers(value.savedBrief.sourceAnswersSnapshot) }
       : value.savedBrief;
-    savedBrief = restoreSavedBrief(savedValue, answers);
+    savedBrief = restoreSavedBrief(withoutPersistedClarificationConsentInBrief(savedValue), answers);
   }
   return { schemaVersion: 2, answers, currentStage: stage, lastEditedAt: new Date(edited).toISOString(), expiresAt: new Date(expires).toISOString(), ...(savedBrief ? { savedBrief: savedBrief as SavedBrief } : {}), ...(isRecord(value.savedBrief) && !savedBrief ? { reportNeedsRegeneration: true } : {}) };
 }
@@ -147,8 +159,8 @@ export function validateSavedDraft(value: unknown): SavedDraft | null {
     || typeof value.lastEditedAt !== "string" || typeof value.expiresAt !== "string") return null;
   const edited = Date.parse(value.lastEditedAt), expires = Date.parse(value.expiresAt);
   if (!Number.isFinite(edited) || !Number.isFinite(expires) || expires <= edited || expires - edited > DRAFT_TTL_MS + 1000) return null;
-  const answers = hydrateLegacyFollowupFingerprints(value.answers);
-  const savedBrief = value.savedBrief === undefined ? undefined : restoreSavedBrief(value.savedBrief, answers);
+  const answers = withoutPersistedClarificationConsent(hydrateLegacyFollowupFingerprints(value.answers));
+  const savedBrief = value.savedBrief === undefined ? undefined : restoreSavedBrief(withoutPersistedClarificationConsentInBrief(value.savedBrief), answers);
   const reportNeedsRegeneration = value.reportNeedsRegeneration === true || (value.savedBrief !== undefined && value.savedBrief !== null && !savedBrief);
   return { schemaVersion: 2, answers, currentStage: Number(value.currentStage), lastEditedAt: new Date(edited).toISOString(), expiresAt: new Date(expires).toISOString(), ...(savedBrief ? { savedBrief } : {}), ...(reportNeedsRegeneration ? { reportNeedsRegeneration: true } : {}) };
 }
@@ -171,10 +183,11 @@ export function loadDraft(storage: Storage, now = Date.now()): DraftLoadResult {
   const draft = validateSavedDraft(parsed);
   if (!draft) return { status: "corrupt" };
   const structuredRefresh = !!draft.savedBrief?.refreshedFrom && isRecord(parsed) && isRecord(parsed.savedBrief) && !sameJson(parsed.savedBrief, draft.savedBrief);
-  if (structuredRefresh) {
+  const normalized = !sameJson(parsed, draft);
+  if (structuredRefresh || normalized) {
     try { storage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft)); } catch { /* keep the recovered report available in memory */ }
   }
-  return { status: "ready", draft, ...(structuredRefresh ? { migrated: true } : {}) };
+  return { status: "ready", draft, ...(structuredRefresh || normalized ? { migrated: true } : {}) };
 }
 
 export function saveDraft(storage: Storage, answers: DesiredClientAnswers, currentStage: number, savedBrief?: SavedBrief, now = Date.now(), reportNeedsRegeneration = false): DraftSaveResult {
@@ -197,9 +210,10 @@ export function saveDraft(storage: Storage, answers: DesiredClientAnswers, curre
     }
   } catch { /* continue in memory and report a storage failure below */ }
   const timestamp = new Date(editedAt).toISOString();
-  const safeBrief = savedBrief ? restoreSavedBrief(savedBrief, answers) : undefined;
+  const persistedAnswers = withoutPersistedClarificationConsent(answers);
+  const safeBrief = savedBrief ? restoreSavedBrief(withoutPersistedClarificationConsentInBrief(savedBrief), persistedAnswers) : undefined;
   if (safeBrief) needsRegeneration = false;
-  const draft: SavedDraft = { schemaVersion: 2, answers, currentStage, lastEditedAt: timestamp,
+  const draft: SavedDraft = { schemaVersion: 2, answers: persistedAnswers, currentStage, lastEditedAt: timestamp,
     expiresAt: new Date(expiresAt).toISOString(), ...(safeBrief ? { savedBrief: safeBrief } : {}), ...(needsRegeneration ? { reportNeedsRegeneration: true } : {}) };
   try { storage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft)); return { status: "saved", draft }; } catch { return { status: "unavailable" }; }
 }

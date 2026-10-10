@@ -38,14 +38,15 @@ export async function layoutFailures(page: Page | Frame, copySelector = '[data-u
       const box = el.parentElement?.closest<HTMLElement>('[data-ui-component-content]');
       const rect = el.getBoundingClientRect();
       const controlLabel = el.matches('.dc-option__label, .dc-reviewed > span');
-      const intrinsicControl = el.matches('button, .dc-badge');
+      const intrinsicControl = el.matches('button, .dc-badge, .dc-evidence-label');
       if (controlLabel) {
         // Native choice controls reserve only the input and its gap. Their text
         // must fill the remaining label content track; wrapping is still checked.
         const label = el.parentElement!, input = label.querySelector('input')!;
         const lr = label.getBoundingClientRect(), ir = input.getBoundingClientRect(), cs = getComputedStyle(label);
         const right = lr.right - parseFloat(cs.paddingRight) - parseFloat(cs.borderRightWidth);
-        const left = ir.right + parseFloat(cs.columnGap || cs.gap || '0');
+        const stacked = cs.flexDirection === 'column';
+        const left = stacked ? lr.left + parseFloat(cs.paddingLeft) + parseFloat(cs.borderLeftWidth) : ir.right + parseFloat(cs.columnGap || cs.gap || '0');
         if (Math.abs(rect.left - left) > 1.5 || Math.abs(rect.right - right) > 1.5)
           out.push('Narrow control label: ' + text);
       } else if (box && !intrinsicControl) {
@@ -67,25 +68,40 @@ export async function layoutFailures(page: Page | Frame, copySelector = '[data-u
           const range = document.createRange();
           range.setStart(node, match.index!);
           range.setEnd(node, match.index! + match[0].length);
-          const r = range.getBoundingClientRect();
-          if (r.width === 0 || r.height === 0) continue;
-          let line = lines.find(l => Math.abs(l.y - r.top) < 2);
-          if (!line) { line = { y: r.top, words: [] }; lines.push(line); }
-          line.words.push({ left: r.left, right: r.right, width: r.width });
+          // A naturally hyphenated word can occupy multiple rendered lines.
+          // Its union bounding box hides the second fragment and miscounts it.
+          for (const r of range.getClientRects()) {
+            if (r.width === 0 || r.height === 0) continue;
+            let line = lines.find(l => Math.abs(l.y - r.top) < 2);
+            if (!line) { line = { y: r.top, words: [] }; lines.push(line); }
+            line.words.push({ left: r.left, right: r.right, width: r.width });
+          }
         }
       }
       lines.sort((a, b) => a.y - b.y);
-      if (!el.matches('h1,h2,h3,h4') && lines.length > 1 && lines.at(-1)!.words.length === 1) out.push('Single-word last line in ' + el.tagName.toLowerCase() + ': ' + text);
+      if (lines.length > 1 && lines.at(-1)!.words.length === 1) out.push('Single-word last line in ' + el.tagName.toLowerCase() + ': ' + text);
       for (let i = 0; i < lines.length - 1; i++) {
         const current = lines[i].words, following = lines[i + 1].words[0];
         const used = Math.max(...current.map(w => w.right)) - Math.min(...current.map(w => w.left));
         const remaining = contentRight - Math.max(...current.map(w => w.right));
-        if (!el.matches('h1,h2,h3,h4') && used / contentWidth < .75 && following && following.width + 6 < remaining)
+        // Moving a word off a two-word final line would create the orphan
+        // this same gate forbids; that line is not avoidably short.
+        const wouldOrphan = i === lines.length - 2 && lines[i + 1].words.length <= 2;
+        if (!wouldOrphan && used / contentWidth < .75 && following && following.width + 6 < remaining)
           out.push('Avoidably short nonfinal line in ' + el.tagName.toLowerCase() + ': ' + text);
       }
     }
     return out;
   }, copySelector);
+  if (failures.length) console.info('Rendered copy failure metrics', await page.evaluate(({ selector, failures }) => ({
+    viewport: innerWidth,
+    contentWidth: document.documentElement.clientWidth,
+    pixels: devicePixelRatio,
+    copy: Array.from(document.querySelectorAll<HTMLElement>(selector)).filter(el => failures.some(failure => failure.endsWith(el.textContent?.trim() ?? ''))).map(el => {
+      const style = getComputedStyle(el);
+      return { text: el.textContent?.trim(), width: el.getBoundingClientRect().width, font: style.fontFamily, size: style.fontSize, weight: style.fontWeight, wrap: style.textWrap };
+    }),
+  }), { selector: copySelector, failures }));
   return failures;
 }
 export async function layout(page: Page | Frame, copySelector?: string) {
@@ -121,4 +137,17 @@ export async function establishedToReview(page: Page, screenshotPrefix?: string)
   await choose(page, 'Fee and time records');
   await next(page);
   await expect(page.getByRole('heading', { name: 'Review your direction' })).toBeVisible();
+}
+
+export async function exportedLayout(page: Page) {
+  // Each status item has its own complete row; measure its text separately.
+  const selector = 'header h1,header .eyebrow,header .meta,header .status > *,main h2,main h3,main p,main li,main dd';
+  await page.evaluate((selector) => {
+    const boxes = 'header,.definition,.card,.legacy-card,.claim,.conditions,.conditions ul,.progress,.progress dl>div,.decision-pathway-heading,.decision-pathway-steps article,.recovery-disclosure,.source-entry,main';
+    for (const copy of document.querySelectorAll<HTMLElement>(selector)) {
+      const box = copy.parentElement?.closest<HTMLElement>(boxes);
+      if (box) box.dataset.uiComponentContent = 'export-' + box.className;
+    }
+  }, selector);
+  expect.soft(await layoutFailures(page, selector), `Export at ${page.viewportSize()?.width}px`).toEqual([]);
 }

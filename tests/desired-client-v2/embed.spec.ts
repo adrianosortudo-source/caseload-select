@@ -1,48 +1,76 @@
-import { expect, test } from '@playwright/test';
-import { capture, layout } from './helpers';
+import { expect, test, type Page, type Frame } from '@playwright/test';
+import { capture, layout, settled } from './helpers';
+
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/tools/desired-client-matter/analyze', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: false }) }));
+});
+
+async function settleEmbedded(page: Page, child: Frame) {
+  await settled(child);
+  await expect.poll(async () => {
+    const content = await child.evaluate(() => document.documentElement.scrollHeight);
+    const frame = await page.locator('iframe[data-desired-client-frame]').evaluate(el => el.getBoundingClientRect().height);
+    return Math.abs(frame - content);
+  }).toBeLessThanOrEqual(2);
+  await settled(child);
+}
 
 test('iframe uses verified messages, grows and shrinks, and preserves the public wrapper', async ({ page }) => {
+  const appOrigin = new URL(test.info().project.use.baseURL ?? 'http://localhost:3301').origin;
   await page.goto('http://localhost:3300/tools/desired-client-matter.html');
   const frame = page.frameLocator('iframe[data-desired-client-frame]');
-  await expect(frame.getByRole('button', { name: 'Define my desired client', exact: true })).toBeVisible();
-  await expect(page.getByRole('link', { name: 'Open the tool in its own window', exact: true })).toHaveAttribute('href', 'http://localhost:3301/tools/desired-client-matter');
-  const child = page.frames().find(f => f.url().includes('localhost:3301'));
+  await expect(frame.getByRole('button', { name: 'Build my profile', exact: true }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open the tool in its own window', exact: true })).toHaveAttribute('href', appOrigin + '/tools/desired-client-matter');
+  const child = page.frames().find(f => f.url().startsWith(appOrigin + '/'));
   expect(child).toBeTruthy();
   const dimensions = async () => page.locator('iframe[data-desired-client-frame]').evaluate(el => ({ height: el.getBoundingClientRect().height, style: el.style.height }));
   await expect.poll(async () => (await dimensions()).style).not.toBe('');
+  await settleEmbedded(page, child!);
   const before = await dimensions();
-  await page.evaluate(() => {
+  await page.evaluate((appOrigin) => {
     const el = document.querySelector('iframe')!;
     window.dispatchEvent(new MessageEvent('message', { origin: 'https://unrelated.example', source: el.contentWindow, data: { type: 'desired-client:height', version: 1, height: 16000 } }));
-    window.dispatchEvent(new MessageEvent('message', { origin: 'http://localhost:3301', source: window, data: { type: 'desired-client:height', version: 1, height: 15000 } }));
-  });
+    window.dispatchEvent(new MessageEvent('message', { origin: appOrigin, source: window, data: { type: 'desired-client:height', version: 1, height: 15000 } }));
+  }, appOrigin);
   expect(await dimensions()).toEqual(before);
-  await frame.getByRole('button', { name: 'Define my desired client', exact: true }).click();
-  await frame.getByLabel('Business & commercial', { exact: true }).check();
-  await frame.getByLabel('Commercial agreement drafting and review', { exact: true }).check();
-  await frame.getByLabel('We already do it and want more', { exact: true }).check();
+  await frame.getByRole('button', { name: 'Build my profile', exact: true }).first().click();
+  const practiceHeight = (await dimensions()).height;
+  await frame.getByRole('group', { name: 'What do you want this profile to help your firm do?', exact: true }).getByRole('radio').last().check();
+  await frame.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(frame.getByRole('heading', { name: 'Which client situation and specific matter do you want more of?', exact: true })).toBeVisible();
+  await frame.getByLabel('Practice area for the work list').selectOption({ label: 'Business & commercial' });
   await expect.poll(async () => {
     const height = await child!.evaluate(() => document.documentElement.scrollHeight);
     return Math.abs((await dimensions()).height - height);
   }).toBeLessThanOrEqual(2);
   const focusHeight = (await dimensions()).height;
-  await frame.getByRole('button', { name: 'Continue', exact: true }).click();
-  await expect(frame.getByRole('heading', { name: 'When does this client usually seek help?', exact: true })).toBeVisible();
+  expect(focusHeight).toBeGreaterThan(practiceHeight);
+  await frame.getByRole('button', { name: 'Back', exact: true }).click();
+  await expect(frame.getByRole('heading', { name: 'What work does the firm want to build around?', exact: true })).toBeVisible();
   await expect.poll(async () => (await dimensions()).height).toBeLessThan(focusHeight);
+  await settleEmbedded(page, child!);
   const stable = (await dimensions()).height;
   await page.waitForTimeout(500);
   expect((await dimensions()).height).toBe(stable);
 });
 
-for (const width of [1440, 1024, 768, 640, 375, 320]) {
+for (const width of [1440, 1024, 768, 640, 390, 375, 320]) {
   test('embedded welcome reflows at ' + width + 'px', async ({ page }) => {
+    const appOrigin = new URL(test.info().project.use.baseURL ?? 'http://localhost:3301').origin;
     await page.setViewportSize({ width, height: 1000 });
     await page.goto('http://localhost:3300/tools/desired-client-matter.html');
     const frame = page.frameLocator('iframe[data-desired-client-frame]');
-    await expect(frame.getByRole('button', { name: 'Define my desired client', exact: true })).toBeVisible();
+    await expect(frame.getByRole('button', { name: 'Build my profile', exact: true }).first()).toBeVisible();
+    const child = page.frames().find(f => f.url().startsWith(appOrigin + '/'))!;
+    await settleEmbedded(page, child);
     await layout(page);
-    const child = page.frames().find(f => f.url().includes('localhost:3301'))!;
-    await layout(child);
+    for (let tab = 0; tab < 6; tab++) {
+      await child.getByRole('tab').nth(tab).click();
+      await settleEmbedded(page, child);
+      await layout(child);
+    }
+    await child.getByRole('tab').first().click();
+    await settleEmbedded(page, child);
     expect(await child.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
     await capture(page, width + '-embedded-welcome');
   });
