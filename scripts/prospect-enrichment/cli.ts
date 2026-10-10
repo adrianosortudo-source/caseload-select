@@ -9,10 +9,10 @@ import { assertEnvelopeProfile, parseProfile, profileConfig, type EnrichmentProf
 import { assertWholeFirmManifestCoverage, compileWholeFirmSnapshot, freezeWholeFirmExport, type WholeFirmSourceManifest } from "./whole-firm";
 import { assertCoordinatorOutputPath, assertCoordinatorOutputRoot, snapshotCoordinatorState } from "./whole-firm-coordinator-export";
 import { runWholeFirmOfflineHandoff } from "./offline-handoff";
-import { assertManifestRegistrationBinding, assertFinalizedComparisonReader, verifyAndSerializeComparisonExport } from "./comparison-export";
+import { assertManifestRegistrationBinding, assertFinalizedComparisonReader, assertOpenRunRecoveryBinding, verifyAndSerializeComparisonExport } from "./comparison-export";
 import { serializeComparisonRequest, writeComparisonRequest } from "./comparison-request";
 import { assertFrozenWholeFirmPackageMissing, assertFrozenWholeFirmRunCompatibility, CHILD5_FROZEN_COMPATIBILITY } from "./frozen-whole-firm-compatibility";
-import { prepareManifestRequests, recoverCaseyMossHeldEvidenceOnce, submitManifestChunks, assertManifestPackage, checkManifestApproval, validateManifestChunks } from "./manifest-delivery";
+import { CASEY_MOSS_HELD_EVIDENCE_RECOVERY, prepareManifestRequests, recoverCaseyMossHeldEvidenceOnce, submitManifestChunks, assertManifestPackage, checkManifestApproval, validateManifestChunks } from "./manifest-delivery";
 import { buildExpectedRunManifest, buildHeldCandidateEvidence, chunkExpectedRunManifest } from "./run-manifest";
 import { archivedDocuments, extractCandidates, inventory, type SourceManifest } from "./inventory";
 import { DEFAULT_OUTPUT, DEFAULT_ROOTS, object, protocolHash, sha256, within } from "./model";
@@ -41,7 +41,7 @@ const HELP = `Prospect enrichment local tools (dry-run by default)
   receipt --key KEY --outbox DIR --token-file FILE --execute
   verify-replay --key KEY --outbox DIR --manifest-chunks FILE --held-evidence FILE --packages FILE --snapshot FILE
          --approval FILE --approval-sha256 HASH --token-file FILE --execute --confirm VERIFY-IDENTICAL-PROSPECT-REPLAY
-  recover-held-evidence --outbox DIR --manifest-chunks FILE --held-evidence FILE --packages FILE --snapshot FILE
+  recover-held-evidence --profile whole-firm --outbox DIR --manifest-chunks FILE --held-evidence FILE --packages FILE --snapshot FILE
          --approval FILE --approval-sha256 HASH --recovery-authorization FILE --recovery-authorization-sha256 HASH
          --token-file FILE --execute --confirm RECOVER-CASEY-MOSS-HELD-EVIDENCE-ONCE
 Whole-firm commands require --profile whole-firm and use a separate private D: output root.
@@ -253,7 +253,8 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     const outbox = privateOutput(required(options, "outbox"));
     const manifestOnly = options["manifest-only"] === true;
     if (manifestOnly && (command !== "submit" || profile !== "whole-firm" || options.key !== undefined)) throw Error("manifest_only_scope_invalid");
-    const key = manifestOnly ? null : required(options, "key");
+    if (command === "recover-held-evidence" && (profile !== "whole-firm" || options.key !== undefined || manifestOnly)) throw Error("held_evidence_recovery_cli_scope_invalid");
+    const key = manifestOnly || command === "recover-held-evidence" ? null : required(options, "key");
     const comparison = command !== "receipt" ? await json<unknown>(required(options, "snapshot")) : null;
     const manifestChunksFileBytes = command !== "receipt" ? await fs.readFile(required(options, "manifest-chunks")) : null;
     const manifestChunks = manifestChunksFileBytes ? jsonlBytes<unknown>(manifestChunksFileBytes) : null;
@@ -270,7 +271,13 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
       assertFreshComparison(comparison);
       assertFinalizedComparisonReader(comparison, finalRequestSha256!);
     };
-    if (command !== "receipt") assertFinalizedBinding();
+    const assertRecoveryBinding = () => {
+      assertFreshComparison(comparison);
+      if (finalRequestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.comparisonRequestSha256) throw Error("held_evidence_recovery_comparison_request_mismatch");
+      assertOpenRunRecoveryBinding(comparison, CASEY_MOSS_HELD_EVIDENCE_RECOVERY.comparisonRequestSha256);
+    };
+    const assertCommandComparisonBinding = command === "recover-held-evidence" ? assertRecoveryBinding : assertFinalizedBinding;
+    if (command !== "receipt") assertCommandComparisonBinding();
     const queued = command !== "receipt" && key ? await readEntry(outbox, key) : null;
     if (queued) assertEnvelopeProfile(queued.envelope, profile);
     if (prepared && queued) assertManifestPackage(prepared.chunks, queued);
@@ -317,12 +324,11 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
     }
     const token = (await fs.readFile(required(options, "token-file"), "utf8")).trim();
     if (command === "recover-held-evidence") {
-      if (profile !== "legacy-backfill") throw Error("held_evidence_recovery_profile_invalid");
-      assertFinalizedBinding();
+      if (profile !== "whole-firm") throw Error("held_evidence_recovery_profile_invalid");
       const authorizationBytes = await fs.readFile(required(options, "recovery-authorization"));
       return recoverCaseyMossHeldEvidenceOnce({ outbox, chunks: prepared!.chunks, heldEvidence, approval: approval!,
         authorizationBytes, authorizationSha256: required(options, "recovery-authorization-sha256"), profile,
-        confirmation: required(options, "confirm"), token, beforeNetwork: assertFinalizedBinding });
+        confirmation: required(options, "confirm"), token, beforeNetwork: assertRecoveryBinding });
     }
     if (command === "submit") {
       assertFinalizedBinding();
