@@ -277,3 +277,5 @@
 
 /* Compact detail copy retains a usable measure on the narrowest direct view. */
 @media(min-width:311px) and (max-width:340px){.dc-landing .detail-text{font-size:14px}}
+/* Balance only the landing profile and detail paragraphs that share the app-wide pretty-wrap rule. */
+.dc-landing .profile-intro[data-ui-copy="body"],.dc-landing .detail-text[data-ui-copy="body"]{text-wrap:balance}
