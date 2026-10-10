@@ -197,7 +197,7 @@ test("saved request, held evidence and prior state drift fail closed before netw
     await fs.writeFile(path.join(dir, CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestKey + ".state.json"), JSON.stringify({ ...JSON.parse(ctx.priorStateBytes.toString("utf8")), attempts: 4 }));
     const noSend = (async () => { calls++; throw Error("must not send"); }) as typeof fetch;
     await assert.rejects(recoverCaseyMossHeldEvidenceOnce(recoveryOptions(ctx, noSend)), /saved_state_hash_mismatch/); assert.equal(calls, 0); });
-  await t.test("held evidence", async t => { const ctx = await recoveryContext(t), changed = structuredClone(ctx.source.heldEvidence), entry = changed.find(item => item.entryId === CASEY_MOSS_HELD_EVIDENCE_RECOVERY.entryId); entry.issues[0].reason += " tampered"; let calls = 0;
+  await t.test("held evidence", async t => { const ctx = await recoveryContext(t), changed = structuredClone(ctx.source.heldEvidence), entry = changed.find(item => item.entryId === CASEY_MOSS_HELD_EVIDENCE_RECOVERY.entryId); assert.ok(entry); entry.issues[0].reason += " tampered"; let calls = 0;
     const noSend = (async () => { calls++; throw Error("must not send"); }) as typeof fetch;
     await assert.rejects(recoverCaseyMossHeldEvidenceOnce({ ...recoveryOptions(ctx, noSend), heldEvidence: changed }), /held_evidence_manifest_mismatch/); assert.equal(calls, 0); });
 });
