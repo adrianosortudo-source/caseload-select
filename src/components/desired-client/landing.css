@@ -282,3 +282,7 @@
 
 .dc-landing .detail-text{font-size:14.5px}
 @media(max-width:340px){.dc-landing .detail-text{font-size:14px}}
+
+.dc-landing .profile-body{padding-inline:16px}
+@media(max-width:620px){.dc-landing .profile-body{padding-inline:8px}}
+@media(max-width:340px){.dc-landing .container{width:calc(100% - 20px)}}
