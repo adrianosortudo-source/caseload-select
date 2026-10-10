@@ -31,8 +31,11 @@ export function enterTool(restored?:{answers:DesiredClientAnswers;stage:StageId;
     ? { ...rawAnswers, interview: { ...rawAnswers.interview, ai_clarification_consent:false } }
     : rawAnswers;
   const rawBrief=restored?.savedBrief;
-  const restoredBrief=rawBrief?.sourceAnswersSnapshot?.interview?.ai_clarification_consent
-    ? { ...rawBrief, sourceAnswersSnapshot: { ...rawBrief.sourceAnswersSnapshot, interview: { ...rawBrief.sourceAnswersSnapshot.interview, ai_clarification_consent:false } } }
+  const rawSnapshot=rawBrief?.sourceAnswersSnapshot;
+  const snapshot=rawSnapshot&&typeof rawSnapshot==="object"&&!Array.isArray(rawSnapshot)?rawSnapshot as Record<string,unknown>:null;
+  const snapshotInterview=snapshot?.interview&&typeof snapshot.interview==="object"&&!Array.isArray(snapshot.interview)?snapshot.interview as Record<string,unknown>:null;
+  const restoredBrief=rawBrief&&snapshot&&snapshotInterview?.ai_clarification_consent===true
+    ? { ...rawBrief, sourceAnswersSnapshot: { ...snapshot, interview: { ...snapshotInterview, ai_clarification_consent:false } } }
     : rawBrief;
   const savedBrief=restoredBrief&&savedBriefMatchesAnswers(restoredBrief,answers)?restoredBrief:undefined;
   const reportNeedsRegeneration=restored?.reportNeedsRegeneration===true||(restoredBrief!==undefined&&!savedBrief);

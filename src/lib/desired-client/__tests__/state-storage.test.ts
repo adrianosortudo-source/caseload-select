@@ -22,7 +22,7 @@ describe("draft lifecycle and migration",()=>{
   expect(answers.interview.ai_clarification_consent).toBe(true);
   if(saved.status==="saved"){
    expect(saved.draft.answers.interview.ai_clarification_consent).toBe(false);
-   expect(saved.draft.savedBrief?.sourceAnswersSnapshot?.interview.ai_clarification_consent).toBe(false);
+   expect((saved.draft.savedBrief?.sourceAnswersSnapshot as typeof answers|undefined)?.interview.ai_clarification_consent).toBe(false);
    expect(saved.draft.savedBrief?.wordingReviewed).toBe(true);
    const loaded=loadDraft(storage,now+1);
    expect(loaded.status).toBe("ready");
@@ -45,7 +45,7 @@ describe("draft lifecycle and migration",()=>{
   if(loaded.status==="ready"){
    expect(loaded.migrated).toBe(true);
    expect(loaded.draft.answers.interview.ai_clarification_consent).toBe(false);
-   expect(loaded.draft.savedBrief?.sourceAnswersSnapshot?.interview.ai_clarification_consent).toBe(false);
+   expect((loaded.draft.savedBrief?.sourceAnswersSnapshot as typeof answers|undefined)?.interview.ai_clarification_consent).toBe(false);
    expect(loaded.draft.savedBrief?.wordingReviewed).toBe(true);
    expect(loaded.draft.savedBrief?.generatedAt).toBe(report.generatedAt);
    expect(loaded.draft.reportNeedsRegeneration).toBeUndefined();
@@ -53,7 +53,7 @@ describe("draft lifecycle and migration",()=>{
    expect(loaded.draft.expiresAt).toBe(expiresAt);
    const persisted=JSON.parse(values.get(DRAFT_STORAGE_KEY)!);
    expect(persisted.answers.interview.ai_clarification_consent).toBe(false);
-   const resumed=enterTool({answers:loaded.draft.answers,stage:loaded.draft.currentStage,savedBrief:loaded.draft.savedBrief,reportNeedsRegeneration:loaded.draft.reportNeedsRegeneration});
+   const resumed=enterTool({answers:loaded.draft.answers,stage:loaded.draft.currentStage as 7,savedBrief:loaded.draft.savedBrief,reportNeedsRegeneration:loaded.draft.reportNeedsRegeneration});
    expect(resumed.answers.interview.ai_clarification_consent).toBe(false);
    expect(resumed.savedBrief?.brief).toEqual(report.brief);
    expect(resumed.reviewed).toBe(true);
