@@ -205,6 +205,14 @@ async function appendRecoveryAudit(file: string, event: Record<string, unknown>)
   finally { await handle.close(); }
 }
 
+async function atomicBytes(file: string, bytes: Uint8Array): Promise<void> {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const temp = file + "." + randomUUID() + ".tmp";
+  const handle = await fs.open(temp, "wx");
+  try { await handle.writeFile(bytes); await handle.sync(); } finally { await handle.close(); }
+  await fs.rename(temp, file);
+}
+
 /** One exact, separately authorized attempt for the exhausted held-evidence request. */
 export async function recoverCaseyMossHeldEvidenceOnce(options: {
   outbox: string; chunks: unknown; heldEvidence: unknown; approval: DeliveryApproval; authorizationBytes: Uint8Array;
@@ -275,6 +283,15 @@ export async function recoverCaseyMossHeldEvidenceOnce(options: {
       authorizationSha256: options.authorizationSha256, authorizationReference: authorization.authorizationReference, attemptNumber: state.attempts + 1, at: now });
     const next: ManifestDeliveryState = { ...state, attempts: state.attempts + 1, lastStatus: null, lastError: null, updatedAt: now };
     await atomicJson(stateFile, next);
+    try { options.beforeNetwork?.(); }
+    catch {
+      await atomicBytes(stateFile, stateBytes);
+      await appendRecoveryAudit(auditPath, { event: "held_evidence_recovery_not_sent", requestKey: request.requestKey,
+        requestBodySha256: request.bodySha256, authorizationSha256: options.authorizationSha256,
+        state, reason: "fresh_comparison_revalidation_failed_after_durable_write", networkRequests: 0, at: new Date().toISOString() });
+      await fs.unlink(attemptPath);
+      return { requestKey: request.requestKey, state: state.state, outcome: "not_sent", attempts: state.attempts, httpStatus: state.lastStatus, networkRequests: 0 };
+    }
     let response: Response | null = null;
     try {
       response = await (options.fetcher ?? fetch)(PRODUCTION_ORIGIN + "/api/internal/prospect-enrichment/runs/held-evidence", {

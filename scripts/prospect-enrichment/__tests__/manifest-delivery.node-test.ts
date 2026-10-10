@@ -228,6 +228,27 @@ test("second comparison expiry returns not-sent without spending an attempt or m
   assert.equal(audit.event, "held_evidence_recovery_not_sent"); assert.equal(audit.networkRequests, 0);
 });
 
+test("expiry during durable recovery writes restores the exact unused state before fetch", async t => {
+  const ctx = await recoveryContext(t); let checks = 0, calls = 0, expiredDuringWrite = false;
+  const noSend = (async () => { calls++; throw Error("must not send"); }) as typeof fetch;
+  const result = await recoverCaseyMossHeldEvidenceOnce(recoveryOptions(ctx, noSend, () => {
+    checks++;
+    if (checks === 2) setImmediate(() => { expiredDuringWrite = true; });
+    if (checks === 3 && expiredDuringWrite) throw Error("comparison_stale");
+  }));
+  assert.equal(expiredDuringWrite, true); assert.equal(checks, 3); assert.equal(calls, 0);
+  assert.equal(result.outcome, "not_sent"); assert.equal(result.networkRequests, 0);
+  assert.equal(result.attempts, 5); assert.equal(result.state, "retry_exhausted");
+  const recoveryDir = path.join(ctx.outbox, "recovery-authorizations");
+  const statePath = path.join(ctx.outbox, "manifests", CASEY_MOSS_HELD_EVIDENCE_RECOVERY.runManifestSha256, CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestKey + ".state.json");
+  assert.equal(sha256(await fs.readFile(statePath)), CASEY_MOSS_HELD_EVIDENCE_RECOVERY.priorStateSha256);
+  await assert.rejects(fs.access(path.join(recoveryDir, CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestKey + ".attempt.json")));
+  await fs.access(path.join(recoveryDir, CASEY_MOSS_HELD_EVIDENCE_RECOVERY.requestKey + ".json"));
+  const audit = (await fs.readFile(path.join(ctx.outbox, "recovery-audit.jsonl"), "utf8")).trim().split(/\r?\n/).map(line => JSON.parse(line));
+  assert.equal(audit.at(-1).event, "held_evidence_recovery_not_sent");
+  assert.equal(audit.at(-1).reason, "fresh_comparison_revalidation_failed_after_durable_write");
+  assert.equal(audit.at(-1).networkRequests, 0);
+});
 test("manifest registration prepares a stable run key and exact final replay without network access", () => {
   const { chunks } = fixture(), a = prepareManifestRequests(chunks), b = prepareManifestRequests(JSON.parse(JSON.stringify(chunks)));
   assert.deepEqual(a.requests, b.requests);
