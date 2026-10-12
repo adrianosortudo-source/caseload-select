@@ -29,7 +29,7 @@ type ProjectionField = {
   source_urls: string[];
   source_url_hashes: string[];
 };
-type ProjectionContentChunk = { chunk: string; content_sha256: string };
+type ProjectionContentChunk = { chunk_offset: number | string; chunk: string; total_characters: number | string; content_sha256: string };
 function sourceBodySha(name: string): string {
   const marker = "CREATE FUNCTION prospect_candidate_private." + name + "(";
   const start = originalSql.indexOf(marker);
@@ -148,6 +148,7 @@ integrationDescribe("fresh PostgreSQL catalog output using checked-in baseline f
           "SELECT item_kind,source_table,source_key,original_status,selection_disposition,processing_disposition,qualification_state,source_root,relative_path,source_pointer,source_file_sha256,payload_sha256,original_json,original_json_sha256,unmapped_paths,observed_at,retrieved_at,recorded_at,read_warnings,verified_firm_id " +
           "FROM public.prospect_research_candidate_history WHERE candidate_id=$1", [candidate]
         )).rows;
+        const historyId = (await db.query("SELECT id FROM public.prospect_research_candidate_history WHERE candidate_id=$1", [candidate])).rows[0]?.id;
         const fields = (await db.query(
           "SELECT pointer,pointer_sha256,scalar_type,value_json,searchable_text,source_item_id,source_ids,source_urls,source_url_hashes,observed_at,retrieved_at,validation_state,observed_day,retrieved_day " +
           "FROM public.prospect_research_candidate_fields WHERE candidate_id=$1 ORDER BY pointer COLLATE \"C\"", [candidate]
@@ -158,7 +159,7 @@ integrationDescribe("fresh PostgreSQL catalog output using checked-in baseline f
         const content = (await db.query(
           "SELECT chunk_offset,chunk,total_characters,content_sha256 FROM public.prospect_research_candidate_content_chunks WHERE candidate_id=$1 ORDER BY chunk_offset", [candidate]
         )).rows;
-        return { writeMs, history, fields, search, content };
+        return { writeMs, history, historyId, fields, search, content };
       };
 
       await db.query(baselineDefinition);
@@ -170,7 +171,13 @@ integrationDescribe("fresh PostgreSQL catalog output using checked-in baseline f
       expect(repaired.history).toEqual(baseline.history);
       expect(repaired.fields).toEqual(baseline.fields);
       expect(repaired.search).toEqual(baseline.search);
-      expect(repaired.content).toEqual(baseline.content);
+      const normalizeContent = (rows: ProjectionContentChunk[], candidate: string, historyId: string) => rows.map((row) => ({
+        chunk_offset: row.chunk_offset,
+        chunk: row.chunk.replaceAll(candidate, "00000000-0000-0000-0000-000000000000").replaceAll(historyId, "00000000-0000-0000-0000-000000000000"),
+        total_characters: row.total_characters,
+      }));
+      expect(normalizeContent(baseline.content as ProjectionContentChunk[], baselineCandidate, baseline.historyId))
+        .toEqual(normalizeContent(repaired.content as ProjectionContentChunk[], repairedCandidate, repaired.historyId));
       expect(repaired.writeMs).toBeLessThan(8_000);
       expect(baseline.writeMs).toBeLessThan(8_000);
       console.info("projection-repair-large-write", JSON.stringify({ baselineMs: baseline.writeMs, repairedMs: repaired.writeMs, rawBytes: Buffer.byteLength(rawBytes), searchChunks: repaired.search.length }));
@@ -195,12 +202,15 @@ integrationDescribe("fresh PostgreSQL catalog output using checked-in baseline f
       const pointer = "/pointer/x~1y~0z";
       expect(fieldAt(pointer).pointer_sha256).toBe(sha256(pointer));
       expect(fieldAt(pointer).value_json).toBe(false);
-      const canonical = (await db.query(
-        "SELECT public.prospect_enrichment_stable_json_v1(prospect_candidate_private.history_item(id)) AS body FROM public.prospect_research_candidate_history WHERE candidate_id=$1", [repairedCandidate]
-      )).rows[0].body;
-      const assembled = (repaired.content as ProjectionContentChunk[]).map((row) => row.chunk).join("");
-      expect(assembled).toBe(canonical);
-      expect((repaired.content as ProjectionContentChunk[]).every((row) => row.content_sha256 === sha256(assembled))).toBe(true);
+      for (const [candidate, snapshot] of [[baselineCandidate, baseline], [repairedCandidate, repaired]] as const) {
+        const canonical = (await db.query(
+          "SELECT public.prospect_enrichment_stable_json_v1(prospect_candidate_private.history_item(id)) AS body FROM public.prospect_research_candidate_history WHERE candidate_id=$1", [candidate]
+        )).rows[0].body;
+        const chunks = snapshot.content as ProjectionContentChunk[];
+        const assembled = chunks.map((row) => row.chunk).join("");
+        expect(assembled).toBe(canonical);
+        expect(chunks.every((row) => row.content_sha256 === sha256(assembled))).toBe(true);
+      }
 
       const failingFunction = "repair_ci_fail_" + randomUUID().replaceAll("-", "");
       const failingTrigger = "repair_ci_fail_" + randomUUID().replaceAll("-", "");
