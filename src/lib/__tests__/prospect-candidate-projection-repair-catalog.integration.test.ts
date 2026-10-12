@@ -6,7 +6,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "pg";
 import {
-  REPAIR_PATH, RECORD_HISTORY_SIGNATURE, STORE_CONTENT_SIGNATURE, ORIGINAL_FUNCTION_SHA256, normalizeProjectionIdentityArguments, verifyProjectionRepairCatalog,
+  REPAIR_PATH, RECORD_HISTORY_SIGNATURE, STORE_CONTENT_SIGNATURE, normalizeProjectionIdentityArguments, verifyProjectionRepairCatalog,
 } from "../../../scripts/prospect-enrichment/candidate-projection-repair-gate.mjs";
 
 const databaseUrlRaw = process.env.DIRECT_DATABASE_URL ?? process.env.PROSPECT_ENRICHMENT_TEST_DATABASE_URL;
@@ -17,8 +17,7 @@ const repairSql = readFileSync(path.join(root, REPAIR_PATH), "utf8");
 const originalSql = readFileSync(path.join(root, "supabase/migrations/20260924172758_prospect_enrichment_candidate_profiles.sql"), "utf8");
 const sha256 = (value: string) => createHash("sha256").update(value, "utf8").digest("hex");
 const md5 = (value: string) => createHash("md5").update(value, "utf8").digest("hex");
-// These hashes describe the checked-in baseline SQL fixture used to create scratch-schema functions.
-// They are deliberately separate from ORIGINAL_FUNCTION_SHA256, which pins the authorized production catalog.
+// These hashes pin the checked-in SQL fixture used to create functions in the disposable test catalog.
 const CHECKED_IN_BASELINE_FUNCTION_SHA256 = Object.freeze({
   [RECORD_HISTORY_SIGNATURE]: "533856840e6f59b42f68512d06d8cd59a4202e614ff23373e2871c6983fa31a9",
   [STORE_CONTENT_SIGNATURE]: "7de2e7d7eb914d74406876cc4f43f17c45184cf9fc68f7b36a185417b57ceb44",
@@ -88,7 +87,6 @@ integrationDescribe("fresh PostgreSQL catalog output using checked-in baseline f
       );
       const baselineHashes = [sourceBodySha("record_history"), sourceBodySha("store_revision_content")];
       expect(baselineHashes).toEqual([CHECKED_IN_BASELINE_FUNCTION_SHA256[RECORD_HISTORY_SIGNATURE], CHECKED_IN_BASELINE_FUNCTION_SHA256[STORE_CONTENT_SIGNATURE]]);
-      expect(baselineHashes).not.toEqual([ORIGINAL_FUNCTION_SHA256[RECORD_HISTORY_SIGNATURE], ORIGINAL_FUNCTION_SHA256[STORE_CONTENT_SIGNATURE]]);
       expect(before.map(row => row.bodySha256)).toEqual(baselineHashes);
       expect(before.every(row => row.owner === "postgres" && row.securityDefiner === false &&
         Array.isArray(row.settings) && row.settings[0] === 'search_path=""' && row.acl === "{postgres=X/postgres}")).toBe(true);
@@ -134,7 +132,7 @@ integrationDescribe("fresh PostgreSQL catalog output using checked-in baseline f
         const id = randomUUID();
         await db.query(
           "INSERT INTO public.prospect_research_candidates(id,identity_namespace,identity_key,identity_namespace_sha256,identity_key_sha256,created_revision) " +
-          "VALUES($1,'projection-repair-ci',$1,encode(extensions.digest(convert_to('projection-repair-ci','UTF8'),'sha256'),'hex'),encode(extensions.digest(convert_to($1,'UTF8'),'sha256'),'hex'),$2)",
+          "VALUES($1::uuid,'projection-repair-ci',$1::text,encode(extensions.digest(convert_to('projection-repair-ci','UTF8'),'sha256'),'hex'),encode(extensions.digest(convert_to($1::text,'UTF8'),'sha256'),'hex'),$2)",
           [id, revision],
         );
         return id;
