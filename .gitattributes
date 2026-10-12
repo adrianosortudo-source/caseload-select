@@ -28,5 +28,9 @@
 # into the same class of bug as *.mjs above if that changes.
 /supabase/run-migrations.js text eol=lf
 
+# Prospect projection repair migration is byte-pinned by the release receipt;
+# preserve the same migration bytes on Windows and Linux checkouts.
+/supabase/migrations/20261009191000_prospect_candidate_projection_insert_reuse.sql text eol=lf
+
 # Public migration CA is byte-pinned; preserve its downloaded PEM bytes.
 /scripts/prospect-enrichment/certificates/prod-ca-2021.crt -text
