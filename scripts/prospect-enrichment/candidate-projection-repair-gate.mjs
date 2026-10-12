@@ -9,14 +9,14 @@ import {
 } from "./migration-gate.mjs";
 
 export const REPAIR_PATH = CANDIDATE_PROJECTION_REPAIR_PATH;
-export const REPAIR_SHA256 = "01a95245ecd1604ffde65ec4b82adfe1e7fca8b6cc7bd4ce6e46e53a8b173928";
+export const REPAIR_SHA256 = "3651634e333568a50b92a0917c61b65a51f19b532a69a9176723534068b85b01";
 export const RELEASE_PATH = "scripts/prospect-enrichment/projection-repair-release.json";
 export const RECORD_HISTORY_SIGNATURE = "prospect_candidate_private.record_history(uuid,bigint,text,text,text,uuid,text,uuid,jsonb,text,jsonb,jsonb,uuid)";
 export const STORE_CONTENT_SIGNATURE = "prospect_candidate_private.store_revision_content(uuid)";
 export const REPAIR_CONFIRMATION = "APPLY-PROSPECT-PROJECTION-INSERT-REPAIR-V1";
 export const ORIGINAL_FUNCTION_SHA256 = Object.freeze({
-  [RECORD_HISTORY_SIGNATURE]: "e7380bec5baa9e371d40a7e92273f2a20769c6a99d77de282abb015c24fd4abb",
-  [STORE_CONTENT_SIGNATURE]: "2962b46e4b4791ff3ceadf92c05ab3e935dfc550f9faca40a382e454ce11d937",
+  [RECORD_HISTORY_SIGNATURE]: "533856840e6f59b42f68512d06d8cd59a4202e614ff23373e2871c6983fa31a9",
+  [STORE_CONTENT_SIGNATURE]: "7de2e7d7eb914d74406876cc4f43f17c45184cf9fc68f7b36a185417b57ceb44",
 });
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
@@ -74,8 +74,9 @@ export function verifyProjectionRepairLedger(rows, sourceRoot = ROOT, phase = "p
 
 function migrationFunctionHashes(source) {
   const sql = source.toString("utf8").replace(/\r\n/g, "\n");
+  if (sql.includes("CREATE OR REPLACE FUNCTION prospect_candidate_private.store_revision_content(")) fail("candidate_projection_repair_function_source_invalid");
   const result = {};
-  for (const [signature, name] of [[RECORD_HISTORY_SIGNATURE, "record_history"], [STORE_CONTENT_SIGNATURE, "store_revision_content"]]) {
+  for (const [signature, name] of [[RECORD_HISTORY_SIGNATURE, "record_history"]]) {
     const marker = `CREATE OR REPLACE FUNCTION prospect_candidate_private.${name}(`;
     const start = sql.indexOf(marker);
     if (start < 0 || sql.indexOf(marker, start + marker.length) >= 0) fail("candidate_projection_repair_function_source_invalid");
@@ -103,7 +104,7 @@ export function verifyProjectionRepairCatalog(rows, phase = "pre", migrationByte
   const signatures = [RECORD_HISTORY_SIGNATURE, STORE_CONTENT_SIGNATURE];
   if (!["pre", "post"].includes(phase) || !Array.isArray(rows) || rows.length !== 2) fail("candidate_projection_repair_catalog_invalid");
   const postHashes = migrationFunctionHashes(migrationBytes);
-  const expectedHashes = phase === "pre" ? ORIGINAL_FUNCTION_SHA256 : postHashes;
+  const expectedHashes = phase === "pre" ? ORIGINAL_FUNCTION_SHA256 : { ...ORIGINAL_FUNCTION_SHA256, ...postHashes };
   for (const [index, row] of rows.entries()) {
     const signature = signatures[index];
     if (!exact(row, ["signature", "functionName", "identityArguments", "owner", "securityDefiner", "settings", "acl", "bodySha256"]) ||

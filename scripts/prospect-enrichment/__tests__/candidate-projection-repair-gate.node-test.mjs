@@ -11,7 +11,7 @@ import { PREFLIGHT_FILES, createPreflightBinding, verifyPreflightBinding } from 
 import {
   REPAIR_PATH, REPAIR_SHA256, RELEASE_PATH, RECORD_HISTORY_SIGNATURE, STORE_CONTENT_SIGNATURE,
   ORIGINAL_FUNCTION_SHA256, REPAIR_CONFIRMATION, verifyProjectionRepairReceipt, verifyProjectionRepairSource,
-  verifyProjectionRepairPlan, verifyProjectionRepairLedger, projectionRepairCatalogQuery, verifyProjectionRepairCatalog,
+  verifyProjectionRepairPlan, verifyProjectionRepairLedger, projectionRepairCatalogQuery, normalizeProjectionIdentityArguments, verifyProjectionRepairCatalog,
 } from "../candidate-projection-repair-gate.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -101,6 +101,7 @@ test("catalog gate pins original definitions and preserves owner, ACL and invoke
   }));
   assert.equal(verifyProjectionRepairCatalog(rows, "pre").verified, true);
   assert.match(projectionRepairCatalogQuery(), /prosecdef/);
+  assert.equal(normalizeProjectionIdentityArguments("uuid, bigint, text, text, text, uuid, text, uuid, jsonb, text, jsonb, jsonb, uuid"), RECORD_HISTORY_SIGNATURE.slice(RECORD_HISTORY_SIGNATURE.indexOf("(") + 1, -1));
   for (const changed of [
     rows.map((row, i) => i === 0 ? { ...row, bodySha256: "0".repeat(64) } : row),
     rows.map((row, i) => i === 1 ? { ...row, acl: "{postgres=X/postgres,service_role=X/postgres}" } : row),
@@ -109,19 +110,20 @@ test("catalog gate pins original definitions and preserves owner, ACL and invoke
   ]) assert.throws(() => verifyProjectionRepairCatalog(changed, "pre"), /candidate_projection_repair_catalog_invalid/);
 });
 
-test("post catalog expects exact source function bodies while retaining the original security envelope", () => {
-  const names = ["record_history", "store_revision_content"];
-  const rows = names.map((name, index) => {
-    const marker = `CREATE OR REPLACE FUNCTION prospect_candidate_private.${name}(`;
-    const start = source.toString("utf8").indexOf(marker), bodyStart = source.toString("utf8").indexOf("AS $function$", start) + 13;
-    const bodyEnd = source.toString("utf8").indexOf("$function$", bodyStart);
-    const signature = index === 0 ? RECORD_HISTORY_SIGNATURE : STORE_CONTENT_SIGNATURE;
-    return { signature, functionName: name, identityArguments: signature.slice(signature.indexOf("(") + 1, -1),
-      owner: "postgres", securityDefiner: false, settings: ['search_path=""'], acl: "{postgres=X/postgres}",
-      bodySha256: sha(Buffer.from(source.toString("utf8").slice(bodyStart, bodyEnd), "utf8")) };
-  });
+test("post catalog expects only the record_history repair and preserves the baseline content serializer", () => {
+  const marker = "CREATE OR REPLACE FUNCTION prospect_candidate_private.record_history(";
+  const start = source.toString("utf8").indexOf(marker), bodyStart = source.toString("utf8").indexOf("AS $function$", start) + 13;
+  const bodyEnd = source.toString("utf8").indexOf("$function$", bodyStart);
+  const rows = [RECORD_HISTORY_SIGNATURE, STORE_CONTENT_SIGNATURE].map((signature, index) => ({
+    signature, functionName: index === 0 ? "record_history" : "store_revision_content",
+    identityArguments: signature.slice(signature.indexOf("(") + 1, -1), owner: "postgres", securityDefiner: false,
+    settings: ['search_path=""'], acl: "{postgres=X/postgres}",
+    bodySha256: index === 0 ? sha(Buffer.from(source.toString("utf8").slice(bodyStart, bodyEnd), "utf8")) : ORIGINAL_FUNCTION_SHA256[signature],
+  }));
   assert.equal(verifyProjectionRepairCatalog(rows, "post", source).verified, true);
+  assert.doesNotMatch(source.toString("utf8"), /CREATE OR REPLACE FUNCTION prospect_candidate_private\.store_revision_content\(/);
   assert.throws(() => verifyProjectionRepairCatalog(rows.map((row, i) => i === 0 ? { ...row, owner: "service_role" } : row), "post", source), /candidate_projection_repair_catalog_invalid/);
+  assert.throws(() => verifyProjectionRepairCatalog(rows.map((row, i) => i === 1 ? { ...row, bodySha256: "0".repeat(64) } : row), "post", source), /candidate_projection_repair_catalog_invalid/);
 });
 
 test("production workflow is manual, current-main-only, two-review and migration-only", () => {
