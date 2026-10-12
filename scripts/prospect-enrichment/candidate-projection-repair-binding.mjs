@@ -14,7 +14,7 @@ export const PREFLIGHT_FILES = Object.freeze({
   stage: "stage-proof.json",
   stageCheck: "stage-check.json",
 });
-export const PROJECTION_REPAIR_MIGRATION_SHA256 = "01a95245ecd1604ffde65ec4b82adfe1e7fca8b6cc7bd4ce6e46e53a8b173928";
+export const PROJECTION_REPAIR_MIGRATION_SHA256 = "3651634e333568a50b92a0917c61b65a51f19b532a69a9176723534068b85b01";
 const exactKeys = (value, keys) => value && typeof value === "object" && !Array.isArray(value) &&
   JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
 
