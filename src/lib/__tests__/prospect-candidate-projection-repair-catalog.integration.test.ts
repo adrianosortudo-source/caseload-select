@@ -23,6 +23,14 @@ const CHECKED_IN_BASELINE_FUNCTION_SHA256 = Object.freeze({
   [RECORD_HISTORY_SIGNATURE]: "533856840e6f59b42f68512d06d8cd59a4202e614ff23373e2871c6983fa31a9",
   [STORE_CONTENT_SIGNATURE]: "7de2e7d7eb914d74406876cc4f43f17c45184cf9fc68f7b36a185417b57ceb44",
 });
+type ProjectionField = {
+  pointer: string;
+  pointer_sha256: string;
+  value_json: unknown;
+  source_urls: string[];
+  source_url_hashes: string[];
+};
+type ProjectionContentChunk = { chunk: string; content_sha256: string };
 function sourceBodySha(name: string): string {
   const marker = "CREATE FUNCTION prospect_candidate_private." + name + "(";
   const start = originalSql.indexOf(marker);
@@ -172,24 +180,29 @@ integrationDescribe("fresh PostgreSQL catalog output using checked-in baseline f
       expect(repaired.search.length).toBeGreaterThan(1);
       expect(repaired.content.length).toBeGreaterThan(1);
       expect(repaired.history[0].original_json).toEqual(raw);
-      const byPointer = new Map(repaired.fields.map((field: any) => [field.pointer, field]));
-      expect(byPointer.get("/noUrl/value").source_urls).toEqual([]);
-      expect(byPointer.get("/noUrl/value").source_url_hashes).toEqual([]);
-      expect(byPointer.get("/nullUrl/value").source_urls).toEqual([]);
-      expect(byPointer.get("/nullUrl/value").source_url_hashes).toEqual([]);
-      expect(byPointer.get("/emptyUrl/value").source_urls).toEqual([""]);
-      expect(byPointer.get("/emptyUrl/value").source_url_hashes).toEqual([md5("")]);
-      expect(byPointer.get("/duplicateUrls/value").source_urls).toEqual([duplicateUrl]);
-      expect(byPointer.get("/duplicateUrls/value").source_url_hashes).toEqual([md5(duplicateUrl)]);
+      const byPointer = new Map((repaired.fields as ProjectionField[]).map((field) => [field.pointer, field] as const));
+      const fieldAt = (pointer: string): ProjectionField => {
+        const field = byPointer.get(pointer);
+        if (!field) throw new Error("projection_repair_expected_field_missing: " + pointer);
+        return field;
+      };
+      expect(fieldAt("/noUrl/value").source_urls).toEqual([]);
+      expect(fieldAt("/noUrl/value").source_url_hashes).toEqual([]);
+      expect(fieldAt("/nullUrl/value").source_urls).toEqual([]);
+      expect(fieldAt("/nullUrl/value").source_url_hashes).toEqual([]);
+      expect(fieldAt("/emptyUrl/value").source_urls).toEqual([""]);
+      expect(fieldAt("/emptyUrl/value").source_url_hashes).toEqual([md5("")]);
+      expect(fieldAt("/duplicateUrls/value").source_urls).toEqual([duplicateUrl]);
+      expect(fieldAt("/duplicateUrls/value").source_url_hashes).toEqual([md5(duplicateUrl)]);
       const pointer = "/pointer/x~1y~0z";
-      expect(byPointer.get(pointer).pointer_sha256).toBe(sha256(pointer));
-      expect(byPointer.get(pointer).value_json).toBe(false);
+      expect(fieldAt(pointer).pointer_sha256).toBe(sha256(pointer));
+      expect(fieldAt(pointer).value_json).toBe(false);
       const canonical = (await db.query(
         "SELECT public.prospect_enrichment_stable_json_v1(prospect_candidate_private.history_item(id)) AS body FROM public.prospect_research_candidate_history WHERE candidate_id=$1", [repairedCandidate]
       )).rows[0].body;
-      const assembled = repaired.content.map((row: any) => row.chunk).join("");
+      const assembled = (repaired.content as ProjectionContentChunk[]).map((row) => row.chunk).join("");
       expect(assembled).toBe(canonical);
-      expect(repaired.content.every((row: any) => row.content_sha256 === sha256(assembled))).toBe(true);
+      expect((repaired.content as ProjectionContentChunk[]).every((row) => row.content_sha256 === sha256(assembled))).toBe(true);
 
       const failingFunction = "repair_ci_fail_" + randomUUID().replaceAll("-", "");
       const failingTrigger = "repair_ci_fail_" + randomUUID().replaceAll("-", "");
@@ -197,9 +210,9 @@ integrationDescribe("fresh PostgreSQL catalog output using checked-in baseline f
       await db.query("CREATE TRIGGER " + failingTrigger + " BEFORE INSERT ON public.prospect_research_candidate_search_chunks FOR EACH ROW EXECUTE FUNCTION prospect_candidate_private." + failingFunction + "()");
       const failedCandidate = await makeCandidate();
       await db.query("SAVEPOINT projection_repair_rollback");
-      let failure: any;
+      let failure: unknown;
       try { await writeAndSnapshot(failedCandidate); } catch (error) { failure = error; }
-      expect(failure?.code).toBe("P0001");
+      expect(failure).toMatchObject({ code: "P0001" });
       await db.query("ROLLBACK TO SAVEPOINT projection_repair_rollback");
       const remainder = (await db.query(
         "SELECT (SELECT count(*) FROM public.prospect_research_candidate_history WHERE candidate_id=$1)::int AS history, " +
