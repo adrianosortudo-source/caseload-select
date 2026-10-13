@@ -4,6 +4,9 @@ import { canonicalJson, object, protocolHash, sha256 } from "./model";
 import { signComparisonSnapshot, signingKeyTrust, type ComparisonSigningKey, type ComparisonTrust } from "./comparison-signature";
 
 export type ComparisonExportInput = Omit<ComparisonSnapshot, "snapshotSha256" | "signature">;
+export type MachineComparisonSnapshot = Omit<ComparisonSnapshot, "provenance"> & {
+  provenance: Extract<ComparisonSnapshot["provenance"], { machineAuthenticated: true }>;
+};
 const hash = (value: unknown) => typeof value === "string" && /^[a-f0-9]{64}$/.test(value);
 const nonempty = (value: unknown) => typeof value === "string" && value.trim().length > 0;
 const nullableText = (value: unknown) => value === null || nonempty(value);
@@ -60,6 +63,58 @@ export function assertOpenRunRecoveryBinding(snapshot: unknown, expectedRequestS
       !Array.isArray(snapshot.packages) || snapshot.packages.length !== 0) {
     throw new Error("open_run_recovery_comparison_required");
   }
+}
+
+/** Machine-authenticated bootstrap snapshots are accepted only by the exact, empty-package recovery path. */
+export function assertMachineOpenRunRecoveryBinding(snapshot: unknown, expectedRequestSha256: string): asserts snapshot is MachineComparisonSnapshot {
+  if (!object(snapshot) || !object(snapshot.provenance) ||
+      !["admin-prospect-enrichment-bootstrap-github-actions/v1", "admin-prospect-enrichment-bootstrap-resume-github-actions/v1"].includes(String(snapshot.provenance.reader)) ||
+      snapshot.provenance.machineAuthenticated !== true || snapshot.provenance.operatorAuthenticated !== undefined ||
+      snapshot.provenance.sourceArtifactSha256 !== expectedRequestSha256 || snapshot.provenance.repository !== "adrianosortudo-source/caseload-select" ||
+      snapshot.provenance.repositoryId !== "1206232496" || snapshot.provenance.ref !== "refs/heads/main" ||
+      snapshot.provenance.workflowRef !== "adrianosortudo-source/caseload-select/.github/workflows/prospect-enrichment-comparison-read.yml@refs/heads/main" ||
+      snapshot.provenance.environment !== "Prospect comparison read" || snapshot.provenance.eventName !== "workflow_dispatch" ||
+      !/^[a-f0-9]{40}$/.test(String(snapshot.provenance.sha)) || !/^[1-9][0-9]{0,19}$/.test(String(snapshot.provenance.runId)) ||
+      !/^[1-9][0-9]{0,5}$/.test(String(snapshot.provenance.runAttempt)) || !/^[a-f0-9]{64}$/.test(String(snapshot.provenance.jtiSha256)) ||
+      !Array.isArray(snapshot.packages) || snapshot.packages.length !== 0) throw new Error("machine_open_run_recovery_comparison_required");
+}
+
+const machineProvenanceKeys = ["reader", "sourceArtifactSha256", "machineAuthenticated", "repository", "repositoryId", "ref", "sha", "workflowRef", "environment", "eventName", "runId", "runAttempt", "jtiSha256"];
+function validMachineProvenance(value: unknown): value is Record<string, unknown> {
+  return object(value) && exactKeys(value, machineProvenanceKeys) &&
+    ["admin-prospect-enrichment-bootstrap-github-actions/v1", "admin-prospect-enrichment-bootstrap-resume-github-actions/v1"].includes(String(value.reader)) &&
+    value.machineAuthenticated === true && value.repository === "adrianosortudo-source/caseload-select" && value.repositoryId === "1206232496" &&
+    value.ref === "refs/heads/main" && /^[a-f0-9]{40}$/.test(String(value.sha)) &&
+    value.workflowRef === "adrianosortudo-source/caseload-select/.github/workflows/prospect-enrichment-comparison-read.yml@refs/heads/main" &&
+    value.environment === "Prospect comparison read" && value.eventName === "workflow_dispatch" && /^[1-9][0-9]{0,19}$/.test(String(value.runId)) &&
+    /^[1-9][0-9]{0,5}$/.test(String(value.runAttempt)) && /^[a-f0-9]{64}$/.test(String(value.jtiSha256));
+}
+
+/** Server-only GitHub workflow signer. It emits no operatorAuthenticated claim. */
+export function serializeMachineComparisonExport(input: unknown, now = new Date().toISOString(), signingKey?: ComparisonSigningKey) {
+  if (!object(input) || !validMachineProvenance(input.provenance) || !hash(input.provenance.sourceArtifactSha256) || !Array.isArray(input.packages) || input.packages.length !== 0) throw Error("machine_comparison_export_schema_invalid");
+  const compatible: Record<string, unknown> = { ...input, provenance: { reader: input.provenance.reader, sourceArtifactSha256: input.provenance.sourceArtifactSha256, operatorAuthenticated: true } };
+  if (!validContent(compatible)) throw Error("machine_comparison_export_schema_invalid");
+  if (!signingKey) throw Error("comparison_signing_key_missing");
+  const content = JSON.parse(canonicalJson(input)) as ComparisonExportInput;
+  const snapshot = signComparisonSnapshot({ ...content, snapshotSha256: protocolHash(content) }, signingKey) as MachineComparisonSnapshot;
+  const issues = validateComparisonSnapshot(snapshot, now, signingKeyTrust(signingKey), "github-actions-machine");
+  if (issues.length) throw Error(issues[0].code);
+  const body = canonicalJson(snapshot) + "\n";
+  return { snapshot, body, bodySha256: sha256(body) };
+}
+
+/** Offline verifier reserved for the recovery command; general reconcile still rejects machine provenance. */
+export function verifyAndSerializeMachineComparisonExport(input: unknown, now = new Date().toISOString(), trust?: ComparisonTrust | null) {
+  if (!object(input) || !hash(input.snapshotSha256) || !Object.hasOwn(input, "signature") || !validMachineProvenance(input.provenance) || !hash(input.provenance.sourceArtifactSha256) || !Array.isArray(input.packages) || input.packages.length !== 0) throw Error("machine_comparison_export_schema_invalid");
+  const compatible: Record<string, unknown> = { ...input, provenance: { reader: input.provenance.reader, sourceArtifactSha256: input.provenance.sourceArtifactSha256, operatorAuthenticated: true } };
+  const { snapshotSha256: _hash, signature: _signature, ...content } = compatible; void _hash; void _signature;
+  if (!validContent(content)) throw Error("machine_comparison_export_schema_invalid");
+  const snapshot = JSON.parse(canonicalJson(input)) as MachineComparisonSnapshot;
+  const issues = validateComparisonSnapshot(snapshot, now, trust, "github-actions-machine");
+  if (issues.length) throw Error(issues[0].code);
+  const body = canonicalJson(snapshot) + "\n";
+  return { snapshot, body, bodySha256: sha256(body) };
 }
 
 /** Serializes an actual supported-reader result. This function grants no auth and performs no I/O. */
