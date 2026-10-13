@@ -14,8 +14,10 @@ export async function POST(request: NextRequest) {
   if (!/^application\/json(?:;|$)/i.test(request.headers.get("content-type") ?? "") || (request.headers.get("content-encoding") ?? "identity").toLowerCase() !== "identity") return prospectEnrichmentJson({ error: "A canonical JSON request is required." }, 400);
   let identity;
   try { identity = await verifyProspectComparisonWorkflowToken(authorization.slice(7)); }
-  catch {
-    console.info("[prospect-comparison-machine-audit]", JSON.stringify({ outcome: "authentication_rejected" }));
+  catch (cause) {
+    const knownReasons = new Set(["github_oidc_token_invalid", "github_oidc_claims_invalid", "github_oidc_claims_rejected", "github_oidc_keys_unavailable", "github_oidc_keys_invalid", "github_oidc_signing_key_unknown", "github_oidc_signature_invalid"]);
+    const reason = cause instanceof Error && knownReasons.has(cause.message) ? cause.message : "github_oidc_verification_failed";
+    console.info("[prospect-comparison-machine-audit]", JSON.stringify({ outcome: "authentication_rejected", reason }));
     return prospectEnrichmentJson({ error: "Unauthorized" }, 401);
   }
   const response = await handleMachineComparisonExport(request, identity);

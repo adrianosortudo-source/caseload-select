@@ -39,6 +39,49 @@ async function signingKeys(fetcher: typeof fetch, now: number, refresh = false):
   return cachedJwks.keys;
 }
 
+/** Only fixed check names and booleans are emitted. Decoded claims are untrusted until signature verification. */
+export function prospectComparisonWorkflowClaimChecks(claims: Record<string, unknown>, now = Date.now()): Record<string, boolean> {
+  const seconds = Math.floor(now / 1000), issued = Number(claims.iat), notBefore = Number(claims.nbf), expires = Number(claims.exp);
+  return {
+    issuer: claims.iss === issuer,
+    audience: claims.aud === PROSPECT_COMPARISON_OIDC_AUDIENCE,
+    subject: claims.sub === `repo:${repository}:environment:${PROSPECT_COMPARISON_OIDC_ENVIRONMENT}`,
+    repository: claims.repository === repository,
+    repositoryId: claims.repository_id === repositoryId,
+    repositoryOwner: claims.repository_owner === "adrianosortudo-source",
+    repositoryOwnerId: claims.repository_owner_id === "274647202",
+    ref: claims.ref === "refs/heads/main",
+    refType: claims.ref_type === "branch",
+    workflowRef: claims.workflow_ref === PROSPECT_COMPARISON_OIDC_WORKFLOW,
+    workflowSha: claims.workflow_sha === claims.sha && sha(claims.sha),
+    directWorkflow: !Object.hasOwn(claims, "job_workflow_ref") && !Object.hasOwn(claims, "job_workflow_sha"),
+    environment: claims.environment === PROSPECT_COMPARISON_OIDC_ENVIRONMENT,
+    event: claims.event_name === "workflow_dispatch",
+    runId: typeof claims.run_id === "string" && /^[1-9][0-9]{0,19}$/.test(claims.run_id),
+    runAttempt: typeof claims.run_attempt === "string" && /^[1-9][0-9]{0,5}$/.test(claims.run_attempt),
+    timeTypes: typeof claims.iat === "number" && typeof claims.nbf === "number" && typeof claims.exp === "number" && Number.isSafeInteger(issued) && Number.isSafeInteger(notBefore) && Number.isSafeInteger(expires),
+    issued: issued <= seconds + 30,
+    notBefore: notBefore <= seconds + 30 && notBefore <= issued,
+    expiry: expires > seconds && expires >= issued,
+    lifetime: expires - issued <= maxLifetimeSeconds,
+    tokenId: typeof claims.jti === "string" && /^[A-Za-z0-9._-]{1,256}$/.test(claims.jti),
+  };
+}
+
+/** Diagnostic only: never grants access, returns claim values, or retains a credential. */
+export function diagnoseProspectComparisonWorkflowToken(token: string, now = Date.now()): Record<string, boolean> {
+  try {
+    if (typeof token !== "string" || Buffer.byteLength(token) > maxTokenBytes) return { tokenFormat: false };
+    const parts = token.split(".");
+    if (parts.length !== 3 || parts.some(part => !/^[A-Za-z0-9_-]+$/.test(part) || Buffer.from(part, "base64url").toString("base64url") !== part)) return { tokenFormat: false };
+    const header: unknown = JSON.parse(Buffer.from(parts[0], "base64url").toString("utf8"));
+    const claims: unknown = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+    if (!hasKeys(header, ["alg", "kid", "typ"]) || !hasKeys(claims, ["iss", "aud", "sub"])) return { tokenFormat: false };
+    const h = header as Record<string, unknown>;
+    return { tokenFormat: true, header: h.alg === "RS256" && typeof h.kid === "string" && h.typ === "JWT", ...prospectComparisonWorkflowClaimChecks(claims as Record<string, unknown>, now) };
+  } catch { return { tokenFormat: false }; }
+}
+
 /** Verifies the single approved GitHub Actions workflow identity. Never returns the bearer token. */
 export async function verifyProspectComparisonWorkflowToken(token: string, options: { now?: number; fetcher?: typeof fetch } = {}): Promise<ProspectComparisonWorkflowIdentity> {
   const now = options.now ?? Date.now(), fetcher = options.fetcher ?? fetch;
@@ -52,15 +95,7 @@ export async function verifyProspectComparisonWorkflowToken(token: string, optio
   } catch { throw Error("github_oidc_token_invalid"); }
   if (!hasKeys(header, ["alg", "kid", "typ"]) || header.alg !== "RS256" || typeof header.kid !== "string" || header.typ !== "JWT" ||
       !hasKeys(claims, ["iss", "aud", "sub", "repository", "repository_id", "repository_owner", "repository_owner_id", "ref", "ref_type", "sha", "workflow_ref", "workflow_sha", "environment", "event_name", "run_id", "run_attempt", "iat", "nbf", "exp", "jti"])) throw Error("github_oidc_claims_invalid");
-  const seconds = Math.floor(now / 1000), issued = Number(claims.iat), notBefore = Number(claims.nbf), expires = Number(claims.exp);
-  if (claims.iss !== issuer || claims.aud !== PROSPECT_COMPARISON_OIDC_AUDIENCE || claims.sub !== `repo:${repository}:environment:${PROSPECT_COMPARISON_OIDC_ENVIRONMENT}` ||
-      claims.repository !== repository || claims.repository_id !== repositoryId || claims.repository_owner !== "adrianosortudo-source" || claims.repository_owner_id !== "274647202" ||
-      claims.ref !== "refs/heads/main" || claims.ref_type !== "branch" || claims.workflow_ref !== PROSPECT_COMPARISON_OIDC_WORKFLOW || claims.workflow_sha !== claims.sha ||
-      Object.hasOwn(claims, "job_workflow_ref") || Object.hasOwn(claims, "job_workflow_sha") ||
-      claims.environment !== PROSPECT_COMPARISON_OIDC_ENVIRONMENT || claims.event_name !== "workflow_dispatch" || !sha(claims.sha) ||
-      typeof claims.run_id !== "string" || !/^[1-9][0-9]{0,19}$/.test(claims.run_id) || typeof claims.run_attempt !== "string" || !/^[1-9][0-9]{0,5}$/.test(claims.run_attempt) ||
-      typeof claims.iat !== "number" || typeof claims.nbf !== "number" || typeof claims.exp !== "number" || !Number.isSafeInteger(issued) || !Number.isSafeInteger(notBefore) || !Number.isSafeInteger(expires) || issued > seconds + 30 || notBefore > seconds + 30 || notBefore > issued || expires <= seconds || expires < issued || expires - issued > maxLifetimeSeconds ||
-      typeof claims.jti !== "string" || !/^[A-Za-z0-9._-]{1,256}$/.test(claims.jti)) throw Error("github_oidc_claims_rejected");
+  if (Object.values(prospectComparisonWorkflowClaimChecks(claims, now)).some(value => !value)) throw Error("github_oidc_claims_rejected");
   const matchesKey = (candidate: Record<string, unknown>) => candidate.kid === header.kid && candidate.kty === "RSA" && candidate.use === "sig" && candidate.alg === "RS256";
   let key = (await signingKeys(fetcher, now)).find(matchesKey);
   if (!key) key = (await signingKeys(fetcher, now, true)).find(matchesKey);
@@ -71,9 +106,9 @@ export async function verifyProspectComparisonWorkflowToken(token: string, optio
     signature = Buffer.from(parts[2], "base64url");
     if (signature.length < 256 || signature.length > 1024 || !verifySignature("RSA-SHA256", Buffer.from(`${parts[0]}.${parts[1]}`), publicKey, signature)) throw Error();
   } catch { throw Error("github_oidc_signature_invalid"); }
-  return { repository, repositoryId, ref: "refs/heads/main", sha: claims.sha, workflowRef: PROSPECT_COMPARISON_OIDC_WORKFLOW,
+  return { repository, repositoryId, ref: "refs/heads/main", sha: String(claims.sha), workflowRef: PROSPECT_COMPARISON_OIDC_WORKFLOW,
     environment: PROSPECT_COMPARISON_OIDC_ENVIRONMENT, eventName: "workflow_dispatch", runId: String(claims.run_id), runAttempt: String(claims.run_attempt),
-    jtiSha256: createHash("sha256").update(claims.jti).digest("hex") };
+    jtiSha256: createHash("sha256").update(String(claims.jti)).digest("hex") };
 }
 
 export function resetProspectComparisonOidcKeyCacheForTests() { cachedJwks = null; }
