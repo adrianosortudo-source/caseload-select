@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const state = vi.hoisted(() => ({ verify: vi.fn(), read: vi.fn() }));
+vi.mock("@/lib/client-import-server", () => ({ validateSameOrigin: vi.fn(() => true) }));
+vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: vi.fn(async () => null) }));
+const invalidContentHeaders: Record<string, string>[] = [{ "content-type": "text/plain" }, { "content-encoding": "gzip" }];
 vi.mock("@/lib/prospect-enrichment-github-oidc", () => ({ verifyProspectComparisonWorkflowToken: state.verify }));
 vi.mock("../../../../../admin/prospect-enrichment/comparison-export/handler", () => ({ handleMachineComparisonExport: state.read }));
 import { POST } from "../route";
@@ -28,7 +31,7 @@ describe("machine comparison route", () => {
     expect(state.verify).not.toHaveBeenCalled();
     expect(state.read).not.toHaveBeenCalled();
   });
-  it.each([{ "content-type": "text/plain" }, { "content-encoding": "gzip" }])("requires canonical uncompressed JSON", async (headers) => {
+  it.each(invalidContentHeaders)("requires canonical uncompressed JSON", async (headers) => {
     expect((await POST(request(headers))).status).toBe(400);
     expect(state.verify).not.toHaveBeenCalled();
     expect(state.read).not.toHaveBeenCalled();
