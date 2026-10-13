@@ -1,0 +1,27 @@
+import { describe, expect, it } from "vitest";
+import { canApproveAgencyFollowupMessage } from "@/lib/agency-followup-ui";
+
+describe("agency follow-up message approval action", () => {
+  it("allows review when only approval and send timing are outstanding", () => {
+    expect(canApproveAgencyFollowupMessage({
+      messageState: "awaiting_review",
+      sequenceReleased: true,
+      blockers: ["message_not_approved", "approval_missing", "not_due", "minimum_spacing_not_elapsed"],
+    })).toBe(true);
+  });
+
+  it("keeps hard eligibility and operations stops visible and blocks approval", () => {
+    for (const blocker of ["eligibility_pending", "contactability_unknown", "contactability_blocked", "conversation_stopped", "prospect_status_stopped", "recipient_email_invalid"]) {
+      expect(canApproveAgencyFollowupMessage({
+        messageState: "awaiting_review",
+        sequenceReleased: true,
+        blockers: ["approval_missing", blocker],
+      })).toBe(false);
+    }
+  });
+
+  it("requires an individually released enrollment and a message awaiting review", () => {
+    expect(canApproveAgencyFollowupMessage({ messageState: "awaiting_review", sequenceReleased: false, blockers: [] })).toBe(false);
+    expect(canApproveAgencyFollowupMessage({ messageState: "approved", sequenceReleased: true, blockers: [] })).toBe(false);
+  });
+});

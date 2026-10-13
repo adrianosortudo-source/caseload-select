@@ -7,6 +7,7 @@
  */
 import { listProspects, listReminders, listDeals } from '@/lib/agency-crm';
 import AgencyCrmClient from './AgencyCrmClient';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -26,8 +27,11 @@ export default async function AgencyCrmPage() {
           <h1 className="text-2xl font-bold text-navy mt-1">Agency CRM</h1>
           <p className="text-sm text-black/50 mt-1">Your own pipeline for selling CaseLoad Select retainers.</p>
         </div>
-        <div className="text-xs text-black/50 uppercase tracking-wider">
-          {prospects.length} prospect{prospects.length === 1 ? '' : 's'}
+        <div className="flex flex-wrap items-center gap-4">
+          <Link href="/admin/agency-crm/follow-up" className="text-sm font-semibold text-navy underline">Follow-up journeys</Link>
+          <div className="text-xs text-black/50 uppercase tracking-wider">
+            {prospects.length} prospect{prospects.length === 1 ? '' : 's'}
+          </div>
         </div>
       </div>
 
