@@ -1,8 +1,8 @@
 import { NextRequest } from "next/server";
 import { prospectEnrichmentJson } from "@/lib/prospect-enrichment-auth";
 import { verifyProspectComparisonWorkflowToken } from "@/lib/prospect-enrichment-github-oidc";
-import { CASEY_MOSS_HELD_EVIDENCE_RECOVERY } from "../../../../../../scripts/prospect-enrichment/manifest-delivery";
-import { handleComparisonExport } from "../../../../admin/prospect-enrichment/comparison-export/handler";
+import { CASEY_MOSS_HELD_EVIDENCE_RECOVERY } from "../../../../../../../scripts/prospect-enrichment/manifest-delivery";
+import { handleMachineComparisonExport } from "../../../../admin/prospect-enrichment/comparison-export/handler";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
     console.info("[prospect-comparison-machine-audit]", JSON.stringify({ outcome: "authentication_rejected" }));
     return prospectEnrichmentJson({ error: "Unauthorized" }, 401);
   }
-  const response = await handleComparisonExport(request, "bootstrap", identity);
+  const response = await handleMachineComparisonExport(request, identity);
   console.info("[prospect-comparison-machine-audit]", JSON.stringify({
     outcome: response.status >= 200 && response.status < 300 ? "read_complete" : "read_rejected",
     repository: identity.repository, repositoryId: identity.repositoryId, ref: identity.ref, sha: identity.sha,

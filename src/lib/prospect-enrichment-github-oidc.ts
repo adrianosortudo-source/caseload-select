@@ -1,4 +1,4 @@
-import { createPublicKey, createHash, verify as verifySignature } from "node:crypto";
+import { createPublicKey, createHash, verify as verifySignature, type JsonWebKey } from "node:crypto";
 
 export const PROSPECT_COMPARISON_OIDC_AUDIENCE = "caseload-prospect-comparison-read/v1";
 export const PROSPECT_COMPARISON_OIDC_ENVIRONMENT = "Prospect comparison read";
@@ -25,16 +25,17 @@ export type ProspectComparisonWorkflowIdentity = {
 };
 
 let cachedJwks: { expiresAt: number; keys: Record<string, unknown>[] } | null = null;
-async function signingKeys(fetcher: typeof fetch, now: number): Promise<Record<string, unknown>[]> {
-  if (cachedJwks && cachedJwks.expiresAt > now) return cachedJwks.keys;
+async function signingKeys(fetcher: typeof fetch, now: number, refresh = false): Promise<Record<string, unknown>[]> {
+  if (!refresh && cachedJwks && cachedJwks.expiresAt > now) return cachedJwks.keys;
   const response = await fetcher(`${issuer}/.well-known/jwks`, { signal: AbortSignal.timeout(3000), headers: { accept: "application/json" } });
   if (!response.ok || new URL(response.url).origin !== issuer || Number(response.headers.get("content-length") ?? 0) > 65_536) throw Error("github_oidc_keys_unavailable");
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (bytes.byteLength > 65_536) throw Error("github_oidc_keys_invalid");
   let value: unknown;
   try { value = JSON.parse(Buffer.from(bytes).toString("utf8")); } catch { throw Error("github_oidc_keys_invalid"); }
-  if (!value || typeof value !== "object" || !Array.isArray((value as Record<string, unknown>).keys) || (value as Record<string, unknown>).keys.length > 20) throw Error("github_oidc_keys_invalid");
-  cachedJwks = { expiresAt: now + 5 * 60_000, keys: (value as { keys: Record<string, unknown>[] }).keys };
+  const keys = value && typeof value === "object" ? (value as Record<string, unknown>).keys : null;
+  if (!Array.isArray(keys) || keys.length > 20 || keys.some((key) => !key || typeof key !== "object" || Array.isArray(key))) throw Error("github_oidc_keys_invalid");
+  cachedJwks = { expiresAt: now + 5 * 60_000, keys: keys as Record<string, unknown>[] };
   return cachedJwks.keys;
 }
 
@@ -50,17 +51,20 @@ export async function verifyProspectComparisonWorkflowToken(token: string, optio
     claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
   } catch { throw Error("github_oidc_token_invalid"); }
   if (!hasKeys(header, ["alg", "kid", "typ"]) || header.alg !== "RS256" || typeof header.kid !== "string" || header.typ !== "JWT" ||
-      !hasKeys(claims, ["iss", "aud", "sub", "repository", "repository_id", "repository_owner", "repository_owner_id", "ref", "ref_type", "sha", "workflow_ref", "job_workflow_ref", "environment", "event_name", "run_id", "run_attempt", "iat", "nbf", "exp", "jti"])) throw Error("github_oidc_claims_invalid");
+      !hasKeys(claims, ["iss", "aud", "sub", "repository", "repository_id", "repository_owner", "repository_owner_id", "ref", "ref_type", "sha", "workflow_ref", "workflow_sha", "environment", "event_name", "run_id", "run_attempt", "iat", "nbf", "exp", "jti"])) throw Error("github_oidc_claims_invalid");
   const seconds = Math.floor(now / 1000), issued = Number(claims.iat), notBefore = Number(claims.nbf), expires = Number(claims.exp);
   if (claims.iss !== issuer || claims.aud !== PROSPECT_COMPARISON_OIDC_AUDIENCE || claims.sub !== `repo:${repository}:environment:${PROSPECT_COMPARISON_OIDC_ENVIRONMENT}` ||
       claims.repository !== repository || claims.repository_id !== repositoryId || claims.repository_owner !== "adrianosortudo-source" || claims.repository_owner_id !== "274647202" ||
-      claims.ref !== "refs/heads/main" || claims.ref_type !== "branch" || claims.workflow_ref !== PROSPECT_COMPARISON_OIDC_WORKFLOW || claims.job_workflow_ref !== PROSPECT_COMPARISON_OIDC_WORKFLOW ||
+      claims.ref !== "refs/heads/main" || claims.ref_type !== "branch" || claims.workflow_ref !== PROSPECT_COMPARISON_OIDC_WORKFLOW || claims.workflow_sha !== claims.sha ||
+      Object.hasOwn(claims, "job_workflow_ref") || Object.hasOwn(claims, "job_workflow_sha") ||
       claims.environment !== PROSPECT_COMPARISON_OIDC_ENVIRONMENT || claims.event_name !== "workflow_dispatch" || !sha(claims.sha) ||
-      !/^[1-9][0-9]{0,19}$/.test(String(claims.run_id)) || !/^[1-9][0-9]{0,5}$/.test(String(claims.run_attempt)) ||
-      !Number.isSafeInteger(issued) || !Number.isSafeInteger(notBefore) || !Number.isSafeInteger(expires) || issued > seconds + 30 || notBefore > seconds + 30 || notBefore > issued || expires <= seconds || expires < issued || expires - issued > maxLifetimeSeconds ||
+      typeof claims.run_id !== "string" || !/^[1-9][0-9]{0,19}$/.test(claims.run_id) || typeof claims.run_attempt !== "string" || !/^[1-9][0-9]{0,5}$/.test(claims.run_attempt) ||
+      typeof claims.iat !== "number" || typeof claims.nbf !== "number" || typeof claims.exp !== "number" || !Number.isSafeInteger(issued) || !Number.isSafeInteger(notBefore) || !Number.isSafeInteger(expires) || issued > seconds + 30 || notBefore > seconds + 30 || notBefore > issued || expires <= seconds || expires < issued || expires - issued > maxLifetimeSeconds ||
       typeof claims.jti !== "string" || !/^[A-Za-z0-9._-]{1,256}$/.test(claims.jti)) throw Error("github_oidc_claims_rejected");
-  const key = (await signingKeys(fetcher, now)).find((candidate) => candidate.kid === header.kid && candidate.kty === "RSA" && candidate.use === "sig" && candidate.alg === "RS256");
-  if (!key) { cachedJwks = null; throw Error("github_oidc_signing_key_unknown"); }
+  const matchesKey = (candidate: Record<string, unknown>) => candidate.kid === header.kid && candidate.kty === "RSA" && candidate.use === "sig" && candidate.alg === "RS256";
+  let key = (await signingKeys(fetcher, now)).find(matchesKey);
+  if (!key) key = (await signingKeys(fetcher, now, true)).find(matchesKey);
+  if (!key) throw Error("github_oidc_signing_key_unknown");
   let signature: Buffer;
   try {
     const publicKey = createPublicKey({ key: key as JsonWebKey, format: "jwk" });

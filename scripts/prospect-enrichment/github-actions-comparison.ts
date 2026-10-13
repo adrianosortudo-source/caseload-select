@@ -7,7 +7,7 @@ import { assertMachineOpenRunRecoveryBinding, verifyAndSerializeMachineCompariso
 import { configuredComparisonTrust } from "./comparison-signature";
 
 const repo = "adrianosortudo-source/caseload-select";
-const audience = "caseload-prospect-comparison-read/v1";
+import { requestWorkflowOidcToken } from "./github-actions-oidc-client";
 const endpoint = "https://caseloadselect.ca/api/internal/prospect-enrichment/comparison-export/github-actions";
 function required(name: string): string { const value = process.env[name]; if (!value) throw Error(`workflow_environment_${name.toLowerCase()}_missing`); return value; }
 
@@ -19,14 +19,8 @@ async function main() {
   if (!comparisonRequest || protocolHash(comparisonRequest) !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.comparisonRequestSha256 ||
       comparisonRequest.manifest.runId !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.runId || comparisonRequest.manifest.sourceManifestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.sourceManifestSha256 ||
       comparisonRequest.manifest.manifestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.runManifestSha256 || comparisonRequest.packages.length !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.expectedPackageCount) throw Error("workflow_frozen_request_pin_mismatch");
-  const tokenUrl = new URL(required("ACTIONS_ID_TOKEN_REQUEST_URL"));
-  if (tokenUrl.protocol !== "https:" || tokenUrl.hostname !== "pipelines.actions.githubusercontent.com") throw Error("github_oidc_request_endpoint_invalid");
-  tokenUrl.searchParams.set("audience", audience);
-  const tokenResponse = await fetch(tokenUrl, { headers: { authorization: `Bearer ${required("ACTIONS_ID_TOKEN_REQUEST_TOKEN")}` }, signal: AbortSignal.timeout(10_000) });
-  if (!tokenResponse.ok) throw Error("github_oidc_token_request_failed");
-  const tokenValue = await tokenResponse.json() as { value?: unknown };
-  if (typeof tokenValue.value !== "string" || tokenValue.value.length > 16_384) throw Error("github_oidc_token_response_invalid");
-  const response = await fetch(endpoint, { method: "POST", headers: { authorization: `Bearer ${tokenValue.value}`, "content-type": "application/json" }, body: canonicalJson(comparisonRequest) + "\n", signal: AbortSignal.timeout(120_000) });
+  const workflowToken = await requestWorkflowOidcToken(required("ACTIONS_ID_TOKEN_REQUEST_URL"), required("ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+  const response = await fetch(endpoint, { method: "POST", redirect: "error", headers: { authorization: `Bearer ${workflowToken}`, "content-type": "application/json" }, body: canonicalJson(comparisonRequest) + "\n", signal: AbortSignal.timeout(120_000) });
   if (!response.ok || Number(response.headers.get("content-length") ?? 0) > 32 * 1024 * 1024) throw Error(`comparison_read_failed_${response.status}`);
   const responseBytes = new Uint8Array(await response.arrayBuffer());
   if (responseBytes.byteLength > 32 * 1024 * 1024) throw Error("comparison_read_response_too_large");

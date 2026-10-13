@@ -61,7 +61,7 @@ export function validateComparisonSnapshot(snapshot: ComparisonSnapshot, now = n
     provenance.environment === "Prospect comparison read" && provenance.eventName === "workflow_dispatch" &&
     typeof provenance.runId === "string" && /^[1-9][0-9]{0,19}$/.test(provenance.runId) && typeof provenance.runAttempt === "string" && /^[1-9][0-9]{0,5}$/.test(provenance.runAttempt) &&
     typeof provenance.jtiSha256 === "string" && /^[a-f0-9]{64}$/.test(provenance.jtiSha256) && snapshot.packages.length === 0;
-  const validOperator = !machine && snapshot.provenance?.operatorAuthenticated === true && !("machineAuthenticated" in provenance);
+  const validOperator = !machine && object(provenance) && provenance.operatorAuthenticated === true && !("machineAuthenticated" in provenance);
   if (snapshot.schemaVersion !== "prospect-enrichment-comparison/v1" || snapshot.projectId !== "ssxryjxifwiivghglqer" || !(validMachine || validOperator) || !snapshot.provenance?.reader || !/^[a-f0-9]{64}$/.test(snapshot.provenance?.sourceArtifactSha256 ?? "")) issues.push({ code: "comparison_provenance_missing", path: "provenance", reason: "Comparison must come from the authenticated supported reader for the fixed project" });
   for (const [index, event] of snapshot.events.entries()) {
     const target = event?.primaryTarget;

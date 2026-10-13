@@ -220,14 +220,19 @@ async function buildSnapshot(input: ComparisonRequest, rawRequest: unknown, admi
   return { snapshot, readSetSha256, fence };
 }
 
-export async function handleComparisonExport(request: NextRequest, mode: "finalized" | "bootstrap" = "finalized", machineIdentity?: ProspectComparisonWorkflowIdentity) {
-  if (machineIdentity) {
-    if (mode !== "bootstrap") return prospectEnrichmentJson({ error: "The machine comparison reader is limited to bootstrap reads." }, 403);
-  } else {
-    const auth = await requireProspectEnrichmentOperator(request, true);
-    if (!auth.ok) return auth.response;
-    if (auth.operator.session.role !== "operator") return prospectEnrichmentJson({ error: "An operator session is required." }, 403);
-  }
+export async function handleComparisonExport(request: NextRequest, mode: "finalized" | "bootstrap" = "finalized") {
+  const auth = await requireProspectEnrichmentOperator(request, true);
+  if (!auth.ok) return auth.response;
+  if (auth.operator.session.role !== "operator") return prospectEnrichmentJson({ error: "An operator session is required." }, 403);
+  return readComparisonExport(request, mode);
+}
+
+/** Called only after the dedicated route verifies the approved workflow token. */
+export async function handleMachineComparisonExport(request: NextRequest, machineIdentity: ProspectComparisonWorkflowIdentity) {
+  return readComparisonExport(request, "bootstrap", machineIdentity);
+}
+
+async function readComparisonExport(request: NextRequest, mode: "finalized" | "bootstrap", machineIdentity?: ProspectComparisonWorkflowIdentity) {
   const body = await readBoundedJson(request, MAX_REQUEST_BYTES, {
     gzip: { maxCompressedBytes: MAX_GZIP_REQUEST_BYTES, maxDecompressedBytes: MAX_GZIP_DECOMPRESSED_BYTES },
   });
