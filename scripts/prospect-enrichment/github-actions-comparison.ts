@@ -8,7 +8,7 @@ import { configuredComparisonTrust } from "./comparison-signature";
 
 const repo = "adrianosortudo-source/caseload-select";
 import { requestWorkflowOidcToken } from "./github-actions-oidc-client";
-const endpoint = "https://caseloadselect.ca/api/internal/prospect-enrichment/comparison-export/github-actions";
+const endpoint = "https://admin.caseloadselect.ca/api/internal/prospect-enrichment/comparison-export/github-actions";
 function required(name: string): string { const value = process.env[name]; if (!value) throw Error(`workflow_environment_${name.toLowerCase()}_missing`); return value; }
 
 async function main() {
