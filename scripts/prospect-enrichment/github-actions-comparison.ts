@@ -8,6 +8,7 @@ import { configuredComparisonTrust } from "./comparison-signature";
 
 const repo = "adrianosortudo-source/caseload-select";
 import { requestWorkflowOidcToken } from "./github-actions-oidc-client";
+import { diagnoseProspectComparisonWorkflowToken } from "../../src/lib/prospect-enrichment-github-oidc";
 const endpoint = "https://admin.caseloadselect.ca/api/internal/prospect-enrichment/comparison-export/github-actions";
 function required(name: string): string { const value = process.env[name]; if (!value) throw Error(`workflow_environment_${name.toLowerCase()}_missing`); return value; }
 
@@ -20,6 +21,7 @@ async function main() {
       comparisonRequest.manifest.runId !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.runId || comparisonRequest.manifest.sourceManifestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.sourceManifestSha256 ||
       comparisonRequest.manifest.manifestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.runManifestSha256 || comparisonRequest.packages.length !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.expectedPackageCount) throw Error("workflow_frozen_request_pin_mismatch");
   const workflowToken = await requestWorkflowOidcToken(required("ACTIONS_ID_TOKEN_REQUEST_URL"), required("ACTIONS_ID_TOKEN_REQUEST_TOKEN"));
+  console.info(JSON.stringify({ outcome: "untrusted_oidc_claim_check_diagnostics", checks: diagnoseProspectComparisonWorkflowToken(workflowToken) }));
   const response = await fetch(endpoint, { method: "POST", redirect: "error", headers: { authorization: `Bearer ${workflowToken}`, "content-type": "application/json" }, body: canonicalJson(comparisonRequest) + "\n", signal: AbortSignal.timeout(120_000) });
   if (!response.ok || Number(response.headers.get("content-length") ?? 0) > 32 * 1024 * 1024) throw Error(`comparison_read_failed_${response.status}`);
   const responseBytes = new Uint8Array(await response.arrayBuffer());

@@ -58,3 +58,17 @@ describe("machine comparison route", () => {
     } finally { audit.mockRestore(); }
   });
 });
+
+
+it.each(["github_oidc_claims_rejected", "unexpected bearer secret"])("audits only an allowlisted authentication reason", async reason => {
+  const audit = vi.spyOn(console, "info").mockImplementation(() => {});
+  try {
+    state.verify.mockRejectedValue(Error(reason));
+    expect((await POST(request())).status).toBe(401);
+    const logged = JSON.stringify(audit.mock.calls);
+    expect(logged).toContain(reason.startsWith("github_oidc_") ? reason : "github_oidc_verification_failed");
+    expect(logged).not.toContain("header.payload.signature");
+    expect(logged).not.toContain("unexpected bearer secret");
+    expect(state.read).not.toHaveBeenCalled();
+  } finally { audit.mockRestore(); }
+});

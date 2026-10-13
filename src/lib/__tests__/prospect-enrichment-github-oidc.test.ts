@@ -1,6 +1,6 @@
 import { generateKeyPairSync, sign } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { PROSPECT_COMPARISON_OIDC_AUDIENCE, PROSPECT_COMPARISON_OIDC_ENVIRONMENT, PROSPECT_COMPARISON_OIDC_WORKFLOW, resetProspectComparisonOidcKeyCacheForTests, verifyProspectComparisonWorkflowToken } from "../prospect-enrichment-github-oidc";
+import { PROSPECT_COMPARISON_OIDC_AUDIENCE, PROSPECT_COMPARISON_OIDC_ENVIRONMENT, PROSPECT_COMPARISON_OIDC_WORKFLOW, resetProspectComparisonOidcKeyCacheForTests, verifyProspectComparisonWorkflowToken, diagnoseProspectComparisonWorkflowToken } from "../prospect-enrichment-github-oidc";
 
 const now = 1_797_000_000_000;
 const keys = generateKeyPairSync("rsa", { modulusLength: 2048 });
@@ -95,5 +95,25 @@ describe("GitHub Actions prospect comparison OIDC", () => {
     const valid = token(), altered = valid.slice(0, -1) + (valid.endsWith("A") ? "B" : "A");
     await expect(verifyProspectComparisonWorkflowToken(altered, { now, fetcher })).rejects.toThrow();
     await expect(verifyProspectComparisonWorkflowToken("Bearer bad", { now, fetcher })).rejects.toThrow();
+  });
+});
+
+
+describe("credential-safe workflow diagnostics", () => {
+  it("exposes fixed check names and booleans only, without token or claim values", () => {
+    const credential = token();
+    const result = diagnoseProspectComparisonWorkflowToken(credential, now);
+    expect(Object.values(result).every(value => typeof value === "boolean")).toBe(true);
+    expect(Object.values(result).every(Boolean)).toBe(true);
+    const logged = JSON.stringify(result);
+    for (const sensitive of [credential, claims().jti, claims().sub, claims().workflow_ref]) expect(logged).not.toContain(sensitive);
+  });
+  it("identifies an exact failed identity condition without granting authentication", async () => {
+    const credential = token({ ...claims(), repository_owner_id: "other-owner" });
+    expect(diagnoseProspectComparisonWorkflowToken(credential, now).repositoryOwnerId).toBe(false);
+    await expect(verifyProspectComparisonWorkflowToken(credential, { now, fetcher })).rejects.toThrow();
+  });
+  it.each(["bad", "", "e30.e30.bad"])("contains malformed input without exposing it", value => {
+    expect(diagnoseProspectComparisonWorkflowToken(value, now)).toEqual({ tokenFormat: false });
   });
 });
