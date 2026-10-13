@@ -132,6 +132,30 @@ describe("Agency follow-up domain", () => {
     ).toEqual([]);
   });
 
+  it("requires dispatch to remain inside the configured local business-day window", () => {
+    const schedulePolicy = {
+      timezone: "America/Toronto",
+      businessDays: [1, 2, 3, 4, 5],
+      localWindowStart: "09:00",
+      localWindowEnd: "17:00",
+    };
+    expect(evaluateAgencyFollowupSend(readyContext({
+      now: "2026-10-13T18:00:00.000Z", // 14:00 Toronto, Tuesday
+      dueAt: "2026-10-13T13:00:00.000Z",
+      schedulePolicy,
+    }))).toEqual([]);
+    expect(evaluateAgencyFollowupSend(readyContext({
+      now: "2026-10-17T16:00:00.000Z", // Saturday in Toronto
+      dueAt: "2026-10-13T13:00:00.000Z",
+      schedulePolicy,
+    }))).toContain("outside_send_window");
+    expect(evaluateAgencyFollowupSend(readyContext({
+      now: "2026-10-13T21:00:00.000Z", // 17:00 Toronto, end is exclusive
+      dueAt: "2026-10-13T13:00:00.000Z",
+      schedulePolicy,
+    }))).toContain("outside_send_window");
+  });
+
   it("uses stable logical message keys and never blindly retries an unknown provider outcome", () => {
     expect(agencyFollowupLogicalMessageKey("enrollment-1", "message-2")).toBe(
       agencyFollowupLogicalMessageKey(" enrollment-1 ", " message-2 "),

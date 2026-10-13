@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 
 const migrationName = "20261013154000_agency_followup_journeys.sql";
 const migration = readFileSync(resolve(process.cwd(), "supabase/migrations", migrationName), "utf8");
+const agencyCrmGrants = readFileSync(resolve(process.cwd(), "supabase/migrations", "20261013230354_agency_crm_service_role_grants.sql"), "utf8");
+const agencyCrmSchema = readFileSync(resolve(process.cwd(), "supabase/migrations", "20260625000001_agency_crm.sql"), "utf8");
 const service = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-service.ts"), "utf8");
 const route = readFileSync(resolve(process.cwd(), "src/app/api/admin/agency-crm/follow-up/route.ts"), "utf8");
 
@@ -68,5 +70,15 @@ describe("Agency follow-up additive migration and service contract", () => {
     expect(service).toContain('.from("prospect_contactability")');
     expect(service).toContain('.from("prospect_activities")');
     expect(service).not.toContain('from("prospect_operations")');
+  });
+
+  it("grants the Agency CRM service client access while keeping public roles revoked", () => {
+    for (const table of ["agency_prospects", "agency_deals", "agency_reminders"]) {
+      expect(agencyCrmSchema).toContain(`ALTER TABLE public.${table} ENABLE ROW LEVEL SECURITY`);
+      expect(agencyCrmSchema).toContain(`ALTER TABLE public.${table} FORCE  ROW LEVEL SECURITY`);
+      expect(agencyCrmGrants).toContain(`REVOKE ALL ON TABLE public.${table} FROM anon, authenticated, PUBLIC`);
+      expect(agencyCrmGrants).toContain(`GRANT ALL ON TABLE public.${table} TO service_role`);
+    }
+    expect(agencyCrmGrants).not.toMatch(/DISABLE\s+ROW LEVEL SECURITY/i);
   });
 });

@@ -90,12 +90,19 @@ export async function dispatchAgencyFollowupBatch(input: {
     const at = input.now;
 
     if (attempt.state === "blocked") {
-      if (attempt.blockers.length === 1 && attempt.blockers[0] === "minimum_spacing_not_elapsed" && context.previousAcceptedAt) {
-        const earliestAt = new Date(Date.parse(context.previousAcceptedAt) + context.minimumSpacingMs).toISOString();
+      const schedulingBlockers = new Set(["outside_send_window", "minimum_spacing_not_elapsed"]);
+      if (attempt.blockers.length > 0 && attempt.blockers.every((reason) => schedulingBlockers.has(reason))) {
+        let earliestMs = Date.parse(input.now);
+        if (attempt.blockers.includes("minimum_spacing_not_elapsed") && context.previousAcceptedAt) {
+          earliestMs = Math.max(earliestMs, Date.parse(context.previousAcceptedAt) + context.minimumSpacingMs);
+        }
+        const earliestAt = new Date(earliestMs).toISOString();
         await input.repository.persistDisposition(claim, {
           state: "scheduled",
           retryAt: scheduleNextAllowed(context, earliestAt),
-          errorCode: "minimum_spacing_rescheduled",
+          errorCode: attempt.blockers.includes("outside_send_window")
+            ? "outside_send_window_rescheduled"
+            : "minimum_spacing_rescheduled",
           at,
         });
         result.retryScheduled += 1;

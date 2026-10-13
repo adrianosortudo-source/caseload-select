@@ -43,6 +43,8 @@
     "test:prospect-enrichment-cli": "node --import tsx --test scripts/prospect-enrichment/__tests__/*.node-test.ts scripts/prospect-enrichment/__tests__/candidate-recovery-gate.node-test.mjs scripts/prospect-enrichment/__tests__/candidate-coverage-backfill-worker.node-test.mjs scripts/prospect-enrichment/__tests__/candidate-reader-repair-gate.node-test.mjs scripts/prospect-enrichment/__tests__/candidate-registration-repair-gate.node-test.mjs",
     "test:prospect-enrichment-integration": "vitest run --config vitest.prospect-enrichment.integration.config.mjs",
     "test:prospect-enrichment-rendered": "playwright test --config playwright.prospect-enrichment.config.ts",
+    "agency-followup:walkthrough": "node --import tsx scripts/agency-followup-walkthrough.ts",
+    "agency-followup:manual": "node --import tsx scripts/agency-followup-walkthrough.ts --manual",
     "drg:deploy": "tsx scripts/drg-deploy/cli.ts",
     "drg:revise-checklists": "tsx scripts/drg-deploy/checklist-revision.ts",
     "prospects:test-batch-pipeline": "node scripts/test-gta-prospect-batch-pipeline.mjs"

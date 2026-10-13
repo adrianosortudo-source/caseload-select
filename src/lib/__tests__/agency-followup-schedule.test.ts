@@ -1,7 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { scheduleAgencyFollowupStep } from "../agency-followup-schedule";
+import { isWithinAgencyFollowupWindow, scheduleAgencyFollowupStep } from "../agency-followup-schedule";
 
 describe("scheduleAgencyFollowupStep", () => {
+  it("checks the complete configured weekday and half-open local time window", () => {
+    const policy = {
+      timezone: "America/Toronto",
+      businessDays: [1, 2, 3, 4, 5],
+      localWindowStart: "09:00",
+      localWindowEnd: "17:00",
+    };
+    expect(isWithinAgencyFollowupWindow("2026-10-13T18:00:00.000Z", policy)).toBe(true);
+    expect(isWithinAgencyFollowupWindow("2026-10-13T21:00:00.000Z", policy)).toBe(false);
+    expect(isWithinAgencyFollowupWindow("2026-10-17T16:00:00.000Z", policy)).toBe(false);
+  });
+
   it("moves a Friday after-window anchor to Monday's local start window", () => {
     expect(
       scheduleAgencyFollowupStep({
