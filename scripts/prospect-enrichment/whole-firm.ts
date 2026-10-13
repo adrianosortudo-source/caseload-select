@@ -1,3 +1,4 @@
+import { readProspectOriginalContent } from "../../src/lib/prospect-enrichment-original-content";
 import { parseProspectEnrichmentEnvelope, type ProspectEnrichmentEnvelope, type JsonValue } from "../../src/lib/prospect-enrichment-contract";
 import type { CompiledPackage } from "./compiler";
 import { validateLegacyAssessmentProjectionClaims, type LegacyAssessmentProjectionClaim } from "./legacy-projections";
@@ -75,11 +76,11 @@ export function compileWholeFirmSnapshot(source: WholeFirmSourceManifest, action
     }
     if (!object(original.standardEnvelope)) { hold("whole_firm_standard_envelope_missing", "The coordinator must provide one explicit standard envelope for this immutable revision."); continue; }
     const subject = object(original.standardEnvelope.subject) ? { ...original.standardEnvelope.subject, identityState: original.standardEnvelope.subject.identityState === "conflict" ? "conflict" : "unresolved" } : original.standardEnvelope.subject;
-    const proposed = { ...original.standardEnvelope, subject, schemaVersion: "prospect-enrichment/v1", runId, packageId: wholeFirmPackageId(runId, expected.researchKey, revision), sourceSystem: WHOLE_FIRM_PROFILE.sourceSystem, sourceName: WHOLE_FIRM_PROFILE.sourceName, generatedAt: source.snapshotAt };
+    const proposed = { ...original.standardEnvelope, subject, schemaVersion: original.standardEnvelope.schemaVersion, runId, packageId: wholeFirmPackageId(runId, expected.researchKey, revision), sourceSystem: WHOLE_FIRM_PROFILE.sourceSystem, sourceName: WHOLE_FIRM_PROFILE.sourceName, generatedAt: source.snapshotAt };
     const parsed = parseProspectEnrichmentEnvelope(proposed);
     if (!parsed.ok) { for (const issue of parsed.issues) hold("hold_schema", issue.path + ": " + issue.message); continue; }
     let envelope: ProspectEnrichmentEnvelope = parsed.envelope;
-    if (envelope.subject.researchKey !== expected.researchKey || protocolHash(envelope.originalResearch.content) !== protocolHash(revision)) { hold("whole_firm_revision_evidence_mismatch", "The envelope must preserve this exact immutable revision content and researchKey."); continue; }
+    if (envelope.subject.researchKey !== expected.researchKey || protocolHash(readProspectOriginalContent(envelope)) !== protocolHash(revision)) { hold("whole_firm_revision_evidence_mismatch", "The envelope must preserve this exact immutable revision content and researchKey."); continue; }
     if (source.originalExport.compilerIdentityClaimPolicy !== undefined) {
       if (!validWholeFirmIdentityClaimPolicy(source.originalExport.compilerIdentityClaimPolicy)) { hold("retained_identity_claim_hold", "Derived claim policy provenance is invalid."); }
       else {

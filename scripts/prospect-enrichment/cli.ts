@@ -1,3 +1,4 @@
+import { readProspectOriginalContent } from "../../src/lib/prospect-enrichment-original-content";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
@@ -228,7 +229,7 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
   if (command === "reconcile") {
     const packages = await jsonl<CompiledPackage>(required(options, "packages")), snapshot = await json<ComparisonSnapshot>(required(options, "snapshot"));
     for (const p of packages) assertEnvelopeProfile(p.envelope, profile);
-    const actions = packages.map(p => reconcilePackage(p, snapshot, { sourceClaimsAccepted: researchClaimsAccepted(p.envelope.originalResearch.content) }));
+    const actions = packages.map(p => reconcilePackage(p, snapshot, { sourceClaimsAccepted: researchClaimsAccepted(readProspectOriginalContent(p.envelope)) }));
     await writeJsonl(privateOutput(required(options, "output")), actions);
     return { packages: actions.length, actions: actions.reduce<Record<string, number>>((counts, a) => { counts[a.action] = (counts[a.action] ?? 0) + 1; return counts; }, {}), networkRequests: 0 };
   }
