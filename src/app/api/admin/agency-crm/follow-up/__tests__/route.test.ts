@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 const h = vi.hoisted(() => {
   const state: { session: { lawyer_id?: string } | null } = { session: null };
   const fns = {
+    getOperatorSession: vi.fn(() => Promise.resolve(state.session)),
     activateAgencyFollowupJourney: vi.fn(() => Promise.resolve()),
     approveAgencyFollowupMessage: vi.fn(() => Promise.resolve()),
     approveAgencyFollowupTemplateVersion: vi.fn(() => Promise.resolve()),
@@ -18,7 +19,7 @@ const h = vi.hoisted(() => {
   return { state, fns };
 });
 
-vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: () => Promise.resolve(h.state.session) }));
+vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: h.fns.getOperatorSession }));
 vi.mock("@/lib/agency-followup-service", () => h.fns);
 
 import { GET, POST } from "../route";
@@ -49,6 +50,7 @@ describe("Agency CRM follow-up API", () => {
     h.state.session = {};
     expect(responseStatus(await GET())).toBe(403);
     expect(h.fns.listAgencyFollowupConsole).not.toHaveBeenCalled();
+    expect(h.fns.getOperatorSession).toHaveBeenCalledTimes(3);
   });
 
   it("rejects bulk or malformed enrollment requests", async () => {

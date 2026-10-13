@@ -21,15 +21,14 @@ function isText(value: unknown, max = 2000): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= max;
 }
 
-async function authorizedActor() {
-  const session = await getOperatorSession();
+function authorizedActor(session: Awaited<ReturnType<typeof getOperatorSession>>) {
   if (!session) return { response: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   if (!session.lawyer_id) return { response: NextResponse.json({ error: "Operator identity is required for audited follow-up actions." }, { status: 403 }) };
   return { actorId: session.lawyer_id };
 }
 
 export async function GET() {
-  const auth = await authorizedActor();
+  const auth = authorizedActor(await getOperatorSession());
   if ("response" in auth) return auth.response;
   try {
     return NextResponse.json(await listAgencyFollowupConsole(), { headers: { "Cache-Control": "no-store" } });
@@ -39,7 +38,7 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const auth = await authorizedActor();
+  const auth = authorizedActor(await getOperatorSession());
   if ("response" in auth) return auth.response;
 
   let body: Record<string, unknown>;
