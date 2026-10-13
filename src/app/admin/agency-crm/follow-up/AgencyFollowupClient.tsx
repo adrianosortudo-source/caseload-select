@@ -4,14 +4,19 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { canApproveAgencyFollowupMessage } from '@/lib/agency-followup-ui';
 
-type Journey = { id: string; name: string; journeyKey: string; version: number; state: string };
+type Journey = {
+  id: string; name: string; journeyKey: string; version: number; state: string;
+  timezone: string; businessDays: number[]; localWindowStart: string; localWindowEnd: string;
+  minimumSpacingHours: number; stepCount: number;
+};
+type TemplateVersion = { id: string; templateKey: string; version: number; state: string; subject: string; body: string };
 type QueueItem = {
   id: string; enrollmentId: string; prospectId: string; firmName: string; prospectStage: string;
   journeyName: string; stepNumber: number; state: string; eligibility: string;
   contactability: string; conversationStatus: string; recipientEmail: string; subject: string;
   body: string; scheduledAt: string | null; blockers: string[]; sequenceReleased: boolean;
 };
-type ConsoleData = { journeys: Journey[]; items: QueueItem[] };
+type ConsoleData = { journeys: Journey[]; templates: TemplateVersion[]; items: QueueItem[] };
 type ProspectMatch = { id: string; firm_name: string; contact_name?: string | null; contact_email?: string | null; stage?: string };
 
 const BLOCKER_LABELS: Record<string, string> = {
@@ -51,6 +56,17 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
   const [error, setError] = useState('');
   const [evidenceByEnrollment, setEvidenceByEnrollment] = useState<Record<string, string>>({});
   const [basisByEnrollment, setBasisByEnrollment] = useState<Record<string, string>>({});
+  const [templateKey, setTemplateKey] = useState('');
+  const [templateSubject, setTemplateSubject] = useState('');
+  const [templateBody, setTemplateBody] = useState('');
+  const [journeyKey, setJourneyKey] = useState('');
+  const [journeyName, setJourneyName] = useState('');
+  const [timezone, setTimezone] = useState('America/Toronto');
+  const [businessDays, setBusinessDays] = useState([1, 2, 3, 4, 5]);
+  const [localWindowStart, setLocalWindowStart] = useState('09:00');
+  const [localWindowEnd, setLocalWindowEnd] = useState('17:00');
+  const [minimumSpacingHours, setMinimumSpacingHours] = useState('168');
+  const [journeySteps, setJourneySteps] = useState([{ templateVersionId: '', delayBusinessDays: '0' }]);
 
   async function act(body: Record<string, unknown>) {
     setBusy(true);
@@ -100,12 +116,111 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
           <p className="mt-2 w-full text-sm leading-6 text-black/65" data-ui-copy="body">
             Review one prospect at a time. Record eligibility, release, and each message approval separately.
           </p>
-          <p className="mt-1 w-full text-sm leading-6 text-black/65" data-ui-copy="supporting">Local review only. No delivery.</p>
+          <p className="mt-1 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]" data-ui-copy="supporting">Approvals enqueue reviewed messages. No live provider is configured.</p>
         </div>
         <a className="shrink-0 text-sm font-semibold text-navy underline" href="/admin/agency-crm">Return to Agency CRM</a>
       </header>
 
       {error && <div role="alert" className="w-full border border-red-200 bg-white px-4 py-3 text-sm text-red-800">{error}</div>}
+
+      <section aria-labelledby="author-title" className="w-full min-w-0 border border-black/10 bg-white p-4 sm:p-5">
+        <div data-ui-component-content="agency-follow-up-authoring" className="w-full min-w-0 space-y-5">
+        <div className="w-full min-w-0">
+          <h2 id="author-title" data-ui-copy="heading" className="w-full text-lg font-semibold text-navy">Author versioned journeys</h2>
+          <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/60 [text-wrap:pretty]">Template content is immutable after creation. New copy or schedule changes create new versions.</p>
+        </div>
+        <form className="grid w-full min-w-0 gap-3 lg:grid-cols-3" onSubmit={async (event) => {
+          event.preventDefault();
+          if (await act({ action: 'template_create', templateKey, subject: templateSubject, body: templateBody })) {
+            setTemplateKey(''); setTemplateSubject(''); setTemplateBody('');
+          }
+        }}>
+          <label className="block min-w-0 text-sm font-medium text-black/80">Template key
+            <input className="mt-1 block w-full min-w-0 border border-black/20 px-3 py-2" value={templateKey} onChange={(event) => setTemplateKey(event.target.value)} placeholder="intro-email" />
+          </label>
+          <label className="block min-w-0 text-sm font-medium text-black/80">Email subject
+            <input className="mt-1 block w-full min-w-0 border border-black/20 px-3 py-2" value={templateSubject} onChange={(event) => setTemplateSubject(event.target.value)} />
+          </label>
+          <label className="block min-w-0 text-sm font-medium text-black/80 lg:col-span-3">Email body
+            <textarea className="mt-1 block w-full min-w-0 border border-black/20 px-3 py-2" rows={4} value={templateBody} onChange={(event) => setTemplateBody(event.target.value)} />
+          </label>
+          <button className="justify-self-start bg-navy px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || !templateKey.trim() || !templateSubject.trim() || !templateBody.trim()}>Create template draft</button>
+        </form>
+
+        {initialData.templates.length > 0 && <div className="grid w-full min-w-0 gap-3 sm:grid-cols-2">
+          {initialData.templates.map((template) => <article key={template.id} className="w-full min-w-0 border border-black/10 p-3">
+            <h3 className="w-full break-words font-semibold text-navy">{template.templateKey} v{template.version} · {prettyState(template.state)}</h3>
+            <p className="mt-1 w-full break-words text-sm text-black/70">{template.subject}</p>
+            <p className="mt-1 w-full whitespace-pre-wrap break-words text-sm leading-6 text-black/60">{template.body}</p>
+            {template.state === 'draft' && <button className="mt-2 text-sm font-semibold text-navy underline disabled:opacity-50" disabled={busy} onClick={() => act({ action: 'template_approve', templateVersionId: template.id })}>Approve template v{template.version}</button>}
+          </article>)}
+        </div>}
+
+        <form className="grid w-full min-w-0 gap-3 border-t border-black/10 pt-4 lg:grid-cols-2" onSubmit={(event) => {
+          event.preventDefault();
+          void act({
+            action: 'journey_create', journeyKey, name: journeyName, timezone,
+            businessDays, localWindowStart, localWindowEnd, minimumSpacingHours: Number(minimumSpacingHours),
+            steps: journeySteps.map((step) => ({ templateVersionId: step.templateVersionId, delayBusinessDays: Number(step.delayBusinessDays) })),
+          });
+        }}>
+          <h3 data-ui-copy="heading" className="w-full text-base font-semibold text-navy lg:col-span-2">Create a journey version</h3>
+          <label className="block min-w-0 text-sm font-medium text-black/80">Journey key
+            <input className="mt-1 block w-full min-w-0 border border-black/20 px-3 py-2" value={journeyKey} onChange={(event) => setJourneyKey(event.target.value)} placeholder="diagnostic-follow-up" />
+          </label>
+          <label className="block min-w-0 text-sm font-medium text-black/80">Journey name
+            <input className="mt-1 block w-full min-w-0 border border-black/20 px-3 py-2" value={journeyName} onChange={(event) => setJourneyName(event.target.value)} />
+          </label>
+          <label className="block min-w-0 text-sm font-medium text-black/80">IANA timezone
+            <input className="mt-1 block w-full min-w-0 border border-black/20 px-3 py-2" value={timezone} onChange={(event) => setTimezone(event.target.value)} placeholder="America/Toronto" />
+          </label>
+          <fieldset className="min-w-0 text-sm text-black/80">
+            <legend className="font-medium">Business days</legend>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-2">
+              {[[1, 'Mon'], [2, 'Tue'], [3, 'Wed'], [4, 'Thu'], [5, 'Fri'], [6, 'Sat'], [7, 'Sun']].map(([day, label]) => <label key={day} className="inline-flex items-center gap-1">
+                <input type="checkbox" checked={businessDays.includes(Number(day))} onChange={() => setBusinessDays((current) => current.includes(Number(day)) ? current.filter((value) => value !== Number(day)) : [...current, Number(day)].sort())} />{label}
+              </label>)}
+            </div>
+          </fieldset>
+          <label className="block min-w-0 text-sm font-medium text-black/80">Local window start
+            <input type="time" className="mt-1 block w-full min-w-0 border border-black/20 px-3 py-2" value={localWindowStart} onChange={(event) => setLocalWindowStart(event.target.value)} />
+          </label>
+          <label className="block min-w-0 text-sm font-medium text-black/80">Local window end
+            <input type="time" className="mt-1 block w-full min-w-0 border border-black/20 px-3 py-2" value={localWindowEnd} onChange={(event) => setLocalWindowEnd(event.target.value)} />
+          </label>
+          <label className="block min-w-0 text-sm font-medium text-black/80">Minimum spacing between scheduled messages, hours
+            <input type="number" min="0" max="8760" className="mt-1 block w-full min-w-0 border border-black/20 px-3 py-2" value={minimumSpacingHours} onChange={(event) => setMinimumSpacingHours(event.target.value)} />
+          </label>
+          <div className="grid w-full min-w-0 gap-2 lg:col-span-2">
+            <p className="w-full text-sm font-medium text-black/80">Ordered steps</p>
+            {journeySteps.map((step, index) => <div key={index} className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_12rem_auto]">
+              <label className="block min-w-0 text-sm text-black/80">Template version
+                <select className="mt-1 block w-full min-w-0 border border-black/20 bg-white px-3 py-2" value={step.templateVersionId} onChange={(event) => setJourneySteps((current) => current.map((item, stepIndex) => stepIndex === index ? { ...item, templateVersionId: event.target.value } : item))}>
+                  <option value="">Choose approved template</option>
+                  {initialData.templates.filter((template) => template.state === 'approved').map((template) => <option key={template.id} value={template.id}>{template.templateKey} v{template.version}</option>)}
+                </select>
+              </label>
+              <label className="block min-w-0 text-sm text-black/80">Delay, business days
+                <input type="number" min="0" max="3650" className="mt-1 block w-full min-w-0 border border-black/20 px-3 py-2" value={step.delayBusinessDays} onChange={(event) => setJourneySteps((current) => current.map((item, stepIndex) => stepIndex === index ? { ...item, delayBusinessDays: event.target.value } : item))} />
+              </label>
+              {journeySteps.length > 1 && <button type="button" className="self-end px-2 py-2 text-sm text-red-800 underline" onClick={() => setJourneySteps((current) => current.filter((_, stepIndex) => stepIndex !== index))}>Remove step</button>}
+            </div>)}
+            <div className="flex flex-wrap gap-3">
+              <button type="button" className="text-sm font-semibold text-navy underline" onClick={() => setJourneySteps((current) => [...current, { templateVersionId: '', delayBusinessDays: '0' }])} disabled={journeySteps.length >= 100}>Add step</button>
+              <button className="bg-navy px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={busy || !journeyKey.trim() || !journeyName.trim() || journeySteps.some((step) => !step.templateVersionId) || initialData.templates.every((template) => template.state !== 'approved')}>Save draft journey version</button>
+            </div>
+          </div>
+        </form>
+
+        {initialData.journeys.length > 0 && <div className="grid w-full min-w-0 gap-2 border-t border-black/10 pt-4">
+          <h3 className="w-full text-base font-semibold text-navy">Journey versions</h3>
+          {initialData.journeys.map((journey) => <div key={journey.id} className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 border border-black/10 p-3">
+            <p className="min-w-0 flex-1 break-words text-sm text-black/80">{journey.name} v{journey.version} · {prettyState(journey.state)} · {journey.timezone} · {journey.businessDays.length} days · {journey.localWindowStart} to {journey.localWindowEnd} · {journey.minimumSpacingHours}h spacing · {journey.stepCount} steps</p>
+            {journey.state === 'draft' && journey.stepCount > 0 && <button className="shrink-0 text-sm font-semibold text-navy underline disabled:opacity-50" disabled={busy} onClick={() => act({ action: 'journey_activate', journeyId: journey.id })}>Activate version</button>}
+          </div>)}
+        </div>}
+        </div>
+      </section>
 
       <section aria-labelledby="enroll-title" className="w-full min-w-0 border border-black/10 bg-white p-4 sm:p-5">
         <div data-ui-component-content="agency-follow-up-enrollment" className="w-full min-w-0">

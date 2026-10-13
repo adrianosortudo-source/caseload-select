@@ -22,10 +22,12 @@ CREATE TABLE public.agency_followup_journeys (
 );
 CREATE INDEX agency_followup_journeys_state_idx
   ON public.agency_followup_journeys (state, journey_key, version DESC);
+CREATE UNIQUE INDEX agency_followup_journeys_one_active_idx
+  ON public.agency_followup_journeys (journey_key)
+  WHERE state = 'active';
 
 CREATE TABLE public.agency_followup_template_versions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  journey_id uuid NOT NULL REFERENCES public.agency_followup_journeys(id) ON DELETE RESTRICT,
   template_key text NOT NULL CHECK (char_length(btrim(template_key)) BETWEEN 1 AND 120),
   version integer NOT NULL CHECK (version > 0),
   channel text NOT NULL DEFAULT 'email' CHECK (channel = 'email'),
@@ -37,11 +39,11 @@ CREATE TABLE public.agency_followup_template_versions (
   approved_at timestamptz NULL,
   created_by_operator_id uuid NOT NULL REFERENCES public.firm_lawyers(id) ON DELETE RESTRICT,
   created_at timestamptz NOT NULL DEFAULT now(),
-  UNIQUE (journey_id, template_key, version),
+  UNIQUE (template_key, version),
   CHECK ((state = 'approved' AND approved_by_operator_id IS NOT NULL AND approved_at IS NOT NULL) OR state <> 'approved')
 );
-CREATE INDEX agency_followup_template_versions_journey_idx
-  ON public.agency_followup_template_versions (journey_id, template_key, version DESC);
+CREATE INDEX agency_followup_template_versions_key_idx
+  ON public.agency_followup_template_versions (template_key, version DESC);
 
 CREATE TABLE public.agency_followup_steps (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -134,9 +136,12 @@ CREATE INDEX agency_followup_messages_enrollment_idx
 
 CREATE TABLE public.agency_followup_events (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  enrollment_id uuid NOT NULL REFERENCES public.agency_followup_enrollments(id) ON DELETE RESTRICT,
+  enrollment_id uuid NULL REFERENCES public.agency_followup_enrollments(id) ON DELETE RESTRICT,
+  journey_id uuid NULL REFERENCES public.agency_followup_journeys(id) ON DELETE RESTRICT,
+  template_version_id uuid NULL REFERENCES public.agency_followup_template_versions(id) ON DELETE RESTRICT,
   message_id uuid NULL REFERENCES public.agency_followup_messages(id) ON DELETE RESTRICT,
   event_type text NOT NULL CHECK (event_type IN (
+    'journey_created', 'journey_activated', 'journey_retired', 'template_created', 'template_approved',
     'enrolled', 'eligibility_changed', 'released', 'paused', 'resumed', 'stopped', 'cancelled',
     'message_changed', 'message_approved', 'message_scheduled', 'message_blocked', 'message_claimed',
     'provider_attempted', 'provider_accepted', 'provider_failed', 'provider_unknown',
@@ -147,13 +152,20 @@ CREATE TABLE public.agency_followup_events (
   event_payload jsonb NOT NULL DEFAULT '{}'::jsonb CHECK (jsonb_typeof(event_payload) = 'object'),
   actor_operator_id uuid NULL REFERENCES public.firm_lawyers(id) ON DELETE RESTRICT,
   occurred_at timestamptz NOT NULL DEFAULT now(),
-  created_at timestamptz NOT NULL DEFAULT now()
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CHECK (enrollment_id IS NOT NULL OR journey_id IS NOT NULL OR template_version_id IS NOT NULL)
 );
 CREATE INDEX agency_followup_events_enrollment_idx
   ON public.agency_followup_events (enrollment_id, occurred_at DESC, id DESC);
 CREATE INDEX agency_followup_events_message_idx
   ON public.agency_followup_events (message_id, occurred_at DESC, id DESC)
   WHERE message_id IS NOT NULL;
+CREATE INDEX agency_followup_events_journey_idx
+  ON public.agency_followup_events (journey_id, occurred_at DESC, id DESC)
+  WHERE journey_id IS NOT NULL;
+CREATE INDEX agency_followup_events_template_idx
+  ON public.agency_followup_events (template_version_id, occurred_at DESC, id DESC)
+  WHERE template_version_id IS NOT NULL;
 
 CREATE OR REPLACE FUNCTION public.reject_agency_followup_event_mutation()
 RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
@@ -171,8 +183,7 @@ BEGIN
   IF TG_OP = 'DELETE' THEN
     RAISE EXCEPTION 'agency follow-up template versions are immutable; create a new version';
   END IF;
-  IF NEW.journey_id IS DISTINCT FROM OLD.journey_id
-     OR NEW.template_key IS DISTINCT FROM OLD.template_key
+  IF NEW.template_key IS DISTINCT FROM OLD.template_key
      OR NEW.version IS DISTINCT FROM OLD.version
      OR NEW.channel IS DISTINCT FROM OLD.channel
      OR NEW.subject IS DISTINCT FROM OLD.subject
@@ -197,6 +208,110 @@ $$;
 CREATE TRIGGER agency_followup_template_versions_no_mutation
   BEFORE UPDATE OR DELETE ON public.agency_followup_template_versions
   FOR EACH ROW EXECUTE FUNCTION public.reject_agency_followup_template_mutation();
+
+CREATE OR REPLACE FUNCTION public.reject_agency_followup_journey_mutation()
+RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.state = 'draft'
+       AND NOT EXISTS (SELECT 1 FROM public.agency_followup_enrollments WHERE journey_id = OLD.id)
+       AND NOT EXISTS (SELECT 1 FROM public.agency_followup_events WHERE journey_id = OLD.id) THEN
+      RETURN OLD;
+    END IF;
+    RAISE EXCEPTION 'agency follow-up journey versions are immutable';
+  END IF;
+  IF NEW.journey_key IS DISTINCT FROM OLD.journey_key
+     OR NEW.version IS DISTINCT FROM OLD.version
+     OR NEW.name IS DISTINCT FROM OLD.name
+     OR NEW.timezone IS DISTINCT FROM OLD.timezone
+     OR NEW.business_days IS DISTINCT FROM OLD.business_days
+     OR NEW.local_window_start IS DISTINCT FROM OLD.local_window_start
+     OR NEW.local_window_end IS DISTINCT FROM OLD.local_window_end
+     OR NEW.minimum_spacing_hours IS DISTINCT FROM OLD.minimum_spacing_hours
+     OR NEW.created_by_operator_id IS DISTINCT FROM OLD.created_by_operator_id
+     OR NEW.created_at IS DISTINCT FROM OLD.created_at THEN
+    RAISE EXCEPTION 'agency follow-up journey configuration is immutable; create a new version';
+  END IF;
+  IF NOT ((OLD.state = 'draft' AND NEW.state = 'active') OR
+          (OLD.state = 'active' AND NEW.state = 'retired') OR OLD.state = NEW.state) THEN
+    RAISE EXCEPTION 'invalid agency follow-up journey state transition';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+CREATE TRIGGER agency_followup_journeys_version_immutable
+  BEFORE UPDATE OR DELETE ON public.agency_followup_journeys
+  FOR EACH ROW EXECUTE FUNCTION public.reject_agency_followup_journey_mutation();
+
+CREATE OR REPLACE FUNCTION public.reject_agency_followup_step_mutation()
+RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF EXISTS (SELECT 1 FROM public.agency_followup_journeys WHERE id = OLD.journey_id AND state = 'draft')
+       AND NOT EXISTS (SELECT 1 FROM public.agency_followup_enrollments WHERE journey_id = OLD.journey_id) THEN
+      RETURN OLD;
+    END IF;
+  END IF;
+  RAISE EXCEPTION 'agency follow-up journey steps are immutable; create a new journey version';
+END;
+$$;
+CREATE TRIGGER agency_followup_steps_immutable
+  BEFORE UPDATE OR DELETE ON public.agency_followup_steps
+  FOR EACH ROW EXECUTE FUNCTION public.reject_agency_followup_step_mutation();
+
+-- Only a draft journey with approved immutable templates can become active.
+-- The unique partial index enforces one active version per journey key.
+CREATE OR REPLACE FUNCTION public.activate_agency_followup_journey(p_journey_id uuid, p_actor_operator_id uuid)
+RETURNS public.agency_followup_journeys
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = ''
+AS $$
+DECLARE
+  target public.agency_followup_journeys;
+BEGIN
+  SELECT * INTO target
+  FROM public.agency_followup_journeys
+  WHERE id = p_journey_id
+  FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'journey version not found'; END IF;
+  IF target.state <> 'draft' THEN RAISE EXCEPTION 'only a draft journey version can be activated'; END IF;
+  IF p_actor_operator_id IS NULL THEN RAISE EXCEPTION 'operator identity is required'; END IF;
+  IF NOT EXISTS (SELECT 1 FROM public.agency_followup_steps WHERE journey_id = target.id) THEN
+    RAISE EXCEPTION 'journey needs at least one step';
+  END IF;
+  IF EXISTS (
+    SELECT 1
+    FROM public.agency_followup_steps step
+    JOIN public.agency_followup_template_versions template_version
+      ON template_version.id = step.template_version_id
+    WHERE step.journey_id = target.id AND template_version.state <> 'approved'
+  ) THEN
+    RAISE EXCEPTION 'every journey step must use an approved template version';
+  END IF;
+  WITH retired AS (
+    UPDATE public.agency_followup_journeys
+  SET state = 'retired', updated_at = now()
+    WHERE journey_key = target.journey_key AND state = 'active'
+    RETURNING id, journey_key, version
+  )
+  INSERT INTO public.agency_followup_events (journey_id, event_type, idempotency_key, event_payload, actor_operator_id)
+  SELECT retired.id, 'journey_retired', 'journey-retired:' || retired.id::text,
+         jsonb_build_object('journeyKey', retired.journey_key, 'version', retired.version), p_actor_operator_id
+  FROM retired
+  ON CONFLICT (idempotency_key) DO NOTHING;
+  UPDATE public.agency_followup_journeys
+  SET state = 'active', updated_at = now()
+  WHERE id = target.id
+  RETURNING * INTO target;
+  INSERT INTO public.agency_followup_events (journey_id, event_type, idempotency_key, event_payload, actor_operator_id)
+  VALUES (target.id, 'journey_activated', 'journey-activated:' || target.id::text,
+          jsonb_build_object('journeyKey', target.journey_key, 'version', target.version, 'activatedAt', target.updated_at),
+          p_actor_operator_id)
+  ON CONFLICT (idempotency_key) DO NOTHING;
+  RETURN target;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.invalidate_agency_followup_message_approval()
 RETURNS trigger LANGUAGE plpgsql SET search_path = '' AS $$
@@ -236,7 +351,7 @@ CREATE OR REPLACE FUNCTION public.claim_agency_followup_messages(
 )
 RETURNS SETOF public.agency_followup_messages
 LANGUAGE plpgsql
-SECURITY DEFINER
+SECURITY INVOKER
 SET search_path = ''
 AS $$
 BEGIN
@@ -246,10 +361,18 @@ BEGIN
   IF p_lease_seconds NOT BETWEEN 10 AND 900 THEN RAISE EXCEPTION 'invalid lease duration'; END IF;
   IF p_limit NOT BETWEEN 1 AND 100 THEN RAISE EXCEPTION 'invalid claim limit'; END IF;
 
-  UPDATE public.agency_followup_messages
-  SET state = 'unknown', unknown_since = p_now, last_error_code = 'lease_expired_outcome_unknown',
-      lease_owner = NULL, lease_until = NULL, updated_at = p_now
-  WHERE state = 'claimed' AND lease_until <= p_now;
+  WITH expired AS (
+    UPDATE public.agency_followup_messages
+    SET state = 'unknown', unknown_since = p_now, last_error_code = 'lease_expired_outcome_unknown',
+        lease_owner = NULL, lease_until = NULL, updated_at = p_now
+    WHERE state = 'claimed' AND lease_until <= p_now
+    RETURNING id, enrollment_id
+  )
+  INSERT INTO public.agency_followup_events (enrollment_id, message_id, event_type, idempotency_key, event_payload)
+  SELECT expired.enrollment_id, expired.id, 'provider_unknown', 'lease-expired:' || expired.id::text,
+         jsonb_build_object('reason', 'lease_expired_outcome_unknown', 'observedAt', p_now)
+  FROM expired
+  ON CONFLICT (idempotency_key) DO NOTHING;
 
   RETURN QUERY
   WITH candidates AS (
@@ -297,3 +420,5 @@ GRANT ALL ON public.agency_followup_messages TO service_role;
 GRANT SELECT, INSERT ON public.agency_followup_events TO service_role;
 REVOKE ALL ON FUNCTION public.claim_agency_followup_messages(text, timestamptz, integer, integer) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_agency_followup_messages(text, timestamptz, integer, integer) TO service_role;
+REVOKE ALL ON FUNCTION public.activate_agency_followup_journey(uuid, uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.activate_agency_followup_journey(uuid, uuid) TO service_role;

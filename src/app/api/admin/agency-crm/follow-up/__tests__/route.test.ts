@@ -4,9 +4,13 @@ import { NextRequest } from "next/server";
 const h = vi.hoisted(() => {
   const state: { session: { lawyer_id?: string } | null } = { session: null };
   const fns = {
+    activateAgencyFollowupJourney: vi.fn(() => Promise.resolve()),
     approveAgencyFollowupMessage: vi.fn(() => Promise.resolve()),
+    approveAgencyFollowupTemplateVersion: vi.fn(() => Promise.resolve()),
+    createAgencyFollowupJourneyVersion: vi.fn(() => Promise.resolve({ journeyId: "j", version: 1 })),
     createAgencyFollowupEnrollment: vi.fn(() => Promise.resolve({ enrollmentId: "e", messageCount: 1 })),
-    listAgencyFollowupConsole: vi.fn(() => Promise.resolve({ journeys: [], items: [] })),
+    createAgencyFollowupTemplateVersion: vi.fn(() => Promise.resolve({ templateVersionId: "t", version: 1 })),
+    listAgencyFollowupConsole: vi.fn(() => Promise.resolve({ journeys: [], templates: [], items: [] })),
     pauseAgencyFollowupEnrollment: vi.fn(() => Promise.resolve()),
     releaseAgencyFollowupEnrollment: vi.fn(() => Promise.resolve()),
     setAgencyFollowupEligibility: vi.fn(() => Promise.resolve()),
@@ -66,5 +70,33 @@ describe("Agency CRM follow-up API", () => {
     expect(responseStatus(await POST(request("POST", { action: "release", enrollmentId: ID, basis: " " })))).toBe(400);
     expect(h.fns.setAgencyFollowupEligibility).not.toHaveBeenCalled();
     expect(h.fns.releaseAgencyFollowupEnrollment).not.toHaveBeenCalled();
+  });
+
+  it("creates reusable template versions and attributes approval to the operator", async () => {
+    h.state.session = { lawyer_id: ID };
+    const created = await POST(request("POST", { action: "template_create", templateKey: "intro", subject: "Subject", body: "Body" }));
+    expect(responseStatus(created)).toBe(201);
+    expect(h.fns.createAgencyFollowupTemplateVersion).toHaveBeenCalledWith({ templateKey: "intro", subject: "Subject", body: "Body", actorId: ID });
+    expect(responseStatus(await POST(request("POST", { action: "template_approve", templateVersionId: ID })))).toBe(200);
+    expect(h.fns.approveAgencyFollowupTemplateVersion).toHaveBeenCalledWith({ templateVersionId: ID, actorId: ID });
+  });
+
+  it("validates schedule configuration and ordered approved-template step inputs", async () => {
+    h.state.session = { lawyer_id: ID };
+    const response = await POST(request("POST", {
+      action: "journey_create", journeyKey: "diagnostic", name: "Diagnostic", timezone: "America/Toronto",
+      businessDays: [1, 2, 3, 4, 5], localWindowStart: "09:00", localWindowEnd: "17:00", minimumSpacingHours: 168,
+      steps: [{ templateVersionId: ID, delayBusinessDays: 0 }],
+    }));
+    expect(responseStatus(response)).toBe(201);
+    expect(h.fns.createAgencyFollowupJourneyVersion).toHaveBeenCalledWith({
+      journeyKey: "diagnostic", name: "Diagnostic",
+      schedule: { timezone: "America/Toronto", businessDays: [1, 2, 3, 4, 5], localWindowStart: "09:00", localWindowEnd: "17:00", minimumSpacingHours: 168 },
+      steps: [{ templateVersionId: ID, delayBusinessDays: 0 }], actorId: ID,
+    });
+    expect(responseStatus(await POST(request("POST", {
+      action: "journey_activate", journeyId: ID,
+    })))).toBe(200);
+    expect(h.fns.activateAgencyFollowupJourney).toHaveBeenCalledWith({ journeyId: ID, actorId: ID });
   });
 });

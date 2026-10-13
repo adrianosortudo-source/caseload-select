@@ -3,6 +3,20 @@ import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { scheduleAgencyFollowupStep } from "@/lib/agency-followup-schedule";
 import {
+  createAgencyFollowupContentSnapshot,
+  nextAgencyFollowupVersion,
+  validateAgencyFollowupSchedulePolicy,
+  validateAgencyFollowupStepDrafts,
+  type AgencyFollowupSchedulePolicy,
+  type AgencyFollowupStepDraft,
+} from "@/lib/agency-followup-authoring";
+import { FakeAgencyFollowupProvider } from "@/lib/agency-followup-provider";
+import {
+  dispatchAgencyFollowupBatch,
+  type AgencyFollowupClaim,
+  type AgencyFollowupWorkerDisposition,
+} from "@/lib/agency-followup-worker";
+import {
   agencyFollowupContentHash,
   agencyFollowupLogicalMessageKey,
   agencyFollowupRecipientHash,
@@ -41,7 +55,12 @@ export interface AgencyFollowupQueueItem {
 }
 
 export interface AgencyFollowupConsoleData {
-  journeys: Array<{ id: string; name: string; journeyKey: string; version: number; state: string }>;
+  journeys: Array<{
+    id: string; name: string; journeyKey: string; version: number; state: string;
+    timezone: string; businessDays: number[]; localWindowStart: string; localWindowEnd: string;
+    minimumSpacingHours: number; stepCount: number;
+  }>;
+  templates: Array<{ id: string; templateKey: string; version: number; state: string; subject: string; body: string }>;
   items: AgencyFollowupQueueItem[];
 }
 
@@ -199,26 +218,35 @@ function makeSendContext(
     now: new Date().toISOString(),
     previousAcceptedAt,
     minimumSpacingMs: Number(journey.minimum_spacing_hours) * 60 * 60 * 1000,
+    schedulePolicy: {
+      timezone: String(journey.timezone),
+      businessDays: (journey.business_days as number[]).map(Number),
+      localWindowStart: String(journey.local_window_start).slice(0, 5),
+    },
     cancelled: ["paused", "stopped", "completed", "cancelled"].includes(String(enrollment.state)) ||
       ["cancelled", "blocked", "failed", "unknown"].includes(String(message.state)),
   };
 }
 
 async function appendAuditEvent(input: {
-  enrollmentId: string;
+  enrollmentId?: string | null;
+  journeyId?: string | null;
+  templateVersionId?: string | null;
   messageId?: string | null;
   eventType: string;
   idempotencyKey: string;
   payload: Record<string, unknown>;
-  actorId: string;
+  actorId?: string | null;
 }): Promise<void> {
   const { error } = await supabase.from("agency_followup_events").insert({
-    enrollment_id: input.enrollmentId,
+    enrollment_id: input.enrollmentId ?? null,
+    journey_id: input.journeyId ?? null,
+    template_version_id: input.templateVersionId ?? null,
     message_id: input.messageId ?? null,
     event_type: input.eventType,
     idempotency_key: input.idempotencyKey,
     event_payload: input.payload,
-    actor_operator_id: input.actorId,
+    actor_operator_id: input.actorId ?? null,
   });
   if (error && !/duplicate key|unique/i.test(error.message)) throw new Error(`Unable to write follow-up audit event: ${error.message}`);
 }
@@ -240,17 +268,30 @@ async function assertClearForReview(enrollment: DbRow, prospect: DbRow): Promise
 }
 
 export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsoleData> {
-  const [journeysResult, enrollmentsResult] = await Promise.all([
-    supabase.from("agency_followup_journeys").select("id,name,journey_key,version,state").order("updated_at", { ascending: false }),
+  const [journeysResult, enrollmentsResult, templatesResult, stepsResult] = await Promise.all([
+    supabase.from("agency_followup_journeys").select("*").order("updated_at", { ascending: false }),
     supabase.from("agency_followup_enrollments").select("*").order("updated_at", { ascending: false }).limit(300),
+    supabase.from("agency_followup_template_versions").select("id,template_key,version,state,subject,body").order("template_key").order("version", { ascending: false }),
+    supabase.from("agency_followup_steps").select("journey_id"),
   ]);
   const journeys = assertResult(journeysResult, "Unable to load follow-up journeys") as DbRow[];
   const enrollments = assertResult(enrollmentsResult, "Unable to load follow-up enrollments") as DbRow[];
+  const templates = assertResult(templatesResult, "Unable to load follow-up templates") as DbRow[];
+  const steps = assertResult(stepsResult, "Unable to load follow-up journey steps") as DbRow[];
+  const stepCountByJourney = new Map<string, number>();
+  for (const step of steps) stepCountByJourney.set(String(step.journey_id), (stepCountByJourney.get(String(step.journey_id)) ?? 0) + 1);
+  const journeyItems = journeys.map((row) => ({
+    id: String(row.id), name: String(row.name), journeyKey: String(row.journey_key), version: Number(row.version), state: String(row.state),
+    timezone: String(row.timezone), businessDays: (row.business_days as number[]).map(Number),
+    localWindowStart: String(row.local_window_start).slice(0, 5), localWindowEnd: String(row.local_window_end).slice(0, 5),
+    minimumSpacingHours: Number(row.minimum_spacing_hours), stepCount: stepCountByJourney.get(String(row.id)) ?? 0,
+  }));
+  const templateItems = templates.map((row) => ({
+    id: String(row.id), templateKey: String(row.template_key), version: Number(row.version), state: String(row.state),
+    subject: String(row.subject), body: String(row.body),
+  }));
   if (enrollments.length === 0) {
-    return {
-      journeys: journeys.map((row) => ({ id: row.id, name: row.name, journeyKey: row.journey_key, version: row.version, state: row.state })),
-      items: [],
-    };
+    return { journeys: journeyItems, templates: templateItems, items: [] };
   }
 
   const enrollmentIds = enrollments.map((row) => String(row.id));
@@ -311,9 +352,134 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
     };
   }));
   return {
-    journeys: journeys.map((row) => ({ id: row.id, name: row.name, journeyKey: row.journey_key, version: row.version, state: row.state })),
+    journeys: journeyItems,
+    templates: templateItems,
     items,
   };
+}
+
+export async function createAgencyFollowupTemplateVersion(input: {
+  templateKey: string;
+  subject: string;
+  body: string;
+  actorId: string;
+}): Promise<{ templateVersionId: string; version: number }> {
+  const templateKey = input.templateKey.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9._-]{0,119}$/.test(templateKey)) throw new Error("Template key must use letters, numbers, dots, underscores, or hyphens.");
+  const snapshot = createAgencyFollowupContentSnapshot(input.subject, input.body);
+  const priorResult = await supabase.from("agency_followup_template_versions").select("version")
+    .eq("template_key", templateKey).order("version", { ascending: false }).limit(100);
+  const priorVersions = assertResult(priorResult, "Unable to read template versions") as DbRow[];
+  const version = nextAgencyFollowupVersion(priorVersions.map((row) => Number(row.version)));
+  const inserted = await supabase.from("agency_followup_template_versions").insert({
+    template_key: templateKey,
+    version,
+    channel: snapshot.content.channel,
+    subject: snapshot.content.subject,
+    body: snapshot.content.body,
+    content_sha256: snapshot.contentSha256,
+    state: "draft",
+    created_by_operator_id: input.actorId,
+  }).select("id").single();
+  if (inserted.error) throw new Error(`Unable to create template version: ${inserted.error.message}`);
+  const templateVersionId = String((inserted.data as DbRow).id);
+  await appendAuditEvent({
+    templateVersionId,
+    eventType: "template_created",
+    idempotencyKey: `template-created:${templateVersionId}`,
+    payload: { templateKey, version, contentSha256: snapshot.contentSha256 },
+    actorId: input.actorId,
+  });
+  return { templateVersionId, version };
+}
+
+export async function approveAgencyFollowupTemplateVersion(input: {
+  templateVersionId: string;
+  actorId: string;
+}): Promise<void> {
+  const reviewedAt = new Date().toISOString();
+  const updated = await supabase.from("agency_followup_template_versions").update({
+    state: "approved",
+    approved_by_operator_id: input.actorId,
+    approved_at: reviewedAt,
+  }).eq("id", input.templateVersionId).eq("state", "draft").select("id,template_key,version,content_sha256").single();
+  if (updated.error) throw new Error(`Unable to approve template version: ${updated.error.message}`);
+  const row = updated.data as DbRow;
+  await appendAuditEvent({
+    templateVersionId: input.templateVersionId,
+    eventType: "template_approved",
+    idempotencyKey: `template-approved:${input.templateVersionId}:${input.actorId}`,
+    payload: { templateKey: row.template_key, version: row.version, contentSha256: row.content_sha256, reviewerId: input.actorId, reviewedAt },
+    actorId: input.actorId,
+  });
+}
+
+export async function createAgencyFollowupJourneyVersion(input: {
+  journeyKey: string;
+  name: string;
+  schedule: AgencyFollowupSchedulePolicy;
+  steps: AgencyFollowupStepDraft[];
+  actorId: string;
+}): Promise<{ journeyId: string; version: number }> {
+  const journeyKey = input.journeyKey.trim().toLowerCase();
+  const name = input.name.trim();
+  if (!/^[a-z0-9][a-z0-9._-]{0,119}$/.test(journeyKey)) throw new Error("Journey key must use letters, numbers, dots, underscores, or hyphens.");
+  if (!name || name.length > 240) throw new Error("Journey name is required and must be at most 240 characters.");
+  validateAgencyFollowupSchedulePolicy(input.schedule);
+  validateAgencyFollowupStepDrafts(input.steps);
+  const templateIds = input.steps.map((step) => step.templateVersionId);
+  const templateResult = await supabase.from("agency_followup_template_versions").select("id,state")
+    .in("id", templateIds).eq("state", "approved");
+  const approvedTemplates = assertResult(templateResult, "Unable to verify approved templates") as DbRow[];
+  if (new Set(approvedTemplates.map((row) => String(row.id))).size !== new Set(templateIds).size) {
+    throw new Error("Every step must reference an approved template version.");
+  }
+  const versionsResult = await supabase.from("agency_followup_journeys").select("version")
+    .eq("journey_key", journeyKey).order("version", { ascending: false }).limit(100);
+  const versions = assertResult(versionsResult, "Unable to read journey versions") as DbRow[];
+  const version = nextAgencyFollowupVersion(versions.map((row) => Number(row.version)));
+  const inserted = await supabase.from("agency_followup_journeys").insert({
+    journey_key: journeyKey,
+    version,
+    name,
+    state: "draft",
+    timezone: input.schedule.timezone,
+    business_days: input.schedule.businessDays,
+    local_window_start: input.schedule.localWindowStart,
+    local_window_end: input.schedule.localWindowEnd,
+    minimum_spacing_hours: input.schedule.minimumSpacingHours,
+    created_by_operator_id: input.actorId,
+  }).select("id").single();
+  if (inserted.error) throw new Error(`Unable to create journey version: ${inserted.error.message}`);
+  const journeyId = String((inserted.data as DbRow).id);
+  const stepRows = input.steps.map((step, index) => ({
+    journey_id: journeyId,
+    step_number: index + 1,
+    template_version_id: step.templateVersionId,
+    delay_business_days: step.delayBusinessDays,
+  }));
+  const createdSteps = await supabase.from("agency_followup_steps").insert(stepRows);
+  if (createdSteps.error) {
+    await supabase.from("agency_followup_steps").delete().eq("journey_id", journeyId);
+    await supabase.from("agency_followup_journeys").delete().eq("id", journeyId);
+    throw new Error(`Unable to create journey steps: ${createdSteps.error.message}`);
+  }
+  await appendAuditEvent({
+    journeyId,
+    eventType: "journey_created",
+    idempotencyKey: `journey-created:${journeyId}`,
+    payload: { journeyKey, version, name, stepCount: stepRows.length, schedule: input.schedule },
+    actorId: input.actorId,
+  });
+  return { journeyId, version };
+}
+
+export async function activateAgencyFollowupJourney(input: { journeyId: string; actorId: string }): Promise<void> {
+  const activation = await supabase.rpc("activate_agency_followup_journey", {
+    p_journey_id: input.journeyId,
+    p_actor_operator_id: input.actorId,
+  });
+  if (activation.error) throw new Error(`Unable to activate journey version: ${activation.error.message}`);
 }
 
 export async function createAgencyFollowupEnrollment(input: {
@@ -509,7 +675,7 @@ export async function approveAgencyFollowupMessage(input: {
 
   const reviewedAt = new Date().toISOString();
   const update = await supabase.from("agency_followup_messages").update({
-    state: "approved",
+    state: "scheduled",
     approved_content_sha256: contentHash,
     approved_recipient_sha256: recipientHash,
     reviewed_by_operator_id: input.actorId,
@@ -522,6 +688,14 @@ export async function approveAgencyFollowupMessage(input: {
     eventType: "message_approved",
     idempotencyKey: `message-approved:${input.messageId}:${contentHash}:${recipientHash}`,
     payload: { contentSha256: contentHash, recipientSha256: recipientHash, reviewerId: input.actorId, reviewedAt },
+    actorId: input.actorId,
+  });
+  await appendAuditEvent({
+    enrollmentId: input.enrollmentId,
+    messageId: input.messageId,
+    eventType: "message_scheduled",
+    idempotencyKey: `message-scheduled:${input.messageId}:${message.scheduled_at}`,
+    payload: { scheduledAt: message.scheduled_at, logicalMessageKey: message.logical_message_key },
     actorId: input.actorId,
   });
 }
@@ -547,5 +721,96 @@ export async function pauseAgencyFollowupEnrollment(input: {
     idempotencyKey: `paused:${input.enrollmentId}:${input.actorId}:${Date.now()}`,
     payload: { reason: input.reason.trim() },
     actorId: input.actorId,
+  });
+}
+
+const fakeFollowupProvider = new FakeAgencyFollowupProvider();
+
+/** Local-only deterministic dispatcher. This adapter has no real provider path. */
+export async function runFakeAgencyFollowupDispatcher(input: {
+  workerId: string;
+  now?: string;
+  leaseSeconds?: number;
+  limit?: number;
+}): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
+  if (!input.workerId.trim()) throw new Error("A worker id is required.");
+  const now = input.now ?? new Date().toISOString();
+  const repository = {
+    async claimDueMessages(claimInput: { workerId: string; now: string; leaseSeconds: number; limit: number }): Promise<AgencyFollowupClaim[]> {
+      const result = await supabase.rpc("claim_agency_followup_messages", {
+        p_worker_id: claimInput.workerId,
+        p_now: claimInput.now,
+        p_lease_seconds: claimInput.leaseSeconds,
+        p_limit: claimInput.limit,
+      });
+      if (result.error) throw new Error(`Unable to claim due fake-provider messages: ${result.error.message}`);
+      return (result.data as DbRow[]).map((row) => ({
+        id: String(row.id),
+        enrollmentId: String(row.enrollment_id),
+        attemptCount: Number(row.attempt_count),
+        leaseOwner: String(row.lease_owner),
+      }));
+    },
+    async loadCurrentSendContext(claim: AgencyFollowupClaim, attemptAt: string): Promise<AgencyFollowupSendContext> {
+      const records = await loadCurrentRecords(claim.enrollmentId, claim.id);
+      const operations = await loadOperationsState(String(records.prospect.id));
+      const previousAcceptedAt = records.messages
+        .filter((row) => Number(row.step_number) < Number(records.message!.step_number) && row.provider_accepted_at)
+        .map((row) => String(row.provider_accepted_at))
+        .sort((left, right) => Date.parse(right) - Date.parse(left))[0] ?? null;
+      const context = makeSendContext(records.enrollment, records.prospect, records.journey, records.message!, operations, previousAcceptedAt);
+      context.now = attemptAt;
+      const expectedKey = agencyFollowupLogicalMessageKey(claim.enrollmentId, claim.id);
+      if (records.message!.provider_idempotency_key !== expectedKey || records.message!.logical_message_key !== expectedKey) {
+        context.cancelled = true;
+      }
+      return context;
+    },
+    async persistDisposition(claim: AgencyFollowupClaim, disposition: AgencyFollowupWorkerDisposition): Promise<void> {
+      const patch: DbRow = { lease_owner: null, lease_until: null, updated_at: disposition.at };
+      let eventType: string;
+      let payload: Record<string, unknown>;
+      if (disposition.state === "blocked") {
+        Object.assign(patch, { state: "blocked", scheduled_at: null, last_error_code: disposition.blockers.join(",").slice(0, 300), unknown_since: null });
+        eventType = "message_blocked";
+        payload = { blockers: disposition.blockers, checkedAt: disposition.at };
+      } else if (disposition.state === "accepted") {
+        Object.assign(patch, { state: "accepted", provider_message_id: disposition.providerMessageId, provider_accepted_at: disposition.acceptedAt, last_error_code: null, unknown_since: null });
+        eventType = "provider_accepted";
+        payload = { providerMessageId: disposition.providerMessageId, acceptedAt: disposition.acceptedAt };
+      } else if (disposition.state === "scheduled") {
+        Object.assign(patch, { state: "scheduled", scheduled_at: disposition.retryAt, last_error_code: disposition.errorCode.slice(0, 300), unknown_since: null });
+        eventType = "provider_attempted";
+        payload = { retryAt: disposition.retryAt, errorCode: disposition.errorCode, sameIdempotencyKey: true };
+      } else if (disposition.state === "failed") {
+        Object.assign(patch, { state: "failed", scheduled_at: null, last_error_code: disposition.errorCode.slice(0, 300), unknown_since: null });
+        eventType = "provider_failed";
+        payload = { errorCode: disposition.errorCode };
+      } else {
+        Object.assign(patch, { state: "unknown", scheduled_at: null, last_error_code: disposition.detail.slice(0, 300), unknown_since: disposition.at });
+        eventType = "provider_unknown";
+        payload = { detail: disposition.detail, automaticRetry: false };
+      }
+      const update = await supabase.from("agency_followup_messages").update(patch)
+        .eq("id", claim.id).eq("state", "claimed").eq("lease_owner", claim.leaseOwner).select("id").maybeSingle();
+      if (update.error) throw new Error(`Unable to persist fake-provider outcome: ${update.error.message}`);
+      if (!update.data) throw new Error("The worker lease expired or changed before outcome persistence.");
+      await appendAuditEvent({
+        enrollmentId: claim.enrollmentId,
+        messageId: claim.id,
+        eventType,
+        idempotencyKey: `worker:${claim.id}:${claim.attemptCount}:${eventType}`,
+        payload: { ...payload, attemptCount: claim.attemptCount, workerId: claim.leaseOwner },
+      });
+    },
+  };
+
+  return dispatchAgencyFollowupBatch({
+    repository,
+    provider: fakeFollowupProvider,
+    workerId: input.workerId,
+    now,
+    leaseSeconds: input.leaseSeconds,
+    limit: input.limit,
   });
 }

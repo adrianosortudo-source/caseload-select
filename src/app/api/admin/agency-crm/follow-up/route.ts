@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOperatorSession } from "@/lib/portal-auth";
 import {
+  activateAgencyFollowupJourney,
   approveAgencyFollowupMessage,
+  approveAgencyFollowupTemplateVersion,
+  createAgencyFollowupJourneyVersion,
   createAgencyFollowupEnrollment,
+  createAgencyFollowupTemplateVersion,
   listAgencyFollowupConsole,
   pauseAgencyFollowupEnrollment,
   releaseAgencyFollowupEnrollment,
@@ -53,6 +57,58 @@ export async function POST(request: NextRequest) {
         }
         const result = await createAgencyFollowupEnrollment({ journeyId: body.journeyId, prospectId: body.prospectId, actorId: auth.actorId });
         return NextResponse.json(result, { status: 201 });
+      }
+      case "template_create": {
+        if (!isText(body.templateKey, 120) || !isText(body.subject, 1000) || !isText(body.body, 20000)) {
+          return NextResponse.json({ error: "Provide a template key, subject, and body within the supported lengths." }, { status: 400 });
+        }
+        const result = await createAgencyFollowupTemplateVersion({
+          templateKey: body.templateKey,
+          subject: body.subject,
+          body: body.body,
+          actorId: auth.actorId,
+        });
+        return NextResponse.json(result, { status: 201 });
+      }
+      case "template_approve": {
+        if (!isText(body.templateVersionId, 100) || !UUID.test(body.templateVersionId)) {
+          return NextResponse.json({ error: "Choose one template version to approve." }, { status: 400 });
+        }
+        await approveAgencyFollowupTemplateVersion({ templateVersionId: body.templateVersionId, actorId: auth.actorId });
+        break;
+      }
+      case "journey_create": {
+        if (!isText(body.journeyKey, 120) || !isText(body.name, 240) || !isText(body.timezone, 120) ||
+            !isText(body.localWindowStart, 5) || !isText(body.localWindowEnd, 5) ||
+            !Array.isArray(body.businessDays) || !Array.isArray(body.steps) ||
+            typeof body.minimumSpacingHours !== "number") {
+          return NextResponse.json({ error: "Provide journey identity, schedule settings, and ordered steps." }, { status: 400 });
+        }
+        const steps = body.steps.map((step) => {
+          const value = step && typeof step === "object" ? step as Record<string, unknown> : {};
+          return { templateVersionId: String(value.templateVersionId ?? ""), delayBusinessDays: Number(value.delayBusinessDays) };
+        });
+        const result = await createAgencyFollowupJourneyVersion({
+          journeyKey: body.journeyKey,
+          name: body.name,
+          schedule: {
+            timezone: body.timezone,
+            businessDays: body.businessDays.map(Number),
+            localWindowStart: body.localWindowStart,
+            localWindowEnd: body.localWindowEnd,
+            minimumSpacingHours: body.minimumSpacingHours,
+          },
+          steps,
+          actorId: auth.actorId,
+        });
+        return NextResponse.json(result, { status: 201 });
+      }
+      case "journey_activate": {
+        if (!isText(body.journeyId, 100) || !UUID.test(body.journeyId)) {
+          return NextResponse.json({ error: "Choose one draft journey version to activate." }, { status: 400 });
+        }
+        await activateAgencyFollowupJourney({ journeyId: body.journeyId, actorId: auth.actorId });
+        break;
       }
       case "eligibility": {
         if (!isText(body.enrollmentId, 100) || !UUID.test(body.enrollmentId) ||

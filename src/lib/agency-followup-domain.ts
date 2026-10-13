@@ -54,6 +54,7 @@ export interface AgencyFollowupSendContext {
   now: string;
   previousAcceptedAt: string | null;
   minimumSpacingMs: number;
+  schedulePolicy?: { timezone: string; businessDays: number[]; localWindowStart: string };
   cancelled: boolean;
 };
 

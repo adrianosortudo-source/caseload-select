@@ -36,6 +36,25 @@ describe("Agency follow-up additive migration and service contract", () => {
     expect(migration).toContain("SET state = 'unknown', unknown_since = p_now");
     expect(migration).toContain("provider acceptance may have occurred before a worker stopped responding");
     expect(migration).toContain("state = 'scheduled' AND scheduled_at <= p_now");
+    expect(migration).toContain("SECURITY INVOKER");
+    expect(migration).not.toContain("SECURITY DEFINER");
+    expect(migration).toContain("lease-expired:' || expired.id::text");
+    expect(service).toContain("sameIdempotencyKey: true");
+    expect(service).toContain("automaticRetry: false");
+    expect(service).toContain('rpc("claim_agency_followup_messages"');
+    expect(service).toContain("new FakeAgencyFollowupProvider()");
+  });
+
+  it("keeps template versions reusable and journey configuration versioned and immutable", () => {
+    expect(migration).toContain("UNIQUE (template_key, version)");
+    expect(migration).not.toContain("journey_id uuid NOT NULL REFERENCES public.agency_followup_journeys(id) ON DELETE RESTRICT,\r\n  template_key");
+    expect(migration).toContain("agency_followup_journeys_one_active_idx");
+    expect(migration).toContain("agency_followup_steps_immutable");
+    expect(migration).toContain("agency_followup_journeys_version_immutable");
+    expect(migration).toContain("activate_agency_followup_journey");
+    expect(service).toContain("createAgencyFollowupTemplateVersion");
+    expect(service).toContain("createAgencyFollowupJourneyVersion");
+    expect(service).toContain('state: "scheduled"');
   });
 
   it("keeps these tables service-role only and uses the existing shared conversation history", () => {

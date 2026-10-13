@@ -4,7 +4,12 @@ import AgencyFollowupClient from "@/app/admin/agency-crm/follow-up/AgencyFollowu
 import "@/app/globals.css";
 
 const fixture = {
-  journeys: [{ id: "journey-1", name: "Synthetic diagnostic follow-up", journeyKey: "synthetic", version: 1, state: "active" }],
+  journeys: [{
+    id: "journey-1", name: "Synthetic diagnostic follow-up", journeyKey: "synthetic", version: 1, state: "active",
+    timezone: "America/Toronto", businessDays: [1, 2, 3, 4, 5], localWindowStart: "09:00", localWindowEnd: "17:00",
+    minimumSpacingHours: 168, stepCount: 2,
+  }],
+  templates: [{ id: "template-1", templateKey: "synthetic-intro", version: 1, state: "approved", subject: "Synthetic template subject", body: "Synthetic template copy appears in the local layout fixture only." }],
   items: [
     {
       id: "message-1", enrollmentId: "enrollment-1", prospectId: "prospect-1", firmName: "Synthetic North Shore Legal Group",
