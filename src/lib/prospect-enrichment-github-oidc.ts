@@ -54,7 +54,10 @@ export function prospectComparisonWorkflowClaimChecks(claims: Record<string, unk
     refType: claims.ref_type === "branch",
     workflowRef: claims.workflow_ref === PROSPECT_COMPARISON_OIDC_WORKFLOW,
     workflowSha: claims.workflow_sha === claims.sha && sha(claims.sha),
-    directWorkflow: !Object.hasOwn(claims, "job_workflow_ref") && !Object.hasOwn(claims, "job_workflow_sha"),
+    // GitHub can emit job metadata for this direct workflow. It must bind the same approved code.
+    directWorkflow: (!Object.hasOwn(claims, "job_workflow_ref") && !Object.hasOwn(claims, "job_workflow_sha")) ||
+      (Object.hasOwn(claims, "job_workflow_ref") && Object.hasOwn(claims, "job_workflow_sha") &&
+        claims.job_workflow_ref === PROSPECT_COMPARISON_OIDC_WORKFLOW && claims.job_workflow_sha === claims.sha),
     environment: claims.environment === PROSPECT_COMPARISON_OIDC_ENVIRONMENT,
     event: claims.event_name === "workflow_dispatch",
     runId: typeof claims.run_id === "string" && /^[1-9][0-9]{0,19}$/.test(claims.run_id),
@@ -78,7 +81,15 @@ export function diagnoseProspectComparisonWorkflowToken(token: string, now = Dat
     const claims: unknown = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
     if (!hasKeys(header, ["alg", "kid", "typ"]) || !hasKeys(claims, ["iss", "aud", "sub"])) return { tokenFormat: false };
     const h = header as Record<string, unknown>;
-    return { tokenFormat: true, header: h.alg === "RS256" && typeof h.kid === "string" && h.typ === "JWT", ...prospectComparisonWorkflowClaimChecks(claims as Record<string, unknown>, now) };
+    const c = claims as Record<string, unknown>;
+    return { tokenFormat: true, header: h.alg === "RS256" && typeof h.kid === "string" && h.typ === "JWT",
+      ...prospectComparisonWorkflowClaimChecks(c, now),
+      // Observations only: absence is supported and must never enter the all-true acceptance map.
+      jobWorkflowRefPresent: Object.hasOwn(c, "job_workflow_ref"),
+      jobWorkflowShaPresent: Object.hasOwn(c, "job_workflow_sha"),
+      jobWorkflowRefMatches: c.job_workflow_ref === PROSPECT_COMPARISON_OIDC_WORKFLOW,
+      jobWorkflowShaMatches: sha(c.sha) && c.job_workflow_sha === c.sha,
+    };
   } catch { return { tokenFormat: false }; }
 }
 
