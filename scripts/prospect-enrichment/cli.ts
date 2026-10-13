@@ -9,7 +9,8 @@ import { assertEnvelopeProfile, parseProfile, profileConfig, type EnrichmentProf
 import { assertWholeFirmManifestCoverage, compileWholeFirmSnapshot, freezeWholeFirmExport, type WholeFirmSourceManifest } from "./whole-firm";
 import { assertCoordinatorOutputPath, assertCoordinatorOutputRoot, snapshotCoordinatorState } from "./whole-firm-coordinator-export";
 import { runWholeFirmOfflineHandoff } from "./offline-handoff";
-import { assertManifestRegistrationBinding, assertFinalizedComparisonReader, assertOpenRunRecoveryBinding, verifyAndSerializeComparisonExport } from "./comparison-export";
+import { assertManifestRegistrationBinding, assertFinalizedComparisonReader, assertOpenRunRecoveryBinding, assertMachineOpenRunRecoveryBinding, verifyAndSerializeComparisonExport } from "./comparison-export";
+import { configuredComparisonTrust } from "./comparison-signature";
 import { serializeComparisonRequest, writeComparisonRequest } from "./comparison-request";
 import { assertFrozenWholeFirmPackageMissing, assertFrozenWholeFirmRunCompatibility, CHILD5_FROZEN_COMPATIBILITY } from "./frozen-whole-firm-compatibility";
 import { CASEY_MOSS_HELD_EVIDENCE_RECOVERY, prepareManifestRequests, recoverCaseyMossHeldEvidenceOnce, submitManifestChunks, assertManifestPackage, checkManifestApproval, validateManifestChunks } from "./manifest-delivery";
@@ -272,9 +273,16 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
       assertFinalizedComparisonReader(comparison, finalRequestSha256!);
     };
     const assertRecoveryBinding = () => {
-      assertFreshComparison(comparison);
       if (finalRequestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.comparisonRequestSha256) throw Error("held_evidence_recovery_comparison_request_mismatch");
-      assertOpenRunRecoveryBinding(comparison, CASEY_MOSS_HELD_EVIDENCE_RECOVERY.comparisonRequestSha256);
+      const machine = object(comparison) && object(comparison.provenance) && comparison.provenance.machineAuthenticated === true;
+      if (machine) {
+        const issues = validateComparisonSnapshot(comparison as ComparisonSnapshot, new Date().toISOString(), configuredComparisonTrust(), "github-actions-machine");
+        if (issues.length) throw Error(issues[0].code);
+        assertMachineOpenRunRecoveryBinding(comparison, CASEY_MOSS_HELD_EVIDENCE_RECOVERY.comparisonRequestSha256);
+      } else {
+        assertFreshComparison(comparison);
+        assertOpenRunRecoveryBinding(comparison, CASEY_MOSS_HELD_EVIDENCE_RECOVERY.comparisonRequestSha256);
+      }
     };
     const assertCommandComparisonBinding = command === "recover-held-evidence" ? assertRecoveryBinding : assertFinalizedBinding;
     if (command !== "receipt") assertCommandComparisonBinding();

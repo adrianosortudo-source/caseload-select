@@ -4,7 +4,10 @@ import { prospectEnrichmentProtocolHash as hash } from "@/lib/prospect-enrichmen
 import { prospectEnrichmentJson, readBoundedJson, requireProspectEnrichmentOperator } from "@/lib/prospect-enrichment-auth";
 import { prospectEnrichmentAgentActor } from "@/lib/prospect-enrichment-agent-auth";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { serializeComparisonExport, type ComparisonExportInput } from "../../../../../../scripts/prospect-enrichment/comparison-export";
+import { serializeComparisonExport, serializeMachineComparisonExport, type ComparisonExportInput } from "../../../../../../scripts/prospect-enrichment/comparison-export";
+import { CASEY_MOSS_HELD_EVIDENCE_RECOVERY } from "../../../../../../scripts/prospect-enrichment/manifest-delivery";
+import type { ProspectComparisonWorkflowIdentity } from "@/lib/prospect-enrichment-github-oidc";
+import { canonicalJson } from "../../../../../../scripts/prospect-enrichment/model";
 import type { Target } from "../../../../../../scripts/prospect-enrichment/reconciliation";
 import { validateLegacyAssessmentProjectionClaims, type LegacyAssessmentProjectionClaim } from "../../../../../../scripts/prospect-enrichment/legacy-projections";
 import { readPackageDetail, type ReadDatabase } from "../_package-read";
@@ -108,7 +111,7 @@ async function eventEvidence(eventId: string, sourceSystem: string, client: Db, 
   return { targets: unique, primary: itemKinds.length === 1 ? choosePrimary(itemKinds[0], unique) : null, researchKeys: [...researchKeys], kinds: itemKinds, visible: unverifiable ? null : visible ? true : false, parentClientId };
 }
 
-async function buildSnapshot(input: ComparisonRequest, rawRequest: unknown, adminRunId: string | null, client: Db, mode: "finalized" | "bootstrap" | "resume"): Promise<{ snapshot: ComparisonExportInput; readSetSha256: string; fence: ComparisonFenceBaseline }> {
+async function buildSnapshot(input: ComparisonRequest, rawRequest: unknown, adminRunId: string | null, client: Db, mode: "finalized" | "bootstrap" | "resume", machineIdentity?: ProspectComparisonWorkflowIdentity): Promise<{ snapshot: ComparisonExportInput; readSetSha256: string; fence: ComparisonFenceBaseline }> {
   const actor = prospectEnrichmentAgentActor();
   const bootstrapPrefix = mode === "bootstrap" ? (await requireUnregisteredRunManifest({ runId: input.manifest.runId, actor, client }), null)
     : mode === "resume" ? await requireResumableRunManifest({ manifest: input.manifest, actor, client }) : null;
@@ -194,8 +197,12 @@ async function buildSnapshot(input: ComparisonRequest, rawRequest: unknown, admi
   const sortedPackages = packages.sort((a, b) => a.clientPackageId.localeCompare(b.clientPackageId));
   const sortedEvents = events.sort((a, b) => a.sourceEventKey.localeCompare(b.sourceEventKey));
   const sortedIdentities = identities.sort((a, b) => a.researchKey.localeCompare(b.researchKey));
-  const reader = mode === "finalized" ? "admin-prospect-enrichment-comparison/v1" : mode === "resume" ? "admin-prospect-enrichment-bootstrap-resume/v1" : "admin-prospect-enrichment-bootstrap/v1";
-  const snapshot: ComparisonExportInput = { schemaVersion: "prospect-enrichment-comparison/v1", projectId: "ssxryjxifwiivghglqer", capturedAt: new Date().toISOString(), provenance: { reader, sourceArtifactSha256: hash(rawRequest), operatorAuthenticated: true }, identities: sortedIdentities, packages: sortedPackages, events: sortedEvents };
+  const reader = machineIdentity
+    ? mode === "resume" ? "admin-prospect-enrichment-bootstrap-resume-github-actions/v1" : "admin-prospect-enrichment-bootstrap-github-actions/v1"
+    : mode === "finalized" ? "admin-prospect-enrichment-comparison/v1" : mode === "resume" ? "admin-prospect-enrichment-bootstrap-resume/v1" : "admin-prospect-enrichment-bootstrap/v1";
+  const provenance: ComparisonExportInput["provenance"] = machineIdentity ? { reader, sourceArtifactSha256: hash(rawRequest), machineAuthenticated: true as const, ...machineIdentity } as ComparisonExportInput["provenance"]
+    : { reader, sourceArtifactSha256: hash(rawRequest), operatorAuthenticated: true as const };
+  const snapshot: ComparisonExportInput = { schemaVersion: "prospect-enrichment-comparison/v1", projectId: "ssxryjxifwiivghglqer", capturedAt: new Date().toISOString(), provenance, identities: sortedIdentities, packages: sortedPackages, events: sortedEvents };
   const cachedPackages = [...cache.values()].map((detail) => ({ packageId: detail.packageId, clientPackageId: detail.clientPackageId, payloadSha256: detail.payloadSha256, state: detail.state, firmId: detail.firmId, rawBodySha256: detail.rawBodySha256, itemReadBack: detail.items.map((item) => ({ itemId: item.itemId, hash: item.hash, targets: item.targets, firmRevision: isRecord(item.currentValue) ? item.currentValue.firmRevision : null })) })).sort((a, b) => a.packageId.localeCompare(b.packageId));
   const runPackageReadSet = runRows.map((row) => ({ id: row.id, runId: row.run_id, actor: row.submitted_by, clientPackageId: row.client_package_id, researchKey: row.research_key, payloadSha256: row.payload_sha256, state: row.state, firmId: row.firm_id, rawBodySha256: row.raw_body_sha256, reviewJson: row.review_json, reviewSha256: row.review_sha256, expectedRevisionSha256: row.expected_revision_sha256, reviewExpiresAt: row.review_expires_at, applyReceipt: row.apply_receipt })).sort((a, b) => String(a.clientPackageId).localeCompare(String(b.clientPackageId)));
   const eventPresence = keys.map((key) => { const rows = eventRows.filter((row) => row.source_event_key === key); return { key, rows: rows.map((row) => ({ id: row.id, sourceSystem: row.source_system, semanticSha256: row.semantic_sha256 })) }; });
@@ -213,16 +220,22 @@ async function buildSnapshot(input: ComparisonRequest, rawRequest: unknown, admi
   return { snapshot, readSetSha256, fence };
 }
 
-export async function handleComparisonExport(request: NextRequest, mode: "finalized" | "bootstrap" = "finalized") {
-  const auth = await requireProspectEnrichmentOperator(request, true);
-  if (!auth.ok) return auth.response;
-  if (auth.operator.session.role !== "operator") return prospectEnrichmentJson({ error: "An operator session is required." }, 403);
+export async function handleComparisonExport(request: NextRequest, mode: "finalized" | "bootstrap" = "finalized", machineIdentity?: ProspectComparisonWorkflowIdentity) {
+  if (machineIdentity) {
+    if (mode !== "bootstrap") return prospectEnrichmentJson({ error: "The machine comparison reader is limited to bootstrap reads." }, 403);
+  } else {
+    const auth = await requireProspectEnrichmentOperator(request, true);
+    if (!auth.ok) return auth.response;
+    if (auth.operator.session.role !== "operator") return prospectEnrichmentJson({ error: "An operator session is required." }, 403);
+  }
   const body = await readBoundedJson(request, MAX_REQUEST_BYTES, {
     gzip: { maxCompressedBytes: MAX_GZIP_REQUEST_BYTES, maxDecompressedBytes: MAX_GZIP_DECOMPRESSED_BYTES },
   });
   if (!body.ok) return prospectEnrichmentJson({ error: body.error }, body.status);
   try {
+    if (machineIdentity && (body.text !== canonicalJson(body.value) + "\n" || hash(body.value) !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.comparisonRequestSha256)) throw new ReadApiError("The machine comparison request is not the exact frozen recovery request.", 422);
     const parsed = parseRequest(body.value);
+    if (machineIdentity && (parsed.manifest.runId !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.runId || parsed.manifest.sourceManifestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.sourceManifestSha256 || parsed.manifest.manifestSha256 !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.runManifestSha256 || parsed.manifest.expectedPackageCount !== CASEY_MOSS_HELD_EVIDENCE_RECOVERY.expectedPackageCount)) throw new ReadApiError("The machine comparison run does not match the exact frozen recovery pin.", 422);
     const actor = prospectEnrichmentAgentActor();
     let effectiveMode: "finalized" | "bootstrap" | "resume" = mode;
     let binding: { adminRunId: string | null };
@@ -240,13 +253,13 @@ export async function handleComparisonExport(request: NextRequest, mode: "finali
     const keyId = process.env.PROSPECT_ENRICHMENT_COMPARISON_SIGNING_KEY_ID;
     const privateKeyPem = process.env.PROSPECT_ENRICHMENT_COMPARISON_SIGNING_PRIVATE_KEY_PEM;
     if (!keyId || !privateKeyPem) throw new ReadApiError("Server comparison signing is not configured.", 503);
-    const initial = await buildSnapshot(parsed, body.value, binding.adminRunId, supabaseAdmin, effectiveMode);
+    const initial = await buildSnapshot(parsed, body.value, binding.adminRunId, supabaseAdmin, effectiveMode, machineIdentity);
     const finalBinding = effectiveMode === "bootstrap"
       ? (await requireUnregisteredRunManifest({ runId: parsed.manifest.runId, actor, client: supabaseAdmin }), { adminRunId: null as string | null })
       : effectiveMode === "resume" ? (await requireResumableRunManifest({ manifest: parsed.manifest, actor, client: supabaseAdmin }), { adminRunId: null as string | null })
       : await requireRegisteredRunManifest({ manifest: parsed.manifest, actor, client: supabaseAdmin });
     if (finalBinding.adminRunId !== binding.adminRunId) throw new ReadApiError("The registered run changed during comparison. Retry the read.", 503);
-    const final = await buildSnapshot(parsed, body.value, binding.adminRunId, supabaseAdmin, effectiveMode);
+    const final = await buildSnapshot(parsed, body.value, binding.adminRunId, supabaseAdmin, effectiveMode, machineIdentity);
     if (initial.readSetSha256 !== final.readSetSha256 || comparisonContentFingerprint(initial.snapshot as unknown as Record<string, unknown>, hash) !== comparisonContentFingerprint(final.snapshot as unknown as Record<string, unknown>, hash)) throw new ReadApiError("Admin research changed during comparison. Retry the read for a stable snapshot.", 503);
     await verifyComparisonFinalFence({ baseline: final.fence, client: supabaseAdmin, envelopes: parsed.packages.map((item) => item.envelope), readIdentity });
     if (effectiveMode === "bootstrap") await requireUnregisteredRunManifest({ runId: parsed.manifest.runId, actor, client: supabaseAdmin });
@@ -255,7 +268,9 @@ export async function handleComparisonExport(request: NextRequest, mode: "finali
       if (resumed.readSetSha256 !== final.fence.resumeManifestReadSetSha256) fail("The partially registered run changed before signing.", 503);
     }
     const fencedSnapshot = { ...final.snapshot, capturedAt: new Date().toISOString() };
-    return prospectEnrichmentJson(serializeComparisonExport(fencedSnapshot, new Date().toISOString(), { keyId, privateKeyPem }).snapshot);
+    return prospectEnrichmentJson(machineIdentity
+      ? serializeMachineComparisonExport(fencedSnapshot, new Date().toISOString(), { keyId, privateKeyPem }).snapshot
+      : serializeComparisonExport(fencedSnapshot, new Date().toISOString(), { keyId, privateKeyPem }).snapshot);
   }
   catch (cause) {
     if (cause instanceof ReadApiError) return prospectEnrichmentJson({ error: cause.message, ...(process.env.PROSPECT_ENRICHMENT_TEST_DIAGNOSTICS === "1" && cause.diagnostic ? { diagnostic: cause.diagnostic } : {}) }, cause.status);

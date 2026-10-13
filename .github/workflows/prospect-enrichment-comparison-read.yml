@@ -1,0 +1,62 @@
+name: Read-only Casey and Moss prospect comparison
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: prospect-enrichment-comparison-read
+  cancel-in-progress: false
+
+jobs:
+  comparison:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
+    name: Read and verify the pinned bootstrap comparison
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: Prospect comparison read
+    env:
+      PROSPECT_ENRICHMENT_COMPARISON_TRUSTED_KEY_ID: ${{ vars.PROSPECT_ENRICHMENT_COMPARISON_TRUSTED_KEY_ID }}
+      PROSPECT_ENRICHMENT_COMPARISON_TRUSTED_PUBLIC_KEY_PEM: ${{ vars.PROSPECT_ENRICHMENT_COMPARISON_TRUSTED_PUBLIC_KEY_PEM }}
+    steps:
+      - name: Check out the dispatched main commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Verify current main and frozen comparison request
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REPOSITORY" = adrianosortudo-source/caseload-select
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin main
+          test "$GITHUB_SHA" = "$(git rev-parse origin/main)"
+          test -n "$PROSPECT_ENRICHMENT_COMPARISON_TRUSTED_KEY_ID"
+          test -n "$PROSPECT_ENRICHMENT_COMPARISON_TRUSTED_PUBLIC_KEY_PEM"
+
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Read and verify the signed bootstrap comparison
+        run: npx tsx scripts/prospect-enrichment/github-actions-comparison.ts
+
+      - name: Retain the signed comparison artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: casey-moss-bootstrap-comparison-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/casey-moss-bootstrap-comparison.json
+          if-no-files-found: error
+          retention-days: 1

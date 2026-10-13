@@ -19,7 +19,11 @@ export type ComparisonSnapshot = {
   schemaVersion: "prospect-enrichment-comparison/v1";
   projectId: "ssxryjxifwiivghglqer";
   capturedAt: string;
-  provenance: { reader: string; sourceArtifactSha256: string; operatorAuthenticated: true };
+  provenance: { reader: string; sourceArtifactSha256: string; operatorAuthenticated: true } | {
+    reader: "admin-prospect-enrichment-bootstrap-github-actions/v1" | "admin-prospect-enrichment-bootstrap-resume-github-actions/v1";
+    sourceArtifactSha256: string; machineAuthenticated: true; repository: string; repositoryId: string; ref: string; sha: string;
+    workflowRef: string; environment: string; eventName: string; runId: string; runAttempt: string; jtiSha256: string;
+  };
   identities: { researchKey: string; databaseFirmId: string; stableFirmId: string | null; sourceRecordKey: string; canonicalDomain: string | null }[];
   packages: { clientPackageId: string; payloadSha256: string; state: string; serverPackageId: string | null; visible: boolean | null }[];
   events: { sourceEventKey: string; semanticSha256: string; researchKey: string; targets: Target[]; primaryTarget: Target | null; visible: boolean | null; parentAssessmentClientId?: string; legacyAssessmentProjections?: LegacyAssessmentProjectionProof[] }[];
@@ -40,13 +44,25 @@ export function items(envelope: ProspectEnrichmentEnvelope) {
   return lineage.map((item, index) => ({ ...values[index], kind: item.itemKind, id: item.clientItemId, sourceEventKey: item.sourceEventKey, semanticSha256: item.semanticSha256 }));
 }
 
-export function validateComparisonSnapshot(snapshot: ComparisonSnapshot, now = new Date().toISOString(), trust?:ComparisonTrust|null): Issue[] {
+export function validateComparisonSnapshot(snapshot: ComparisonSnapshot, now = new Date().toISOString(), trust?:ComparisonTrust|null, authority: "operator" | "github-actions-machine" = "operator"): Issue[] {
   if (!object(snapshot) || !Array.isArray(snapshot.events) || !Array.isArray(snapshot.packages) || !Array.isArray(snapshot.identities)) return [{ code: "comparison_schema_invalid", path: "", reason: "Comparison arrays are required" }];
   const { snapshotSha256, signature: _signature, ...content } = snapshot;
   void _signature;
   const issues: Issue[] = [];
   if (protocolHash(content) !== snapshotSha256) issues.push({ code: "comparison_hash_mismatch", path: "snapshotSha256", reason: "Frozen operator comparison was modified" });
-  if (snapshot.schemaVersion !== "prospect-enrichment-comparison/v1" || snapshot.projectId !== "ssxryjxifwiivghglqer" || snapshot.provenance?.operatorAuthenticated !== true || !snapshot.provenance?.reader || !/^[a-f0-9]{64}$/.test(snapshot.provenance?.sourceArtifactSha256 ?? "")) issues.push({ code: "comparison_provenance_missing", path: "provenance", reason: "Comparison must come from the authenticated supported operator read path for the fixed project" });
+  const machine = authority === "github-actions-machine";
+  const provenance = snapshot.provenance as unknown as Record<string, unknown>;
+  const machineKeys = ["reader", "sourceArtifactSha256", "machineAuthenticated", "repository", "repositoryId", "ref", "sha", "workflowRef", "environment", "eventName", "runId", "runAttempt", "jtiSha256"];
+  const validMachine = machine && object(provenance) && Object.keys(provenance).length === machineKeys.length && machineKeys.every(key => Object.hasOwn(provenance, key)) &&
+    ["admin-prospect-enrichment-bootstrap-github-actions/v1", "admin-prospect-enrichment-bootstrap-resume-github-actions/v1"].includes(String(provenance.reader)) &&
+    provenance.machineAuthenticated === true && provenance.repository === "adrianosortudo-source/caseload-select" && provenance.repositoryId === "1206232496" &&
+    provenance.ref === "refs/heads/main" && typeof provenance.sha === "string" && /^[a-f0-9]{40}$/.test(provenance.sha) &&
+    provenance.workflowRef === "adrianosortudo-source/caseload-select/.github/workflows/prospect-enrichment-comparison-read.yml@refs/heads/main" &&
+    provenance.environment === "Prospect comparison read" && provenance.eventName === "workflow_dispatch" &&
+    typeof provenance.runId === "string" && /^[1-9][0-9]{0,19}$/.test(provenance.runId) && typeof provenance.runAttempt === "string" && /^[1-9][0-9]{0,5}$/.test(provenance.runAttempt) &&
+    typeof provenance.jtiSha256 === "string" && /^[a-f0-9]{64}$/.test(provenance.jtiSha256) && snapshot.packages.length === 0;
+  const validOperator = !machine && snapshot.provenance?.operatorAuthenticated === true && !("machineAuthenticated" in provenance);
+  if (snapshot.schemaVersion !== "prospect-enrichment-comparison/v1" || snapshot.projectId !== "ssxryjxifwiivghglqer" || !(validMachine || validOperator) || !snapshot.provenance?.reader || !/^[a-f0-9]{64}$/.test(snapshot.provenance?.sourceArtifactSha256 ?? "")) issues.push({ code: "comparison_provenance_missing", path: "provenance", reason: "Comparison must come from the authenticated supported reader for the fixed project" });
   for (const [index, event] of snapshot.events.entries()) {
     const target = event?.primaryTarget;
     if (!object(event) || !Array.isArray(event.targets) || !Object.hasOwn(event, "primaryTarget") || !(target === null || (object(target) && typeof target.table === "string" && typeof target.id === "string" && typeof target.rowSha256 === "string" && /^[a-f0-9]{64}$/.test(target.rowSha256) && Object.keys(target).length === 3 && event.targets.filter(t => canonicalJson(t) === canonicalJson(target)).length === 1))) issues.push({ code: "comparison_primary_target_invalid", path: "events/" + index + "/primaryTarget", reason: "Explicit primaryTarget must be null or equal one exact accepted target; array order is not authority" });
