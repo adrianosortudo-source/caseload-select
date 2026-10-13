@@ -37,6 +37,46 @@ describe("GitHub Actions prospect comparison OIDC", () => {
     expect(JSON.stringify(identity)).not.toContain("one-use-test-token");
   });
 
+  it("accepts paired job metadata only for the same pinned workflow and commit", async () => {
+    resetProspectComparisonOidcKeyCacheForTests();
+    const value = { ...claims(), job_workflow_ref: PROSPECT_COMPARISON_OIDC_WORKFLOW, job_workflow_sha: claims().sha };
+    await expect(verifyProspectComparisonWorkflowToken(token(value), { now, fetcher })).resolves.toMatchObject({
+      workflowRef: PROSPECT_COMPARISON_OIDC_WORKFLOW, sha: value.sha,
+    });
+    expect(diagnoseProspectComparisonWorkflowToken(token(value), now)).toMatchObject({
+      directWorkflow: true, jobWorkflowRefPresent: true, jobWorkflowShaPresent: true,
+      jobWorkflowRefMatches: true, jobWorkflowShaMatches: true,
+    });
+  });
+
+  it.each([
+    { job_workflow_ref: "other/repo/.github/workflows/read.yml@refs/heads/main", job_workflow_sha: claims().sha },
+    { job_workflow_ref: PROSPECT_COMPARISON_OIDC_WORKFLOW, job_workflow_sha: "b".repeat(40) },
+    { job_workflow_ref: null, job_workflow_sha: claims().sha },
+    { job_workflow_ref: PROSPECT_COMPARISON_OIDC_WORKFLOW, job_workflow_sha: null },
+    { job_workflow_ref: [], job_workflow_sha: claims().sha },
+    { job_workflow_ref: PROSPECT_COMPARISON_OIDC_WORKFLOW, job_workflow_sha: 1 },
+  ])("rejects mismatched or malformed paired job metadata %j", async (changed) => {
+    resetProspectComparisonOidcKeyCacheForTests();
+    const credential = token({ ...claims(), ...changed });
+    expect(diagnoseProspectComparisonWorkflowToken(credential, now).directWorkflow).toBe(false);
+    await expect(verifyProspectComparisonWorkflowToken(credential, { now, fetcher })).rejects.toThrow("github_oidc_claims_rejected");
+  });
+
+  it.each(["workflow_ref", "workflow_sha"])("paired job metadata never replaces mandatory %s", async (key) => {
+    const value: Record<string, unknown> = { ...claims(), job_workflow_ref: PROSPECT_COMPARISON_OIDC_WORKFLOW, job_workflow_sha: claims().sha };
+    delete value[key];
+    await expect(verifyProspectComparisonWorkflowToken(token(value), { now, fetcher })).rejects.toThrow("github_oidc_claims_invalid");
+  });
+
+  it("requires a valid signature even when all paired metadata checks match", async () => {
+    resetProspectComparisonOidcKeyCacheForTests();
+    const untrusted = generateKeyPairSync("rsa", { modulusLength: 2048 });
+    const credential = token({ ...claims(), job_workflow_ref: PROSPECT_COMPARISON_OIDC_WORKFLOW, job_workflow_sha: claims().sha }, untrusted);
+    expect(diagnoseProspectComparisonWorkflowToken(credential, now).directWorkflow).toBe(true);
+    await expect(verifyProspectComparisonWorkflowToken(credential, { now, fetcher })).rejects.toThrow("github_oidc_signature_invalid");
+  });
+
   it.each([
     ["audience", { aud: "other-audience" }],
     ["environment", { environment: "Production prospect migrations" }],
@@ -104,7 +144,9 @@ describe("credential-safe workflow diagnostics", () => {
     const credential = token();
     const result = diagnoseProspectComparisonWorkflowToken(credential, now);
     expect(Object.values(result).every(value => typeof value === "boolean")).toBe(true);
-    expect(Object.values(result).every(Boolean)).toBe(true);
+    expect(Object.entries(result).filter(([key]) => !key.startsWith("jobWorkflow")).every(([, value]) => value)).toBe(true);
+    expect(result).toMatchObject({ directWorkflow: true, jobWorkflowRefPresent: false, jobWorkflowShaPresent: false,
+      jobWorkflowRefMatches: false, jobWorkflowShaMatches: false });
     const logged = JSON.stringify(result);
     for (const sensitive of [credential, claims().jti, claims().sub, claims().workflow_ref]) expect(logged).not.toContain(sensitive);
   });
