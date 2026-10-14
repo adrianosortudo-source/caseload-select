@@ -104,6 +104,17 @@ test("workflow requires two protected gates, fixed temporary credentials and imm
  assert.doesNotMatch(JSON.stringify(workflow),/STATIC_MIGRATION_DATABASE_URL|migration repair|supabase db push/);
 });
 const normalizeTestDatabaseUrl=value=>value?.trim().replace(/^["']|["']$/g, "");
+const isHistoricalGuardFailure=error=>{
+ if(error.status!==1 || error.signal!==null) return false;
+ try {const failure=JSON.parse(String(error.stdout));return failure._tag==="Error" && /^ERROR: bounded_release_history_reference_execution_prohibited \(SQLSTATE P0001\)(?:\r?\n|$)/.test(String(failure.error?.message));}
+ catch {return false;}
+};
+test("negative CLI proof requires the actual P0001 guard error on structured stdout",()=>{
+ const message="ERROR: bounded_release_history_reference_execution_prohibited (SQLSTATE P0001)\nAt statement: 0";
+ const failure={status:1,signal:null,stdout:JSON.stringify({_tag:"Error",error:{message}})};
+ assert.equal(isHistoricalGuardFailure(failure),true);
+ for(const change of [{status:0},{signal:"SIGTERM"},{stdout:"not-json"},{stdout:JSON.stringify({_tag:"Error",error:{message:"ERROR: syntax error (SQLSTATE 42601)\nRAISE EXCEPTION bounded_release_history_reference_execution_prohibited"}})},{stdout:JSON.stringify({_tag:"Error",error:{message:"connection failed",detail:message}})}]) assert.equal(isHistoricalGuardFailure({...failure,...change}),false);
+});
 test("CLI test accepts the quoted loopback URL exported by Supabase status",()=>{
  const value="postgresql://postgres:postgres@127.0.0.1:55562/postgres";
  for(const input of [value,'"'+value+'"',"'"+value+"'",'  "'+value+'"  ']) assert.equal(new URL(normalizeTestDatabaseUrl(input)).href,value);
@@ -117,7 +128,7 @@ test("pinned CLI skips guarded historical references and plans only the target o
  const dir=fs.mkdtempSync(path.join(root,"bounded-cli-test-"));
  try {
   console.info("bounded-cli-phase","actual-catalog");
-  verifyCatalog((await admin.query(catalogQuery())).rows[0].catalog,receipt,"post");t.diagnostic("Actual isolated database catalog matches all eight reviewed function bodies and permissions.");
+  verifyCatalog((await admin.query(catalogQuery())).rows[0].catalog,receipt,"post");t.diagnostic("Actual isolated database catalog matches all nine reviewed function bodies and permissions.");
   await admin.query('CREATE DATABASE "'+name+'"');created=true;
   const scratch=new URL(cliUrl);scratch.pathname="/"+name;scratch.searchParams.set("sslmode","disable");db=new Pool({connectionString:scratch.toString(),max:1});
   await db.query("CREATE SCHEMA supabase_migrations; CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY,statements text[],name text)");
@@ -133,7 +144,7 @@ test("pinned CLI skips guarded historical references and plans only the target o
   const before=(await db.query("SELECT version,name,statements FROM supabase_migrations.schema_migrations ORDER BY version")).rows;
   console.info("bounded-cli-phase","actual-negative-push");
   assert.throws(()=>execFileSync(cli,["db","push","--yes","--include-all","--skip-vault","--output-format","json","--db-url",scratch.toString()],{cwd:staged,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:60000}),
-    error=>String(error.stderr).includes("bounded_release_history_reference_execution_prohibited"));
+    isHistoricalGuardFailure);
   t.diagnostic("Actual CLI push stopped at the historical SQL guard.");
   assert.deepEqual((await db.query("SELECT version,name,statements FROM supabase_migrations.schema_migrations ORDER BY version")).rows,before);
   assert.equal((await db.query("SELECT count(*)::int count FROM supabase_migrations.schema_migrations WHERE version='20261013174258'")).rows[0].count,0);

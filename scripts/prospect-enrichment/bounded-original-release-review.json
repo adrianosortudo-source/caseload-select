@@ -8,12 +8,24 @@
     "path": "supabase/migrations/20261013214000_prospect_bounded_original_evidence_v2.sql",
     "version": "20261013214000",
     "name": "prospect_bounded_original_evidence_v2",
-    "sha256": "1c60b419df5bc9564910faea412f80434c244d09a88681c645156977697b617d",
-    "bytes": 20286
+    "sha256": "0c2421f1544de099967074184e86c6079570e23f1635ba9c30a149974cc7d301",
+    "bytes": 24285
   },
   "ledgerReferenceSha256": "164e22885c669ab59e99545bc5ec3b5acb9702ee988e2d5980846a972d433bc7",
   "catalogPre": {
     "functions": [
+      {
+        "schema": "prospect_candidate_private",
+        "name": "list_candidates",
+        "signature": "prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)",
+        "owner": "postgres",
+        "security_definer": true,
+        "settings": [
+          "search_path=\"\""
+        ],
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "body_sha256": "ccdaf7f76117af1943b2f34aa3268112072a87889382ec4d78a0c9abf2c4d68d"
+      },
       {
         "schema": "prospect_candidate_private",
         "name": "record_history",
@@ -54,6 +66,18 @@
         "signature": "prospect_candidate_private.decode_original_nodes_v1(jsonb,text,text)",
         "body_sha256": "9ded58ac1695e256f594ea0ef8acf1ae3b2ac2e577501c10cdfa65294266a252",
         "security_definer": false
+      },
+      {
+        "schema": "prospect_candidate_private",
+        "name": "list_candidates",
+        "signature": "prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)",
+        "owner": "postgres",
+        "security_definer": true,
+        "settings": [
+          "search_path=\"\""
+        ],
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "body_sha256": "f62fe885b2ba5a693aabc5a4218a525b71ea288dfeb6b13336eea2cb5857e2c0"
       },
       {
         "acl": "{postgres=X/postgres}",

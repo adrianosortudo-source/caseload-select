@@ -251,3 +251,71 @@ $metadata$||anchor);
   updated:=replace(updated,anchor,$history_replacement$p_hash,p_json,CASE WHEN p_table='prospect_enrichment_packages' AND p_json->>'schemaVersion'='prospect-enrichment/v2' THEN prospect_candidate_private.transport_hash_v2(p_json) ELSE prospect_candidate_private.hash_json(p_json) END,$history_replacement$);
   EXECUTE updated;
 END $patch$;
+
+-- Scoped exact reads avoid resolving the entire identity journal before one
+-- candidate/field match. Group-aware filters retain their existing reader.
+DO $exact_filter_patch$
+DECLARE definition text; body text; anchor text;
+BEGIN
+  SELECT pg_get_functiondef(p.oid),replace(p.prosrc,E'\r\n',E'\n')
+    INTO definition,body FROM pg_proc p
+    WHERE p.oid='prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)'::regprocedure;
+  definition:=replace(definition,E'\r\n',E'\n');
+  IF encode(sha256(convert_to(body,'UTF8')),'hex')<>'ccdaf7f76117af1943b2f34aa3268112072a87889382ec4d78a0c9abf2c4d68d' THEN
+    RAISE EXCEPTION 'bounded_exact_filter_reader_definition_changed';
+  END IF;
+  anchor:=$filter_anchor$ -- Start with exact retained statuses, then expand only their validated firm$filter_anchor$;
+  IF (length(definition)-length(replace(definition,anchor,'')))<>length(anchor) THEN
+    RAISE EXCEPTION 'bounded_exact_filter_reader_anchor_changed';
+  END IF;
+  EXECUTE replace(definition,anchor,$filter_branch$
+ -- Exact source and typed-field filters own their matches; no group expansion
+ -- is required until the unchanged summary for each paged candidate is built.
+ IF (p_filters-ARRAY['identityNamespace','identityKey','fieldPointer','fieldValue']::text[])='{}'::jsonb
+    AND (p_filters ? 'identityNamespace' OR p_filters ? 'fieldPointer') THEN
+   WITH filtered AS MATERIALIZED (
+     SELECT c.id FROM public.prospect_research_candidates c
+     WHERE p_filters ? 'identityNamespace' AND c.created_revision<=cutoff
+       AND c.identity_namespace_sha256=encode(sha256(convert_to(p_filters->>'identityNamespace','UTF8')),'hex')
+       AND c.identity_key_sha256=encode(sha256(convert_to(p_filters->>'identityKey','UTF8')),'hex')
+       AND c.identity_namespace=p_filters->>'identityNamespace'
+       AND c.identity_key=p_filters->>'identityKey'
+       AND (NOT p_filters ? 'fieldPointer' OR EXISTS (
+         SELECT 1 FROM public.prospect_research_candidate_fields f
+         WHERE f.candidate_id=c.id AND f.coverage_revision<=cutoff
+           AND md5(f.pointer)=md5(p_filters->>'fieldPointer')
+           AND f.pointer=p_filters->>'fieldPointer'
+           AND (NOT p_filters ? 'fieldValue' OR
+             (md5(f.value_json::text)=md5((p_filters->'fieldValue')::text)
+               AND f.value_json=p_filters->'fieldValue'))
+       ))
+     UNION ALL
+     SELECT DISTINCT c.id
+     FROM public.prospect_research_candidate_fields f
+     JOIN public.prospect_research_candidates c ON c.id=f.candidate_id
+     WHERE NOT p_filters ? 'identityNamespace' AND p_filters ? 'fieldPointer'
+       AND c.created_revision<=cutoff AND f.coverage_revision<=cutoff
+       AND md5(f.pointer)=md5(p_filters->>'fieldPointer')
+       AND f.pointer=p_filters->>'fieldPointer'
+       AND (NOT p_filters ? 'fieldValue' OR
+         (md5(f.value_json::text)=md5((p_filters->'fieldValue')::text)
+           AND f.value_json=p_filters->'fieldValue'))
+   ), page_ids AS MATERIALIZED (
+     SELECT id FROM filtered WHERE p_after_id IS NULL OR id>p_after_id ORDER BY id LIMIT p_limit
+   ), summaries AS MATERIALIZED (
+     SELECT id,prospect_candidate_private.summary(id,cutoff) data FROM page_ids
+   ), sized AS (
+     SELECT *,sum(octet_length(data::text)) OVER(ORDER BY id) bytes FROM summaries
+   ), page AS MATERIALIZED (
+     SELECT * FROM sized WHERE bytes<=1040000 ORDER BY id
+   )
+   SELECT jsonb_build_object('items',coalesce((SELECT jsonb_agg(data ORDER BY id) FROM page),'[]'),
+     'nextAfterId',CASE WHEN EXISTS(SELECT 1 FROM filtered WHERE id>(SELECT max(id::text)::uuid FROM page))
+       THEN (SELECT max(id::text) FROM page) ELSE NULL END,
+     'inventoryCount',(SELECT count(*) FROM public.prospect_research_candidates WHERE created_revision<=cutoff),
+     'filteredCount',(SELECT count(*) FROM filtered),'coverageRevision',cutoff,'readWarnings',warnings,
+     'complete',warnings='[]'::jsonb) INTO result;
+   RETURN result;
+ END IF;
+$filter_branch$||anchor);
+END $exact_filter_patch$;
