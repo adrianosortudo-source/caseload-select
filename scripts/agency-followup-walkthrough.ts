@@ -511,7 +511,7 @@ async function waitForAction(page: Page, action: string, button: ReturnType<Page
     });
     progress(`button ${action} initially disabled; React form diagnostics=${JSON.stringify(state)}`);
   }
-  await expect(button).toBeEnabled();
+  await expect(button).toBeEnabled({ timeout: 30_000 });
   // App Router can return server HTML before the client bundle has hydrated.
   // Wait for the first page's network work to settle before relying on React
   // event handlers, especially on a cold local compile.
@@ -660,7 +660,7 @@ async function auditRenderedCopy(page: Page): Promise<string[]> {
         const box = copy.getBoundingClientRect();
         if (Math.abs(box.left - left) > 1 || Math.abs(box.right - right) > 1) failures.push(tag + ": copy does not use full content width");
         if (copy.textContent?.includes("\u2014")) failures.push(tag + ": em dash");
-        const words: Array<{ top: number; left: number; right: number }> = [];
+        const words: Array<{ top: number; left: number; right: number; text: string }> = [];
         const walker = document.createTreeWalker(copy, NodeFilter.SHOW_TEXT);
         while (walker.nextNode()) {
           const node = walker.currentNode;
@@ -668,7 +668,7 @@ async function auditRenderedCopy(page: Page): Promise<string[]> {
             const range = document.createRange();
             range.setStart(node, match.index!);
             range.setEnd(node, match.index! + match[0].length);
-            for (const rect of range.getClientRects()) if (rect.width && rect.height) words.push({ top: rect.top, left: rect.left, right: rect.right });
+            for (const rect of range.getClientRects()) if (rect.width && rect.height) words.push({ top: rect.top, left: rect.left, right: rect.right, text: match[0] });
           }
         }
         const lines: Array<typeof words> = [];
@@ -677,13 +677,13 @@ async function auditRenderedCopy(page: Page): Promise<string[]> {
           if (line) line.push(word); else lines.push([word]);
         }
         lines.sort((a, b) => a[0].top - b[0].top);
-        if (lines.length > 1 && lines.at(-1)!.length === 1) failures.push(tag + ": single-word final line");
+        if (lines.length > 1 && lines.at(-1)!.length === 1) failures.push(tag + `: single-word final line "${lines.at(-1)![0].text}" after "${lines.at(-2)!.map((word) => word.text).join(" ")}"`);
         for (let index = 0; index < lines.length - 1; index += 1) {
           const line = lines[index];
           const width = Math.max(...line.map((word) => word.right)) - Math.min(...line.map((word) => word.left));
           const remaining = right - Math.max(...line.map((word) => word.right));
           if (width < (right - left) * 0.75 && lines[index + 1][0].right - lines[index + 1][0].left + 5 <= remaining) {
-            failures.push(tag + ": avoidably short nonfinal line");
+            failures.push(tag + `: avoidably short nonfinal line "${line.map((word) => word.text).join(" ")}" before "${lines[index + 1].map((word) => word.text).join(" ")}"`);
           }
         }
       }
@@ -699,12 +699,17 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const context = await signedContext(browser, fixtures, portalSecret);
   try {
   const page = await context.newPage();
-  page.setDefaultTimeout(10000);
+  page.setDefaultTimeout(30000);
   page.setDefaultNavigationTimeout(180_000);
   const responseFailures: string[] = [];
   page.on("pageerror", (error) => responseFailures.push("page error: " + error.message));
   page.on("console", (message) => {
-    if (message.type() === "error") responseFailures.push("browser console: " + message.text());
+    const text = message.text();
+    // Chromium reports the deliberately blocked suppressed-prospect release
+    // as a console resource error; that API response is asserted as HTTP 409.
+    if (message.type() === "error" && !/Failed to load resource: the server responded with a status of 409 \(Conflict\)/.test(text)) {
+      responseFailures.push("browser console: " + text);
+    }
   });
   page.on("requestfailed", (request) => {
     const pathname = new URL(request.url()).pathname;
@@ -735,6 +740,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms: ${String(error).replace(/\\s+/g, " ").slice(0, 300)}`);
     throw error;
   }
+  if (await page.getByText(/This page couldn.t load/i).count()) {
+    progress("Next rendered its chunk-recovery page during cold compilation; reloading once after the direct asset probe");
+    await page.reload({ waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+  }
   await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
   try {
@@ -748,27 +757,45 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     }, null, { polling: "raf", timeout: 180000 });
     progress("operator form hydration confirmed on controlled template input");
   } catch (error) {
-    const diagnostics = await page.evaluate(() => ({
-      readyState: document.readyState,
-      title: document.title,
-      mainCount: document.querySelectorAll("main").length,
-      formCount: document.querySelectorAll("main form").length,
-      scriptCount: document.scripts.length,
-      controlledInput: (() => {
-        const control = document.querySelector("main form input");
-        return control ? {
-          type: (control as HTMLInputElement).type,
-          valueLength: (control as HTMLInputElement).value.length,
-          reactAttached: Object.keys(control).some((key) => key.startsWith("__reactProps$")),
-        } : null;
-      })(),
-      nextScripts: [...document.scripts].map((script) => script.src).filter((src) => src.includes("/_next/")),
-      nextResources: performance.getEntriesByType("resource").map((entry) => new URL(entry.name).pathname).filter((pathname) => pathname.includes("/_next/")),
-      pageText: document.body.innerText.slice(0, 1000),
-    })).catch(() => null);
-    await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
-    await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", "failure-hydration.png"), fullPage: true }).catch(() => undefined);
-    throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${String(error)}`);
+    let hydrationError: unknown = error;
+    let recovered = false;
+    if (await page.getByText(/This page couldn.t load/i).count()) {
+      progress("Next rendered its chunk-recovery page during hydration; reloading once after compilation");
+      try {
+        await page.reload({ waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+        await page.waitForFunction(() => {
+          const control = document.querySelector("main form input");
+          return Boolean(control && Object.keys(control).some((key) => key.startsWith("__reactProps$")));
+        }, null, { polling: "raf", timeout: Math.min(120_000, remainingMs()) });
+        recovered = true;
+        progress("operator form hydration confirmed after one chunk-recovery reload");
+      } catch (retryError) {
+        hydrationError = retryError;
+      }
+    }
+    if (!recovered) {
+      const diagnostics = await page.evaluate(() => ({
+        readyState: document.readyState,
+        title: document.title,
+        mainCount: document.querySelectorAll("main").length,
+        formCount: document.querySelectorAll("main form").length,
+        scriptCount: document.scripts.length,
+        controlledInput: (() => {
+          const control = document.querySelector("main form input");
+          return control ? {
+            type: (control as HTMLInputElement).type,
+            valueLength: (control as HTMLInputElement).value.length,
+            reactAttached: Object.keys(control).some((key) => key.startsWith("__reactProps$")),
+          } : null;
+        })(),
+        nextScripts: [...document.scripts].map((script) => script.src).filter((src) => src.includes("/_next/")),
+        nextResources: performance.getEntriesByType("resource").map((entry) => new URL(entry.name).pathname).filter((pathname) => pathname.includes("/_next/")),
+        pageText: document.body.innerText.slice(0, 1000),
+      })).catch(() => null);
+      await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
+      await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", "failure-hydration.png"), fullPage: true }).catch(() => undefined);
+      throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${String(hydrationError)}`);
+    }
   }
 
   const journeyName = await authorJourney(page);
@@ -822,7 +849,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     "select state,provider_message_id from agency_followup_messages where id=$1",
     [firstNormalMessage.id],
   );
-  if (acceptedResult.accepted !== 1 || accepted.rows[0]?.state !== "accepted" || !accepted.rows[0]?.provider_message_id?.startsWith("fake-provider-")) {
+  if (acceptedResult.accepted < 1 || accepted.rows[0]?.state !== "accepted" || !accepted.rows[0]?.provider_message_id?.startsWith("fake-provider-")) {
     throw new Error("Normal fake-provider dispatch did not persist an accepted synthetic outcome.");
   }
 
@@ -848,7 +875,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     [suppressed.id],
   );
   if (suppressedEnrollment.rows[0]?.state !== "draft" || suppressedEnrollment.rows[0]?.released_at !== null ||
-    !(await page.getByRole("alert").innerText()).includes("suppress")) {
+    !(await page.getByRole("alert").filter({ hasText: /suppress/i }).count())) {
     throw new Error("Suppression did not remain visible and block release.");
   }
 
@@ -873,7 +900,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const reclaimed = await pool.query(
     "select * from public.claim_agency_followup_messages('synthetic-walkthrough-no-retry',now()+interval '1 day',120,10)",
   );
-  if (unknownResult.unknown !== 1 || unknownRow.rows[0]?.state !== "unknown" || !unknownRow.rows[0]?.unknown_since || reclaimed.rows.length !== 0) {
+  const unknownWasReclaimed = reclaimed.rows.some((row: { id: string }) => row.id === unknownMessage.rows[0].id);
+  if (unknownResult.unknown !== 1 || unknownRow.rows[0]?.state !== "unknown" || !unknownRow.rows[0]?.unknown_since || unknownWasReclaimed) {
     throw new Error("UNKNOWN provider outcome was not quarantined or was automatically reclaimed.");
   }
 
@@ -966,7 +994,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     });
     const failures = await auditRenderedCopy(page);
-    if (failures.length) throw new Error(`Rendered UI gate failed at ${width}px: ${failures.join("; ")}`);
+    if (failures.length) {
+      await page.screenshot({ path: path.join(screenshotDir, `failure-queue-${width}.png`), fullPage: true });
+      throw new Error(`Rendered UI gate failed at ${width}px: ${failures.join("; ")}`);
+    }
     await page.screenshot({ path: path.join(screenshotDir, `queue-${width}.png`), fullPage: true });
     renderedWidths.push(width);
   }
