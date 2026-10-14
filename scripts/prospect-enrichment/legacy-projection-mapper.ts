@@ -1,3 +1,4 @@
+import { readProspectOriginalContent } from "../../src/lib/prospect-enrichment-original-content";
 import { buildProspectEnrichmentClientItems, type ProspectEnrichmentEnvelope } from "../../src/lib/prospect-enrichment-contract";
 import { compileCandidate, type CompiledPackage } from "./compiler";
 import { produceWholeFirmExport } from "./whole-firm-producer";
@@ -53,7 +54,7 @@ export function deriveLegacyAssessmentProjection(envelope: ProspectEnrichmentEnv
     const expectedChild = selectedLineage(envelope,claim.observationId);
     const parent = buildProspectEnrichmentClientItems(envelope).find(item => item.itemKind === "assessment");
     if (!expectedChild || !parent) return null;
-    const original = envelope.originalResearch.content;
+    const original = readProspectOriginalContent(envelope);
     const changed = replaceCriteria(original,claim,storedCriteria);
     if (!changed) return null;
     for (const content of [original,changed]) {

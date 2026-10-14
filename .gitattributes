@@ -34,3 +34,6 @@
 
 # Public migration CA is byte-pinned; preserve its downloaded PEM bytes.
 /scripts/prospect-enrichment/certificates/prod-ca-2021.crt -text
+
+# Bounded original evidence migration is byte-pinned by its reviewed release.
+/supabase/migrations/20261013214000_prospect_bounded_original_evidence_v2.sql text eol=lf

@@ -141,6 +141,18 @@ integrationDescribe("prospect enrichment first-authority legacy refresh gate", (
       // An applied INSERT is not the writer transition and must not refresh.
       const insertFirm = await addFirm(0);
       const insertedPackage = await addPackage(insertFirm, 0);
+      // Older stored rows need not declare a transport version. Preserve their raw evidence.
+      const legacyHistory = await db.query<{
+        original_json: unknown; original_json_sha256: string; payload_sha256: string;
+      }>(
+        `SELECT original_json,original_json_sha256,payload_sha256
+         FROM public.prospect_research_candidate_history
+         WHERE package_id=$1 AND source_table='prospect_enrichment_packages'`,
+        [insertedPackage.id],
+      );
+      expect(legacyHistory.rows).toEqual([{
+        original_json: {}, original_json_sha256: sha256('{}'), payload_sha256: insertedPackage.payloadHash,
+      }]);
       await addFixture(insertedPackage.id, "applied", insertFirm, insertedPackage.payloadHash);
       expect(await callCount()).toBe("0");
 
