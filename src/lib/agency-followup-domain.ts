@@ -128,6 +128,14 @@ export function agencyFollowupRecipientHash(recipient: AgencyFollowupRecipientSn
   });
 }
 
+export function agencyFollowupStepsHaveApprovedTemplates(
+  stepTemplateVersionIds: readonly string[],
+  approvedTemplateVersionIds: readonly string[],
+): boolean {
+  const approved = new Set(approvedTemplateVersionIds);
+  return stepTemplateVersionIds.every((templateVersionId) => approved.has(templateVersionId));
+}
+
 export function agencyFollowupApprovalIsCurrent(
   approval: AgencyFollowupApprovalSnapshot | null,
   content: AgencyFollowupMessageContent,

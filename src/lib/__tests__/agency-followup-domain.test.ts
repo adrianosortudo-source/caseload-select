@@ -4,6 +4,7 @@ import {
   agencyFollowupContentHash,
   agencyFollowupLogicalMessageKey,
   agencyFollowupRecipientHash,
+  agencyFollowupStepsHaveApprovedTemplates,
   evaluateAgencyFollowupSend,
   resolveAgencyProviderOutcome,
   type AgencyFollowupApprovalSnapshot,
@@ -95,6 +96,11 @@ describe("Agency follow-up domain", () => {
         contactEmail: "JORDAN@EXAMPLE.TEST",
       }),
     );
+  });
+
+  it("allows multiple journey steps to reuse one approved template and rejects any unapproved reference", () => {
+    expect(agencyFollowupStepsHaveApprovedTemplates(["template-1", "template-1"], ["template-1"])).toBe(true);
+    expect(agencyFollowupStepsHaveApprovedTemplates(["template-1", "template-2"], ["template-1"])).toBe(false);
   });
 
   it("fails closed on missing eligibility evidence, suppression, reply, unapproved message, and changed recipient", () => {

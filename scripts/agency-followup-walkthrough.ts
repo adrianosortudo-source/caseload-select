@@ -459,7 +459,7 @@ function inspectWindowsProcessChain(listenerPid: number, nextPid: number): { isN
   try {
     raw = execFileSync("pwsh.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
       encoding: "utf8",
-      timeout: 30000,
+      timeout: 60000,
       windowsHide: true,
     });
   } catch (error) {
@@ -541,7 +541,14 @@ async function waitForAction(page: Page, action: string, button: ReturnType<Page
   try { actualAction = String(response.request().postDataJSON()?.action ?? "unknown"); } catch { /* keep the diagnostic label */ }
   progress(`operator action response: expected=${action}; actual=${actualAction}; HTTP=${response.status()}`);
   if (actualAction !== action) throw new Error(`Operator action expected ${action} but observed ${actualAction} (HTTP ${response.status()}).`);
-  if (!response.ok()) throw new Error(`Operator action ${action} failed with HTTP ${response.status()}.`);
+  if (!response.ok()) {
+    const payload = await response.json().catch(() => ({})) as { error?: unknown };
+    const detail = typeof payload.error === "string"
+      ? payload.error.replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 240)
+      : "no safe error detail";
+    progress(`operator action safe error detail: ${detail}`);
+    throw new Error(`Operator action ${action} failed with HTTP ${response.status()}: ${detail}`);
+  }
 }
 
 function queueCard(page: Page, firmName: string) {
@@ -574,16 +581,24 @@ async function authorJourney(page: Page): Promise<string> {
   await page.getByLabel("Delay, business days").nth(1).fill("1");
   await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
   await waitForAction(page, "journey_activate", page.getByRole("button", { name: "Activate version" }).first());
+  const activatedJourneyOption = page.getByLabel("Journey version").locator("option").filter({ hasText: journeyName + " v1" });
+  try {
+    await expect(activatedJourneyOption).toHaveCount(1, { timeout: 30000 });
+  } catch (error) {
+    const options = await page.getByLabel("Journey version").locator("option").allTextContents().catch(() => []);
+    const alert = await page.locator('[role="alert"]').allTextContents().catch(() => []);
+    throw new Error(`Activated journey did not appear in the review selector. Current options=${JSON.stringify(options)}; alerts=${JSON.stringify(alert)}. ${String(error)}`);
+  }
   await page.getByLabel("Journey version").selectOption({ label: journeyName + " v1" });
   return journeyName;
 }
 
-async function createDraft(page: Page, journeyName: string, prospect: ProspectFixture): Promise<void> {
+async function createDraft(pool: Pool, page: Page, journeyName: string, prospect: ProspectFixture): Promise<void> {
   await page.getByLabel("Journey version").selectOption({ label: journeyName + " v1" });
   await page.getByLabel("Find one prospect").fill(prospect.firmName);
   const searchResponsePromise = page.waitForResponse((response) =>
     response.url().includes("/api/admin/agency-crm/prospects?") && response.request().method() === "GET",
-    { timeout: 30000 },
+    { timeout: 360000 },
   );
   await page.getByRole("button", { name: "Search", exact: true }).click();
   const searchResponse = await searchResponsePromise;
@@ -594,6 +609,8 @@ async function createDraft(page: Page, journeyName: string, prospect: ProspectFi
   const searchError = (searchPayload.error ?? "").replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 240);
   progress(`prospect search HTTP ${searchResponse.status()}; returned=${Array.isArray(searchPayload.items) ? searchPayload.items.length : "invalid"}; exactFixtureMatch=${Boolean(exactMatch)}; matchHasEmail=${Boolean(exactMatch?.contact_email)}${searchError ? `; error=${searchError}` : ""}`);
   if (!searchResponse.ok()) throw new Error(`Synthetic prospect search returned HTTP ${searchResponse.status()}${searchError ? `: ${searchError}` : "."}`);
+  const existingEnrollments = await countRows(pool, "select count(*)::text as count from agency_followup_enrollments where prospect_id=$1", [prospect.id]);
+  progress(`synthetic fixture enrollment count before UI enrollment=${existingEnrollments}`);
   const match = page.getByRole("listitem").filter({ hasText: prospect.firmName }).first();
   await match.waitFor({ state: "visible", timeout: 30000 });
   await waitForAction(page, "enroll", match.getByRole("button", { name: "Create draft review" }));
@@ -687,19 +704,55 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   page.on("console", (message) => {
     if (message.type() === "error") responseFailures.push("browser console: " + message.text());
   });
+  page.on("requestfailed", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname.includes("/_next/")) responseFailures.push(`asset request failed: ${pathname}; ${request.failure()?.errorText ?? "unknown"}`);
+  });
+  page.on("response", (response) => {
+    const pathname = new URL(response.url()).pathname;
+    if (pathname.includes("/_next/") && response.status() >= 400) responseFailures.push(`asset response ${response.status()}: ${pathname}`);
+  });
   progress(`opening actual operator queue UI (${Math.floor(remainingMs() / 1000)}s overall budget remains)`);
   await page.goto(APP_ORIGIN + "/admin/agency-crm/follow-up", { waitUntil: "domcontentloaded", timeout: 180_000 });
   await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
-  await page.waitForFunction(() => {
-    const form = document.querySelector("main form");
-    return Boolean(form && Object.keys(form).some((key) => key.startsWith("__reactProps$")));
-  }, null, { timeout: 30000 });
-  progress("operator form hydration confirmed before browser interaction");
+  try {
+    await page.waitForFunction(() => {
+      // The template key is a controlled input with an onChange handler, so
+      // React attaches its event props to this input after hydration. Checking
+      // this concrete control is more stable than assuming the form node is
+      // the element carrying React's delegated event props.
+      const control = document.querySelector("main form input");
+      return Boolean(control && Object.keys(control).some((key) => key.startsWith("__reactProps$")));
+    }, null, { polling: "raf", timeout: 180000 });
+    progress("operator form hydration confirmed on controlled template input");
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => ({
+      readyState: document.readyState,
+      title: document.title,
+      mainCount: document.querySelectorAll("main").length,
+      formCount: document.querySelectorAll("main form").length,
+      scriptCount: document.scripts.length,
+      controlledInput: (() => {
+        const control = document.querySelector("main form input");
+        return control ? {
+          type: (control as HTMLInputElement).type,
+          valueLength: (control as HTMLInputElement).value.length,
+          reactAttached: Object.keys(control).some((key) => key.startsWith("__reactProps$")),
+        } : null;
+      })(),
+      nextScripts: [...document.scripts].map((script) => script.src).filter((src) => src.includes("/_next/")),
+      nextResources: performance.getEntriesByType("resource").map((entry) => new URL(entry.name).pathname).filter((pathname) => pathname.includes("/_next/")),
+      pageText: document.body.innerText.slice(0, 1000),
+    })).catch(() => null);
+    await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
+    await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", "failure-hydration.png"), fullPage: true }).catch(() => undefined);
+    throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${String(error)}`);
+  }
 
   const journeyName = await authorJourney(page);
   const normal = fixtures.prospects.normal;
-  await createDraft(page, journeyName, normal);
+  await createDraft(pool, page, journeyName, normal);
   const duplicate = await postAction(context, {
     action: "enroll",
     journeyId: await page.getByLabel("Journey version").inputValue(),

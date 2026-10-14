@@ -20,6 +20,7 @@ import {
   agencyFollowupContentHash,
   agencyFollowupLogicalMessageKey,
   agencyFollowupRecipientHash,
+  agencyFollowupStepsHaveApprovedTemplates,
   evaluateAgencyFollowupSend,
   type AgencyContactability,
   type AgencyConversationStatus,
@@ -510,7 +511,9 @@ export async function createAgencyFollowupEnrollment(input: {
   const templatesResult = await supabase.from("agency_followup_template_versions").select("*").in("id", templateIds).eq("state", "approved");
   const templates = assertResult(templatesResult, "Unable to load approved message templates") as DbRow[];
   const templateById = new Map(templates.map((row) => [String(row.id), row]));
-  if (templateById.size !== steps.length) throw new Error("Every journey step must reference an approved template version.");
+  if (!agencyFollowupStepsHaveApprovedTemplates(templateIds, [...templateById.keys()])) {
+    throw new Error("Every journey step must reference an approved template version.");
+  }
 
   const enrollmentId = randomUUID();
   const recipientHash = agencyFollowupRecipientHash(recipient);
