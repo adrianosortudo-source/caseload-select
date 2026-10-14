@@ -1,0 +1,169 @@
+{
+  "schemaVersion": "prospect-bounded-original-release/v1",
+  "projectRef": "ssxryjxifwiivghglqer",
+  "cliVersion": "2.117.0",
+  "reviewOnly": true,
+  "approvalGranted": false,
+  "migration": {
+    "path": "supabase/migrations/20261013214000_prospect_bounded_original_evidence_v2.sql",
+    "version": "20261013214000",
+    "name": "prospect_bounded_original_evidence_v2",
+    "sha256": "0c2421f1544de099967074184e86c6079570e23f1635ba9c30a149974cc7d301",
+    "bytes": 24285
+  },
+  "ledgerReferenceSha256": "164e22885c669ab59e99545bc5ec3b5acb9702ee988e2d5980846a972d433bc7",
+  "catalogPre": {
+    "functions": [
+      {
+        "schema": "prospect_candidate_private",
+        "name": "list_candidates",
+        "signature": "prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)",
+        "owner": "postgres",
+        "security_definer": true,
+        "settings": [
+          "search_path=\"\""
+        ],
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "body_sha256": "ccdaf7f76117af1943b2f34aa3268112072a87889382ec4d78a0c9abf2c4d68d"
+      },
+      {
+        "schema": "prospect_candidate_private",
+        "name": "record_history",
+        "signature": "prospect_candidate_private.record_history(uuid,bigint,text,text,text,uuid,text,uuid,jsonb,text,jsonb,jsonb,uuid)",
+        "owner": "postgres",
+        "security_definer": false,
+        "settings": [
+          "search_path=\"\""
+        ],
+        "acl": "{postgres=X/postgres}",
+        "body_sha256": "db42dd49e44b2113f4f4ce4cb0e785a76d3997f315ca1c0c4535601176f3b8e6"
+      },
+      {
+        "schema": "public",
+        "name": "stage_prospect_enrichment_package_v1",
+        "signature": "stage_prospect_enrichment_package_v1(text,text,text,text,text,text,text,text,jsonb,text,text,text,jsonb,jsonb,text)",
+        "owner": "postgres",
+        "security_definer": true,
+        "settings": [
+          "search_path=\"\""
+        ],
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "body_sha256": "f36f75f49a17444e2571ffbf1d9a9a2fc862f6cb16b1919d4326e01201879047"
+      }
+    ],
+    "constraint": "CHECK ((schema_version = 'prospect-enrichment/v1'::text))"
+  },
+  "catalogPost": {
+    "functions": [
+      {
+        "acl": "{postgres=X/postgres}",
+        "name": "decode_original_nodes_v1",
+        "owner": "postgres",
+        "schema": "prospect_candidate_private",
+        "settings": [
+          "search_path=\"\""
+        ],
+        "signature": "prospect_candidate_private.decode_original_nodes_v1(jsonb,text,text)",
+        "body_sha256": "9ded58ac1695e256f594ea0ef8acf1ae3b2ac2e577501c10cdfa65294266a252",
+        "security_definer": false
+      },
+      {
+        "schema": "prospect_candidate_private",
+        "name": "list_candidates",
+        "signature": "prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)",
+        "owner": "postgres",
+        "security_definer": true,
+        "settings": [
+          "search_path=\"\""
+        ],
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "body_sha256": "f62fe885b2ba5a693aabc5a4218a525b71ea288dfeb6b13336eea2cb5857e2c0"
+      },
+      {
+        "acl": "{postgres=X/postgres}",
+        "name": "logical_enrichment_payload_v1",
+        "owner": "postgres",
+        "schema": "prospect_candidate_private",
+        "settings": [
+          "search_path=\"\""
+        ],
+        "signature": "prospect_candidate_private.logical_enrichment_payload_v1(jsonb)",
+        "body_sha256": "18c7a4dfa603d489aa69112c79d3f07a9e0ca4aa7b01c8639a1bc475be462203",
+        "security_definer": false
+      },
+      {
+        "acl": "{postgres=X/postgres}",
+        "name": "package_stable_json_v1",
+        "owner": "postgres",
+        "schema": "prospect_candidate_private",
+        "settings": [
+          "search_path=\"\""
+        ],
+        "signature": "prospect_candidate_private.package_stable_json_v1(jsonb,text)",
+        "body_sha256": "7f89b637548ec8038882cb7269c3b93cb096e700dbfa7aa937603bc34894a92f",
+        "security_definer": false
+      },
+      {
+        "acl": "{postgres=X/postgres}",
+        "name": "record_history",
+        "owner": "postgres",
+        "schema": "prospect_candidate_private",
+        "settings": [
+          "search_path=\"\""
+        ],
+        "signature": "prospect_candidate_private.record_history(uuid,bigint,text,text,text,uuid,text,uuid,jsonb,text,jsonb,jsonb,uuid)",
+        "body_sha256": "f63558b98900f897c8383fd37fbe82d69c8fc6c593a8364a31149bdcc6b1a7d3",
+        "security_definer": false
+      },
+      {
+        "acl": "{postgres=X/postgres}",
+        "name": "transport_hash_v2",
+        "owner": "postgres",
+        "schema": "prospect_candidate_private",
+        "settings": [
+          "search_path=\"\""
+        ],
+        "signature": "prospect_candidate_private.transport_hash_v2(jsonb)",
+        "body_sha256": "2fe57748217b3aed843e8a36e9ad503c40ec6ee0f8e1f9c399656bf106f76a20",
+        "security_definer": false
+      },
+      {
+        "acl": "{postgres=X/postgres}",
+        "name": "transport_stable_json_v2",
+        "owner": "postgres",
+        "schema": "prospect_candidate_private",
+        "settings": [
+          "search_path=\"\""
+        ],
+        "signature": "prospect_candidate_private.transport_stable_json_v2(jsonb)",
+        "body_sha256": "b3d4c9db94f54909e40f40e2142f0381c99af61f36d228312ba3439bc5196b94",
+        "security_definer": false
+      },
+      {
+        "acl": "{postgres=X/postgres}",
+        "name": "utf16_sort_key_v2",
+        "owner": "postgres",
+        "schema": "prospect_candidate_private",
+        "settings": [
+          "search_path=\"\""
+        ],
+        "signature": "prospect_candidate_private.utf16_sort_key_v2(text)",
+        "body_sha256": "eb738539a970f7af373f5371fb740edd2f21d454a738b5e238c6204f3fadb687",
+        "security_definer": false
+      },
+      {
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "name": "stage_prospect_enrichment_package_v1",
+        "owner": "postgres",
+        "schema": "public",
+        "settings": [
+          "search_path=\"\""
+        ],
+        "signature": "stage_prospect_enrichment_package_v1(text,text,text,text,text,text,text,text,jsonb,text,text,text,jsonb,jsonb,text)",
+        "body_sha256": "2ae8e838f9f040791cbb9397077431e7c5bb0236d88b6b5e58869c991e3433e2",
+        "security_definer": true
+      }
+    ],
+    "constraint": "CHECK ((schema_version = ANY (ARRAY['prospect-enrichment/v1'::text, 'prospect-enrichment/v2'::text])))"
+  }
+}

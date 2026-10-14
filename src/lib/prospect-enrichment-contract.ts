@@ -1,3 +1,4 @@
+import { readProspectOriginalContent } from "./prospect-enrichment-original-content";
 import {
   prospectEnrichmentProtocolHash,
   prospectEnrichmentSemanticSha256,
@@ -7,6 +8,7 @@ import {
 
 export type JsonValue = ProspectEnrichmentJsonValue;
 export const PROSPECT_ENRICHMENT_SCHEMA_VERSION = "prospect-enrichment/v1" as const;
+export const PROSPECT_ENRICHMENT_BOUNDED_SCHEMA_VERSION = "prospect-enrichment/v2" as const;
 export const PROSPECT_ENRICHMENT_MAX_BODY_BYTES = 2_097_152;
 export const PROSPECT_ENRICHMENT_MAX_ITEMS = 500;
 export const PROSPECT_ENRICHMENT_MAX_DEPTH = 12;
@@ -94,7 +96,7 @@ export type ProspectEnrichmentExistingRecord = Readonly<{
 }>;
 
 export type ProspectEnrichmentEnvelope = Readonly<{
-  schemaVersion: typeof PROSPECT_ENRICHMENT_SCHEMA_VERSION;
+  schemaVersion: typeof PROSPECT_ENRICHMENT_SCHEMA_VERSION | typeof PROSPECT_ENRICHMENT_BOUNDED_SCHEMA_VERSION;
   runId: string;
   packageId: string;
   supersedesPackageId: string | null;
@@ -119,6 +121,7 @@ export type ProspectEnrichmentEnvelope = Readonly<{
     sourceSha256: string;
     sourcePointer: string;
     contentSha256: string;
+    representationSha256?: string;
     content: JsonValue;
     unmappedPaths: readonly string[];
   }>;
@@ -545,7 +548,7 @@ function parseObservation(value: unknown, index: number, sourceIds: ReadonlySet<
 
 function parseEnvelopeObject(value: Record<string, unknown>, issues: ProspectEnrichmentValidationIssue[]): ProspectEnrichmentEnvelope | null {
   exactKeys(value, ["schemaVersion", "runId", "packageId", "supersedesPackageId", "sourceSystem", "sourceName", "generatedAt", "mode", "subject", "sources", "observations", "assessment", "originalResearch", "controls"], "", issues);
-  if (value.schemaVersion !== PROSPECT_ENRICHMENT_SCHEMA_VERSION) add(issues, "schemaVersion", "must equal prospect-enrichment/v1");
+  if (value.schemaVersion !== PROSPECT_ENRICHMENT_SCHEMA_VERSION && value.schemaVersion !== PROSPECT_ENRICHMENT_BOUNDED_SCHEMA_VERSION) add(issues, "schemaVersion", "must equal prospect-enrichment/v1 or prospect-enrichment/v2");
   for (const key of ["runId", "packageId", "sourceSystem", "sourceName"] as const) {
     if (typeof value[key] !== "string" || !identifier.test(value[key] as string)) add(issues, key, "must be a lowercase stable identifier of at most 120 characters");
   }
@@ -582,8 +585,9 @@ function parseEnvelopeObject(value: Record<string, unknown>, issues: ProspectEnr
   const assessment = parseAssessment(value.assessment, sourceIdSet, issues);
   if (!record(value.originalResearch)) add(issues, "originalResearch", "must be an object");
   let originalResearch: ProspectEnrichmentEnvelope["originalResearch"] | null = null;
+  let originalContent: JsonValue | undefined;
   if (record(value.originalResearch)) {
-    exactKeys(value.originalResearch, ["sourcePath", "sourceSha256", "sourcePointer", "contentSha256", "content", "unmappedPaths"], "originalResearch", issues);
+    exactKeys(value.originalResearch, ["sourcePath", "sourceSha256", "sourcePointer", "contentSha256", "content", "unmappedPaths", ...(value.schemaVersion === PROSPECT_ENRICHMENT_BOUNDED_SCHEMA_VERSION ? ["representationSha256"] : [])], "originalResearch", issues);
     requiredString(value.originalResearch.sourcePath, "originalResearch.sourcePath", issues, 2000);
     if (typeof value.originalResearch.sourceSha256 !== "string" || !sha256.test(value.originalResearch.sourceSha256)) add(issues, "originalResearch.sourceSha256", "must be a lowercase SHA-256 digest");
     if (typeof value.originalResearch.sourcePointer !== "string" || value.originalResearch.sourcePointer.length > 2000) add(issues, "originalResearch.sourcePointer", "must be a source pointer up to 2000 characters");
@@ -595,9 +599,12 @@ function parseEnvelopeObject(value: Record<string, unknown>, issues: ProspectEnr
       if (paths.some((path, index) => index > 0 && typeof path === "string" && typeof paths[index - 1] === "string" && (paths[index - 1] as string) > path)) add(issues, "originalResearch.unmappedPaths", "must be sorted lexicographically");
     }
     try {
-      const contentHash = prospectEnrichmentProtocolHash(value.originalResearch.content);
-      if (contentHash !== value.originalResearch.contentSha256) add(issues, "originalResearch.contentSha256", "does not match the protocol hash of content");
-    } catch { add(issues, "originalResearch.content", "must be a JSON value that can be canonically hashed"); }
+      originalContent = readProspectOriginalContent({ schemaVersion: value.schemaVersion, originalResearch: value.originalResearch });
+    } catch (cause) {
+      if (cause instanceof Error && cause.message === "original_research_content_hash_mismatch") add(issues, "originalResearch.contentSha256", "does not match the protocol hash of content");
+      else if (cause instanceof Error && cause.message === "original_research_unicode_not_supported_by_database") add(issues, "originalResearch.content", "contains NUL or an unpaired surrogate unsupported by JSONB; preserve the immutable source as an explicit hold");
+      else add(issues, "originalResearch.content", value.schemaVersion === PROSPECT_ENRICHMENT_SCHEMA_VERSION ? "must be a JSON value that can be canonically hashed" : "must preserve verified logical content and a valid bounded representation hash");
+    }
     originalResearch = value.originalResearch as unknown as ProspectEnrichmentEnvelope["originalResearch"];
   }
   if (!record(value.controls)) add(issues, "controls", "must be an object");
@@ -605,7 +612,7 @@ function parseEnvelopeObject(value: Record<string, unknown>, issues: ProspectEnr
     exactKeys(value.controls, ["contactFormsSubmitted", "chatSessionsStarted", "outreachSent"], "controls", issues);
     for (const control of ["contactFormsSubmitted", "chatSessionsStarted", "outreachSent"] as const) if (value.controls[control] !== false) add(issues, `controls.${control}`, "must be false for this no-contact adapter");
   }
-  if (!observations.length && assessment === null && (!record(value.originalResearch) || value.originalResearch.content === null)) add(issues, "package", "requires an observation, assessment, or non-null originalResearch.content");
+  if (!observations.length && assessment === null && (originalContent === undefined || originalContent === null)) add(issues, "package", "requires an observation, assessment, or non-null originalResearch.content");
   try {
     if (new TextEncoder().encode(stableProspectEnrichmentJson(value)).byteLength > PROSPECT_ENRICHMENT_MAX_BODY_BYTES) add(issues, "package", "canonical envelope exceeds the 2 MiB limit");
   } catch { /* recursive inspection above provides the specific issue */ }

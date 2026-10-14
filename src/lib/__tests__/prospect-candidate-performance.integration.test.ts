@@ -126,6 +126,10 @@ suite("candidate reads above the observed Admin inventory", () => {
       };
       const first = await read("unfiltered-cold", {});
       for (let index = 0; index < 4; index++) await read("unfiltered-repeat-" + index, {});
+      const exactIdentity = { identityNamespace: "legacy:gta_prospect_firms", identityKey: targetFirm };
+      const exactCandidate = await read("indexed-exact-identity", exactIdentity);
+      expect(exactCandidate.filteredCount).toBe(1); expect(exactCandidate.items).toHaveLength(1);
+      expect((await read("indexed-exact-identity-field", { ...exactIdentity, fieldPointer: "/source_record_key", fieldValue: targetSourceKey })).items.map(item => item.id)).toEqual(exactCandidate.items.map(item => item.id));
       const selectiveText = await read("indexed-text", { text: prefix + "-6500" });
       expect(selectiveText.filteredCount).toBeGreaterThanOrEqual(1);
       const broadTermText = await read("rare-anchor-with-broad-term", { text: targetUnique + " Law" });
@@ -203,6 +207,8 @@ suite("candidate reads above the observed Admin inventory", () => {
       expect(timings.find(item => item.label === "verified-firm")!.milliseconds).toBeLessThan(4500);
       expect(timings.find(item => item.label === "verified-firm-original-status")!.milliseconds).toBeLessThan(4500);
       console.info("candidate-read-performance", JSON.stringify({ counts, timings, p95Milliseconds: p95, statementTimeoutMilliseconds: 5000 }));
+      expect(timings.find(item => item.label === "indexed-exact-identity")!.milliseconds).toBeLessThan(4500);
+      expect(timings.find(item => item.label === "indexed-exact-identity-field")!.milliseconds).toBeLessThan(4500);
       expect(p95).toBeLessThan(5000);
     } finally { await db.query("ROLLBACK"); db.release(); }
   }, 900_000);

@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { verifyBoundedOriginalForDisplay } from "@/lib/prospect-enrichment-original-display";
 
 export const researchButton = "inline-flex items-center justify-center rounded-md border border-border-brand bg-white px-3 py-2 text-sm font-semibold text-navy hover:bg-parchment disabled:cursor-not-allowed disabled:opacity-50";
 export const researchInput = "w-full rounded-md border border-border-brand bg-white px-3 py-2 text-sm text-navy";
@@ -47,6 +48,30 @@ export function ResearchJson({ value, depth = 0 }: { value: unknown; depth?: num
 }
 
 
+function VerifiedBoundedResearch({ value, expectedEnvelopeSha256, fullEnvelope = false }: { value: unknown; expectedEnvelopeSha256?: string; fullEnvelope?: boolean }) {
+  const [verification, setVerification] = useState<{ input: unknown; hash?: string; content?: unknown; logicalEnvelope?: unknown; failed: boolean } | null>(null);
+  const [transportOpen, setTransportOpen] = useState(false);
+  useEffect(() => {
+    let active = true;
+    void verifyBoundedOriginalForDisplay(value, expectedEnvelopeSha256).then(result => {
+      if (active) setVerification({ input: value, hash: expectedEnvelopeSha256, ...result, failed: false });
+    }).catch(() => { if (active) setVerification({ input: value, hash: expectedEnvelopeSha256, failed: true }); });
+    return () => { active = false; };
+  }, [value, expectedEnvelopeSha256]);
+  const current = verification !== null && verification.input === value && verification.hash === expectedEnvelopeSha256 ? verification : null;
+  const saved = fullEnvelope ? value : (value as { originalResearch: { content: unknown } }).originalResearch.content;
+  return <div className="min-w-0 space-y-3" data-ui-component-content="research-original-verification">
+    <p role={current?.failed ? "alert" : "status"} className="w-full text-sm" data-ui-copy="supporting">{!current ? "Verifying evidence." : current.failed ? "Verification failed." : "Evidence hashes match."}</p>
+    {current && !current.failed && <>{fullEnvelope && <h4 className="w-full text-sm font-semibold" data-ui-copy="heading">Reconstructed view</h4>}<div role="region" tabIndex={0} aria-label="Verified original research" className="max-h-[40rem] min-w-0 overflow-auto"><ResearchJson value={fullEnvelope ? current.logicalEnvelope : current.content} /></div></>}
+    <details onToggle={event => setTransportOpen(event.currentTarget.open)}><summary className="cursor-pointer text-sm font-semibold">{fullEnvelope ? "Saved transport JSON" : "Saved node JSON"}</summary>{transportOpen && <pre className="mt-3 max-h-96 overflow-auto whitespace-pre-wrap break-all text-xs">{JSON.stringify(saved, null, 2)}</pre>}</details>
+  </div>;
+}
+
+export function ResearchRetainedJson({ value, packageId, originalJsonSha256 }: { value: unknown; packageId: string | null; originalJsonSha256: string }) {
+  const bounded = packageId !== null && value !== null && typeof value === "object" && !Array.isArray(value) && (value as Record<string, unknown>).schemaVersion === "prospect-enrichment/v2";
+  return bounded ? <VerifiedBoundedResearch value={value} expectedEnvelopeSha256={originalJsonSha256} fullEnvelope /> : <ResearchJson value={value} />;
+}
+
 export function ResearchSource({ source }: { source: unknown }) {
   if (!source || typeof source !== "object" || Array.isArray(source)) return <ResearchJson value={source} />;
   const value = source as Record<string, unknown>;
@@ -56,15 +81,17 @@ export function ResearchSource({ source }: { source: unknown }) {
   return <div className="min-w-0 space-y-2"><p className="text-sm">{dateLabel}</p>{typeof value.publicationLabel === "string" && <p className="text-sm">Published {value.publicationLabel}</p>}<ResearchJson value={value} /></div>;
 }
 
-export function ResearchOriginal({ content, unmappedPaths = [], sourcePath, sourcePointer, sha256 }: { content: unknown; unmappedPaths?: readonly string[]; sourcePath?: string; sourcePointer?: string; sha256?: string }) {
-  return <details className="min-w-0 rounded-md border border-border-brand p-3">
+export function ResearchOriginal({ content, unmappedPaths = [], sourcePath, sourcePointer, sha256, envelopeSchemaVersion, contentSha256, representationSha256 }: { content: unknown; unmappedPaths?: readonly string[]; sourcePath?: string; sourcePointer?: string; sha256?: string; envelopeSchemaVersion?: string; contentSha256?: string; representationSha256?: string }) {
+  const original = useMemo(() => ({ schemaVersion: envelopeSchemaVersion, originalResearch: { content, contentSha256, representationSha256 } }), [envelopeSchemaVersion, content, contentSha256, representationSha256]);
+  const [open, setOpen] = useState(false);
+  return <details className="min-w-0 rounded-md border border-border-brand p-3" onToggle={event => setOpen(event.currentTarget.open)}>
     <summary className="cursor-pointer text-sm font-semibold text-navy">Original research and unmapped fields</summary>
     <div className="mt-3 space-y-3">
       {sourcePath && <p className="break-all text-xs text-black/60">Source: {sourcePath}{sourcePointer ? ` ${sourcePointer}` : ""}</p>}
       {sha256 && <p className="break-all font-mono text-xs">Source SHA-256: {sha256}</p>}
       <p className="text-sm text-black/60">{unmappedPaths.length ? `${unmappedPaths.length} original paths remain outside the structured fields.` : "No unmapped paths were reported by this package."}</p>
       {unmappedPaths.length > 0 && <ul className="space-y-1 text-xs">{unmappedPaths.map((path) => <li key={path} className="break-all font-mono">{path}</li>)}</ul>}
-      <div className="min-w-0 rounded-md bg-parchment p-3"><ResearchJson value={content} /></div>
+      {open && <div className="min-w-0 rounded-md bg-parchment p-3">{envelopeSchemaVersion === "prospect-enrichment/v2" ? <VerifiedBoundedResearch value={original} /> : <ResearchJson value={content} />}</div>}
     </div>
   </details>;
 }

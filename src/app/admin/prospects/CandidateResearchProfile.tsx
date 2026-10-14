@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { candidateFieldReference, loadCandidateRevision } from "@/lib/prospect-enrichment-candidate-content";
 import type { CandidateDetail, CandidateHistory, CandidateHistoryItem } from "@/lib/prospect-enrichment-candidate-contract";
 import { CandidateWarnings } from "./CandidateResearchWarnings";
-import { ResearchError, ResearchJson, ResearchPanel, readResearchResponse, researchButton, researchLabel } from "./ResearchEvidence";
+import { ResearchError, ResearchJson, ResearchRetainedJson, ResearchPanel, readResearchResponse, researchButton, researchLabel } from "./ResearchEvidence";
 
 function ExactFieldLink({ revisionId, pointer, value }: { revisionId: string; pointer: string; value: unknown }) {
   const router = useRouter(), [error, setError] = useState(false);
@@ -31,7 +31,7 @@ function CandidateRevision({ item: metadata, coverageRevision }: { item: Candida
         return <div key={field.pointer} className="min-w-0 rounded bg-parchment p-3"><p className="break-all font-mono text-xs">{field.pointer || "(root)"} · {field.scalarType}</p><ResearchJson value={field.value} /><p className="mt-2 break-words text-xs">Observed {field.observedAt ?? "not recorded"}; retrieved {field.retrievedAt ?? "not recorded"}. {researchLabel(field.validationState)}.</p><p className="break-all text-xs">Item {field.sourceItemId ?? "not recorded"}; source references {JSON.stringify(field.sourceIds)}.</p><ExactFieldLink revisionId={item.id} pointer={field.pointer} value={field.value} /></div>;
       })}</div>
       {item.fields.length > fieldLimit && <button className={researchButton} onClick={() => setFieldLimit(value => value + 50)} type="button">Show 50 more retained fields</button>}
-      {!item.contentDeferred && <details><summary className="cursor-pointer font-semibold text-navy">Complete original JSON</summary><div className="mt-3 min-w-0"><ResearchJson value={item.originalJson} /></div></details>}
+      {!item.contentDeferred && <details><summary className="cursor-pointer font-semibold text-navy">Complete original JSON</summary><div className="mt-3 min-w-0"><ResearchRetainedJson value={item.originalJson} packageId={item.packageId} originalJsonSha256={item.originalJsonSha256} /></div></details>}
       {!item.contentDeferred && <details><summary className="cursor-pointer font-semibold text-navy">Unmapped original paths</summary><div className="mt-3"><ResearchJson value={item.unmappedPaths} /></div></details>}
     </div>}</details>
   </article>;

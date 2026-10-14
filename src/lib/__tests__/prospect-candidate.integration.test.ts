@@ -1,5 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
 import { createHash, randomUUID } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { Pool, type PoolClient } from "pg";
 import { prospectEnrichmentProtocolHash, stableProspectEnrichmentJson } from "@/lib/prospect-enrichment-hash";
 
@@ -296,6 +297,9 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       }
       const fresh = await sourceCandidates();
       expect(fresh.items).toHaveLength(1);
+      const exactConflict = { identityNamespace: fresh.items[0].identityNamespace, identityKey: fresh.items[0].identityKey };
+      expect(await list(db, exactConflict, 100, null, fresh.coverageRevision)).toEqual(await list(db, { ...exactConflict, text: "" }, 100, null, fresh.coverageRevision));
+      expect((await list(db, exactConflict, 100, null, cutoffBeforeSecond)).items[0]).toMatchObject({ identityState: "resolved", verifiedFirmId: firmIds[0] });
       expect(fresh.items[0].originalStatuses).toEqual(expect.arrayContaining(["selected", "not_selected"]));
       expect(fresh.items[0].qualificationStates).toEqual(["needs_evidence"]);
       const statusConflict = await list(db, { originalStatus: "selected" });
@@ -313,6 +317,85 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       expect(revisions.items.some(x => x.fields.some(f => f.value === "https://synthetic.example/source-only"))).toBe(true);
     } finally { await db.query("ROLLBACK"); db.release(); }
   }, 60_000);
+
+
+  it("keeps exact source and typed fields candidate-owned with identical historical responses", async () => {
+    const db = await pool!.connect(); await db.query("BEGIN");
+    try {
+      const token = "exactfilter" + randomUUID().replaceAll("-", "");
+      const governed = await governedLegacyFirm(db, token);
+      const addAudit = async (suffix: string) => (await db.query<{ id: string }>(
+        "INSERT INTO public.gta_prospect_import_audit(import_batch_id,source_record_key,source_record_sha256,validation_state,action_state,firm_id,canonical_record) VALUES($1,$2,$3,'accepted','created',$4,$5::jsonb) RETURNING id",
+        [governed.batchId, token + suffix, "d".repeat(64), governed.firmId, JSON.stringify({
+          sourceRecordKey: token + suffix, firmName: "Synthetic exact filter",
+          ownedMatch: token, answers: [null, false, 0, "false", [], {}], "slash/~": { "": null }
+        })])).rows[0].id;
+      const firstAudit = await addAudit("B"), secondAudit = await addAudit("C");
+      const a = { identityNamespace: "legacy:gta_prospect_firms", identityKey: governed.firmId };
+      const b = { identityNamespace: "legacy:gta_prospect_import_audit", identityKey: firstAudit };
+      const aPage = await list(db, a);
+      expect(aPage.items).toHaveLength(1);
+      expect(aPage.items[0]).toMatchObject({ identityState: "resolved", verifiedFirmId: governed.firmId });
+      const bPage = await list(db, b, 100, null, aPage.coverageRevision);
+      expect(bPage.items).toHaveLength(1);
+      expect(bPage.items[0].verifiedFirmId).toBe(governed.firmId);
+      const owned = { fieldPointer: "/canonical_record/ownedMatch", fieldValue: token };
+      expect((await list(db, { ...a, ...owned })).filteredCount).toBe(0);
+      expect((await list(db, { ...b, ...owned })).items.map(item => item.id)).toEqual([bPage.items[0].id]);
+      expect((await list(db, owned)).filteredCount).toBe(2);
+
+      const equivalent = async (filters: Record<string, Json>, limit = 100, after: string | null = null, cutoff = aPage.coverageRevision) => {
+        const fast = await list(db, filters, limit, after, cutoff);
+        expect(fast).toEqual(await list(db, { ...filters, text: "" }, limit, after, cutoff));
+        return fast;
+      };
+      await equivalent(a); await equivalent(b); await equivalent({ ...a, ...owned });
+      await equivalent({ ...b, ...owned }); await equivalent(owned);
+      await equivalent({ identityNamespace: a.identityNamespace.toUpperCase(), identityKey: a.identityKey });
+      const typed: Json[] = [null, false, 0, "false", [], {}];
+      for (const [index, value] of typed.entries()) {
+        const filters = { ...b, fieldPointer: "/canonical_record/answers/" + index, fieldValue: value };
+        expect((await equivalent(filters)).filteredCount).toBe(1);
+        expect((await equivalent({ ...a, fieldPointer: filters.fieldPointer, fieldValue: value })).filteredCount).toBe(0);
+      }
+      expect((await equivalent({ ...b, fieldPointer: "/canonical_record/answers/1", fieldValue: "false" })).filteredCount).toBe(0);
+      expect((await equivalent({ ...b, fieldPointer: "/canonical_record/slash~1~0/" })).filteredCount).toBe(1);
+      expect((await equivalent({ ...b, fieldPointer: "/canonical_record/slash~1~0/", fieldValue: null })).filteredCount).toBe(1);
+
+      const first = await equivalent(owned, 1);
+      expect(first.filteredCount).toBe(2); expect(first.items).toHaveLength(1); expect(first.nextAfterId).not.toBeNull();
+      await addAudit("later");
+      const second = await equivalent(owned, 1, first.nextAfterId, first.coverageRevision);
+      expect(second.filteredCount).toBe(2); expect(second.inventoryCount).toBe(first.inventoryCount);
+      expect(second.nextAfterId).toBeNull();
+      expect(new Set([...first.items, ...second.items].map(item => item.id)).size).toBe(2);
+      expect((await list(db, owned)).filteredCount).toBe(3);
+
+      const beforeName = "Synthetic legacy " + token, changedName = "Synthetic changed " + token;
+      await db.query("UPDATE public.gta_prospect_firms SET display_name=$2 WHERE id=$1", [governed.firmId, changedName]);
+      expect((await list(db, { ...a, fieldPointer: "/display_name", fieldValue: beforeName })).filteredCount).toBe(1);
+      expect((await equivalent({ ...a, fieldPointer: "/display_name", fieldValue: changedName })).filteredCount).toBe(0);
+      expect((await list(db, { ...a, fieldPointer: "/display_name", fieldValue: changedName })).filteredCount).toBe(1);
+      // An unchanged source key in multiple historical revisions still counts each candidate once.
+      expect((await list(db, { fieldPointer: "/source_record_key", fieldValue: token })).filteredCount).toBe(2);
+
+      await register(db, [{ key: token + "unresolved", raw: { ownedMatch: token, answer: false } }]);
+      const unresolved = { identityNamespace: "source:candidate-integration", identityKey: token + "unresolved" };
+      const unresolvedPage = await list(db, unresolved);
+      expect(unresolvedPage.items[0]).toMatchObject({ identityState: "unresolved", verifiedFirmId: null });
+      expect(unresolvedPage).toEqual(await list(db, { ...unresolved, text: "" }, 100, null, unresolvedPage.coverageRevision));
+      await expectRejected(db, "SELECT public.list_prospect_research_candidates_v1($1,10,NULL,NULL)", [JSON.stringify({ identityNamespace: a.identityNamespace })]);
+      await expectRejected(db, "SELECT public.list_prospect_research_candidates_v1($1,10,NULL,NULL)", [JSON.stringify({ ...b, fieldValue: false })]);
+      // The guarded migration refuses a different/already replaced body before executing DDL.
+      const migration = readFileSync(new URL("../../../supabase/migrations/20261013214000_prospect_bounded_original_evidence_v2.sql", import.meta.url), "utf8");
+      const patch = migration.match(/DO \$exact_filter_patch\$[\s\S]*?END \$exact_filter_patch\$;/)?.[0];
+      expect(patch).toBeDefined();
+      const beforeGuard = (await db.query("SELECT prosrc,proacl,proconfig,proowner,prosecdef FROM pg_proc WHERE oid='prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)'::regprocedure")).rows;
+      await expectRejected(db, patch!, [], /bounded_exact_filter_reader_definition_changed/);
+      expect((await db.query("SELECT prosrc,proacl,proconfig,proowner,prosecdef FROM pg_proc WHERE oid='prospect_candidate_private.list_candidates(jsonb,integer,uuid,bigint)'::regprocedure")).rows).toEqual(beforeGuard);
+      expect(secondAudit).not.toBe(firstAudit);
+    } finally { await db.query("ROLLBACK"); db.release(); }
+  }, 300_000);
 
   it("expands retained literal statuses across verified firms and freezes every continuation", async () => {
     const db = await pool!.connect(); await db.query("BEGIN");

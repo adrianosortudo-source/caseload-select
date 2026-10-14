@@ -1,3 +1,4 @@
+import { readProspectOriginalContent } from "@/lib/prospect-enrichment-original-content";
 import "server-only";
 
 import { buildProspectEnrichmentClientItems, parseProspectEnrichmentEnvelope } from "@/lib/prospect-enrichment-contract";
@@ -75,7 +76,7 @@ async function verifyPackage(record: PackageDetail, requestedHash: string, clien
   requireCheck(equal(raw, record.payload), "raw_envelope_mismatch", "The retained request and package envelope differ.");
   const payload = parsed.envelope;
   requireCheck(equal(record.sources, payload.sources), "source_coverage_mismatch", "The package source read-back is incomplete.");
-  requireCheck(hash(payload.originalResearch.content) === payload.originalResearch.contentSha256,
+  requireCheck(hash(readProspectOriginalContent({ schemaVersion: payload.schemaVersion, originalResearch: payload.originalResearch })) === payload.originalResearch.contentSha256,
     "original_research_mismatch", "The original research content does not match its evidence hash.");
   const lineage = buildProspectEnrichmentClientItems(payload);
   requireCheck(record.items.length === lineage.length && new Set(record.items.map((item) => item.itemId)).size === lineage.length

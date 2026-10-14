@@ -1,3 +1,4 @@
+import { readProspectOriginalContent } from "../../src/lib/prospect-enrichment-original-content";
 import type { ProspectEnrichmentEnvelope } from "../../src/lib/prospect-enrichment-contract";
 import { object, protocolHash, type Issue } from "./model";
 
@@ -39,11 +40,13 @@ export function validateLegacyAssessmentProjectionClaims(envelope: ProspectEnric
   const issues: Issue[] = [];
   const fail = (path: string) => issues.push({ code: "legacy_projection_claim_invalid", path, reason: "Projection metadata must identify an exact nested original criteria value and this envelope's observation/assessment." });
   if (!Array.isArray(input)) { fail("legacyAssessmentProjectionClaims"); return issues; }
+  let originalContent: unknown;
+  try { originalContent = readProspectOriginalContent(envelope); } catch { fail("originalResearch"); return issues; }
   const seen = new Set<string>();
   for (const [index, claim] of input.entries()) {
     const at = "legacyAssessmentProjectionClaims/" + index;
     if (!object(claim) || Object.keys(claim).length !== fields.length || !fields.every(key => Object.hasOwn(claim, key)) || typeof claim.observationId !== "string" || typeof claim.parentAssessmentId !== "string" || !isSafeJsonPointer(claim.sourcePointer) || !isCriteriaSelector(claim.criteriaSelector) || !hash(claim.selectedValueSha256)) { fail(at); continue; }
-    const original = selectOwnJsonPointer(envelope.originalResearch.content, claim.sourcePointer);
+    const original = selectOwnJsonPointer(originalContent, claim.sourcePointer);
     const criteria = selectOwnJsonPointer({ criteria: envelope.assessment?.legacyCriteria }, claim.criteriaSelector);
     if (!envelope.assessment || claim.parentAssessmentId !== envelope.assessment.assessmentId || !envelope.observations.some(o => o.observationId === claim.observationId) || seen.has(claim.observationId) || !claim.sourcePointer.endsWith(claim.criteriaSelector) || !original.found || !criteria.found || protocolHash(original.value) !== claim.selectedValueSha256 || protocolHash(criteria.value) !== claim.selectedValueSha256) fail(at);
     seen.add(claim.observationId);
