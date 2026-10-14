@@ -185,6 +185,8 @@ DO $patch$
 DECLARE definition text; updated text; anchor text;
 BEGIN
   SELECT pg_get_functiondef('public.stage_prospect_enrichment_package_v1(text,text,text,text,text,text,text,text,jsonb,text,text,text,jsonb,jsonb,text)'::regprocedure) INTO definition;
+  -- Normalize function DDL line endings only; immutable research data is untouched.
+  definition:=replace(definition,E'\r\n',E'\n');
   anchor:=$anchor$p_payload->>'schemaVersion' IS DISTINCT FROM 'prospect-enrichment/v1'$anchor$;
   IF (length(definition)-length(replace(definition,anchor,'')))<>length(anchor) THEN RAISE EXCEPTION 'bounded_stage_version_anchor_changed'; END IF;
   updated:=replace(definition,anchor,$replacement$coalesce(p_payload->>'schemaVersion','') NOT IN ('prospect-enrichment/v1','prospect-enrichment/v2')$replacement$);
@@ -217,6 +219,8 @@ BEGIN
   EXECUTE updated;
 
   SELECT pg_get_functiondef('prospect_candidate_private.record_history(uuid,bigint,text,text,text,uuid,text,uuid,jsonb,text,jsonb,jsonb,uuid)'::regprocedure) INTO definition;
+  -- Normalize function DDL line endings only; immutable research data is untouched.
+  definition:=replace(definition,E'\r\n',E'\n');
   anchor:='DECLARE row_id uuid; recorded timestamptz;';
   IF (length(definition)-length(replace(definition,anchor,'')))<>length(anchor) THEN RAISE EXCEPTION 'bounded_history_declaration_anchor_changed'; END IF;
   updated:=replace(definition,anchor,anchor||' logical_json jsonb; status_key text;');
