@@ -1,3 +1,4 @@
+import { verifyPushedWholeFirmOriginalCompiler } from "./whole-firm-original-derivation-gate";
 import { readProspectOriginalContent } from "../../src/lib/prospect-enrichment-original-content";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -7,7 +8,7 @@ import { prospectEnrichmentIdempotencyKey } from "../../src/lib/prospect-enrichm
 import { compileCandidate, type CompiledPackage } from "./compiler";
 import { assertNoExclusionTokens, compileExclusionScoped, loadPrivateExclusions } from "./private-exclusions";
 import { assertEnvelopeProfile, parseProfile, profileConfig, type EnrichmentProfile } from "./profiles";
-import { assertWholeFirmManifestCoverage, compileWholeFirmSnapshot, freezeWholeFirmExport, type WholeFirmSourceManifest } from "./whole-firm";
+import { assertWholeFirmManifestCoverage, compileWholeFirmSnapshot, deriveWholeFirmBoundedSource, freezeWholeFirmExport, type WholeFirmSourceManifest } from "./whole-firm";
 import { assertCoordinatorOutputPath, assertCoordinatorOutputRoot, snapshotCoordinatorState } from "./whole-firm-coordinator-export";
 import { runWholeFirmOfflineHandoff } from "./offline-handoff";
 import { assertManifestRegistrationBinding, assertFinalizedComparisonReader, assertOpenRunRecoveryBinding, assertMachineOpenRunRecoveryBinding, verifyAndSerializeComparisonExport } from "./comparison-export";
@@ -17,7 +18,7 @@ import { assertFrozenWholeFirmPackageMissing, assertFrozenWholeFirmRunCompatibil
 import { CASEY_MOSS_HELD_EVIDENCE_RECOVERY, prepareManifestRequests, recoverCaseyMossHeldEvidenceOnce, submitManifestChunks, assertManifestPackage, checkManifestApproval, validateManifestChunks } from "./manifest-delivery";
 import { buildExpectedRunManifest, buildHeldCandidateEvidence, chunkExpectedRunManifest } from "./run-manifest";
 import { archivedDocuments, extractCandidates, inventory, type SourceManifest } from "./inventory";
-import { DEFAULT_OUTPUT, DEFAULT_ROOTS, object, protocolHash, sha256, within } from "./model";
+import { canonicalJson, DEFAULT_OUTPUT, DEFAULT_ROOTS, object, protocolHash, sha256, within } from "./model";
 import { checkApproval, enqueue, readEntry, readState, receiptStatus, submitOne, verifyIdenticalReplay, type DeliveryApproval } from "./outbox";
 import { assertFreshComparison, bindReconciledPackages, reconcilePackage, researchClaimsAccepted, selectPilot, validateComparisonSnapshot, type ComparisonSnapshot, type ReconciledAction } from "./reconciliation";
 
@@ -26,6 +27,9 @@ const HELP = `Prospect enrichment local tools (dry-run by default)
   inventory --profile whole-firm --file IMMUTABLE_COORDINATOR_EXPORT
   inventory --profile whole-firm --coordinator-state PATH
   handoff --profile whole-firm --coordinator-state PATH [--execute-offline]
+  derive-source --profile whole-firm --manifest FILE --output FILE --compiler-commit PUSHED_HEAD
+         --compiler-file-sha256 HASH --baseline-ledger FILE --baseline-ledger-sha256 HASH
+         [--unknown-completion-revisions FILE] [--execute-offline]
   compile --manifest FILE --run-dir DIR [--actions FILE] [--exclusions PRIVATE_FILE]
   comparison-request --manifest FILE --packages FILE --output FILE [--gzip]
   register-manifest --profile whole-firm --manifest SOURCE_MANIFEST --manifest-chunks FILE --held-evidence FILE
@@ -51,8 +55,9 @@ Whole-firm submit additionally requires --manifest SOURCE_MANIFEST and a finaliz
 register-manifest accepts a fresh signed bootstrap/resume comparison, or a finalized-run comparison for exact finalization-receipt recovery. It registers inventory and held bodies only; it never submits packages.
 Use --manifest-only instead of --key only for whole-firm snapshots with zero packages. Default profile remains legacy-backfill.
 register-manifest registers the expected inventory and held bodies only. submit requires that finalized inventory and a fresh finalized-run comparison, then stages one package. Neither command reviews/applies canonical evidence.
+derive-source preserves frozen originals and uses an explicit manifest policy; selected unknown-completion revisions remain original-only evidence holds. --execute-offline persists local artifacts only and grants no production delivery authority.
 Approval documents must record a real exact user authorization; a file alone does not grant it.`;
-const valueFlags = new Set(["manifest", "run-dir", "file", "packages", "snapshot", "output", "key", "outbox", "approval", "approval-sha256", "token-file", "confirm", "actions", "manifest-chunks", "held-evidence", "profile", "coordinator-state", "exclusions", "recovery-authorization", "recovery-authorization-sha256"]);
+const valueFlags = new Set(["manifest", "run-dir", "file", "packages", "snapshot", "output", "key", "outbox", "approval", "approval-sha256", "token-file", "confirm", "actions", "manifest-chunks", "held-evidence", "profile", "coordinator-state", "exclusions", "recovery-authorization", "recovery-authorization-sha256", "compiler-commit", "compiler-file-sha256", "baseline-ledger", "baseline-ledger-sha256", "unknown-completion-revisions"]);
 function args(argv: string[]) {
   const [command = "help", ...rest] = argv, options: Record<string, string | boolean> = {};
   for (let i = 0; i < rest.length; i++) {
@@ -97,8 +102,38 @@ export async function main(argv = process.argv.slice(2)): Promise<unknown> {
   const privateOutput = (file: string) => profileOutput(file, profile);
   if (command === "help" || command === "--help") return HELP;
   if (options.exclusions !== undefined && (command !== "compile" || profile !== "legacy-backfill")) throw Error("exclusions_cli_scope_invalid");
-  if (options["execute-offline"] === true && command !== "handoff") throw Error("execute_offline_cli_scope_invalid");
+  if (options["execute-offline"] === true && !["handoff", "derive-source"].includes(command)) throw Error("execute_offline_cli_scope_invalid");
   if (options["coordinator-state"] !== undefined && (!(["inventory", "handoff"].includes(command)) || profile !== "whole-firm")) throw Error("coordinator_state_input_scope_invalid");
+  if (command === "derive-source") {
+    const allowed = new Set(["profile","manifest","output","compiler-commit","compiler-file-sha256","baseline-ledger","baseline-ledger-sha256","unknown-completion-revisions","execute-offline"]);
+    if (profile !== "whole-firm" || Object.keys(options).some(key => !allowed.has(key))) throw Error("offline_original_derivation_scope_invalid");
+    const commit = required(options,"compiler-commit");
+    if (!/^[a-f0-9]{40}$/.test(commit)) throw Error("offline_original_derivation_commit_invalid");
+    const { compilerFileSha256, byteSealProof } = await verifyPushedWholeFirmOriginalCompiler(commit);
+    if (compilerFileSha256 !== required(options,"compiler-file-sha256")) throw Error("offline_original_derivation_compiler_hash_mismatch");
+    const ledgerBytes = await fs.readFile(required(options,"baseline-ledger")), baselineLedgerSha256 = sha256(ledgerBytes);
+    if (baselineLedgerSha256 !== required(options,"baseline-ledger-sha256")) throw Error("offline_original_derivation_ledger_hash_mismatch");
+    const ids = typeof options["unknown-completion-revisions"] === "string" ? await json<unknown>(options["unknown-completion-revisions"]) : [];
+    if (!Array.isArray(ids) || !ids.every(id => typeof id === "string" && id.length > 0)) throw Error("unknown_completion_retention_scope_invalid");
+    const source = await json<WholeFirmSourceManifest>(required(options,"manifest"));
+    const derived = deriveWholeFirmBoundedSource(source,{ compilerCommit: commit, compilerFileSha256, baselineLedgerSha256 },ids);
+    const compiled = compileWholeFirmSnapshot(derived), output = privateOutput(required(options,"output"));
+    const summary = { dryRun: options["execute-offline"] !== true, parentSourceManifestSha256: source.manifestSha256, sourceManifestSha256: derived.manifestSha256,
+      sourceExportSha256: derived.sourceExportSha256, revisionCount: derived.expectedRevisionCount, retainedUnknownCompletionRevisions: ids.length,
+      packageCount: compiled.packages.length, heldEntryCount: compiled.expected.entries.filter(entry => entry.clientPackageId === null).length,
+      runId: compiled.expected.runId, runManifestSha256: compiled.expected.manifestSha256, networkRequests: 0, submitted: 0, applied: 0, output,
+      compilerFileSha256, compilerByteSealProof: options["execute-offline"] === true ? undefined : byteSealProof, compilerByteSealReceipt: options["execute-offline"] === true ? privateOutput(path.join(config.outputRoot,"compiler-byte-seals",compilerFileSha256 + ".json")) : null };
+    if (options["execute-offline"] === true) {
+      await assertCoordinatorOutputRoot(config.outputRoot);
+      await writeExactBytes(privateOutput(path.join(config.outputRoot,"compiler-byte-seals",compilerFileSha256 + ".json")),Buffer.from(canonicalJson(byteSealProof) + "\n"),config.outputRoot);
+      await writeExactBytes(privateOutput(path.join(config.outputRoot,"exports",derived.sourceExportSha256 + ".json")),Buffer.from(canonicalJson(derived.originalExport) + "\n"),config.outputRoot);
+      // The declared export hash uses canonical JSON; save exactly those bytes.
+      const exportFile = privateOutput(path.join(config.outputRoot,"exports",derived.sourceExportSha256 + ".json"));
+      if (sha256(await fs.readFile(exportFile)) !== derived.sourceExportSha256) throw Error("offline_original_derivation_saved_export_mismatch");
+      await writeExactBytes(output,Buffer.from(JSON.stringify(derived,null,2) + "\n"),config.outputRoot);
+    }
+    return summary;
+  }
   if (command === "handoff") {
     const allowed = new Set(["profile", "coordinator-state", "execute-offline"]);
     if (profile !== "whole-firm" || Object.keys(options).some(key => !allowed.has(key))) throw Error("offline_handoff_scope_invalid");

@@ -1,4 +1,5 @@
-import { readProspectOriginalContent } from "../../src/lib/prospect-enrichment-original-content";
+import { originalRevisionBinding, unknownCompletionBinding, unknownCompletionOriginalOnlyEnvelope, validWholeFirmOriginalRepresentationPolicy, validWholeFirmUnknownCompletionRetentionPolicy, type WholeFirmOriginalRepresentationPolicy, type WholeFirmUnknownCompletionRetentionPolicy, type WholeFirmOriginalPolicyProvenance } from "./whole-firm-original-policies";
+import { encodeBoundedProspectEnvelope, readProspectOriginalContent } from "../../src/lib/prospect-enrichment-original-content";
 import { parseProspectEnrichmentEnvelope, type ProspectEnrichmentEnvelope, type JsonValue } from "../../src/lib/prospect-enrichment-contract";
 import type { CompiledPackage } from "./compiler";
 import { validateLegacyAssessmentProjectionClaims, type LegacyAssessmentProjectionClaim } from "./legacy-projections";
@@ -15,6 +16,8 @@ export type WholeFirmCoordinatorExport = {
   expectedRevisions: { revisionId: string; researchKey: string }[];
   revisions: unknown[];
   compilerIdentityClaimPolicy?: WholeFirmIdentityClaimPolicy;
+  compilerOriginalRepresentationPolicy?: WholeFirmOriginalRepresentationPolicy;
+  compilerUnknownCompletionRetentionPolicy?: WholeFirmUnknownCompletionRetentionPolicy;
   sourceInventory?: unknown;
 };
 export type WholeFirmSourceManifest = {
@@ -50,9 +53,42 @@ export function deriveWholeFirmIdentityClaimSource(source: WholeFirmSourceManife
   const exported = { ...source.originalExport, compilerIdentityClaimPolicy: policy };
   return freezeWholeFirmExport(exported, sha256(canonicalJson(exported) + "\n"));
 }
+/** Explicit offline derivation preserves all wrappers and inventories and creates new transport identities. */
+export function deriveWholeFirmBoundedSource(source: WholeFirmSourceManifest, provenance: Pick<WholeFirmOriginalPolicyProvenance, "compilerCommit" | "compilerFileSha256" | "baselineLedgerSha256">, unknownCompletionRevisionIds: readonly string[] = []): WholeFirmSourceManifest {
+  verifyWholeFirmManifest(source);
+  if (source.originalExport.compilerOriginalRepresentationPolicy !== undefined || source.originalExport.compilerUnknownCompletionRetentionPolicy !== undefined) throw Error("whole_firm_original_source_already_derived");
+  if (new Set(unknownCompletionRevisionIds).size !== unknownCompletionRevisionIds.length) throw Error("unknown_completion_retention_scope_invalid");
+  const common = { parentSourceManifestSha256: source.manifestSha256, parentSourceExportSha256: source.sourceExportSha256, ...provenance };
+  const representation: WholeFirmOriginalRepresentationPolicy = { ...common, schemaVersion: "prospect-whole-firm-original-representation-policy/v1", policyVersion: "bounded-original-nodes/v1", revisions: source.originalExport.expectedRevisions.map((_,index) => originalRevisionBinding(source,index)) };
+  if (!validWholeFirmOriginalRepresentationPolicy(representation)) throw Error("whole_firm_original_representation_policy_invalid");
+  const retention: WholeFirmUnknownCompletionRetentionPolicy = { ...common, schemaVersion: "prospect-whole-firm-unknown-completion-retention-policy/v1", policyVersion: "original-only-evidence-hold/v1", revisions: unknownCompletionRevisionIds.map(id => {
+    const index = source.originalExport.expectedRevisions.findIndex(entry => entry.revisionId === id);
+    if (index < 0) throw Error("unknown_completion_retention_scope_invalid");
+    return unknownCompletionBinding(source,index);
+  }) };
+  if (!validWholeFirmUnknownCompletionRetentionPolicy(retention)) throw Error("whole_firm_unknown_completion_policy_invalid");
+  const exported = { ...source.originalExport, compilerOriginalRepresentationPolicy: representation, ...(retention.revisions.length ? { compilerUnknownCompletionRetentionPolicy: retention } : {}) };
+  return freezeWholeFirmExport(exported, sha256(canonicalJson(exported) + "\n"));
+}
+function assertWholeFirmOriginalPolicies(source: WholeFirmSourceManifest): void {
+  const representation = source.originalExport.compilerOriginalRepresentationPolicy, retention = source.originalExport.compilerUnknownCompletionRetentionPolicy;
+  if (representation === undefined) { if (retention !== undefined) throw Error("unknown_completion_requires_bounded_representation"); return; }
+  if (!validWholeFirmOriginalRepresentationPolicy(representation) || canonicalJson(representation.revisions) !== canonicalJson(source.originalExport.expectedRevisions.map((_,index) => originalRevisionBinding(source,index)))) throw Error("whole_firm_original_representation_policy_binding_mismatch");
+  const { compilerOriginalRepresentationPolicy: _representation, compilerUnknownCompletionRetentionPolicy: _retention, ...parentExport } = source.originalExport; void _representation; void _retention;
+  if (freezeWholeFirmExport(parentExport,representation.parentSourceExportSha256).manifestSha256 !== representation.parentSourceManifestSha256) throw Error("whole_firm_original_policy_parent_mismatch");
+  if (sha256(canonicalJson(source.originalExport) + "\n") !== source.sourceExportSha256) throw Error("whole_firm_derived_export_hash_mismatch");
+  if (retention !== undefined) {
+    if (!validWholeFirmUnknownCompletionRetentionPolicy(retention) || ["parentSourceManifestSha256","parentSourceExportSha256","compilerCommit","compilerFileSha256","baselineLedgerSha256"].some(key => retention[key as keyof typeof retention] !== representation[key as keyof typeof representation])) throw Error("whole_firm_unknown_completion_policy_invalid");
+    for (const entry of retention.revisions) {
+      const index = source.originalExport.expectedRevisions.findIndex(expected => expected.revisionId === entry.revisionId);
+      if (index < 0 || canonicalJson(entry) !== canonicalJson(unknownCompletionBinding(source,index))) throw Error("whole_firm_unknown_completion_policy_binding_mismatch");
+    }
+  }
+}
 type RevisionCoverage = CandidateCoverage & { revisionId: string; original: unknown; originalStatus: unknown };
 export function compileWholeFirmSnapshot(source: WholeFirmSourceManifest, actions?: ReconciledAction[]): { packages: CompiledPackage[]; candidates: RevisionCoverage[]; issues: Issue[]; expected: ExpectedRunManifest } {
   verifyWholeFirmManifest(source);
+  assertWholeFirmOriginalPolicies(source);
   const runId = wholeFirmRunId(source.manifestSha256), packages: CompiledPackage[] = [], candidates: RevisionCoverage[] = [], issues: Issue[] = [];
   for (const [index, expected] of source.originalExport.expectedRevisions.entries()) {
     const original = source.originalExport.revisions[index], pointer = "/originalExport/revisions/" + index;
@@ -63,6 +99,7 @@ export function compileWholeFirmSnapshot(source: WholeFirmSourceManifest, action
     if (!object(original) || original.revisionId !== expected.revisionId || !Object.hasOwn(original, "originalRevision") || original.originalRevision === null) { hold("whole_firm_revision_incomplete", "Declared revision is missing/malformed; preserve the complete raw snapshot and do not fabricate evidence."); continue; }
     const revision = original.originalRevision;
     coverage.originalStatus = object(revision) ? revision.disposition ?? revision.status ?? null : null;
+    const originalOnly = source.originalExport.compilerUnknownCompletionRetentionPolicy?.revisions.some(entry => entry.revisionId === expected.revisionId) === true;
     const recordedResult = object(revision) && object(revision.result) ? revision.result : null;
     if (recordedResult) {
       const completion = recordedDate(recordedResult.completedAt);
@@ -70,13 +107,20 @@ export function compileWholeFirmSnapshot(source: WholeFirmSourceManifest, action
         ? "result_completed_at_not_recorded"
         : completion.missingProvenanceReason ? "result_completed_at_invalid" : null;
       if (timestampIssue) {
-        if (!coverage.issues.some(issue => issue.code === timestampIssue)) hold(timestampIssue, "A persisted result without a supported recorded completedAt stays a package-less technical hold; no timestamp is inferred.");
-        continue;
+        if (!coverage.issues.some(issue => issue.code === timestampIssue)) hold(timestampIssue, originalOnly ? "Result completion remains unknown; the exact original is retained only under the named original-only evidence-hold policy." : "A persisted result without a supported recorded completedAt stays a package-less technical hold; no timestamp is inferred.");
+        if (!originalOnly) continue;
       }
     }
-    if (!object(original.standardEnvelope)) { hold("whole_firm_standard_envelope_missing", "The coordinator must provide one explicit standard envelope for this immutable revision."); continue; }
-    const subject = object(original.standardEnvelope.subject) ? { ...original.standardEnvelope.subject, identityState: original.standardEnvelope.subject.identityState === "conflict" ? "conflict" : "unresolved" } : original.standardEnvelope.subject;
-    const proposed = { ...original.standardEnvelope, subject, schemaVersion: original.standardEnvelope.schemaVersion, runId, packageId: wholeFirmPackageId(runId, expected.researchKey, revision), sourceSystem: WHOLE_FIRM_PROFILE.sourceSystem, sourceName: WHOLE_FIRM_PROFILE.sourceName, generatedAt: source.snapshotAt };
+    if (!originalOnly && !object(original.standardEnvelope)) { hold("whole_firm_standard_envelope_missing", "The coordinator must provide one explicit standard envelope for this immutable revision."); continue; }
+    let standard: ProspectEnrichmentEnvelope | Record<string, unknown>;
+    try { standard = originalOnly ? unknownCompletionOriginalOnlyEnvelope(source,index) : original.standardEnvelope as Record<string, unknown>; }
+    catch { hold("hold_schema", "This complete original cannot use the bounded retention representation within its resource limits."); continue; }
+    const subject = object(standard.subject) ? { ...standard.subject, identityState: standard.subject.identityState === "conflict" ? "conflict" : "unresolved" } : standard.subject;
+    let proposed: Record<string, unknown> = { ...standard, subject, schemaVersion: standard.schemaVersion, runId, packageId: wholeFirmPackageId(runId, expected.researchKey, revision), sourceSystem: WHOLE_FIRM_PROFILE.sourceSystem, sourceName: WHOLE_FIRM_PROFILE.sourceName, generatedAt: source.snapshotAt };
+    if (source.originalExport.compilerOriginalRepresentationPolicy !== undefined && proposed.schemaVersion === "prospect-enrichment/v1") {
+      try { proposed = encodeBoundedProspectEnvelope(proposed as unknown as ProspectEnrichmentEnvelope); }
+      catch { hold("hold_schema", "Original evidence cannot use the bounded representation within its immutable hash, Unicode and resource limits."); continue; }
+    }
     const parsed = parseProspectEnrichmentEnvelope(proposed);
     if (!parsed.ok) { for (const issue of parsed.issues) hold("hold_schema", issue.path + ": " + issue.message); continue; }
     let envelope: ProspectEnrichmentEnvelope = parsed.envelope;
@@ -93,10 +137,10 @@ export function compileWholeFirmSnapshot(source: WholeFirmSourceManifest, action
       // Typed-empty held/incomplete research still has its complete original content.
       hold("whole_firm_evidence_hold", "No typed observation or assessment is present; complete raw revision remains staged research only.");
     }
-    const projectionIssues = validateLegacyAssessmentProjectionClaims(envelope, original.legacyAssessmentProjectionClaims);
+    const projectionIssues = validateLegacyAssessmentProjectionClaims(envelope, originalOnly ? [] : original.legacyAssessmentProjectionClaims);
     if (projectionIssues.length) { for (const issue of projectionIssues) hold("hold_schema", issue.path + ": " + issue.reason); continue; }
     const missing = envelope.observations.some(o => !o.sourceIds.length || o.missingProvenanceReason) || !!envelope.assessment?.missingProvenanceReason || !envelope.observations.length;
-    const p: CompiledPackage = { envelope, payloadSha256: protocolHash(envelope), state: missing || coverage.issues.some(i => i.code.startsWith("reference_")) ? "evidence_hold" : envelope.subject.identityState === "resolved" ? "ready_for_review" : "identity_hold", displayCategory: displayCategory(coverage.originalStatus), originalStatus: coverage.originalStatus, issues: [...coverage.issues], legacyAssessmentProjectionClaims: (original.legacyAssessmentProjectionClaims ?? []) as LegacyAssessmentProjectionClaim[] };
+    const p: CompiledPackage = { envelope, payloadSha256: protocolHash(envelope), state: missing || coverage.issues.some(i => i.code.startsWith("reference_")) ? "evidence_hold" : envelope.subject.identityState === "resolved" ? "ready_for_review" : "identity_hold", displayCategory: displayCategory(coverage.originalStatus), originalStatus: coverage.originalStatus, issues: [...coverage.issues], legacyAssessmentProjectionClaims: (originalOnly ? [] : original.legacyAssessmentProjectionClaims ?? []) as LegacyAssessmentProjectionClaim[] };
     coverage.packageIds.push(envelope.packageId); packages.push(p);
   }
   const conflicts = new Set(packages.filter((p, index) => packages.findIndex(q => q.envelope.packageId === p.envelope.packageId) !== index).map(p => p.envelope.packageId));
