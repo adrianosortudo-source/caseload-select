@@ -50,6 +50,7 @@ type SupabaseStatus = {
   SERVICE_ROLE_KEY: string;
 };
 type ProspectFixture = { id: string; firmName: string; contactName: string; email: string; conversationId: string };
+type ProspectSearchMatch = { id: string; firm_name: string; contact_email?: string | null };
 type Fixtures = { firmId: string; lawyerId: string; prospects: Record<string, ProspectFixture> };
 
 function must(value: string | undefined, label: string): string {
@@ -586,7 +587,7 @@ async function createDraft(page: Page, journeyName: string, prospect: ProspectFi
   );
   await page.getByRole("button", { name: "Search", exact: true }).click();
   const searchResponse = await searchResponsePromise;
-  const searchPayload = await searchResponse.json() as { items?: ProspectMatch[]; error?: string };
+  const searchPayload = await searchResponse.json() as { items?: ProspectSearchMatch[]; error?: string };
   const exactMatch = Array.isArray(searchPayload.items)
     ? searchPayload.items.find((item) => item.id === prospect.id || item.firm_name === prospect.firmName)
     : undefined;
