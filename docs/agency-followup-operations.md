@@ -41,9 +41,9 @@ Use `npm run agency-followup:manual` instead to open the headed operator page. I
 
 ## 2026-10-14 synthetic walkthrough report
 
-The full local synthetic walkthrough passed with exit code 0 on 2026-10-14.
+A full local synthetic walkthrough passed with exit code 0 earlier on 2026-10-14; that is historical evidence only. Fresh reruns on the current branch have not completed. One reached the actual operator page, which returned 200 after a slow compile, but no client chunks loaded before the hydration timeout. Later runs using both default Turbopack and Webpack exited after the 10-minute startup bound without binding loopback port 55435 or writing Next stdout/stderr. A lightweight `next --version` probe eventually returned Next.js 16.4.0 after about 100 seconds, which confirms unusually slow local module loading but does not establish its cause. The runner uses `--webpack` to match the repository's `dev` script and the earlier run that reached the operator page. Current verification is incomplete; resolve the local Next startup delay before treating the CRM UI journeys as verified.
 
-- Verified the dedicated disposable project ID, loopback API, migration versions `20261013154000` and `20261013230354`, migration blobs on the pushed branch, six follow-up tables, and Agency CRM grants before seeding.
+- Historical passing run details: verified the dedicated disposable project ID, loopback API, migration versions `20261013154000` and `20261013230354`, migration blobs on the pushed branch, six follow-up tables, and Agency CRM grants before seeding.
 - Confirmed the follow-up API returns 401 without an operator session and 200 with the synthetic signed operator session.
 - Passed template create/approve, journey create/activate, exact prospect search, enrollment, eligibility, per-prospect release, and per-message approval.
 - Passed duplicate enrollment protection, pause behavior, suppression blocking, approval invalidation after content changes, accepted fake-provider persistence, UNKNOWN quarantine without retry, weekend-window rescheduling, concurrent claim exclusivity, and stale-lease rejection.
@@ -64,4 +64,4 @@ The runner checks the scratch identity, loopback endpoints, migration ledger and
 
 ## PR status
 
-PR #402 remains open as a draft. The local synthetic walkthrough is complete; GitHub CI and preview checks must pass for the current PR head before any merge review. Do not merge or deploy from this branch. Production migration and release still require CI, review, and separate explicit approval.
+PR #402 is open and ready for review, not a draft, as last verified on 2026-10-14. Check GitHub for current CI and preview results before any merge review because those statuses may change. Do not merge or deploy from this branch. Production migration and release still require CI, review, and separate explicit approval.
