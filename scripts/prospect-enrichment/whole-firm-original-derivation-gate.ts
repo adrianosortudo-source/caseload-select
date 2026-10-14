@@ -39,6 +39,14 @@ export function assertSafeOriginalCompilerAttributes(bytes: string, expectedPath
   }
   if (expectedPaths && (pairs.size !== expectedPaths.length * attributes.length || expectedPaths.some(path => attributes.some(attribute => !pairs.has(JSON.stringify([path,attribute])))))) throw Error("offline_original_derivation_attributes_invalid");
 }
+/** An attributes file matters only when it can govern a sealed path; dependency-package attributes cannot. */
+export function originalCompilerUntrackedPathRejected(path: string, sealedPaths: readonly string[]): boolean {
+  if (path.split("/").at(-1) === ".gitattributes") {
+    const prefix = path.slice(0,path.lastIndexOf("/") + 1);
+    return sealedPaths.some(file => prefix === "" || file.startsWith(prefix));
+  }
+  return scope.some(root => path.startsWith(root + "/")) && /\.[cm]?[jt]sx?$/.test(path);
+}
 /** Wider tracked code/config seal; Git may apply only pinned text/EOL checkout conversion. */
 export async function verifyPushedWholeFirmOriginalCompiler(commit: string): Promise<{ compilerFileSha256: string; fileCount: number; byteSealProof: ReturnType<typeof wholeFirmOriginalCompilerByteProof> }> {
   if (!/^[a-f0-9]{40}$/.test(commit)) throw Error("offline_original_derivation_commit_invalid");
@@ -50,7 +58,7 @@ export async function verifyPushedWholeFirmOriginalCompiler(commit: string): Pro
   if (files.some(path => /[\r\n]/.test(path))) throw Error("offline_original_derivation_compiler_inventory_invalid");
   for (const flags of [["--others","--exclude-standard"],["--others","--ignored","--exclude-standard"]]) {
     const untracked = git("ls-files",...flags,"-z").split("\0").filter(Boolean);
-    if (untracked.some(path => path.split("/").at(-1) === ".gitattributes" || (scope.some(root => path.startsWith(root + "/")) && /\.[cm]?[jt]sx?$/.test(path)))) throw Error("offline_original_derivation_untracked_compiler");
+    if (untracked.some(path => originalCompilerUntrackedPathRejected(path,files))) throw Error("offline_original_derivation_untracked_compiler");
   }
   const config = (key: string): string | null => {
     try { return git("config","--get",key).trim().toLowerCase(); }

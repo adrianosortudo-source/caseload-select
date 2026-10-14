@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { assertSafeOriginalCompilerAttributes, verifyWholeFirmOriginalCompilerFiles } from "../whole-firm-original-derivation-gate";
+import { originalCompilerUntrackedPathRejected, assertSafeOriginalCompilerAttributes, verifyWholeFirmOriginalCompilerFiles } from "../whole-firm-original-derivation-gate";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { wholeFirmFixture } from "../fixtures/whole-firm";
@@ -129,4 +129,13 @@ test("real Git non-batch filtering yields complete expected checkout bytes for C
     assert.equal(checkout.toString("utf8").replaceAll("\r\n","\n"),committed.toString("utf8").replaceAll("\r\n","\n"));
     if (path.endsWith(".mjs")) assert.ok(checkout.equals(committed),"explicit eol=lf stays byte identical");
   }
+});
+
+test("untracked attribute scope rejects compiler overrides without rejecting installed dependency metadata", () => {
+  const paths = ["scripts/prospect-enrichment/cli.ts","src/lib/prospect-enrichment-contract.ts"];
+  assert.equal(originalCompilerUntrackedPathRejected("node_modules/is-map/.gitattributes",paths),false);
+  assert.equal(originalCompilerUntrackedPathRejected(".gitattributes",paths),true);
+  assert.equal(originalCompilerUntrackedPathRejected("src/.gitattributes",paths),true);
+  assert.equal(originalCompilerUntrackedPathRejected("scripts/prospect-enrichment/.gitattributes",paths),true);
+  assert.equal(originalCompilerUntrackedPathRejected("src/lib/untracked-loader.js",paths),true);
 });
