@@ -766,6 +766,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const normalCard = queueCard(page, normal.firmName);
   const normalApprovalButtons = normalCard.getByRole("button", { name: "Approve this message" });
   await waitForAction(page, "approve", normalApprovalButtons.nth(0));
+  await expect(normalCard.getByText("scheduled", { exact: true }).first()).toBeVisible({ timeout: 30000 });
+  await expect(normalCard.getByRole("button", { name: "Approve this message" })).toHaveCount(1, { timeout: 30000 });
   await waitForAction(page, "approve", queueCard(page, normal.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
   const normalMessages = await pool.query<{ id: string; step_number: number; state: string }>(
     "select id,step_number,state from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) order by step_number",
