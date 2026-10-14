@@ -13,7 +13,7 @@ if (enabled) {
   }
 }
 const suite = enabled ? describe : describe.skip;
-type Page = { inventoryCount: number; filteredCount: number; coverageRevision: number; nextAfterId: string | null; items: { id: string; verifiedFirmId: string | null }[] };
+type Page = { inventoryCount: number; filteredCount: number; coverageRevision: number; nextAfterId: string | null; items: { id: string; verifiedFirmId: string | null; identityState?: string }[] };
 
 suite("candidate reads above the observed Admin inventory", () => {
   const pool = enabled ? new Pool({ connectionString: rawUrl, max: 1 }) : null;
@@ -130,6 +130,15 @@ suite("candidate reads above the observed Admin inventory", () => {
       const exactCandidate = await read("indexed-exact-identity", exactIdentity);
       expect(exactCandidate.filteredCount).toBe(1); expect(exactCandidate.items).toHaveLength(1);
       expect((await read("indexed-exact-identity-field", { ...exactIdentity, fieldPointer: "/source_record_key", fieldValue: targetSourceKey })).items.map(item => item.id)).toEqual(exactCandidate.items.map(item => item.id));
+      const combinedFieldFilters = {
+        text: prefix + "-6500", identityState: "resolved",
+        fieldPointer: "/source_record_key", fieldValue: targetSourceKey,
+      };
+      const combinedField = await read("indexed-field-text-identity-combination", combinedFieldFilters);
+      expect(combinedField.filteredCount).toBeGreaterThanOrEqual(2);
+      expect(combinedField.items.length).toBeGreaterThanOrEqual(2);
+      expect(combinedField.items.map(item => item.id)).toContain(exactCandidate.items[0].id);
+      expect(combinedField.items.every(item => item.identityState === "resolved")).toBe(true);
       const selectiveText = await read("indexed-text", { text: prefix + "-6500" });
       expect(selectiveText.filteredCount).toBeGreaterThanOrEqual(1);
       const broadTermText = await read("rare-anchor-with-broad-term", { text: targetUnique + " Law" });
