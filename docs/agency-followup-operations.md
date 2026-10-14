@@ -38,3 +38,42 @@ npm run agency-followup:walkthrough
 ```
 
 Use `npm run agency-followup:manual` instead to open the headed operator page. It creates the same isolated synthetic operator and prospect fixtures, then stays open until Ctrl+C. The runner independently checks the scratch project ID, loopback API/DB ports, both migration ledger versions, both migration blobs against their verified pushed branch revisions, and the service-role-only CRM table grants before seeding anything. It reads local Supabase keys into process memory only.
+
+## 2026-10-13 synthetic walkthrough report
+
+The full walkthrough is not yet complete. This report separates checks that reached the application from checks blocked by the disposable stack.
+
+### Application checks reached
+
+- The actual authenticated Agency CRM operator page loaded and completed hydration in Playwright.
+- The follow-up API rejected an unauthenticated request with HTTP 401 and returned HTTP 200 for the synthetic signed operator session.
+- From the operator page, synthetic template creation returned 201, template approval returned 200, journey creation returned 201, and journey activation returned 200.
+- Prospect search then returned HTTP 500 with `permission denied for table agency_prospects`. This exposed a missing `service_role` table grant in the disposable database. The additive grant migration `20261013230354_agency_crm_service_role_grants.sql` was prepared, pushed, and covered by a migration-contract test. The walkthrough has not been rerun against that migration.
+
+The test-only dispatch route was removed by the runner on exit. Since the run stopped during prospect search, it did not produce the promised summary or screenshot set. Pause/cancel, suppression, approval invalidation, retry, and UNKNOWN quarantine were not verified in this browser/API run; their offline unit coverage is separate.
+
+### Automated test result
+
+The focused source contract passed with 6 tests:
+
+```powershell
+npx vitest run --pool=forks --maxWorkers=1 --minWorkers=1 src/lib/__tests__/agency-followup-migration-contract.test.ts
+```
+
+The ordinary worker-pool invocation failed during Vitest setup before collecting tests: the `tests/vitest.server-only.setup.ts` worker fetch timed out after about 266 seconds and 0 tests were collected. This was a setup failure, not a failing assertion. No full Next build result is available from this machine.
+
+### Disposable migration and stack diagnostics
+
+The pushed grant migration was checked against its pinned blob and the disposable project ID before an apply attempt. A read-only ledger comparison found 274 recorded migration versions, all present as matching migration filenames in the scratch project. The only scratch version absent from the ledger was the new `20261013230354` migration.
+
+The migration command was:
+
+```powershell
+supabase --workdir 'test-results\crm-local-stack' migration up --local
+```
+
+It did not apply SQL. The initial call pointed `--workdir` at the nested `supabase` directory and reported `LegacyMigrationMissingLocalError`. Retrying from the project root after checking the project ID, migration blob, and pending ledger version failed before migration execution with `LegacyDbConnectError: failed to connect to postgres`.
+
+Both loopback endpoints were then confirmed closed. One project-scoped `supabase stop` invocation was interrupted after it emitted no completion status. A subsequent project-scoped `supabase start` was run without reset or repair but exited 1 with `LegacyHealthCheckTimeoutError`, reporting two unhealthy containers. A filtered status check then reported no container named `supabase_db_crm-followup-walkthrough-20261013`; the read-only container inspection timed out. The local PostgREST request returned no HTTP status. Container logs and mount metadata were unavailable, so volume persistence could not be independently confirmed. No reset, repair, production connection, or migration apply occurred.
+
+Resume only after the disposable project is healthy and its project ID, loopback endpoints, migration ledger, and CRM grants pass the runner's preflight. Do not point the walkthrough at another database to get around this local stack failure.
