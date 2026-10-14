@@ -1,0 +1,151 @@
+name: Reviewed bounded original evidence migration
+on:
+  workflow_dispatch:
+    inputs:
+      reviewed_source_sha:
+        description: Exact reviewed current main commit.
+        required: true
+        type: string
+      reviewed_receipt_sha256:
+        description: SHA-256 of the committed bounded original release receipt.
+        required: true
+        type: string
+      confirmation:
+        description: Enter APPLY-PROSPECT-BOUNDED-ORIGINAL-V2.
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: gta-prospect-migrations-production
+  cancel-in-progress: false
+env:
+  PROJECT_REF: ssxryjxifwiivghglqer
+  REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+  REVIEWED_RECEIPT_SHA256: ${{ inputs.reviewed_receipt_sha256 }}
+  BOUNDED_ORIGINAL_CONFIRMATION: ${{ inputs.confirmation }}
+  USE_TEMPORARY_DATABASE_CREDENTIAL: 'true'
+  CREDENTIAL_GATE: bounded-original-release
+jobs:
+  preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
+    name: Read-only bounded original migration preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: Production prospect migrations
+    env:
+      CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_BOUNDED_ORIGINAL_RELEASE_REVIEWED_SHA }}
+      CONFIGURED_RECEIPT_SHA256: ${{ vars.PROSPECT_BOUNDED_ORIGINAL_RELEASE_REVIEWED_RECEIPT_SHA256 }}
+    outputs:
+      artifact_id: ${{ steps.evidence.outputs.artifact-id }}
+      artifact_digest: ${{ steps.evidence.outputs.artifact-digest }}
+    steps:
+      - name: Check out exact reviewed dispatch commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.reviewed_source_sha }}
+          fetch-depth: 0
+      - name: Authorize exact current main and committed receipt before credentials
+        run: node scripts/prospect-enrichment/bounded-original-release-gate.mjs source
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.117.0
+      - name: Request protected short-lived database authentication
+        env:
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned database TLS
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Verify full immutable ledger, catalog and exact one-file dry-run
+        run: node scripts/prospect-enrichment/bounded-original-release-gate.mjs preflight
+      - name: Upload bound redacted preflight for the second protected review
+        id: evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prospect-bounded-original-preflight
+          path: |
+            ${{ runner.temp }}/bounded-original-release/preflight-evidence.json
+            ${{ runner.temp }}/bounded-original-release/source-check.json
+            ${{ runner.temp }}/bounded-original-release/role-check.json
+            ${{ runner.temp }}/bounded-original-release/ledger-check.json
+            ${{ runner.temp }}/bounded-original-release/catalog-check.json
+            ${{ runner.temp }}/bounded-original-release/plan-check.json
+            ${{ runner.temp }}/bounded-original-release/stage-check.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Identify exact second-review evidence
+        env:
+          ARTIFACT_ID: ${{ steps.evidence.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ steps.evidence.outputs.artifact-digest }}
+        run: |
+          printf 'Review bounded original migration preflight artifact %s, SHA-256 %s, run %s attempt %s, source %s, receipt %s. Pending scope is only 20261013214000_prospect_bounded_original_evidence_v2.sql. Historical ledger references, CRM migrations, research submissions and canonical apply are excluded.\n' "$ARTIFACT_ID" "$ARTIFACT_DIGEST" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$REVIEWED_SOURCE_SHA" "$REVIEWED_RECEIPT_SHA256" >> "$GITHUB_STEP_SUMMARY"
+  apply:
+    needs: preflight
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
+    name: Apply only reviewed bounded original migration and verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: Production prospect migrations
+    permissions:
+      contents: read
+      actions: read
+    env:
+      CONFIGURED_REVIEWED_SHA: ${{ vars.PROSPECT_BOUNDED_ORIGINAL_RELEASE_REVIEWED_SHA }}
+      CONFIGURED_RECEIPT_SHA256: ${{ vars.PROSPECT_BOUNDED_ORIGINAL_RELEASE_REVIEWED_RECEIPT_SHA256 }}
+      EXPECTED_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact_id }}
+      EXPECTED_ARTIFACT_DIGEST: ${{ needs.preflight.outputs.artifact_digest }}
+    steps:
+      - name: Check out exact reviewed dispatch commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.reviewed_source_sha }}
+          fetch-depth: 0
+      - name: Reauthorize current main before any credentials
+        run: node scripts/prospect-enrichment/bounded-original-release-gate.mjs source
+      - name: Verify exact immutable preflight artifact metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$EXPECTED_ARTIFACT_ID" > "$RUNNER_TEMP/bounded-artifact-metadata.json"
+          node scripts/prospect-enrichment/bounded-original-release-gate.mjs artifact "$RUNNER_TEMP/bounded-artifact-metadata.json"
+      - name: Download only the verified artifact ID
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
+        with:
+          artifact-ids: ${{ needs.preflight.outputs.artifact_id }}
+          merge-multiple: true
+          path: ${{ runner.temp }}/reviewed-bounded-original
+      - name: Verify source, run, freshness and every reviewed evidence hash
+        run: node scripts/prospect-enrichment/bounded-original-release-gate.mjs verify-evidence
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.117.0
+      - name: Request protected short-lived database authentication
+        env:
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+      - name: Configure pinned database TLS
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Repeat immediate preflight, attempt the one migration once and always read back
+        run: node scripts/prospect-enrichment/bounded-original-release-gate.mjs apply
+      - name: Preserve redacted success or failure receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prospect-bounded-original-release-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/bounded-original-release/source-check.json
+            ${{ runner.temp }}/bounded-original-release/role-check.json
+            ${{ runner.temp }}/bounded-original-release/ledger-check.json
+            ${{ runner.temp }}/bounded-original-release/catalog-check.json
+            ${{ runner.temp }}/bounded-original-release/plan-check.json
+            ${{ runner.temp }}/bounded-original-release/stage-check.json
+            ${{ runner.temp }}/bounded-original-release/apply-started.json
+            ${{ runner.temp }}/bounded-original-release/release-receipt.json
+          if-no-files-found: warn
+          retention-days: 30

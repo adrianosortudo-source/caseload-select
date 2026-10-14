@@ -229,6 +229,7 @@ jobs:
           npm run test:prospect-enrichment-cli
           node --test scripts/prospect-enrichment/__tests__/migration-gate.node-test.mjs
           node --test scripts/prospect-enrichment/__tests__/candidate-projection-repair-gate.node-test.mjs
+          node --test scripts/prospect-enrichment/__tests__/bounded-original-release-gate.node-test.mjs
           node --test scripts/prospect-enrichment/__tests__/additive-release-gate.node-test.mjs
           node --test scripts/prospect-enrichment/__tests__/complete-release-gate.node-test.mjs
           node --test scripts/prospect-enrichment/__tests__/temporary-credential.node-test.mjs
@@ -373,14 +374,14 @@ jobs:
 
       - name: Setup Supabase CLI
         # Pinned to the version this workflow was authored and verified
-        # against (`npx supabase@latest --version` => 2.109.1, 2026-07-16).
+        # against; 2.117.0 also matches the reviewed bounded-original release gate.
         # CLI flags for `supabase status -o env` / `--override-name` have
         # changed across versions before; bump this deliberately, not
         # silently via a floating tag, and re-verify the flags below still
         # parse (`supabase status --help`) when you do.
         uses: supabase/setup-cli@v3
         with:
-          version: '2.109.1'
+          version: '2.117.0'
 
       - name: Allocate an isolated local Supabase database port
         # GitHub-hosted runners occasionally reserve the conventional local
@@ -539,6 +540,10 @@ jobs:
       - name: Run publication and privacy integration tests
         run: npx vitest run src/lib/__tests__/publication-receipt-concurrency.integration.test.ts src/lib/__tests__/publication-placement-claim-concurrency.integration.test.ts src/lib/__tests__/standing-publishing-authorization-concurrency.integration.test.ts src/lib/__tests__/drg-manifest-deployment.integration.test.ts src/lib/__tests__/channel-conversation-acl.integration.test.ts src/lib/__tests__/privacy-screened-lead-redaction.integration.test.ts src/lib/__tests__/privacy-restore-replay.integration.test.ts src/lib/__tests__/gta-prospect-research-import-batch.integration.test.ts src/lib/__tests__/voice-screen-parallel.integration.test.ts
 
+      - name: Verify bounded original singleton plan with pinned CLI on isolated Postgres
+        env:
+          PROSPECT_BOUNDED_RELEASE_CLI_TEST_DATABASE_URL: ${{ env.DIRECT_DATABASE_URL }}
+        run: node --test scripts/prospect-enrichment/__tests__/bounded-original-release-gate.node-test.mjs
       - name: Run prospect enrichment real PostgreSQL contract
         env:
           PROSPECT_ENRICHMENT_REQUIRE_DATABASE_URL: "1"

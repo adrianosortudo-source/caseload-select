@@ -36,7 +36,7 @@ suite("bounded original v2 real PostgreSQL contract", () => {
     try {
       const token = randomUUID().replaceAll("-", ""), actor = "v2-integration-" + token;
       const base = structuredClone(createProspectEnrichmentFixtures()[0].envelope);
-      const original: Record<string, JsonValue> = { status: "held", qualificationState: "needs_evidence", unknown: null, consent: false,
+      const original: Record<string, JsonValue> = { status: "held", qualificationState: "needs_evidence", unknown: null, consent: false, crlfAnswer: "First line\r\nSecond line",
         "": "empty key", "slash/key~": [], "\uE000": 1e21, "😀": 1e-7, longFinding: "🧭".repeat(20_000) };
       let deepest = original;
       for (let i = 0; i < 16; i++) { deepest.receipt = {}; deepest = deepest.receipt as Record<string, JsonValue>; }
@@ -84,6 +84,7 @@ suite("bounded original v2 real PostgreSQL contract", () => {
       expect(retained.fields).toEqual(expect.arrayContaining([
         expect.objectContaining({ pointer: "/originalResearch/content/unknown", value: null }),
         expect.objectContaining({ pointer: "/originalResearch/content/consent", value: false }),
+        expect.objectContaining({ pointer: "/originalResearch/content/crlfAnswer", value: "First line\r\nSecond line" }),
         expect.objectContaining({ pointer: "/originalResearch/content/", value: "empty key" }),
         expect.objectContaining({ pointer: "/originalResearch/content/slash~1key~0", value: [] }),
         expect.objectContaining({ pointer: "/originalResearch/content" + "/receipt".repeat(16) + "/answer", value: "Preserved questionnaire answer." }),
