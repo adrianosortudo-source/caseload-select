@@ -103,7 +103,12 @@ test("workflow requires two protected gates, fixed temporary credentials and imm
  assert.ok(apply.some(step=>step.with?.["artifact-ids"] && step.with["merge-multiple"]===true));assert.ok(apply.some(step=>step.if==="always()"));
  assert.doesNotMatch(JSON.stringify(workflow),/STATIC_MIGRATION_DATABASE_URL|migration repair|supabase db push/);
 });
-const cliUrl=process.env.PROSPECT_BOUNDED_RELEASE_CLI_TEST_DATABASE_URL;
+const normalizeTestDatabaseUrl=value=>value?.trim().replace(/^["']|["']$/g, "");
+test("CLI test accepts the quoted loopback URL exported by Supabase status",()=>{
+ const value="postgresql://postgres:postgres@127.0.0.1:55562/postgres";
+ for(const input of [value,'"'+value+'"',"'"+value+"'",'  "'+value+'"  ']) assert.equal(new URL(normalizeTestDatabaseUrl(input)).href,value);
+});
+const cliUrl=normalizeTestDatabaseUrl(process.env.PROSPECT_BOUNDED_RELEASE_CLI_TEST_DATABASE_URL);
 test("pinned CLI skips guarded historical references and plans only the target on isolated Postgres",{skip:!cliUrl,timeout:300000},async t=>{
  const url=new URL(cliUrl);assert.ok(["postgres:","postgresql:"].includes(url.protocol));assert.ok(["127.0.0.1","::1"].includes(url.hostname.replace(/^\[|\]$/g,"")));assert.ok(url.port);assert.equal(url.pathname,"/postgres");
  const cli=process.env.PROSPECT_BOUNDED_RELEASE_SUPABASE_BIN??"supabase";
@@ -111,17 +116,22 @@ test("pinned CLI skips guarded historical references and plans only the target o
  const admin=new Pool({connectionString:cliUrl,max:1});const name="bounded_cli_"+randomUUID().replaceAll("-","");let created=false,db;
  const dir=fs.mkdtempSync(path.join(root,"bounded-cli-test-"));
  try {
+  console.info("bounded-cli-phase","actual-catalog");
   verifyCatalog((await admin.query(catalogQuery())).rows[0].catalog,receipt,"post");t.diagnostic("Actual isolated database catalog matches all eight reviewed function bodies and permissions.");
   await admin.query('CREATE DATABASE "'+name+'"');created=true;
   const scratch=new URL(cliUrl);scratch.pathname="/"+name;scratch.searchParams.set("sslmode","disable");db=new Pool({connectionString:scratch.toString(),max:1});
   await db.query("CREATE SCHEMA supabase_migrations; CREATE TABLE supabase_migrations.schema_migrations(version text PRIMARY KEY,statements text[],name text)");
   await db.query("INSERT INTO supabase_migrations.schema_migrations(version,name) SELECT entry->>'version',entry->>'name' FROM jsonb_array_elements($1::jsonb) entry",[JSON.stringify(reference.ledger)]);
+  console.info("bounded-cli-phase","guarded-stage");
   const staged=path.join(dir,"staged");stage(reference,bytes,staged);
   const dry=()=>JSON.parse(execFileSync(cli,["db","push","--dry-run","--include-all","--skip-vault","--output-format","json","--db-url",scratch.toString()],{cwd:staged,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:60000}));
+  console.info("bounded-cli-phase","singleton-dry-run");
   verifyPlan(dry(),"pre");t.diagnostic("Pinned CLI planned only the reviewed target.");
   await db.query("DELETE FROM supabase_migrations.schema_migrations WHERE version='20261013174258'");
+  console.info("bounded-cli-phase","missing-history-dry-run");
   assert.throws(()=>verifyPlan(dry(),"pre"));t.diagnostic("A missing historical ledger row was rejected by the plan verifier.");
   const before=(await db.query("SELECT version,name,statements FROM supabase_migrations.schema_migrations ORDER BY version")).rows;
+  console.info("bounded-cli-phase","actual-negative-push");
   assert.throws(()=>execFileSync(cli,["db","push","--yes","--include-all","--skip-vault","--output-format","json","--db-url",scratch.toString()],{cwd:staged,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:60000}),
     error=>String(error.stderr).includes("bounded_release_history_reference_execution_prohibited"));
   t.diagnostic("Actual CLI push stopped at the historical SQL guard.");
