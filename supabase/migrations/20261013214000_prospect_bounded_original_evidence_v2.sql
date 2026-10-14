@@ -223,7 +223,8 @@ BEGIN
   anchor:='  SELECT recorded_at INTO recorded FROM public.prospect_research_candidate_coverage WHERE revision=p_coverage;';
   IF (length(updated)-length(replace(updated,anchor,'')))<>length(anchor) THEN RAISE EXCEPTION 'bounded_history_metadata_anchor_changed'; END IF;
   updated:=replace(updated,anchor,$metadata$  logical_json:=p_json;
-  IF p_table='prospect_enrichment_packages' THEN
+  -- Preserve historical stored JSON; decode only explicitly declared v2 transport.
+  IF p_table='prospect_enrichment_packages' AND p_json->>'schemaVersion'='prospect-enrichment/v2' THEN
     logical_json:=prospect_candidate_private.logical_enrichment_payload_v1(p_json);
     IF p_json->>'schemaVersion'='prospect-enrichment/v2' THEN
       p_meta:=p_meta||jsonb_build_object(
