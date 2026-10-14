@@ -39,49 +39,29 @@ npm run agency-followup:walkthrough
 
 Use `npm run agency-followup:manual` instead to open the headed operator page. It creates the same isolated synthetic operator and prospect fixtures, then stays open until Ctrl+C. The runner independently checks the scratch project ID, loopback API/DB ports, both migration ledger versions, both migration blobs against their verified pushed branch revisions, and the service-role-only CRM table grants before seeding anything. It reads local Supabase keys into process memory only.
 
-## 2026-10-13 synthetic walkthrough report
+## 2026-10-14 synthetic walkthrough report
 
-The full walkthrough is not yet complete. This report separates checks that reached the application from checks blocked by the disposable stack.
+The full local synthetic walkthrough passed with exit code 0 on 2026-10-14.
 
-### Application checks reached
+- Verified the dedicated disposable project ID, loopback API, migration versions `20261013154000` and `20261013230354`, migration blobs on the pushed branch, six follow-up tables, and Agency CRM grants before seeding.
+- Confirmed the follow-up API returns 401 without an operator session and 200 with the synthetic signed operator session.
+- Passed template create/approve, journey create/activate, exact prospect search, enrollment, eligibility, per-prospect release, and per-message approval.
+- Passed duplicate enrollment protection, pause behavior, suppression blocking, approval invalidation after content changes, accepted fake-provider persistence, UNKNOWN quarantine without retry, weekend-window rescheduling, concurrent claim exclusivity, and stale-lease rejection.
+- Verified rendered copy and horizontal overflow at 1440, 1024, 768, 640, 375, and 320 CSS pixels. Six screenshots and `summary.json` are written under ignored `test-results/agency-followup-walkthrough`.
 
-- The actual authenticated Agency CRM operator page loaded and completed hydration in Playwright.
-- The follow-up API rejected an unauthenticated request with HTTP 401 and returned HTTP 200 for the synthetic signed operator session.
-- From the operator page, synthetic template creation returned 201, template approval returned 200, journey creation returned 201, and journey activation returned 200.
-- Prospect search then returned HTTP 500 with `permission denied for table agency_prospects`. This exposed a missing `service_role` table grant in the disposable database. The additive grant migration `20261013230354_agency_crm_service_role_grants.sql` was prepared, pushed, and covered by a migration-contract test. The walkthrough has not been rerun against that migration.
+The disposable local database was reset before the clean run so the screenshots contain only the current synthetic records. The migration was applied only to that local disposable database. No production database, real contact, or real provider was accessed, and no message was sent.
 
-The test-only dispatch route was removed by the runner on exit. Since the run stopped during prospect search, it did not produce the promised summary or screenshot set. Pause/cancel, suppression, approval invalidation, retry, and UNKNOWN quarantine were not verified in this browser/API run; their offline unit coverage is separate.
+### Run the walkthrough
 
-### Automated test result
-
-The focused source contract passed with 6 tests:
-
-```powershell
-npx vitest run --pool=forks --maxWorkers=1 --minWorkers=1 src/lib/__tests__/agency-followup-migration-contract.test.ts
-```
-
-The ordinary worker-pool invocation failed during Vitest setup before collecting tests: the `tests/vitest.server-only.setup.ts` worker fetch timed out after about 266 seconds and 0 tests were collected. This was a setup failure, not a failing assertion. No full Next build result is available from this machine.
-
-### Disposable migration and stack diagnostics
-
-The pushed grant migration was checked against its pinned blob and the disposable project ID before an apply attempt. A read-only ledger comparison found 274 recorded migration versions, all present as matching migration filenames in the scratch project. The only scratch version absent from the ledger was the new `20261013230354` migration.
-
-The migration command was:
+From the repository root in PowerShell, start and verify the dedicated scratch stack, then run:
 
 ```powershell
-supabase --workdir 'test-results\crm-local-stack' migration up --local
+$env:AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION = 'YES-LOCAL-DISPOSABLE-ONLY'
+npm run agency-followup:walkthrough
 ```
 
-It did not apply SQL. The initial call pointed `--workdir` at the nested `supabase` directory and reported `LegacyMigrationMissingLocalError`. Retrying from the project root after checking the project ID, migration blob, and pending ledger version failed before migration execution with `LegacyDbConnectError: failed to connect to postgres`.
+The runner checks the scratch identity, loopback endpoints, migration ledger and pushed migration blobs, and required grants before writing synthetic rows. Use `npm run agency-followup:manual` to open the signed synthetic operator page in a headed browser. The manual run remains open until Ctrl+C. Both commands are local-only and must never be pointed at an existing or production database.
 
-Both loopback endpoints were then confirmed closed. One project-scoped `supabase stop` invocation was interrupted after it emitted no completion status. A subsequent project-scoped `supabase start` was run without reset or repair but exited 1 with `LegacyHealthCheckTimeoutError`, reporting two unhealthy containers. A filtered status check then reported no container named `supabase_db_crm-followup-walkthrough-20261013`; the read-only container inspection timed out. The local PostgREST request returned no HTTP status. Container logs and mount metadata were unavailable, so volume persistence could not be independently confirmed. No reset, repair, production connection, or migration apply occurred.
+## PR status
 
-Resume only after the disposable project is healthy and its project ID, loopback endpoints, migration ledger, and CRM grants pass the runner's preflight. Do not point the walkthrough at another database to get around this local stack failure.
-
-## 2026-10-14 CI repair update
-
-The CI fixes are on pushed commit `f08e38ccb30f170226a30d552c882fb34b1a1bc0` in draft PR #402. The walkthrough now uses a local prospect-search response type instead of importing an unrelated UI type. The operator-origin inventory tracks `src/lib/notification-digest.ts`, where digest URLs are actually built with the shared origin policy.
-
-The focused origin-inventory suite passed 4/4 locally. On the current PR head, TypeScript, full Vitest, ESLint, rendered-copy gates, independent widget checks, service parity/typecheck, build assets, and both Vercel preview checks passed. The real-Postgres workflow started its fresh Supabase stack and passed publication/privacy integration tests; its prospect-enrichment Postgres contract remained in progress at the last check. PR #402 remains a draft and is unmerged.
-
-The local synthetic Agency CRM browser walkthrough is still incomplete. The disposable local stack previously failed `supabase start` with `LegacyHealthCheckTimeoutError`; its loopback services were unavailable afterward. No CRM migration was applied to that stack, no production database/provider was contacted, and no real message was sent. The pushed migration still requires successful fresh-Postgres CI validation and a healthy disposable stack before the browser walkthrough can be completed.
+PR #402 remains open as a draft. The local synthetic walkthrough is complete; GitHub CI and preview checks must pass for the current PR head before any merge review. Do not merge or deploy from this branch. Production migration and release still require CI, review, and separate explicit approval.
