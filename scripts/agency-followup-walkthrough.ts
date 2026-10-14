@@ -520,8 +520,10 @@ async function waitForAction(page: Page, action: string, button: ReturnType<Page
   // Install the response listener only after readiness waits. Starting its
   // timeout before hydration can expire before the click is even issued.
   const responsePromise = page.waitForResponse((response) => {
-    return new URL(response.url()).pathname === API_PATH && response.request().method() === "POST";
-  });
+    const matched = new URL(response.url()).pathname === API_PATH && response.request().method() === "POST";
+    if (matched) progress(`waiter matched Agency CRM POST response HTTP ${response.status()}`);
+    return matched;
+  }, { timeout: 30000 });
   await button.click();
   let response: Awaited<typeof responsePromise>;
   try {
@@ -711,9 +713,28 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   page.on("response", (response) => {
     const pathname = new URL(response.url()).pathname;
     if (pathname.includes("/_next/") && response.status() >= 400) responseFailures.push(`asset response ${response.status()}: ${pathname}`);
+    if (pathname === API_PATH && response.request().method() === "POST") progress(`browser observed Agency CRM POST response HTTP ${response.status()}`);
   });
   progress(`opening actual operator queue UI (${Math.floor(remainingMs() / 1000)}s overall budget remains)`);
+  page.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === "/_next/static/chunks/app/layout.js") progress("browser requested Next app/layout.js chunk");
+    if (pathname === API_PATH && request.method() === "POST") {
+      let action = "unknown";
+      try { action = String(request.postDataJSON()?.action ?? "unknown"); } catch { /* report only the request path */ }
+      progress(`browser emitted Agency CRM POST action=${action}`);
+    }
+  });
   await page.goto(APP_ORIGIN + "/admin/agency-crm/follow-up", { waitUntil: "domcontentloaded", timeout: 180_000 });
+  const layoutChunkStartedAt = Date.now();
+  try {
+    const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(30000, remainingMs()) });
+    const layoutChunkBody = await layoutChunkResponse.body();
+    progress(`direct app/layout.js asset probe returned HTTP ${layoutChunkResponse.status()}; bytes=${layoutChunkBody.byteLength}; elapsed=${Date.now() - layoutChunkStartedAt}ms`);
+  } catch (error) {
+    progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms: ${String(error).replace(/\\s+/g, " ").slice(0, 300)}`);
+    throw error;
+  }
   await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
   try {
@@ -806,7 +827,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
 
   const pauseProspect = fixtures.prospects.pause;
-  await createDraft(page, journeyName, pauseProspect);
+  await createDraft(pool, page, journeyName, pauseProspect);
   await markEligibleAndRelease(page, pauseProspect);
   const pauseCard = queueCard(page, pauseProspect.firmName);
   await waitForAction(page, "approve", pauseCard.getByRole("button", { name: "Approve this message" }).nth(0));
@@ -820,7 +841,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
 
   const suppressed = fixtures.prospects.suppressed;
-  await createDraft(page, journeyName, suppressed);
+  await createDraft(pool, page, journeyName, suppressed);
   await markEligibleAndReleaseAttempt(page, suppressed);
   const suppressedEnrollment = await pool.query<{ state: string; released_at: string | null }>(
     "select state,released_at from agency_followup_enrollments where prospect_id=$1",
@@ -832,7 +853,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
 
   const unknownProspect = fixtures.prospects.unknown;
-  await createDraft(page, journeyName, unknownProspect);
+  await createDraft(pool, page, journeyName, unknownProspect);
   await markEligibleAndRelease(page, unknownProspect);
   await waitForAction(page, "approve", queueCard(page, unknownProspect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
   const unknownMessage = await pool.query<{ id: string }>(
@@ -859,7 +880,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   // Exercise actual schedule policy immediately before handoff with a delayed
   // weekend claim. The current weekday/window come from the persisted journey.
   const windowProspect = fixtures.prospects.window;
-  await createDraft(page, journeyName, windowProspect);
+  await createDraft(pool, page, journeyName, windowProspect);
   await markEligibleAndRelease(page, windowProspect);
   const windowMessage = await pool.query<{ id: string; timezone: string; business_days: number[]; local_window_start: string; local_window_end: string }>(
     "select m.id,j.timezone,j.business_days,j.local_window_start,j.local_window_end from agency_followup_messages m join agency_followup_enrollments e on e.id=m.enrollment_id join agency_followup_journeys j on j.id=e.journey_id where e.prospect_id=$1 and m.step_number=1",
@@ -902,7 +923,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
 
   // Real RPC contention: concurrent workers must yield exactly one claim.
   const leaseProspect = fixtures.prospects.lease;
-  await createDraft(page, journeyName, leaseProspect);
+  await createDraft(pool, page, journeyName, leaseProspect);
   await markEligibleAndRelease(page, leaseProspect);
   await waitForAction(page, "approve", queueCard(page, leaseProspect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
   const leaseMessage = await pool.query<{ id: string }>(
@@ -999,7 +1020,25 @@ async function runManual(context: BrowserContext, fixtures: Fixtures): Promise<v
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
   page.setDefaultNavigationTimeout(180_000);
+  page.on("request", (request) => {
+    const pathname = new URL(request.url()).pathname;
+    if (pathname === "/_next/static/chunks/app/layout.js") progress("browser requested Next app/layout.js chunk");
+    if (pathname === API_PATH && request.method() === "POST") {
+      let action = "unknown";
+      try { action = String(request.postDataJSON()?.action ?? "unknown"); } catch { /* report only the request path */ }
+      progress(`browser emitted Agency CRM POST action=${action}`);
+    }
+  });
   await page.goto(APP_ORIGIN + "/admin/agency-crm/follow-up", { waitUntil: "domcontentloaded", timeout: 180_000 });
+  const layoutChunkStartedAt = Date.now();
+  try {
+    const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(30000, remainingMs()) });
+    const layoutChunkBody = await layoutChunkResponse.body();
+    progress(`direct app/layout.js asset probe returned HTTP ${layoutChunkResponse.status()}; bytes=${layoutChunkBody.byteLength}; elapsed=${Date.now() - layoutChunkStartedAt}ms`);
+  } catch (error) {
+    progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms: ${String(error).replace(/\\s+/g, " ").slice(0, 300)}`);
+    throw error;
+  }
   await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
   console.log("Synthetic Agency CRM is open at " + APP_ORIGIN + "/admin/agency-crm/follow-up");
   console.log("Create a template and journey, then search Synthetic Walkthrough Normal. Other synthetic prospects are available for pause, suppression, UNKNOWN, window, and lease checks.");
