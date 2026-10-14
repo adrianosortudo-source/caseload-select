@@ -994,6 +994,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
     });
     const failures = await auditRenderedCopy(page);
+    await page.evaluate(() => window.scrollTo(0, 0));
     if (failures.length) {
       await page.screenshot({ path: path.join(screenshotDir, `failure-queue-${width}.png`), fullPage: true });
       throw new Error(`Rendered UI gate failed at ${width}px: ${failures.join("; ")}`);
