@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync, execSync } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -23,9 +23,10 @@ const MIGRATION_PATH = "supabase/migrations/20261013154000_agency_followup_journ
 const EXPECTED_CRM_GRANTS_MIGRATION_BLOB = "af413a079a76e2fc9844f0bb37d61bec3127b558";
 const CRM_GRANTS_MIGRATION_PATH = "supabase/migrations/20261013230354_agency_crm_service_role_grants.sql";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
-const RUN_ID = randomUUID();
+const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
 const RUN_STARTED_AT = new Date().toISOString();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+if (!UUID.test(RUN_ID)) throw new Error("Acceptance run ID must be a UUID.");
 const MANUAL = process.argv.includes("--manual");
 const WALKTHROUGH_STARTED_AT = Date.now();
 const WALKTHROUGH_TIMEOUT_MS = 20 * 60_000;
@@ -35,6 +36,22 @@ let activeNextServer: ChildProcess | undefined;
 let activeBrowser: Browser | undefined;
 let runAbortController: AbortController | undefined;
 let temporaryRouteInstalled = false;
+let temporaryRouteSha256: string | undefined;
+let sourceAtStart: ReturnType<typeof captureSourceState> | undefined;
+
+function captureSourceState() {
+  const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" });
+  const sourceCommit = git("rev-parse", "HEAD").trim();
+  const workingTreeStatus = git("status", "--porcelain", "--untracked-files=all");
+  const untrackedSource = git("ls-files", "--others", "--exclude-standard", "-z").split("\0").filter(Boolean)
+    .map((file) => ({ path: file, sha256: createHash("sha256").update(readFileSync(file)).digest("hex") }));
+  const fingerprint = createHash("sha256")
+    .update(execFileSync("git", ["diff", "HEAD", "--binary"]))
+    .update(execFileSync("git", ["diff", "--cached", "--binary"]))
+    .update(workingTreeStatus).update(JSON.stringify(untrackedSource)).digest("hex");
+  return { sourceCommit, workingTreeState: workingTreeStatus ? "dirty" : "clean",
+    workingTreeStatus, diffFingerprintSha256: fingerprint, untrackedSource };
+}
 process.on("SIGINT", () => { interrupted = true; });
 
 function progress(message: string): void {
@@ -271,6 +288,7 @@ export async function POST(request: NextRequest) {
 `;
   await writeFile(path.join(TEST_DISPATCH_DIR, "route.ts"), route, "utf8");
   temporaryRouteInstalled = true;
+  temporaryRouteSha256 = createHash("sha256").update(route).digest("hex");
   progress("temporary fake-dispatch route installed");
 }
 
@@ -643,6 +661,20 @@ async function dispatchFake(
   return await response.json() as Record<string, number>;
 }
 
+async function withFixtureClaim<T>(pool: Pool, messageId: string, operation: () => Promise<T>): Promise<T> {
+  // Keep retained scheduled fixtures out of this claim without rewriting them.
+  // The real claim RPC still selects the target using FOR UPDATE SKIP LOCKED.
+  const guard = await pool.connect();
+  try {
+    await guard.query("begin");
+    await guard.query("set local lock_timeout = '3s'");
+    await guard.query("select id from public.agency_followup_messages where state='scheduled' and id<>$1 order by id for update", [messageId]);
+    return await operation();
+  } finally {
+    try { await guard.query("rollback"); } finally { guard.release(); }
+  }
+}
+
 async function countRows(pool: Pool, query: string, values: unknown[] = []): Promise<number> {
   const result = await pool.query<{ count: string }>(query, values);
   return Number(result.rows[0]?.count ?? 0);
@@ -847,7 +879,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await page.reload({ waitUntil: "networkidle" });
   await expect(queueCard(page, normal.firmName).getByText("awaiting review", { exact: true })).toBeVisible();
 
-  const acceptedResult = await dispatchFake(context, walkthroughToken, { workerId: "synthetic-walkthrough-accepted", limit: 10 });
+  const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, { workerId: "synthetic-walkthrough-accepted", limit: 1 }));
   const accepted = await pool.query<{ state: string; provider_message_id: string | null }>(
     "select state,provider_message_id from agency_followup_messages where id=$1",
     [firstNormalMessage.id],
@@ -891,11 +923,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     [unknownProspect.id],
   );
   await pool.query("update agency_followup_messages set scheduled_at=now()-interval '1 minute' where id=$1", [unknownMessage.rows[0].id]);
-  const unknownResult = await dispatchFake(context, walkthroughToken, {
+  const unknownResult = await withFixtureClaim(pool, unknownMessage.rows[0].id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-unknown",
     limit: 1,
     outcomePlan: [{ kind: "unknown", detail: "synthetic interruption after fake handoff" }],
-  });
+  }));
   const unknownRow = await pool.query<{ state: string; unknown_since: string | null }>(
     "select state,unknown_since from agency_followup_messages where id=$1",
     [unknownMessage.rows[0].id],
@@ -934,15 +966,14 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   while (retryClock.getUTCDay() === 0 || retryClock.getUTCDay() === 6) retryClock.setUTCDate(retryClock.getUTCDate() + 1);
   const retryNow = retryClock.toISOString();
   const retryDueAt = new Date(retryClock.getTime() + 30_000).toISOString();
-  // Make this fixture the oldest due row without touching historical fixtures.
-  const retryInitialDueAt = new Date(retryClock.getTime() - 100 * 365 * 24 * 60 * 60 * 1000).toISOString();
+  const retryInitialDueAt = new Date(retryClock.getTime() - 60_000).toISOString();
   await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [retryMessage.id, retryInitialDueAt]);
-  const retryFailure = await dispatchFake(context, walkthroughToken, {
+  const retryFailure = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-retry",
     now: retryNow,
     limit: 1,
     outcomePlan: [{ kind: "definitive_retryable_failure", code: "synthetic_throttle" }],
-  });
+  }));
   const retryRow = await pool.query<{ state: string; attempt_count: number; scheduled_at: string; last_error_code: string | null; provider_idempotency_key: string }>(
     "select state,attempt_count,scheduled_at,last_error_code,provider_idempotency_key from agency_followup_messages where id=$1",
     [retryMessage.id],
@@ -976,6 +1007,23 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     retryClient.release();
   }
 
+  const retryAcceptance = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-retry-accepted", now: retryDueAt, limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: "fake-provider-retry-" + RUN_ID, acceptedAt: retryDueAt }],
+  }));
+  const retryReplay = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-retry-replay", now: new Date(Date.parse(retryDueAt) + 1000).toISOString(), limit: 1,
+  }));
+  const acceptedRetry = await pool.query<{ state: string; attempt_count: number; provider_idempotency_key: string; acceptances: string }>(
+    "select m.state,m.attempt_count,m.provider_idempotency_key,(select count(*)::text from agency_followup_events e where e.message_id=m.id and e.event_type='provider_accepted') as acceptances from agency_followup_messages m where m.id=$1",
+    [retryMessage.id],
+  );
+  if (retryAcceptance.accepted !== 1 || retryReplay.claimed !== 0 || acceptedRetry.rows[0]?.state !== "accepted" ||
+    Number(acceptedRetry.rows[0]?.attempt_count) !== 2 || acceptedRetry.rows[0]?.provider_idempotency_key !== retryMessage.provider_idempotency_key ||
+    acceptedRetry.rows[0]?.acceptances !== "1") {
+    throw new Error("The due retry did not persist exactly one acceptance with two attempts and the same logical key.");
+  }
+
   // Exercise actual schedule policy immediately before handoff with a delayed
   // weekend claim. The current weekday/window come from the persisted journey.
   const windowProspect = fixtures.prospects.window;
@@ -992,11 +1040,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const weekendNow = nextSaturday.toISOString();
   const weekendDue = new Date(nextSaturday.getTime() - 60_000).toISOString();
   await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [windowMessage.rows[0].id, weekendDue]);
-  const windowResult = await dispatchFake(context, walkthroughToken, {
+  const windowResult = await withFixtureClaim(pool, windowMessage.rows[0].id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-window",
     now: weekendNow,
     limit: 1,
-  });
+  }));
   const policy = {
     timezone: windowMessage.rows[0].timezone,
     businessDays: windowMessage.rows[0].business_days.map(Number),
@@ -1030,10 +1078,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     [leaseProspect.id],
   );
   await pool.query("update agency_followup_messages set scheduled_at=now()-interval '1 minute' where id=$1", [leaseMessage.rows[0].id]);
-  const [claimA, claimB] = await Promise.all([
+  const [claimA, claimB] = await withFixtureClaim(pool, leaseMessage.rows[0].id, () => Promise.all([
     pool.query("select id,lease_owner from public.claim_agency_followup_messages('synthetic-lease-a',now(),120,1)"),
     pool.query("select id,lease_owner from public.claim_agency_followup_messages('synthetic-lease-b',now(),120,1)"),
-  ]);
+  ]));
   const claims = [...claimA.rows, ...claimB.rows];
   if (claims.length !== 1 || claims[0].id !== leaseMessage.rows[0].id) {
     throw new Error("Concurrent database workers did not produce exactly one message lease.");
@@ -1060,16 +1108,28 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const renderedWidths: number[] = [];
   const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
   const stableLayout = async () => page.evaluate(async () => {
-    await document.fonts.ready;
-    const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-    for (let attempt = 0; attempt < 20; attempt += 1) {
-      await frame();
-      if (document.getAnimations().every((animation) => animation.playState !== "running")) {
-        await frame();
-        if (document.getAnimations().every((animation) => animation.playState !== "running")) return;
+    const settle = async () => {
+      await document.fonts.ready;
+      let previous: number[] = [];
+      let stableFrames = 0;
+      while (stableFrames < 3) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const running = document.getAnimations().some((animation) =>
+          animation.playState === "running" && animation.effect?.getTiming().iterations !== Infinity);
+        const bounds = Array.from(document.querySelectorAll("main, aside, nav, h1, label input"))
+          .flatMap((element) => { const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
+        const stable = previous.length > 0 && previous.length === bounds.length &&
+          bounds.every((value, index) => Math.abs(value - previous[index]) <= 1);
+        stableFrames = !running && stable ? stableFrames + 1 : 0;
+        previous = bounds;
       }
-    }
-    throw new Error("Layout transitions did not settle before the acceptance capture.");
+    };
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([settle(), new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Layout did not settle within 5000 ms.")), 5000);
+      })]);
+    } finally { if (timer) clearTimeout(timer); }
   });
   const screenshot = async (filename: string, width: number, navigationState: string) => {
     const file = path.join(screenshotDir, filename);
@@ -1093,6 +1153,15 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     }, requireFocus);
     if (!usable) throw new Error(`${label} was hidden, occluded, or not focusable at ${await page.evaluate(() => innerWidth)}px.`);
   };
+  const requiredAuthoringControl = async (target: Page) => {
+    const control = target.locator("label").filter({ hasText: "Template key" }).locator("input");
+    if (await control.count() !== 1) throw new Error("Exactly one Template key authoring control is required.");
+    await expect(control).toBeVisible();
+    await expect(control).toBeEnabled();
+    await assertUnoccluded(control, "Template key authoring control", true);
+  };
+  let missingAuthoringControlRejected = false;
+  const reproduction: Array<{ path: string; sha256: string; elapsedAfterCloseMs: number }> = [];
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 1000 });
     await stableLayout();
@@ -1106,6 +1175,14 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       await assertUnoccluded(closeMenu, "Open navigation close button", true);
       await screenshot(`${RUN_ID}-queue-${width}-nav-open.png`, width, "open");
       await closeMenu.click();
+      if (width === 640) {
+        const closedAt = Date.now();
+        const immediatePath = path.join(screenshotDir, RUN_ID + "-reproduction-640-after-close.png");
+        await page.screenshot({ path: immediatePath, fullPage: true });
+        reproduction.push({ path: path.relative(process.cwd(), immediatePath).replaceAll("\\", "/"),
+          sha256: createHash("sha256").update(await readFile(immediatePath)).digest("hex"),
+          elapsedAfterCloseMs: Date.now() - closedAt });
+      }
       await stableLayout();
     }
     const failures = await auditRenderedCopy(page);
@@ -1116,23 +1193,38 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       throw new Error(`Rendered UI gate failed at ${width}px: ${failures.join("; ")}`);
     }
     await assertUnoccluded(page.getByRole("heading", { level: 1 }).first(), "Follow-up page heading");
-    const authoringControl = page.locator("label").filter({ hasText: "Template key" }).locator("input").first();
-    if (await authoringControl.count()) await assertUnoccluded(authoringControl, "Template key authoring control", true);
+    await requiredAuthoringControl(page);
+    if (width === 640) {
+      const probe = await context.newPage();
+      try {
+        await probe.setViewportSize({ width, height: 1000 });
+        await probe.goto(page.url(), { waitUntil: "domcontentloaded" });
+        const input = probe.locator("label").filter({ hasText: "Template key" }).locator("input");
+        await expect(input).toBeVisible();
+        await input.evaluate((element) => element.remove());
+        try { await requiredAuthoringControl(probe); }
+        catch (error) {
+          if (!(error instanceof Error) || error.message !== "Exactly one Template key authoring control is required.") throw error;
+          missingAuthoringControlRejected = true;
+        }
+        if (!missingAuthoringControlRejected) throw new Error("Missing required authoring control did not fail acceptance.");
+      } finally { await probe.close(); }
+    }
     await page.evaluate(() => window.scrollTo(0, 0));
     await stableLayout();
     await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
     renderedWidths.push(width);
   }
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
-  const gitHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-  const gitStatus = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { encoding: "utf8" });
-  const diff = execFileSync("git", ["diff", "HEAD", "--binary"], { encoding: "buffer" });
+  if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
+  if (screenshots.length !== 12 || !missingAuthoringControlRejected) throw new Error("Incomplete viewport or required-control evidence.");
   const summary = {
     runId: RUN_ID,
-    sourceCommit: gitHead,
-    workingTreeState: gitStatus.length ? "dirty" : "clean",
-    workingTreeStatus: gitStatus,
-    diffFingerprintSha256: createHash("sha256").update(diff).update(gitStatus).digest("hex"),
+    ...sourceAtStart,
+    sourceAtStart,
+    temporaryDispatchRoute: { path: path.relative(process.cwd(), TEST_DISPATCH_DIR), sha256: temporaryRouteSha256 },
+    reproduction,
+    missingAuthoringControlRejected,
     startedAtUtc: RUN_STARTED_AT,
     endedAtUtc: new Date().toISOString(),
     command: "npm run agency-followup:walkthrough",
@@ -1151,7 +1243,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       fakeAccepted: "persisted",
       unknown: "quarantined and not reclaimed",
       businessDayWindow: "weekend claim rescheduled before fake provider",
-      retry: "fake transient failure persisted; database excluded early claim and admitted claim at retry instant",
+      retry: "temporary failure and backoff persisted; early claim excluded; due retry accepted exactly once with stable key and two attempts",
       concurrentClaim: "exactly one claim",
       staleLeaseOwner: "rejected",
     },
@@ -1159,7 +1251,6 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     screenshotViewports: renderedWidths,
     screenshotCount: screenshots.length
   };
-  await writeFile(path.join(OUTPUT_DIR, `summary-${RUN_ID}.json`), JSON.stringify(summary, null, 2) + "\n", "utf8");
   return summary;
   } finally {
     await context.close();
@@ -1222,6 +1313,8 @@ async function main(): Promise<void> {
   if (must(process.env.AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION, "Disposable database confirmation") !== "YES-LOCAL-DISPOSABLE-ONLY") {
     throw new Error("Set AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION=YES-LOCAL-DISPOSABLE-ONLY for this disposable local walkthrough.");
   }
+  sourceAtStart = captureSourceState();
+  let completedSummary: Record<string, unknown> | undefined;
   absoluteDeadline = Date.now() + WALKTHROUGH_TIMEOUT_MS;
   progress("verifying pushed migration blobs");
   await verifyPushedMigration(MIGRATION_PATH, EXPECTED_MIGRATION_BLOB);
@@ -1274,8 +1367,7 @@ async function main(): Promise<void> {
       await runManual(context, fixtures);
       return;
     }
-    const summary = await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken);
-    console.log(JSON.stringify(summary, null, 2));
+    completedSummary = await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken);
   } finally {
     await context?.close();
     await browser?.close();
@@ -1285,9 +1377,20 @@ async function main(): Promise<void> {
   }
   } finally {
     if (hardStop) clearTimeout(hardStop);
-    await pool.end().catch(() => undefined);
-    await removeTemporaryDispatchRoute().catch(() => undefined);
+    try { await pool.end(); }
+    finally { await removeTemporaryDispatchRoute(); }
     runAbortController = undefined;
+  }
+  if (completedSummary) {
+    const sourceAfterCleanup = captureSourceState();
+    if (JSON.stringify(sourceAfterCleanup) !== JSON.stringify(sourceAtStart)) {
+      throw new Error("Source changed during acceptance or temporary-route cleanup was incomplete.");
+    }
+    completedSummary.sourceAfterCleanup = sourceAfterCleanup;
+    completedSummary.cleanupCompleted = true;
+    completedSummary.endedAtUtc = new Date().toISOString();
+    await writeFile(path.join(OUTPUT_DIR, "summary-" + RUN_ID + ".json"), JSON.stringify(completedSummary, null, 2) + "\n", "utf8");
+    console.log(JSON.stringify(completedSummary, null, 2));
   }
 }
 

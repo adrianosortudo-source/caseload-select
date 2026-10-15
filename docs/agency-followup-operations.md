@@ -76,6 +76,16 @@ A baseline walkthrough attempt on `c6b7021` stopped with `Cannot find module 'pg
 
 The walkthrough is designed to reuse the dedicated disposable local stack without resetting it. Earlier synthetic walkthrough fixtures may remain in that stack; they are historical fixtures, not rows created by the new run. The Prospect Enrichment rendered Playwright artifact described above is separate evidence and does not establish that this Agency Follow-up walkthrough passed. A completed run must link each screenshot hash to its run ID and record source commit, working-tree fingerprint, UTC times, command, exit status, and migration identities.
 
+### Execution checkpoint: dependency repair and stronger acceptance
+
+The follow-up execution restored the missing local stack configuration from the prior D: walkthrough worktree after verifying its project ID, ports and disabled analytics setting. Starting the installed Docker Desktop brought the existing disposable containers back online without a database reset. Read-only preflight verified both required migration versions, their fetched origin/main blob identities, all six follow-up tables and the expected CRM grants.
+
+The runner now requires exactly one visible, enabled and unoccluded Template key input and includes an isolated negative check for a removed input. Layout capture waits for finite transitions and three stable geometry frames within five seconds. Source state is captured before the temporary route is created and checked again after cleanup; the route has its own content hash. Success summaries are emitted after cleanup, and a separate local command wrapper records actual process exit and verifies screenshot hashes.
+
+Each fake dispatch uses temporary row locks to exclude retained scheduled fixtures without rewriting them. The retry scenario now verifies persisted acceptance at the due instant, the same logical key, exactly two attempts, one acceptance event and no repeated claim after acceptance. Worker tests also assert that early retries and terminal exhaustion, permanent-failure and UNKNOWN states make no extra provider calls.
+
+These additional edits still require executable validation. The locked offline installation is in progress under attempt 89e845d8-ada3-4d55-b25c-b4aa5a7d0ddb; active package extraction has been measured. No new completed database/browser run or screenshot review is claimed at this checkpoint. Final results must replace this pending status before the PR is ready.
+
 ## PR status
 
 PR #402 is merged. This follow-up PR has not yet been opened. Do not merge or deploy from this branch. Production migration and release still require CI, review, and separate explicit approval.

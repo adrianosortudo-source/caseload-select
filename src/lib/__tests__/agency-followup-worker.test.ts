@@ -132,7 +132,9 @@ describe("Agency follow-up fake dispatcher", () => {
       { kind: "accepted", providerMessageId: "synthetic-accepted", acceptedAt: "2026-10-12T15:01:00.000Z" },
     ]);
     const first = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: validContext.now });
+    expect(provider.sendCalls).toBe(1);
     const early = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: "2026-10-12T15:00:29.999Z" });
+    expect(provider.sendCalls).toBe(1);
     const due = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: "2026-10-12T15:00:30.000Z" });
     expect(first.retryScheduled).toBe(1);
     expect(repository.dispositions[0]).toMatchObject({ state: "scheduled", retryAt: "2026-10-12T15:00:30.000Z" });
@@ -165,6 +167,10 @@ describe("Agency follow-up fake dispatcher", () => {
     expect(exhausted).toMatchObject({ claimed: 1, failed: 1, retryScheduled: 0 });
     expect(repository.dispositions).toHaveLength(5);
     expect(repository.dispositions[4]).toMatchObject({ state: "failed", errorCode: "synthetic_throttle" });
+    expect(provider.sendCalls).toBe(5);
+    const later = new Date(Date.parse(now) + 60_000).toISOString();
+    expect((await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: later })).claimed).toBe(0);
+    expect(provider.sendCalls).toBe(5);
   });
 
   it("stops permanently failed attempts without scheduling a retry", async () => {
@@ -175,7 +181,9 @@ describe("Agency follow-up fake dispatcher", () => {
     const result = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: validContext.now });
     expect(result).toMatchObject({ claimed: 1, failed: 1, retryScheduled: 0 });
     expect(repository.dispositions[0]).toMatchObject({ state: "failed", errorCode: "synthetic_invalid_recipient" });
+    expect(provider.sendCalls).toBe(1);
     expect((await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: "2026-10-12T16:00:00.000Z" })).claimed).toBe(0);
+    expect(provider.sendCalls).toBe(1);
   });
 
   it("re-enqueues a spacing delay at the next configured local send window", async () => {
@@ -224,8 +232,10 @@ describe("Agency follow-up fake dispatcher", () => {
     ]);
     const result = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: validContext.now });
     expect(result.unknown).toBe(1);
+    expect(provider.sendCalls).toBe(1);
     expect(repository.dispositions[0]).toMatchObject({ state: "unknown", detail: "synthetic interruption after handoff" });
     expect((await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: validContext.now })).claimed).toBe(0);
     expect(provider.uniqueIdempotencyKeysSeen).toBe(1);
+    expect(provider.sendCalls).toBe(1);
   });
 });
