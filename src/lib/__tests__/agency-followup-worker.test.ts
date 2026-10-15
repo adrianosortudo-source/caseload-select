@@ -134,13 +134,37 @@ describe("Agency follow-up fake dispatcher", () => {
       ...validContext,
       previousAcceptedAt: "2026-10-12T14:59:00.000Z",
       minimumSpacingMs: 60 * 60_000,
-      schedulePolicy: { timezone: "UTC", businessDays: [1, 2, 3, 4, 5, 6, 7], localWindowStart: "16:00" },
+      schedulePolicy: { timezone: "UTC", businessDays: [1, 2, 3, 4, 5, 6, 7], localWindowStart: "16:00", localWindowEnd: "18:00" },
     };
     const repository = new SyntheticRepository(context);
     const provider = new FakeAgencyFollowupProvider();
     const result = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: context.now });
     expect(result.retryScheduled).toBe(1);
     expect(repository.dispositions[0]).toMatchObject({ state: "scheduled", retryAt: "2026-10-12T16:00:00.000Z" });
+    expect(provider.uniqueIdempotencyKeysSeen).toBe(0);
+  });
+
+  it("reschedules a delayed weekend claim to the next configured business-day window before provider handoff", async () => {
+    const context: AgencyFollowupSendContext = {
+      ...validContext,
+      now: "2026-10-17T16:00:00.000Z", // Saturday at noon in Toronto
+      dueAt: "2026-10-13T13:00:00.000Z",
+      schedulePolicy: {
+        timezone: "America/Toronto",
+        businessDays: [1, 2, 3, 4, 5],
+        localWindowStart: "09:00",
+        localWindowEnd: "17:00",
+      },
+    };
+    const repository = new SyntheticRepository(context);
+    const provider = new FakeAgencyFollowupProvider();
+    const result = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: context.now });
+    expect(result).toMatchObject({ claimed: 1, retryScheduled: 1, accepted: 0 });
+    expect(repository.dispositions[0]).toMatchObject({
+      state: "scheduled",
+      retryAt: "2026-10-19T13:00:00.000Z",
+      errorCode: "outside_send_window_rescheduled",
+    });
     expect(provider.uniqueIdempotencyKeysSeen).toBe(0);
   });
 

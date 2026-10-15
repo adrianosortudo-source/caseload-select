@@ -4,6 +4,7 @@ import {
   agencyFollowupContentHash,
   agencyFollowupLogicalMessageKey,
   agencyFollowupRecipientHash,
+  agencyFollowupStepsHaveApprovedTemplates,
   evaluateAgencyFollowupSend,
   resolveAgencyProviderOutcome,
   type AgencyFollowupApprovalSnapshot,
@@ -97,6 +98,11 @@ describe("Agency follow-up domain", () => {
     );
   });
 
+  it("allows multiple journey steps to reuse one approved template and rejects any unapproved reference", () => {
+    expect(agencyFollowupStepsHaveApprovedTemplates(["template-1", "template-1"], ["template-1"])).toBe(true);
+    expect(agencyFollowupStepsHaveApprovedTemplates(["template-1", "template-2"], ["template-1"])).toBe(false);
+  });
+
   it("fails closed on missing eligibility evidence, suppression, reply, unapproved message, and changed recipient", () => {
     const blockers = evaluateAgencyFollowupSend(
       readyContext({
@@ -130,6 +136,30 @@ describe("Agency follow-up domain", () => {
         readyContext({ previousAcceptedAt: new Date(Date.parse("2098-05-01T12:00:00.000Z") - spacingMs).toISOString() }),
       ),
     ).toEqual([]);
+  });
+
+  it("requires dispatch to remain inside the configured local business-day window", () => {
+    const schedulePolicy = {
+      timezone: "America/Toronto",
+      businessDays: [1, 2, 3, 4, 5],
+      localWindowStart: "09:00",
+      localWindowEnd: "17:00",
+    };
+    expect(evaluateAgencyFollowupSend(readyContext({
+      now: "2026-10-13T18:00:00.000Z", // 14:00 Toronto, Tuesday
+      dueAt: "2026-10-13T13:00:00.000Z",
+      schedulePolicy,
+    }))).toEqual([]);
+    expect(evaluateAgencyFollowupSend(readyContext({
+      now: "2026-10-17T16:00:00.000Z", // Saturday in Toronto
+      dueAt: "2026-10-13T13:00:00.000Z",
+      schedulePolicy,
+    }))).toContain("outside_send_window");
+    expect(evaluateAgencyFollowupSend(readyContext({
+      now: "2026-10-13T21:00:00.000Z", // 17:00 Toronto, end is exclusive
+      dueAt: "2026-10-13T13:00:00.000Z",
+      schedulePolicy,
+    }))).toContain("outside_send_window");
   });
 
   it("uses stable logical message keys and never blindly retries an unknown provider outcome", () => {

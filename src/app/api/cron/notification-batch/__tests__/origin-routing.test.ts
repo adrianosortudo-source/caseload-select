@@ -5,7 +5,7 @@ vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: {} }));
 vi.mock("@/lib/email", () => ({ sendEmail: vi.fn() }));
 vi.mock("@/lib/cron-auth", () => ({ isCronAuthorized: vi.fn() }));
 
-import { buildDigest } from "../route";
+import { buildDigest } from "@/lib/notification-digest";
 
 const FIRM = "11111111-1111-1111-1111-111111111111";
 const MATTER = "22222222-2222-2222-2222-222222222222";

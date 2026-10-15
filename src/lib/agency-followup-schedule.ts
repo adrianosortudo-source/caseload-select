@@ -6,6 +6,13 @@ export interface AgencyFollowupScheduleInput {
   localWindowStart: string;
 }
 
+export interface AgencyFollowupSchedulePolicy {
+  timezone: string;
+  businessDays: number[];
+  localWindowStart: string;
+  localWindowEnd: string;
+}
+
 interface LocalDateTime {
   year: number;
   month: number;
@@ -37,6 +44,31 @@ function localParts(instant: Date, timezone: string): LocalDateTime {
     minute: value("minute"),
     second: value("second"),
   };
+}
+
+/** Returns whether an instant is on a configured business day and inside the
+ * half-open local send window [start, end). */
+export function isWithinAgencyFollowupWindow(instantValue: string, policy: AgencyFollowupSchedulePolicy): boolean {
+  const instant = new Date(instantValue);
+  if (!Number.isFinite(instant.getTime())) return false;
+  if (!policy.timezone.trim() || !Array.isArray(policy.businessDays) || policy.businessDays.length < 1 ||
+    policy.businessDays.some((day) => !ISO_WEEKDAYS.has(day))) return false;
+  const parseTime = (value: string) => /^((?:[01]\d|2[0-3])):([0-5]\d)$/.exec(value);
+  const start = parseTime(policy.localWindowStart);
+  const end = parseTime(policy.localWindowEnd);
+  if (!start || !end) return false;
+  const startMinute = Number(start[1]) * 60 + Number(start[2]);
+  const endMinute = Number(end[1]) * 60 + Number(end[2]);
+  if (endMinute <= startMinute) return false;
+  let local: LocalDateTime;
+  try {
+    local = localParts(instant, policy.timezone);
+  } catch {
+    return false;
+  }
+  const ordinal = dateOrdinal(local);
+  const localMinute = local.hour * 60 + local.minute;
+  return policy.businessDays.includes(isoWeekday(ordinal)) && localMinute >= startMinute && localMinute < endMinute;
 }
 
 function dateOrdinal(date: Pick<LocalDateTime, "year" | "month" | "day">): number {

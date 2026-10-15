@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isWithinAgencyFollowupWindow, type AgencyFollowupSchedulePolicy } from "./agency-followup-schedule";
 
 export type AgencyContactability =
   | "allowed"
@@ -54,7 +55,7 @@ export interface AgencyFollowupSendContext {
   now: string;
   previousAcceptedAt: string | null;
   minimumSpacingMs: number;
-  schedulePolicy?: { timezone: string; businessDays: number[]; localWindowStart: string };
+  schedulePolicy?: AgencyFollowupSchedulePolicy;
   cancelled: boolean;
 };
 
@@ -79,7 +80,8 @@ export type AgencyFollowupBlockReason =
   | "cancelled"
   | "invalid_schedule"
   | "not_due"
-  | "minimum_spacing_not_elapsed";
+  | "minimum_spacing_not_elapsed"
+  | "outside_send_window";
 
 const STOPPED_CONVERSATION_STATUSES = new Set<AgencyConversationStatus>([
   "replied",
@@ -124,6 +126,14 @@ export function agencyFollowupRecipientHash(recipient: AgencyFollowupRecipientSn
     contactName: recipient.contactName ? normalizeWhitespace(recipient.contactName).toLowerCase() : null,
     contactEmail: recipient.contactEmail.trim().toLowerCase(),
   });
+}
+
+export function agencyFollowupStepsHaveApprovedTemplates(
+  stepTemplateVersionIds: readonly string[],
+  approvedTemplateVersionIds: readonly string[],
+): boolean {
+  const approved = new Set(approvedTemplateVersionIds);
+  return stepTemplateVersionIds.every((templateVersionId) => approved.has(templateVersionId));
 }
 
 export function agencyFollowupApprovalIsCurrent(
@@ -185,6 +195,10 @@ export function evaluateAgencyFollowupSend(
   const now = Date.parse(context.now);
   if (!Number.isFinite(due) || !Number.isFinite(now)) blockers.push("invalid_schedule");
   else if (due > now) blockers.push("not_due");
+  if (context.schedulePolicy && Number.isFinite(now) &&
+    !isWithinAgencyFollowupWindow(context.now, context.schedulePolicy)) {
+    blockers.push("outside_send_window");
+  }
 
   if (context.previousAcceptedAt !== null) {
     const previous = Date.parse(context.previousAcceptedAt);

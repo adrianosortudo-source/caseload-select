@@ -113,7 +113,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
         <div className="min-w-0">
           <p className="text-xs font-semibold uppercase tracking-wider text-gold" data-ui-copy="supporting">Agency CRM</p>
           <h1 className="mt-1 w-full text-2xl font-bold text-navy" data-ui-copy="heading">Follow-up journeys</h1>
-          <p className="mt-2 w-full text-sm leading-6 text-black/65" data-ui-copy="body">
+          <p className="mt-2 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]" data-ui-copy="body">
             Review one prospect at a time. Record eligibility, release, and each message approval separately.
           </p>
           <p className="mt-1 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]" data-ui-copy="supporting">Approvals enqueue reviewed messages. No live provider is configured.</p>
@@ -222,7 +222,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
         </div>
       </section>
 
-      <section aria-labelledby="enroll-title" className="w-full min-w-0 border border-black/10 bg-white p-4 sm:p-5">
+      <section aria-labelledby="enroll-title" className="w-full min-w-0 border border-black/10 bg-white p-2 sm:p-5">
         <div data-ui-component-content="agency-follow-up-enrollment" className="w-full min-w-0">
         <h2 id="enroll-title" data-ui-copy="heading" className="w-full text-lg font-semibold text-navy">Start a prospect review</h2>
         <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/60">Enrollment creates a draft with message snapshots. It does not contact the prospect.</p>
@@ -273,11 +273,12 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
               <span className="shrink-0 border border-black/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-black/70">{first.sequenceReleased ? 'Released' : 'Draft'}</span>
             </div>
 
-            <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-2">
-              {items.map((item) => <section key={item.id} className={`w-full min-w-0 border border-black/10 p-3 ${items.length === 1 ? 'md:col-span-2' : ''}`}>
+            <div className="mt-4 grid min-w-0 gap-3 lg:grid-cols-2">
+              {items.map((item) => <section key={item.id} className={`w-full min-w-0 border border-black/10 p-3 ${items.length === 1 ? 'lg:col-span-2' : ''}`}>
                 <div data-ui-component-content="agency-follow-up-message" className="w-full min-w-0">
                 <div className="space-y-1">
-                  <h4 data-ui-copy="heading" className="w-full break-words text-sm font-semibold text-navy sm:text-base [text-wrap:pretty]">Message {item.stepNumber}: {item.subject || 'No subject'}</h4>
+                  <span data-ui-copy="supporting" className="block w-full text-xs font-semibold uppercase tracking-wide text-black/60">Message {item.stepNumber}</span>
+                  <h4 data-ui-copy="heading" className="w-full break-words text-sm font-semibold text-navy sm:text-base [text-wrap:pretty]">{item.subject || 'No subject'}</h4>
                   <span className="block w-full text-xs uppercase tracking-wide text-black/60">{prettyState(item.state)}</span>
                 </div>
                 <p data-ui-copy="body" className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-black/75 [text-wrap:pretty]">{item.body}</p>

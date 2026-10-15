@@ -20,12 +20,14 @@ import {
   agencyFollowupContentHash,
   agencyFollowupLogicalMessageKey,
   agencyFollowupRecipientHash,
+  agencyFollowupStepsHaveApprovedTemplates,
   evaluateAgencyFollowupSend,
   type AgencyContactability,
   type AgencyConversationStatus,
   type AgencyFollowupMessageContent,
   type AgencyFollowupRecipientSnapshot,
   type AgencyFollowupSendContext,
+  type AgencyProviderOutcome,
 } from "@/lib/agency-followup-domain";
 
 const supabase = supabaseAdmin;
@@ -222,6 +224,7 @@ function makeSendContext(
       timezone: String(journey.timezone),
       businessDays: (journey.business_days as number[]).map(Number),
       localWindowStart: String(journey.local_window_start).slice(0, 5),
+      localWindowEnd: String(journey.local_window_end).slice(0, 5),
     },
     cancelled: ["paused", "stopped", "completed", "cancelled"].includes(String(enrollment.state)) ||
       ["cancelled", "blocked", "failed", "unknown"].includes(String(message.state)),
@@ -508,7 +511,9 @@ export async function createAgencyFollowupEnrollment(input: {
   const templatesResult = await supabase.from("agency_followup_template_versions").select("*").in("id", templateIds).eq("state", "approved");
   const templates = assertResult(templatesResult, "Unable to load approved message templates") as DbRow[];
   const templateById = new Map(templates.map((row) => [String(row.id), row]));
-  if (templateById.size !== steps.length) throw new Error("Every journey step must reference an approved template version.");
+  if (!agencyFollowupStepsHaveApprovedTemplates(templateIds, [...templateById.keys()])) {
+    throw new Error("Every journey step must reference an approved template version.");
+  }
 
   const enrollmentId = randomUUID();
   const recipientHash = agencyFollowupRecipientHash(recipient);
@@ -724,7 +729,7 @@ export async function pauseAgencyFollowupEnrollment(input: {
   });
 }
 
-const fakeFollowupProvider = new FakeAgencyFollowupProvider();
+const defaultFakeFollowupProvider = new FakeAgencyFollowupProvider();
 
 /** Local-only deterministic dispatcher. This adapter has no real provider path. */
 export async function runFakeAgencyFollowupDispatcher(input: {
@@ -732,9 +737,16 @@ export async function runFakeAgencyFollowupDispatcher(input: {
   now?: string;
   leaseSeconds?: number;
   limit?: number;
+  outcomePlan?: AgencyProviderOutcome[];
 }): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
   if (!input.workerId.trim()) throw new Error("A worker id is required.");
+  if (input.outcomePlan && process.env.NODE_ENV === "production") {
+    throw new Error("Synthetic provider outcomes are available only outside production.");
+  }
   const now = input.now ?? new Date().toISOString();
+  const fakeFollowupProvider = input.outcomePlan
+    ? new FakeAgencyFollowupProvider(input.outcomePlan)
+    : defaultFakeFollowupProvider;
   const repository = {
     async claimDueMessages(claimInput: { workerId: string; now: string; leaseSeconds: number; limit: number }): Promise<AgencyFollowupClaim[]> {
       const result = await supabase.rpc("claim_agency_followup_messages", {

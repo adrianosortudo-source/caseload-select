@@ -9,7 +9,7 @@ const OPERATOR_LINK_SOURCES = [
   "src/lib/firm-onboarding-notification.ts",
   "src/lib/file-notify.ts",
   "src/lib/deliverables.ts",
-  "src/app/api/cron/notification-batch/route.ts",
+  "src/lib/notification-digest.ts",
   "src/app/api/admin/firms/[firmId]/members/[memberId]/signin-code/route.ts",
   "src/app/l/[code]/route.ts",
 ];
