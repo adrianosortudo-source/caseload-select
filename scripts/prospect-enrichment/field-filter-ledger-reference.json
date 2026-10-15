@@ -1,0 +1,1651 @@
+{
+  "schemaVersion": "prospect-field-filter-ledger-reference/v1",
+  "projectRef": "ssxryjxifwiivghglqer",
+  "baseline": [
+    {
+      "version": "20260412235959",
+      "name": "historical_baseline_pre_cutover",
+      "statement_count": 49,
+      "statements_sha256": "59a7112c2fb82f7d057c80c3d318fd19442e0c88f02e0540f91c899df4d1c521"
+    },
+    {
+      "version": "20260413",
+      "name": "add_confirmed_answers",
+      "statement_count": 1,
+      "statements_sha256": "f44403c040fec3a47a852834deb8b3f8f429fc1f5e7fbb8600628f15d370ad84"
+    },
+    {
+      "version": "20260414000001",
+      "name": "conflict_check",
+      "statement_count": 6,
+      "statements_sha256": "af03c367b6c6919ccbd58f32f7bb4e5198fd5c67103dc949811d8e5ae4d6da19"
+    },
+    {
+      "version": "20260414000002",
+      "name": "custom_domain",
+      "statement_count": 2,
+      "statements_sha256": "f2aec7b2febc65728bf38b2a4c61ba1e1dbbbe32119162979e2a15975554240c"
+    },
+    {
+      "version": "20260414000003",
+      "name": "intake_firms_location",
+      "statement_count": 1,
+      "statements_sha256": "524577b13b2ceabd3f4017525bb42281581b93c56ebd32694498477280551a0a"
+    },
+    {
+      "version": "20260414000004",
+      "name": "j10_re_engagement",
+      "statement_count": 1,
+      "statements_sha256": "a17fe855ddf33899cc9585ea1813edd36b45ebd45d22e342735387cbb022bc26"
+    },
+    {
+      "version": "20260414000005",
+      "name": "j11_j12_relationship_nurture",
+      "statement_count": 2,
+      "statements_sha256": "8e73f00d388f6740d1d3bc9799373cfc43a72753fc72fa2bfe1e4fdb4a30d912"
+    },
+    {
+      "version": "20260414000006",
+      "name": "j2_consultation_reminders",
+      "statement_count": 1,
+      "statements_sha256": "208542aa6e724803bfd606a1fdff7a9c6fc4f3162b8d8cc7adb1523292f24f36"
+    },
+    {
+      "version": "20260414000007",
+      "name": "j7_welcome_onboarding",
+      "statement_count": 2,
+      "statements_sha256": "97053c5a667c86c0326041d7411a3ddb709901041cff884ae8a99f4dee458d54"
+    },
+    {
+      "version": "20260414000008",
+      "name": "j8_matter_active",
+      "statement_count": 1,
+      "statements_sha256": "0c0f60cd0893a1c06a9284f83e50848d1870c93d7366a20acc450ec33b36cd9e"
+    },
+    {
+      "version": "20260414000009",
+      "name": "j9_review_request",
+      "statement_count": 1,
+      "statements_sha256": "9729bd45303caac483587d2ee48920db09c0feaf93b6553d1012624636f7df1f"
+    },
+    {
+      "version": "20260414000010",
+      "name": "journey_sequences",
+      "statement_count": 6,
+      "statements_sha256": "0eaee90de2615436c6ba738190e143f515afbbf73f3bbb60940d96b3b4f5e2c8"
+    },
+    {
+      "version": "20260414000011",
+      "name": "portal_clio",
+      "statement_count": 1,
+      "statements_sha256": "2981aa46e099f725f26e97692b4968c8dd719631ae3a5325ce5de73c49d3b992"
+    },
+    {
+      "version": "20260414000012",
+      "name": "retainer_agreements",
+      "statement_count": 5,
+      "statements_sha256": "14d5b6b42add5b381a183d6f649f42eb926de7b0aae07f98354f01d2ddfdd63e"
+    },
+    {
+      "version": "20260415000001",
+      "name": "dashboard_columns",
+      "statement_count": 4,
+      "statements_sha256": "3d731a43f951df7222a0d15fc19e5486ab3a7425272d6ff16c0f76df1f1971b5"
+    },
+    {
+      "version": "20260415000002",
+      "name": "dashboard_v2",
+      "statement_count": 3,
+      "statements_sha256": "043ae35128bd67089535dd6c45ef10b42e11cc1d9cebf8836c551cb9be1acf37"
+    },
+    {
+      "version": "20260415000003",
+      "name": "leads_intake_session_id",
+      "statement_count": 2,
+      "statements_sha256": "4adbbdc2b4a9d8d17971bbc8c2e1eaa21d310b487117539ec0ec614e5a4b25af"
+    },
+    {
+      "version": "20260417000001",
+      "name": "round3_memo",
+      "statement_count": 3,
+      "statements_sha256": "3570f5f1476d190c457fc21297da351a1453e37741c0aef9e0e304b7bd2da423"
+    },
+    {
+      "version": "20260417000002",
+      "name": "sub_type_conflicts",
+      "statement_count": 5,
+      "statements_sha256": "9e17932ee401b5c98c4140be3f1e9117e35a10d2d65051a2382559a7b2612695"
+    },
+    {
+      "version": "20260418000001",
+      "name": "matter_routing",
+      "statement_count": 11,
+      "statements_sha256": "d9aa3f35b524fd0a2a0a52b23f738694eb90b67399712b237adbbeaab0f4931a"
+    },
+    {
+      "version": "20260418000002",
+      "name": "retainer_fks",
+      "statement_count": 2,
+      "statements_sha256": "51eb974a998ab167429a943344e175eb69b1ee9b6438a042b04ef8e65f7cd647"
+    },
+    {
+      "version": "20260418000003",
+      "name": "storage_intake_attachments",
+      "statement_count": 4,
+      "statements_sha256": "2a08e18faf6b75f4490eb6dda5c5d347d96e43e4d2ea77d2f18f9afcaf67b6a7"
+    },
+    {
+      "version": "20260421",
+      "name": "intake_sessions_practice_sub_type",
+      "statement_count": 3,
+      "statements_sha256": "6cdc46722875524af6ad4bee8b143c516f3cc519434e7ccaadf0667f330e6c0d"
+    },
+    {
+      "version": "20260423000001",
+      "name": "leads_cpi_explainability",
+      "statement_count": 4,
+      "statements_sha256": "a7903bd54164fd292371b8bf353bb2ce4bcc98beeb386648739a188827cf05fc"
+    },
+    {
+      "version": "20260423000002",
+      "name": "leads_scoring_model",
+      "statement_count": 4,
+      "statements_sha256": "55f67827be16e1a0b8291aa9d031215e6cc4d31173b3a372740d4739c302eb33"
+    },
+    {
+      "version": "20260423000003",
+      "name": "rls_hardening",
+      "statement_count": 16,
+      "statements_sha256": "a765a94786a4883220603a6c1b403057174359f852044e07c8b5e2fa84b6d605"
+    },
+    {
+      "version": "20260423000004",
+      "name": "rls_hardening_fix",
+      "statement_count": 12,
+      "statements_sha256": "72721b1737a0ec583d4d8b721f3bdf8cd5f8ffb96025bc4698e126698fdd0a74"
+    },
+    {
+      "version": "20260423000005",
+      "name": "rls_hardening_sweep",
+      "statement_count": 8,
+      "statements_sha256": "4330f1ff88c8dfa1f783a2a08e957dd05baa966b123f3b1fbf37535962470c6e"
+    },
+    {
+      "version": "20260429",
+      "name": "band_x_check_constraint",
+      "statement_count": 11,
+      "statements_sha256": "cb8c3bb18ee45f01da23636549dfba5fae0531b5081842b2d30dd828a00ef8b0"
+    },
+    {
+      "version": "20260505000001",
+      "name": "firm_decline_templates",
+      "statement_count": 8,
+      "statements_sha256": "3b2191519d594a68dbbbe275774d801fbda89739a86d15e40cdeae05f5c29f16"
+    },
+    {
+      "version": "20260505000002",
+      "name": "screened_leads",
+      "statement_count": 11,
+      "statements_sha256": "bebb13100e7d8af64f16d0a3535984e1eec0dee24cf8da31bb4188357739ba42"
+    },
+    {
+      "version": "20260505000003",
+      "name": "screened_leads_dashboard_indexes",
+      "statement_count": 4,
+      "statements_sha256": "597eefa93b34060fdc5b420428a5e06f632da96fdcd9cf7f128755a6c00062ef"
+    },
+    {
+      "version": "20260505000004",
+      "name": "webhook_outbox",
+      "statement_count": 10,
+      "statements_sha256": "12107370a268ecbb05fec81a85889bf8cd50e45524f4fc985bad81afdbd6648b"
+    },
+    {
+      "version": "20260506000001",
+      "name": "firm_lawyers",
+      "statement_count": 10,
+      "statements_sha256": "291dc9c5725e6af61bdf02edef08579c932fad7c082ea5566b76ee28a9956a26"
+    },
+    {
+      "version": "20260506000002",
+      "name": "firm_files",
+      "statement_count": 16,
+      "statements_sha256": "5a3e6f878e04fd7023bd0b976831b3673d97f4f183337c57b68ac5682ee7cddf"
+    },
+    {
+      "version": "20260506000003",
+      "name": "pg_cron_pg_net_setup",
+      "statement_count": 15,
+      "statements_sha256": "e7446b4773a33aa0257e135a9bbbd9e3919540fe93735e0b992d6e8449355c8c"
+    },
+    {
+      "version": "20260512",
+      "name": "intake_language_and_raw_transcript",
+      "statement_count": 3,
+      "statements_sha256": "af95db44496cd41bf14bd51171ab4ed0ed7fbef96e2de094e54f55d24347b62c"
+    },
+    {
+      "version": "20260513000001",
+      "name": "firm_onboarding_intake",
+      "statement_count": 6,
+      "statements_sha256": "fce270b6b26009ab4e393be6a38942593bc70faabb98629a326d7b40f99a7df5"
+    },
+    {
+      "version": "20260513000002",
+      "name": "cron_health_rpc",
+      "statement_count": 5,
+      "statements_sha256": "552ef8f3f84e103bca2b9e1d9950d6ba39adceb007fd7f9cc2d844091c12876d"
+    },
+    {
+      "version": "20260513000003",
+      "name": "firm_onboarding_access_grant_status",
+      "statement_count": 4,
+      "statements_sha256": "ded151a58817ffc844a2b5f4853de17c09d061571ca973ad3d93d0e1ee3aac44"
+    },
+    {
+      "version": "20260513000004",
+      "name": "firm_onboarding_booking_url",
+      "statement_count": 1,
+      "statements_sha256": "c1f6cf8a573eda5fd73be89b48a9c2b8898b70582356ae3983e3aa49df12d118"
+    },
+    {
+      "version": "20260513000005",
+      "name": "firm_onboarding_channels_and_signature",
+      "statement_count": 4,
+      "statements_sha256": "bb3663e7e42954d5f63932a2a531e6475943fb292792202eda83940bd881162b"
+    },
+    {
+      "version": "20260513000006",
+      "name": "firm_onboarding_gbp_admin_status",
+      "statement_count": 2,
+      "statements_sha256": "6f532f52c8af84ae03143493a014a520aac08e98906f47c2571168e9ab1b42f1"
+    },
+    {
+      "version": "20260513000007",
+      "name": "firm_onboarding_intake_doc_upload",
+      "statement_count": 3,
+      "statements_sha256": "30166d05efd487e4e293b3b63f528ac0875944f67aaea324408121b1a48c6cf2"
+    },
+    {
+      "version": "20260513000008",
+      "name": "firm_onboarding_practice_scope_and_systems",
+      "statement_count": 6,
+      "statements_sha256": "f20162dda23e292a669ffbf1e03f27fa756b7c9e039fe7736af72ec7f1783a66"
+    },
+    {
+      "version": "20260513000009",
+      "name": "voice_webhook_secret",
+      "statement_count": 2,
+      "statements_sha256": "b05cc0ed0a8126fe3ac1d17c7e6a68eed5796aa6dff2bd929998dbe5654f111e"
+    },
+    {
+      "version": "20260514000001",
+      "name": "intake_firms_channel_asset_ids",
+      "statement_count": 8,
+      "statements_sha256": "ead72efea4553e8f670a201a687e75ded66aa8604e93ad02ef75ea142bdf9f72"
+    },
+    {
+      "version": "20260514000002",
+      "name": "screened_leads_actor_role",
+      "statement_count": 4,
+      "statements_sha256": "40ee2060f6be01e5798d0fb47628256112d629243813016c5445e2622b2b1591"
+    },
+    {
+      "version": "20260515000001",
+      "name": "band_d_and_referred_status",
+      "statement_count": 6,
+      "statements_sha256": "32123d2f8ac5a030c833586945a017a2b974995851179e53fcf48747ff711f24"
+    },
+    {
+      "version": "20260515000002",
+      "name": "screened_leads_utm_referrer",
+      "statement_count": 8,
+      "statements_sha256": "003ced29d79d5241e83871d6c7bf21ab9b21cd002e1ae126862431d80ce0c35d"
+    },
+    {
+      "version": "20260516000001",
+      "name": "channel_intake_sessions",
+      "statement_count": 9,
+      "statements_sha256": "8e4a3c15ee4e6dba0ef02e617d51faa031574b62c8c520ca988e6b5b5fe0ba5f"
+    },
+    {
+      "version": "20260516000002",
+      "name": "intake_firms_meta_access_tokens",
+      "statement_count": 4,
+      "statements_sha256": "f3796699ef6c441ed27f0a9e754e90f68afbd0dab5dca13fd80ffdfb0403893f"
+    },
+    {
+      "version": "20260516000003",
+      "name": "unconfirmed_inquiries",
+      "statement_count": 10,
+      "statements_sha256": "1cb2c6c78b12386dcd5842eb507e668deee7eca3ed361d05aa8a43e6e5be189f"
+    },
+    {
+      "version": "20260518000000",
+      "name": "enable_rls_firm_onboarding_intake",
+      "statement_count": 2,
+      "statements_sha256": "a3fe5791ddd44a69f8f2ca1a17c60f1dfb136500f8f50070c775c5d56dfc0f85"
+    },
+    {
+      "version": "20260518193933",
+      "name": "enable_required_extensions",
+      "statement_count": 1,
+      "statements_sha256": "c442300a681eb39e781d44f9f11d38dc93c65f43c5229d3c378f134bf59f5d33"
+    },
+    {
+      "version": "20260520000001",
+      "name": "firm_onboarding_directory_prep",
+      "statement_count": 4,
+      "statements_sha256": "b1415ee8f8ada8ee2d604042cabeb072951b77d3563f4ebffe80f32a28c2edb0"
+    },
+    {
+      "version": "20260520000002",
+      "name": "firm_onboarding_notification_tracking",
+      "statement_count": 6,
+      "statements_sha256": "a315eb752c0a3ed007708a55633ac74279e657ba2109ae699eb117478e191744"
+    },
+    {
+      "version": "20260520000003",
+      "name": "s8p1_client_matters",
+      "statement_count": 19,
+      "statements_sha256": "70b31d708eefe0be8e4702db755bb55f10b3e09eb5cf7d0ea9f0e75fb9c4862a"
+    },
+    {
+      "version": "20260520000004",
+      "name": "s8p1_explainer_articles",
+      "statement_count": 18,
+      "statements_sha256": "e0784767b15c998e1893d166f98bf1eeaccbe2ff6fa32fd305a425fee195b78f"
+    },
+    {
+      "version": "20260520000005",
+      "name": "s8p1_firm_lawyers_roles",
+      "statement_count": 7,
+      "statements_sha256": "183fa80a2189189e1065be3bb0ce88e8beec89997e9d000a3a0c5030d2271136"
+    },
+    {
+      "version": "20260520000006",
+      "name": "s8p1_intake_firms_routing",
+      "statement_count": 10,
+      "statements_sha256": "d1c079c8053fc431e63626e6b0c194ede337ac7e2e437134a94277bad732c19e"
+    },
+    {
+      "version": "20260520000007",
+      "name": "s8p1_matter_messages",
+      "statement_count": 18,
+      "statements_sha256": "0023164e21e8766f914766951d9a3d65fc3b128b6ea46c00ba85a2e423f0e224"
+    },
+    {
+      "version": "20260520000008",
+      "name": "s8p1_notification_batch_cron",
+      "statement_count": 2,
+      "statements_sha256": "92e3379fe6e9e46b61c00e425ece013fae0f759ed15ae4b3895677e4f38b5660"
+    },
+    {
+      "version": "20260520000009",
+      "name": "s8p1_notification_outbox",
+      "statement_count": 11,
+      "statements_sha256": "776459ff60d4e278b73cb415d3185e74fe86fa5647f09c8a846ef81a14e560dd"
+    },
+    {
+      "version": "20260521000001",
+      "name": "intake_firms_ghl_location_id",
+      "statement_count": 3,
+      "statements_sha256": "97b4f5e4655c842d50521f6f38f954c3bf002f6655170951d0c612abc720c9dc"
+    },
+    {
+      "version": "20260521000002",
+      "name": "intake_firms_voice_api_token",
+      "statement_count": 3,
+      "statements_sha256": "6b5bea57a2b5fb4999f5dec42fb80c3b68c948e23fb619f105c83e24f8b2267c"
+    },
+    {
+      "version": "20260525",
+      "name": "channel_intake_sessions_recent_finalized_index",
+      "statement_count": 1,
+      "statements_sha256": "8e0a24fdadc22f4471ea86483e7fd94dd734d3b21112279960fcd231cd098fd7"
+    },
+    {
+      "version": "20260526000001",
+      "name": "channel_sessions_screened_lead_link",
+      "statement_count": 3,
+      "statements_sha256": "8fffc484739120decb6d81815725ec83f1dd4e4f66a1facbb04cf6007d3881d4"
+    },
+    {
+      "version": "20260526000002",
+      "name": "intake_firms_token_expiry",
+      "statement_count": 8,
+      "statements_sha256": "dd76f1d05ef9208376c1885ce6ff9010a3d5b69053d7010a2ad21ce45468fd3c"
+    },
+    {
+      "version": "20260526000003",
+      "name": "intake_firms_token_expiry_trigger",
+      "statement_count": 4,
+      "statements_sha256": "468e815e58dd9d27aeda44d16dea51a0b775c2899247ee77ee1412d0fd95b69f"
+    },
+    {
+      "version": "20260601",
+      "name": "voice_callback_requests",
+      "statement_count": 12,
+      "statements_sha256": "ac3aeb01fc75e5be95ee3e354f321120e37fb85cd27e772e0e3b04950ad5d230"
+    },
+    {
+      "version": "20260602",
+      "name": "intake_firms_gemini_disabled_alert",
+      "statement_count": 2,
+      "statements_sha256": "f1d4633a24d1f90c89e4d2a5212ea2cd316cc7015853a3bb5b2f9ebb5a0a6e6b"
+    },
+    {
+      "version": "20260605000000",
+      "name": "voice_callback_promoted_link",
+      "statement_count": 3,
+      "statements_sha256": "431e90df3ece28641eb9a89e8511e374074ddce7ec2ed3e938342725530f7c71"
+    },
+    {
+      "version": "20260605175457",
+      "name": "20260605_security_lockdown_anon_authenticated",
+      "statement_count": 1,
+      "statements_sha256": "96171cce51460ee2bf4a3051ccea63dafad6aa16714be66ce83d4868e7e2a3b4"
+    },
+    {
+      "version": "20260609000001",
+      "name": "otp_attempt_cap",
+      "statement_count": 2,
+      "statements_sha256": "57803e8f139197df3fc256d4cc17f40b065f5b3b46c6f2a1454c5c33d8ee015b"
+    },
+    {
+      "version": "20260609000002",
+      "name": "processed_channel_messages",
+      "statement_count": 9,
+      "statements_sha256": "1104abddffc006fb943ea0a115dd3ddd9144f30bbe8e2bc273065f2381f7e65a"
+    },
+    {
+      "version": "20260609000003",
+      "name": "screened_leads_notification_state",
+      "statement_count": 6,
+      "statements_sha256": "44ebb74908978275f0d9c99fcc99d4ed0503e8fdffc43a610cb2098e6c0283cf"
+    },
+    {
+      "version": "20260609000004",
+      "name": "webhook_outbox_action_check_expand",
+      "statement_count": 3,
+      "statements_sha256": "12dd93b1cf7c7feedcdc6ea207a9435a337844f8453f6493a475ca9584736c5c"
+    },
+    {
+      "version": "20260611000000",
+      "name": "voice_turn_sessions",
+      "statement_count": 5,
+      "statements_sha256": "1cfb733eb6ca8a725ae4b03dad7e7004cbd1ad211f8b0b3020404a904b7cf902"
+    },
+    {
+      "version": "20260616000001",
+      "name": "firm_files_links_and_sections",
+      "statement_count": 16,
+      "statements_sha256": "29f75093ffce3bfaa135a3224becb10ba161033a562263c2f5dcc3e90ab1e543"
+    },
+    {
+      "version": "20260616000002",
+      "name": "firm_lawyers_disabled",
+      "statement_count": 1,
+      "statements_sha256": "fbb447dd70ad4a4b42b7b395bd9981aefd7c749340f6af2bc52b93897b1a50e2"
+    },
+    {
+      "version": "20260617000001",
+      "name": "firm_onboarding_customer_base",
+      "statement_count": 1,
+      "statements_sha256": "0b25e1d4831a76f825096c264b251147ca1f44351359333bd3d8e54d87ec5fef"
+    },
+    {
+      "version": "20260617000002",
+      "name": "firm_onboarding_v2_fields",
+      "statement_count": 3,
+      "statements_sha256": "3ef15cb9fd73095b041474387d3d0b881c2544bf1ac14b8b8de333c9106847e4"
+    },
+    {
+      "version": "20260617000003",
+      "name": "screened_leads_archive",
+      "statement_count": 2,
+      "statements_sha256": "e0a1f428794e8fdd6ef7f96a9f1cf830ef89fb29aa529099a4a56b6a909922cb"
+    },
+    {
+      "version": "20260623000001",
+      "name": "approval_rpc_atomic",
+      "statement_count": 4,
+      "statements_sha256": "1028611f39aed5dc777139ac6fa69b88cb074e62ba9af8d2841b67cd02be3d01"
+    },
+    {
+      "version": "20260623000002",
+      "name": "content_approval",
+      "statement_count": 12,
+      "statements_sha256": "bc80380775436202c66d62fe45ee9e9e0923d55ac5a5c67ef8012ebc84a7a094"
+    },
+    {
+      "version": "20260623000003",
+      "name": "content_approval_rls_lockdown",
+      "statement_count": 14,
+      "statements_sha256": "97e6645d50ec43292d8cdd98c4fcfc0c18a25b69e55a2338c6d8e47aab6bf982"
+    },
+    {
+      "version": "20260623000004",
+      "name": "deliverables_article_meta",
+      "statement_count": 7,
+      "statements_sha256": "cb64494510d07fc53470d7d0aef7bb301bc4b313f3a2d1817b44d0b100243663"
+    },
+    {
+      "version": "20260623000005",
+      "name": "deliverables_review_notified_at",
+      "statement_count": 2,
+      "statements_sha256": "5ece94d0c8759ec62a983d9ce53cb6bad0dc9ec540f4376cc3dee811256e3fd5"
+    },
+    {
+      "version": "20260623000006",
+      "name": "firm_analytics_config",
+      "statement_count": 1,
+      "statements_sha256": "44a6ff1d4b04324426200369c19631c9198bd3f43afcbda0a5d398e3c3da67b5"
+    },
+    {
+      "version": "20260623000007",
+      "name": "intake_attachments_private",
+      "statement_count": 1,
+      "statements_sha256": "a0d4073234ccff5b80a97d8e35660e6f3a00eb0c2b0c8c41ca110d9f89e4ef38"
+    },
+    {
+      "version": "20260623000008",
+      "name": "intake_firms_is_demo",
+      "statement_count": 3,
+      "statements_sha256": "d880b3f8c154bb14f3ba5fbdd7cbab2a9351ef4d9990ba57ee4dec5f4a162bb4"
+    },
+    {
+      "version": "20260623000009",
+      "name": "matter_messages_threading",
+      "statement_count": 2,
+      "statements_sha256": "fc0ea8ce8e6690fd59b9ff8be954dbf8015abaf1f2990bf664763c4857015b81"
+    },
+    {
+      "version": "20260624000001",
+      "name": "content_periods",
+      "statement_count": 9,
+      "statements_sha256": "954867b87cb5fe8e5b5b012c776b03c1a4e10c2864200a7b761aef9f1c34804a"
+    },
+    {
+      "version": "20260624000002",
+      "name": "content_plan_settings",
+      "statement_count": 5,
+      "statements_sha256": "52cbeac7b6521cdeaec52bc1e125e31f782dc49b813fa7f637b98d338d527c28"
+    },
+    {
+      "version": "20260624000003",
+      "name": "content_studio_foundation",
+      "statement_count": 34,
+      "statements_sha256": "f72173ee4ae01d1b78ef950e7e7714c4cde36f0b978ab6898d5db59c88f510db"
+    },
+    {
+      "version": "20260624000004",
+      "name": "deliverables_kicker",
+      "statement_count": 2,
+      "statements_sha256": "924ecc4de90b1bda79bb885ebe5fdec641f7306c48cf0f2eedbeacea67fd21c0"
+    },
+    {
+      "version": "20260624000005",
+      "name": "force_rls_three_pii_tables",
+      "statement_count": 3,
+      "statements_sha256": "e5d40f0fe1588c8d478ac766e79a86b29d048e671b017476c123306804f2f1b8"
+    },
+    {
+      "version": "20260624000006",
+      "name": "notification_outbox_deliverable_events",
+      "statement_count": 2,
+      "statements_sha256": "e0ce2d41a958965045a14ce91f7bc79eb6dc985c9248fdc9cbb7b08f211b64c2"
+    },
+    {
+      "version": "20260624000007",
+      "name": "operator_firm_messaging",
+      "statement_count": 18,
+      "statements_sha256": "f6451dd6604251659bc98a74a43157f27d0f1d4018e7d82f98c0c02a637baa62"
+    },
+    {
+      "version": "20260624000008",
+      "name": "operator_firm_messages_context",
+      "statement_count": 1,
+      "statements_sha256": "d3d3f8f30b540da48eb5c924cdc030085e41253536a13d13c3dad030e8e30163"
+    },
+    {
+      "version": "20260624000009",
+      "name": "operator_firm_messaging_phase2",
+      "statement_count": 7,
+      "statements_sha256": "482c1c51c23f843645b3052d71701ab6ae6923f89118541d76083a7162770590"
+    },
+    {
+      "version": "20260625000001",
+      "name": "agency_crm",
+      "statement_count": 15,
+      "statements_sha256": "f04995bffd43233f7d2a1b09788d91100f93fe2e84a2bd53c02169b5c24baed5"
+    },
+    {
+      "version": "20260625000002",
+      "name": "firm_about_explainer",
+      "statement_count": 5,
+      "statements_sha256": "1014643eabc6a3cecfd0b2b998901247df64e2f702fdcfe39e37f2f5b7636f24"
+    },
+    {
+      "version": "20260625000003",
+      "name": "firm_about_links",
+      "statement_count": 1,
+      "statements_sha256": "ec96f8314cd02a3f3d7541c92cf874f20777775bb759b0242e6b0888cd9b4062"
+    },
+    {
+      "version": "20260625000004",
+      "name": "firm_onboarding_v2_phase1_bing_apple_fees",
+      "statement_count": 1,
+      "statements_sha256": "a4be941fad9096d9332922344cf4aad1aeba5c0a39467af326b3432747925346"
+    },
+    {
+      "version": "20260625000005",
+      "name": "intake_firms_read_scoring_port",
+      "statement_count": 2,
+      "statements_sha256": "4ed02c8b74a8665a5f0c396fddc35ad310ed8073eb483b898189e9de5a848c51"
+    },
+    {
+      "version": "20260625000006",
+      "name": "portal_signin_codes",
+      "statement_count": 5,
+      "statements_sha256": "9d68fa7f17db4234192135e188a996f189feb2bfcf24021740788e7522ba0ab5"
+    },
+    {
+      "version": "20260625000007",
+      "name": "screened_leads_contact_postal_code",
+      "statement_count": 2,
+      "statements_sha256": "d1fdba8108f9acc75b3aa8b45968403d9bb62de248b398d8529308ebfb4681ae"
+    },
+    {
+      "version": "20260625000008",
+      "name": "screened_leads_scoring_delta",
+      "statement_count": 3,
+      "statements_sha256": "6ac0de8e593b1887fcb5901ead53b2286e5c6cf68266cd0bac0d3fbf64c91048"
+    },
+    {
+      "version": "20260626000000",
+      "name": "screened_conflict_checks",
+      "statement_count": 12,
+      "statements_sha256": "f5c6df063e402e4f85b6d1acb92a28bc0cab47eb386484065c1f36eb242591c8"
+    },
+    {
+      "version": "20260626000001",
+      "name": "fix_cron_health_http_correlation",
+      "statement_count": 1,
+      "statements_sha256": "eae353539e4386445876f70f8c62a62823d58212f8017c3e7468eb0e120149b4"
+    },
+    {
+      "version": "20260626000002",
+      "name": "matter_promotion_events",
+      "statement_count": 12,
+      "statements_sha256": "7e012aba414bd0cbfd56ef8a81ead2b904f4b3e0753f132a9255eb937c23f6b8"
+    },
+    {
+      "version": "20260626000003",
+      "name": "screened_leads_axis_reasoning",
+      "statement_count": 1,
+      "statements_sha256": "0326e2e0c63d25f52a23fc5d4ad6d58ce1675fbf68f8d8ac86de5275156594c6"
+    },
+    {
+      "version": "20260626000004",
+      "name": "screened_leads_consent",
+      "statement_count": 17,
+      "statements_sha256": "1e60d13fc02c57324c3f83c53aabd36c78513ce15283913d2ae968d5412372a4"
+    },
+    {
+      "version": "20260626100000",
+      "name": "content_studio_format_taxonomy",
+      "statement_count": 5,
+      "statements_sha256": "e53469ea5c9b201fc025dd09a85d79d65423fb1c3e607f81dbd3c5845dfaba80"
+    },
+    {
+      "version": "20260626100100",
+      "name": "content_studio_doctrine_p0",
+      "statement_count": 10,
+      "statements_sha256": "7cf9703c4a24a86bd9d7190a4e4462448b50c684beb752bdb0a07bfe54bb72e7"
+    },
+    {
+      "version": "20260626100200",
+      "name": "content_studio_compliance_formats",
+      "statement_count": 5,
+      "statements_sha256": "1d7730a30cd98f7603d1e0b69731f4f47f875ad44f4d2d6ab8831fa3ba6f3fe1"
+    },
+    {
+      "version": "20260626203055",
+      "name": "20260626_screened_leads_consent",
+      "statement_count": 1,
+      "statements_sha256": "4719887b7a35800f859330f505f67b86a59dfe374415d117c4c78f75aacdab3f"
+    },
+    {
+      "version": "20260628",
+      "name": "m1_parties_activities",
+      "statement_count": 24,
+      "statements_sha256": "fdbf50d914f5c10e6f68993854df9e267ba3d745b2ff8ddcd0229041583478bf"
+    },
+    {
+      "version": "20260701",
+      "name": "seo_audit_runs",
+      "statement_count": 7,
+      "statements_sha256": "9d69077a5d4bc2527ac4647c6d0293d058fed012db3235198f2304d4926cfba9"
+    },
+    {
+      "version": "20260702000001",
+      "name": "screened_leads_deadline_reminder",
+      "statement_count": 2,
+      "statements_sha256": "cef13e248ad4e5c64de60190a832284b242e54c7d659a78f4491bee5d585f4ae"
+    },
+    {
+      "version": "20260702000002",
+      "name": "seo_check_runs",
+      "statement_count": 7,
+      "statements_sha256": "26f88765d1055e3747a5aa6e475f03048ad33b3649e68c1d12cfd87f47f80500"
+    },
+    {
+      "version": "20260702152906",
+      "name": "promote_scoring_port_default_on",
+      "statement_count": 1,
+      "statements_sha256": "f2326d145c9ef7fba7353370e3e4905a9a6176043211063e0d92f72ce718d1cf"
+    },
+    {
+      "version": "20260702154220",
+      "name": "screened_leads_decision_reason_code",
+      "statement_count": 1,
+      "statements_sha256": "c552d4651dda3025413cd6abed8d587c84d6c93a3cfaec9dbc346a5b0407028f"
+    },
+    {
+      "version": "20260702155341",
+      "name": "web_intake_sessions",
+      "statement_count": 1,
+      "statements_sha256": "9f9e88b3609186f4d6e5d62f9ad4f9f9e4aeee0c8f4792ce0b93a09c5e72b928"
+    },
+    {
+      "version": "20260702190957",
+      "name": "j8_client_matters_milestone_fields_schema",
+      "statement_count": 1,
+      "statements_sha256": "d8520f69b0721810020dc523a33035f2957052436d794fd8e3443bdc5a8e7002"
+    },
+    {
+      "version": "20260703",
+      "name": "cadence_engine_shadow",
+      "statement_count": 35,
+      "statements_sha256": "2cd12b501f681626df3f3c7d4540f9a813f540394350e968a2a9173e1fac231b"
+    },
+    {
+      "version": "20260705000001",
+      "name": "booking_adapter_wp6",
+      "statement_count": 3,
+      "statements_sha256": "9f0ed9807735c347fb9ca462ced544af62f6534b6cbaa249351be2353ac33046"
+    },
+    {
+      "version": "20260705000002",
+      "name": "cadence_audit_fixes",
+      "statement_count": 8,
+      "statements_sha256": "bfe936a0561d04fd2a6b4bce36b40355d874c18705dd97349ea6ceb247406cdd"
+    },
+    {
+      "version": "20260705000003",
+      "name": "cadence_wp1_extensions",
+      "statement_count": 14,
+      "statements_sha256": "b0cb24f03a84758d217f45cc18b47a8351fdbb11d6618ca2545f40613753176e"
+    },
+    {
+      "version": "20260705000004",
+      "name": "dashboard_views_wp5",
+      "statement_count": 9,
+      "statements_sha256": "0f4e407cbcd66807acfec792f37ff008da41e36fdef1587b4cf0ad3d6559b260"
+    },
+    {
+      "version": "20260705000005",
+      "name": "ghl_export_wp8",
+      "statement_count": 14,
+      "statements_sha256": "ec72945aad59e4781b3dde637d45fe2f602d5baad73bd7637267fd1b549c966c"
+    },
+    {
+      "version": "20260705000006",
+      "name": "review_automation_wp4",
+      "statement_count": 4,
+      "statements_sha256": "933b59814172b575379e313cf9d3a2c568db5da5030b1f109f57c1a1f311d5d7"
+    },
+    {
+      "version": "20260706000001",
+      "name": "agency_prospects_dedupe_key",
+      "statement_count": 4,
+      "statements_sha256": "1ada5290098be6c75689c5f4cbc284bc4841ba76cf7f3bc9f6a0f640376f3589"
+    },
+    {
+      "version": "20260706000002",
+      "name": "cadence_rules_trigger_type_field_change_only",
+      "statement_count": 4,
+      "statements_sha256": "6f0692c1e0eb49408f42c609c11f3fca27e6b9aa65ccb7777170360e07acaaf6"
+    },
+    {
+      "version": "20260706000003",
+      "name": "consent_log_repair_cron",
+      "statement_count": 1,
+      "statements_sha256": "d94fbb10dee29343c3efac59ad05be684bace27fa326c2c727edefe637a76c7b"
+    },
+    {
+      "version": "20260706000004",
+      "name": "screened_leads_gclid",
+      "statement_count": 2,
+      "statements_sha256": "80121e6292df6a5d26b7bffb84a5e49f9a830ad624e51e053851e6584df4e891"
+    },
+    {
+      "version": "20260706000005",
+      "name": "web_intake_sessions_gclid",
+      "statement_count": 1,
+      "statements_sha256": "9abd7579534c279b128bbb89c59697670d68d8315a4c63c539b2d16d328e2ae0"
+    },
+    {
+      "version": "20260706200052",
+      "name": "20260707b_operator_preview_log",
+      "statement_count": 1,
+      "statements_sha256": "8ddbd314e9c3595ab4c5284debe6f334436484dce21cd08faf0a33f842daabeb"
+    },
+    {
+      "version": "20260707000001",
+      "name": "consent_log_repair_antijoin_fn",
+      "statement_count": 3,
+      "statements_sha256": "3a4f63e5c8039de043be49be2d00142656a5481844f2bab72ea92fa8228950f7"
+    },
+    {
+      "version": "20260707000002",
+      "name": "deliverable_current_version_invariant",
+      "statement_count": 4,
+      "statements_sha256": "831c9553905661c31c4a3b673e8e02d527645a7f9dbdbbfe4c6e32b0c4eb2fa2"
+    },
+    {
+      "version": "20260709",
+      "name": "deliverable_change_request_loop",
+      "statement_count": 10,
+      "statements_sha256": "b73622c4dc5a9d002aca3d3322fbb19e0d3570674882512bb5ea87306fae5d90"
+    },
+    {
+      "version": "20260712183638",
+      "name": "add_firm_profile_fee_detail_fields",
+      "statement_count": 1,
+      "statements_sha256": "5b28a236bc78c86b19b19939d9d757d34fab9fd0f15dd6747a2d686011fc04ab"
+    },
+    {
+      "version": "20260713185849",
+      "name": "pdf_artifact_integrity",
+      "statement_count": 1,
+      "statements_sha256": "0828a35edfa8fd66d9f2eb0d849a375cae7d23369b756a320721fb1bb5ab61ed"
+    },
+    {
+      "version": "20260713234759",
+      "name": "deliverable_suggestions",
+      "statement_count": 1,
+      "statements_sha256": "1e0717179f1afece89d0e58a13252ad93a4777e1160f6494898c40b6187882bc"
+    },
+    {
+      "version": "20260713235455",
+      "name": "deliverable_suggestion_atomic_workflow",
+      "statement_count": 1,
+      "statements_sha256": "153aa298544d6e7977eb14a3d9c4df33f0a318d5cd2b8e34709fe21ae7113e84"
+    },
+    {
+      "version": "20260714001604",
+      "name": "deliverable_suggestion_fk_indexes",
+      "statement_count": 1,
+      "statements_sha256": "3053e449bf82a8f4486e6bb291dd9a72c912be569e819a079e8b9a13473277cf"
+    },
+    {
+      "version": "20260714011950",
+      "name": "deliverable_suggestion_release_hardening",
+      "statement_count": 1,
+      "statements_sha256": "cc080c5aaa99babcc4b42a254fd17e8a132886c0b9eb12bbd61d38b7b4c598ad"
+    },
+    {
+      "version": "20260714141535",
+      "name": "20260714101200_publication_metadata",
+      "statement_count": 1,
+      "statements_sha256": "bc3617c94afa58e6a3bff12d71029a6c07ce3b49093eef53f4508b57a9969ec5"
+    },
+    {
+      "version": "20260714141612",
+      "name": "20260714101300_publication_artifacts",
+      "statement_count": 1,
+      "statements_sha256": "b5e3e62d3eb37ca99017a1d9f77b4ec514cee632532ecba6b5a621d6662082d9"
+    },
+    {
+      "version": "20260714141709",
+      "name": "20260714101400_publication_artifacts_fk_indexes",
+      "statement_count": 1,
+      "statements_sha256": "10a055ad93d5e7141ff7ccff7fddf9bfb5106bb8be6ed23a133469fdfb8c2c3f"
+    },
+    {
+      "version": "20260714180754",
+      "name": "20260714150000_publication_artifacts_uniqueness",
+      "statement_count": 1,
+      "statements_sha256": "b1158fe13d90725d797989518b9eefa907ee8b710ce7eae4867198b419e822f0"
+    },
+    {
+      "version": "20260715191156",
+      "name": "20260715130000_approval_records_append_only",
+      "statement_count": 1,
+      "statements_sha256": "48d05c916f3aa105b662ebda6c403194bf1e887c9b471adccb129e7bf5ea88cd"
+    },
+    {
+      "version": "20260715191218",
+      "name": "20260715130100_content_placements",
+      "statement_count": 1,
+      "statements_sha256": "45e29f249d26d386d6193711e67a19b04ae6edb1842be62630f468fb05d50e7d"
+    },
+    {
+      "version": "20260715191243",
+      "name": "20260715130200_publication_receipts",
+      "statement_count": 1,
+      "statements_sha256": "3be40f35517ed26582cb4a250f7556b748cd9bfb14e49687d921deb72f701973"
+    },
+    {
+      "version": "20260715193131",
+      "name": "20260715120000_content_periods_readiness_activation",
+      "statement_count": 1,
+      "statements_sha256": "6b64a33531e6bee1741589104148d26f51ae9fa8725f12caaa22062fdbebefe8"
+    },
+    {
+      "version": "20260715193139",
+      "name": "20260715120200_content_deliverables_cta_target_path",
+      "statement_count": 1,
+      "statements_sha256": "3f6ab8e2d693a0bca73e40ac68651a5764e80605b355275f05def865c7cac37a"
+    },
+    {
+      "version": "20260715193146",
+      "name": "20260715120400_founder_vesting_cta_target_path_fix",
+      "statement_count": 1,
+      "statements_sha256": "0708e041644bc1958d7a984801c30f3fa3cec8af00e1ed9d056e68591e0fca97"
+    },
+    {
+      "version": "20260715193201",
+      "name": "20260715120500_relocation_clause_publication_metadata",
+      "statement_count": 1,
+      "statements_sha256": "37050a86881fe3b79662e10b441f731d8e23841d924295646f07431c92b415bb"
+    },
+    {
+      "version": "20260715193211",
+      "name": "20260715121000_already_published_retroactive_review_publication_metadata",
+      "statement_count": 1,
+      "statements_sha256": "826900c5e80d90343647292b2daf648e170429e3d36be8987dd4f14ee25434aa"
+    },
+    {
+      "version": "20260715193219",
+      "name": "20260715121500_decision_tools_publication_metadata",
+      "statement_count": 1,
+      "statements_sha256": "b9d99bcca7244414b521571f4166d9cc58f7bf3da6e4357b613a1f2b7aab30c0"
+    },
+    {
+      "version": "20260715193236",
+      "name": "20260715122000_renewal_clause_publication_metadata",
+      "statement_count": 1,
+      "statements_sha256": "774ce31abed35a5834defa3ed9a264ebd576ee1dc696e2791d45b299189e6570"
+    },
+    {
+      "version": "20260715193255",
+      "name": "20260715122500_equal_shares_unequal_control_publication_metadata",
+      "statement_count": 1,
+      "statements_sha256": "8722aa933432bc2bbd28c4f09de289b912ae7dae12705afa63e3c1886dd28300"
+    },
+    {
+      "version": "20260715193313",
+      "name": "20260715123000_power_of_attorney_publication_metadata",
+      "statement_count": 1,
+      "statements_sha256": "7d894e18669ed8fa2253c3e8b682a591df72198bb241d21a829a75f61744ab5f"
+    },
+    {
+      "version": "20260715193329",
+      "name": "20260715123500_shareholder_agreement_clauses_publication_metadata",
+      "statement_count": 1,
+      "statements_sha256": "a25f254b780d3f08a98edc7ee579181c264cf62159dee1b73443f18a6cad5541"
+    },
+    {
+      "version": "20260715193342",
+      "name": "20260715124000_content_periods_lifecycle_inventory",
+      "statement_count": 1,
+      "statements_sha256": "9207f7e1c845adbc2e811024262c675eea52366120403a5fc37057cc38c23154"
+    },
+    {
+      "version": "20260715210116",
+      "name": "content_periods_enforced_monotonic",
+      "statement_count": 1,
+      "statements_sha256": "89e25814ef0f0c698ac1e0cd7e39a0fd8c057a183ae2b3915d1e399843bded9f"
+    },
+    {
+      "version": "20260715225139",
+      "name": "publication_receipt_integrity_hardening",
+      "statement_count": 1,
+      "statements_sha256": "d03cf8f079f10f4fa2a84b99d1a424251a741a4cd7f9b514dad929c709a1c0b3"
+    },
+    {
+      "version": "20260715231733",
+      "name": "publication_receipt_hardening_supplement",
+      "statement_count": 1,
+      "statements_sha256": "0079f83bb6a9a7886856dfea2393ef55fb2e59a5647229ec80c6d9068da2a12c"
+    },
+    {
+      "version": "20260715232702",
+      "name": "20260715234500_publication_artifacts_dedupe_partial_index",
+      "statement_count": 1,
+      "statements_sha256": "603c16ca32b3cb8e8b6623d7c5b94854a52fac6fc1e7e9c684aefffc1053cb48"
+    },
+    {
+      "version": "20260716000000",
+      "name": "firm_assist_corpus",
+      "statement_count": 24,
+      "statements_sha256": "9dca26aaaf5ef44f4353b3be56d02000363b1f191f480f4e25da42f241f3780b"
+    },
+    {
+      "version": "20260716144315",
+      "name": "publication_receipt_verification_after_revision_fix",
+      "statement_count": 1,
+      "statements_sha256": "657bf9ff90f9ccf6a3e70ba8cccbc007400ab26964fef59426df71aaa01ef9a1"
+    },
+    {
+      "version": "20260716144510",
+      "name": "publication_receipt_concurrency_lock",
+      "statement_count": 1,
+      "statements_sha256": "9522082286aea83b39305e4a78b46f5e141ee82c5fba99c629c2ad835d398ae1"
+    },
+    {
+      "version": "20260716144723",
+      "name": "publication_receipt_reconcile_concurrency_lock_merge",
+      "statement_count": 1,
+      "statements_sha256": "78d505440e016a73e190ffc72ef2ccc27a61485592810d621ee61170bde6b196"
+    },
+    {
+      "version": "20260716150130",
+      "name": "publication_placement_claims",
+      "statement_count": 1,
+      "statements_sha256": "4b37ba50116c6f8eb03e0220ac524f7d44181a980e4daecebb12abfcf5705812"
+    },
+    {
+      "version": "20260716155746",
+      "name": "publication_placement_claim_race_fix",
+      "statement_count": 1,
+      "statements_sha256": "76c85e3da61d4fa7cd0ed7e21454dfdc74446d726444e642826bbe68d0027f8c"
+    },
+    {
+      "version": "20260716205822",
+      "name": "publication_receipt_claim_binding",
+      "statement_count": 1,
+      "statements_sha256": "e13669a301b975d05031fc18bd324e80ae451206f6f8b93493873b7df2e44876"
+    },
+    {
+      "version": "20260716205829",
+      "name": "publication_placement_claim_mutation_lockdown",
+      "statement_count": 1,
+      "statements_sha256": "618cf177dc3e82da61eabf3d203927efd831288b040e36334ad265458bae1c33"
+    },
+    {
+      "version": "20260716210037",
+      "name": "publication_receipt_claim_release_revoke_public_execute",
+      "statement_count": 1,
+      "statements_sha256": "cbc2e0e63dcbefe2360e74718d9de7bd2ad18057cb230e2fd2aaa8b28ea1a64e"
+    },
+    {
+      "version": "20260717001444",
+      "name": "publication_receipt_actor_binding_and_hash_trust_fix",
+      "statement_count": 1,
+      "statements_sha256": "2cd12a4a2ed1a23404a9dbffd2cec50e441b651d99ca6d28d8f48652222ba539"
+    },
+    {
+      "version": "20260717001510",
+      "name": "publication_placement_claim_idempotency_identity_scoping",
+      "statement_count": 1,
+      "statements_sha256": "892274fd6b53c5ebaff0ba98bf3d93db4be42aeb5af26337ea8666e746411044"
+    },
+    {
+      "version": "20260717015014",
+      "name": "publication_placement_claim_idempotency_firm_scoping",
+      "statement_count": 1,
+      "statements_sha256": "344be66bbdbe3efc12871e6211b7a2d239c57a20b28580ef3648967c4c2f308d"
+    },
+    {
+      "version": "20260717224806",
+      "name": "content_attribution_evidence",
+      "statement_count": 1,
+      "statements_sha256": "6012161d8e812a0a6aa7dcc4b28a284fccd6b9329eb84fabc06eb2fe5da9c000"
+    },
+    {
+      "version": "20260717230956",
+      "name": "standing_publishing_authorization",
+      "statement_count": 1,
+      "statements_sha256": "86fd9c2ac519a498e85faf8b0d9fec8f7694ba43163072fc441fc6f675e8b9f8"
+    },
+    {
+      "version": "20260717231158",
+      "name": "standing_publishing_authorization_notification_pref_null_fix",
+      "statement_count": 1,
+      "statements_sha256": "80ee55d0f065dbe90ecc51e5f988a290286f29f8922e3e2bfa52ff2ab02baae0"
+    },
+    {
+      "version": "20260719140000",
+      "name": "content_deliverables_email_role_widen",
+      "statement_count": 6,
+      "statements_sha256": "738c12c71274c2daed5ee4ffdf719750b90d3f37ac11356aadb69d94fc40bc64"
+    },
+    {
+      "version": "20260719140600",
+      "name": "drg_law_minute_backfill",
+      "statement_count": 2,
+      "statements_sha256": "613f63c3d0abaf4ed64b63a8535f48024cb6a7ec880dc2c82fdf5d8a980f8a89"
+    },
+    {
+      "version": "20260722180056",
+      "name": "add_content_deliverable_published_at",
+      "statement_count": 1,
+      "statements_sha256": "95e9f1632a92b2c72df5bbec201dc2a0e7255611918fa6c8e2fd1ab01a8484e2"
+    },
+    {
+      "version": "20260723024820",
+      "name": "20260722000000_firm_onboarding_client_list",
+      "statement_count": 1,
+      "statements_sha256": "715466de2062d6a82fc23195496a1f95db229fd1124b2a0bca1da35fc8dd4adb"
+    },
+    {
+      "version": "20260723120000",
+      "name": "publishing_package_control_room",
+      "statement_count": 0,
+      "statements_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "version": "20260725134001",
+      "name": "content_periods_week_number",
+      "statement_count": 1,
+      "statements_sha256": "475b8b4efab52ad2a4c6e7abd290d48bae50c771e64108187197c08074ac8878"
+    },
+    {
+      "version": "20260725202440",
+      "name": "firm_onboarding_meta_business_verified",
+      "statement_count": 1,
+      "statements_sha256": "ea7cb1327052f5d6637bd3bb9b0291e8190f8a5c8a3314b2066fe11e4389880d"
+    },
+    {
+      "version": "20260727220613",
+      "name": "intake_firms_ghl_contacts_write_token",
+      "statement_count": 1,
+      "statements_sha256": "f14fbbb07ff4e95df3400b048c37980f78a66a90cbd53416780629db2be91fd6"
+    },
+    {
+      "version": "20260727221123",
+      "name": "marketing_lead_consent_log",
+      "statement_count": 1,
+      "statements_sha256": "b7b5fbbcf14dbeb789356da5db3e6ac97e40be3321bbd7a287618f4289f138da"
+    },
+    {
+      "version": "20260727233602",
+      "name": "marketing_lead_unsubscribes",
+      "statement_count": 1,
+      "statements_sha256": "ce6e8e8ad1e1f17bef1fe6810a4dc88f2551a2d2e2cf6c2011992c7ad932ed35"
+    },
+    {
+      "version": "20260728001447",
+      "name": "weekly_strategy_brief",
+      "statement_count": 1,
+      "statements_sha256": "039d88ada172fca151c6c50a20dc9b1373521607b235a86045a70deec6f1a4cb"
+    },
+    {
+      "version": "20260728190000",
+      "name": "publication_artifact_asset_roles",
+      "statement_count": 6,
+      "statements_sha256": "fa4e891ca103b56cb3e04ebcbc5a30540fec7f09ca4db57bfcce74421a06d647"
+    },
+    {
+      "version": "20260729130410",
+      "name": "publication_artifact_role_assignments",
+      "statement_count": 1,
+      "statements_sha256": "9027ca92454ece05f725789de20e30bee56ff0f541fc89a25fd3292d1686e9eb"
+    },
+    {
+      "version": "20260729151754",
+      "name": "publication_pdf_atomic_replacement",
+      "statement_count": 1,
+      "statements_sha256": "e20383d4883c2de6cc116faceeeb964123720cc1eac4936bae0a8b4c6f500d76"
+    },
+    {
+      "version": "20260729152943",
+      "name": "validate_pdf_storage_object",
+      "statement_count": 1,
+      "statements_sha256": "2e816f8950f033c4eebde946bf567ba6cbff2d180663fefcaad083f8e76c06c3"
+    },
+    {
+      "version": "20260730120000",
+      "name": "asset_register_single_winner",
+      "statement_count": 7,
+      "statements_sha256": "4d5c5a3a04de58f345cb180f8236e93daee47efbf48d33344c79fe04c2cbb4ae"
+    },
+    {
+      "version": "20260806140000",
+      "name": "firm_asset_ownership",
+      "statement_count": 10,
+      "statements_sha256": "ae5b3eb8b41a0b499e5914145db60270a0f71ccfceee0d3c8d7ecb724a279cf0"
+    },
+    {
+      "version": "20260807120000",
+      "name": "caseload_prospects",
+      "statement_count": 18,
+      "statements_sha256": "9ba39e6716960189d0308297b22b0a4b8241d9e79cd254fc06339c614795ca04"
+    },
+    {
+      "version": "20260808120000",
+      "name": "caseload_prospect_erasure",
+      "statement_count": 14,
+      "statements_sha256": "57009b0362771af9e1b603037e5d0bc971d1ae2051d96103625692b1a038be7f"
+    },
+    {
+      "version": "20260809150948",
+      "name": "release_safety_authorization_and_change_holds",
+      "statement_count": 28,
+      "statements_sha256": "9178f8a384bd3cf6512744075437d4d07a9c2d6db7178b8dec3f62f4f6c42508"
+    },
+    {
+      "version": "20260809170708",
+      "name": "deliverable_scoped_client_change_holds",
+      "statement_count": 8,
+      "statements_sha256": "92202f3d3e708ea02f4a33f9c508e3d4f70d9b184661dd902ffe2c9100b6fb7f"
+    },
+    {
+      "version": "20260811231500",
+      "name": "drg_manifest_deployment",
+      "statement_count": 1,
+      "statements_sha256": "ad754a0f43906e4537a167d0553ab35571ddbba4062115114371ef89d2d8e03f"
+    },
+    {
+      "version": "20260818170000",
+      "name": "drg_checklist_text_review_contract",
+      "statement_count": 1,
+      "statements_sha256": "bd9cdfbcfc14a7b8da5ebe3d6a66580fea76a4c18dfdc8213ebbdeb6e9e1eff4"
+    },
+    {
+      "version": "20260818180000",
+      "name": "public_website_origin",
+      "statement_count": 5,
+      "statements_sha256": "f8ef01983874ee8a619a20e346124c8c1a86a32f5ea971e6f93c39249c99dcfc"
+    },
+    {
+      "version": "20260822004201",
+      "name": "drg_csb426_deployment_authority",
+      "statement_count": 2,
+      "statements_sha256": "616874c1a078a6aad4983b3824def5a6179f65ff4614be27bb8e12d558e42118"
+    },
+    {
+      "version": "20260822132830",
+      "name": "screen_funnel_events",
+      "statement_count": 7,
+      "statements_sha256": "e7570c04470ad146fa82ef7ca8dd73a8bde420f8be0dd64a3ab16dfa187ad34a"
+    },
+    {
+      "version": "20260831154909",
+      "name": "secure_import_room",
+      "statement_count": 35,
+      "statements_sha256": "3344e2dbd71aaba8e6cb1c4e003d59190ad0435d10a2445d05617cdb07b76b62"
+    },
+    {
+      "version": "20260901231830",
+      "name": "channel_conversation_ledger",
+      "statement_count": 21,
+      "statements_sha256": "f4520e0ff1a5d2c619139463982312a541d6f8b508d2642b3e28f2331f209ca6"
+    },
+    {
+      "version": "20260902102620",
+      "name": "restrict_screen_funnel_service_role_acl",
+      "statement_count": 2,
+      "statements_sha256": "75ce79f6e8672fc04d77089f226ca0a15258626259a9578c265a5f838be5efbc"
+    },
+    {
+      "version": "20260902111504",
+      "name": "harden_channel_conversation_acl",
+      "statement_count": 4,
+      "statements_sha256": "c84cf45e0a7b3e70fc2d4fa1a434e0b253d767ef203fb3335cf856b76519b455"
+    },
+    {
+      "version": "20260902133000",
+      "name": "role_aware_firm_member_invitation",
+      "statement_count": 5,
+      "statements_sha256": "aeb063a961f10025e791704f5de2ab17e06fd262ea3a0e7dd0902fdd2e0e394c"
+    },
+    {
+      "version": "20260902210124",
+      "name": "privacy_screened_lead_redaction",
+      "statement_count": 153,
+      "statements_sha256": "937aa1f3854e446f2a9607feae6147d916cc97dbef184c6b19146fa073afb159"
+    },
+    {
+      "version": "20260903011450",
+      "name": "privacy_provider_evidence_required",
+      "statement_count": 7,
+      "statements_sha256": "d7e4d7c95645a3326dad263a34baab8eb2cb4d04f83d3ab8fd0720acc275519c"
+    },
+    {
+      "version": "20260903140551",
+      "name": "privacy_external_deletion_registry_recovery_control",
+      "statement_count": 14,
+      "statements_sha256": "7862a15e1ade1db77d2eb747f8f7629450d048692310f5ae74bf9095d0f7b89a"
+    },
+    {
+      "version": "20260903144312",
+      "name": "privacy_deletion_registry_saga_hardening",
+      "statement_count": 18,
+      "statements_sha256": "4818e4eb3d1965c57c05102a1c7ff7d6fcc2dcfec32afea8acf2d2e3ede904e4"
+    },
+    {
+      "version": "20260903183915",
+      "name": "privacy_deletion_registry_operational_completeness",
+      "statement_count": 56,
+      "statements_sha256": "85a3384cd886586cff9c3f7796cc961607d83f2d030a616f0a89c4edb4d177e8"
+    },
+    {
+      "version": "20260904125000",
+      "name": "privacy_recovery_open_from_locked",
+      "statement_count": 7,
+      "statements_sha256": "303ff8dcb32f4f24e4dc30ac4160c12b7aab193d95699ffedb5bb75e2f547141"
+    },
+    {
+      "version": "20260907145628",
+      "name": "20260907145628_gta_prospect_research_persistence",
+      "statement_count": 1,
+      "statements_sha256": "05b287102447ac787f2a351f9eed2483760fa6441e0620dd8f42effc3705f959"
+    },
+    {
+      "version": "20260907181342",
+      "name": "20260907181342_gta_prospect_research_operator_read_projection",
+      "statement_count": 1,
+      "statements_sha256": "a46ef18148c60d21ff45a6e5f7d6a3453d28a44da0eaa61557a91c4622ea8850"
+    },
+    {
+      "version": "20260907210156",
+      "name": "20260907210156_gta_prospect_research_canonical_iso_date_fix",
+      "statement_count": 0,
+      "statements_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "version": "20260907213130",
+      "name": "gta_prospect_apply_advisory_lock_fix",
+      "statement_count": 0,
+      "statements_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "version": "20260908140907",
+      "name": "gta_prospect_downtown_geography_observations",
+      "statement_count": 12,
+      "statements_sha256": "3057ae14d27a8a7297fac25b02038836b3bf245dd88355ffed5274c47864ea8b"
+    },
+    {
+      "version": "20260908160000",
+      "name": "gta_prospect_public_contacts",
+      "statement_count": 15,
+      "statements_sha256": "be93a82c6e5082559426c67a6101a0a366751553b78943f634935db6b3d404b6"
+    },
+    {
+      "version": "20260909231831",
+      "name": "voice_screen_parallel_journey",
+      "statement_count": 1,
+      "statements_sha256": "ed5c7e293fe41096cf70a0f649f2a1f0ed50ba9f4d344d3d890e4f2a350a3f9b"
+    },
+    {
+      "version": "20260909231858",
+      "name": "prospect_operations_core",
+      "statement_count": 91,
+      "statements_sha256": "86d0f5bf7ecb867169054fa122113f10b4a6c05c90033945b879eeb4c1d52193"
+    },
+    {
+      "version": "20260910022033",
+      "name": "voice_screen_native_webhook_replay_oauth",
+      "statement_count": 30,
+      "statements_sha256": "46cc2eb4dcc7331383428e2a549a4cc8f9820a8932ff4e22045c5461ee597a37"
+    },
+    {
+      "version": "20260910042530",
+      "name": "fix_prospect_history_trigger_row_shape",
+      "statement_count": 2,
+      "statements_sha256": "2ecf370f8c347903bcd12ff5a593c05ca34ebcb254b0d19d4ace63db1997a6d3"
+    },
+    {
+      "version": "20260910141025",
+      "name": "provision_prospect_source_batch",
+      "statement_count": 6,
+      "statements_sha256": "5c470c855151467c12e7226cdb9ef3cffcae1fbe56dccd95819368d2f24f22a7"
+    },
+    {
+      "version": "20260911195806",
+      "name": "gta_prospect_operator_import_apply",
+      "statement_count": 14,
+      "statements_sha256": "9c6b6fb06fc88ebd74080323a69fee8f4a8045cbdae164993f736a22f23fe5a2"
+    },
+    {
+      "version": "20260911205207",
+      "name": "gta_prospect_operator_import_history",
+      "statement_count": 5,
+      "statements_sha256": "167bb797000dda0b1eb9cdd95b012679b8d727e133b8a6543245a83619e4da6e"
+    },
+    {
+      "version": "20260911215333",
+      "name": "20260910161644_prospect_archive_sync_apply",
+      "statement_count": 1,
+      "statements_sha256": "b610c67bb2fab9e14d91437eeb2d0a3688f11fbee568451c5e9e79a953a2f8dc"
+    },
+    {
+      "version": "20260912131132",
+      "name": "gta_prospect_supplemental_evidence_import",
+      "statement_count": 53,
+      "statements_sha256": "0832354fedca5c1dca736da2c256382ccab7aac83c347047aa5fbcb9ad299c31"
+    },
+    {
+      "version": "20260913213058",
+      "name": "gta_prospect_stable_identity_registry",
+      "statement_count": 18,
+      "statements_sha256": "3e19dbd0961f23c5c109469ebc1343420af2f0f8bc83f3af418aa250cb6dc4e5"
+    },
+    {
+      "version": "20260914123626",
+      "name": "gta_prospect_research_work_queue",
+      "statement_count": 32,
+      "statements_sha256": "93812f01fc3f73504a4c5cfe8768a85b520e8d8c02d90c4aa17210c8b455a43d"
+    },
+    {
+      "version": "20260914202504",
+      "name": "gta_prospect_worker_evidence_drafts",
+      "statement_count": 32,
+      "statements_sha256": "7cb4367823b01a4bdd34aadb0dc71f2455e5c510aa1d290ab76e3490c9c9867d"
+    },
+    {
+      "version": "20260915003000",
+      "name": "gta_prospect_research_queue_reactivation",
+      "statement_count": 0,
+      "statements_sha256": "74234e98afe7498fb5daf1f36ac2d78acc339464f950703b8c019892f982b90b"
+    },
+    {
+      "version": "20260915114633",
+      "name": "channel_intake_exchange_history",
+      "statement_count": 11,
+      "statements_sha256": "fccf9a41a3424c32b9e7873706a9a11e6180152f62607c58bed426061d4a0921"
+    },
+    {
+      "version": "20260915150000",
+      "name": "gta_prospect_agent_draft_inbox",
+      "statement_count": 23,
+      "statements_sha256": "b9201c55b0a071cff6c0fbb3d05eebfd8a008e248e78aee7379256fa0dbc3b64"
+    },
+    {
+      "version": "20260921120000",
+      "name": "prospect_qualification_evidence",
+      "statement_count": 24,
+      "statements_sha256": "a508e9b31803835924fa4e9cce5ae14e31cf8c7ba84dab10be9dbc110cb92c4c"
+    },
+    {
+      "version": "20260921121500",
+      "name": "prospect_qualification_profile_details",
+      "statement_count": 13,
+      "statements_sha256": "b1d2a90af233dbe225844816085354c1da7f5ce87d06badf96b5011d6391be56"
+    },
+    {
+      "version": "20260923161812",
+      "name": "prospect_enrichment_v1",
+      "statement_count": 157,
+      "statements_sha256": "094473a3df185bcac04eb3e21ad991f779e633cf79369c135840abf7e2a3f9c5"
+    },
+    {
+      "version": "20260923174500",
+      "name": "prospect_enrichment_identity_read_rpc",
+      "statement_count": 7,
+      "statements_sha256": "7536bd5a052dbf9798ea606b02ebc758ba3da8901f8b31258f79095147f54f80"
+    },
+    {
+      "version": "20260923182000",
+      "name": "prospect_enrichment_operator_read_rpc",
+      "statement_count": 4,
+      "statements_sha256": "0834d5dd31f65aec18c395dac4c208471ba15a31d5de74bc05215985e8919aeb"
+    },
+    {
+      "version": "20260923221500",
+      "name": "prospect_enrichment_gta_target_read_rpc",
+      "statement_count": 4,
+      "statements_sha256": "a46ff155ec200d749a276a6ece50033b3457a6e3325ceafbd38f3e839bf32553"
+    },
+    {
+      "version": "20260924071322",
+      "name": "prospect_enrichment_manifest_hold_evidence",
+      "statement_count": 24,
+      "statements_sha256": "545965374d6ee2d07d4904c80e8745a88fdeef357798937b5caba4bf2002bcd2"
+    },
+    {
+      "version": "20260924093317",
+      "name": "fix_gta_prospect_operator_projection_gaps",
+      "statement_count": 9,
+      "statements_sha256": "5c3e16a9a8717780de2b2cc627145cb4ebb2427a8c66121d1d5fa504b463d0b5"
+    },
+    {
+      "version": "20260924172758",
+      "name": "prospect_enrichment_candidate_profiles",
+      "statement_count": 65,
+      "statements_sha256": "c3f3a12f23ec98b67c980d93fa401537c463f29ef2e90265702d2e8b10f7ddb4"
+    },
+    {
+      "version": "20260924180541",
+      "name": "restore_operator_membership_rpc",
+      "statement_count": 1,
+      "statements_sha256": "40db86a5d56ece11e5fb74bddcb1bb3c83ac45bd1cdfac6ffc90c4ac006e55dd"
+    },
+    {
+      "version": "20260924185000",
+      "name": "prospect_enrichment_registration_rpc_reliability",
+      "statement_count": 4,
+      "statements_sha256": "545fbcd0a76c0e4c7314def5a69f25bfa2b376ced3ac48378d5b3537e3335c76"
+    },
+    {
+      "version": "20260924192549",
+      "name": "prospect_enrichment_candidate_firm_coverage",
+      "statement_count": 44,
+      "statements_sha256": "463ba3636442a3fa84fea3688e3d2955b8f1ce236c75d71ecd7c22143a84d6b7"
+    },
+    {
+      "version": "20260925200000",
+      "name": "gta_prospect_operator_database_firm_profile_link",
+      "statement_count": 7,
+      "statements_sha256": "662898233e0400737e98c7381d3bb1493a6e1ce857fbfb3552067f2ed2fea630"
+    },
+    {
+      "version": "20260930004100",
+      "name": "prospect_candidate_reader_timeout_fix",
+      "statement_count": 9,
+      "statements_sha256": "2c3f998487df5f7ea320e24abc6a942fb4de7e845aa0e3d6c925adc5c5dae0d7"
+    },
+    {
+      "version": "20260930050000",
+      "name": "prospect_candidate_coverage_warning_index",
+      "statement_count": 4,
+      "statements_sha256": "c24cd89f6a75c15453bd77d21b7f1f6a37bd1ca1178d4801cafeb827161f8ceb"
+    },
+    {
+      "version": "20260930130000",
+      "name": "prospect_candidate_reader_defer_legacy_audit",
+      "statement_count": 7,
+      "statements_sha256": "159d7a48fdbdfc90c3a67cee5c1a054696c6ac7d9f2960d2bea22be9a403612c"
+    },
+    {
+      "version": "20260930225510",
+      "name": "prospect_enrichment_apply_refresh_gate",
+      "statement_count": 3,
+      "statements_sha256": "f2b2409f799948aedf9a8dd0737af8100726a88c786d66a8a9b890471046755e"
+    },
+    {
+      "version": "20261004120000",
+      "name": "prospect_candidate_firm_field_fastpath",
+      "statement_count": 6,
+      "statements_sha256": "ad41891ab1dcc5d0bc11069929ec020c8c42d83c059ba3642f520f026ae979e9"
+    },
+    {
+      "version": "20261005141204",
+      "name": "prospect_candidate_original_status_fastpath",
+      "statement_count": 7,
+      "statements_sha256": "7ec8dee40d1c6ed84efba4fb26f1c38bd583bf598d1027bd09df494638ebcae4"
+    },
+    {
+      "version": "20261006003626",
+      "name": "prospect_candidate_scoped_reader_fastpaths",
+      "statement_count": 9,
+      "statements_sha256": "82881c7f8a9ce5f2d933d0e225d35cc1ef5d1a88620828c6b9109a4b12f5b079"
+    },
+    {
+      "version": "20261006111650",
+      "name": "prospect_candidate_global_text_search_scoped",
+      "statement_count": 5,
+      "statements_sha256": "977f0e3191264176a3013b4e7871de03bd4f847e9509e59004c113666931c979"
+    },
+    {
+      "version": "20261006133000",
+      "name": "prospect_candidate_global_text_search_set_identity",
+      "statement_count": 7,
+      "statements_sha256": "066a5ce233b484bfcf433ee3f57cd8852a30fb2340c1bc7c8641d86b7b9b769e"
+    },
+    {
+      "version": "20261006150000",
+      "name": "prospect_candidate_global_text_search_warning_fastpath",
+      "statement_count": 7,
+      "statements_sha256": "430a1296cfdb1ab2266913aab7a44b185b71968516888f0a88862ee2a23e129e"
+    },
+    {
+      "version": "20261006160000",
+      "name": "prospect_candidate_global_text_search_index_only",
+      "statement_count": 7,
+      "statements_sha256": "1e152bc3d61a5376cb8b1b796999f4afb9ae070139abee463263e9632e14bc79"
+    },
+    {
+      "version": "20261006170000",
+      "name": "prospect_candidate_global_text_search_direct_scope",
+      "statement_count": 6,
+      "statements_sha256": "dd1cd4b551a2cbb92c7a745b15d327a748320eecdef3fea30acd706dbfeedaa8"
+    },
+    {
+      "version": "20261006234701",
+      "name": "prospect_candidate_global_text_search_bounded_membership",
+      "statement_count": 5,
+      "statements_sha256": "c64a5b51ec19237f625e262db1aa39b5cd15015f85c2bf0c43559850f6f73c87"
+    },
+    {
+      "version": "20261009191000",
+      "name": "prospect_candidate_projection_insert_reuse",
+      "statement_count": 2,
+      "statements_sha256": "a47d6c06969fbf890cbd9dbef4d52d78ead9888a10fd658d753defe6e4f08ae8"
+    },
+    {
+      "version": "20261013173327",
+      "name": "agency_followup_journeys",
+      "statement_count": 1,
+      "statements_sha256": "5f1de5211dd150df56fa83ee6755b26c66167f92c1836f692bd02b0c2f42c6b3"
+    },
+    {
+      "version": "20261013174258",
+      "name": "harden_agency_followup_events_privileges",
+      "statement_count": 1,
+      "statements_sha256": "50d504c06bc73115bf5a68551b7f76a58f434f3a06781b91af506da879a493dd"
+    }
+  ],
+  "prerequisite": {
+    "path": "supabase/migrations/20261013214000_prospect_bounded_original_evidence_v2.sql",
+    "version": "20261013214000",
+    "name": "prospect_bounded_original_evidence_v2",
+    "sha256": "0c2421f1544de099967074184e86c6079570e23f1635ba9c30a149974cc7d301",
+    "bytes": 24285
+  }
+}

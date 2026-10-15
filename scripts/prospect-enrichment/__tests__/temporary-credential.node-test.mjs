@@ -64,6 +64,18 @@ test("no acquisition on default mode, invalid gate, or failed source authorizati
   assert.equal(called, false);
 });
 
+test("field-filter release is a separately source-authorized credential gate", async () => {
+  let authorized = false, requested = false;
+  const result = await acquireTemporaryCredential({
+    environment: { ...environment, CREDENTIAL_GATE: "field-filter-release" },
+    authorize: () => { authorized = true; },
+    fetchImpl: async () => { assert.equal(authorized, true); requested = true; return { status: 201, json: async () => payload }; },
+    mask: () => {}, persist: () => {},
+  });
+  assert.equal(requested, true);
+  assert.equal(result.projectRef, PROJECT_REF);
+});
+
 test("API errors and malformed responses never expose credential text or persist", async () => {
   for (const [fetchImpl, expectedCode] of [
     [async () => { throw Error("synthetic-secret"); }, "temporary_credential_transport_failed"],
