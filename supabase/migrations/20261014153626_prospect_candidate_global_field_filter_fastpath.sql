@@ -31,22 +31,28 @@ BEGIN
       AND (NOT p_filters ? 'fieldValue' OR
         (md5(f.value_json::text)=md5((p_filters->'fieldValue')::text)
           AND f.value_json=p_filters->'fieldValue'))
+  ), anchor_identity_links AS MATERIALIZED (
+    SELECT * FROM prospect_candidate_private.identity_links_for_candidates(
+      cutoff,ARRAY(SELECT candidate_id FROM field_matches))
   ), anchor_identities AS MATERIALIZED (
     SELECT anchors.candidate_id,count(DISTINCT links.verified_firm_id) firm_count,
       min(links.verified_firm_id::text)::uuid firm_id
     FROM field_matches anchors
-    LEFT JOIN LATERAL prospect_candidate_private.identity_links_for(cutoff,anchors.candidate_id) links ON true
+    LEFT JOIN anchor_identity_links links USING(candidate_id)
     GROUP BY anchors.candidate_id
   ), anchor_firms AS MATERIALIZED (
     SELECT DISTINCT firm_id FROM anchor_identities WHERE firm_count=1
   ), expanded_identity_links AS MATERIALIZED (
     SELECT DISTINCT links.candidate_id
     FROM prospect_candidate_private.identity_links_for_firms(cutoff,ARRAY(SELECT firm_id FROM anchor_firms)) links
+  ), expanded_identity_details AS MATERIALIZED (
+    SELECT * FROM prospect_candidate_private.identity_links_for_candidates(
+      cutoff,ARRAY(SELECT candidate_id FROM expanded_identity_links))
   ), expanded_firms AS MATERIALIZED (
     SELECT candidates.candidate_id,count(DISTINCT links.verified_firm_id) firm_count,
       min(links.verified_firm_id::text)::uuid firm_id
     FROM expanded_identity_links candidates
-    LEFT JOIN LATERAL prospect_candidate_private.identity_links_for(cutoff,candidates.candidate_id) links ON true
+    LEFT JOIN expanded_identity_details links USING(candidate_id)
     GROUP BY candidates.candidate_id
   ), candidate_scope AS MATERIALIZED (
     SELECT anchors.candidate_id,
