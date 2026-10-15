@@ -9,8 +9,8 @@
     "path": "supabase/migrations/20261014153626_prospect_candidate_global_field_filter_fastpath.sql",
     "version": "20261014153626",
     "name": "prospect_candidate_global_field_filter_fastpath",
-    "sha256": "9e0aa56f0601fb05960500245438fb043f1c16ec0e96fd99f07ae9262fbdeb1d",
-    "bytes": 7429
+    "sha256": "27d4fb0f03266f6fb1bb652a1ab6ce446dd819c9d7c58750e84a420aaccc5098",
+    "bytes": 9347
   },
   "prerequisite": {
     "path": "supabase/migrations/20261013214000_prospect_bounded_original_evidence_v2.sql",
@@ -48,7 +48,7 @@
           "search_path=\"\""
         ],
         "acl": "{postgres=X/postgres,service_role=X/postgres}",
-        "body_sha256": "998fae4d1bdc17df09b3aca9e85d48dc7d094678466090582fc366884ad60653"
+        "body_sha256": "85c680f7c21998d520e5ecde2bc2bbf6198056c9994c328348d34d81261470a3"
       },
       {
         "schema": "public",
