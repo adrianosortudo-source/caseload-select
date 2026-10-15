@@ -53,24 +53,32 @@ const claim: AgencyFollowupClaim = {
 class SyntheticRepository implements AgencyFollowupWorkerRepository {
   readonly dispositions: AgencyFollowupWorkerDisposition[] = [];
   claimCalls = 0;
-  private available: AgencyFollowupClaim[];
+  private available: Array<{ claim: AgencyFollowupClaim; dueAt: number }>;
 
   constructor(private readonly context: AgencyFollowupSendContext, claims = [claim]) {
-    this.available = [...claims];
+    this.available = claims.map((item) => ({ claim: item, dueAt: Date.parse(context.now) }));
   }
 
-  async claimDueMessages(): Promise<AgencyFollowupClaim[]> {
+  async claimDueMessages(input: { now: string }): Promise<AgencyFollowupClaim[]> {
     this.claimCalls += 1;
-    const next = this.available.shift();
-    return next ? [next] : [];
+    const now = Date.parse(input.now);
+    const index = this.available.findIndex((item) => item.dueAt <= now);
+    if (index < 0) return [];
+    return [this.available.splice(index, 1)[0].claim];
   }
 
-  async loadCurrentSendContext(): Promise<AgencyFollowupSendContext> {
-    return this.context;
+  async loadCurrentSendContext(_claim: AgencyFollowupClaim, now: string): Promise<AgencyFollowupSendContext> {
+    return { ...this.context, now };
   }
 
-  async persistDisposition(_claim: AgencyFollowupClaim, disposition: AgencyFollowupWorkerDisposition): Promise<void> {
+  async persistDisposition(current: AgencyFollowupClaim, disposition: AgencyFollowupWorkerDisposition): Promise<void> {
     this.dispositions.push(disposition);
+    if (disposition.state === "scheduled") {
+      this.available.push({
+        claim: { ...current, attemptCount: current.attemptCount + 1 },
+        dueAt: Date.parse(disposition.retryAt),
+      });
+    }
   }
 }
 
@@ -113,20 +121,61 @@ describe("Agency follow-up fake dispatcher", () => {
     expect(provider.uniqueIdempotencyKeysSeen).toBe(1);
   });
 
-  it("retries only definitive failures with the same key and bounded backoff", async () => {
-    const secondClaim = { ...claim, attemptCount: 2 };
-    const repository = new SyntheticRepository(validContext, [claim, secondClaim]);
+  it("honors retry backoff, excludes early claims, and accepts once due with the same key", async () => {
+    const retryContext: AgencyFollowupSendContext = {
+      ...validContext,
+      schedulePolicy: { timezone: "UTC", businessDays: [1, 2, 3, 4, 5, 6, 7], localWindowStart: "09:00", localWindowEnd: "17:00" },
+    };
+    const repository = new SyntheticRepository(retryContext);
     const provider = new FakeAgencyFollowupProvider([
       { kind: "definitive_retryable_failure", code: "synthetic_throttle" },
       { kind: "accepted", providerMessageId: "synthetic-accepted", acceptedAt: "2026-10-12T15:01:00.000Z" },
     ]);
     const first = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: validContext.now });
-    const second = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: validContext.now });
+    const early = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: "2026-10-12T15:00:29.999Z" });
+    const due = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: "2026-10-12T15:00:30.000Z" });
     expect(first.retryScheduled).toBe(1);
     expect(repository.dispositions[0]).toMatchObject({ state: "scheduled", retryAt: "2026-10-12T15:00:30.000Z" });
-    expect(second.accepted).toBe(1);
+    expect(early).toMatchObject({ claimed: 0, accepted: 0 });
+    expect(due).toMatchObject({ claimed: 1, accepted: 1 });
     expect(provider.uniqueIdempotencyKeysSeen).toBe(1);
+    expect(provider.sendCalls).toBe(2);
     expect(repository.dispositions[1]).toMatchObject({ state: "accepted", providerMessageId: "synthetic-accepted" });
+    expect((await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: "2026-10-12T15:00:31.000Z" })).claimed).toBe(0);
+    expect(provider.sendCalls).toBe(2);
+  });
+
+  it("exhausts the five-attempt limit across due retries", async () => {
+    const repository = new SyntheticRepository(validContext);
+    const provider = new FakeAgencyFollowupProvider(Array.from({ length: 5 }, () => ({
+      kind: "definitive_retryable_failure" as const,
+      code: "synthetic_throttle",
+    })));
+    let now = validContext.now;
+    for (let attempt = 1; attempt < 5; attempt += 1) {
+      const result = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now });
+      expect(result.retryScheduled).toBe(1);
+      const disposition = repository.dispositions[attempt - 1];
+      if (disposition.state !== "scheduled") throw new Error("A retryable failure did not schedule the next attempt.");
+      const expectedDelay = 30_000 * (2 ** (attempt - 1));
+      expect(disposition.retryAt).toBe(new Date(Date.parse(now) + expectedDelay).toISOString());
+      now = disposition.retryAt;
+    }
+    const exhausted = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now });
+    expect(exhausted).toMatchObject({ claimed: 1, failed: 1, retryScheduled: 0 });
+    expect(repository.dispositions).toHaveLength(5);
+    expect(repository.dispositions[4]).toMatchObject({ state: "failed", errorCode: "synthetic_throttle" });
+  });
+
+  it("stops permanently failed attempts without scheduling a retry", async () => {
+    const repository = new SyntheticRepository(validContext);
+    const provider = new FakeAgencyFollowupProvider([
+      { kind: "definitive_permanent_failure", code: "synthetic_invalid_recipient" },
+    ]);
+    const result = await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: validContext.now });
+    expect(result).toMatchObject({ claimed: 1, failed: 1, retryScheduled: 0 });
+    expect(repository.dispositions[0]).toMatchObject({ state: "failed", errorCode: "synthetic_invalid_recipient" });
+    expect((await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: "2026-10-12T16:00:00.000Z" })).claimed).toBe(0);
   });
 
   it("re-enqueues a spacing delay at the next configured local send window", async () => {

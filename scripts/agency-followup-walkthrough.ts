@@ -22,7 +22,9 @@ const EXPECTED_MIGRATION_BLOB = "c6d594c51b8c257aaca7a62fff41c96a1534a86a";
 const MIGRATION_PATH = "supabase/migrations/20261013154000_agency_followup_journeys.sql";
 const EXPECTED_CRM_GRANTS_MIGRATION_BLOB = "af413a079a76e2fc9844f0bb37d61bec3127b558";
 const CRM_GRANTS_MIGRATION_PATH = "supabase/migrations/20261013230354_agency_crm_service_role_grants.sql";
-const WIDTHS = [1440, 1024, 768, 640, 375, 320];
+const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
+const RUN_ID = randomUUID();
+const RUN_STARTED_AT = new Date().toISOString();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const MANUAL = process.argv.includes("--manual");
 const WALKTHROUGH_STARTED_AT = Date.now();
@@ -170,10 +172,11 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["unknown", "Synthetic Walkthrough Unknown " + suffix, "Morgan Example", "eligible"],
     ["window", "Synthetic Walkthrough Window " + suffix, "Casey Example", "eligible"],
     ["lease", "Synthetic Walkthrough Lease " + suffix, "Quinn Example", "eligible"],
+    ["retry", "Synthetic Walkthrough Retry " + suffix, "Devon Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and six Agency prospects");
+    progress("seeding synthetic operator and seven Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -897,12 +900,80 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     "select state,unknown_since from agency_followup_messages where id=$1",
     [unknownMessage.rows[0].id],
   );
-  const reclaimed = await pool.query(
-    "select * from public.claim_agency_followup_messages('synthetic-walkthrough-no-retry',now()+interval '1 day',120,10)",
-  );
-  const unknownWasReclaimed = reclaimed.rows.some((row: { id: string }) => row.id === unknownMessage.rows[0].id);
+  const quarantineClient = await pool.connect();
+  let unknownWasReclaimed = false;
+  try {
+    await quarantineClient.query("begin");
+    const reclaimed = await quarantineClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_messages('synthetic-walkthrough-no-retry',now()+interval '1 day',120,100)",
+    );
+    unknownWasReclaimed = reclaimed.rows.some((row) => row.id === unknownMessage.rows[0].id);
+    await quarantineClient.query("rollback");
+  } catch (error) {
+    await quarantineClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    quarantineClient.release();
+  }
   if (unknownResult.unknown !== 1 || unknownRow.rows[0]?.state !== "unknown" || !unknownRow.rows[0]?.unknown_since || unknownWasReclaimed) {
     throw new Error("UNKNOWN provider outcome was not quarantined or was automatically reclaimed.");
+  }
+  const retryProspect = fixtures.prospects.retry;
+  await createDraft(pool, page, journeyName, retryProspect);
+  await markEligibleAndRelease(page, retryProspect);
+  await waitForAction(page, "approve", queueCard(page, retryProspect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const retryMessageResult = await pool.query<{ id: string; provider_idempotency_key: string }>(
+    "select id,provider_idempotency_key from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) and step_number=1",
+    [retryProspect.id],
+  );
+  const retryMessage = retryMessageResult.rows[0];
+  if (!retryMessage) throw new Error("Synthetic retry message was not created.");
+  const retryClock = new Date();
+  retryClock.setUTCHours(16, 0, 0, 0);
+  if (retryClock.getTime() <= Date.now()) retryClock.setUTCDate(retryClock.getUTCDate() + 1);
+  while (retryClock.getUTCDay() === 0 || retryClock.getUTCDay() === 6) retryClock.setUTCDate(retryClock.getUTCDate() + 1);
+  const retryNow = retryClock.toISOString();
+  const retryDueAt = new Date(retryClock.getTime() + 30_000).toISOString();
+  // Make this fixture the oldest due row without touching historical fixtures.
+  const retryInitialDueAt = new Date(retryClock.getTime() - 100 * 365 * 24 * 60 * 60 * 1000).toISOString();
+  await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [retryMessage.id, retryInitialDueAt]);
+  const retryFailure = await dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-retry",
+    now: retryNow,
+    limit: 1,
+    outcomePlan: [{ kind: "definitive_retryable_failure", code: "synthetic_throttle" }],
+  });
+  const retryRow = await pool.query<{ state: string; attempt_count: number; scheduled_at: string; last_error_code: string | null; provider_idempotency_key: string }>(
+    "select state,attempt_count,scheduled_at,last_error_code,provider_idempotency_key from agency_followup_messages where id=$1",
+    [retryMessage.id],
+  );
+  const retryScheduledAt = retryRow.rows[0]?.scheduled_at ? new Date(retryRow.rows[0].scheduled_at).toISOString() : "";
+  if (retryFailure.retryScheduled !== 1 || retryRow.rows[0]?.state !== "scheduled" || Number(retryRow.rows[0]?.attempt_count) !== 1 ||
+    retryScheduledAt !== retryDueAt || retryRow.rows[0]?.last_error_code !== "synthetic_throttle" ||
+    retryRow.rows[0]?.provider_idempotency_key !== retryMessage.provider_idempotency_key) {
+    throw new Error("The disposable database did not persist the first retry, 30-second backoff, and stable idempotency key.");
+  }
+  const retryClient = await pool.connect();
+  try {
+    await retryClient.query("begin");
+    const earlyClaims = await retryClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_messages($1,$2,120,100)",
+      ["synthetic-walkthrough-early-retry", new Date(Date.parse(retryDueAt) - 1).toISOString()],
+    );
+    if (earlyClaims.rows.some((row) => row.id === retryMessage.id)) throw new Error("The retry message was claimable before its persisted backoff was due.");
+    await retryClient.query("rollback");
+    await retryClient.query("begin");
+    const dueClaims = await retryClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_messages($1,$2,120,100)",
+      ["synthetic-walkthrough-due-retry", retryDueAt],
+    );
+    if (!dueClaims.rows.some((row) => row.id === retryMessage.id)) throw new Error("The retry message was not eligible exactly when its persisted backoff became due.");
+    await retryClient.query("rollback");
+  } catch (error) {
+    await retryClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    retryClient.release();
   }
 
   // Exercise actual schedule policy immediately before handoff with a delayed
@@ -987,27 +1058,90 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const screenshotDir = path.join(OUTPUT_DIR, "screenshots");
   await mkdir(screenshotDir, { recursive: true });
   const renderedWidths: number[] = [];
+  const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
+  const stableLayout = async () => page.evaluate(async () => {
+    await document.fonts.ready;
+    const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      await frame();
+      if (document.getAnimations().every((animation) => animation.playState !== "running")) {
+        await frame();
+        if (document.getAnimations().every((animation) => animation.playState !== "running")) return;
+      }
+    }
+    throw new Error("Layout transitions did not settle before the acceptance capture.");
+  });
+  const screenshot = async (filename: string, width: number, navigationState: string) => {
+    const file = path.join(screenshotDir, filename);
+    await page.screenshot({ path: file, fullPage: true });
+    const digest = createHash("sha256").update(await readFile(file)).digest("hex");
+    screenshots.push({ path: path.relative(process.cwd(), file).replaceAll("\\", "/"), sha256: digest, viewport: width, navigationState });
+  };
+  const assertUnoccluded = async (locator: ReturnType<Page["getByRole"]>, label: string, requireFocus = false) => {
+    await locator.scrollIntoViewIfNeeded();
+    await locator.waitFor({ state: "visible" });
+    const usable = await locator.evaluate((element, shouldFocus) => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= innerHeight) return false;
+      const x = Math.min(rect.right - 1, Math.max(rect.left + 1, rect.left + rect.width / 2));
+      const y = Math.min(rect.bottom - 1, Math.max(rect.top + 1, rect.top + rect.height / 2));
+      const hit = document.elementFromPoint(x, y);
+      if (!hit || (hit !== element && !element.contains(hit))) return false;
+      if (!shouldFocus) return true;
+      (element as HTMLElement).focus();
+      return document.activeElement === element;
+    }, requireFocus);
+    if (!usable) throw new Error(`${label} was hidden, occluded, or not focusable at ${await page.evaluate(() => innerWidth)}px.`);
+  };
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 1000 });
-    await page.evaluate(async () => {
-      await document.fonts.ready;
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    });
+    await stableLayout();
+    if (width < 768) {
+      const openMenu = page.getByRole("button", { name: "Open menu" });
+      if (!(await openMenu.isVisible())) throw new Error(`Mobile navigation opener is missing at ${width}px.`);
+      await assertUnoccluded(openMenu, "Mobile navigation opener", true);
+      await openMenu.click();
+      await stableLayout();
+      const closeMenu = page.getByRole("button", { name: "Close menu" });
+      await assertUnoccluded(closeMenu, "Open navigation close button", true);
+      await screenshot(`${RUN_ID}-queue-${width}-nav-open.png`, width, "open");
+      await closeMenu.click();
+      await stableLayout();
+    }
     const failures = await auditRenderedCopy(page);
     await page.evaluate(() => window.scrollTo(0, 0));
+    await stableLayout();
     if (failures.length) {
-      await page.screenshot({ path: path.join(screenshotDir, `failure-queue-${width}.png`), fullPage: true });
+      await screenshot(`${RUN_ID}-failure-queue-${width}-nav-closed.png`, width, "closed");
       throw new Error(`Rendered UI gate failed at ${width}px: ${failures.join("; ")}`);
     }
-    await page.screenshot({ path: path.join(screenshotDir, `queue-${width}.png`), fullPage: true });
+    await assertUnoccluded(page.getByRole("heading", { level: 1 }).first(), "Follow-up page heading");
+    const authoringControl = page.locator("label").filter({ hasText: "Template key" }).locator("input").first();
+    if (await authoringControl.count()) await assertUnoccluded(authoringControl, "Template key authoring control", true);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await stableLayout();
+    await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
     renderedWidths.push(width);
   }
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
+  const gitHead = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+  const gitStatus = execFileSync("git", ["status", "--porcelain", "--untracked-files=all"], { encoding: "utf8" });
+  const diff = execFileSync("git", ["diff", "HEAD", "--binary"], { encoding: "buffer" });
   const summary = {
-    synthetic: true,
-    provider: "fake-only",
+    runId: RUN_ID,
+    sourceCommit: gitHead,
+    workingTreeState: gitStatus.length ? "dirty" : "clean",
+    workingTreeStatus: gitStatus,
+    diffFingerprintSha256: createHash("sha256").update(diff).update(gitStatus).digest("hex"),
+    startedAtUtc: RUN_STARTED_AT,
+    endedAtUtc: new Date().toISOString(),
+    command: "npm run agency-followup:walkthrough",
+    exitCode: 0,
+    testedEnvironment: { appOrigin: APP_ORIGIN, databaseProjectId: STACK_PROJECT_ID, databaseHost: "loopback", provider: "network-free fake", databaseReusedWithoutReset: true },
     migrationVersions: ["20261013154000", "20261013230354"],
     verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB],
+    screenshots,
+    synthetic: true,
     flows: {
       templateJourneyEnrollmentReleaseApproval: "passed",
       repeatedEnrollment: "409 and one enrollment",
@@ -1017,15 +1151,15 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       fakeAccepted: "persisted",
       unknown: "quarantined and not reclaimed",
       businessDayWindow: "weekend claim rescheduled before fake provider",
+      retry: "fake transient failure persisted; database excluded early claim and admitted claim at retry instant",
       concurrentClaim: "exactly one claim",
       staleLeaseOwner: "rejected",
     },
     syntheticProspects: Object.keys(fixtures.prospects).length,
     screenshotViewports: renderedWidths,
-    screenshotCount: renderedWidths.length,
-    capturedAt: new Date().toISOString(),
+    screenshotCount: screenshots.length
   };
-  await writeFile(path.join(OUTPUT_DIR, "summary.json"), JSON.stringify(summary, null, 2) + "\n", "utf8");
+  await writeFile(path.join(OUTPUT_DIR, `summary-${RUN_ID}.json`), JSON.stringify(summary, null, 2) + "\n", "utf8");
   return summary;
   } finally {
     await context.close();

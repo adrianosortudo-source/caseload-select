@@ -26,6 +26,7 @@ export interface AgencyFollowupProvider {
 export class FakeAgencyFollowupProvider implements AgencyFollowupProvider {
   private readonly outcomes = new Map<string, AgencyProviderOutcome>();
   private readonly seenKeys = new Set<string>();
+  private sendCallCount = 0;
   private readonly plan: AgencyProviderOutcome[];
   private nextAcceptedId = 1;
 
@@ -34,6 +35,7 @@ export class FakeAgencyFollowupProvider implements AgencyFollowupProvider {
   }
 
   async send(request: AgencyFollowupProviderRequest): Promise<AgencyProviderOutcome> {
+    this.sendCallCount += 1;
     this.seenKeys.add(request.idempotencyKey);
     const prior = this.outcomes.get(request.idempotencyKey);
     if (prior) return prior;
@@ -46,6 +48,10 @@ export class FakeAgencyFollowupProvider implements AgencyFollowupProvider {
     // but let a later retry consume the next synthetic outcome.
     if (outcome.kind !== "definitive_retryable_failure") this.outcomes.set(request.idempotencyKey, outcome);
     return outcome;
+  }
+
+  get sendCalls(): number {
+    return this.sendCallCount;
   }
 
   get uniqueIdempotencyKeysSeen(): number {

@@ -66,6 +66,16 @@ npm run agency-followup:walkthrough
 
 The runner checks the scratch identity, loopback endpoints, migration ledger and pushed migration blobs, and required grants before writing synthetic rows. Use `npm run agency-followup:manual` to open the signed synthetic operator page in a headed browser. The manual run remains open until Ctrl+C. Both commands are local-only and must never be pointed at an existing or production database.
 
+## 2026-10-15 acceptance follow-up status
+
+PR #402 merged on 2026-10-15 at 01:18 UTC as `c6b70214058a41040aeb5c484f4ba493f10f299d`. This follow-up is separate work on `codex/crm-followup-acceptance-20261014`; it does not change production or merge PR #402 again.
+
+The acceptance changes in this worktree are not yet validated. They add stable transition waits, open and closed mobile navigation checks, point-hit occlusion checks for the heading and authoring control, and viewport checks at 1440, 1024, 769, 768, 767, 640, 375, and 320 CSS pixels. The worker unit fixture now models scheduled due times and covers early exclusion, acceptance at the retry instant, the five-attempt limit, and permanent failure. UNKNOWN remains terminal and is never automatically reclaimed.
+
+A baseline walkthrough attempt on `c6b7021` stopped with `Cannot find module 'pg'`; it did not connect to the disposable database, seed rows, run a browser, or capture screenshots. The attempt record is `test-results/agency-followup-walkthrough/baseline-ed5ff68b-2a5a-4e05-9b24-5944bcb2f4c9.json`. The latest edited-source attempt then failed before the walkthrough loaded: `node --import tsx` raised `Error: spawn EFTYPE` from the partial `tsx/esbuild` install under Node 24.14.0. The focused worker-test command passed the metadata-secret scan, then exited with 1 because `vitest` was not recognized. The exact commands, outputs, UTC timestamps, source commit, dirty status, and diff fingerprint are recorded in `test-results/agency-followup-walkthrough/validation-attempt-a66f541b-37f5-4f6f-9d49-af498011f2be.json`. Neither latest attempt accessed the database or captured screenshots. Syntax-only TypeScript transpilation passed for the edited source and test files; the unit and full local browser/database validation remain outstanding.
+
+The walkthrough is designed to reuse the dedicated disposable local stack without resetting it. Earlier synthetic walkthrough fixtures may remain in that stack; they are historical fixtures, not rows created by the new run. The Prospect Enrichment rendered Playwright artifact described above is separate evidence and does not establish that this Agency Follow-up walkthrough passed. A completed run must link each screenshot hash to its run ID and record source commit, working-tree fingerprint, UTC times, command, exit status, and migration identities.
+
 ## PR status
 
-PR #402 is open and ready for review, not a draft, as last verified on 2026-10-14. Check GitHub for current CI and preview results before any merge review because those statuses may change. Do not merge or deploy from this branch. Production migration and release still require CI, review, and separate explicit approval.
+PR #402 is merged. This follow-up PR has not yet been opened. Do not merge or deploy from this branch. Production migration and release still require CI, review, and separate explicit approval.
