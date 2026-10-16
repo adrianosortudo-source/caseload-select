@@ -21,6 +21,43 @@ BEGIN
       AND f.coverage_revision<=cutoff
   ) THEN RAISE EXCEPTION 'invalid candidate field reference'; END IF;
 
+  -- A typed-field-only query has no group-wide predicate to evaluate. Count
+  -- its indexed candidate set directly, then resolve full summaries only for
+  -- the bounded page. The general path below still resolves identities before
+  -- applying any additional firm, text, status, or date filters.
+  IF (p_filters-ARRAY['fieldPointer','fieldValue','fieldRefRevision','fieldRefPointerSha256']::text[])='{}'::jsonb THEN
+    WITH field_matches AS MATERIALIZED (
+      SELECT DISTINCT f.candidate_id AS id
+      FROM public.prospect_research_candidate_fields f
+      JOIN public.prospect_research_candidates c ON c.id=f.candidate_id
+      WHERE c.created_revision<=cutoff AND f.coverage_revision<=cutoff
+        AND md5(f.pointer)=md5(p_filters->>'fieldPointer')
+        AND f.pointer=p_filters->>'fieldPointer'
+        AND (NOT p_filters ? 'fieldValue' OR
+          (md5(f.value_json::text)=md5((p_filters->'fieldValue')::text)
+            AND f.value_json=p_filters->'fieldValue'))
+    ), page_ids AS MATERIALIZED (
+      SELECT id FROM field_matches
+      WHERE p_after_id IS NULL OR id>p_after_id
+      ORDER BY id LIMIT p_limit
+    ), summaries AS MATERIALIZED (
+      SELECT id,prospect_candidate_private.summary(id,cutoff) AS data FROM page_ids
+    ), sized AS (
+      SELECT *,sum(octet_length(data::text)) OVER(ORDER BY id) AS bytes FROM summaries
+    ), page AS MATERIALIZED (
+      SELECT * FROM sized WHERE bytes<=1040000 ORDER BY id
+    )
+    SELECT jsonb_build_object(
+      'items',coalesce((SELECT jsonb_agg(data ORDER BY id) FROM page),'[]'),
+      'nextAfterId',CASE WHEN EXISTS(SELECT 1 FROM field_matches WHERE id>(SELECT max(id::text)::uuid FROM page))
+        THEN (SELECT max(id::text) FROM page) ELSE NULL END,
+      'inventoryCount',(SELECT count(*) FROM public.prospect_research_candidates WHERE created_revision<=cutoff),
+      'filteredCount',(SELECT count(*) FROM field_matches),
+      'coverageRevision',cutoff,'readWarnings',warnings,'complete',warnings='[]'::jsonb
+    ) INTO result;
+    RETURN result;
+  END IF;
+
   WITH field_matches AS MATERIALIZED (
     SELECT DISTINCT f.candidate_id
     FROM public.prospect_research_candidate_fields f

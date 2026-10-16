@@ -1,0 +1,67 @@
+{
+  "schemaVersion": "prospect-field-filter-release/v1",
+  "projectRef": "ssxryjxifwiivghglqer",
+  "cliVersion": "2.117.0",
+  "reviewOnly": true,
+  "approvalGranted": false,
+  "catalogEvidence": "source-derived; protected preflight must verify the live production catalog",
+  "migration": {
+    "path": "supabase/migrations/20261014153626_prospect_candidate_global_field_filter_fastpath.sql",
+    "version": "20261014153626",
+    "name": "prospect_candidate_global_field_filter_fastpath",
+    "sha256": "27d4fb0f03266f6fb1bb652a1ab6ce446dd819c9d7c58750e84a420aaccc5098",
+    "bytes": 9347
+  },
+  "prerequisite": {
+    "path": "supabase/migrations/20261013214000_prospect_bounded_original_evidence_v2.sql",
+    "version": "20261013214000",
+    "name": "prospect_bounded_original_evidence_v2",
+    "sha256": "0c2421f1544de099967074184e86c6079570e23f1635ba9c30a149974cc7d301",
+    "bytes": 24285
+  },
+  "ledgerReferenceSha256": "10a7f9ec30a99c555486f8a95e50ff4f6eac60d974923027d60a8c6ce1b3cb85",
+  "catalogPre": {
+    "functions": [
+      {
+        "schema": "public",
+        "name": "list_prospect_research_candidates_v1",
+        "signature": "list_prospect_research_candidates_v1(jsonb,integer,uuid,bigint)",
+        "owner": "postgres",
+        "security_definer": false,
+        "settings": [
+          "search_path=\"\""
+        ],
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "body_sha256": "a3487a5f7c84f9a8e2c1055b9b4688dd8e7b8c71756bdb588646234689adef33"
+      }
+    ]
+  },
+  "catalogPost": {
+    "functions": [
+      {
+        "schema": "prospect_candidate_private",
+        "name": "list_candidates_for_indexed_field",
+        "signature": "prospect_candidate_private.list_candidates_for_indexed_field(jsonb,integer,uuid,bigint)",
+        "owner": "postgres",
+        "security_definer": true,
+        "settings": [
+          "search_path=\"\""
+        ],
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "body_sha256": "85c680f7c21998d520e5ecde2bc2bbf6198056c9994c328348d34d81261470a3"
+      },
+      {
+        "schema": "public",
+        "name": "list_prospect_research_candidates_v1",
+        "signature": "list_prospect_research_candidates_v1(jsonb,integer,uuid,bigint)",
+        "owner": "postgres",
+        "security_definer": false,
+        "settings": [
+          "search_path=\"\""
+        ],
+        "acl": "{postgres=X/postgres,service_role=X/postgres}",
+        "body_sha256": "abd804118b26314a363b350c3ed05ce8e0b0afe6576e000f45e4685c9995f50b"
+      }
+    ]
+  }
+}
