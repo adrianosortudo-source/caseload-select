@@ -15,7 +15,7 @@ export default function ToolHeader() {
     <header className="wyf-nav">
       <a href="https://caseloadselect.ca/" className="wyf-nav-logo" aria-label="CaseLoad Select home">
         <Image
-          src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png"
+          src="/brand/logos/lockup-horizontal-tagline-light-transparent.png"
           alt="CaseLoad Select"
           width={180}
           height={36}

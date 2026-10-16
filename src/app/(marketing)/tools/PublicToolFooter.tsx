@@ -1,6 +1,6 @@
 const LINKS = [
   { href: "https://caseloadselect.ca/", label: "Home" },
-  { href: "https://caseloadselect.ca/screen-demo", label: "Try the Screen" },
+  { href: "https://caseloadselect.ca/screen.html", label: "Screen" },
   { href: "https://caseloadselect.ca/work/drg-law.html", label: "DRG Law case study" },
   { href: "https://caseloadselect.ca/tools.html", label: "All tools" },
   { href: "https://caseloadselect.ca/tools/seo-check.html", label: "SEO Check" },
@@ -28,6 +28,7 @@ export default function PublicToolFooter() {
         .public-tool-footer nav a:hover, .public-tool-footer p a:hover { color: var(--white); }
         .public-tool-footer p { margin: var(--sp-4) 0 0; }
         @media(max-width:640px) { .public-tool-footer { padding: var(--sp-6) var(--sp-4); } }
+        @media print { .public-tool-footer { display: none !important; } }
       `}</style>
     </>
   );

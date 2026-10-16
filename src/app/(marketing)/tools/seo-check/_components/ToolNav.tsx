@@ -5,7 +5,7 @@ export default function ToolNav() {
     <header className="seo-nav">
       <a href="https://caseloadselect.ca/" className="seo-nav-logo" aria-label="CaseLoad Select home">
         <Image
-          src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png"
+          src="/brand/logos/lockup-horizontal-tagline-light-transparent.png"
           alt="CaseLoad Select"
           width={180}
           height={36}

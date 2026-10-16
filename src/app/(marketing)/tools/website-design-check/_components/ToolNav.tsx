@@ -4,7 +4,7 @@ export default function ToolNav() {
   return (
     <header className="dc-nav">
       <a href="https://caseloadselect.ca/" className="dc-nav-logo" aria-label="CaseLoad Select home">
-        <Image src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png" alt="CaseLoad Select" width={220} height={44} priority />
+        <Image src="/brand/logos/lockup-horizontal-tagline-light-transparent.png" alt="CaseLoad Select" width={220} height={44} priority />
       </a>
       <nav className="dc-nav-links" aria-label="Main navigation">
         <a href="https://caseloadselect.ca/">Home</a>
