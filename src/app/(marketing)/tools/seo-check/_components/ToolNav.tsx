@@ -31,7 +31,7 @@ export default function ToolNav() {
         }
         .seo-nav-logo { line-height: 0; }
         .seo-nav-logo { flex-shrink: 0; }
-        .seo-nav-logo :global(img) { height: 38px; width: auto; }
+        .seo-nav-logo img { height: 38px; width: auto; }
         .seo-nav-links { display: flex; align-items: center; gap: 24px; }
         .seo-nav-links a {
           font-family: var(--font-body);
@@ -43,7 +43,7 @@ export default function ToolNav() {
         .seo-nav-links a:hover { color: var(--navy); }
         @media (max-width: 640px) {
           .seo-nav { padding: 14px 18px; }
-          .seo-nav-logo :global(img) { height: 30px; }
+          .seo-nav-logo img { height: 30px; }
           .seo-nav-links { gap: 14px; }
           .seo-nav-links a { font-size: 12px; }
         }
