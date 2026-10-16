@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import ToolNav from "./_components/ToolNav";
+import PublicToolFooter from "../PublicToolFooter";
 // The SEO tool components moved out of this frozen marketing tree to
 // src/components/seo-check/ so operator-tool work is no longer blocked by the
 // website-rebuild freeze. This page (proxied, not rebuilt, per the rebuild
@@ -154,6 +155,8 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           </p>
         </section>
       </main>
+
+      {!isEmbedded && <PublicToolFooter />}
 
       <style>{`
         .seo-main {

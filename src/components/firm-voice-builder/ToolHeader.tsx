@@ -9,16 +9,19 @@ import Image from "next/image";
 export default function ToolHeader() {
   return (
     <header className="fvb-nav">
-      <a href="/home" className="fvb-nav-logo" aria-label="CaseLoad Select home">
+      <a href="https://caseloadselect.ca/" className="fvb-nav-logo" aria-label="CaseLoad Select home">
         <Image
-          src="/brand/logos/lockup-horizontal-light-transparent.png"
+          src="/brand/logos/lockup-horizontal-tagline-dark-transparent.png"
           alt="CaseLoad Select"
           width={180}
           height={36}
           priority
         />
       </a>
-      <a href="/home" className="fvb-nav-exit">← Back to home</a>
+      <nav className="fvb-nav-links" aria-label="Main navigation">
+        <a href="https://caseloadselect.ca/">Home</a>
+        <a href="https://caseloadselect.ca/tools.html">Back to tools</a>
+      </nav>
 
       <style>{`
         .fvb-nav {
@@ -32,19 +35,22 @@ export default function ToolHeader() {
           top: 0;
           z-index: 50;
         }
-        .fvb-nav-logo { line-height: 0; }
-        .fvb-nav-logo img { height: 32px; width: auto; }
-        .fvb-nav-exit {
+        .fvb-nav-logo { line-height: 0; flex-shrink: 0; }
+        .fvb-nav-logo img { height: 38px; width: auto; }
+        .fvb-nav-links { display: flex; align-items: center; gap: 24px; }
+        .fvb-nav-links a {
           font-family: 'Manrope', system-ui, sans-serif;
           font-size: 12px;
           color: #6B7A8D;
           text-decoration: none;
           transition: color 0.2s;
         }
-        .fvb-nav-exit:hover { color: #1E2F58; }
+        .fvb-nav-links a:hover { color: #1E2F58; }
         @media (max-width: 640px) {
           .fvb-nav { padding: 14px 18px; }
-          .fvb-nav-logo img { height: 26px; }
+          .fvb-nav-logo img { height: 30px; }
+          .fvb-nav-links { gap: 14px; }
+          .fvb-nav-links a { font-size: 12px; }
         }
       `}</style>
     </header>
