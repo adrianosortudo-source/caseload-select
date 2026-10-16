@@ -1,0 +1,44 @@
+[
+  {
+    "id": "broad-business-formation",
+    "caller_description": "I want to start a business.",
+    "highest_value_missing_item": "specific_situation",
+    "acceptable_next_question": "What kind of business are you planning to start?",
+    "unacceptable_pattern": "premature generic deadline or paperwork checklist"
+  },
+  {
+    "id": "broad-property-request",
+    "caller_description": "I need help with a property.",
+    "highest_value_missing_item": "specific_situation",
+    "acceptable_next_question": "What is happening with the property?",
+    "unacceptable_pattern": "generic value question before understanding the matter"
+  },
+  {
+    "id": "employment-event",
+    "caller_description": "I was let go from my job yesterday and want to know my options.",
+    "highest_value_missing_item": "current_stage",
+    "acceptable_next_question": "What did your employer give or tell you when they ended your employment?",
+    "unacceptable_pattern": "jargon about proceedings or parties"
+  },
+  {
+    "id": "business-owner-dispute",
+    "caller_description": "My business partner and I are in a dispute.",
+    "highest_value_missing_item": "desired_legal_help",
+    "acceptable_next_question": "What would you like the lawyer to help you do about the dispute?",
+    "unacceptable_pattern": "generic checklist that does not clarify the caller's goal"
+  },
+  {
+    "id": "estate-planning-request",
+    "caller_description": "I need help with a will.",
+    "highest_value_missing_item": "specific_situation",
+    "acceptable_next_question": "Are you making a new will or changing one you already have?",
+    "unacceptable_pattern": "irrelevant question about money or court deadlines"
+  },
+  {
+    "id": "court-papers-with-near-date",
+    "caller_description": "I received court papers and the date on them is tomorrow.",
+    "highest_value_missing_item": "timing",
+    "acceptable_next_question": "What is scheduled or due tomorrow?",
+    "unacceptable_pattern": "generic checklist before clarifying the caller-spoken near date"
+  }
+]
