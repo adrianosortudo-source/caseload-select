@@ -1,5 +1,5 @@
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { appendFileSync, readFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -137,9 +137,8 @@ async function verifyLocalPostgrest(status: SupabaseStatus): Promise<void> {
 }
 
 async function verifyPushedMigration(pathname: string, expectedBlob: string): Promise<void> {
-  const source = await readFile(pathname);
-  const blobHeader = Buffer.from(`blob ${source.byteLength}\0`, "utf8");
-  const workingBlob = createHash("sha1").update(Buffer.concat([blobHeader, source])).digest("hex");
+  // Ask Git to apply the path clean filters so Windows CRLF checkouts match the pushed blob.
+  const workingBlob = execFileSync("git", ["hash-object", "--path", pathname, pathname], { encoding: "utf8" }).trim();
   if (workingBlob !== expectedBlob) {
     throw new Error(`Refusing local database use because ${path.basename(pathname)} no longer matches its verified pushed blob.`);
   }
@@ -361,7 +360,7 @@ function stopApp(server: ChildProcess): void {
   }
 }
 
-async function waitForApp(server: ChildProcess, fixtures: Fixtures, portalSecret: string): Promise<void> {
+async function waitForApp(server: ChildProcess, fixtures: Fixtures): Promise<void> {
   const startedAt = Date.now();
   const startupDeadline = Math.min(absoluteDeadline, Date.now() + 10 * 60_000);
   const startupDiagnostics = setInterval(() => {
@@ -641,7 +640,10 @@ async function createDraft(pool: Pool, page: Page, journeyName: string, prospect
 
 async function markEligibleAndRelease(page: Page, prospect: ProspectFixture): Promise<void> {
   const card = queueCard(page, prospect.firmName);
-  await card.getByLabel("Eligibility evidence for this prospect").fill("Synthetic evidence for local walkthrough only.");
+  const evidenceControl = card.getByLabel("Eligibility evidence for this prospect");
+  progress("waiting for the required eligibility control to render for " + prospect.firmName);
+  await evidenceControl.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
+  await evidenceControl.fill("Synthetic evidence for local walkthrough only.");
   await waitForAction(page, "eligibility", card.getByRole("button", { name: "Record eligible" }));
   await card.getByLabel("Individual release basis").fill("Synthetic walkthrough approval basis.");
   await waitForAction(page, "release", card.getByRole("button", { name: "Release this prospect" }));
@@ -1108,25 +1110,24 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const renderedWidths: number[] = [];
   const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
   const stableLayout = async () => page.evaluate(async () => {
-    const settle = async () => {
-      await document.fonts.ready;
-      let previous: number[] = [];
-      let stableFrames = 0;
-      while (stableFrames < 3) {
-        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-        const running = document.getAnimations().some((animation) =>
-          animation.playState === "running" && animation.effect?.getTiming().iterations !== Infinity);
-        const bounds = Array.from(document.querySelectorAll("main, aside, nav, h1, label input"))
-          .flatMap((element) => { const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
-        const stable = previous.length > 0 && previous.length === bounds.length &&
-          bounds.every((value, index) => Math.abs(value - previous[index]) <= 1);
-        stableFrames = !running && stable ? stableFrames + 1 : 0;
-        previous = bounds;
-      }
-    };
+    await document.fonts.ready;
+    let previous: number[] = [];
+    let stableFrames = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
-      await Promise.race([settle(), new Promise<never>((_, reject) => {
+      await Promise.race([(async () => {
+        while (stableFrames < 3) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          const running = document.getAnimations().some((animation) =>
+            animation.playState === "running" && animation.effect?.getTiming().iterations !== Infinity);
+          const bounds = Array.from(document.querySelectorAll("main, aside, nav, h1, label input"))
+            .flatMap((element) => { const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
+          const stable = previous.length > 0 && previous.length === bounds.length &&
+            bounds.every((value, index) => Math.abs(value - previous[index]) <= 1);
+          stableFrames = !running && stable ? stableFrames + 1 : 0;
+          previous = bounds;
+        }
+      })(), new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new Error("Layout did not settle within 5000 ms.")), 5000);
       })]);
     } finally { if (timer) clearTimeout(timer); }
@@ -1261,7 +1262,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
 
 async function markEligibleAndReleaseAttempt(page: Page, prospect: ProspectFixture): Promise<void> {
   const card = queueCard(page, prospect.firmName);
-  await card.getByLabel("Eligibility evidence for this prospect").fill("Synthetic evidence for local walkthrough only.");
+  const evidenceControl = card.getByLabel("Eligibility evidence for this prospect");
+  progress("waiting for the required eligibility control to render for " + prospect.firmName);
+  await evidenceControl.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
+  await evidenceControl.fill("Synthetic evidence for local walkthrough only.");
   await waitForAction(page, "eligibility", card.getByRole("button", { name: "Record eligible" }));
   await card.getByLabel("Individual release basis").fill("Synthetic release attempt against a seeded suppression.");
   const responsePromise = page.waitForResponse((response) => {
@@ -1273,7 +1277,7 @@ async function markEligibleAndReleaseAttempt(page: Page, prospect: ProspectFixtu
   if (response.status() !== 409) throw new Error("Suppressed prospect release did not return an explicit conflict.");
 }
 
-async function runManual(context: BrowserContext, fixtures: Fixtures): Promise<void> {
+async function runManual(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
   page.setDefaultNavigationTimeout(180_000);
@@ -1358,13 +1362,13 @@ async function main(): Promise<void> {
   let browser: Browser | undefined;
   let context: BrowserContext | undefined;
   try {
-    await waitForApp(server, fixtures, portalSecret);
+    await waitForApp(server, fixtures);
     progress("authenticated API is ready; opening actual operator queue UI");
     if (MANUAL) {
       browser = await chromium.launch({ headless: false });
       activeBrowser = browser;
       context = await signedContext(browser, fixtures, portalSecret);
-      await runManual(context, fixtures);
+      await runManual(context);
       return;
     }
     completedSummary = await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken);
