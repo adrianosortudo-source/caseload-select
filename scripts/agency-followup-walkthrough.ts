@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
-import { execFileSync, execSync } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { appendFileSync, readFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -22,8 +22,11 @@ const EXPECTED_MIGRATION_BLOB = "c6d594c51b8c257aaca7a62fff41c96a1534a86a";
 const MIGRATION_PATH = "supabase/migrations/20261013154000_agency_followup_journeys.sql";
 const EXPECTED_CRM_GRANTS_MIGRATION_BLOB = "af413a079a76e2fc9844f0bb37d61bec3127b558";
 const CRM_GRANTS_MIGRATION_PATH = "supabase/migrations/20261013230354_agency_crm_service_role_grants.sql";
-const WIDTHS = [1440, 1024, 768, 640, 375, 320];
+const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
+const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
+const RUN_STARTED_AT = new Date().toISOString();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+if (!UUID.test(RUN_ID)) throw new Error("Acceptance run ID must be a UUID.");
 const MANUAL = process.argv.includes("--manual");
 const WALKTHROUGH_STARTED_AT = Date.now();
 const WALKTHROUGH_TIMEOUT_MS = 20 * 60_000;
@@ -33,6 +36,22 @@ let activeNextServer: ChildProcess | undefined;
 let activeBrowser: Browser | undefined;
 let runAbortController: AbortController | undefined;
 let temporaryRouteInstalled = false;
+let temporaryRouteSha256: string | undefined;
+let sourceAtStart: ReturnType<typeof captureSourceState> | undefined;
+
+function captureSourceState() {
+  const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" });
+  const sourceCommit = git("rev-parse", "HEAD").trim();
+  const workingTreeStatus = git("status", "--porcelain", "--untracked-files=all");
+  const untrackedSource = git("ls-files", "--others", "--exclude-standard", "-z").split("\0").filter(Boolean)
+    .map((file) => ({ path: file, sha256: createHash("sha256").update(readFileSync(file)).digest("hex") }));
+  const fingerprint = createHash("sha256")
+    .update(execFileSync("git", ["diff", "HEAD", "--binary"]))
+    .update(execFileSync("git", ["diff", "--cached", "--binary"]))
+    .update(workingTreeStatus).update(JSON.stringify(untrackedSource)).digest("hex");
+  return { sourceCommit, workingTreeState: workingTreeStatus ? "dirty" : "clean",
+    workingTreeStatus, diffFingerprintSha256: fingerprint, untrackedSource };
+}
 process.on("SIGINT", () => { interrupted = true; });
 
 function progress(message: string): void {
@@ -118,9 +137,8 @@ async function verifyLocalPostgrest(status: SupabaseStatus): Promise<void> {
 }
 
 async function verifyPushedMigration(pathname: string, expectedBlob: string): Promise<void> {
-  const source = await readFile(pathname);
-  const blobHeader = Buffer.from(`blob ${source.byteLength}\0`, "utf8");
-  const workingBlob = createHash("sha1").update(Buffer.concat([blobHeader, source])).digest("hex");
+  // Ask Git to apply the path clean filters so Windows CRLF checkouts match the pushed blob.
+  const workingBlob = execFileSync("git", ["hash-object", "--path", pathname, pathname], { encoding: "utf8" }).trim();
   if (workingBlob !== expectedBlob) {
     throw new Error(`Refusing local database use because ${path.basename(pathname)} no longer matches its verified pushed blob.`);
   }
@@ -170,10 +188,11 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["unknown", "Synthetic Walkthrough Unknown " + suffix, "Morgan Example", "eligible"],
     ["window", "Synthetic Walkthrough Window " + suffix, "Casey Example", "eligible"],
     ["lease", "Synthetic Walkthrough Lease " + suffix, "Quinn Example", "eligible"],
+    ["retry", "Synthetic Walkthrough Retry " + suffix, "Devon Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and six Agency prospects");
+    progress("seeding synthetic operator and seven Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -268,6 +287,7 @@ export async function POST(request: NextRequest) {
 `;
   await writeFile(path.join(TEST_DISPATCH_DIR, "route.ts"), route, "utf8");
   temporaryRouteInstalled = true;
+  temporaryRouteSha256 = createHash("sha256").update(route).digest("hex");
   progress("temporary fake-dispatch route installed");
 }
 
@@ -340,7 +360,7 @@ function stopApp(server: ChildProcess): void {
   }
 }
 
-async function waitForApp(server: ChildProcess, fixtures: Fixtures, portalSecret: string): Promise<void> {
+async function waitForApp(server: ChildProcess, fixtures: Fixtures): Promise<void> {
   const startedAt = Date.now();
   const startupDeadline = Math.min(absoluteDeadline, Date.now() + 10 * 60_000);
   const startupDiagnostics = setInterval(() => {
@@ -620,7 +640,10 @@ async function createDraft(pool: Pool, page: Page, journeyName: string, prospect
 
 async function markEligibleAndRelease(page: Page, prospect: ProspectFixture): Promise<void> {
   const card = queueCard(page, prospect.firmName);
-  await card.getByLabel("Eligibility evidence for this prospect").fill("Synthetic evidence for local walkthrough only.");
+  const evidenceControl = card.getByLabel("Eligibility evidence for this prospect");
+  progress("waiting for the required eligibility control to render for " + prospect.firmName);
+  await evidenceControl.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
+  await evidenceControl.fill("Synthetic evidence for local walkthrough only.");
   await waitForAction(page, "eligibility", card.getByRole("button", { name: "Record eligible" }));
   await card.getByLabel("Individual release basis").fill("Synthetic walkthrough approval basis.");
   await waitForAction(page, "release", card.getByRole("button", { name: "Release this prospect" }));
@@ -638,6 +661,20 @@ async function dispatchFake(
   const response = await context.request.post(APP_ORIGIN + TEST_DISPATCH_PATH, { data: { ...input, token } });
   if (!response.ok()) throw new Error("Local fake dispatcher endpoint returned HTTP " + response.status() + ".");
   return await response.json() as Record<string, number>;
+}
+
+async function withFixtureClaim<T>(pool: Pool, messageId: string, operation: () => Promise<T>): Promise<T> {
+  // Keep retained scheduled fixtures out of this claim without rewriting them.
+  // The real claim RPC still selects the target using FOR UPDATE SKIP LOCKED.
+  const guard = await pool.connect();
+  try {
+    await guard.query("begin");
+    await guard.query("set local lock_timeout = '3s'");
+    await guard.query("select id from public.agency_followup_messages where state='scheduled' and id<>$1 order by id for update", [messageId]);
+    return await operation();
+  } finally {
+    try { await guard.query("rollback"); } finally { guard.release(); }
+  }
 }
 
 async function countRows(pool: Pool, query: string, values: unknown[] = []): Promise<number> {
@@ -844,7 +881,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await page.reload({ waitUntil: "networkidle" });
   await expect(queueCard(page, normal.firmName).getByText("awaiting review", { exact: true })).toBeVisible();
 
-  const acceptedResult = await dispatchFake(context, walkthroughToken, { workerId: "synthetic-walkthrough-accepted", limit: 10 });
+  const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, { workerId: "synthetic-walkthrough-accepted", limit: 1 }));
   const accepted = await pool.query<{ state: string; provider_message_id: string | null }>(
     "select state,provider_message_id from agency_followup_messages where id=$1",
     [firstNormalMessage.id],
@@ -888,21 +925,105 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     [unknownProspect.id],
   );
   await pool.query("update agency_followup_messages set scheduled_at=now()-interval '1 minute' where id=$1", [unknownMessage.rows[0].id]);
-  const unknownResult = await dispatchFake(context, walkthroughToken, {
+  const unknownResult = await withFixtureClaim(pool, unknownMessage.rows[0].id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-unknown",
     limit: 1,
     outcomePlan: [{ kind: "unknown", detail: "synthetic interruption after fake handoff" }],
-  });
+  }));
   const unknownRow = await pool.query<{ state: string; unknown_since: string | null }>(
     "select state,unknown_since from agency_followup_messages where id=$1",
     [unknownMessage.rows[0].id],
   );
-  const reclaimed = await pool.query(
-    "select * from public.claim_agency_followup_messages('synthetic-walkthrough-no-retry',now()+interval '1 day',120,10)",
-  );
-  const unknownWasReclaimed = reclaimed.rows.some((row: { id: string }) => row.id === unknownMessage.rows[0].id);
+  const quarantineClient = await pool.connect();
+  let unknownWasReclaimed = false;
+  try {
+    await quarantineClient.query("begin");
+    const reclaimed = await quarantineClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_messages('synthetic-walkthrough-no-retry',now()+interval '1 day',120,100)",
+    );
+    unknownWasReclaimed = reclaimed.rows.some((row) => row.id === unknownMessage.rows[0].id);
+    await quarantineClient.query("rollback");
+  } catch (error) {
+    await quarantineClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    quarantineClient.release();
+  }
   if (unknownResult.unknown !== 1 || unknownRow.rows[0]?.state !== "unknown" || !unknownRow.rows[0]?.unknown_since || unknownWasReclaimed) {
     throw new Error("UNKNOWN provider outcome was not quarantined or was automatically reclaimed.");
+  }
+  const retryProspect = fixtures.prospects.retry;
+  await createDraft(pool, page, journeyName, retryProspect);
+  await markEligibleAndRelease(page, retryProspect);
+  await waitForAction(page, "approve", queueCard(page, retryProspect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const retryMessageResult = await pool.query<{ id: string; provider_idempotency_key: string }>(
+    "select id,provider_idempotency_key from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) and step_number=1",
+    [retryProspect.id],
+  );
+  const retryMessage = retryMessageResult.rows[0];
+  if (!retryMessage) throw new Error("Synthetic retry message was not created.");
+  const retryClock = new Date();
+  retryClock.setUTCHours(16, 0, 0, 0);
+  if (retryClock.getTime() <= Date.now()) retryClock.setUTCDate(retryClock.getUTCDate() + 1);
+  while (retryClock.getUTCDay() === 0 || retryClock.getUTCDay() === 6) retryClock.setUTCDate(retryClock.getUTCDate() + 1);
+  const retryNow = retryClock.toISOString();
+  const retryDueAt = new Date(retryClock.getTime() + 30_000).toISOString();
+  const retryInitialDueAt = new Date(retryClock.getTime() - 60_000).toISOString();
+  await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [retryMessage.id, retryInitialDueAt]);
+  const retryFailure = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-retry",
+    now: retryNow,
+    limit: 1,
+    outcomePlan: [{ kind: "definitive_retryable_failure", code: "synthetic_throttle" }],
+  }));
+  const retryRow = await pool.query<{ state: string; attempt_count: number; scheduled_at: string; last_error_code: string | null; provider_idempotency_key: string }>(
+    "select state,attempt_count,scheduled_at,last_error_code,provider_idempotency_key from agency_followup_messages where id=$1",
+    [retryMessage.id],
+  );
+  const retryScheduledAt = retryRow.rows[0]?.scheduled_at ? new Date(retryRow.rows[0].scheduled_at).toISOString() : "";
+  if (retryFailure.retryScheduled !== 1 || retryRow.rows[0]?.state !== "scheduled" || Number(retryRow.rows[0]?.attempt_count) !== 1 ||
+    retryScheduledAt !== retryDueAt || retryRow.rows[0]?.last_error_code !== "synthetic_throttle" ||
+    retryRow.rows[0]?.provider_idempotency_key !== retryMessage.provider_idempotency_key) {
+    throw new Error("The disposable database did not persist the first retry, 30-second backoff, and stable idempotency key.");
+  }
+  const retryClient = await pool.connect();
+  try {
+    await retryClient.query("begin");
+    const earlyClaims = await retryClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_messages($1,$2,120,100)",
+      ["synthetic-walkthrough-early-retry", new Date(Date.parse(retryDueAt) - 1).toISOString()],
+    );
+    if (earlyClaims.rows.some((row) => row.id === retryMessage.id)) throw new Error("The retry message was claimable before its persisted backoff was due.");
+    await retryClient.query("rollback");
+    await retryClient.query("begin");
+    const dueClaims = await retryClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_messages($1,$2,120,100)",
+      ["synthetic-walkthrough-due-retry", retryDueAt],
+    );
+    if (!dueClaims.rows.some((row) => row.id === retryMessage.id)) throw new Error("The retry message was not eligible exactly when its persisted backoff became due.");
+    await retryClient.query("rollback");
+  } catch (error) {
+    await retryClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    retryClient.release();
+  }
+
+  const retryAcceptance = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-retry-accepted", now: retryDueAt, limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: "fake-provider-retry-" + RUN_ID, acceptedAt: retryDueAt }],
+  }));
+  const retryReplay = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-retry-replay", now: new Date(Date.parse(retryDueAt) + 1000).toISOString(), limit: 1,
+  }));
+  const acceptedRetry = await pool.query<{ state: string; attempt_count: number; provider_idempotency_key: string; acceptances: string }>(
+    "select m.state,m.attempt_count,m.provider_idempotency_key,(select count(*)::text from agency_followup_events e where e.message_id=m.id and e.event_type='provider_accepted') as acceptances from agency_followup_messages m where m.id=$1",
+    [retryMessage.id],
+  );
+  if (retryAcceptance.accepted !== 1 || retryReplay.claimed !== 0 || acceptedRetry.rows[0]?.state !== "accepted" ||
+    Number(acceptedRetry.rows[0]?.attempt_count) !== 2 || acceptedRetry.rows[0]?.provider_idempotency_key !== retryMessage.provider_idempotency_key ||
+    acceptedRetry.rows[0]?.acceptances !== "1") {
+    throw new Error("The due retry did not persist exactly one acceptance with two attempts and the same logical key.");
   }
 
   // Exercise actual schedule policy immediately before handoff with a delayed
@@ -921,11 +1042,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const weekendNow = nextSaturday.toISOString();
   const weekendDue = new Date(nextSaturday.getTime() - 60_000).toISOString();
   await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [windowMessage.rows[0].id, weekendDue]);
-  const windowResult = await dispatchFake(context, walkthroughToken, {
+  const windowResult = await withFixtureClaim(pool, windowMessage.rows[0].id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-window",
     now: weekendNow,
     limit: 1,
-  });
+  }));
   const policy = {
     timezone: windowMessage.rows[0].timezone,
     businessDays: windowMessage.rows[0].business_days.map(Number),
@@ -959,10 +1080,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     [leaseProspect.id],
   );
   await pool.query("update agency_followup_messages set scheduled_at=now()-interval '1 minute' where id=$1", [leaseMessage.rows[0].id]);
-  const [claimA, claimB] = await Promise.all([
+  const [claimA, claimB] = await withFixtureClaim(pool, leaseMessage.rows[0].id, () => Promise.all([
     pool.query("select id,lease_owner from public.claim_agency_followup_messages('synthetic-lease-a',now(),120,1)"),
     pool.query("select id,lease_owner from public.claim_agency_followup_messages('synthetic-lease-b',now(),120,1)"),
-  ]);
+  ]));
   const claims = [...claimA.rows, ...claimB.rows];
   if (claims.length !== 1 || claims[0].id !== leaseMessage.rows[0].id) {
     throw new Error("Concurrent database workers did not produce exactly one message lease.");
@@ -987,27 +1108,133 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const screenshotDir = path.join(OUTPUT_DIR, "screenshots");
   await mkdir(screenshotDir, { recursive: true });
   const renderedWidths: number[] = [];
+  const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
+  const stableLayout = async () => page.evaluate(async () => {
+    await document.fonts.ready;
+    let previous: number[] = [];
+    let stableFrames = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([(async () => {
+        while (stableFrames < 3) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          const running = document.getAnimations().some((animation) =>
+            animation.playState === "running" && animation.effect?.getTiming().iterations !== Infinity);
+          const bounds = Array.from(document.querySelectorAll("main, aside, nav, h1, label input"))
+            .flatMap((element) => { const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
+          const stable = previous.length > 0 && previous.length === bounds.length &&
+            bounds.every((value, index) => Math.abs(value - previous[index]) <= 1);
+          stableFrames = !running && stable ? stableFrames + 1 : 0;
+          previous = bounds;
+        }
+      })(), new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Layout did not settle within 5000 ms.")), 5000);
+      })]);
+    } finally { if (timer) clearTimeout(timer); }
+  });
+  const screenshot = async (filename: string, width: number, navigationState: string) => {
+    const file = path.join(screenshotDir, filename);
+    await page.screenshot({ path: file, fullPage: true });
+    const digest = createHash("sha256").update(await readFile(file)).digest("hex");
+    screenshots.push({ path: path.relative(process.cwd(), file).replaceAll("\\", "/"), sha256: digest, viewport: width, navigationState });
+  };
+  const assertUnoccluded = async (locator: ReturnType<Page["getByRole"]>, label: string, requireFocus = false) => {
+    await locator.scrollIntoViewIfNeeded();
+    await locator.waitFor({ state: "visible" });
+    const usable = await locator.evaluate((element, shouldFocus) => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= innerHeight) return false;
+      const x = Math.min(rect.right - 1, Math.max(rect.left + 1, rect.left + rect.width / 2));
+      const y = Math.min(rect.bottom - 1, Math.max(rect.top + 1, rect.top + rect.height / 2));
+      const hit = document.elementFromPoint(x, y);
+      if (!hit || (hit !== element && !element.contains(hit))) return false;
+      if (!shouldFocus) return true;
+      (element as HTMLElement).focus();
+      return document.activeElement === element;
+    }, requireFocus);
+    if (!usable) throw new Error(`${label} was hidden, occluded, or not focusable at ${await page.evaluate(() => innerWidth)}px.`);
+  };
+  const requiredAuthoringControl = async (target: Page) => {
+    const control = target.locator("label").filter({ hasText: "Template key" }).locator("input");
+    if (await control.count() !== 1) throw new Error("Exactly one Template key authoring control is required.");
+    await expect(control).toBeVisible();
+    await expect(control).toBeEnabled();
+    await assertUnoccluded(control, "Template key authoring control", true);
+  };
+  let missingAuthoringControlRejected = false;
+  const reproduction: Array<{ path: string; sha256: string; elapsedAfterCloseMs: number }> = [];
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 1000 });
-    await page.evaluate(async () => {
-      await document.fonts.ready;
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    });
+    await stableLayout();
+    if (width < 768) {
+      const openMenu = page.getByRole("button", { name: "Open menu" });
+      if (!(await openMenu.isVisible())) throw new Error(`Mobile navigation opener is missing at ${width}px.`);
+      await assertUnoccluded(openMenu, "Mobile navigation opener", true);
+      await openMenu.click();
+      await stableLayout();
+      const closeMenu = page.getByRole("button", { name: "Close menu" });
+      await assertUnoccluded(closeMenu, "Open navigation close button", true);
+      await screenshot(`${RUN_ID}-queue-${width}-nav-open.png`, width, "open");
+      await closeMenu.click();
+      if (width === 640) {
+        const closedAt = Date.now();
+        const immediatePath = path.join(screenshotDir, RUN_ID + "-reproduction-640-after-close.png");
+        await page.screenshot({ path: immediatePath, fullPage: true });
+        reproduction.push({ path: path.relative(process.cwd(), immediatePath).replaceAll("\\", "/"),
+          sha256: createHash("sha256").update(await readFile(immediatePath)).digest("hex"),
+          elapsedAfterCloseMs: Date.now() - closedAt });
+      }
+      await stableLayout();
+    }
     const failures = await auditRenderedCopy(page);
     await page.evaluate(() => window.scrollTo(0, 0));
+    await stableLayout();
     if (failures.length) {
-      await page.screenshot({ path: path.join(screenshotDir, `failure-queue-${width}.png`), fullPage: true });
+      await screenshot(`${RUN_ID}-failure-queue-${width}-nav-closed.png`, width, "closed");
       throw new Error(`Rendered UI gate failed at ${width}px: ${failures.join("; ")}`);
     }
-    await page.screenshot({ path: path.join(screenshotDir, `queue-${width}.png`), fullPage: true });
+    await assertUnoccluded(page.getByRole("heading", { level: 1 }).first(), "Follow-up page heading");
+    await requiredAuthoringControl(page);
+    if (width === 640) {
+      const probe = await context.newPage();
+      try {
+        await probe.setViewportSize({ width, height: 1000 });
+        await probe.goto(page.url(), { waitUntil: "domcontentloaded" });
+        const input = probe.locator("label").filter({ hasText: "Template key" }).locator("input");
+        await expect(input).toBeVisible();
+        await input.evaluate((element) => element.remove());
+        try { await requiredAuthoringControl(probe); }
+        catch (error) {
+          if (!(error instanceof Error) || error.message !== "Exactly one Template key authoring control is required.") throw error;
+          missingAuthoringControlRejected = true;
+        }
+        if (!missingAuthoringControlRejected) throw new Error("Missing required authoring control did not fail acceptance.");
+      } finally { await probe.close(); }
+    }
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await stableLayout();
+    await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
     renderedWidths.push(width);
   }
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
+  if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
+  if (screenshots.length !== 12 || !missingAuthoringControlRejected) throw new Error("Incomplete viewport or required-control evidence.");
   const summary = {
-    synthetic: true,
-    provider: "fake-only",
+    runId: RUN_ID,
+    ...sourceAtStart,
+    sourceAtStart,
+    temporaryDispatchRoute: { path: path.relative(process.cwd(), TEST_DISPATCH_DIR), sha256: temporaryRouteSha256 },
+    reproduction,
+    missingAuthoringControlRejected,
+    startedAtUtc: RUN_STARTED_AT,
+    endedAtUtc: new Date().toISOString(),
+    command: "npm run agency-followup:walkthrough",
+    exitCode: 0,
+    testedEnvironment: { appOrigin: APP_ORIGIN, databaseProjectId: STACK_PROJECT_ID, databaseHost: "loopback", provider: "network-free fake", databaseReusedWithoutReset: true },
     migrationVersions: ["20261013154000", "20261013230354"],
     verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB],
+    screenshots,
+    synthetic: true,
     flows: {
       templateJourneyEnrollmentReleaseApproval: "passed",
       repeatedEnrollment: "409 and one enrollment",
@@ -1017,15 +1244,14 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       fakeAccepted: "persisted",
       unknown: "quarantined and not reclaimed",
       businessDayWindow: "weekend claim rescheduled before fake provider",
+      retry: "temporary failure and backoff persisted; early claim excluded; due retry accepted exactly once with stable key and two attempts",
       concurrentClaim: "exactly one claim",
       staleLeaseOwner: "rejected",
     },
     syntheticProspects: Object.keys(fixtures.prospects).length,
     screenshotViewports: renderedWidths,
-    screenshotCount: renderedWidths.length,
-    capturedAt: new Date().toISOString(),
+    screenshotCount: screenshots.length
   };
-  await writeFile(path.join(OUTPUT_DIR, "summary.json"), JSON.stringify(summary, null, 2) + "\n", "utf8");
   return summary;
   } finally {
     await context.close();
@@ -1036,7 +1262,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
 
 async function markEligibleAndReleaseAttempt(page: Page, prospect: ProspectFixture): Promise<void> {
   const card = queueCard(page, prospect.firmName);
-  await card.getByLabel("Eligibility evidence for this prospect").fill("Synthetic evidence for local walkthrough only.");
+  const evidenceControl = card.getByLabel("Eligibility evidence for this prospect");
+  progress("waiting for the required eligibility control to render for " + prospect.firmName);
+  await evidenceControl.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
+  await evidenceControl.fill("Synthetic evidence for local walkthrough only.");
   await waitForAction(page, "eligibility", card.getByRole("button", { name: "Record eligible" }));
   await card.getByLabel("Individual release basis").fill("Synthetic release attempt against a seeded suppression.");
   const responsePromise = page.waitForResponse((response) => {
@@ -1048,7 +1277,7 @@ async function markEligibleAndReleaseAttempt(page: Page, prospect: ProspectFixtu
   if (response.status() !== 409) throw new Error("Suppressed prospect release did not return an explicit conflict.");
 }
 
-async function runManual(context: BrowserContext, fixtures: Fixtures): Promise<void> {
+async function runManual(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
   page.setDefaultNavigationTimeout(180_000);
@@ -1088,6 +1317,8 @@ async function main(): Promise<void> {
   if (must(process.env.AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION, "Disposable database confirmation") !== "YES-LOCAL-DISPOSABLE-ONLY") {
     throw new Error("Set AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION=YES-LOCAL-DISPOSABLE-ONLY for this disposable local walkthrough.");
   }
+  sourceAtStart = captureSourceState();
+  let completedSummary: Record<string, unknown> | undefined;
   absoluteDeadline = Date.now() + WALKTHROUGH_TIMEOUT_MS;
   progress("verifying pushed migration blobs");
   await verifyPushedMigration(MIGRATION_PATH, EXPECTED_MIGRATION_BLOB);
@@ -1131,17 +1362,16 @@ async function main(): Promise<void> {
   let browser: Browser | undefined;
   let context: BrowserContext | undefined;
   try {
-    await waitForApp(server, fixtures, portalSecret);
+    await waitForApp(server, fixtures);
     progress("authenticated API is ready; opening actual operator queue UI");
     if (MANUAL) {
       browser = await chromium.launch({ headless: false });
       activeBrowser = browser;
       context = await signedContext(browser, fixtures, portalSecret);
-      await runManual(context, fixtures);
+      await runManual(context);
       return;
     }
-    const summary = await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken);
-    console.log(JSON.stringify(summary, null, 2));
+    completedSummary = await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken);
   } finally {
     await context?.close();
     await browser?.close();
@@ -1151,9 +1381,20 @@ async function main(): Promise<void> {
   }
   } finally {
     if (hardStop) clearTimeout(hardStop);
-    await pool.end().catch(() => undefined);
-    await removeTemporaryDispatchRoute().catch(() => undefined);
+    try { await pool.end(); }
+    finally { await removeTemporaryDispatchRoute(); }
     runAbortController = undefined;
+  }
+  if (completedSummary) {
+    const sourceAfterCleanup = captureSourceState();
+    if (JSON.stringify(sourceAfterCleanup) !== JSON.stringify(sourceAtStart)) {
+      throw new Error("Source changed during acceptance or temporary-route cleanup was incomplete.");
+    }
+    completedSummary.sourceAfterCleanup = sourceAfterCleanup;
+    completedSummary.cleanupCompleted = true;
+    completedSummary.endedAtUtc = new Date().toISOString();
+    await writeFile(path.join(OUTPUT_DIR, "summary-" + RUN_ID + ".json"), JSON.stringify(completedSummary, null, 2) + "\n", "utf8");
+    console.log(JSON.stringify(completedSummary, null, 2));
   }
 }
 
