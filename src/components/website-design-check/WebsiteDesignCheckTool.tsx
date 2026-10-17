@@ -88,13 +88,17 @@ export default function WebsiteDesignCheckTool() {
     <div className="dc-tool">
       {step === "input" && (
         <div className="dc-input-card">
+          <label className="dc-domain-label" htmlFor="dc-domain-input">Public website URL</label>
           <div className="dc-input-row">
             <div className="dc-input-field-wrap">
               <span className="dc-input-prefix">https://</span>
               <input
+                id="dc-domain-input"
                 type="text"
                 className="dc-input-field"
                 placeholder="yourfirm.ca"
+                aria-invalid={Boolean(error)}
+                aria-describedby={error ? "dc-domain-error" : undefined}
                 value={domain}
                 onChange={(e) => {
                   setDomain(e.target.value);
@@ -108,7 +112,7 @@ export default function WebsiteDesignCheckTool() {
               Check my site
             </button>
           </div>
-          {error && <p className="dc-error">{error}</p>}
+          {error && <p id="dc-domain-error" className="dc-error" role="alert">{error}</p>}
           <p className="dc-input-hint">
             Renders your homepage in a real browser at mobile and desktop widths, then measures typography, contrast, spacing,
             forms, and authority signals against a fixed rubric.
@@ -139,6 +143,7 @@ export default function WebsiteDesignCheckTool() {
         .dc-tool { width: 100%; }
 
         .dc-input-card { max-width: 640px; margin: 0 auto; background: var(--white); border: 1px solid var(--border); border-radius: var(--r-card); padding: var(--sp-6); }
+        .dc-domain-label { display: block; margin: 0 0 var(--sp-2); font-family: var(--font-body); font-size: 13px; font-weight: 600; color: var(--text); }
         .dc-input-row { display: flex; gap: var(--sp-3); margin-bottom: var(--sp-3); }
         .dc-input-field-wrap { flex: 1; display: flex; align-items: center; border: 1.5px solid var(--border); border-radius: var(--r-tight); overflow: hidden; background: var(--parchment); transition: border-color 0.2s; }
         .dc-input-field-wrap:focus-within { border-color: var(--navy); }
