@@ -88,7 +88,7 @@ This was the pending checkpoint as of 2026-10-15 and is superseded by the 2026-1
 
 ## PR status
 
-PR #402 is merged. This follow-up PR has not yet been opened. Do not merge or deploy from this branch. Production migration and release still require CI, review, and separate explicit approval.
+PR #402 is merged. Follow-up PR #407 is open on `codex/crm-followup-acceptance-20261014` at `125e94e4ee0fd48042f0c47abefab982fc48fc90`; GitHub Actions run `38854160384` passed all 11 jobs on that exact head. Do not merge or deploy from this branch without explicit approval from Adriano for PR #407. Production migration and release require separate explicit approval.
 
 ## 2026-10-16 acceptance evidence checkpoint
 
