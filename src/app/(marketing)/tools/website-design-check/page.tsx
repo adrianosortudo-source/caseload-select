@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import ToolNav from "./_components/ToolNav";
+import PublicToolFooter from "../PublicToolFooter";
 import WebsiteDesignCheckTool from "@/components/website-design-check/WebsiteDesignCheckTool";
 
 export const metadata: Metadata = {
@@ -123,6 +124,8 @@ export default async function WebsiteDesignCheckPage({ searchParams }: PageProps
           </p>
         </section>
       </main>
+
+      {!isEmbedded && <PublicToolFooter />}
 
       <style>{`
         .dc-main { background: var(--parchment); min-height: calc(100vh - 72px); padding: var(--sp-9) var(--section-pad-h) var(--sp-10); }
