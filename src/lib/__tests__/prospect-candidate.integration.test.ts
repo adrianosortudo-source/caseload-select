@@ -352,6 +352,8 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       await equivalent(a); await equivalent(b); await equivalent({ ...a, ...owned });
       await equivalent({ ...b, ...owned }); await equivalent(owned);
       await equivalent({ identityNamespace: a.identityNamespace.toUpperCase(), identityKey: a.identityKey });
+      const missingIdentity = { identityNamespace: a.identityNamespace, identityKey: token + "missing" };
+      expect(await equivalent(missingIdentity)).toMatchObject({ items: [], filteredCount: 0, nextAfterId: null });
       const typed: Json[] = [null, false, 0, "false", [], {}];
       for (const [index, value] of typed.entries()) {
         const filters = { ...b, fieldPointer: "/canonical_record/answers/" + index, fieldValue: value };
@@ -734,6 +736,9 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       const definer = await db.query<{ proname: string }>(
         "SELECT proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND proname IN ('list_prospect_research_candidates_v1','get_prospect_research_candidate_v1','list_prospect_research_candidate_history_v1') AND prosecdef");
       expect(definer.rows).toHaveLength(0);
+      const identityReadAcl = await db.query<{ service: boolean; anon: boolean; authenticated: boolean }>(
+        "SELECT has_function_privilege('service_role','prospect_candidate_private.list_candidates_for_identity(jsonb,integer,uuid,bigint)','EXECUTE') service, has_function_privilege('anon','prospect_candidate_private.list_candidates_for_identity(jsonb,integer,uuid,bigint)','EXECUTE') anon, has_function_privilege('authenticated','prospect_candidate_private.list_candidates_for_identity(jsonb,integer,uuid,bigint)','EXECUTE') authenticated");
+      expect(identityReadAcl.rows).toEqual([{ service: true, anon: false, authenticated: false }]);
     } finally { await db.query("ROLLBACK"); db.release(); }
   });
 });
