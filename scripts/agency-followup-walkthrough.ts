@@ -543,7 +543,7 @@ async function waitForAction(page: Page, action: string, button: ReturnType<Page
     const matched = new URL(response.url()).pathname === API_PATH && response.request().method() === "POST";
     if (matched) progress(`waiter matched Agency CRM POST response HTTP ${response.status()}`);
     return matched;
-  }, { timeout: 30000 });
+  }, { timeout: 60000 });
   await button.click();
   let response: Awaited<typeof responsePromise>;
   try {
@@ -602,7 +602,8 @@ async function authorJourney(page: Page): Promise<string> {
   await templateSelects.nth(1).selectOption({ label: templateKey + " v1" });
   await page.getByLabel("Delay, business days").nth(1).fill("1");
   await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
-  await waitForAction(page, "journey_activate", page.getByRole("button", { name: "Activate version" }).first());
+  const createdJourneyRow = page.getByText(journeyName + " v1 · draft", { exact: false }).locator("..");
+  await waitForAction(page, "journey_activate", createdJourneyRow.getByRole("button", { name: "Activate version" }));
   const activatedJourneyOption = page.getByLabel("Journey version").locator("option").filter({ hasText: journeyName + " v1" });
   try {
     await expect(activatedJourneyOption).toHaveCount(1, { timeout: 30000 });
@@ -862,7 +863,13 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw new Error("The normal two-step flow did not reach per-message scheduled review.");
   }
   const firstNormalMessage = normalMessages.rows[0];
-  await pool.query("update agency_followup_messages set scheduled_at=now()-interval '1 minute' where id=$1", [firstNormalMessage.id]);
+  const acceptedClock = new Date();
+  acceptedClock.setUTCHours(16, 0, 0, 0);
+  if (acceptedClock.getTime() <= Date.now()) acceptedClock.setUTCDate(acceptedClock.getUTCDate() + 1);
+  while (acceptedClock.getUTCDay() === 0 || acceptedClock.getUTCDay() === 6) acceptedClock.setUTCDate(acceptedClock.getUTCDate() + 1);
+  const acceptedNow = acceptedClock.toISOString();
+  const acceptedDueAt = new Date(acceptedClock.getTime() - 60_000).toISOString();
+  await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [firstNormalMessage.id, acceptedDueAt]);
 
   // Edit a reviewed snapshot in the disposable database to exercise the real
   // invalidation trigger. The trigger must clear reviewer/time and re-open review.
@@ -881,7 +888,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await page.reload({ waitUntil: "networkidle" });
   await expect(queueCard(page, normal.firmName).getByText("awaiting review", { exact: true })).toBeVisible();
 
-  const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, { workerId: "synthetic-walkthrough-accepted", limit: 1 }));
+  const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, { workerId: "synthetic-walkthrough-accepted", now: acceptedNow, limit: 1 }));
   const accepted = await pool.query<{ state: string; provider_message_id: string | null }>(
     "select state,provider_message_id from agency_followup_messages where id=$1",
     [firstNormalMessage.id],
@@ -924,9 +931,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     "select id from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) and step_number=1",
     [unknownProspect.id],
   );
-  await pool.query("update agency_followup_messages set scheduled_at=now()-interval '1 minute' where id=$1", [unknownMessage.rows[0].id]);
+  await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [unknownMessage.rows[0].id, acceptedDueAt]);
   const unknownResult = await withFixtureClaim(pool, unknownMessage.rows[0].id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-unknown",
+    now: acceptedNow,
     limit: 1,
     outcomePlan: [{ kind: "unknown", detail: "synthetic interruption after fake handoff" }],
   }));

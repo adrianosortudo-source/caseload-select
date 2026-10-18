@@ -3,6 +3,7 @@ const PRE_APPROVAL_SEND_BLOCKERS = new Set([
   "approval_missing",
   "not_due",
   "minimum_spacing_not_elapsed",
+  "outside_send_window",
 ]);
 
 export function canApproveAgencyFollowupMessage(input: {
