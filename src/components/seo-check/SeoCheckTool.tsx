@@ -221,13 +221,19 @@ export default function SeoCheckTool({
     <div className="seo-tool">
       {step === "input" && (
         <div className="seo-input-card">
+          <label className="seo-domain-label" htmlFor="seo-domain-input">
+            {isOperator ? "Firm or prospect URL" : "Public website URL"}
+          </label>
           <div className="seo-input-row">
             <div className="seo-input-field-wrap">
               <span className="seo-input-prefix">https://</span>
               <input
+                id="seo-domain-input"
                 type="text"
                 className="seo-input-field"
                 placeholder={isOperator ? "firm-or-prospect.ca" : "yourfirm.ca"}
+                aria-invalid={Boolean(error)}
+                aria-describedby={error ? "seo-domain-error" : undefined}
                 value={domain}
                 onChange={(e) => {
                   setDomain(e.target.value);
@@ -241,7 +247,7 @@ export default function SeoCheckTool({
               {isOperator ? "Run check" : "Check my site"}
             </button>
           </div>
-          {error && <p className="seo-error">{error}</p>}
+          {error && <p id="seo-domain-error" className="seo-error" role="alert">{error}</p>}
           {isOperator && (
             <div className="seo-operator-panel">
               <div className="seo-operator-row">
@@ -432,6 +438,14 @@ export default function SeoCheckTool({
           border: 1px solid var(--border);
           border-radius: var(--r-card);
           padding: var(--sp-6);
+        }
+        .seo-domain-label {
+          display: block;
+          margin: 0 0 var(--sp-2);
+          font-family: var(--font-body);
+          font-size: 13px;
+          font-weight: 600;
+          color: var(--text);
         }
         .seo-input-row {
           display: flex;
