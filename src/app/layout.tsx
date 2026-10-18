@@ -5,6 +5,7 @@ import "@fontsource-variable/dm-sans";
 import "@fontsource-variable/source-serif-4";
 import "./globals.css";
 import AdminShell from "@/components/AdminShell";
+import { Analytics } from "@vercel/analytics/next";
 
 const oxanium = localFont({
   src: "../../public/fonts/Oxanium-VF.ttf",
@@ -39,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className={`${oxanium.variable} ${manrope.variable}`}>
       <body>
         <AdminShell>{children}</AdminShell>
+        <Analytics />
       </body>
     </html>
   );
