@@ -47,6 +47,10 @@ function prettyState(value: string): string {
   return value.replaceAll('_', ' ');
 }
 
+function normalizeJourneyKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export default function AgencyFollowupClient({ initialData }: { initialData: ConsoleData }) {
   const router = useRouter();
   const [journeys, setJourneys] = useState(initialData.journeys);
@@ -167,7 +171,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
           });
           if (result?.journeyId && result.version) {
             setJourneys((current) => [{
-              id: result.journeyId!, name: journeyName, journeyKey, version: result.version!, state: 'draft',
+              id: result.journeyId!, name: journeyName, journeyKey: normalizeJourneyKey(journeyKey), version: result.version!, state: 'draft',
               timezone, businessDays: [...businessDays], localWindowStart, localWindowEnd,
               minimumSpacingHours: Number(minimumSpacingHours), stepCount: steps.length,
             }, ...current.filter((journey) => journey.id !== result.journeyId)]);
@@ -229,7 +233,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
               if (await act({ action: 'journey_activate', journeyId: journey.id })) {
                 setJourneys((current) => current.map((item) => item.id === journey.id
                   ? { ...item, state: 'active' }
-                  : item.journeyKey === journey.journeyKey && item.state === 'active'
+                  : normalizeJourneyKey(item.journeyKey) === normalizeJourneyKey(journey.journeyKey) && item.state === 'active'
                     ? { ...item, state: 'retired' }
                     : item));
               }

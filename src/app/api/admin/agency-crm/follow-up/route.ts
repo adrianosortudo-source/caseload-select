@@ -27,12 +27,35 @@ function authorizedActor(session: Awaited<ReturnType<typeof getOperatorSession>>
   return { actorId: session.lawyer_id };
 }
 
-export async function GET() {
-  const auth = authorizedActor(await getOperatorSession());
-  if ("response" in auth) return auth.response;
+function traceLocalFollowupProbe(host: string | null, stage: string, details: Record<string, unknown> = {}): void {
+  if (!/^(127\.0\.0\.1|localhost):55435$/i.test(host ?? "")) return;
+  console.info("[agency-followup-local-probe] " + JSON.stringify({ component: "handler", stage, ...details }));
+}
+
+export async function GET(request: NextRequest) {
+  const startedAt = Date.now();
+  const host = request.headers.get("host");
+  traceLocalFollowupProbe(host, "handler_enter", { method: "GET" });
+  const authStartedAt = Date.now();
+  const session = await getOperatorSession();
+  traceLocalFollowupProbe(host, "auth_complete", {
+    elapsedMs: Date.now() - authStartedAt,
+    sessionPresent: Boolean(session),
+    operatorIdentityPresent: Boolean(session?.lawyer_id),
+  });
+  const auth = authorizedActor(session);
+  if ("response" in auth) {
+    traceLocalFollowupProbe(host, "handler_exit", { elapsedMs: Date.now() - startedAt, responseStatus: auth.response.status });
+    return auth.response;
+  }
+  const listStartedAt = Date.now();
+  traceLocalFollowupProbe(host, "crm_list_start");
   try {
-    return NextResponse.json(await listAgencyFollowupConsole(), { headers: { "Cache-Control": "no-store" } });
+    const result = await listAgencyFollowupConsole();
+    traceLocalFollowupProbe(host, "crm_list_complete", { elapsedMs: Date.now() - listStartedAt });
+    return NextResponse.json(result, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
+    traceLocalFollowupProbe(host, "crm_list_failed", { elapsedMs: Date.now() - listStartedAt });
     return NextResponse.json({ error: (error as Error).message }, { status: 500 });
   }
 }

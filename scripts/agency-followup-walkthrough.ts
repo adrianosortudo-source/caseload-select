@@ -28,6 +28,7 @@ const RUN_STARTED_AT = new Date().toISOString();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 if (!UUID.test(RUN_ID)) throw new Error("Acceptance run ID must be a UUID.");
 const MANUAL = process.argv.includes("--manual");
+const JOURNEY_VERSION_REGRESSION_ONLY = process.argv.includes("--journey-version-regression");
 const WALKTHROUGH_STARTED_AT = Date.now();
 const WALKTHROUGH_TIMEOUT_MS = 20 * 60_000;
 let interrupted = false;
@@ -35,9 +36,43 @@ let absoluteDeadline = Number.POSITIVE_INFINITY;
 let activeNextServer: ChildProcess | undefined;
 let activeBrowser: Browser | undefined;
 let runAbortController: AbortController | undefined;
+let failureLifecycleContext: {
+  abortState: boolean | null;
+  nextChildPid: number | null;
+  nextChildExitCode: number | null;
+  nextChildSignalCode: NodeJS.Signals | null;
+} | undefined;
 let temporaryRouteInstalled = false;
 let temporaryRouteSha256: string | undefined;
 let sourceAtStart: ReturnType<typeof captureSourceState> | undefined;
+let diagnosticStage = "initialization";
+let diagnosticStageStartedAt = Date.now();
+let journeyVersionRegressionResult: {
+  sameKeyV1Retired: boolean;
+  sameKeyV1AbsentFromSelector: boolean;
+  sameKeyV2ActiveAndAvailable: boolean;
+  otherKeyV1RemainsAvailable: boolean;
+} | undefined;
+
+function setDiagnosticStage(stage: string): void {
+  diagnosticStage = stage;
+  diagnosticStageStartedAt = Date.now();
+}
+
+function safeDiagnosticAtom(value: unknown): string | number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return typeof value === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(value) ? value : null;
+}
+
+function safeErrorDiagnostics(error: unknown): { errorName: string | number | null; errorCode: string | number | null; causeCode: string | number | null } {
+  const value = error && typeof error === "object" ? error as { name?: unknown; code?: unknown; cause?: unknown } : {};
+  const cause = value.cause && typeof value.cause === "object" ? value.cause as { code?: unknown } : {};
+  return {
+    errorName: safeDiagnosticAtom(value.name),
+    errorCode: safeDiagnosticAtom(value.code),
+    causeCode: safeDiagnosticAtom(cause.code),
+  };
+}
 
 function captureSourceState() {
   const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" });
@@ -371,14 +406,16 @@ async function waitForApp(server: ChildProcess, fixtures: Fixtures): Promise<voi
       throw new Error(`Local Next child exited before ${stage}: code=${server.exitCode} signal=${server.signalCode}.`);
     }
   };
+  setDiagnosticStage("next_listener_wait");
   try {
     await waitForListener(server, startupDeadline);
   } finally {
     clearInterval(startupDiagnostics);
   }
   assertRunning("unauthenticated API request");
-  progress(`Next child is alive before unauthenticated request; pid=${server.pid}; exitCode=${server.exitCode}; signalCode=${server.signalCode}; proxyBypass=127.0.0.1`);
+  progress(`Next child is alive before unauthenticated request; pid=${server.pid}; exitCode=${server.exitCode}; signalCode=${server.signalCode}; loopbackListenerOwnerVerified=true`);
   progress(`55435 listener is ready; probing unauthenticated Agency follow-up API (expected 401 or 403; ${Math.floor(remainingMs() / 1000)}s overall budget remains)`);
+  setDiagnosticStage("unauthenticated_api_probe");
   const unauthenticatedStartedAt = Date.now();
   const unauthenticatedProgress = setInterval(() => {
     progress(`unauthenticated API request still pending; elapsed=${Math.floor((Date.now() - unauthenticatedStartedAt) / 1000)}s; next child state=${server.exitCode === null ? "running" : `exit-${server.exitCode}`}`);
@@ -388,6 +425,16 @@ async function waitForApp(server: ChildProcess, fixtures: Fixtures): Promise<voi
     unauthenticated = await fetch(APP_ORIGIN + API_PATH, {
       signal: AbortSignal.any([runAbortController!.signal, AbortSignal.timeout(Math.min(360_000, remainingMs()))]),
     });
+  } catch (error) {
+    progress("unauthenticated API probe rejected " + JSON.stringify({
+      stage: diagnosticStage,
+      elapsedMs: Date.now() - unauthenticatedStartedAt,
+      ...safeErrorDiagnostics(error),
+      abortState: runAbortController?.signal.aborted ?? null,
+      nextChildExitCode: server.exitCode,
+      nextChildSignalCode: server.signalCode,
+    }));
+    throw error;
   } finally {
     clearInterval(unauthenticatedProgress);
   }
@@ -396,9 +443,10 @@ async function waitForApp(server: ChildProcess, fixtures: Fixtures): Promise<voi
     throw new Error("Unauthenticated Agency follow-up API returned unexpected HTTP " + unauthenticated.status + ".");
   }
   assertRunning("authenticated API request");
-  progress(`Next child is alive before authenticated request; pid=${server.pid}; exitCode=${server.exitCode}; signalCode=${server.signalCode}; proxyBypass=127.0.0.1`);
+  progress(`Next child is alive before authenticated request; pid=${server.pid}; exitCode=${server.exitCode}; signalCode=${server.signalCode}; loopbackListenerOwnerVerified=true`);
   const cookie = createSessionCookie(fixtures.firmId, { role: "operator", lawyer_id: fixtures.lawyerId });
   progress(`probing authenticated Agency follow-up API (synthetic operator cookie; ${Math.floor(remainingMs() / 1000)}s overall budget remains)`);
+  setDiagnosticStage("authenticated_api_probe");
   const authenticated = await fetch(APP_ORIGIN + API_PATH, {
     headers: { cookie: `${cookie.name}=${cookie.value}` },
     signal: AbortSignal.any([runAbortController!.signal, AbortSignal.timeout(Math.min(60_000, remainingMs()))]),
@@ -406,6 +454,7 @@ async function waitForApp(server: ChildProcess, fixtures: Fixtures): Promise<voi
   progress(`authenticated Agency follow-up API returned HTTP ${authenticated.status}`);
   if (authenticated.status !== 200) throw new Error("Authenticated Agency follow-up API returned HTTP " + authenticated.status + ".");
   assertRunning("authenticated API response");
+  setDiagnosticStage("browser_ui_walkthrough");
 }
 
 async function waitForListener(server: ChildProcess, deadline: number): Promise<void> {
@@ -515,7 +564,13 @@ async function signedContext(browser: Browser, fixtures: Fixtures, portalSecret:
   return context;
 }
 
-async function waitForAction(page: Page, action: string, button: ReturnType<Page["getByRole"]>): Promise<void> {
+async function waitForAction(
+  page: Page,
+  action: string,
+  button: ReturnType<Page["getByRole"]>,
+  enabledTimeoutMs = 30_000,
+): Promise<void> {
+  setDiagnosticStage(`browser_action_${action}`);
   await button.waitFor({ state: "visible" });
   if (!(await button.isEnabled())) {
     const state = await button.evaluate((element) => {
@@ -531,7 +586,7 @@ async function waitForAction(page: Page, action: string, button: ReturnType<Page
     });
     progress(`button ${action} initially disabled; React form diagnostics=${JSON.stringify(state)}`);
   }
-  await expect(button).toBeEnabled({ timeout: 30_000 });
+  await expect(button).toBeEnabled({ timeout: enabledTimeoutMs });
   // App Router can return server HTML before the client bundle has hydrated.
   // Wait for the first page's network work to settle before relying on React
   // event handlers, especially on a cold local compile.
@@ -587,7 +642,11 @@ async function authorJourney(page: Page): Promise<string> {
   await page.getByLabel("Email body").fill("Hello. This message is a local synthetic review fixture and is never sent to a provider.");
   await waitForAction(page, "template_create", page.getByRole("button", { name: "Create template draft" }));
   const templateCard = page.locator("article").filter({ hasText: templateKey }).first();
-  await waitForAction(page, "template_approve", templateCard.getByRole("button", { name: "Approve template v1" }));
+  const templateApprovalButton = templateCard.getByRole("button", { name: "Approve template v1" });
+  await templateApprovalButton.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
+  await waitForAction(page, "template_approve", templateApprovalButton);
+  const approvedTemplateOption = page.getByLabel("Template version").locator("option").filter({ hasText: templateKey + " v1" });
+  await expect(approvedTemplateOption).toHaveCount(1, { timeout: Math.min(90_000, remainingMs()) });
 
   await page.getByLabel("Journey key").fill(journeyKey);
   await page.getByLabel("Journey name").fill(journeyName);
@@ -604,20 +663,53 @@ async function authorJourney(page: Page): Promise<string> {
   await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
   const createdJourneyRow = page.getByText(journeyName + " v1 · draft", { exact: false }).locator("..");
   await waitForAction(page, "journey_activate", createdJourneyRow.getByRole("button", { name: "Activate version" }));
-  const activatedJourneyOption = page.getByLabel("Journey version").locator("option").filter({ hasText: journeyName + " v1" });
+  const journeyOptions = page.getByLabel("Journey version").locator("option");
+  const versionOneOption = journeyOptions.filter({ hasText: journeyName + " v1" });
   try {
-    await expect(activatedJourneyOption).toHaveCount(1, { timeout: 30000 });
+    await expect(versionOneOption).toHaveCount(1, { timeout: 30000 });
   } catch (error) {
-    const options = await page.getByLabel("Journey version").locator("option").allTextContents().catch(() => []);
+    const options = await journeyOptions.allTextContents().catch(() => []);
     const alert = await page.locator('[role="alert"]').allTextContents().catch(() => []);
     throw new Error(`Activated journey did not appear in the review selector. Current options=${JSON.stringify(options)}; alerts=${JSON.stringify(alert)}. ${String(error)}`);
   }
-  await page.getByLabel("Journey version").selectOption({ label: journeyName + " v1" });
-  return journeyName;
+
+  const otherJourneyKey = journeyKey + "-other";
+  const otherJourneyName = journeyName + " other";
+  await page.getByLabel("Journey key").fill(otherJourneyKey);
+  await page.getByLabel("Journey name").fill(otherJourneyName);
+  await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
+  const otherJourneyDraft = page.getByText(otherJourneyName + " v1 · draft", { exact: false }).locator("..");
+  await waitForAction(page, "journey_activate", otherJourneyDraft.getByRole("button", { name: "Activate version" }));
+  const otherJourneyOption = journeyOptions.filter({ hasText: otherJourneyName + " v1" });
+  await expect(otherJourneyOption).toHaveCount(1);
+
+  const mixedCaseJourneyKey = "  " + journeyKey.toUpperCase() + "  ";
+  if (mixedCaseJourneyKey.trim().toLowerCase() !== journeyKey) {
+    throw new Error("Mixed-case regression fixture must normalize to the original journey key.");
+  }
+  await page.getByLabel("Journey key").fill(mixedCaseJourneyKey);
+  await page.getByLabel("Journey name").fill(journeyName);
+  await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
+  const journeyV2Draft = page.getByText(journeyName + " v2 · draft", { exact: false }).locator("..");
+  await waitForAction(page, "journey_activate", journeyV2Draft.getByRole("button", { name: "Activate version" }));
+  await expect(page.getByText(journeyName + " v1 · retired", { exact: false })).toBeVisible();
+  await expect(page.getByText(journeyName + " v2 · active", { exact: false })).toBeVisible();
+  await expect(versionOneOption).toHaveCount(0);
+  const versionTwoOption = journeyOptions.filter({ hasText: journeyName + " v2" });
+  await expect(versionTwoOption).toHaveCount(1);
+  await expect(otherJourneyOption).toHaveCount(1);
+  journeyVersionRegressionResult = {
+    sameKeyV1Retired: true,
+    sameKeyV1AbsentFromSelector: true,
+    sameKeyV2ActiveAndAvailable: true,
+    otherKeyV1RemainsAvailable: true,
+  };
+  await page.getByLabel("Journey version").selectOption({ label: journeyName + " v2" });
+  return journeyName + " v2";
 }
 
-async function createDraft(pool: Pool, page: Page, journeyName: string, prospect: ProspectFixture): Promise<void> {
-  await page.getByLabel("Journey version").selectOption({ label: journeyName + " v1" });
+async function createDraft(pool: Pool, page: Page, journeyVersionLabel: string, prospect: ProspectFixture): Promise<void> {
+  await page.getByLabel("Journey version").selectOption({ label: journeyVersionLabel });
   await page.getByLabel("Find one prospect").fill(prospect.firmName);
   const searchResponsePromise = page.waitForResponse((response) =>
     response.url().includes("/api/admin/agency-crm/prospects?") && response.request().method() === "GET",
@@ -647,7 +739,12 @@ async function markEligibleAndRelease(page: Page, prospect: ProspectFixture): Pr
   await evidenceControl.fill("Synthetic evidence for local walkthrough only.");
   await waitForAction(page, "eligibility", card.getByRole("button", { name: "Record eligible" }));
   await card.getByLabel("Individual release basis").fill("Synthetic walkthrough approval basis.");
-  await waitForAction(page, "release", card.getByRole("button", { name: "Release this prospect" }));
+  await waitForAction(
+    page,
+    "release",
+    card.getByRole("button", { name: "Release this prospect" }),
+    Math.min(90_000, remainingMs()),
+  );
 }
 
 async function postAction(context: BrowserContext, data: Record<string, unknown>): Promise<APIResponse> {
@@ -1207,7 +1304,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       const probe = await context.newPage();
       try {
         await probe.setViewportSize({ width, height: 1000 });
-        await probe.goto(page.url(), { waitUntil: "domcontentloaded" });
+        await probe.goto(page.url(), { waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
         const input = probe.locator("label").filter({ hasText: "Template key" }).locator("input");
         await expect(input).toBeVisible();
         await input.evaluate((element) => element.remove());
@@ -1268,6 +1365,118 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
 }
 
+async function runJourneyVersionRegression(fixtures: Fixtures, portalSecret: string): Promise<Record<string, unknown>> {
+  setDiagnosticStage("browser_journey_version_regression");
+  const browser = await chromium.launch({ headless: true });
+  activeBrowser = browser;
+  let context: BrowserContext | undefined;
+  try {
+    context = await signedContext(browser, fixtures, portalSecret);
+    const page = await context.newPage();
+    page.setDefaultTimeout(30000);
+    page.setDefaultNavigationTimeout(180_000);
+    const responseFailures: string[] = [];
+    page.on("pageerror", (error) => responseFailures.push("page error: " + error.message));
+    page.on("console", (message) => {
+      const text = message.text();
+      if (message.type() === "error" && !/Failed to load resource: the server responded with a status of 409 \(Conflict\)/.test(text)) {
+        responseFailures.push("browser console: " + text);
+      }
+    });
+    page.on("requestfailed", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.includes("/_next/")) responseFailures.push(`asset request failed: ${pathname}; ${request.failure()?.errorText ?? "unknown"}`);
+    });
+    page.on("response", (response) => {
+      const pathname = new URL(response.url()).pathname;
+      if (pathname.includes("/_next/") && response.status() >= 400) responseFailures.push(`asset response ${response.status()}: ${pathname}`);
+    });
+    progress(`opening the follow-up UI for the focused journey-version regression (${Math.floor(remainingMs() / 1000)}s overall budget remains)`);
+    await page.goto(APP_ORIGIN + "/admin/agency-crm/follow-up", { waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+    const layoutChunkStartedAt = Date.now();
+    try {
+      const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(30_000, remainingMs()) });
+      const layoutChunkBody = await layoutChunkResponse.body();
+      progress(`direct app/layout.js asset probe returned HTTP ${layoutChunkResponse.status()}; bytes=${layoutChunkBody.byteLength}; elapsed=${Date.now() - layoutChunkStartedAt}ms`);
+    } catch (error) {
+      progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms; safe diagnostics=${JSON.stringify(safeErrorDiagnostics(error))}`);
+      throw error;
+    }
+    if (await page.getByText(/This page couldn.t load/i).count()) {
+      progress("Next rendered its chunk-recovery page during cold compilation; reloading once after the direct asset probe");
+      await page.reload({ waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+    }
+    await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
+    await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => undefined);
+    try {
+      await page.waitForFunction(() => {
+        const control = document.querySelector("main form input");
+        return Boolean(control && Object.keys(control).some((key) => key.startsWith("__reactProps$")));
+      }, null, { polling: "raf", timeout: Math.min(180_000, remainingMs()) });
+      progress("operator form hydration confirmed on controlled template input");
+    } catch (error) {
+      let hydrationError: unknown = error;
+      let recovered = false;
+      if (await page.getByText(/This page couldn.t load/i).count()) {
+        progress("Next rendered its chunk-recovery page during hydration; reloading once after compilation");
+        try {
+          await page.reload({ waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+          await page.waitForFunction(() => {
+            const control = document.querySelector("main form input");
+            return Boolean(control && Object.keys(control).some((key) => key.startsWith("__reactProps$")));
+          }, null, { polling: "raf", timeout: Math.min(120_000, remainingMs()) });
+          recovered = true;
+          progress("operator form hydration confirmed after one chunk-recovery reload");
+        } catch (retryError) {
+          hydrationError = retryError;
+        }
+      }
+      if (!recovered) {
+        const diagnostics = await page.evaluate(() => ({
+          readyState: document.readyState,
+          title: document.title,
+          mainCount: document.querySelectorAll("main").length,
+          formCount: document.querySelectorAll("main form").length,
+          scriptCount: document.scripts.length,
+          controlledInput: (() => {
+            const control = document.querySelector("main form input");
+            return control ? {
+              type: (control as HTMLInputElement).type,
+              valueLength: (control as HTMLInputElement).value.length,
+              reactAttached: Object.keys(control).some((key) => key.startsWith("__reactProps$")),
+            } : null;
+          })(),
+          nextScripts: [...document.scripts].map((script) => script.src).filter((src) => src.includes("/_next/")),
+          nextResources: performance.getEntriesByType("resource").map((entry) => new URL(entry.name).pathname).filter((pathname) => pathname.includes("/_next/")),
+          pageText: document.body.innerText.slice(0, 1000),
+        })).catch(() => null);
+        await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
+        await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", `failure-hydration-${RUN_ID}.png`), fullPage: true }).catch(() => undefined);
+        throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${String(hydrationError)}`);
+      }
+    }
+    await authorJourney(page);
+    if (responseFailures.length) {
+      throw new Error(`Browser acceptance observed runtime or asset failures: ${JSON.stringify(responseFailures.slice(0, 20))}`);
+    }
+    if (!journeyVersionRegressionResult || Object.values(journeyVersionRegressionResult).some((passed) => !passed)) {
+      throw new Error("Journey-version replacement regression did not record every required assertion.");
+    }
+    return {
+      runId: RUN_ID,
+      runStartedAtUtc: RUN_STARTED_AT,
+      sourceAtStart,
+      synthetic: true,
+      focusedRegression: "journey-version replacement state and enrollment selector",
+      journeyVersionRegression: journeyVersionRegressionResult,
+    };
+  } finally {
+    await context?.close();
+    await browser.close();
+    if (activeBrowser === browser) activeBrowser = undefined;
+  }
+}
+
 async function markEligibleAndReleaseAttempt(page: Page, prospect: ProspectFixture): Promise<void> {
   const card = queueCard(page, prospect.firmName);
   const evidenceControl = card.getByLabel("Eligibility evidence for this prospect");
@@ -1321,6 +1530,9 @@ async function runManual(context: BrowserContext): Promise<void> {
 }
 
 async function main(): Promise<void> {
+  if (JOURNEY_VERSION_REGRESSION_ONLY && MANUAL) {
+    throw new Error("The focused journey-version regression cannot be combined with --manual.");
+  }
   progress("validating disposable local-only confirmation");
   if (must(process.env.AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION, "Disposable database confirmation") !== "YES-LOCAL-DISPOSABLE-ONLY") {
     throw new Error("Set AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION=YES-LOCAL-DISPOSABLE-ONLY for this disposable local walkthrough.");
@@ -1379,7 +1591,17 @@ async function main(): Promise<void> {
       await runManual(context);
       return;
     }
-    completedSummary = await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken);
+    completedSummary = JOURNEY_VERSION_REGRESSION_ONLY
+      ? await runJourneyVersionRegression(fixtures, portalSecret)
+      : await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken);
+  } catch (error) {
+    failureLifecycleContext = {
+      abortState: runAbortController?.signal.aborted ?? null,
+      nextChildPid: server.pid ?? null,
+      nextChildExitCode: server.exitCode,
+      nextChildSignalCode: server.signalCode,
+    };
+    throw error;
   } finally {
     await context?.close();
     await browser?.close();
@@ -1407,7 +1629,14 @@ async function main(): Promise<void> {
 }
 
 main().catch((error) => {
-  const message = error instanceof Error ? error.message : "Unknown walkthrough failure.";
-  console.error("Agency follow-up synthetic walkthrough failed: " + message);
+  console.error("Agency follow-up synthetic walkthrough failed " + JSON.stringify({
+    stage: diagnosticStage,
+    stageElapsedMs: Date.now() - diagnosticStageStartedAt,
+    ...safeErrorDiagnostics(error),
+    abortState: failureLifecycleContext?.abortState ?? runAbortController?.signal.aborted ?? null,
+    nextChildPid: failureLifecycleContext?.nextChildPid ?? activeNextServer?.pid ?? null,
+    nextChildExitCode: failureLifecycleContext?.nextChildExitCode ?? activeNextServer?.exitCode ?? null,
+    nextChildSignalCode: failureLifecycleContext?.nextChildSignalCode ?? activeNextServer?.signalCode ?? null,
+  }));
   process.exitCode = 1;
 });
