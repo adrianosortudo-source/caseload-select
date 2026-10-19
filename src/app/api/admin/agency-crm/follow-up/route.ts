@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     operatorIdentityPresent: Boolean(session?.lawyer_id),
   });
   const auth = authorizedActor(session);
-  if ("response" in auth) {
+  if ("response" in auth && auth.response) {
     traceLocalFollowupProbe(host, "handler_exit", { elapsedMs: Date.now() - startedAt, responseStatus: auth.response.status });
     return auth.response;
   }
