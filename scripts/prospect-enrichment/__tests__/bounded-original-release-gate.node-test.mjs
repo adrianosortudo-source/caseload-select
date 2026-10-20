@@ -97,6 +97,7 @@ test("workflow requires two protected gates, fixed temporary credentials and imm
  const yaml=await import("js-yaml");const workflow=yaml.default.load(fs.readFileSync(path.join(root,".github/workflows/prospect-bounded-original-release.yml"),"utf8"));
  assert.equal(workflow.concurrency.group,"gta-prospect-migrations-production");assert.equal(workflow.concurrency["cancel-in-progress"],false);
  assert.equal(workflow.env.USE_TEMPORARY_DATABASE_CREDENTIAL,"true");assert.equal(workflow.env.CREDENTIAL_GATE,"bounded-original-release");
+ assert.equal(workflow.env.SUPABASE_NO_UPDATE_NOTIFIER,"true");
  for(const job of Object.values(workflow.jobs)){assert.equal(job.environment.name,"Production prospect migrations");const actions=job.steps.filter(step=>step.uses);for(const step of actions)assert.match(step.uses,/@[a-f0-9]{40}$/);}
  assert.equal(workflow.jobs.apply.needs,"preflight");
  const apply=workflow.jobs.apply.steps;assert.ok(apply.findIndex(step=>step.run?.includes("verify-evidence"))<apply.findIndex(step=>step.run?.includes("temporary-credential.mjs")));
@@ -135,15 +136,17 @@ test("pinned CLI skips guarded historical references and plans only the target o
   await db.query("INSERT INTO supabase_migrations.schema_migrations(version,name) SELECT entry->>'version',entry->>'name' FROM jsonb_array_elements($1::jsonb) entry",[JSON.stringify(reference.ledger)]);
   console.info("bounded-cli-phase","guarded-stage");
   const staged=path.join(dir,"staged");stage(reference,bytes,staged);
-  const dry=()=>JSON.parse(execFileSync(cli,["db","push","--dry-run","--include-all","--skip-vault","--output-format","json","--db-url",scratch.toString()],{cwd:staged,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:60000}));
+  const cliEnvironment={...process.env,SUPABASE_NO_UPDATE_NOTIFIER:"true"};
+  const dry=()=>JSON.parse(execFileSync(cli,["db","push","--dry-run","--include-all","--skip-vault","--output-format","json","--db-url",scratch.toString()],{cwd:staged,env:cliEnvironment,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:60000}));
   console.info("bounded-cli-phase","singleton-dry-run");
   verifyPlan(dry(),"pre");t.diagnostic("Pinned CLI planned only the reviewed target.");
+  verifyStage(reference,bytes,staged);t.diagnostic("Pinned CLI left the guarded stage exact after its dry-run.");
   await db.query("DELETE FROM supabase_migrations.schema_migrations WHERE version='20261013174258'");
   console.info("bounded-cli-phase","missing-history-dry-run");
   assert.throws(()=>verifyPlan(dry(),"pre"));t.diagnostic("A missing historical ledger row was rejected by the plan verifier.");
   const before=(await db.query("SELECT version,name,statements FROM supabase_migrations.schema_migrations ORDER BY version")).rows;
   console.info("bounded-cli-phase","actual-negative-push");
-  assert.throws(()=>execFileSync(cli,["db","push","--yes","--include-all","--skip-vault","--output-format","json","--db-url",scratch.toString()],{cwd:staged,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:60000}),
+  assert.throws(()=>execFileSync(cli,["db","push","--yes","--include-all","--skip-vault","--output-format","json","--db-url",scratch.toString()],{cwd:staged,env:cliEnvironment,encoding:"utf8",stdio:["ignore","pipe","pipe"],timeout:60000}),
     isHistoricalGuardFailure);
   t.diagnostic("Actual CLI push stopped at the historical SQL guard.");
   assert.deepEqual((await db.query("SELECT version,name,statements FROM supabase_migrations.schema_migrations ORDER BY version")).rows,before);
