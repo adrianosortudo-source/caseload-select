@@ -107,7 +107,12 @@ export async function POST(req: NextRequest) {
     p_recipient_email: recipientEmail,
     p_recipient_sha256: recipientHash,
   });
-  if (result.error) return noStore({ error: "event_persistence_failed" }, 500);
+  if (result.error) {
+    // Keep the response generic, but record the PostgreSQL error class for
+    // server-side diagnosis without logging recipient or event contents.
+    console.error("[agency-followup-webhook] persistence failure", { code: result.error.code ?? "unknown" });
+    return noStore({ error: "event_persistence_failed" }, 500);
+  }
   const outcome = isObject(result.data) && typeof result.data.result === "string" ? result.data.result : "recorded";
   // Resend retries non-2xx responses. An event can arrive before the sender
   // persists provider acceptance; allow the same signed event to be replayed

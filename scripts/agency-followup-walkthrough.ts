@@ -789,7 +789,7 @@ async function dispatchFake(
   return await response.json() as Record<string, number>;
 }
 
-async function postSyntheticResendEvent(providerEventId: string, payload: Record<string, unknown>): Promise<{ status: number; outcome: string }> {
+async function postSyntheticResendEvent(providerEventId: string, payload: Record<string, unknown>): Promise<{ status: number; outcome: string; error: string }> {
   const timestamp = String(Math.floor(Date.now() / 1000));
   const rawBody = JSON.stringify(payload);
   const signingKey = Buffer.from(SYNTHETIC_WEBHOOK_SECRET.slice("whsec_".length), "base64");
@@ -806,8 +806,12 @@ async function postSyntheticResendEvent(providerEventId: string, payload: Record
     },
     body: rawBody,
   });
-  const result = await response.json().catch(() => ({})) as { outcome?: unknown };
-  return { status: response.status, outcome: typeof result.outcome === "string" ? result.outcome : "none" };
+  const result = await response.json().catch(() => ({})) as { outcome?: unknown; error?: unknown };
+  return {
+    status: response.status,
+    outcome: typeof result.outcome === "string" ? result.outcome : "none",
+    error: typeof result.error === "string" ? result.error.replace(/[^A-Za-z0-9_.:-]+/g, "_").slice(0, 120) : "none",
+  };
 }
 
 async function withFixtureClaim<T>(pool: Pool, messageId: string, operation: () => Promise<T>): Promise<T> {
@@ -1001,6 +1005,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await expect(normalCard.getByText("scheduled", { exact: true }).first()).toBeVisible({ timeout: 30000 });
   await expect(normalCard.getByRole("button", { name: "Approve this message" })).toHaveCount(1, { timeout: 30000 });
   await waitForAction(page, "approve", queueCard(page, normal.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  await expect(queueCard(page, normal.firmName).getByText("scheduled", { exact: true })).toHaveCount(2, { timeout: 30000 });
+  // The action starts an App Router refresh without awaiting it. Wait until
+  // both updated message states are rendered before changing the DB fixture
+  // and doing a full reload, so the refresh and navigation cannot overlap.
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
   const normalMessages = await pool.query<{ id: string; step_number: number; state: string }>(
     "select id,step_number,state from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) order by step_number",
     [normal.id],
@@ -1192,6 +1201,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
   const reconciledProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
   const duplicateProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
+  progress(`synthetic provider event replay: first=${JSON.stringify(reconciledProviderEvent)}; duplicate=${JSON.stringify(duplicateProviderEvent)}`);
   const providerEventState = await pool.query<{ processing_result: string; message_id: string | null; applications: string; applied_message_id: string | null; applied_result: string | null; durable_events: string }>(
     "select provider_event.processing_result,provider_event.message_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id and application.message_id=$2) as applications,(select application.message_id from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_message_id,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_result,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-event:'||provider_event.provider_event_id) as durable_events from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$1",
     [resendEventId, retryMessage.id],
