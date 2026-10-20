@@ -24,6 +24,8 @@ const EXPECTED_CRM_GRANTS_MIGRATION_BLOB = "af413a079a76e2fc9844f0bb37d61bec3127
 const CRM_GRANTS_MIGRATION_PATH = "supabase/migrations/20261013230354_agency_crm_service_role_grants.sql";
 const EVENT_MIGRATION_PATH = "supabase/migrations/20261020025251_agency_followup_resend_events_and_shared_suppression.sql";
 const EXPECTED_EVENT_MIGRATION_BLOB = "ea4cf8a7186f338d65127d27099902e30949b345";
+const EVENT_ROW_LOCK_GRANT_MIGRATION_PATH = "supabase/migrations/20261020141945_agency_followup_provider_event_row_lock_privilege.sql";
+const EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB = "4c5a29df51e716fe37b2a1ac34a300ad8beef351";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
 const RUN_STARTED_AT = new Date().toISOString();
@@ -199,11 +201,11 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013154000", "20261013230354", "20261020025251"]],
+      [["20261013154000", "20261013230354", "20261020025251", "20261020141945"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "3") {
-    throw new Error("Disposable Postgres identity or exact three-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "4") {
+    throw new Error("Disposable Postgres identity or exact four-migration ledger check failed.");
   }
   const tables = await pool.query<{ count: string }>(
     "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
@@ -213,11 +215,16 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
       "prospect_contactability_provider_suppressions"]],
   );
   if (tables.rows[0]?.count !== "9") throw new Error("The verified disposable stack does not contain the six follow-up and three provider-event tables.");
-  const providerGrants = await pool.query<{ service_access: boolean; public_access: boolean }>(
-    "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access from unnest(array['public.agency_followup_provider_events','public.agency_followup_provider_event_applications','public.prospect_contactability_provider_suppressions']) as event_table(table_name)",
+  const providerGrants = await pool.query<{ service_access: boolean; public_access: boolean; public_update_access: boolean; service_event_column_update: boolean; service_event_table_update: boolean; service_event_other_column_update: boolean; immutable_event_trigger: boolean }>(
+    "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access, bool_or(has_table_privilege('anon', table_name, 'update') or has_table_privilege('authenticated', table_name, 'update')) as public_update_access, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'provider_event_id', 'update') as service_event_column_update, has_table_privilege('service_role', 'public.agency_followup_provider_events', 'update') as service_event_table_update, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'processing_result', 'update') as service_event_other_column_update, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_provider_events'::regclass and tgname='agency_followup_provider_events_no_mutation' and not tgisinternal and tgenabled in ('O','A') and pg_get_triggerdef(oid) ilike '%BEFORE UPDATE OR DELETE%') as immutable_event_trigger from unnest(array['public.agency_followup_provider_events','public.agency_followup_provider_event_applications','public.prospect_contactability_provider_suppressions']) as event_table(table_name)",
   );
-  if (providerGrants.rows[0]?.service_access !== true || providerGrants.rows[0]?.public_access !== false) {
-    throw new Error("The provider-event tables are not restricted to service-role select/insert access.");
+  if (providerGrants.rows[0]?.service_access !== true || providerGrants.rows[0]?.public_access !== false
+    || providerGrants.rows[0]?.public_update_access !== false
+    || providerGrants.rows[0]?.service_event_column_update !== true
+    || providerGrants.rows[0]?.service_event_table_update !== false
+    || providerGrants.rows[0]?.service_event_other_column_update !== false
+    || providerGrants.rows[0]?.immutable_event_trigger !== true) {
+    throw new Error("Provider-event row-lock privilege, append-only trigger, or restricted grants are not in the expected state.");
   }
   const grants = await pool.query<{ service_access: boolean; public_access: boolean }>(
     "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access from unnest(array['public.agency_prospects','public.agency_deals','public.agency_reminders']) as crm_table(table_name)",
@@ -225,7 +232,7 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
   if (grants.rows[0]?.service_access !== true || grants.rows[0]?.public_access !== false) {
     throw new Error("Disposable Agency CRM service-role grants or public-role revocations are not in the expected state.");
   }
-  progress("disposable identity, all three migration ledger versions, nine follow-up/provider tables, and restricted grants checked");
+  progress("disposable identity, all four migration ledger versions, nine follow-up/provider tables, row-lock-only privilege, append-only trigger, and restricted grants checked");
 }
 
 async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
@@ -1439,8 +1446,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     command: "npm run agency-followup:walkthrough",
     exitCode: 0,
     testedEnvironment: { appOrigin: APP_ORIGIN, databaseProjectId: STACK_PROJECT_ID, databaseHost: "loopback", provider: "network-free fake", databaseReusedWithoutReset: true },
-    migrationVersions: ["20261013154000", "20261013230354", "20261020025251"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB],
+    migrationVersions: ["20261013154000", "20261013230354", "20261020025251", "20261020141945"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB],
     screenshots,
     synthetic: true,
     flows: {
@@ -1653,6 +1660,7 @@ async function main(): Promise<void> {
   await verifyPushedMigration(MIGRATION_PATH, EXPECTED_MIGRATION_BLOB);
   await verifyPushedMigration(CRM_GRANTS_MIGRATION_PATH, EXPECTED_CRM_GRANTS_MIGRATION_BLOB);
   await verifyPushedMigration(EVENT_MIGRATION_PATH, EXPECTED_EVENT_MIGRATION_BLOB);
+  await verifyPushedMigration(EVENT_ROW_LOCK_GRANT_MIGRATION_PATH, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");

@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 
 const migrationName = "20261020025251_agency_followup_resend_events_and_shared_suppression.sql";
 const migration = readFileSync(resolve(process.cwd(), "supabase/migrations", migrationName), "utf8");
+const rowLockMigrationName = "20261020141945_agency_followup_provider_event_row_lock_privilege.sql";
+const rowLockMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", rowLockMigrationName), "utf8");
 
 describe("Agency follow-up Resend migration contract", () => {
   it("keeps webhook evidence append-only, minimized, private, and replay-safe", () => {
@@ -23,6 +25,14 @@ describe("Agency follow-up Resend migration contract", () => {
     expect(migration).toContain("FORCE ROW LEVEL SECURITY");
     expect(migration).toContain("GRANT SELECT, INSERT ON public.agency_followup_provider_events TO service_role");
     expect(migration).not.toMatch(/raw_payload|webhook_body|recipient_email text NULL/i);
+  });
+
+  it("grants only the provider event key update privilege required for row locking", () => {
+    expect(rowLockMigration).toContain("GRANT UPDATE (provider_event_id) ON public.agency_followup_provider_events TO service_role");
+    expect(rowLockMigration).not.toMatch(/GRANT\s+UPDATE\s+ON\s+public\.agency_followup_provider_events/i);
+    expect(migration).toContain("CREATE TRIGGER agency_followup_provider_events_no_mutation");
+    expect(migration).toContain("BEFORE UPDATE OR DELETE ON public.agency_followup_provider_events");
+    expect(migration).toContain("SECURITY INVOKER");
   });
 
   it("maps recipient status only through an accepted message and exact Agency source binding", () => {
