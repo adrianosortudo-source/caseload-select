@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -78,17 +78,15 @@ function safeErrorDiagnostics(error: unknown): { errorName: string | number | nu
 }
 
 function captureSourceState() {
-  const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" });
+  const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8", timeout: 30_000 });
   const sourceCommit = git("rev-parse", "HEAD").trim();
-  const workingTreeStatus = git("status", "--porcelain", "--untracked-files=all");
-  const untrackedSource = git("ls-files", "--others", "--exclude-standard", "-z").split("\0").filter(Boolean)
-    .map((file) => ({ path: file, sha256: createHash("sha256").update(readFileSync(file)).digest("hex") }));
+  const workingTreeStatus = git("status", "--porcelain", "--untracked-files=normal");
+  const untrackedSource = workingTreeStatus.split(/\r?\n/).filter((line) => line.startsWith("?? "))
+    .map((line) => line.slice(3));
   const fingerprint = createHash("sha256")
-    .update(execFileSync("git", ["diff", "HEAD", "--binary"]))
-    .update(execFileSync("git", ["diff", "--cached", "--binary"]))
-    .update(workingTreeStatus).update(JSON.stringify(untrackedSource)).digest("hex");
+    .update(sourceCommit).update("\0").update(workingTreeStatus).digest("hex");
   return { sourceCommit, workingTreeState: workingTreeStatus ? "dirty" : "clean",
-    workingTreeStatus, diffFingerprintSha256: fingerprint, untrackedSource };
+    workingTreeStatus, cleanTreeIdentitySha256: fingerprint, untrackedSource };
 }
 process.on("SIGINT", () => { interrupted = true; });
 
@@ -176,14 +174,14 @@ async function verifyLocalPostgrest(status: SupabaseStatus): Promise<void> {
 
 async function verifyPushedMigration(pathname: string, expectedBlob: string): Promise<void> {
   // Ask Git to apply the path clean filters so Windows CRLF checkouts match the pushed blob.
-  const workingBlob = execFileSync("git", ["hash-object", "--path", pathname, pathname], { encoding: "utf8" }).trim();
+  const workingBlob = execFileSync("git", ["hash-object", "--path", pathname, pathname], { encoding: "utf8", timeout: 30_000 }).trim();
   if (workingBlob !== expectedBlob) {
     throw new Error(`Refusing local database use because ${path.basename(pathname)} no longer matches its verified pushed blob.`);
   }
 }
 
 function verifyPushedHead(sourceCommit: string): void {
-  const remoteBranches = execFileSync("git", ["branch", "-r", "--contains", sourceCommit], { encoding: "utf8" })
+  const remoteBranches = execFileSync("git", ["branch", "-r", "--contains", sourceCommit], { encoding: "utf8", timeout: 30_000 })
     .split(/\r?\n/).map((ref) => ref.trim());
   if (!remoteBranches.includes("origin/codex/crm-live-followup-20261019")) {
     throw new Error("Refusing walkthrough because the exact source commit is not on the pushed CRM branch.");
@@ -1625,13 +1623,14 @@ async function main(): Promise<void> {
   if (must(process.env.AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION, "Disposable database confirmation") !== "YES-LOCAL-DISPOSABLE-ONLY") {
     throw new Error("Set AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION=YES-LOCAL-DISPOSABLE-ONLY for this disposable local walkthrough.");
   }
+  absoluteDeadline = Date.now() + WALKTHROUGH_TIMEOUT_MS;
+  progress("checking pushed source HEAD and bounded clean-tree status");
   sourceAtStart = captureSourceState();
   if (sourceAtStart.workingTreeState !== "clean") {
     throw new Error("Refusing walkthrough because the exact pushed source worktree is not clean.");
   }
   verifyPushedHead(sourceAtStart.sourceCommit);
   let completedSummary: Record<string, unknown> | undefined;
-  absoluteDeadline = Date.now() + WALKTHROUGH_TIMEOUT_MS;
   progress("verifying pushed migration blobs");
   await verifyPushedMigration(MIGRATION_PATH, EXPECTED_MIGRATION_BLOB);
   await verifyPushedMigration(CRM_GRANTS_MIGRATION_PATH, EXPECTED_CRM_GRANTS_MIGRATION_BLOB);
