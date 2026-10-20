@@ -653,7 +653,7 @@ async function recordActionFailure(
   const browserRuntimeErrors = browserRuntimeErrorsByPage.get(page)?.slice(-20) ?? [];
   await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
   const screenshotPath = path.join(OUTPUT_DIR, "screenshots", `failure-${action}-${RUN_ID}.png`);
-  const screenshotWritten = await page.screenshot({ path: screenshotPath, fullPage: true }).then(() => true, () => false);
+  const screenshotWritten = await page.screenshot({ path: screenshotPath, fullPage: false }).then(() => true, () => false);
   const errorMessage = String(error).replace(/[\r\n\s]+/g, " ")
     .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 500);
   const failureReceipt = { runId: RUN_ID, action, errorMessage, diagnostics, browserRuntimeErrors, screenshot: screenshotWritten ? path.basename(screenshotPath) : null, recordedAtUtc: new Date().toISOString() };
@@ -1154,7 +1154,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       })).catch(() => null);
       await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
       const screenshotPath = path.join(OUTPUT_DIR, "screenshots", `failure-hydration-${RUN_ID}.png`);
-      const screenshotWritten = await page.screenshot({ path: screenshotPath, fullPage: true }).then(() => true, () => false);
+      const screenshotWritten = await page.screenshot({ path: screenshotPath, fullPage: false }).then(() => true, () => false);
       const errorMessage = String(hydrationError).replace(/[\r\n\s]+/g, " ")
         .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 1000);
       const failureReceipt = {
@@ -1531,7 +1531,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   });
   const screenshot = async (filename: string, width: number, navigationState: string) => {
     const file = path.join(screenshotDir, filename);
-    await page.screenshot({ path: file, fullPage: true });
+    await page.screenshot({ path: file, fullPage: false });
     const digest = createHash("sha256").update(await readFile(file)).digest("hex");
     screenshots.push({ path: path.relative(process.cwd(), file).replaceAll("\\", "/"), sha256: digest, viewport: width, navigationState });
   };
@@ -1576,7 +1576,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       if (width === 640) {
         const closedAt = Date.now();
         const immediatePath = path.join(screenshotDir, RUN_ID + "-reproduction-640-after-close.png");
-        await page.screenshot({ path: immediatePath, fullPage: true });
+        await page.screenshot({ path: immediatePath, fullPage: false });
         reproduction.push({ path: path.relative(process.cwd(), immediatePath).replaceAll("\\", "/"),
           sha256: createHash("sha256").update(await readFile(immediatePath)).digest("hex"),
           elapsedAfterCloseMs: Date.now() - closedAt });
@@ -1745,7 +1745,7 @@ async function runJourneyVersionRegression(fixtures: Fixtures, portalSecret: str
           pageText: document.body.innerText.slice(0, 1000),
         })).catch(() => null);
         await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
-        await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", `failure-hydration-${RUN_ID}.png`), fullPage: true }).catch(() => undefined);
+        await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", `failure-hydration-${RUN_ID}.png`), fullPage: false }).catch(() => undefined);
         throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${String(hydrationError)}`);
       }
     }
