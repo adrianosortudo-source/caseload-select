@@ -910,7 +910,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await page.goto(APP_ORIGIN + "/admin/agency-crm/follow-up", { waitUntil: "domcontentloaded", timeout: 180_000 });
   const layoutChunkStartedAt = Date.now();
   try {
-    const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(30000, remainingMs()) });
+    const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(180_000, remainingMs()) });
     const layoutChunkBody = await layoutChunkResponse.body();
     progress(`direct app/layout.js asset probe returned HTTP ${layoutChunkResponse.status()}; bytes=${layoutChunkBody.byteLength}; elapsed=${Date.now() - layoutChunkStartedAt}ms`);
   } catch (error) {
@@ -1581,7 +1581,7 @@ async function runManual(context: BrowserContext): Promise<void> {
   await page.goto(APP_ORIGIN + "/admin/agency-crm/follow-up", { waitUntil: "domcontentloaded", timeout: 180_000 });
   const layoutChunkStartedAt = Date.now();
   try {
-    const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(30000, remainingMs()) });
+    const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(180_000, remainingMs()) });
     const layoutChunkBody = await layoutChunkResponse.body();
     progress(`direct app/layout.js asset probe returned HTTP ${layoutChunkResponse.status()}; bytes=${layoutChunkBody.byteLength}; elapsed=${Date.now() - layoutChunkStartedAt}ms`);
   } catch (error) {
