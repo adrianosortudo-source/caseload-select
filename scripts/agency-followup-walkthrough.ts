@@ -1075,7 +1075,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     workerId: "synthetic-walkthrough-unknown",
     now: acceptedNow,
     limit: 1,
-    outcomePlan: [{ kind: "unknown", detail: "synthetic interruption after fake handoff" }],
+    outcomePlan: [{ kind: "unknown", detail: "synthetic_interruption_after_fake_handoff" }],
   }));
   const unknownRow = await pool.query<{ state: string; unknown_since: string | null }>(
     "select state,unknown_since from agency_followup_messages where id=$1",
