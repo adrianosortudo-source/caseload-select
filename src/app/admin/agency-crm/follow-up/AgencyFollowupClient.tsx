@@ -112,7 +112,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
     byEnrollment.set(item.enrollmentId, group);
   }
   const sendStatus = initialData.send.mode === 'off'
-    ? 'Sending is off. Approved messages stay queued.'
+    ? 'Sending is off. Messages stay queued.'
     : !initialData.send.ready
       ? 'Sending is unavailable until required configuration is complete.'
       : initialData.send.mode === 'test'
