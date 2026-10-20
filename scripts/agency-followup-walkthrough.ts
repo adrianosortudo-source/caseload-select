@@ -32,6 +32,7 @@ const RUN_STARTED_AT = new Date().toISOString();
 const SYNTHETIC_WEBHOOK_SECRET = `whsec_${randomBytes(32).toString("base64")}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 if (!UUID.test(RUN_ID)) throw new Error("Acceptance run ID must be a UUID.");
+const browserRuntimeErrorsByPage = new WeakMap<Page, string[]>();
 const MANUAL = process.argv.includes("--manual");
 const JOURNEY_VERSION_REGRESSION_ONLY = process.argv.includes("--journey-version-regression");
 const WEBHOOK_PREFLIGHT_ONLY = process.argv.includes("--webhook-preflight-only");
@@ -648,14 +649,15 @@ async function recordActionFailure(
       pageText: document.body.innerText.slice(0, 800),
     };
   }).catch(() => null);
+  const browserRuntimeErrors = browserRuntimeErrorsByPage.get(page)?.slice(-20) ?? [];
   await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
   const screenshotPath = path.join(OUTPUT_DIR, "screenshots", `failure-${action}-${RUN_ID}.png`);
-  await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
+  const screenshotWritten = await page.screenshot({ path: screenshotPath, fullPage: true }).then(() => true, () => false);
   const errorMessage = String(error).replace(/[\r\n\s]+/g, " ")
     .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 500);
-  const failureReceipt = { runId: RUN_ID, action, errorMessage, diagnostics, screenshot: path.basename(screenshotPath), recordedAtUtc: new Date().toISOString() };
+  const failureReceipt = { runId: RUN_ID, action, errorMessage, diagnostics, browserRuntimeErrors, screenshot: screenshotWritten ? path.basename(screenshotPath) : null, recordedAtUtc: new Date().toISOString() };
   await writeFile(path.join(OUTPUT_DIR, `failure-${action}-${RUN_ID}.json`), JSON.stringify(failureReceipt, null, 2) + "\n", "utf8");
-  progress(`operator action ${action} failed; diagnostics=${JSON.stringify(diagnostics)}; screenshot=${path.basename(screenshotPath)}; message=${errorMessage}`);
+  progress(`operator action ${action} failed; diagnostics=${JSON.stringify(diagnostics)}; screenshot=${screenshotWritten ? path.basename(screenshotPath) : "unavailable"}; message=${errorMessage}`);
   return errorMessage;
 }
 
@@ -711,15 +713,8 @@ async function waitForAction(
     if (!result.ok) throw result.error;
     response = result.response;
   } catch (error) {
-    const diagnostics = await page.evaluate(() => ({
-      buttonDisabled: (document.activeElement as HTMLButtonElement | null)?.disabled ?? null,
-      alerts: [...document.querySelectorAll('[role="alert"]')].map((node) => node.textContent?.trim() ?? ""),
-      readyState: document.readyState,
-      pageText: document.body.innerText.slice(0, 1200),
-    })).catch(() => null);
-    await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
-    await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", `failure-${action}.png`), fullPage: true }).catch(() => undefined);
-    throw new Error(`Operator action ${action} produced no POST response. UI diagnostics: ${JSON.stringify(diagnostics)}. ${String(error)}`);
+    const errorMessage = await recordActionFailure(page, action, button, error);
+    throw new Error(`Operator action ${action} produced no POST response: ${errorMessage}`);
   }
   if (response.status() === 401) {
     const payload = await response.json().catch(() => ({})) as { error?: unknown };
@@ -1014,6 +1009,9 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   page.setDefaultTimeout(30000);
   page.setDefaultNavigationTimeout(180_000);
   const responseFailures: string[] = [];
+  const recoveredBrowserRuntimeErrors: string[] = [];
+  let initialChunkRecoveryReloaded = false;
+  browserRuntimeErrorsByPage.set(page, responseFailures);
   page.on("pageerror", (error) => responseFailures.push("page error: " + error.message));
   page.on("console", (message) => {
     const text = message.text();
@@ -1055,6 +1053,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   if (await page.getByText(/This page couldn.t load/i).count()) {
     progress("Next rendered its chunk-recovery page during cold compilation; reloading once after the direct asset probe");
     await page.reload({ waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+    initialChunkRecoveryReloaded = true;
   }
   await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
@@ -1107,6 +1106,23 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
       await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", "failure-hydration.png"), fullPage: true }).catch(() => undefined);
       throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${String(hydrationError)}`);
+    }
+  }
+
+  // A cold Next dev compilation can time out the initial App Router layout
+  // chunk. Treat only that exact error as recovered, and only after the
+  // controlled reload above plus the controlled-input hydration assertion
+  // succeeded. Keep the original error in the run receipt for auditability.
+  if (initialChunkRecoveryReloaded) {
+    const recoveredChunkFailure = /^(?:page error|browser console): .*ChunkLoadError: Loading chunk app\/layout failed\./;
+    for (let index = responseFailures.length - 1; index >= 0; index--) {
+      if (recoveredChunkFailure.test(responseFailures[index])) {
+        recoveredBrowserRuntimeErrors.unshift(responseFailures[index]);
+        responseFailures.splice(index, 1);
+      }
+    }
+    if (recoveredBrowserRuntimeErrors.length) {
+      progress(`initial layout chunk error recovered by one reload and successful form hydration; captured=${JSON.stringify(recoveredBrowserRuntimeErrors)}`);
     }
   }
 
@@ -1542,6 +1558,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     temporaryDispatchRoute: { path: path.relative(process.cwd(), TEST_DISPATCH_DIR), sha256: temporaryRouteSha256 },
     reproduction,
     missingAuthoringControlRejected,
+    recoveredBrowserRuntimeErrors,
     startedAtUtc: RUN_STARTED_AT,
     endedAtUtc: new Date().toISOString(),
     command: "npm run agency-followup:walkthrough",
