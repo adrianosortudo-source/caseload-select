@@ -34,6 +34,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 if (!UUID.test(RUN_ID)) throw new Error("Acceptance run ID must be a UUID.");
 const MANUAL = process.argv.includes("--manual");
 const JOURNEY_VERSION_REGRESSION_ONLY = process.argv.includes("--journey-version-regression");
+const WEBHOOK_PREFLIGHT_ONLY = process.argv.includes("--webhook-preflight-only");
 const WALKTHROUGH_STARTED_AT = Date.now();
 const WALKTHROUGH_TIMEOUT_MS = 20 * 60_000;
 let interrupted = false;
@@ -625,6 +626,38 @@ async function signedContext(browser: Browser, fixtures: Fixtures, portalSecret:
   return context;
 }
 
+async function recordActionFailure(
+  page: Page,
+  action: string,
+  button: ReturnType<Page["getByRole"]>,
+  error: unknown,
+): Promise<string> {
+  const diagnostics = await button.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const hitTarget = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return {
+      buttonText: element.textContent?.trim().slice(0, 100) ?? "",
+      disabled: (element as HTMLButtonElement).disabled,
+      ariaDisabled: element.getAttribute("aria-disabled"),
+      visible: rect.width > 0 && rect.height > 0,
+      pointerEvents: getComputedStyle(element).pointerEvents,
+      hitTargetTag: hitTarget?.tagName ?? null,
+      hitTargetText: hitTarget?.textContent?.trim().slice(0, 100) ?? "",
+      pageTitle: document.title,
+      pageText: document.body.innerText.slice(0, 800),
+    };
+  }).catch(() => null);
+  await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
+  const screenshotPath = path.join(OUTPUT_DIR, "screenshots", `failure-${action}-${RUN_ID}.png`);
+  await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
+  const errorMessage = String(error).replace(/[\r\n\s]+/g, " ")
+    .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 500);
+  const failureReceipt = { runId: RUN_ID, action, errorMessage, diagnostics, screenshot: path.basename(screenshotPath), recordedAtUtc: new Date().toISOString() };
+  await writeFile(path.join(OUTPUT_DIR, `failure-${action}-${RUN_ID}.json`), JSON.stringify(failureReceipt, null, 2) + "\n", "utf8");
+  progress(`operator action ${action} failed; diagnostics=${JSON.stringify(diagnostics)}; screenshot=${path.basename(screenshotPath)}; message=${errorMessage}`);
+  return errorMessage;
+}
+
 async function waitForAction(
   page: Page,
   action: string,
@@ -632,22 +665,27 @@ async function waitForAction(
   enabledTimeoutMs = 30_000,
 ): Promise<void> {
   setDiagnosticStage(`browser_action_${action}`);
-  await button.waitFor({ state: "visible" });
-  if (!(await button.isEnabled())) {
-    const state = await button.evaluate((element) => {
-      const form = element.closest("form");
-      return {
-        buttonDisabled: (element as HTMLButtonElement).disabled,
-        reactAttached: Boolean(form && Object.keys(form).some((key) => key.startsWith("__reactProps$"))),
-        controls: [...(form?.querySelectorAll("input,textarea,select") ?? [])].map((control) => ({
-          valueLength: (control as HTMLInputElement).value.length,
-          reactAttached: Object.keys(control).some((key) => key.startsWith("__reactProps$")),
-        })),
-      };
-    });
-    progress(`button ${action} initially disabled; React form diagnostics=${JSON.stringify(state)}`);
+  try {
+    await button.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
+    if (!(await button.isEnabled())) {
+      const state = await button.evaluate((element) => {
+        const form = element.closest("form");
+        return {
+          buttonDisabled: (element as HTMLButtonElement).disabled,
+          reactAttached: Boolean(form && Object.keys(form).some((key) => key.startsWith("__reactProps$"))),
+          controls: [...(form?.querySelectorAll("input,textarea,select") ?? [])].map((control) => ({
+            valueLength: (control as HTMLInputElement).value.length,
+            reactAttached: Object.keys(control).some((key) => key.startsWith("__reactProps$")),
+          })),
+        };
+      });
+      progress(`button ${action} initially disabled; React form diagnostics=${JSON.stringify(state)}`);
+    }
+    await expect(button).toBeEnabled({ timeout: Math.min(enabledTimeoutMs, remainingMs()) });
+  } catch (error) {
+    const errorMessage = await recordActionFailure(page, action, button, error);
+    throw new Error(`Operator action ${action} readiness failed: ${errorMessage}`);
   }
-  await expect(button).toBeEnabled({ timeout: enabledTimeoutMs });
   // The initial page explicitly verifies controlled-input hydration. For later
   // actions, the enabled locator and Playwright's click actionability checks
   // provide the readiness gate without waiting on unrelated page network work.
@@ -656,37 +694,21 @@ async function waitForAction(
     const matched = new URL(response.url()).pathname === API_PATH && response.request().method() === "POST";
     if (matched) progress(`waiter matched Agency CRM POST response HTTP ${response.status()}`);
     return matched;
-  }, { timeout: 60000 });
+  }, { timeout: Math.min(60_000, remainingMs()) }).then(
+    (response) => ({ ok: true as const, response }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
   try {
     await button.click({ timeout: Math.min(60_000, remainingMs()) });
   } catch (error) {
-    const diagnostics = await button.evaluate((element) => {
-      const rect = element.getBoundingClientRect();
-      const hitTarget = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-      return {
-        buttonText: element.textContent?.trim().slice(0, 100) ?? "",
-        disabled: (element as HTMLButtonElement).disabled,
-        ariaDisabled: element.getAttribute("aria-disabled"),
-        visible: rect.width > 0 && rect.height > 0,
-        pointerEvents: getComputedStyle(element).pointerEvents,
-        hitTargetTag: hitTarget?.tagName ?? null,
-        hitTargetText: hitTarget?.textContent?.trim().slice(0, 100) ?? "",
-        pageTitle: document.title,
-      };
-    }).catch(() => null);
-    await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
-    const screenshotPath = path.join(OUTPUT_DIR, "screenshots", `failure-${action}-${RUN_ID}.png`);
-    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
-    const errorMessage = String(error).replace(/[\r\n\s]+/g, " ")
-      .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 500);
-    const failureReceipt = { runId: RUN_ID, action, errorMessage, diagnostics, screenshot: path.basename(screenshotPath), recordedAtUtc: new Date().toISOString() };
-    await writeFile(path.join(OUTPUT_DIR, `failure-${action}-${RUN_ID}.json`), JSON.stringify(failureReceipt, null, 2) + "\n", "utf8");
-    progress(`operator action ${action} click failed; diagnostics=${JSON.stringify(diagnostics)}; screenshot=${path.basename(screenshotPath)}; message=${errorMessage}`);
+    const errorMessage = await recordActionFailure(page, action, button, error);
     throw new Error(`Operator action ${action} button click failed: ${errorMessage}`);
   }
   let response: Awaited<typeof responsePromise>;
   try {
-    response = await responsePromise;
+    const result = await responsePromise;
+    if (!result.ok) throw result.error;
+    response = result.response;
   } catch (error) {
     const diagnostics = await page.evaluate(() => ({
       buttonDisabled: (document.activeElement as HTMLButtonElement | null)?.disabled ?? null,
@@ -871,12 +893,14 @@ async function dispatchFake(
 }
 
 async function postSyntheticResendEvent(providerEventId: string, payload: Record<string, unknown>): Promise<{ status: number; outcome: string; error: string }> {
+  setDiagnosticStage("synthetic_signed_webhook");
   const timestamp = String(Math.floor(Date.now() / 1000));
   const rawBody = JSON.stringify(payload);
   const signingKey = Buffer.from(SYNTHETIC_WEBHOOK_SECRET.slice("whsec_".length), "base64");
   const signature = createHmac("sha256", signingKey)
     .update(`${providerEventId}.${timestamp}.${rawBody}`, "utf8")
     .digest("base64");
+  progress("sending synthetic signed provider event to the local webhook");
   const response = await fetch(APP_ORIGIN + "/api/webhooks/resend/agency-followup", {
     method: "POST",
     headers: {
@@ -886,13 +910,31 @@ async function postSyntheticResendEvent(providerEventId: string, payload: Record
       "svix-signature": `v1,${signature}`,
     },
     body: rawBody,
+    signal: AbortSignal.timeout(Math.min(90_000, remainingMs())),
   });
   const result = await response.json().catch(() => ({})) as { outcome?: unknown; error?: unknown };
-  return {
+  const receipt = {
     status: response.status,
     outcome: typeof result.outcome === "string" ? result.outcome : "none",
     error: typeof result.error === "string" ? result.error.replace(/[^A-Za-z0-9_.:-]+/g, "_").slice(0, 120) : "none",
   };
+  progress(`synthetic signed provider event returned HTTP ${receipt.status}; outcome=${receipt.outcome}; error=${receipt.error}`);
+  return receipt;
+}
+
+async function warmResendWebhookRoute(): Promise<void> {
+  setDiagnosticStage("resend_webhook_cold_route_preflight");
+  const response = await fetch(APP_ORIGIN + "/api/webhooks/resend/agency-followup", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+    signal: AbortSignal.timeout(Math.min(90_000, remainingMs())),
+  });
+  const result = await response.json().catch(() => ({})) as { error?: unknown };
+  if (response.status !== 400 || result.error !== "invalid_signature") {
+    throw new Error(`Unsigned local webhook preflight expected HTTP 400 invalid_signature; got HTTP ${response.status}.`);
+  }
+  progress("local webhook route compiled; unsigned preflight returned HTTP 400 before persistence");
 }
 
 async function withFixtureClaim<T>(pool: Pool, messageId: string, operation: () => Promise<T>): Promise<T> {
@@ -1698,6 +1740,50 @@ async function runManual(context: BrowserContext): Promise<void> {
   });
 }
 
+async function runWebhookPreflightOnly(status: SupabaseStatus, portalSecret: string, walkthroughToken: string): Promise<void> {
+  const pool = new Pool({ connectionString: status.DB_URL, max: 2, ssl: false, connectionTimeoutMillis: 5000, query_timeout: 20000 });
+  let server: ChildProcess | undefined;
+  try {
+    await verifyLocalPostgrest(status);
+    await verifyDisposableTarget(pool);
+    await verifyProviderEventImmutability(pool);
+    const before = await countRows(pool, "select count(*)::text as count from public.agency_followup_provider_events");
+    await mkdir(OUTPUT_DIR, { recursive: true });
+    await writeFile(path.join(OUTPUT_DIR, "next-server.log"), "", "utf8");
+    await writeFile(path.join(OUTPUT_DIR, "next-server.stdout.log"), "", "utf8");
+    await writeFile(path.join(OUTPUT_DIR, "next-server.stderr.log"), "", "utf8");
+    server = startApp(portalSecret, walkthroughToken, status);
+    activeNextServer = server;
+    const listenerDeadline = Math.min(absoluteDeadline, Date.now() + 120_000);
+    await waitForListener(server, listenerDeadline);
+    await warmResendWebhookRoute();
+    const after = await countRows(pool, "select count(*)::text as count from public.agency_followup_provider_events");
+    if (after !== before) throw new Error("Unsigned webhook preflight changed the disposable provider-event count.");
+    const sourceAfterCleanup = captureSourceState();
+    if (sourceAfterCleanup.workingTreeState !== "clean") throw new Error("Source changed during webhook preflight.");
+    const receipt = {
+      runId: RUN_ID,
+      command: "node --import tsx scripts/agency-followup-walkthrough.ts --webhook-preflight-only",
+      sourceCommit: sourceAfterCleanup.sourceCommit,
+      databaseProjectId: STACK_PROJECT_ID,
+      databaseHost: "loopback",
+      browserLaunched: false,
+      unsignedRequest: "HTTP 400 invalid_signature",
+      providerEventCountUnchanged: true,
+      temporaryDispatchRouteInstalled: false,
+      completedAtUtc: new Date().toISOString(),
+    };
+    await writeFile(path.join(OUTPUT_DIR, `webhook-preflight-${RUN_ID}.json`), JSON.stringify(receipt, null, 2) + "\n", "utf8");
+    console.log(JSON.stringify(receipt, null, 2));
+  } finally {
+    if (server) {
+      stopApp(server);
+      if (activeNextServer === server) activeNextServer = undefined;
+    }
+    await pool.end();
+  }
+}
+
 async function main(): Promise<void> {
   if (JOURNEY_VERSION_REGRESSION_ONLY && MANUAL) {
     throw new Error("The focused journey-version regression cannot be combined with --manual.");
@@ -1723,9 +1809,14 @@ async function main(): Promise<void> {
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");
-  await verifyLocalPostgrest(status);
   const portalSecret = randomBytes(32).toString("hex") + "-test-only";
   const walkthroughToken = randomBytes(32).toString("hex") + "-test-only";
+  if (WEBHOOK_PREFLIGHT_ONLY) {
+    progress("running bounded cold webhook route preflight only; no browser or synthetic event persistence");
+    await runWebhookPreflightOnly(status, portalSecret, walkthroughToken);
+    return;
+  }
+  await verifyLocalPostgrest(status);
   process.env.NEXT_PUBLIC_SUPABASE_URL = status.API_URL;
   process.env.SUPABASE_SERVICE_ROLE_KEY = status.SERVICE_ROLE_KEY;
   process.env.PORTAL_SECRET = portalSecret;
@@ -1761,6 +1852,7 @@ async function main(): Promise<void> {
   let context: BrowserContext | undefined;
   try {
     await waitForApp(server, fixtures);
+    await warmResendWebhookRoute();
     progress("authenticated API is ready; opening actual operator queue UI");
     if (MANUAL) {
       browser = await chromium.launch({ headless: false });
