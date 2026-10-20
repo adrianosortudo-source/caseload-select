@@ -162,6 +162,135 @@ async function loadOperationsState(prospectId: string): Promise<{
   };
 }
 
+async function readOperationsPages(
+  queryAt: (from: number, to: number) => PromiseLike<{ data: DbRow[] | null; error: { message: string } | null }>,
+  label: string,
+): Promise<DbRow[]> {
+  const pageSize = 1000;
+  const hardCap = 20000;
+  const rows: DbRow[] = [];
+  for (let offset = 0; offset < hardCap; offset += pageSize) {
+    const page = assertResult(await queryAt(offset, offset + pageSize - 1), label);
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
+  }
+  throw new Error(`${label}: result exceeded the ${hardCap}-row safety limit`);
+}
+
+async function loadOperationsStates(prospectIds: string[]): Promise<Map<string, Awaited<ReturnType<typeof loadOperationsState>>>> {
+  const statesByProspect = new Map<string, Awaited<ReturnType<typeof loadOperationsState>>>();
+  const unknownState = (): Awaited<ReturnType<typeof loadOperationsState>> => ({
+    contactability: "unknown",
+    conversationStatus: "not_contacted",
+    hasExactSource: false,
+  });
+  for (const prospectId of prospectIds) statesByProspect.set(prospectId, unknownState());
+  if (prospectIds.length === 0) return statesByProspect;
+
+  const sourceRows = await readOperationsPages(
+    (from, to) => supabase.from("prospect_source_links").select("id,source_record_key")
+      .in("source_system", ["agency_crm", "agency_crm_contact"]).in("source_record_key", prospectIds).range(from, to),
+    "Unable to verify Agency CRM source history",
+  );
+  const prospectBySourceId = new Map<string, string>();
+  for (const row of sourceRows) {
+    const prospectId = String(row.source_record_key);
+    if (statesByProspect.has(prospectId)) prospectBySourceId.set(String(row.id), prospectId);
+  }
+  const sourceIds = [...prospectBySourceId.keys()];
+  if (sourceIds.length === 0) return statesByProspect;
+
+  const associations = await readOperationsPages(
+    (from, to) => supabase.from("prospect_conversation_sources").select("source_link_id,conversation_id")
+      .in("source_link_id", sourceIds).range(from, to),
+    "Unable to read Agency CRM conversation links",
+  );
+  const conversationIdsByProspect = new Map<string, Set<string>>();
+  for (const row of associations) {
+    const prospectId = prospectBySourceId.get(String(row.source_link_id));
+    if (!prospectId) continue;
+    const conversationId = String(row.conversation_id);
+    const ids = conversationIdsByProspect.get(prospectId) ?? new Set<string>();
+    ids.add(conversationId);
+    conversationIdsByProspect.set(prospectId, ids);
+  }
+  const conversationIds = [...new Set([...conversationIdsByProspect.values()].flatMap((ids) => [...ids]))];
+  if (conversationIds.length === 0) return statesByProspect;
+
+  for (const [prospectId, ids] of conversationIdsByProspect) {
+    if (ids.size > 0) statesByProspect.set(prospectId, { ...unknownState(), hasExactSource: true });
+  }
+  const [conversations, contactRows, activityRows, providerSuppressionRows] = await Promise.all([
+    readOperationsPages(
+      (from, to) => supabase.from("prospect_conversations").select("id,status").in("id", conversationIds).range(from, to),
+      "Unable to read prospect conversation state",
+    ),
+    readOperationsPages(
+      (from, to) => supabase.from("prospect_contactability").select("conversation_id,state").in("conversation_id", conversationIds).range(from, to),
+      "Unable to read prospect contactability",
+    ),
+    readOperationsPages(
+      (from, to) => supabase.from("prospect_activities").select("conversation_id,kind").in("conversation_id", conversationIds)
+        .in("kind", ["human_reply", "meeting", "bounce"]).range(from, to),
+      "Unable to read prospect activity stops",
+    ),
+    readOperationsPages(
+      (from, to) => supabase.from("prospect_contactability_provider_suppressions").select("conversation_id")
+        .in("conversation_id", conversationIds).range(from, to),
+      "Unable to read provider-originated contactability stops",
+    ),
+  ]);
+
+  const statusRank: Record<string, number> = {
+    not_contacted: 0,
+    awaiting_reply: 1,
+    unreachable: 2,
+    replied: 3,
+    declined: 4,
+    meeting_scheduled: 5,
+    completed: 6,
+  };
+  const conversationsById = new Map(conversations.map((row) => [String(row.id), String(row.status)]));
+  const contactById = new Map<string, string[]>();
+  for (const row of contactRows) {
+    const id = String(row.conversation_id);
+    const rows = contactById.get(id) ?? [];
+    rows.push(String(row.state));
+    contactById.set(id, rows);
+  }
+  const activitiesById = new Map<string, string[]>();
+  for (const row of activityRows) {
+    const id = String(row.conversation_id);
+    const rows = activitiesById.get(id) ?? [];
+    rows.push(String(row.kind));
+    activitiesById.set(id, rows);
+  }
+  const suppressedIds = new Set(providerSuppressionRows.map((row) => String(row.conversation_id)));
+
+  for (const [prospectId, ids] of conversationIdsByProspect) {
+    const prospectConversationIds = [...ids];
+    if (prospectConversationIds.length === 0) continue;
+    const states = prospectConversationIds.flatMap((id) => contactById.get(id) ?? []);
+    const contactability: AgencyContactability = prospectConversationIds.some((id) => suppressedIds.has(id)) || states.some((state) => state === "suppressed")
+      ? "hold"
+      : states.length === prospectConversationIds.length && states.every((state) => state === "eligible")
+        ? "allowed"
+        : "unknown";
+    let conversationStatus = prospectConversationIds.map((id) => conversationsById.get(id)).filter((status): status is string => status !== undefined)
+      .sort((left, right) => (statusRank[right] ?? 0) - (statusRank[left] ?? 0))[0] as AgencyConversationStatus | undefined;
+    const activityKinds = prospectConversationIds.flatMap((id) => activitiesById.get(id) ?? []);
+    if (activityKinds.includes("human_reply")) conversationStatus = "replied";
+    else if (activityKinds.includes("meeting")) conversationStatus = "meeting_scheduled";
+    else if (activityKinds.includes("bounce")) conversationStatus = "unreachable";
+    statesByProspect.set(prospectId, {
+      contactability,
+      conversationStatus: conversationStatus ?? "not_contacted",
+      hasExactSource: true,
+    });
+  }
+  return statesByProspect;
+}
+
 async function loadCurrentRecords(enrollmentId: string, messageId?: string) {
   const enrollmentResult = await supabase.from("agency_followup_enrollments").select("*").eq("id", enrollmentId).maybeSingle();
   if (enrollmentResult.error) throw new Error(enrollmentResult.error.message);
@@ -316,7 +445,7 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
   const prospectById = new Map(prospects.map((row) => [String(row.id), row]));
   const enrollmentById = new Map(enrollments.map((row) => [String(row.id), row]));
 
-  const operationsByProspect = new Map<string, Promise<Awaited<ReturnType<typeof loadOperationsState>>>>();
+  const operationsByProspect = await loadOperationsStates(prospectIds);
   const messagesByEnrollment = new Map<string, DbRow[]>();
   for (const message of messages) {
     const enrollmentId = String(message.enrollment_id);
@@ -329,8 +458,11 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
     const prospect = enrollment ? prospectById.get(String(enrollment.prospect_id)) : undefined;
     if (!enrollment || !prospect) throw new Error("A follow-up message is missing its exact Agency CRM prospect link.");
     const prospectId = String(prospect.id);
-    if (!operationsByProspect.has(prospectId)) operationsByProspect.set(prospectId, loadOperationsState(prospectId));
-    const operations = await operationsByProspect.get(prospectId)!;
+    const operations = operationsByProspect.get(prospectId) ?? {
+      contactability: "unknown" as const,
+      conversationStatus: "not_contacted" as const,
+      hasExactSource: false,
+    };
     const enrollmentMessages = messagesByEnrollment.get(String(enrollment.id)) ?? [];
     const previousAcceptedAt = enrollmentMessages
       .filter((row) => Number(row.step_number) < Number(message.step_number) && row.provider_accepted_at)
