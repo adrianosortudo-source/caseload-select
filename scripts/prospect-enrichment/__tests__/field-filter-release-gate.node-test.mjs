@@ -90,6 +90,8 @@ test("workflow has separate protected reviews, exact environment and pinned acti
  const yaml=await import("js-yaml"),workflow=yaml.default.load(fs.readFileSync(path.join(root,".github/workflows/prospect-field-filter-release.yml"),"utf8"));
  assert.equal(workflow.concurrency.group,"gta-prospect-migrations-production");assert.equal(workflow.concurrency["cancel-in-progress"],false);assert.equal(workflow.env.CREDENTIAL_GATE,"field-filter-release");
  assert.equal(workflow.env.SUPABASE_NO_UPDATE_NOTIFIER,"true");
+ const workflowEnvironment={...environment,...workflow.env,REVIEWED_SOURCE_SHA:sha,REVIEWED_RECEIPT_SHA256:receiptSha,FIELD_FILTER_CONFIRMATION:CONFIRMATION};
+ assert.equal(verifySource({environment:workflowEnvironment,checkoutSha:sha,mainSha:sha,receiptSha256:receiptSha}).projectRef,PROJECT_REF);
  assert.deepEqual(Object.keys(workflow.jobs).sort(),["apply","preflight"]);for(const job of Object.values(workflow.jobs)){assert.equal(job.environment.name,"Production prospect migrations");for(const step of job.steps.filter(step=>step.uses))assert.match(step.uses,/@[a-f0-9]{40}$/);}
  assert.match(workflow.jobs.preflight.steps.find(step=>step.name.includes("before credentials")).run,/field-filter-release-gate\.mjs source/);
  assert.match(workflow.jobs.apply.steps.find(step=>step.name.includes("one migration once")).run,/field-filter-release-gate\.mjs apply/);

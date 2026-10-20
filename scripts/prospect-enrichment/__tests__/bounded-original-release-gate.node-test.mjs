@@ -98,6 +98,8 @@ test("workflow requires two protected gates, fixed temporary credentials and imm
  assert.equal(workflow.concurrency.group,"gta-prospect-migrations-production");assert.equal(workflow.concurrency["cancel-in-progress"],false);
  assert.equal(workflow.env.USE_TEMPORARY_DATABASE_CREDENTIAL,"true");assert.equal(workflow.env.CREDENTIAL_GATE,"bounded-original-release");
  assert.equal(workflow.env.SUPABASE_NO_UPDATE_NOTIFIER,"true");
+ const workflowEnvironment={...environment,...workflow.env,REVIEWED_SOURCE_SHA:sha,REVIEWED_RECEIPT_SHA256:receiptSha,BOUNDED_ORIGINAL_CONFIRMATION:CONFIRMATION};
+ assert.equal(verifySource({environment:workflowEnvironment,checkoutSha:sha,mainSha:sha,receiptSha256:receiptSha}).projectRef,PROJECT_REF);
  for(const job of Object.values(workflow.jobs)){assert.equal(job.environment.name,"Production prospect migrations");const actions=job.steps.filter(step=>step.uses);for(const step of actions)assert.match(step.uses,/@[a-f0-9]{40}$/);}
  assert.equal(workflow.jobs.apply.needs,"preflight");
  const apply=workflow.jobs.apply.steps;assert.ok(apply.findIndex(step=>step.run?.includes("verify-evidence"))<apply.findIndex(step=>step.run?.includes("temporary-credential.mjs")));

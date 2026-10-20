@@ -407,6 +407,8 @@ export function verifyDatabaseEnvironment(environment = {}, projectEnvFiles = []
     const setting = environment[key];
     if (setting === undefined) return false;
     if (key.toUpperCase() === "SUPABASE_INTERNAL_IMAGE_REGISTRY" && setting === "ghcr.io") return false;
+    // This fixed CLI switch disables its update-cache write; it cannot select a database or credential.
+    if (key === "SUPABASE_NO_UPDATE_NOTIFIER" && setting === "true") return false;
     return /^(?:PG|SUPABASE_|DOTENV_)/i.test(key) || ["DOCKER_HOST", "NODE_TLS_REJECT_UNAUTHORIZED", "NODE_EXTRA_CA_CERTS", "NODE_OPTIONS", "SSL_CERT_FILE", "SSL_CERT_DIR"].includes(key.toUpperCase());
   })) fail("ambient_database_configuration_prohibited");
   if (!Array.isArray(projectEnvFiles) || projectEnvFiles.length) fail("project_database_env_files_prohibited");
