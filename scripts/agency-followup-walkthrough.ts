@@ -1907,7 +1907,7 @@ async function main(): Promise<void> {
   process.env.SUPABASE_SERVICE_ROLE_KEY = status.SERVICE_ROLE_KEY;
   process.env.PORTAL_SECRET = portalSecret;
   const pool = new Pool({ connectionString: status.DB_URL, max: 8, ssl: false, connectionTimeoutMillis: 5000, query_timeout: 20000 });
-  if (!MANUAL) runAbortController = new AbortController();
+  runAbortController = new AbortController();
   const hardStop = MANUAL ? undefined : setTimeout(() => {
     interrupted = true;
     runAbortController?.abort(new Error("Overall walkthrough deadline exceeded."));
