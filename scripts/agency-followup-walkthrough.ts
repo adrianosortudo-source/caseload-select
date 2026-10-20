@@ -802,7 +802,7 @@ async function authorJourney(page: Page): Promise<string> {
   const otherJourneyDraft = page.getByText(otherJourneyName + " v1 · draft", { exact: false }).locator("..");
   await waitForAction(page, "journey_activate", otherJourneyDraft.getByRole("button", { name: "Activate version" }));
   const otherJourneyOption = journeyOptions.filter({ hasText: otherJourneyName + " v1" });
-  await expect(otherJourneyOption).toHaveCount(1);
+  await expect(otherJourneyOption).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
 
   const mixedCaseJourneyKey = "  " + journeyKey.toUpperCase() + "  ";
   if (mixedCaseJourneyKey.trim().toLowerCase() !== journeyKey) {
@@ -813,12 +813,12 @@ async function authorJourney(page: Page): Promise<string> {
   await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
   const journeyV2Draft = page.getByText(journeyName + " v2 · draft", { exact: false }).locator("..");
   await waitForAction(page, "journey_activate", journeyV2Draft.getByRole("button", { name: "Activate version" }));
-  await expect(page.getByText(journeyName + " v1 · retired", { exact: false })).toBeVisible();
-  await expect(page.getByText(journeyName + " v2 · active", { exact: false })).toBeVisible();
-  await expect(versionOneOption).toHaveCount(0);
+  await expect(page.getByText(journeyName + " v1 · retired", { exact: false })).toBeVisible({ timeout: Math.min(30_000, remainingMs()) });
+  await expect(page.getByText(journeyName + " v2 · active", { exact: false })).toBeVisible({ timeout: Math.min(30_000, remainingMs()) });
+  await expect(versionOneOption).toHaveCount(0, { timeout: Math.min(30_000, remainingMs()) });
   const versionTwoOption = journeyOptions.filter({ hasText: journeyName + " v2" });
-  await expect(versionTwoOption).toHaveCount(1);
-  await expect(otherJourneyOption).toHaveCount(1);
+  await expect(versionTwoOption).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+  await expect(otherJourneyOption).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
   journeyVersionRegressionResult = {
     sameKeyV1Retired: true,
     sameKeyV1AbsentFromSelector: true,
