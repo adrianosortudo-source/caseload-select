@@ -47,8 +47,13 @@ function prettyState(value: string): string {
   return value.replaceAll('_', ' ');
 }
 
+function normalizeJourneyKey(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 export default function AgencyFollowupClient({ initialData }: { initialData: ConsoleData }) {
   const router = useRouter();
+  const [journeys, setJourneys] = useState(initialData.journeys);
   const [journeyId, setJourneyId] = useState(initialData.journeys.find((item) => item.state === 'active')?.id ?? '');
   const [search, setSearch] = useState('');
   const [matches, setMatches] = useState<ProspectMatch[]>([]);
@@ -75,13 +80,13 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
       const response = await fetch('/api/admin/agency-crm/follow-up', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
-      const result = await response.json().catch(() => ({})) as { error?: string };
+      const result = await response.json().catch(() => ({})) as { error?: string; journeyId?: string; version?: number };
       if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
       router.refresh();
-      return true;
+      return result;
     } catch (cause) {
       setError((cause as Error).message);
-      return false;
+      return null;
     } finally {
       setBusy(false);
     }
@@ -156,13 +161,21 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
           </article>)}
         </div>}
 
-        <form className="grid w-full min-w-0 gap-3 border-t border-black/10 pt-4 lg:grid-cols-2" onSubmit={(event) => {
+        <form className="grid w-full min-w-0 gap-3 border-t border-black/10 pt-4 lg:grid-cols-2" onSubmit={async (event) => {
           event.preventDefault();
-          void act({
+          const steps = journeySteps.map((step) => ({ templateVersionId: step.templateVersionId, delayBusinessDays: Number(step.delayBusinessDays) }));
+          const result = await act({
             action: 'journey_create', journeyKey, name: journeyName, timezone,
             businessDays, localWindowStart, localWindowEnd, minimumSpacingHours: Number(minimumSpacingHours),
-            steps: journeySteps.map((step) => ({ templateVersionId: step.templateVersionId, delayBusinessDays: Number(step.delayBusinessDays) })),
+            steps,
           });
+          if (result?.journeyId && result.version) {
+            setJourneys((current) => [{
+              id: result.journeyId!, name: journeyName, journeyKey: normalizeJourneyKey(journeyKey), version: result.version!, state: 'draft',
+              timezone, businessDays: [...businessDays], localWindowStart, localWindowEnd,
+              minimumSpacingHours: Number(minimumSpacingHours), stepCount: steps.length,
+            }, ...current.filter((journey) => journey.id !== result.journeyId)]);
+          }
         }}>
           <h3 data-ui-copy="heading" className="w-full text-base font-semibold text-navy lg:col-span-2">Create a journey version</h3>
           <label className="block min-w-0 text-sm font-medium text-black/80">Journey key
@@ -212,11 +225,19 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
           </div>
         </form>
 
-        {initialData.journeys.length > 0 && <div className="grid w-full min-w-0 gap-2 border-t border-black/10 pt-4">
+        {journeys.length > 0 && <div className="grid w-full min-w-0 gap-2 border-t border-black/10 pt-4">
           <h3 className="w-full text-base font-semibold text-navy">Journey versions</h3>
-          {initialData.journeys.map((journey) => <div key={journey.id} className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 border border-black/10 p-3">
+          {journeys.map((journey) => <div key={journey.id} className="flex w-full min-w-0 flex-wrap items-center justify-between gap-2 border border-black/10 p-3">
             <p className="min-w-0 flex-1 break-words text-sm text-black/80">{journey.name} v{journey.version} · {prettyState(journey.state)} · {journey.timezone} · {journey.businessDays.length} days · {journey.localWindowStart} to {journey.localWindowEnd} · {journey.minimumSpacingHours}h spacing · {journey.stepCount} steps</p>
-            {journey.state === 'draft' && journey.stepCount > 0 && <button className="shrink-0 text-sm font-semibold text-navy underline disabled:opacity-50" disabled={busy} onClick={() => act({ action: 'journey_activate', journeyId: journey.id })}>Activate version</button>}
+            {journey.state === 'draft' && journey.stepCount > 0 && <button className="shrink-0 text-sm font-semibold text-navy underline disabled:opacity-50" disabled={busy} onClick={async () => {
+              if (await act({ action: 'journey_activate', journeyId: journey.id })) {
+                setJourneys((current) => current.map((item) => item.id === journey.id
+                  ? { ...item, state: 'active' }
+                  : normalizeJourneyKey(item.journeyKey) === normalizeJourneyKey(journey.journeyKey) && item.state === 'active'
+                    ? { ...item, state: 'retired' }
+                    : item));
+              }
+            }}>Activate version</button>}
           </div>)}
         </div>}
         </div>
@@ -231,7 +252,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
             Journey version
             <select className="mt-1 block w-full min-w-0 border border-black/20 bg-white px-3 py-2" value={journeyId} onChange={(event) => setJourneyId(event.target.value)}>
               <option value="">Choose a journey</option>
-              {initialData.journeys.filter((journey) => journey.state === 'active').map((journey) =>
+              {journeys.filter((journey) => journey.state === 'active').map((journey) =>
                 <option key={journey.id} value={journey.id}>{journey.name} v{journey.version}</option>)}
             </select>
           </label>

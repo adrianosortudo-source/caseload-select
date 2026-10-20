@@ -180,8 +180,31 @@ function rewriteForFirm(req: NextRequest, firmId: string): NextResponse {
 export async function middleware(req: NextRequest): Promise<NextResponse> {
   const hostname = req.nextUrl.hostname;
   const { pathname, search } = req.nextUrl;
+  const isLocalAgencyFollowupProbe = pathname === "/api/admin/agency-crm/follow-up"
+    && hostname === "127.0.0.1" && req.nextUrl.port === "55435";
+  const requestStartedAt = Date.now();
+  if (isLocalAgencyFollowupProbe) {
+    console.info("[agency-followup-local-probe] " + JSON.stringify({
+      component: "middleware",
+      stage: "middleware_enter",
+      method: req.method,
+      privacyRecoveryProtectedPath: isPrivacyRecoveryProtectedPath(pathname),
+      privacyGateEnabled: process.env.PRIVACY_DELETION_REGISTRY_ENABLED === "true",
+      redisUrlConfigured: Boolean(process.env.UPSTASH_REDIS_REST_URL),
+      redisTokenConfigured: Boolean(process.env.UPSTASH_REDIS_REST_TOKEN),
+    }));
+  }
 
+  const privacyGateStartedAt = Date.now();
   const recoveryGate = await privacyRecoveryApiGate(pathname);
+  if (isLocalAgencyFollowupProbe) {
+    console.info("[agency-followup-local-probe] " + JSON.stringify({
+      component: "middleware",
+      stage: "privacy_gate_exit",
+      elapsedMs: Date.now() - privacyGateStartedAt,
+      responseStatus: recoveryGate?.status ?? null,
+    }));
+  }
   if (recoveryGate) return recoveryGate;
 
   // A QA cookie is an unambiguous read-only principal. It cannot navigate to a
@@ -209,7 +232,16 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
 
   // Local dev + Vercel preview URLs → pass through
   if (isLocalOrPreviewHost(hostname)) {
-    return nextWithTrustedRequestContext(req);
+    const response = nextWithTrustedRequestContext(req);
+    if (isLocalAgencyFollowupProbe) {
+      console.info("[agency-followup-local-probe] " + JSON.stringify({
+        component: "middleware",
+        stage: "middleware_pass",
+        elapsedMs: Date.now() - requestStartedAt,
+        responseStatus: response.status,
+      }));
+    }
+    return response;
   }
 
   // Keep browser navigation on the origin that owns its host-only session.
