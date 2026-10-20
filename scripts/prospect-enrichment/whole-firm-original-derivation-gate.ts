@@ -1,5 +1,5 @@
 import fs from "node:fs/promises";
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { protocolHash, sha256 } from "./model";
 export type OriginalCompilerFile = { path: string; current: Uint8Array; committed: Uint8Array; expectedCheckout?: Uint8Array };
 const scope = ["src", "scripts", "package.json", "package-lock.json", "tsconfig.json"];
@@ -13,6 +13,32 @@ export function wholeFirmOriginalCompilerByteProof(files: readonly OriginalCompi
 }
 export function verifyWholeFirmOriginalCompilerFiles(files: readonly OriginalCompilerFile[], checkoutProof: unknown = null): string {
   return protocolHash(wholeFirmOriginalCompilerByteProof(files,checkoutProof));
+}
+/** Map in input order, limiting subprocess fan-out and waiting for started work on failure. */
+export async function mapConcurrentOrdered<T, R>(items: readonly T[], limit: number, mapper: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  if (!Number.isSafeInteger(limit) || limit < 1) throw new RangeError("offline_original_derivation_concurrency_invalid");
+  const results = new Array<R>(items.length);
+  let next = 0, failed = false, firstFailure: unknown;
+  const worker = async () => {
+    while (!failed) {
+      const index = next++;
+      if (index >= items.length) return;
+      try { results[index] = await mapper(items[index],index); }
+      catch (error) { if (!failed) { failed = true; firstFailure = error; } }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit,items.length) },worker));
+  if (failed) throw firstFailure;
+  return results;
+}
+function filteredCheckoutBytes(path: string, oid: string): Promise<Buffer> {
+  return new Promise((resolve,reject) => execFile("git",["cat-file","--filters","--path=" + path,oid],{ encoding: "buffer", maxBuffer: 64 * 1024 * 1024 },(error,stdout) => {
+    if (error) reject(error); else resolve(stdout);
+  }));
+}
+export function expectedOriginalCompilerCheckoutBytes(path: string, oid: string, committed: Uint8Array, current: Uint8Array): Promise<Buffer> {
+  const committedBytes = Buffer.from(committed), currentBytes = Buffer.from(current);
+  return currentBytes.equals(committedBytes) ? Promise.resolve(committedBytes) : filteredCheckoutBytes(path,oid);
 }
 function parseBatch(batch: Buffer, files: readonly string[]): { path: string; oid: string; bytes: Buffer }[] {
   let offset = 0;
@@ -76,13 +102,12 @@ export async function verifyPushedWholeFirmOriginalCompiler(commit: string): Pro
   }
   const batch = (input: string, filters = false) => execFileSync("git",["cat-file","--batch",...(filters ? ["--filters"] : [])],{ input, stdio: ["pipe","pipe","pipe"], maxBuffer: 64 * 1024 * 1024 });
   const committed = parseBatch(batch(files.map(path => commit + ":" + path + "\n").join("")),files);
-  const records: OriginalCompilerFile[] = [];
-  for (const file of committed) {
+  const records: OriginalCompilerFile[] = await mapConcurrentOrdered(committed,8,async file => {
     const current = await fs.readFile(file.path);
     // Exact committed bytes need no conversion; otherwise consume complete non-batch stdout.
-    const expectedCheckout = current.equals(file.bytes) ? file.bytes : execFileSync("git",["cat-file","--filters","--path=" + file.path,file.oid],{ stdio: ["ignore","pipe","pipe"], maxBuffer: 64 * 1024 * 1024 });
-    records.push({ path: file.path, committed: file.bytes, expectedCheckout, current });
-  }
+    const expectedCheckout = await expectedOriginalCompilerCheckoutBytes(file.path,file.oid,file.bytes,current);
+    return { path: file.path, committed: file.bytes, expectedCheckout, current };
+  });
   if (attr(false) !== currentAttributes || checkout.autocrlf !== config("core.autocrlf") || checkout.eol !== config("core.eol") || checkout.safecrlf !== config("core.safecrlf")) throw Error("offline_original_derivation_checkout_changed");
   const byteSealProof = wholeFirmOriginalCompilerByteProof(records,{ ...checkout, attributesSha256: sha256(pinnedAttributes) });
   return { compilerFileSha256: protocolHash(byteSealProof), fileCount: records.length, byteSealProof };

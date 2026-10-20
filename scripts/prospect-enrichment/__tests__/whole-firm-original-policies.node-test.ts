@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { originalCompilerUntrackedPathRejected, assertSafeOriginalCompilerAttributes, verifyWholeFirmOriginalCompilerFiles } from "../whole-firm-original-derivation-gate";
+import { originalCompilerUntrackedPathRejected, assertSafeOriginalCompilerAttributes, expectedOriginalCompilerCheckoutBytes, mapConcurrentOrdered, verifyWholeFirmOriginalCompilerFiles } from "../whole-firm-original-derivation-gate";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { wholeFirmFixture } from "../fixtures/whole-firm";
@@ -110,6 +110,28 @@ test("checkout byte seal admits only exact Git EOL conversion and rejects source
   for (const attribute of ["filter","ident","working-tree-encoding"]) assert.throws(() => assertSafeOriginalCompilerAttributes("cli.ts\0" + attribute + "\0custom\0"),/unsafe_checkout_conversion/);
 });
 
+test("ordered conversion pool bounds concurrency and waits for started work before failing", async () => {
+  let active=0, maximum=0;
+  const ordered=await mapConcurrentOrdered([0,1,2,3,4,5],2,async value=>{
+    active++; maximum=Math.max(maximum,active);
+    await new Promise(resolve=>setTimeout(resolve,(5-value)*2));
+    active--; return value*2;
+  });
+  assert.equal(maximum,2);
+  assert.deepEqual(ordered,[0,2,4,6,8,10]);
+
+  const expectedFailure=new Error("expected worker failure"), started:number[]=[];
+  let laterWorkerSettled=false;
+  await assert.rejects(mapConcurrentOrdered([0,1,2,3],2,async value=>{
+    started.push(value);
+    if(value===0) { await new Promise(resolve=>setTimeout(resolve,1)); throw expectedFailure; }
+    if(value===1) { await new Promise(resolve=>setTimeout(resolve,15)); assert.equal(laterWorkerSettled,false); laterWorkerSettled=true; return value; }
+    return value;
+  }),error=>error===expectedFailure);
+  assert.equal(laterWorkerSettled,true);
+  assert.deepEqual(started,[0,1]);
+});
+
 test("real Git NUL attribute framing verifies every requested path and attribute", () => {
   const paths = ["scripts/prospect-enrichment/cli.ts","scripts/check-self-contained-build-assets.mjs"];
   const result = execFileSync("git",["check-attr","-z","--stdin","text","eol","filter","ident","working-tree-encoding"],{ input: paths.join("\0") + "\0", encoding: "utf8" });
@@ -119,12 +141,14 @@ test("real Git NUL attribute framing verifies every requested path and attribute
   assert.throws(() => assertSafeOriginalCompilerAttributes(result.split("\0").slice(0,-4).join("\0") + "\0",paths),/attributes_invalid/);
 });
 
-test("real Git non-batch filtering yields complete expected checkout bytes for CRLF and pinned LF files", () => {
+test("async conversion matches real Git non-batch filtering for CRLF and pinned LF files", async () => {
   const paths = ["scripts/prospect-enrichment/model.ts","scripts/check-self-contained-build-assets.mjs"];
   for (const path of paths) {
     const oid = execFileSync("git",["rev-parse","HEAD:" + path],{ encoding: "utf8" }).trim();
     const committed = execFileSync("git",["cat-file","blob",oid]);
-    const checkout = execFileSync("git",["cat-file","--filters","--path=" + path,oid]);
+    const current = readFileSync(path), serialOracle = execFileSync("git",["cat-file","--filters","--path=" + path,oid]);
+    const checkout = await expectedOriginalCompilerCheckoutBytes(path,oid,committed,current);
+    assert.ok(checkout.equals(serialOracle),"async conversion matches the serial Git oracle: " + path);
     assert.ok(checkout.equals(readFileSync(path)),"complete expected checkout bytes: " + path);
     assert.equal(checkout.toString("utf8").replaceAll("\r\n","\n"),committed.toString("utf8").replaceAll("\r\n","\n"));
     if (path.endsWith(".mjs")) assert.ok(checkout.equals(committed),"explicit eol=lf stays byte identical");
