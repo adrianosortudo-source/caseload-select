@@ -461,7 +461,7 @@ test("dotenv detection covers both directories and all pinned default filenames 
 });
 
 
-test("current twelve-migration tree stages only prerequisites, preserving separate candidate authority", async t => {
+test("current migration tree stages only prerequisites, preserving separate candidate authority", async t => {
   const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "prerequisite-stage-test-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const source = path.join(base, "source");

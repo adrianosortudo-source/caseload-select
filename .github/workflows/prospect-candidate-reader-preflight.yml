@@ -1,0 +1,114 @@
+name: Read-only candidate reader repair preflight
+
+'on':
+  workflow_dispatch:
+    inputs:
+      reviewed_source_sha:
+        description: Exact reviewed 40-character current main commit containing the reader repair receipt and migrations.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gta-prospect-migrations-production
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select'
+    name: Read-only reader repair preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: Production prospect migrations
+    env:
+      PROJECT_REF: ssxryjxifwiivghglqer
+      REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+    steps:
+      - name: Check out the exact dispatch commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ inputs.reviewed_source_sha }}
+          fetch-depth: 0
+      - name: Verify exact current main source and reader receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$REVIEWED_SOURCE_SHA" = "$(git rev-parse HEAD)"
+          test "$REVIEWED_SOURCE_SHA" = "$GITHUB_SHA"
+          git fetch --no-tags origin main
+          test "$REVIEWED_SOURCE_SHA" = "$(git rev-parse origin/main)"
+          node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs source > "$RUNNER_TEMP/reader-source-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs receipt > "$RUNNER_TEMP/additive-receipt-check.json"
+      - name: Load protected static database connection
+        env:
+          STATIC_MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$STATIC_MIGRATION_DATABASE_URL"
+          [[ "$STATIC_MIGRATION_DATABASE_URL" != *$'\n'* && "$STATIC_MIGRATION_DATABASE_URL" != *$'\r'* ]]
+          printf 'MIGRATION_DATABASE_URL=%s\n' "$STATIC_MIGRATION_DATABASE_URL" >> "$GITHUB_ENV"
+      - name: Configure pinned database TLS
+        shell: bash
+        run: node scripts/prospect-enrichment/configure-migration-tls.mjs
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.117.0
+      - name: Validate protected connection and reviewed CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(supabase --version)" = "2.117.0"
+          supabase db push --help > "$RUNNER_TEMP/push-help.txt"
+          grep -q -- '--include-all' "$RUNNER_TEMP/push-help.txt"
+          node scripts/prospect-enrichment/migration-gate.mjs connection > "$RUNNER_TEMP/connection-check.json"
+      - name: Verify existing additive receipt, ledger statements and prerequisite catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/additive-release-gate.mjs ledger-query > "$RUNNER_TEMP/additive-ledger.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/additive-ledger.sql" --output json --agent no > "$RUNNER_TEMP/additive-ledger.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs ledger "$RUNNER_TEMP/additive-ledger.json" > "$RUNNER_TEMP/additive-ledger-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs candidate-complete "$RUNNER_TEMP/additive-ledger-check.json" > "$RUNNER_TEMP/additive-complete-check.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs catalog-query > "$RUNNER_TEMP/operator-catalog.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/operator-catalog.sql" --output json --agent no > "$RUNNER_TEMP/operator-catalog.json"
+          node scripts/prospect-enrichment/additive-release-gate.mjs catalog-bound "$RUNNER_TEMP/operator-catalog.json" "$RUNNER_TEMP/additive-ledger.json" > "$RUNNER_TEMP/operator-catalog-check.json"
+      - name: Require exactly the reader-repair migration suffix in full-ledger preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" > "$RUNNER_TEMP/staged-inventory.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/full-ledger.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/full-ledger.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger.json" "$RUNNER_TEMP/reader-migrations" candidate-reader-repair-pending '["supabase/migrations/20260930050000_prospect_candidate_coverage_warning_index.sql","supabase/migrations/20260930130000_prospect_candidate_reader_defer_legacy_audit.sql","supabase/migrations/20260930225510_prospect_enrichment_apply_refresh_gate.sql","supabase/migrations/20261004120000_prospect_candidate_firm_field_fastpath.sql","supabase/migrations/20261005141204_prospect_candidate_original_status_fastpath.sql","supabase/migrations/20261006003626_prospect_candidate_scoped_reader_fastpaths.sql","supabase/migrations/20261006111650_prospect_candidate_global_text_search_scoped.sql","supabase/migrations/20261006133000_prospect_candidate_global_text_search_set_identity.sql","supabase/migrations/20261006150000_prospect_candidate_global_text_search_warning_fastpath.sql","supabase/migrations/20261006160000_prospect_candidate_global_text_search_index_only.sql","supabase/migrations/20261006170000_prospect_candidate_global_text_search_direct_scope.sql","supabase/migrations/20261006234701_prospect_candidate_global_text_search_bounded_membership.sql","supabase/migrations/20261016042722_prospect_candidate_identity_filter_fastpath.sql"]' > "$RUNNER_TEMP/full-ledger-check.json"
+          (cd "$RUNNER_TEMP/reader-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/preflight-plan.json"
+          PLAN_PHASE=pre node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs plan "$RUNNER_TEMP/preflight-plan.json" "$RUNNER_TEMP/full-ledger-check.json" > "$RUNNER_TEMP/preflight-plan-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs verify-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" "$RUNNER_TEMP/staged-inventory.json" > "$RUNNER_TEMP/stage-check.json"
+      - name: Bind preflight evidence to run, source and migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e 'const fs=require("node:fs");const r=JSON.parse(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json","utf8"));if(!Array.isArray(r.migrations)||r.migrations.length!==13)process.exit(1);fs.writeFileSync(process.env.RUNNER_TEMP+"/preflight-binding.json",JSON.stringify({runId:process.env.GITHUB_RUN_ID,sourceSha:process.env.REVIEWED_SOURCE_SHA,migrationSha256:require("node:crypto").createHash("sha256").update(JSON.stringify(r.migrations)).digest("hex"),receiptSha256:require("node:crypto").createHash("sha256").update(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json")).digest("hex"),databaseWrites:0})+"\n");'
+          cat "$RUNNER_TEMP/preflight-binding.json"
+      - name: Upload redacted read-only preflight evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: prospect-reader-repair-preflight-only-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/preflight-binding.json
+            ${{ runner.temp }}/reader-source-check.json
+            ${{ runner.temp }}/additive-receipt-check.json
+            ${{ runner.temp }}/connection-check.json
+            ${{ runner.temp }}/additive-ledger-check.json
+            ${{ runner.temp }}/additive-complete-check.json
+            ${{ runner.temp }}/operator-catalog-check.json
+            ${{ runner.temp }}/staged-inventory.json
+            ${{ runner.temp }}/full-ledger-check.json
+            ${{ runner.temp }}/preflight-plan-check.json
+            ${{ runner.temp }}/stage-check.json
+          if-no-files-found: error
+          retention-days: 30
