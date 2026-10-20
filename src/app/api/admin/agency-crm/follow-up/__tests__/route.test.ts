@@ -45,10 +45,10 @@ beforeEach(() => {
 
 describe("Agency CRM follow-up API", () => {
   it("requires an operator session and an audit identity", async () => {
-    expect(responseStatus(await GET())).toBe(401);
+    expect(responseStatus(await GET(request("GET")))).toBe(401);
     expect(responseStatus(await POST(request("POST", { action: "enroll" })))).toBe(401);
     h.state.session = {};
-    expect(responseStatus(await GET())).toBe(403);
+    expect(responseStatus(await GET(request("GET")))).toBe(403);
     expect(h.fns.listAgencyFollowupConsole).not.toHaveBeenCalled();
     expect(h.fns.getOperatorSession).toHaveBeenCalledTimes(3);
   });

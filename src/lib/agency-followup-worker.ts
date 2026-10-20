@@ -3,7 +3,10 @@ import {
   type AgencyFollowupProvider,
 } from "./agency-followup-provider";
 import type { AgencyFollowupSendContext } from "./agency-followup-domain";
-import { scheduleAgencyFollowupStep } from "./agency-followup-schedule";
+import {
+  isWithinAgencyFollowupWindow,
+  scheduleAgencyFollowupStep,
+} from "./agency-followup-schedule";
 
 export interface AgencyFollowupClaim {
   id: string;
@@ -41,6 +44,7 @@ export function retryDelayMs(attemptCount: number): number {
 
 function scheduleNextAllowed(context: AgencyFollowupSendContext, earliestAt: string): string {
   if (!context.schedulePolicy) return earliestAt;
+  if (isWithinAgencyFollowupWindow(earliestAt, context.schedulePolicy)) return earliestAt;
   return scheduleAgencyFollowupStep({
     anchorAt: earliestAt,
     timezone: context.schedulePolicy.timezone,

@@ -6,7 +6,7 @@ describe("agency follow-up message approval action", () => {
     expect(canApproveAgencyFollowupMessage({
       messageState: "awaiting_review",
       sequenceReleased: true,
-      blockers: ["message_not_approved", "approval_missing", "not_due", "minimum_spacing_not_elapsed"],
+      blockers: ["message_not_approved", "approval_missing", "not_due", "minimum_spacing_not_elapsed", "outside_send_window"],
     })).toBe(true);
   });
 

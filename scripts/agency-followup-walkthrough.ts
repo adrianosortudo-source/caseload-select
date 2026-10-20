@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
-import { execFileSync, execSync } from "node:child_process";
-import { appendFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { appendFileSync, readFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -22,9 +22,13 @@ const EXPECTED_MIGRATION_BLOB = "c6d594c51b8c257aaca7a62fff41c96a1534a86a";
 const MIGRATION_PATH = "supabase/migrations/20261013154000_agency_followup_journeys.sql";
 const EXPECTED_CRM_GRANTS_MIGRATION_BLOB = "af413a079a76e2fc9844f0bb37d61bec3127b558";
 const CRM_GRANTS_MIGRATION_PATH = "supabase/migrations/20261013230354_agency_crm_service_role_grants.sql";
-const WIDTHS = [1440, 1024, 768, 640, 375, 320];
+const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
+const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
+const RUN_STARTED_AT = new Date().toISOString();
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+if (!UUID.test(RUN_ID)) throw new Error("Acceptance run ID must be a UUID.");
 const MANUAL = process.argv.includes("--manual");
+const JOURNEY_VERSION_REGRESSION_ONLY = process.argv.includes("--journey-version-regression");
 const WALKTHROUGH_STARTED_AT = Date.now();
 const WALKTHROUGH_TIMEOUT_MS = 20 * 60_000;
 let interrupted = false;
@@ -32,7 +36,57 @@ let absoluteDeadline = Number.POSITIVE_INFINITY;
 let activeNextServer: ChildProcess | undefined;
 let activeBrowser: Browser | undefined;
 let runAbortController: AbortController | undefined;
+let failureLifecycleContext: {
+  abortState: boolean | null;
+  nextChildPid: number | null;
+  nextChildExitCode: number | null;
+  nextChildSignalCode: NodeJS.Signals | null;
+} | undefined;
 let temporaryRouteInstalled = false;
+let temporaryRouteSha256: string | undefined;
+let sourceAtStart: ReturnType<typeof captureSourceState> | undefined;
+let diagnosticStage = "initialization";
+let diagnosticStageStartedAt = Date.now();
+let journeyVersionRegressionResult: {
+  sameKeyV1Retired: boolean;
+  sameKeyV1AbsentFromSelector: boolean;
+  sameKeyV2ActiveAndAvailable: boolean;
+  otherKeyV1RemainsAvailable: boolean;
+} | undefined;
+
+function setDiagnosticStage(stage: string): void {
+  diagnosticStage = stage;
+  diagnosticStageStartedAt = Date.now();
+}
+
+function safeDiagnosticAtom(value: unknown): string | number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  return typeof value === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(value) ? value : null;
+}
+
+function safeErrorDiagnostics(error: unknown): { errorName: string | number | null; errorCode: string | number | null; causeCode: string | number | null } {
+  const value = error && typeof error === "object" ? error as { name?: unknown; code?: unknown; cause?: unknown } : {};
+  const cause = value.cause && typeof value.cause === "object" ? value.cause as { code?: unknown } : {};
+  return {
+    errorName: safeDiagnosticAtom(value.name),
+    errorCode: safeDiagnosticAtom(value.code),
+    causeCode: safeDiagnosticAtom(cause.code),
+  };
+}
+
+function captureSourceState() {
+  const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" });
+  const sourceCommit = git("rev-parse", "HEAD").trim();
+  const workingTreeStatus = git("status", "--porcelain", "--untracked-files=all");
+  const untrackedSource = git("ls-files", "--others", "--exclude-standard", "-z").split("\0").filter(Boolean)
+    .map((file) => ({ path: file, sha256: createHash("sha256").update(readFileSync(file)).digest("hex") }));
+  const fingerprint = createHash("sha256")
+    .update(execFileSync("git", ["diff", "HEAD", "--binary"]))
+    .update(execFileSync("git", ["diff", "--cached", "--binary"]))
+    .update(workingTreeStatus).update(JSON.stringify(untrackedSource)).digest("hex");
+  return { sourceCommit, workingTreeState: workingTreeStatus ? "dirty" : "clean",
+    workingTreeStatus, diffFingerprintSha256: fingerprint, untrackedSource };
+}
 process.on("SIGINT", () => { interrupted = true; });
 
 function progress(message: string): void {
@@ -118,9 +172,8 @@ async function verifyLocalPostgrest(status: SupabaseStatus): Promise<void> {
 }
 
 async function verifyPushedMigration(pathname: string, expectedBlob: string): Promise<void> {
-  const source = await readFile(pathname);
-  const blobHeader = Buffer.from(`blob ${source.byteLength}\0`, "utf8");
-  const workingBlob = createHash("sha1").update(Buffer.concat([blobHeader, source])).digest("hex");
+  // Ask Git to apply the path clean filters so Windows CRLF checkouts match the pushed blob.
+  const workingBlob = execFileSync("git", ["hash-object", "--path", pathname, pathname], { encoding: "utf8" }).trim();
   if (workingBlob !== expectedBlob) {
     throw new Error(`Refusing local database use because ${path.basename(pathname)} no longer matches its verified pushed blob.`);
   }
@@ -170,10 +223,11 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["unknown", "Synthetic Walkthrough Unknown " + suffix, "Morgan Example", "eligible"],
     ["window", "Synthetic Walkthrough Window " + suffix, "Casey Example", "eligible"],
     ["lease", "Synthetic Walkthrough Lease " + suffix, "Quinn Example", "eligible"],
+    ["retry", "Synthetic Walkthrough Retry " + suffix, "Devon Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and six Agency prospects");
+    progress("seeding synthetic operator and seven Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -268,6 +322,7 @@ export async function POST(request: NextRequest) {
 `;
   await writeFile(path.join(TEST_DISPATCH_DIR, "route.ts"), route, "utf8");
   temporaryRouteInstalled = true;
+  temporaryRouteSha256 = createHash("sha256").update(route).digest("hex");
   progress("temporary fake-dispatch route installed");
 }
 
@@ -340,7 +395,7 @@ function stopApp(server: ChildProcess): void {
   }
 }
 
-async function waitForApp(server: ChildProcess, fixtures: Fixtures, portalSecret: string): Promise<void> {
+async function waitForApp(server: ChildProcess, fixtures: Fixtures): Promise<void> {
   const startedAt = Date.now();
   const startupDeadline = Math.min(absoluteDeadline, Date.now() + 10 * 60_000);
   const startupDiagnostics = setInterval(() => {
@@ -351,14 +406,16 @@ async function waitForApp(server: ChildProcess, fixtures: Fixtures, portalSecret
       throw new Error(`Local Next child exited before ${stage}: code=${server.exitCode} signal=${server.signalCode}.`);
     }
   };
+  setDiagnosticStage("next_listener_wait");
   try {
     await waitForListener(server, startupDeadline);
   } finally {
     clearInterval(startupDiagnostics);
   }
   assertRunning("unauthenticated API request");
-  progress(`Next child is alive before unauthenticated request; pid=${server.pid}; exitCode=${server.exitCode}; signalCode=${server.signalCode}; proxyBypass=127.0.0.1`);
+  progress(`Next child is alive before unauthenticated request; pid=${server.pid}; exitCode=${server.exitCode}; signalCode=${server.signalCode}; loopbackListenerOwnerVerified=true`);
   progress(`55435 listener is ready; probing unauthenticated Agency follow-up API (expected 401 or 403; ${Math.floor(remainingMs() / 1000)}s overall budget remains)`);
+  setDiagnosticStage("unauthenticated_api_probe");
   const unauthenticatedStartedAt = Date.now();
   const unauthenticatedProgress = setInterval(() => {
     progress(`unauthenticated API request still pending; elapsed=${Math.floor((Date.now() - unauthenticatedStartedAt) / 1000)}s; next child state=${server.exitCode === null ? "running" : `exit-${server.exitCode}`}`);
@@ -368,6 +425,16 @@ async function waitForApp(server: ChildProcess, fixtures: Fixtures, portalSecret
     unauthenticated = await fetch(APP_ORIGIN + API_PATH, {
       signal: AbortSignal.any([runAbortController!.signal, AbortSignal.timeout(Math.min(360_000, remainingMs()))]),
     });
+  } catch (error) {
+    progress("unauthenticated API probe rejected " + JSON.stringify({
+      stage: diagnosticStage,
+      elapsedMs: Date.now() - unauthenticatedStartedAt,
+      ...safeErrorDiagnostics(error),
+      abortState: runAbortController?.signal.aborted ?? null,
+      nextChildExitCode: server.exitCode,
+      nextChildSignalCode: server.signalCode,
+    }));
+    throw error;
   } finally {
     clearInterval(unauthenticatedProgress);
   }
@@ -376,9 +443,10 @@ async function waitForApp(server: ChildProcess, fixtures: Fixtures, portalSecret
     throw new Error("Unauthenticated Agency follow-up API returned unexpected HTTP " + unauthenticated.status + ".");
   }
   assertRunning("authenticated API request");
-  progress(`Next child is alive before authenticated request; pid=${server.pid}; exitCode=${server.exitCode}; signalCode=${server.signalCode}; proxyBypass=127.0.0.1`);
+  progress(`Next child is alive before authenticated request; pid=${server.pid}; exitCode=${server.exitCode}; signalCode=${server.signalCode}; loopbackListenerOwnerVerified=true`);
   const cookie = createSessionCookie(fixtures.firmId, { role: "operator", lawyer_id: fixtures.lawyerId });
   progress(`probing authenticated Agency follow-up API (synthetic operator cookie; ${Math.floor(remainingMs() / 1000)}s overall budget remains)`);
+  setDiagnosticStage("authenticated_api_probe");
   const authenticated = await fetch(APP_ORIGIN + API_PATH, {
     headers: { cookie: `${cookie.name}=${cookie.value}` },
     signal: AbortSignal.any([runAbortController!.signal, AbortSignal.timeout(Math.min(60_000, remainingMs()))]),
@@ -386,6 +454,7 @@ async function waitForApp(server: ChildProcess, fixtures: Fixtures, portalSecret
   progress(`authenticated Agency follow-up API returned HTTP ${authenticated.status}`);
   if (authenticated.status !== 200) throw new Error("Authenticated Agency follow-up API returned HTTP " + authenticated.status + ".");
   assertRunning("authenticated API response");
+  setDiagnosticStage("browser_ui_walkthrough");
 }
 
 async function waitForListener(server: ChildProcess, deadline: number): Promise<void> {
@@ -495,7 +564,13 @@ async function signedContext(browser: Browser, fixtures: Fixtures, portalSecret:
   return context;
 }
 
-async function waitForAction(page: Page, action: string, button: ReturnType<Page["getByRole"]>): Promise<void> {
+async function waitForAction(
+  page: Page,
+  action: string,
+  button: ReturnType<Page["getByRole"]>,
+  enabledTimeoutMs = 30_000,
+): Promise<void> {
+  setDiagnosticStage(`browser_action_${action}`);
   await button.waitFor({ state: "visible" });
   if (!(await button.isEnabled())) {
     const state = await button.evaluate((element) => {
@@ -511,7 +586,7 @@ async function waitForAction(page: Page, action: string, button: ReturnType<Page
     });
     progress(`button ${action} initially disabled; React form diagnostics=${JSON.stringify(state)}`);
   }
-  await expect(button).toBeEnabled({ timeout: 30_000 });
+  await expect(button).toBeEnabled({ timeout: enabledTimeoutMs });
   // App Router can return server HTML before the client bundle has hydrated.
   // Wait for the first page's network work to settle before relying on React
   // event handlers, especially on a cold local compile.
@@ -523,7 +598,7 @@ async function waitForAction(page: Page, action: string, button: ReturnType<Page
     const matched = new URL(response.url()).pathname === API_PATH && response.request().method() === "POST";
     if (matched) progress(`waiter matched Agency CRM POST response HTTP ${response.status()}`);
     return matched;
-  }, { timeout: 30000 });
+  }, { timeout: 60000 });
   await button.click();
   let response: Awaited<typeof responsePromise>;
   try {
@@ -567,7 +642,11 @@ async function authorJourney(page: Page): Promise<string> {
   await page.getByLabel("Email body").fill("Hello. This message is a local synthetic review fixture and is never sent to a provider.");
   await waitForAction(page, "template_create", page.getByRole("button", { name: "Create template draft" }));
   const templateCard = page.locator("article").filter({ hasText: templateKey }).first();
-  await waitForAction(page, "template_approve", templateCard.getByRole("button", { name: "Approve template v1" }));
+  const templateApprovalButton = templateCard.getByRole("button", { name: "Approve template v1" });
+  await templateApprovalButton.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
+  await waitForAction(page, "template_approve", templateApprovalButton);
+  const approvedTemplateOption = page.getByLabel("Template version").locator("option").filter({ hasText: templateKey + " v1" });
+  await expect(approvedTemplateOption).toHaveCount(1, { timeout: Math.min(90_000, remainingMs()) });
 
   await page.getByLabel("Journey key").fill(journeyKey);
   await page.getByLabel("Journey name").fill(journeyName);
@@ -582,21 +661,55 @@ async function authorJourney(page: Page): Promise<string> {
   await templateSelects.nth(1).selectOption({ label: templateKey + " v1" });
   await page.getByLabel("Delay, business days").nth(1).fill("1");
   await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
-  await waitForAction(page, "journey_activate", page.getByRole("button", { name: "Activate version" }).first());
-  const activatedJourneyOption = page.getByLabel("Journey version").locator("option").filter({ hasText: journeyName + " v1" });
+  const createdJourneyRow = page.getByText(journeyName + " v1 · draft", { exact: false }).locator("..");
+  await waitForAction(page, "journey_activate", createdJourneyRow.getByRole("button", { name: "Activate version" }));
+  const journeyOptions = page.getByLabel("Journey version").locator("option");
+  const versionOneOption = journeyOptions.filter({ hasText: journeyName + " v1" });
   try {
-    await expect(activatedJourneyOption).toHaveCount(1, { timeout: 30000 });
+    await expect(versionOneOption).toHaveCount(1, { timeout: 30000 });
   } catch (error) {
-    const options = await page.getByLabel("Journey version").locator("option").allTextContents().catch(() => []);
+    const options = await journeyOptions.allTextContents().catch(() => []);
     const alert = await page.locator('[role="alert"]').allTextContents().catch(() => []);
     throw new Error(`Activated journey did not appear in the review selector. Current options=${JSON.stringify(options)}; alerts=${JSON.stringify(alert)}. ${String(error)}`);
   }
-  await page.getByLabel("Journey version").selectOption({ label: journeyName + " v1" });
-  return journeyName;
+
+  const otherJourneyKey = journeyKey + "-other";
+  const otherJourneyName = journeyName + " other";
+  await page.getByLabel("Journey key").fill(otherJourneyKey);
+  await page.getByLabel("Journey name").fill(otherJourneyName);
+  await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
+  const otherJourneyDraft = page.getByText(otherJourneyName + " v1 · draft", { exact: false }).locator("..");
+  await waitForAction(page, "journey_activate", otherJourneyDraft.getByRole("button", { name: "Activate version" }));
+  const otherJourneyOption = journeyOptions.filter({ hasText: otherJourneyName + " v1" });
+  await expect(otherJourneyOption).toHaveCount(1);
+
+  const mixedCaseJourneyKey = "  " + journeyKey.toUpperCase() + "  ";
+  if (mixedCaseJourneyKey.trim().toLowerCase() !== journeyKey) {
+    throw new Error("Mixed-case regression fixture must normalize to the original journey key.");
+  }
+  await page.getByLabel("Journey key").fill(mixedCaseJourneyKey);
+  await page.getByLabel("Journey name").fill(journeyName);
+  await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
+  const journeyV2Draft = page.getByText(journeyName + " v2 · draft", { exact: false }).locator("..");
+  await waitForAction(page, "journey_activate", journeyV2Draft.getByRole("button", { name: "Activate version" }));
+  await expect(page.getByText(journeyName + " v1 · retired", { exact: false })).toBeVisible();
+  await expect(page.getByText(journeyName + " v2 · active", { exact: false })).toBeVisible();
+  await expect(versionOneOption).toHaveCount(0);
+  const versionTwoOption = journeyOptions.filter({ hasText: journeyName + " v2" });
+  await expect(versionTwoOption).toHaveCount(1);
+  await expect(otherJourneyOption).toHaveCount(1);
+  journeyVersionRegressionResult = {
+    sameKeyV1Retired: true,
+    sameKeyV1AbsentFromSelector: true,
+    sameKeyV2ActiveAndAvailable: true,
+    otherKeyV1RemainsAvailable: true,
+  };
+  await page.getByLabel("Journey version").selectOption({ label: journeyName + " v2" });
+  return journeyName + " v2";
 }
 
-async function createDraft(pool: Pool, page: Page, journeyName: string, prospect: ProspectFixture): Promise<void> {
-  await page.getByLabel("Journey version").selectOption({ label: journeyName + " v1" });
+async function createDraft(pool: Pool, page: Page, journeyVersionLabel: string, prospect: ProspectFixture): Promise<void> {
+  await page.getByLabel("Journey version").selectOption({ label: journeyVersionLabel });
   await page.getByLabel("Find one prospect").fill(prospect.firmName);
   const searchResponsePromise = page.waitForResponse((response) =>
     response.url().includes("/api/admin/agency-crm/prospects?") && response.request().method() === "GET",
@@ -620,10 +733,18 @@ async function createDraft(pool: Pool, page: Page, journeyName: string, prospect
 
 async function markEligibleAndRelease(page: Page, prospect: ProspectFixture): Promise<void> {
   const card = queueCard(page, prospect.firmName);
-  await card.getByLabel("Eligibility evidence for this prospect").fill("Synthetic evidence for local walkthrough only.");
+  const evidenceControl = card.getByLabel("Eligibility evidence for this prospect");
+  progress("waiting for the required eligibility control to render for " + prospect.firmName);
+  await evidenceControl.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
+  await evidenceControl.fill("Synthetic evidence for local walkthrough only.");
   await waitForAction(page, "eligibility", card.getByRole("button", { name: "Record eligible" }));
   await card.getByLabel("Individual release basis").fill("Synthetic walkthrough approval basis.");
-  await waitForAction(page, "release", card.getByRole("button", { name: "Release this prospect" }));
+  await waitForAction(
+    page,
+    "release",
+    card.getByRole("button", { name: "Release this prospect" }),
+    Math.min(90_000, remainingMs()),
+  );
 }
 
 async function postAction(context: BrowserContext, data: Record<string, unknown>): Promise<APIResponse> {
@@ -638,6 +759,20 @@ async function dispatchFake(
   const response = await context.request.post(APP_ORIGIN + TEST_DISPATCH_PATH, { data: { ...input, token } });
   if (!response.ok()) throw new Error("Local fake dispatcher endpoint returned HTTP " + response.status() + ".");
   return await response.json() as Record<string, number>;
+}
+
+async function withFixtureClaim<T>(pool: Pool, messageId: string, operation: () => Promise<T>): Promise<T> {
+  // Keep retained scheduled fixtures out of this claim without rewriting them.
+  // The real claim RPC still selects the target using FOR UPDATE SKIP LOCKED.
+  const guard = await pool.connect();
+  try {
+    await guard.query("begin");
+    await guard.query("set local lock_timeout = '3s'");
+    await guard.query("select id from public.agency_followup_messages where state='scheduled' and id<>$1 order by id for update", [messageId]);
+    return await operation();
+  } finally {
+    try { await guard.query("rollback"); } finally { guard.release(); }
+  }
 }
 
 async function countRows(pool: Pool, query: string, values: unknown[] = []): Promise<number> {
@@ -825,7 +960,13 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw new Error("The normal two-step flow did not reach per-message scheduled review.");
   }
   const firstNormalMessage = normalMessages.rows[0];
-  await pool.query("update agency_followup_messages set scheduled_at=now()-interval '1 minute' where id=$1", [firstNormalMessage.id]);
+  const acceptedClock = new Date();
+  acceptedClock.setUTCHours(16, 0, 0, 0);
+  if (acceptedClock.getTime() <= Date.now()) acceptedClock.setUTCDate(acceptedClock.getUTCDate() + 1);
+  while (acceptedClock.getUTCDay() === 0 || acceptedClock.getUTCDay() === 6) acceptedClock.setUTCDate(acceptedClock.getUTCDate() + 1);
+  const acceptedNow = acceptedClock.toISOString();
+  const acceptedDueAt = new Date(acceptedClock.getTime() - 60_000).toISOString();
+  await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [firstNormalMessage.id, acceptedDueAt]);
 
   // Edit a reviewed snapshot in the disposable database to exercise the real
   // invalidation trigger. The trigger must clear reviewer/time and re-open review.
@@ -844,7 +985,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await page.reload({ waitUntil: "networkidle" });
   await expect(queueCard(page, normal.firmName).getByText("awaiting review", { exact: true })).toBeVisible();
 
-  const acceptedResult = await dispatchFake(context, walkthroughToken, { workerId: "synthetic-walkthrough-accepted", limit: 10 });
+  const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, { workerId: "synthetic-walkthrough-accepted", now: acceptedNow, limit: 1 }));
   const accepted = await pool.query<{ state: string; provider_message_id: string | null }>(
     "select state,provider_message_id from agency_followup_messages where id=$1",
     [firstNormalMessage.id],
@@ -887,22 +1028,107 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     "select id from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) and step_number=1",
     [unknownProspect.id],
   );
-  await pool.query("update agency_followup_messages set scheduled_at=now()-interval '1 minute' where id=$1", [unknownMessage.rows[0].id]);
-  const unknownResult = await dispatchFake(context, walkthroughToken, {
+  await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [unknownMessage.rows[0].id, acceptedDueAt]);
+  const unknownResult = await withFixtureClaim(pool, unknownMessage.rows[0].id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-unknown",
+    now: acceptedNow,
     limit: 1,
     outcomePlan: [{ kind: "unknown", detail: "synthetic interruption after fake handoff" }],
-  });
+  }));
   const unknownRow = await pool.query<{ state: string; unknown_since: string | null }>(
     "select state,unknown_since from agency_followup_messages where id=$1",
     [unknownMessage.rows[0].id],
   );
-  const reclaimed = await pool.query(
-    "select * from public.claim_agency_followup_messages('synthetic-walkthrough-no-retry',now()+interval '1 day',120,10)",
-  );
-  const unknownWasReclaimed = reclaimed.rows.some((row: { id: string }) => row.id === unknownMessage.rows[0].id);
+  const quarantineClient = await pool.connect();
+  let unknownWasReclaimed = false;
+  try {
+    await quarantineClient.query("begin");
+    const reclaimed = await quarantineClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_messages('synthetic-walkthrough-no-retry',now()+interval '1 day',120,100)",
+    );
+    unknownWasReclaimed = reclaimed.rows.some((row) => row.id === unknownMessage.rows[0].id);
+    await quarantineClient.query("rollback");
+  } catch (error) {
+    await quarantineClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    quarantineClient.release();
+  }
   if (unknownResult.unknown !== 1 || unknownRow.rows[0]?.state !== "unknown" || !unknownRow.rows[0]?.unknown_since || unknownWasReclaimed) {
     throw new Error("UNKNOWN provider outcome was not quarantined or was automatically reclaimed.");
+  }
+  const retryProspect = fixtures.prospects.retry;
+  await createDraft(pool, page, journeyName, retryProspect);
+  await markEligibleAndRelease(page, retryProspect);
+  await waitForAction(page, "approve", queueCard(page, retryProspect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const retryMessageResult = await pool.query<{ id: string; provider_idempotency_key: string }>(
+    "select id,provider_idempotency_key from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) and step_number=1",
+    [retryProspect.id],
+  );
+  const retryMessage = retryMessageResult.rows[0];
+  if (!retryMessage) throw new Error("Synthetic retry message was not created.");
+  const retryClock = new Date();
+  retryClock.setUTCHours(16, 0, 0, 0);
+  if (retryClock.getTime() <= Date.now()) retryClock.setUTCDate(retryClock.getUTCDate() + 1);
+  while (retryClock.getUTCDay() === 0 || retryClock.getUTCDay() === 6) retryClock.setUTCDate(retryClock.getUTCDate() + 1);
+  const retryNow = retryClock.toISOString();
+  const retryDueAt = new Date(retryClock.getTime() + 30_000).toISOString();
+  const retryInitialDueAt = new Date(retryClock.getTime() - 60_000).toISOString();
+  await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [retryMessage.id, retryInitialDueAt]);
+  const retryFailure = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-retry",
+    now: retryNow,
+    limit: 1,
+    outcomePlan: [{ kind: "definitive_retryable_failure", code: "synthetic_throttle" }],
+  }));
+  const retryRow = await pool.query<{ state: string; attempt_count: number; scheduled_at: string; last_error_code: string | null; provider_idempotency_key: string }>(
+    "select state,attempt_count,scheduled_at,last_error_code,provider_idempotency_key from agency_followup_messages where id=$1",
+    [retryMessage.id],
+  );
+  const retryScheduledAt = retryRow.rows[0]?.scheduled_at ? new Date(retryRow.rows[0].scheduled_at).toISOString() : "";
+  if (retryFailure.retryScheduled !== 1 || retryRow.rows[0]?.state !== "scheduled" || Number(retryRow.rows[0]?.attempt_count) !== 1 ||
+    retryScheduledAt !== retryDueAt || retryRow.rows[0]?.last_error_code !== "synthetic_throttle" ||
+    retryRow.rows[0]?.provider_idempotency_key !== retryMessage.provider_idempotency_key) {
+    throw new Error("The disposable database did not persist the first retry, 30-second backoff, and stable idempotency key.");
+  }
+  const retryClient = await pool.connect();
+  try {
+    await retryClient.query("begin");
+    const earlyClaims = await retryClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_messages($1,$2,120,100)",
+      ["synthetic-walkthrough-early-retry", new Date(Date.parse(retryDueAt) - 1).toISOString()],
+    );
+    if (earlyClaims.rows.some((row) => row.id === retryMessage.id)) throw new Error("The retry message was claimable before its persisted backoff was due.");
+    await retryClient.query("rollback");
+    await retryClient.query("begin");
+    const dueClaims = await retryClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_messages($1,$2,120,100)",
+      ["synthetic-walkthrough-due-retry", retryDueAt],
+    );
+    if (!dueClaims.rows.some((row) => row.id === retryMessage.id)) throw new Error("The retry message was not eligible exactly when its persisted backoff became due.");
+    await retryClient.query("rollback");
+  } catch (error) {
+    await retryClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    retryClient.release();
+  }
+
+  const retryAcceptance = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-retry-accepted", now: retryDueAt, limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: "fake-provider-retry-" + RUN_ID, acceptedAt: retryDueAt }],
+  }));
+  const retryReplay = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-retry-replay", now: new Date(Date.parse(retryDueAt) + 1000).toISOString(), limit: 1,
+  }));
+  const acceptedRetry = await pool.query<{ state: string; attempt_count: number; provider_idempotency_key: string; acceptances: string }>(
+    "select m.state,m.attempt_count,m.provider_idempotency_key,(select count(*)::text from agency_followup_events e where e.message_id=m.id and e.event_type='provider_accepted') as acceptances from agency_followup_messages m where m.id=$1",
+    [retryMessage.id],
+  );
+  if (retryAcceptance.accepted !== 1 || retryReplay.claimed !== 0 || acceptedRetry.rows[0]?.state !== "accepted" ||
+    Number(acceptedRetry.rows[0]?.attempt_count) !== 2 || acceptedRetry.rows[0]?.provider_idempotency_key !== retryMessage.provider_idempotency_key ||
+    acceptedRetry.rows[0]?.acceptances !== "1") {
+    throw new Error("The due retry did not persist exactly one acceptance with two attempts and the same logical key.");
   }
 
   // Exercise actual schedule policy immediately before handoff with a delayed
@@ -921,11 +1147,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const weekendNow = nextSaturday.toISOString();
   const weekendDue = new Date(nextSaturday.getTime() - 60_000).toISOString();
   await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [windowMessage.rows[0].id, weekendDue]);
-  const windowResult = await dispatchFake(context, walkthroughToken, {
+  const windowResult = await withFixtureClaim(pool, windowMessage.rows[0].id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-window",
     now: weekendNow,
     limit: 1,
-  });
+  }));
   const policy = {
     timezone: windowMessage.rows[0].timezone,
     businessDays: windowMessage.rows[0].business_days.map(Number),
@@ -959,10 +1185,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     [leaseProspect.id],
   );
   await pool.query("update agency_followup_messages set scheduled_at=now()-interval '1 minute' where id=$1", [leaseMessage.rows[0].id]);
-  const [claimA, claimB] = await Promise.all([
+  const [claimA, claimB] = await withFixtureClaim(pool, leaseMessage.rows[0].id, () => Promise.all([
     pool.query("select id,lease_owner from public.claim_agency_followup_messages('synthetic-lease-a',now(),120,1)"),
     pool.query("select id,lease_owner from public.claim_agency_followup_messages('synthetic-lease-b',now(),120,1)"),
-  ]);
+  ]));
   const claims = [...claimA.rows, ...claimB.rows];
   if (claims.length !== 1 || claims[0].id !== leaseMessage.rows[0].id) {
     throw new Error("Concurrent database workers did not produce exactly one message lease.");
@@ -987,27 +1213,133 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const screenshotDir = path.join(OUTPUT_DIR, "screenshots");
   await mkdir(screenshotDir, { recursive: true });
   const renderedWidths: number[] = [];
+  const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
+  const stableLayout = async () => page.evaluate(async () => {
+    await document.fonts.ready;
+    let previous: number[] = [];
+    let stableFrames = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      await Promise.race([(async () => {
+        while (stableFrames < 3) {
+          await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+          const running = document.getAnimations().some((animation) =>
+            animation.playState === "running" && animation.effect?.getTiming().iterations !== Infinity);
+          const bounds = Array.from(document.querySelectorAll("main, aside, nav, h1, label input"))
+            .flatMap((element) => { const r = element.getBoundingClientRect(); return [r.x, r.y, r.width, r.height]; });
+          const stable = previous.length > 0 && previous.length === bounds.length &&
+            bounds.every((value, index) => Math.abs(value - previous[index]) <= 1);
+          stableFrames = !running && stable ? stableFrames + 1 : 0;
+          previous = bounds;
+        }
+      })(), new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Layout did not settle within 5000 ms.")), 5000);
+      })]);
+    } finally { if (timer) clearTimeout(timer); }
+  });
+  const screenshot = async (filename: string, width: number, navigationState: string) => {
+    const file = path.join(screenshotDir, filename);
+    await page.screenshot({ path: file, fullPage: true });
+    const digest = createHash("sha256").update(await readFile(file)).digest("hex");
+    screenshots.push({ path: path.relative(process.cwd(), file).replaceAll("\\", "/"), sha256: digest, viewport: width, navigationState });
+  };
+  const assertUnoccluded = async (locator: ReturnType<Page["getByRole"]>, label: string, requireFocus = false) => {
+    await locator.scrollIntoViewIfNeeded();
+    await locator.waitFor({ state: "visible" });
+    const usable = await locator.evaluate((element, shouldFocus) => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0 || rect.bottom <= 0 || rect.top >= innerHeight) return false;
+      const x = Math.min(rect.right - 1, Math.max(rect.left + 1, rect.left + rect.width / 2));
+      const y = Math.min(rect.bottom - 1, Math.max(rect.top + 1, rect.top + rect.height / 2));
+      const hit = document.elementFromPoint(x, y);
+      if (!hit || (hit !== element && !element.contains(hit))) return false;
+      if (!shouldFocus) return true;
+      (element as HTMLElement).focus();
+      return document.activeElement === element;
+    }, requireFocus);
+    if (!usable) throw new Error(`${label} was hidden, occluded, or not focusable at ${await page.evaluate(() => innerWidth)}px.`);
+  };
+  const requiredAuthoringControl = async (target: Page) => {
+    const control = target.locator("label").filter({ hasText: "Template key" }).locator("input");
+    if (await control.count() !== 1) throw new Error("Exactly one Template key authoring control is required.");
+    await expect(control).toBeVisible();
+    await expect(control).toBeEnabled();
+    await assertUnoccluded(control, "Template key authoring control", true);
+  };
+  let missingAuthoringControlRejected = false;
+  const reproduction: Array<{ path: string; sha256: string; elapsedAfterCloseMs: number }> = [];
   for (const width of WIDTHS) {
     await page.setViewportSize({ width, height: 1000 });
-    await page.evaluate(async () => {
-      await document.fonts.ready;
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-    });
+    await stableLayout();
+    if (width < 768) {
+      const openMenu = page.getByRole("button", { name: "Open menu" });
+      if (!(await openMenu.isVisible())) throw new Error(`Mobile navigation opener is missing at ${width}px.`);
+      await assertUnoccluded(openMenu, "Mobile navigation opener", true);
+      await openMenu.click();
+      await stableLayout();
+      const closeMenu = page.getByRole("button", { name: "Close menu" });
+      await assertUnoccluded(closeMenu, "Open navigation close button", true);
+      await screenshot(`${RUN_ID}-queue-${width}-nav-open.png`, width, "open");
+      await closeMenu.click();
+      if (width === 640) {
+        const closedAt = Date.now();
+        const immediatePath = path.join(screenshotDir, RUN_ID + "-reproduction-640-after-close.png");
+        await page.screenshot({ path: immediatePath, fullPage: true });
+        reproduction.push({ path: path.relative(process.cwd(), immediatePath).replaceAll("\\", "/"),
+          sha256: createHash("sha256").update(await readFile(immediatePath)).digest("hex"),
+          elapsedAfterCloseMs: Date.now() - closedAt });
+      }
+      await stableLayout();
+    }
     const failures = await auditRenderedCopy(page);
     await page.evaluate(() => window.scrollTo(0, 0));
+    await stableLayout();
     if (failures.length) {
-      await page.screenshot({ path: path.join(screenshotDir, `failure-queue-${width}.png`), fullPage: true });
+      await screenshot(`${RUN_ID}-failure-queue-${width}-nav-closed.png`, width, "closed");
       throw new Error(`Rendered UI gate failed at ${width}px: ${failures.join("; ")}`);
     }
-    await page.screenshot({ path: path.join(screenshotDir, `queue-${width}.png`), fullPage: true });
+    await assertUnoccluded(page.getByRole("heading", { level: 1 }).first(), "Follow-up page heading");
+    await requiredAuthoringControl(page);
+    if (width === 640) {
+      const probe = await context.newPage();
+      try {
+        await probe.setViewportSize({ width, height: 1000 });
+        await probe.goto(page.url(), { waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+        const input = probe.locator("label").filter({ hasText: "Template key" }).locator("input");
+        await expect(input).toBeVisible();
+        await input.evaluate((element) => element.remove());
+        try { await requiredAuthoringControl(probe); }
+        catch (error) {
+          if (!(error instanceof Error) || error.message !== "Exactly one Template key authoring control is required.") throw error;
+          missingAuthoringControlRejected = true;
+        }
+        if (!missingAuthoringControlRejected) throw new Error("Missing required authoring control did not fail acceptance.");
+      } finally { await probe.close(); }
+    }
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await stableLayout();
+    await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
     renderedWidths.push(width);
   }
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
+  if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
+  if (screenshots.length !== 12 || !missingAuthoringControlRejected) throw new Error("Incomplete viewport or required-control evidence.");
   const summary = {
-    synthetic: true,
-    provider: "fake-only",
+    runId: RUN_ID,
+    ...sourceAtStart,
+    sourceAtStart,
+    temporaryDispatchRoute: { path: path.relative(process.cwd(), TEST_DISPATCH_DIR), sha256: temporaryRouteSha256 },
+    reproduction,
+    missingAuthoringControlRejected,
+    startedAtUtc: RUN_STARTED_AT,
+    endedAtUtc: new Date().toISOString(),
+    command: "npm run agency-followup:walkthrough",
+    exitCode: 0,
+    testedEnvironment: { appOrigin: APP_ORIGIN, databaseProjectId: STACK_PROJECT_ID, databaseHost: "loopback", provider: "network-free fake", databaseReusedWithoutReset: true },
     migrationVersions: ["20261013154000", "20261013230354"],
     verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB],
+    screenshots,
+    synthetic: true,
     flows: {
       templateJourneyEnrollmentReleaseApproval: "passed",
       repeatedEnrollment: "409 and one enrollment",
@@ -1017,15 +1349,14 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       fakeAccepted: "persisted",
       unknown: "quarantined and not reclaimed",
       businessDayWindow: "weekend claim rescheduled before fake provider",
+      retry: "temporary failure and backoff persisted; early claim excluded; due retry accepted exactly once with stable key and two attempts",
       concurrentClaim: "exactly one claim",
       staleLeaseOwner: "rejected",
     },
     syntheticProspects: Object.keys(fixtures.prospects).length,
     screenshotViewports: renderedWidths,
-    screenshotCount: renderedWidths.length,
-    capturedAt: new Date().toISOString(),
+    screenshotCount: screenshots.length
   };
-  await writeFile(path.join(OUTPUT_DIR, "summary.json"), JSON.stringify(summary, null, 2) + "\n", "utf8");
   return summary;
   } finally {
     await context.close();
@@ -1034,9 +1365,124 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
 }
 
+async function runJourneyVersionRegression(fixtures: Fixtures, portalSecret: string): Promise<Record<string, unknown>> {
+  setDiagnosticStage("browser_journey_version_regression");
+  const browser = await chromium.launch({ headless: true });
+  activeBrowser = browser;
+  let context: BrowserContext | undefined;
+  try {
+    context = await signedContext(browser, fixtures, portalSecret);
+    const page = await context.newPage();
+    page.setDefaultTimeout(30000);
+    page.setDefaultNavigationTimeout(180_000);
+    const responseFailures: string[] = [];
+    page.on("pageerror", (error) => responseFailures.push("page error: " + error.message));
+    page.on("console", (message) => {
+      const text = message.text();
+      if (message.type() === "error" && !/Failed to load resource: the server responded with a status of 409 \(Conflict\)/.test(text)) {
+        responseFailures.push("browser console: " + text);
+      }
+    });
+    page.on("requestfailed", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname.includes("/_next/")) responseFailures.push(`asset request failed: ${pathname}; ${request.failure()?.errorText ?? "unknown"}`);
+    });
+    page.on("response", (response) => {
+      const pathname = new URL(response.url()).pathname;
+      if (pathname.includes("/_next/") && response.status() >= 400) responseFailures.push(`asset response ${response.status()}: ${pathname}`);
+    });
+    progress(`opening the follow-up UI for the focused journey-version regression (${Math.floor(remainingMs() / 1000)}s overall budget remains)`);
+    await page.goto(APP_ORIGIN + "/admin/agency-crm/follow-up", { waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+    const layoutChunkStartedAt = Date.now();
+    try {
+      const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(30_000, remainingMs()) });
+      const layoutChunkBody = await layoutChunkResponse.body();
+      progress(`direct app/layout.js asset probe returned HTTP ${layoutChunkResponse.status()}; bytes=${layoutChunkBody.byteLength}; elapsed=${Date.now() - layoutChunkStartedAt}ms`);
+    } catch (error) {
+      progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms; safe diagnostics=${JSON.stringify(safeErrorDiagnostics(error))}`);
+      throw error;
+    }
+    if (await page.getByText(/This page couldn.t load/i).count()) {
+      progress("Next rendered its chunk-recovery page during cold compilation; reloading once after the direct asset probe");
+      await page.reload({ waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+    }
+    await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
+    await page.waitForLoadState("networkidle", { timeout: 30_000 }).catch(() => undefined);
+    try {
+      await page.waitForFunction(() => {
+        const control = document.querySelector("main form input");
+        return Boolean(control && Object.keys(control).some((key) => key.startsWith("__reactProps$")));
+      }, null, { polling: "raf", timeout: Math.min(180_000, remainingMs()) });
+      progress("operator form hydration confirmed on controlled template input");
+    } catch (error) {
+      let hydrationError: unknown = error;
+      let recovered = false;
+      if (await page.getByText(/This page couldn.t load/i).count()) {
+        progress("Next rendered its chunk-recovery page during hydration; reloading once after compilation");
+        try {
+          await page.reload({ waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+          await page.waitForFunction(() => {
+            const control = document.querySelector("main form input");
+            return Boolean(control && Object.keys(control).some((key) => key.startsWith("__reactProps$")));
+          }, null, { polling: "raf", timeout: Math.min(120_000, remainingMs()) });
+          recovered = true;
+          progress("operator form hydration confirmed after one chunk-recovery reload");
+        } catch (retryError) {
+          hydrationError = retryError;
+        }
+      }
+      if (!recovered) {
+        const diagnostics = await page.evaluate(() => ({
+          readyState: document.readyState,
+          title: document.title,
+          mainCount: document.querySelectorAll("main").length,
+          formCount: document.querySelectorAll("main form").length,
+          scriptCount: document.scripts.length,
+          controlledInput: (() => {
+            const control = document.querySelector("main form input");
+            return control ? {
+              type: (control as HTMLInputElement).type,
+              valueLength: (control as HTMLInputElement).value.length,
+              reactAttached: Object.keys(control).some((key) => key.startsWith("__reactProps$")),
+            } : null;
+          })(),
+          nextScripts: [...document.scripts].map((script) => script.src).filter((src) => src.includes("/_next/")),
+          nextResources: performance.getEntriesByType("resource").map((entry) => new URL(entry.name).pathname).filter((pathname) => pathname.includes("/_next/")),
+          pageText: document.body.innerText.slice(0, 1000),
+        })).catch(() => null);
+        await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
+        await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", `failure-hydration-${RUN_ID}.png`), fullPage: true }).catch(() => undefined);
+        throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${String(hydrationError)}`);
+      }
+    }
+    await authorJourney(page);
+    if (responseFailures.length) {
+      throw new Error(`Browser acceptance observed runtime or asset failures: ${JSON.stringify(responseFailures.slice(0, 20))}`);
+    }
+    if (!journeyVersionRegressionResult || Object.values(journeyVersionRegressionResult).some((passed) => !passed)) {
+      throw new Error("Journey-version replacement regression did not record every required assertion.");
+    }
+    return {
+      runId: RUN_ID,
+      runStartedAtUtc: RUN_STARTED_AT,
+      sourceAtStart,
+      synthetic: true,
+      focusedRegression: "journey-version replacement state and enrollment selector",
+      journeyVersionRegression: journeyVersionRegressionResult,
+    };
+  } finally {
+    await context?.close();
+    await browser.close();
+    if (activeBrowser === browser) activeBrowser = undefined;
+  }
+}
+
 async function markEligibleAndReleaseAttempt(page: Page, prospect: ProspectFixture): Promise<void> {
   const card = queueCard(page, prospect.firmName);
-  await card.getByLabel("Eligibility evidence for this prospect").fill("Synthetic evidence for local walkthrough only.");
+  const evidenceControl = card.getByLabel("Eligibility evidence for this prospect");
+  progress("waiting for the required eligibility control to render for " + prospect.firmName);
+  await evidenceControl.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
+  await evidenceControl.fill("Synthetic evidence for local walkthrough only.");
   await waitForAction(page, "eligibility", card.getByRole("button", { name: "Record eligible" }));
   await card.getByLabel("Individual release basis").fill("Synthetic release attempt against a seeded suppression.");
   const responsePromise = page.waitForResponse((response) => {
@@ -1048,7 +1494,7 @@ async function markEligibleAndReleaseAttempt(page: Page, prospect: ProspectFixtu
   if (response.status() !== 409) throw new Error("Suppressed prospect release did not return an explicit conflict.");
 }
 
-async function runManual(context: BrowserContext, fixtures: Fixtures): Promise<void> {
+async function runManual(context: BrowserContext): Promise<void> {
   const page = await context.newPage();
   page.setDefaultTimeout(10000);
   page.setDefaultNavigationTimeout(180_000);
@@ -1084,10 +1530,15 @@ async function runManual(context: BrowserContext, fixtures: Fixtures): Promise<v
 }
 
 async function main(): Promise<void> {
+  if (JOURNEY_VERSION_REGRESSION_ONLY && MANUAL) {
+    throw new Error("The focused journey-version regression cannot be combined with --manual.");
+  }
   progress("validating disposable local-only confirmation");
   if (must(process.env.AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION, "Disposable database confirmation") !== "YES-LOCAL-DISPOSABLE-ONLY") {
     throw new Error("Set AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION=YES-LOCAL-DISPOSABLE-ONLY for this disposable local walkthrough.");
   }
+  sourceAtStart = captureSourceState();
+  let completedSummary: Record<string, unknown> | undefined;
   absoluteDeadline = Date.now() + WALKTHROUGH_TIMEOUT_MS;
   progress("verifying pushed migration blobs");
   await verifyPushedMigration(MIGRATION_PATH, EXPECTED_MIGRATION_BLOB);
@@ -1131,17 +1582,26 @@ async function main(): Promise<void> {
   let browser: Browser | undefined;
   let context: BrowserContext | undefined;
   try {
-    await waitForApp(server, fixtures, portalSecret);
+    await waitForApp(server, fixtures);
     progress("authenticated API is ready; opening actual operator queue UI");
     if (MANUAL) {
       browser = await chromium.launch({ headless: false });
       activeBrowser = browser;
       context = await signedContext(browser, fixtures, portalSecret);
-      await runManual(context, fixtures);
+      await runManual(context);
       return;
     }
-    const summary = await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken);
-    console.log(JSON.stringify(summary, null, 2));
+    completedSummary = JOURNEY_VERSION_REGRESSION_ONLY
+      ? await runJourneyVersionRegression(fixtures, portalSecret)
+      : await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken);
+  } catch (error) {
+    failureLifecycleContext = {
+      abortState: runAbortController?.signal.aborted ?? null,
+      nextChildPid: server.pid ?? null,
+      nextChildExitCode: server.exitCode,
+      nextChildSignalCode: server.signalCode,
+    };
+    throw error;
   } finally {
     await context?.close();
     await browser?.close();
@@ -1151,14 +1611,32 @@ async function main(): Promise<void> {
   }
   } finally {
     if (hardStop) clearTimeout(hardStop);
-    await pool.end().catch(() => undefined);
-    await removeTemporaryDispatchRoute().catch(() => undefined);
+    try { await pool.end(); }
+    finally { await removeTemporaryDispatchRoute(); }
     runAbortController = undefined;
+  }
+  if (completedSummary) {
+    const sourceAfterCleanup = captureSourceState();
+    if (JSON.stringify(sourceAfterCleanup) !== JSON.stringify(sourceAtStart)) {
+      throw new Error("Source changed during acceptance or temporary-route cleanup was incomplete.");
+    }
+    completedSummary.sourceAfterCleanup = sourceAfterCleanup;
+    completedSummary.cleanupCompleted = true;
+    completedSummary.endedAtUtc = new Date().toISOString();
+    await writeFile(path.join(OUTPUT_DIR, "summary-" + RUN_ID + ".json"), JSON.stringify(completedSummary, null, 2) + "\n", "utf8");
+    console.log(JSON.stringify(completedSummary, null, 2));
   }
 }
 
 main().catch((error) => {
-  const message = error instanceof Error ? error.message : "Unknown walkthrough failure.";
-  console.error("Agency follow-up synthetic walkthrough failed: " + message);
+  console.error("Agency follow-up synthetic walkthrough failed " + JSON.stringify({
+    stage: diagnosticStage,
+    stageElapsedMs: Date.now() - diagnosticStageStartedAt,
+    ...safeErrorDiagnostics(error),
+    abortState: failureLifecycleContext?.abortState ?? runAbortController?.signal.aborted ?? null,
+    nextChildPid: failureLifecycleContext?.nextChildPid ?? activeNextServer?.pid ?? null,
+    nextChildExitCode: failureLifecycleContext?.nextChildExitCode ?? activeNextServer?.exitCode ?? null,
+    nextChildSignalCode: failureLifecycleContext?.nextChildSignalCode ?? activeNextServer?.signalCode ?? null,
+  }));
   process.exitCode = 1;
 });
