@@ -1,25 +1,6 @@
 -- Transactional Resend webhook reconciliation and shared contactability stops.
--- This migration is prepared for review only. Do not apply it from this worktree.
-
--- Provider message ids are the only webhook-to-outbox join key. Refuse an
--- ambiguous legacy state instead of selecting an arbitrary message.
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM public.agency_followup_messages
-    WHERE provider_message_id IS NOT NULL
-    GROUP BY provider_message_id
-    HAVING count(*) > 1
-  ) THEN
-    RAISE EXCEPTION 'duplicate Agency follow-up provider message ids prevent safe webhook mapping';
-  END IF;
-END;
-$$;
-
-CREATE UNIQUE INDEX agency_followup_messages_provider_message_id_unique
-  ON public.agency_followup_messages (provider_message_id)
-  WHERE provider_message_id IS NOT NULL;
+-- Push this migration before applying it. Never apply it to the linked
+-- production project from a local worktree.
 
 ALTER TABLE public.agency_followup_messages
   ADD COLUMN provider_delivery_status text NOT NULL DEFAULT 'unknown'
@@ -33,6 +14,28 @@ ALTER TABLE public.agency_followup_messages
   ADD COLUMN provider_bounced_at timestamptz NULL,
   ADD COLUMN provider_complained_at timestamptz NULL,
   ADD COLUMN provider_unsubscribed_at timestamptz NULL;
+
+-- Provider ids are matched with the exact recipient fingerprint. This keeps
+-- prior synthetic provider fixtures intact while preventing duplicate real
+-- message/recipient identities from being correlated ambiguously.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM public.agency_followup_messages
+    WHERE provider_message_id IS NOT NULL
+      AND provider_recipient_email_sha256 IS NOT NULL
+    GROUP BY provider_message_id, provider_recipient_email_sha256
+    HAVING count(*) > 1
+  ) THEN
+    RAISE EXCEPTION 'duplicate Agency follow-up provider message and recipient identities prevent safe webhook mapping';
+  END IF;
+END;
+$$;
+
+CREATE UNIQUE INDEX agency_followup_messages_provider_message_recipient_unique
+  ON public.agency_followup_messages (provider_message_id, provider_recipient_email_sha256)
+  WHERE provider_message_id IS NOT NULL AND provider_recipient_email_sha256 IS NOT NULL;
 
 -- Stores only normalized provider metadata and hashes. In particular, no raw
 -- webhook body, recipient address, subject, or message body is persisted here.
@@ -477,6 +480,7 @@ BEGIN
     SELECT count(*) INTO v_message_count
     FROM public.agency_followup_messages AS message
     WHERE message.provider_message_id = btrim(p_provider_message_id)
+      AND message.provider_recipient_email_sha256 = p_recipient_sha256
       AND message.state = 'accepted'
       AND message.provider_accepted_at IS NOT NULL;
 

@@ -9,6 +9,9 @@ describe("Agency follow-up Resend migration contract", () => {
   it("keeps webhook evidence append-only, minimized, private, and replay-safe", () => {
     expect(migration).toContain("CREATE TABLE public.agency_followup_provider_events");
     expect(migration).toContain("provider_event_id text PRIMARY KEY");
+    expect(migration).toContain("agency_followup_messages_provider_message_recipient_unique");
+    expect(migration).toContain("GROUP BY provider_message_id, provider_recipient_email_sha256");
+    expect(migration).not.toContain("agency_followup_messages_provider_message_id_unique");
     expect(migration).toContain("provider events are append-only");
     expect(migration).toContain("ON CONFLICT (provider_event_id) DO NOTHING");
     expect(migration).toContain("CREATE TABLE public.agency_followup_provider_event_applications");
@@ -33,6 +36,7 @@ describe("Agency follow-up Resend migration contract", () => {
     expect(migration).toContain("FOREIGN KEY (conversation_id, source_link_id)");
     expect(migration).toContain("OR p_recipient_sha256 IS NULL");
     expect(migration).toContain("message.provider_recipient_email_sha256 = p_recipient_sha256");
+    expect(migration).toContain("AND message.provider_recipient_email_sha256 = p_recipient_sha256");
   });
 
   it("persists worker disposition and audit event in one lease-guarded RPC", () => {
