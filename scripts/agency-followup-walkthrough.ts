@@ -35,6 +35,7 @@ if (!UUID.test(RUN_ID)) throw new Error("Acceptance run ID must be a UUID.");
 const browserRuntimeErrorsByPage = new WeakMap<Page, string[]>();
 const MANUAL = process.argv.includes("--manual");
 const JOURNEY_VERSION_REGRESSION_ONLY = process.argv.includes("--journey-version-regression");
+const FAILURE_CAPTURE_PREFLIGHT_ONLY = process.argv.includes("--failure-capture-preflight");
 const WEBHOOK_PREFLIGHT_ONLY = process.argv.includes("--webhook-preflight-only");
 const WALKTHROUGH_STARTED_AT = Date.now();
 const WALKTHROUGH_TIMEOUT_MS = 20 * 60_000;
@@ -1071,6 +1072,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
   await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
+  setDiagnosticStage("browser_form_hydration");
   try {
     await page.waitForFunction(() => {
       // The template key is a controlled input with an onChange handler, so
@@ -1118,8 +1120,23 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
         pageText: document.body.innerText.slice(0, 1000),
       })).catch(() => null);
       await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
-      await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", "failure-hydration.png"), fullPage: true }).catch(() => undefined);
-      throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${String(hydrationError)}`);
+      const screenshotPath = path.join(OUTPUT_DIR, "screenshots", `failure-hydration-${RUN_ID}.png`);
+      const screenshotWritten = await page.screenshot({ path: screenshotPath, fullPage: true }).then(() => true, () => false);
+      const errorMessage = String(hydrationError).replace(/[\r\n\s]+/g, " ")
+        .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 1000);
+      const failureReceipt = {
+        runId: RUN_ID,
+        stage: "browser_form_hydration",
+        errorMessage,
+        diagnostics,
+        browserRuntimeErrors: responseFailures.slice(-20),
+        screenshot: screenshotWritten ? path.basename(screenshotPath) : null,
+        recordedAtUtc: new Date().toISOString(),
+      };
+      const receiptPath = path.join(OUTPUT_DIR, `failure-browser_form_hydration-${RUN_ID}.json`);
+      await writeFile(receiptPath, JSON.stringify(failureReceipt, null, 2) + "\n", "utf8");
+      progress(`operator form hydration failed; receipt=${path.basename(receiptPath)}; screenshot=${failureReceipt.screenshot ?? "unavailable"}; browserErrors=${JSON.stringify(failureReceipt.browserRuntimeErrors)}`);
+      throw new Error(`Operator UI did not hydrate its controlled template input. Receipt=${path.basename(receiptPath)}; ${errorMessage}`);
     }
   }
 
@@ -1138,6 +1155,39 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     if (recoveredBrowserRuntimeErrors.length) {
       progress(`initial layout chunk error recovered by one reload and successful form hydration; captured=${JSON.stringify(recoveredBrowserRuntimeErrors)}`);
     }
+  }
+
+  if (FAILURE_CAPTURE_PREFLIGHT_ONLY) {
+    if (responseFailures.length) throw new Error(`Failure-capture preflight page has unresolved browser errors: ${JSON.stringify(responseFailures.slice(-20))}`);
+    const disabledButton = page.locator("button[disabled]").first();
+    await disabledButton.waitFor({ state: "visible", timeout: Math.min(15_000, remainingMs()) });
+    try {
+      await waitForAction(page, "capture_preflight", disabledButton, 1000);
+      throw new Error("Failure-capture preflight unexpectedly accepted a disabled control.");
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("Operator action capture_preflight readiness failed:")) throw error;
+    }
+    const receiptPath = path.join(OUTPUT_DIR, `failure-capture_preflight-${RUN_ID}.json`);
+    const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as { runId?: string; action?: string; errorMessage?: string; screenshot?: string };
+    if (receipt.runId !== RUN_ID || receipt.action !== "capture_preflight" || !receipt.errorMessage || !receipt.screenshot) {
+      throw new Error("Failure-capture preflight receipt is missing its run, action, error, or screenshot fields.");
+    }
+    const screenshotPath = path.join(OUTPUT_DIR, "screenshots", receipt.screenshot);
+    const screenshotBytes = await readFile(screenshotPath);
+    if (!screenshotBytes.byteLength) throw new Error("Failure-capture preflight screenshot is empty.");
+    const receiptSha256 = createHash("sha256").update(await readFile(receiptPath)).digest("hex");
+    const screenshotSha256 = createHash("sha256").update(screenshotBytes).digest("hex");
+    progress(`failure-capture preflight verified receipt=${path.basename(receiptPath)} bytes=${(await readFile(receiptPath)).byteLength} sha256=${receiptSha256}; screenshot=${receipt.screenshot} bytes=${screenshotBytes.byteLength} sha256=${screenshotSha256}`);
+    return {
+      runId: RUN_ID,
+      ...sourceAtStart,
+      sourceAtStart,
+      synthetic: true,
+      failureCapturePreflight: { action: receipt.action, errorRecorded: true, screenshotCaptured: true, receiptPath: path.relative(process.cwd(), receiptPath), receiptSha256, screenshotPath: path.relative(process.cwd(), screenshotPath), screenshotBytes: screenshotBytes.byteLength, screenshotSha256 },
+      startedAtUtc: RUN_STARTED_AT,
+      endedAtUtc: new Date().toISOString(),
+      command: "npm run agency-followup:walkthrough -- --failure-capture-preflight",
+    };
   }
 
   const journeyName = await authorJourney(page);
@@ -1821,6 +1871,9 @@ async function main(): Promise<void> {
   if (JOURNEY_VERSION_REGRESSION_ONLY && MANUAL) {
     throw new Error("The focused journey-version regression cannot be combined with --manual.");
   }
+  if (FAILURE_CAPTURE_PREFLIGHT_ONLY && (JOURNEY_VERSION_REGRESSION_ONLY || MANUAL)) {
+    throw new Error("The failure-capture preflight cannot be combined with another browser walkthrough mode.");
+  }
   progress(`acceptance run id=${RUN_ID}`);
   progress("validating disposable local-only confirmation");
   if (must(process.env.AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION, "Disposable database confirmation") !== "YES-LOCAL-DISPOSABLE-ONLY") {
@@ -1931,16 +1984,35 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
+main().catch(async (error) => {
+  const errorMessage = String(error).replace(/[\r\n\s]+/g, " ")
+    .replace(/(SUPABASE_SERVICE_ROLE_KEY|PORTAL_SECRET|AGENCY_FOLLOWUP_WALKTHROUGH_TOKEN)(\s*[=:]\s*)[^\s"']+/g, "$1$2[REDACTED]")
+    .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 1500);
+  const failureReceiptPath = path.join(OUTPUT_DIR, `failure-run-${RUN_ID}.json`);
+  await mkdir(OUTPUT_DIR, { recursive: true });
+  await writeFile(failureReceiptPath, JSON.stringify({
+    runId: RUN_ID,
+    stage: diagnosticStage,
+    stageElapsedMs: Date.now() - diagnosticStageStartedAt,
+    errorMessage,
+    ...safeErrorDiagnostics(error),
+    abortState: failureLifecycleContext?.abortState ?? runAbortController?.signal.aborted ?? null,
+    nextChildPid: failureLifecycleContext?.nextChildPid ?? activeNextServer?.pid ?? null,
+    nextChildExitCode: failureLifecycleContext?.nextChildExitCode ?? activeNextServer?.exitCode ?? null,
+    nextChildSignalCode: failureLifecycleContext?.nextChildSignalCode ?? activeNextServer?.signalCode ?? null,
+    recordedAtUtc: new Date().toISOString(),
+  }, null, 2) + "\n", "utf8");
   console.error("Agency follow-up synthetic walkthrough failed " + JSON.stringify({
     runId: RUN_ID,
     stage: diagnosticStage,
     stageElapsedMs: Date.now() - diagnosticStageStartedAt,
+    errorMessage,
     ...safeErrorDiagnostics(error),
     abortState: failureLifecycleContext?.abortState ?? runAbortController?.signal.aborted ?? null,
     nextChildPid: failureLifecycleContext?.nextChildPid ?? activeNextServer?.pid ?? null,
     nextChildExitCode: failureLifecycleContext?.nextChildExitCode ?? activeNextServer?.exitCode ?? null,
     nextChildSignalCode: failureLifecycleContext?.nextChildSignalCode ?? activeNextServer?.signalCode ?? null,
   }));
+  console.error(`Failure receipt: ${failureReceiptPath}`);
   process.exitCode = 1;
 });
