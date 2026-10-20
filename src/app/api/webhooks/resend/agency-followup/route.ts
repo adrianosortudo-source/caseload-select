@@ -1,8 +1,8 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { Webhook } from "svix";
+import { agencyFollowupRecipientEmailHash } from "@/lib/agency-followup-domain";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     }
     providerMessageId = data.email_id;
     recipientEmail = recipients[0];
-    recipientHash = createHash("sha256").update(recipientEmail.toLowerCase(), "utf8").digest("hex");
+    recipientHash = agencyFollowupRecipientEmailHash(recipientEmail);
   } else {
     return noStore({ ok: true, ignored: true }, 202);
   }

@@ -9,6 +9,7 @@ vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: { rpc: mocks.rpc } }));
 
 import { NextRequest } from "next/server";
 import { POST } from "../route";
+import { agencyFollowupRecipientEmailHash } from "@/lib/agency-followup-domain";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
 const webhookSecret = `whsec_${Buffer.from("synthetic-webhook-secret").toString("base64")}`;
@@ -74,7 +75,7 @@ describe("Resend Agency follow-up webhook", () => {
       p_provider_message_id: "re_msg_123",
       p_event_type: "email.delivered",
       p_recipient_email: "Owner@example.com",
-      p_recipient_sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      p_recipient_sha256: agencyFollowupRecipientEmailHash("Owner@example.com"),
     }));
   });
 
