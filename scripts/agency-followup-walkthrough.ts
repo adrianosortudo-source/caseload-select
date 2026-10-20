@@ -868,7 +868,21 @@ async function markEligibleAndRelease(page: Page, prospect: ProspectFixture): Pr
 }
 
 async function postAction(context: BrowserContext, data: Record<string, unknown>): Promise<APIResponse> {
-  return context.request.post(APP_ORIGIN + API_PATH, { data });
+  let response = await context.request.post(APP_ORIGIN + API_PATH, { data });
+  if (response.status() === 401) {
+    const payload = await response.json().catch(() => ({})) as { error?: unknown };
+    if (payload.error === "Unauthorized") {
+      // The disposable local membership lookup can briefly fail closed before
+      // the protected API is healthy again. A 401 is rejected before action
+      // dispatch, so retry once only after this same signed context proves GET.
+      const health = await context.request.get(APP_ORIGIN + API_PATH, { timeout: 15000 }).catch(() => undefined);
+      if (health?.status() === 200) {
+        progress(`synthetic ${String(data.action ?? "unknown")} probe received transient 401; same-session authenticated health check returned 200; retrying once`);
+        response = await context.request.post(APP_ORIGIN + API_PATH, { data });
+      }
+    }
+  }
+  return response;
 }
 
 async function dispatchFake(
@@ -1129,6 +1143,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const journeyName = await authorJourney(page);
   const normal = fixtures.prospects.normal;
   await createDraft(pool, page, journeyName, normal);
+  setDiagnosticStage("duplicate_enrollment_conflict");
   const duplicate = await postAction(context, {
     action: "enroll",
     journeyId: await page.getByLabel("Journey version").inputValue(),
