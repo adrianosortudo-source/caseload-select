@@ -939,7 +939,7 @@ async function warmResendWebhookRoute(): Promise<void> {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: "{}",
-    signal: AbortSignal.timeout(Math.min(90_000, remainingMs())),
+    signal: AbortSignal.timeout(Math.min(180_000, remainingMs())),
   });
   const result = await response.json().catch(() => ({})) as { error?: unknown };
   if (response.status !== 400 || result.error !== "invalid_signature") {
