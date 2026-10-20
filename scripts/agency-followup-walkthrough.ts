@@ -778,7 +778,14 @@ async function dispatchFake(
   input: { workerId: string; limit?: number; now?: string; outcomePlan?: Array<Record<string, unknown>> },
 ): Promise<Record<string, number>> {
   const response = await context.request.post(APP_ORIGIN + TEST_DISPATCH_PATH, { data: { ...input, token } });
-  if (!response.ok()) throw new Error("Local fake dispatcher endpoint returned HTTP " + response.status() + ".");
+  if (!response.ok()) {
+    const payload = await response.json().catch(() => ({})) as { error?: unknown };
+    const detail = typeof payload.error === "string"
+      ? payload.error.replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").replace(/[^A-Za-z0-9_.:-]+/g, "_").slice(0, 200)
+      : "no_safe_error_detail";
+    progress(`fake dispatcher HTTP ${response.status()}; safeError=${detail}`);
+    throw new Error("Local fake dispatcher endpoint returned HTTP " + response.status() + ": " + detail);
+  }
   return await response.json() as Record<string, number>;
 }
 
