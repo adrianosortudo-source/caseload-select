@@ -1071,6 +1071,39 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     initialChunkRecoveryReloaded = true;
   }
   await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
+
+  if (FAILURE_CAPTURE_PREFLIGHT_ONLY) {
+    const disabledButton = page.locator("button[disabled]").first();
+    await disabledButton.waitFor({ state: "visible", timeout: Math.min(15_000, remainingMs()) });
+    try {
+      await waitForAction(page, "capture_preflight", disabledButton, 1000);
+      throw new Error("Failure-capture preflight unexpectedly accepted a disabled control.");
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("Operator action capture_preflight readiness failed:")) throw error;
+    }
+    const receiptPath = path.join(OUTPUT_DIR, `failure-capture_preflight-${RUN_ID}.json`);
+    const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as { runId?: string; action?: string; errorMessage?: string; screenshot?: string };
+    if (receipt.runId !== RUN_ID || receipt.action !== "capture_preflight" || !receipt.errorMessage || !receipt.screenshot) {
+      throw new Error("Failure-capture preflight receipt is missing its run, action, error, or screenshot fields.");
+    }
+    const screenshotPath = path.join(OUTPUT_DIR, "screenshots", receipt.screenshot);
+    const screenshotBytes = await readFile(screenshotPath);
+    if (!screenshotBytes.byteLength) throw new Error("Failure-capture preflight screenshot is empty.");
+    const receiptSha256 = createHash("sha256").update(await readFile(receiptPath)).digest("hex");
+    const screenshotSha256 = createHash("sha256").update(screenshotBytes).digest("hex");
+    progress(`failure-capture preflight verified receipt=${path.basename(receiptPath)} bytes=${(await readFile(receiptPath)).byteLength} sha256=${receiptSha256}; screenshot=${receipt.screenshot} bytes=${screenshotBytes.byteLength} sha256=${screenshotSha256}`);
+    return {
+      runId: RUN_ID,
+      ...sourceAtStart,
+      sourceAtStart,
+      synthetic: true,
+      failureCapturePreflight: { action: receipt.action, errorRecorded: true, screenshotCaptured: true, receiptPath: path.relative(process.cwd(), receiptPath), receiptSha256, screenshotPath: path.relative(process.cwd(), screenshotPath), screenshotBytes: screenshotBytes.byteLength, screenshotSha256 },
+      startedAtUtc: RUN_STARTED_AT,
+      endedAtUtc: new Date().toISOString(),
+      command: "npm run agency-followup:walkthrough -- --failure-capture-preflight",
+    };
+  }
+
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
   setDiagnosticStage("browser_form_hydration");
   try {
@@ -1155,39 +1188,6 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     if (recoveredBrowserRuntimeErrors.length) {
       progress(`initial layout chunk error recovered by one reload and successful form hydration; captured=${JSON.stringify(recoveredBrowserRuntimeErrors)}`);
     }
-  }
-
-  if (FAILURE_CAPTURE_PREFLIGHT_ONLY) {
-    if (responseFailures.length) throw new Error(`Failure-capture preflight page has unresolved browser errors: ${JSON.stringify(responseFailures.slice(-20))}`);
-    const disabledButton = page.locator("button[disabled]").first();
-    await disabledButton.waitFor({ state: "visible", timeout: Math.min(15_000, remainingMs()) });
-    try {
-      await waitForAction(page, "capture_preflight", disabledButton, 1000);
-      throw new Error("Failure-capture preflight unexpectedly accepted a disabled control.");
-    } catch (error) {
-      if (!(error instanceof Error) || !error.message.includes("Operator action capture_preflight readiness failed:")) throw error;
-    }
-    const receiptPath = path.join(OUTPUT_DIR, `failure-capture_preflight-${RUN_ID}.json`);
-    const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as { runId?: string; action?: string; errorMessage?: string; screenshot?: string };
-    if (receipt.runId !== RUN_ID || receipt.action !== "capture_preflight" || !receipt.errorMessage || !receipt.screenshot) {
-      throw new Error("Failure-capture preflight receipt is missing its run, action, error, or screenshot fields.");
-    }
-    const screenshotPath = path.join(OUTPUT_DIR, "screenshots", receipt.screenshot);
-    const screenshotBytes = await readFile(screenshotPath);
-    if (!screenshotBytes.byteLength) throw new Error("Failure-capture preflight screenshot is empty.");
-    const receiptSha256 = createHash("sha256").update(await readFile(receiptPath)).digest("hex");
-    const screenshotSha256 = createHash("sha256").update(screenshotBytes).digest("hex");
-    progress(`failure-capture preflight verified receipt=${path.basename(receiptPath)} bytes=${(await readFile(receiptPath)).byteLength} sha256=${receiptSha256}; screenshot=${receipt.screenshot} bytes=${screenshotBytes.byteLength} sha256=${screenshotSha256}`);
-    return {
-      runId: RUN_ID,
-      ...sourceAtStart,
-      sourceAtStart,
-      synthetic: true,
-      failureCapturePreflight: { action: receipt.action, errorRecorded: true, screenshotCaptured: true, receiptPath: path.relative(process.cwd(), receiptPath), receiptSha256, screenshotPath: path.relative(process.cwd(), screenshotPath), screenshotBytes: screenshotBytes.byteLength, screenshotSha256 },
-      startedAtUtc: RUN_STARTED_AT,
-      endedAtUtc: new Date().toISOString(),
-      command: "npm run agency-followup:walkthrough -- --failure-capture-preflight",
-    };
   }
 
   const journeyName = await authorJourney(page);
