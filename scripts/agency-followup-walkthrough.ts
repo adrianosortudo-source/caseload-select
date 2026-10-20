@@ -1411,15 +1411,15 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     "select provider_event.processing_result,provider_event.message_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id and application.message_id=$2) as applications,(select application.message_id from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_message_id,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_result,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-event:'||provider_event.provider_event_id) as durable_events from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$1",
     [resendEventId, retryMessage.id],
   );
-  const reconciledMessage = await pool.query<{ state: string }>(
-    "select state from public.agency_followup_messages where id=$1", [retryMessage.id],
+  const reconciledMessage = await pool.query<{ provider_delivery_status: string }>(
+    "select provider_delivery_status from public.agency_followup_messages where id=$1", [retryMessage.id],
   );
   if (reconciledProviderEvent.status !== 200 || reconciledProviderEvent.outcome !== "matched" ||
     duplicateProviderEvent.status !== 200 || duplicateProviderEvent.outcome !== "duplicate" ||
     providerEventState.rows[0]?.processing_result !== "unmatched_message" || providerEventState.rows[0]?.message_id !== null ||
     providerEventState.rows[0]?.applications !== "1" || providerEventState.rows[0]?.applied_message_id !== retryMessage.id ||
     providerEventState.rows[0]?.applied_result !== "matched" || providerEventState.rows[0]?.durable_events !== "1" ||
-    reconciledMessage.rows[0]?.state !== "delivered") {
+    reconciledMessage.rows[0]?.provider_delivery_status !== "delivered") {
     throw new Error("The signed provider event did not reconcile after acceptance exactly once with an authoritative application row.");
   }
 
