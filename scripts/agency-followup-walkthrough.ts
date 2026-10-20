@@ -22,9 +22,12 @@ const EXPECTED_MIGRATION_BLOB = "c6d594c51b8c257aaca7a62fff41c96a1534a86a";
 const MIGRATION_PATH = "supabase/migrations/20261013154000_agency_followup_journeys.sql";
 const EXPECTED_CRM_GRANTS_MIGRATION_BLOB = "af413a079a76e2fc9844f0bb37d61bec3127b558";
 const CRM_GRANTS_MIGRATION_PATH = "supabase/migrations/20261013230354_agency_crm_service_role_grants.sql";
+const EVENT_MIGRATION_PATH = "supabase/migrations/20261020025251_agency_followup_resend_events_and_shared_suppression.sql";
+const EXPECTED_EVENT_MIGRATION_BLOB = "ce5c6bff68b27cc57d5023d17910759d2862de91";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
 const RUN_STARTED_AT = new Date().toISOString();
+const SYNTHETIC_WEBHOOK_SECRET = `whsec_${randomBytes(32).toString("base64")}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 if (!UUID.test(RUN_ID)) throw new Error("Acceptance run ID must be a UUID.");
 const MANUAL = process.argv.includes("--manual");
@@ -179,6 +182,14 @@ async function verifyPushedMigration(pathname: string, expectedBlob: string): Pr
   }
 }
 
+function verifyPushedHead(sourceCommit: string): void {
+  const remoteBranches = execFileSync("git", ["branch", "-r", "--contains", sourceCommit], { encoding: "utf8" })
+    .split(/\r?\n/).map((ref) => ref.trim());
+  if (!remoteBranches.includes("origin/codex/crm-live-followup-20261019")) {
+    throw new Error("Refusing walkthrough because the exact source commit is not on the pushed CRM branch.");
+  }
+}
+
 async function verifyDisposableTarget(pool: Pool): Promise<void> {
   progress("checking disposable database identity and migration ledger");
   const config = await readFile(path.join(STACK_DIR, "supabase", "config.toml"), "utf8");
@@ -190,25 +201,33 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013154000", "20261013230354"]],
+      [["20261013154000", "20261013230354", "20261020025251"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "2") {
-    throw new Error("Disposable Postgres identity or exact two-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "3") {
+    throw new Error("Disposable Postgres identity or exact three-migration ledger check failed.");
   }
   const tables = await pool.query<{ count: string }>(
     "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
     [["agency_followup_template_versions", "agency_followup_journeys", "agency_followup_steps",
-      "agency_followup_enrollments", "agency_followup_messages", "agency_followup_events"]],
+      "agency_followup_enrollments", "agency_followup_messages", "agency_followup_events",
+      "agency_followup_provider_events", "agency_followup_provider_event_applications",
+      "prospect_contactability_provider_suppressions"]],
   );
-  if (tables.rows[0]?.count !== "6") throw new Error("The verified disposable stack does not contain all six Agency follow-up tables.");
+  if (tables.rows[0]?.count !== "9") throw new Error("The verified disposable stack does not contain the six follow-up and three provider-event tables.");
+  const providerGrants = await pool.query<{ service_access: boolean; public_access: boolean }>(
+    "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access from unnest(array['public.agency_followup_provider_events','public.agency_followup_provider_event_applications','public.prospect_contactability_provider_suppressions']) as event_table(table_name)",
+  );
+  if (providerGrants.rows[0]?.service_access !== true || providerGrants.rows[0]?.public_access !== false) {
+    throw new Error("The provider-event tables are not restricted to service-role select/insert access.");
+  }
   const grants = await pool.query<{ service_access: boolean; public_access: boolean }>(
     "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access from unnest(array['public.agency_prospects','public.agency_deals','public.agency_reminders']) as crm_table(table_name)",
   );
   if (grants.rows[0]?.service_access !== true || grants.rows[0]?.public_access !== false) {
     throw new Error("Disposable Agency CRM service-role grants or public-role revocations are not in the expected state.");
   }
-  progress("disposable identity, both migration ledger versions, six follow-up tables, and Agency CRM grants checked");
+  progress("disposable identity, all three migration ledger versions, nine follow-up/provider tables, and restricted grants checked");
 }
 
 async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
@@ -357,6 +376,8 @@ function startApp(portalSecret: string, walkthroughToken: string, status: Supaba
       SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
       PORTAL_SECRET: portalSecret,
       AGENCY_FOLLOWUP_WALKTHROUGH_TOKEN: walkthroughToken,
+      AGENCY_FOLLOWUP_SEND_MODE: "off",
+      AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: SYNTHETIC_WEBHOOK_SECRET,
       PORT: "55435",
       NODE_ENV: "development",
     },
@@ -761,6 +782,27 @@ async function dispatchFake(
   return await response.json() as Record<string, number>;
 }
 
+async function postSyntheticResendEvent(providerEventId: string, payload: Record<string, unknown>): Promise<{ status: number; outcome: string }> {
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const rawBody = JSON.stringify(payload);
+  const signingKey = Buffer.from(SYNTHETIC_WEBHOOK_SECRET.slice("whsec_".length), "base64");
+  const signature = createHmac("sha256", signingKey)
+    .update(`${providerEventId}.${timestamp}.${rawBody}`, "utf8")
+    .digest("base64");
+  const response = await fetch(APP_ORIGIN + "/api/webhooks/resend/agency-followup", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "svix-id": providerEventId,
+      "svix-timestamp": timestamp,
+      "svix-signature": `v1,${signature}`,
+    },
+    body: rawBody,
+  });
+  const result = await response.json().catch(() => ({})) as { outcome?: unknown };
+  return { status: response.status, outcome: typeof result.outcome === "string" ? result.outcome : "none" };
+}
+
 async function withFixtureClaim<T>(pool: Pool, messageId: string, operation: () => Promise<T>): Promise<T> {
   // Keep retained scheduled fixtures out of this claim without rewriting them.
   // The real claim RPC still selects the target using FOR UPDATE SKIP LOCKED.
@@ -1114,9 +1156,20 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     retryClient.release();
   }
 
+  const resendEventId = `evt_walkthrough_${RUN_ID}`;
+  const retryProviderMessageId = "fake-provider-retry-" + RUN_ID;
+  const signedDeliveryEvent = {
+    type: "email.delivered",
+    created_at: retryDueAt,
+    data: { email_id: retryProviderMessageId, to: [retryProspect.email] },
+  };
+  const earlyProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
+  if (earlyProviderEvent.status !== 503 || earlyProviderEvent.outcome !== "unmatched_message") {
+    throw new Error("An early signed provider event was not durably quarantined and returned for retry.");
+  }
   const retryAcceptance = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-retry-accepted", now: retryDueAt, limit: 1,
-    outcomePlan: [{ kind: "accepted", providerMessageId: "fake-provider-retry-" + RUN_ID, acceptedAt: retryDueAt }],
+    outcomePlan: [{ kind: "accepted", providerMessageId: retryProviderMessageId, acceptedAt: retryDueAt }],
   }));
   const retryReplay = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-retry-replay", now: new Date(Date.parse(retryDueAt) + 1000).toISOString(), limit: 1,
@@ -1129,6 +1182,23 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     Number(acceptedRetry.rows[0]?.attempt_count) !== 2 || acceptedRetry.rows[0]?.provider_idempotency_key !== retryMessage.provider_idempotency_key ||
     acceptedRetry.rows[0]?.acceptances !== "1") {
     throw new Error("The due retry did not persist exactly one acceptance with two attempts and the same logical key.");
+  }
+  const reconciledProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
+  const duplicateProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
+  const providerEventState = await pool.query<{ processing_result: string; message_id: string | null; applications: string; applied_message_id: string | null; applied_result: string | null; durable_events: string }>(
+    "select provider_event.processing_result,provider_event.message_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id and application.message_id=$2) as applications,(select application.message_id from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_message_id,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_result,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-event:'||provider_event.provider_event_id) as durable_events from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$1",
+    [resendEventId, retryMessage.id],
+  );
+  const reconciledMessage = await pool.query<{ state: string }>(
+    "select state from public.agency_followup_messages where id=$1", [retryMessage.id],
+  );
+  if (reconciledProviderEvent.status !== 200 || reconciledProviderEvent.outcome !== "matched" ||
+    duplicateProviderEvent.status !== 200 || duplicateProviderEvent.outcome !== "duplicate" ||
+    providerEventState.rows[0]?.processing_result !== "unmatched_message" || providerEventState.rows[0]?.message_id !== null ||
+    providerEventState.rows[0]?.applications !== "1" || providerEventState.rows[0]?.applied_message_id !== retryMessage.id ||
+    providerEventState.rows[0]?.applied_result !== "matched" || providerEventState.rows[0]?.durable_events !== "1" ||
+    reconciledMessage.rows[0]?.state !== "delivered") {
+    throw new Error("The signed provider event did not reconcile after acceptance exactly once with an authoritative application row.");
   }
 
   // Exercise actual schedule policy immediately before handoff with a delayed
@@ -1336,8 +1406,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     command: "npm run agency-followup:walkthrough",
     exitCode: 0,
     testedEnvironment: { appOrigin: APP_ORIGIN, databaseProjectId: STACK_PROJECT_ID, databaseHost: "loopback", provider: "network-free fake", databaseReusedWithoutReset: true },
-    migrationVersions: ["20261013154000", "20261013230354"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB],
+    migrationVersions: ["20261013154000", "20261013230354", "20261020025251"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB],
     screenshots,
     synthetic: true,
     flows: {
@@ -1350,6 +1420,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       unknown: "quarantined and not reclaimed",
       businessDayWindow: "weekend claim rescheduled before fake provider",
       retry: "temporary failure and backoff persisted; early claim excluded; due retry accepted exactly once with stable key and two attempts",
+      providerEventReplay: "signed event was quarantined before acceptance, reconciled on retry after acceptance, and deduplicated with one durable application",
       concurrentClaim: "exactly one claim",
       staleLeaseOwner: "rejected",
     },
@@ -1538,11 +1609,16 @@ async function main(): Promise<void> {
     throw new Error("Set AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION=YES-LOCAL-DISPOSABLE-ONLY for this disposable local walkthrough.");
   }
   sourceAtStart = captureSourceState();
+  if (sourceAtStart.workingTreeState !== "clean") {
+    throw new Error("Refusing walkthrough because the exact pushed source worktree is not clean.");
+  }
+  verifyPushedHead(sourceAtStart.sourceCommit);
   let completedSummary: Record<string, unknown> | undefined;
   absoluteDeadline = Date.now() + WALKTHROUGH_TIMEOUT_MS;
   progress("verifying pushed migration blobs");
   await verifyPushedMigration(MIGRATION_PATH, EXPECTED_MIGRATION_BLOB);
   await verifyPushedMigration(CRM_GRANTS_MIGRATION_PATH, EXPECTED_CRM_GRANTS_MIGRATION_BLOB);
+  await verifyPushedMigration(EVENT_MIGRATION_PATH, EXPECTED_EVENT_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");

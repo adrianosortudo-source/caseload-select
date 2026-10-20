@@ -16,7 +16,7 @@ type QueueItem = {
   contactability: string; conversationStatus: string; recipientEmail: string; subject: string;
   body: string; scheduledAt: string | null; blockers: string[]; sequenceReleased: boolean;
 };
-type ConsoleData = { journeys: Journey[]; templates: TemplateVersion[]; items: QueueItem[] };
+type ConsoleData = { send: { mode: 'off' | 'test' | 'live'; ready: boolean }; journeys: Journey[]; templates: TemplateVersion[]; items: QueueItem[] };
 type ProspectMatch = { id: string; firm_name: string; contact_name?: string | null; contact_email?: string | null; stage?: string };
 
 const BLOCKER_LABELS: Record<string, string> = {
@@ -111,6 +111,13 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
     group.push(item);
     byEnrollment.set(item.enrollmentId, group);
   }
+  const sendStatus = initialData.send.mode === 'off'
+    ? 'Sending is off. Approved messages stay queued.'
+    : !initialData.send.ready
+      ? 'Sending is unavailable until required configuration is complete.'
+      : initialData.send.mode === 'test'
+        ? 'Test mode is limited to allowlisted recipients and records.'
+        : 'Live mode is enabled. Each dispatch is limited to one message.';
 
   return (
     <main className="w-full min-w-0 space-y-6">
@@ -121,7 +128,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
           <p className="mt-2 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]" data-ui-copy="body">
             Review one prospect at a time. Record eligibility, release, and each message approval separately.
           </p>
-          <p className="mt-1 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]" data-ui-copy="supporting">Approvals enqueue reviewed messages. No live provider is configured.</p>
+          <p className="mt-1 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]" data-ui-copy="supporting">Approvals enqueue reviewed messages. {sendStatus}</p>
         </div>
         <a className="shrink-0 text-sm font-semibold text-navy underline" href="/admin/agency-crm">Return to Agency CRM</a>
       </header>

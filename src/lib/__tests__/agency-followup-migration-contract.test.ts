@@ -7,6 +7,7 @@ const migration = readFileSync(resolve(process.cwd(), "supabase/migrations", mig
 const agencyCrmGrants = readFileSync(resolve(process.cwd(), "supabase/migrations", "20261013230354_agency_crm_service_role_grants.sql"), "utf8");
 const agencyCrmSchema = readFileSync(resolve(process.cwd(), "supabase/migrations", "20260625000001_agency_crm.sql"), "utf8");
 const service = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-service.ts"), "utf8");
+const provider = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-resend-provider.ts"), "utf8");
 const route = readFileSync(resolve(process.cwd(), "src/app/api/admin/agency-crm/follow-up/route.ts"), "utf8");
 
 describe("Agency follow-up additive migration and service contract", () => {
@@ -41,8 +42,7 @@ describe("Agency follow-up additive migration and service contract", () => {
     expect(migration).toContain("SECURITY INVOKER");
     expect(migration).not.toContain("SECURITY DEFINER");
     expect(migration).toContain("lease-expired:' || expired.id::text");
-    expect(service).toContain("sameIdempotencyKey: true");
-    expect(service).toContain("automaticRetry: false");
+    expect(provider).toContain("CreateEmailRequestOptions = { idempotencyKey: request.idempotencyKey }");
     expect(service).toContain('rpc("claim_agency_followup_messages"');
     expect(service).toContain("new FakeAgencyFollowupProvider()");
   });

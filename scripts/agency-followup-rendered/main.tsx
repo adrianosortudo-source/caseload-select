@@ -4,6 +4,7 @@ import AgencyFollowupClient from "@/app/admin/agency-crm/follow-up/AgencyFollowu
 import "@/app/globals.css";
 
 const fixture = {
+  send: { mode: "off" as const, ready: false },
   journeys: [{
     id: "journey-1", name: "Synthetic diagnostic follow-up", journeyKey: "synthetic", version: 1, state: "active",
     timezone: "America/Toronto", businessDays: [1, 2, 3, 4, 5], localWindowStart: "09:00", localWindowEnd: "17:00",

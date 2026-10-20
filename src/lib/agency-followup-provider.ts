@@ -86,7 +86,7 @@ export async function runAgencyFollowupAttempt(
   });
   return {
     state: resolveAgencyProviderOutcome(outcome),
-    blockers: [],
+    blockers: outcome.kind === "blocked" ? outcome.blockers : [],
     logicalMessageKey,
     providerOutcome: outcome,
   };

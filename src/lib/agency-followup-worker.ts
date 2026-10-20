@@ -2,7 +2,7 @@ import {
   runAgencyFollowupAttempt,
   type AgencyFollowupProvider,
 } from "./agency-followup-provider";
-import type { AgencyFollowupSendContext } from "./agency-followup-domain";
+import { agencyFollowupRecipientEmailHash, type AgencyFollowupSendContext } from "./agency-followup-domain";
 import {
   isWithinAgencyFollowupWindow,
   scheduleAgencyFollowupStep,
@@ -17,7 +17,7 @@ export interface AgencyFollowupClaim {
 
 export type AgencyFollowupWorkerDisposition =
   | { state: "blocked"; blockers: string[]; at: string }
-  | { state: "accepted"; providerMessageId: string; acceptedAt: string; at: string }
+  | { state: "accepted"; providerMessageId: string; recipientEmailHash: string; acceptedAt: string; at: string }
   | { state: "scheduled"; retryAt: string; errorCode: string; at: string }
   | { state: "failed"; errorCode: string; at: string }
   | { state: "unknown"; detail: string; at: string };
@@ -123,6 +123,7 @@ export async function dispatchAgencyFollowupBatch(input: {
       await input.repository.persistDisposition(claim, {
         state: "accepted",
         providerMessageId: outcome.providerMessageId,
+        recipientEmailHash: agencyFollowupRecipientEmailHash(context.recipient.contactEmail),
         acceptedAt: outcome.acceptedAt,
         at,
       });

@@ -10,7 +10,9 @@ import {
   type AgencyFollowupSchedulePolicy,
   type AgencyFollowupStepDraft,
 } from "@/lib/agency-followup-authoring";
-import { FakeAgencyFollowupProvider } from "@/lib/agency-followup-provider";
+import { FakeAgencyFollowupProvider, type AgencyFollowupProvider } from "@/lib/agency-followup-provider";
+import { createAgencyFollowupResendProvider } from "@/lib/agency-followup-resend-provider";
+import { resolveAgencyFollowupSendConfig } from "@/lib/agency-followup-send-config";
 import {
   dispatchAgencyFollowupBatch,
   type AgencyFollowupClaim,
@@ -57,6 +59,7 @@ export interface AgencyFollowupQueueItem {
 }
 
 export interface AgencyFollowupConsoleData {
+  send: { mode: "off" | "test" | "live"; ready: boolean };
   journeys: Array<{
     id: string; name: string; journeyKey: string; version: number; state: string;
     timezone: string; businessDays: number[]; localWindowStart: string; localWindowEnd: string;
@@ -116,18 +119,20 @@ async function loadOperationsState(prospectId: string): Promise<{
     return { contactability: "unknown", conversationStatus: "not_contacted", hasExactSource: false };
   }
 
-  const [conversationsResult, contactabilityResult, activitiesResult] = await Promise.all([
+  const [conversationsResult, contactabilityResult, activitiesResult, providerSuppressionsResult] = await Promise.all([
     supabase.from("prospect_conversations").select("id,status").in("id", conversationIds),
     supabase.from("prospect_contactability").select("conversation_id,state").in("conversation_id", conversationIds),
     supabase.from("prospect_activities").select("conversation_id,kind").in("conversation_id", conversationIds)
       .in("kind", ["human_reply", "meeting", "bounce"]),
+    supabase.from("prospect_contactability_provider_suppressions").select("conversation_id").in("conversation_id", conversationIds),
   ]);
   const conversations = assertResult(conversationsResult, "Unable to read prospect conversation state") as DbRow[];
   const contactRows = assertResult(contactabilityResult, "Unable to read prospect contactability") as DbRow[];
   const activityRows = assertResult(activitiesResult, "Unable to read prospect activity stops") as DbRow[];
+  const providerSuppressionRows = assertResult(providerSuppressionsResult, "Unable to read provider-originated contactability stops") as DbRow[];
 
   const states = contactRows.map((row) => String(row.state));
-  const contactability: AgencyContactability = states.some((state) => state === "suppressed")
+  const contactability: AgencyContactability = providerSuppressionRows.length > 0 || states.some((state) => state === "suppressed")
     ? "hold"
     : states.length === conversationIds.length && states.every((state) => state === "eligible")
       ? "allowed"
@@ -271,6 +276,8 @@ async function assertClearForReview(enrollment: DbRow, prospect: DbRow): Promise
 }
 
 export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsoleData> {
+  const sendConfig = resolveAgencyFollowupSendConfig();
+  const send = { mode: sendConfig.mode, ready: sendConfig.ready } as const;
   const [journeysResult, enrollmentsResult, templatesResult, stepsResult] = await Promise.all([
     supabase.from("agency_followup_journeys").select("*").order("updated_at", { ascending: false }),
     supabase.from("agency_followup_enrollments").select("*").order("updated_at", { ascending: false }).limit(300),
@@ -294,7 +301,7 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
     subject: String(row.subject), body: String(row.body),
   }));
   if (enrollments.length === 0) {
-    return { journeys: journeyItems, templates: templateItems, items: [] };
+    return { send, journeys: journeyItems, templates: templateItems, items: [] };
   }
 
   const enrollmentIds = enrollments.map((row) => String(row.id));
@@ -355,6 +362,7 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
     };
   }));
   return {
+    send,
     journeys: journeyItems,
     templates: templateItems,
     items,
@@ -729,24 +737,16 @@ export async function pauseAgencyFollowupEnrollment(input: {
   });
 }
 
-const defaultFakeFollowupProvider = new FakeAgencyFollowupProvider();
-
-/** Local-only deterministic dispatcher. This adapter has no real provider path. */
-export async function runFakeAgencyFollowupDispatcher(input: {
+/** Shared validated repository used by both deterministic tests and real delivery. */
+async function runAgencyFollowupDispatcherWithProvider(input: {
   workerId: string;
+  provider: AgencyFollowupProvider;
   now?: string;
   leaseSeconds?: number;
   limit?: number;
-  outcomePlan?: AgencyProviderOutcome[];
 }): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
   if (!input.workerId.trim()) throw new Error("A worker id is required.");
-  if (input.outcomePlan && process.env.NODE_ENV === "production") {
-    throw new Error("Synthetic provider outcomes are available only outside production.");
-  }
   const now = input.now ?? new Date().toISOString();
-  const fakeFollowupProvider = input.outcomePlan
-    ? new FakeAgencyFollowupProvider(input.outcomePlan)
-    : defaultFakeFollowupProvider;
   const repository = {
     async claimDueMessages(claimInput: { workerId: string; now: string; leaseSeconds: number; limit: number }): Promise<AgencyFollowupClaim[]> {
       const result = await supabase.rpc("claim_agency_followup_messages", {
@@ -779,50 +779,60 @@ export async function runFakeAgencyFollowupDispatcher(input: {
       return context;
     },
     async persistDisposition(claim: AgencyFollowupClaim, disposition: AgencyFollowupWorkerDisposition): Promise<void> {
-      const patch: DbRow = { lease_owner: null, lease_until: null, updated_at: disposition.at };
-      let eventType: string;
-      let payload: Record<string, unknown>;
-      if (disposition.state === "blocked") {
-        Object.assign(patch, { state: "blocked", scheduled_at: null, last_error_code: disposition.blockers.join(",").slice(0, 300), unknown_since: null });
-        eventType = "message_blocked";
-        payload = { blockers: disposition.blockers, checkedAt: disposition.at };
-      } else if (disposition.state === "accepted") {
-        Object.assign(patch, { state: "accepted", provider_message_id: disposition.providerMessageId, provider_accepted_at: disposition.acceptedAt, last_error_code: null, unknown_since: null });
-        eventType = "provider_accepted";
-        payload = { providerMessageId: disposition.providerMessageId, acceptedAt: disposition.acceptedAt };
-      } else if (disposition.state === "scheduled") {
-        Object.assign(patch, { state: "scheduled", scheduled_at: disposition.retryAt, last_error_code: disposition.errorCode.slice(0, 300), unknown_since: null });
-        eventType = "provider_attempted";
-        payload = { retryAt: disposition.retryAt, errorCode: disposition.errorCode, sameIdempotencyKey: true };
-      } else if (disposition.state === "failed") {
-        Object.assign(patch, { state: "failed", scheduled_at: null, last_error_code: disposition.errorCode.slice(0, 300), unknown_since: null });
-        eventType = "provider_failed";
-        payload = { errorCode: disposition.errorCode };
-      } else {
-        Object.assign(patch, { state: "unknown", scheduled_at: null, last_error_code: disposition.detail.slice(0, 300), unknown_since: disposition.at });
-        eventType = "provider_unknown";
-        payload = { detail: disposition.detail, automaticRetry: false };
-      }
-      const update = await supabase.from("agency_followup_messages").update(patch)
-        .eq("id", claim.id).eq("state", "claimed").eq("lease_owner", claim.leaseOwner).select("id").maybeSingle();
-      if (update.error) throw new Error(`Unable to persist fake-provider outcome: ${update.error.message}`);
-      if (!update.data) throw new Error("The worker lease expired or changed before outcome persistence.");
-      await appendAuditEvent({
-        enrollmentId: claim.enrollmentId,
-        messageId: claim.id,
-        eventType,
-        idempotencyKey: `worker:${claim.id}:${claim.attemptCount}:${eventType}`,
-        payload: { ...payload, attemptCount: claim.attemptCount, workerId: claim.leaseOwner },
+      const persisted = await supabase.rpc("persist_agency_followup_disposition", {
+        p_message_id: claim.id,
+        p_enrollment_id: claim.enrollmentId,
+        p_lease_owner: claim.leaseOwner,
+        p_attempt_count: claim.attemptCount,
+        p_disposition: disposition,
       });
+      if (persisted.error || persisted.data !== true) {
+        throw new Error("Unable to atomically persist the Agency follow-up result; the message remains quarantined from automatic retry.");
+      }
     },
   };
 
   return dispatchAgencyFollowupBatch({
     repository,
-    provider: fakeFollowupProvider,
+    provider: input.provider,
     workerId: input.workerId,
     now,
     leaseSeconds: input.leaseSeconds,
     limit: input.limit,
+  });
+}
+
+const defaultFakeFollowupProvider = new FakeAgencyFollowupProvider();
+
+/** Local-only deterministic dispatcher. This adapter has no real provider path. */
+export async function runFakeAgencyFollowupDispatcher(input: {
+  workerId: string;
+  now?: string;
+  leaseSeconds?: number;
+  limit?: number;
+  outcomePlan?: AgencyProviderOutcome[];
+}): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
+  if (input.outcomePlan && process.env.NODE_ENV === "production") {
+    throw new Error("Synthetic provider outcomes are available only outside production.");
+  }
+  const provider = input.outcomePlan ? new FakeAgencyFollowupProvider(input.outcomePlan) : defaultFakeFollowupProvider;
+  return runAgencyFollowupDispatcherWithProvider({ ...input, provider });
+}
+
+/** Real dispatcher. Off or incomplete send configuration returns before any queue claim. */
+export async function runAgencyFollowupDispatcher(input: {
+  workerId: string;
+  now?: string;
+  leaseSeconds?: number;
+}): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
+  const config = resolveAgencyFollowupSendConfig();
+  if (config.mode === "off" || !config.ready) {
+    return { claimed: 0, accepted: 0, retryScheduled: 0, failed: 0, unknown: 0, blocked: 0 };
+  }
+  const provider = createAgencyFollowupResendProvider({ config });
+  return runAgencyFollowupDispatcherWithProvider({
+    ...input,
+    provider,
+    limit: config.maxBatchSize,
   });
 }

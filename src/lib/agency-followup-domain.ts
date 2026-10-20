@@ -128,6 +128,11 @@ export function agencyFollowupRecipientHash(recipient: AgencyFollowupRecipientSn
   });
 }
 
+/** Separate normalized email fingerprint for exact provider-event recipient correlation. */
+export function agencyFollowupRecipientEmailHash(email: string): string {
+  return sha256(email.trim().toLowerCase());
+}
+
 export function agencyFollowupStepsHaveApprovedTemplates(
   stepTemplateVersionIds: readonly string[],
   approvedTemplateVersionIds: readonly string[],
@@ -219,9 +224,10 @@ export type AgencyProviderOutcome =
   | { kind: "accepted"; providerMessageId: string; acceptedAt: string }
   | { kind: "definitive_retryable_failure"; code: string }
   | { kind: "definitive_permanent_failure"; code: string }
-  | { kind: "unknown"; detail: string };
+  | { kind: "unknown"; detail: string }
+  | { kind: "blocked"; blockers: string[] };
 
-export type AgencyOutboxResolution = "accepted" | "retry_same_key" | "failed" | "quarantine_unknown";
+export type AgencyOutboxResolution = "accepted" | "retry_same_key" | "failed" | "quarantine_unknown" | "blocked";
 
 export function resolveAgencyProviderOutcome(outcome: AgencyProviderOutcome): AgencyOutboxResolution {
   switch (outcome.kind) {
@@ -233,5 +239,7 @@ export function resolveAgencyProviderOutcome(outcome: AgencyProviderOutcome): Ag
       return "failed";
     case "unknown":
       return "quarantine_unknown";
+    case "blocked":
+      return "blocked";
   }
 }
