@@ -235,6 +235,41 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
   progress("disposable identity, all four migration ledger versions, nine follow-up/provider tables, row-lock-only privilege, append-only trigger, and restricted grants checked");
 }
 
+async function verifyProviderEventImmutability(pool: Pool): Promise<void> {
+  const client = await pool.connect();
+  const providerEventId = `walkthrough-immutability-${RUN_ID}`;
+  try {
+    await client.query("begin");
+    await client.query("set local role service_role");
+    await client.query(
+      "insert into public.agency_followup_provider_events (provider_event_id,event_type,occurred_at,processing_result) values ($1,'email.sent',now(),'unmatched_message')",
+      [providerEventId],
+    );
+    await client.query("savepoint update_immutability_probe");
+    let updateRejected = false;
+    try {
+      await client.query("update public.agency_followup_provider_events set provider_event_id=provider_event_id where provider_event_id=$1", [providerEventId]);
+    } catch (error) {
+      updateRejected = String(error).includes("Agency follow-up provider events are append-only");
+    }
+    await client.query("rollback to savepoint update_immutability_probe");
+    if (!updateRejected) throw new Error("The provider event UPDATE immutability probe was not rejected by the append-only trigger.");
+    await client.query("reset role");
+    await client.query("savepoint delete_immutability_probe");
+    let deleteRejected = false;
+    try {
+      await client.query("delete from public.agency_followup_provider_events where provider_event_id=$1", [providerEventId]);
+    } catch (error) {
+      deleteRejected = String(error).includes("Agency follow-up provider events are append-only");
+    }
+    await client.query("rollback to savepoint delete_immutability_probe");
+    if (!deleteRejected) throw new Error("The provider event DELETE immutability probe was not rejected by the append-only trigger.");
+    progress("disposable service_role UPDATE and owner DELETE probes were rejected by the append-only trigger; transaction rolled back");
+  } finally {
+    try { await client.query("rollback"); } finally { client.release(); }
+  }
+}
+
 async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
   const suffix = randomUUID().slice(0, 8);
   const firmId = randomUUID();
@@ -613,19 +648,42 @@ async function waitForAction(
     progress(`button ${action} initially disabled; React form diagnostics=${JSON.stringify(state)}`);
   }
   await expect(button).toBeEnabled({ timeout: enabledTimeoutMs });
-  // App Router can return server HTML before the client bundle has hydrated.
-  // Wait for the first page's network work to settle before relying on React
-  // event handlers, especially on a cold local compile.
-  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
-  await page.waitForTimeout(500);
-  // Install the response listener only after readiness waits. Starting its
-  // timeout before hydration can expire before the click is even issued.
+  // The initial page explicitly verifies controlled-input hydration. For later
+  // actions, the enabled locator and Playwright's click actionability checks
+  // provide the readiness gate without waiting on unrelated page network work.
+  // Start the correlated response waiter immediately before the click.
   const responsePromise = page.waitForResponse((response) => {
     const matched = new URL(response.url()).pathname === API_PATH && response.request().method() === "POST";
     if (matched) progress(`waiter matched Agency CRM POST response HTTP ${response.status()}`);
     return matched;
   }, { timeout: 60000 });
-  await button.click();
+  try {
+    await button.click({ timeout: Math.min(60_000, remainingMs()) });
+  } catch (error) {
+    const diagnostics = await button.evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const hitTarget = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      return {
+        buttonText: element.textContent?.trim().slice(0, 100) ?? "",
+        disabled: (element as HTMLButtonElement).disabled,
+        ariaDisabled: element.getAttribute("aria-disabled"),
+        visible: rect.width > 0 && rect.height > 0,
+        pointerEvents: getComputedStyle(element).pointerEvents,
+        hitTargetTag: hitTarget?.tagName ?? null,
+        hitTargetText: hitTarget?.textContent?.trim().slice(0, 100) ?? "",
+        pageTitle: document.title,
+      };
+    }).catch(() => null);
+    await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
+    const screenshotPath = path.join(OUTPUT_DIR, "screenshots", `failure-${action}-${RUN_ID}.png`);
+    await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => undefined);
+    const errorMessage = String(error).replace(/[\r\n\s]+/g, " ")
+      .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 500);
+    const failureReceipt = { runId: RUN_ID, action, errorMessage, diagnostics, screenshot: path.basename(screenshotPath), recordedAtUtc: new Date().toISOString() };
+    await writeFile(path.join(OUTPUT_DIR, `failure-${action}-${RUN_ID}.json`), JSON.stringify(failureReceipt, null, 2) + "\n", "utf8");
+    progress(`operator action ${action} click failed; diagnostics=${JSON.stringify(diagnostics)}; screenshot=${path.basename(screenshotPath)}; message=${errorMessage}`);
+    throw new Error(`Operator action ${action} button click failed: ${errorMessage}`);
+  }
   let response: Awaited<typeof responsePromise>;
   try {
     response = await responsePromise;
@@ -1644,6 +1702,7 @@ async function main(): Promise<void> {
   if (JOURNEY_VERSION_REGRESSION_ONLY && MANUAL) {
     throw new Error("The focused journey-version regression cannot be combined with --manual.");
   }
+  progress(`acceptance run id=${RUN_ID}`);
   progress("validating disposable local-only confirmation");
   if (must(process.env.AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION, "Disposable database confirmation") !== "YES-LOCAL-DISPOSABLE-ONLY") {
     throw new Error("Set AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION=YES-LOCAL-DISPOSABLE-ONLY for this disposable local walkthrough.");
@@ -1682,6 +1741,7 @@ async function main(): Promise<void> {
   hardStop?.unref();
   try {
   await verifyDisposableTarget(pool);
+  await verifyProviderEventImmutability(pool);
   const seedClient = await pool.connect();
   let fixtures: Fixtures;
   try {
@@ -1748,6 +1808,7 @@ async function main(): Promise<void> {
 
 main().catch((error) => {
   console.error("Agency follow-up synthetic walkthrough failed " + JSON.stringify({
+    runId: RUN_ID,
     stage: diagnosticStage,
     stageElapsedMs: Date.now() - diagnosticStageStartedAt,
     ...safeErrorDiagnostics(error),
