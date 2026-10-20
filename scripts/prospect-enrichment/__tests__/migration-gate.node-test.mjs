@@ -132,6 +132,16 @@ test("source inventory and manifest reject additions, omissions, duplicates, reo
   assert.throws(() => verifyReleaseManifest({ ...manifest, projectRef: "other-project" }, sources), /source_mismatch/);
 });
 test("manual reviewed main is accepted for dry-run", () => assert.equal(verifyExecutionGate(gate).projectRef, PROJECT_REF));
+test("notifier suppression is accepted without admitting ambient database configuration", () => {
+  const environment = { SUPABASE_NO_UPDATE_NOTIFIER: "true" };
+  assert.equal(verifyExecutionGate({ ...gate, environment }).projectRef, PROJECT_REF);
+  for (const value of ["false", "", "1", "TRUE", " true", true]) {
+    assert.throws(() => verifyExecutionGate({ ...gate, environment: { SUPABASE_NO_UPDATE_NOTIFIER: value } }), /ambient_database_configuration_prohibited/);
+  }
+  for (const key of ["supabase_no_update_notifier", "SUPABASE_NO_UPDATE_NOTIFIER_EXTRA", "SUPABASE_DB_URL", "SUPABASE_ACCESS_TOKEN", "PGHOST", "DOTENV_CONFIG_PATH", "NODE_TLS_REJECT_UNAUTHORIZED", "NODE_OPTIONS"]) {
+    assert.throws(() => verifyExecutionGate({ ...gate, environment: { ...environment, [key]: "true" } }), /ambient_database_configuration_prohibited/);
+  }
+});
 for (const [label, change] of [
   ["push event", { event: "push" }], ["PR branch", { ref: "refs/heads/codex/example" }],
   ["different repository", { repository: "other/caseload-select" }], ["unknown operation", { operation: "reset" }],
