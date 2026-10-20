@@ -633,6 +633,24 @@ async function waitForAction(
     await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", `failure-${action}.png`), fullPage: true }).catch(() => undefined);
     throw new Error(`Operator action ${action} produced no POST response. UI diagnostics: ${JSON.stringify(diagnostics)}. ${String(error)}`);
   }
+  if (response.status() === 401) {
+    const payload = await response.json().catch(() => ({})) as { error?: unknown };
+    if (payload.error === "Unauthorized") {
+      // Membership revalidation can fail closed when the disposable local
+      // PostgREST fetch has a brief transport interruption. Retry only after
+      // this same signed browser session proves the protected GET is healthy.
+      const health = await page.context().request.get(APP_ORIGIN + API_PATH, { timeout: 15000 }).catch(() => undefined);
+      if (health?.status() === 200) {
+        progress(`operator action ${action} received transient 401; same-session authenticated health check returned 200; retrying once`);
+        const retryResponse = page.waitForResponse((candidate) =>
+          new URL(candidate.url()).pathname === API_PATH && candidate.request().method() === "POST",
+          { timeout: 60000 },
+        );
+        await button.click();
+        response = await retryResponse;
+      }
+    }
+  }
   let actualAction = "unknown";
   try { actualAction = String(response.request().postDataJSON()?.action ?? "unknown"); } catch { /* keep the diagnostic label */ }
   progress(`operator action response: expected=${action}; actual=${actualAction}; HTTP=${response.status()}`);
