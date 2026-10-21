@@ -354,6 +354,33 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
           [conversationId],
         );
       }
+      if (key === "normal") {
+        const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
+        const capturedAt = new Date().toISOString();
+        const syntheticConsentHash = createHash("sha256").update(syntheticConsent).digest("hex");
+        await pool.query(
+          `select * from public.record_agency_followup_opt_in_event(
+            $1::uuid, $2::uuid, $3::uuid, $4::text, $5::text, $6::timestamptz,
+            $7::text, $8::text, $9::text, $10::text, $11::text, $12::uuid, $13::text
+          )`,
+          [
+            prospectId,
+            sourceId,
+            conversationId,
+            createHash("sha256").update(email.trim().toLowerCase()).digest("hex"),
+            "opt_in_granted",
+            capturedAt,
+            "other_verified_evidence",
+            "synthetic-walkthrough-consent-v1",
+            syntheticConsentHash,
+            `synthetic://agency-followup-walkthrough/${RUN_ID}/normal-opt-in`,
+            syntheticConsentHash,
+            lawyerId,
+            `walkthrough:${RUN_ID}:synthetic-opt-in:${prospectId}`,
+          ],
+        );
+        progress("seeded synthetic-only opt-in grant for the normal prospect; it is not real consent evidence");
+      }
       fixtures.prospects[key] = { id: prospectId, firmName, contactName, email, conversationId };
       progress(`seeded synthetic ${key} prospect through Agency CRM history trigger`);
     }
