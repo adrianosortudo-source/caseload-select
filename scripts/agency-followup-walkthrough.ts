@@ -11,13 +11,28 @@ import { chromium, expect, type APIResponse, type Browser, type BrowserContext, 
 import { createSessionCookie } from "../src/lib/portal-session-cookie";
 import { scheduleAgencyFollowupStep } from "../src/lib/agency-followup-schedule";
 
-const STACK_DIR = path.resolve("test-results/crm-local-stack");
+const DEFAULT_STACK_DIR = "test-results/crm-local-stack";
+const DEFAULT_STACK_PROJECT_ID = "crm-followup-walkthrough-20261013";
+const STACK_DIR = path.resolve(process.env.AGENCY_FOLLOWUP_STACK_DIR || DEFAULT_STACK_DIR);
 const OUTPUT_DIR = path.resolve("test-results/agency-followup-walkthrough");
 const APP_ORIGIN = "http://127.0.0.1:55435";
 const API_PATH = "/api/admin/agency-crm/follow-up";
 const TEST_DISPATCH_PATH = "/api/agency-followup-walkthrough";
 const TEST_DISPATCH_DIR = path.resolve("src/app/api/agency-followup-walkthrough");
-const STACK_PROJECT_ID = "crm-followup-walkthrough-20261013";
+const STACK_PROJECT_ID = process.env.AGENCY_FOLLOWUP_STACK_PROJECT_ID || DEFAULT_STACK_PROJECT_ID;
+const SUPABASE_API_PORT = parseDisposablePort(process.env.AGENCY_FOLLOWUP_SUPABASE_API_PORT, 55431, "Supabase API");
+const SUPABASE_DB_PORT = parseDisposablePort(process.env.AGENCY_FOLLOWUP_SUPABASE_DB_PORT, 55432, "Supabase database");
+if (SUPABASE_API_PORT === SUPABASE_DB_PORT || SUPABASE_API_PORT === 55435 || SUPABASE_DB_PORT === 55435) {
+  throw new Error("Disposable Supabase API/database ports must be distinct and must not overlap the local app port.");
+}
+const relativeStackDir = path.relative(process.cwd(), STACK_DIR).split(path.sep);
+if (relativeStackDir[0] !== "test-results" || relativeStackDir.some((part) => part === "..")
+  || !/^crm-local-stack(?:-[A-Za-z0-9-]+)?$/.test(relativeStackDir[1] ?? "")) {
+  throw new Error("Disposable stack configuration must stay inside test-results/crm-local-stack[ suffix ].");
+}
+if (!/^crm-followup-walkthrough-\d{8}(?:-[a-f0-9]{8})?$/.test(STACK_PROJECT_ID)) {
+  throw new Error("Disposable Supabase project id must use the guarded CRM walkthrough prefix and date suffix.");
+}
 const EXPECTED_MIGRATION_BLOB = "c6d594c51b8c257aaca7a62fff41c96a1534a86a";
 const MIGRATION_PATH = "supabase/migrations/20261013154000_agency_followup_journeys.sql";
 const EXPECTED_CRM_GRANTS_MIGRATION_BLOB = "af413a079a76e2fc9844f0bb37d61bec3127b558";
@@ -65,6 +80,15 @@ let journeyVersionRegressionResult: {
 function setDiagnosticStage(stage: string): void {
   diagnosticStage = stage;
   diagnosticStageStartedAt = Date.now();
+}
+
+function parseDisposablePort(raw: string | undefined, fallback: number, label: string): number {
+  if (!raw) return fallback;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 55430 || port > 55499) {
+    throw new Error(`${label} port must be an unused loopback-only test port from 55430 through 55499.`);
+  }
+  return port;
 }
 
 function safeDiagnosticAtom(value: unknown): string | number | null {
@@ -120,8 +144,8 @@ function must(value: string | undefined, label: string): string {
 
 function assertLoopbackApi(raw: string): URL {
   const url = new URL(raw);
-  if (url.protocol !== "http:" || url.hostname !== "127.0.0.1" || url.port !== "55431") {
-    throw new Error("The disposable walkthrough requires Supabase API http://127.0.0.1:55431.");
+  if (url.protocol !== "http:" || url.hostname !== "127.0.0.1" || url.port !== String(SUPABASE_API_PORT)) {
+    throw new Error(`The disposable walkthrough requires Supabase API http://127.0.0.1:${SUPABASE_API_PORT}.`);
   }
   return url;
 }
@@ -129,8 +153,8 @@ function assertLoopbackApi(raw: string): URL {
 function assertLoopbackDatabase(raw: string): URL {
   const url = new URL(raw);
   if (!["postgres:", "postgresql:"].includes(url.protocol) || url.hostname !== "127.0.0.1" ||
-    url.port !== "55432" || url.pathname !== "/postgres") {
-    throw new Error("The disposable walkthrough requires direct Postgres at 127.0.0.1:55432/postgres.");
+    url.port !== String(SUPABASE_DB_PORT) || url.pathname !== "/postgres") {
+    throw new Error(`The disposable walkthrough requires direct Postgres at 127.0.0.1:${SUPABASE_DB_PORT}/postgres.`);
   }
   return url;
 }
@@ -157,8 +181,8 @@ function getSupabaseStatus(): SupabaseStatus {
   // Sign only in process memory; the key and secret are never written or logged.
   const jwt = `${signed}.${createHmac("sha256", jwtSecret).update(signed).digest("base64url")}`;
   const status: SupabaseStatus = {
-    API_URL: "http://127.0.0.1:55431",
-    DB_URL: "postgresql://postgres:postgres@127.0.0.1:55432/postgres",
+    API_URL: `http://127.0.0.1:${SUPABASE_API_PORT}`,
+    DB_URL: `postgresql://postgres:postgres@127.0.0.1:${SUPABASE_DB_PORT}/postgres`,
     SERVICE_ROLE_KEY: jwt,
   };
   assertLoopbackApi(must(status.API_URL, "Local Supabase API"));
@@ -1628,7 +1652,17 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     endedAtUtc: new Date().toISOString(),
     command: "npm run agency-followup:walkthrough",
     exitCode: 0,
-    testedEnvironment: { appOrigin: APP_ORIGIN, databaseProjectId: STACK_PROJECT_ID, databaseHost: "loopback", provider: "network-free fake", databaseReusedWithoutReset: true },
+    testedEnvironment: {
+      appOrigin: APP_ORIGIN,
+      databaseProjectId: STACK_PROJECT_ID,
+      databaseConfigDirectory: path.relative(process.cwd(), STACK_DIR),
+      databaseApiPort: SUPABASE_API_PORT,
+      databaseDirectPort: SUPABASE_DB_PORT,
+      databaseHost: "loopback",
+      provider: "network-free fake",
+      databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
+      databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
+    },
     migrationVersions: ["20261013154000", "20261013230354", "20261020025251", "20261020141945"],
     verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB],
     screenshots,
