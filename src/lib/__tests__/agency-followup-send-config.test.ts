@@ -34,6 +34,9 @@ describe("Agency follow-up send configuration", () => {
     const config = resolveAgencyFollowupSendConfig(configured);
     expect(config.ready).toBe(true);
     expect(config.maxBatchSize).toBe(1);
+    expect(config.testClaimTargets).toEqual([{
+      enrollmentId: "enrollment-01", messageId: "message-01", recipientEmail: "owner@example.test",
+    }]);
     expect(config.authorize({ enrollmentId: "enrollment-01", messageId: "message-01", recipientEmail: "owner@example.test" })).toEqual([]);
     expect(config.authorize({ enrollmentId: "enrollment-01", messageId: "message-02", recipientEmail: "owner@example.test" })).toContain("test_enrollment_message_recipient_not_allowlisted");
     expect(config.authorize({ enrollmentId: "enrollment-01", messageId: "message-01", recipientEmail: "other@example.test" })).toEqual([
@@ -58,6 +61,20 @@ describe("Agency follow-up send configuration", () => {
       expect(config.blockers.length).toBeGreaterThan(0);
       expect(config.authorize({ enrollmentId: "enrollment-01", messageId: "message-01", recipientEmail: "owner@example.test" })).toEqual(config.blockers);
     }
+  });
+
+  it("rejects an oversized test record allowlist before any queue claim", () => {
+    const records = Array.from({ length: 101 }, (_, index) => ({
+      enrollmentId: `enrollment-${index}`,
+      messageId: `message-${index}`,
+      recipientEmail: "owner@example.test",
+    }));
+    const config = resolveAgencyFollowupSendConfig({
+      ...configured,
+      AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST: JSON.stringify(records),
+    });
+    expect(config.ready).toBe(false);
+    expect(config.blockers).toContain("test_record_allowlist_too_large");
   });
 
   it("requires a non-empty exact live enrollment allowlist and permits only listed enrollments", () => {

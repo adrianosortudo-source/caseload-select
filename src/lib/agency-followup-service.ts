@@ -919,18 +919,28 @@ async function runAgencyFollowupDispatcherWithProvider(input: {
   now?: string;
   leaseSeconds?: number;
   limit?: number;
+  testClaimTargets?: readonly { enrollmentId: string; messageId: string; recipientEmail: string }[];
 }): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
   if (!input.workerId.trim()) throw new Error("A worker id is required.");
   const now = input.now ?? new Date().toISOString();
   const repository = {
     async claimDueMessages(claimInput: { workerId: string; now: string; leaseSeconds: number; limit: number }): Promise<AgencyFollowupClaim[]> {
-      const result = await supabase.rpc("claim_agency_followup_messages", {
+      const claimParameters = {
         p_worker_id: claimInput.workerId,
         p_now: claimInput.now,
         p_lease_seconds: claimInput.leaseSeconds,
         p_limit: claimInput.limit,
-      });
-      if (result.error) throw new Error(`Unable to claim due fake-provider messages: ${result.error.message}`);
+      };
+      const result = input.testClaimTargets
+        ? await supabase.rpc("claim_agency_followup_test_messages", {
+          p_worker_id: claimInput.workerId,
+          p_now: claimInput.now,
+          p_lease_seconds: claimInput.leaseSeconds,
+          p_limit: claimInput.limit,
+          p_allowed_targets: input.testClaimTargets,
+        })
+        : await supabase.rpc("claim_agency_followup_messages", claimParameters);
+      if (result.error) throw new Error("Unable to claim due Agency follow-up messages.");
       return (result.data as DbRow[]).map((row) => ({
         id: String(row.id),
         enrollmentId: String(row.enrollment_id),
@@ -1009,5 +1019,6 @@ export async function runAgencyFollowupDispatcher(input: {
     ...input,
     provider,
     limit: config.maxBatchSize,
+    testClaimTargets: config.mode === "test" ? config.testClaimTargets : undefined,
   });
 }

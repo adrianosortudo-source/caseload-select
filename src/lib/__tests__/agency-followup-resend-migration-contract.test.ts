@@ -6,6 +6,9 @@ const migrationName = "20261020025251_agency_followup_resend_events_and_shared_s
 const migration = readFileSync(resolve(process.cwd(), "supabase/migrations", migrationName), "utf8");
 const rowLockMigrationName = "20261020141945_agency_followup_provider_event_row_lock_privilege.sql";
 const rowLockMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", rowLockMigrationName), "utf8");
+const testClaimMigrationName = "20261021173939_agency_followup_test_message_claim.sql";
+const testClaimMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", testClaimMigrationName), "utf8");
+const service = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-service.ts"), "utf8");
 
 describe("Agency follow-up Resend migration contract", () => {
   it("keeps webhook evidence append-only, minimized, private, and replay-safe", () => {
@@ -63,5 +66,22 @@ describe("Agency follow-up Resend migration contract", () => {
 
   it("does not let a late provider failure roll a delivered message backward", () => {
     expect(migration).toContain("WHEN 'failed' THEN 2\n          WHEN 'delivered' THEN 3");
+  });
+
+  it("claims only the exact allowlisted enrollment/message pairs in test mode", () => {
+    expect(testClaimMigration).toContain("CREATE OR REPLACE FUNCTION public.claim_agency_followup_test_messages(");
+    expect(testClaimMigration).toContain("message.id::text = allowed.target ->> 'messageId'");
+    expect(testClaimMigration).toContain("message.enrollment_id::text = allowed.target ->> 'enrollmentId'");
+    expect(testClaimMigration).toContain("message.recipient_email_snapshot = allowed.target ->> 'recipientEmail'");
+    expect(testClaimMigration).toContain("message.state = 'scheduled' AND message.scheduled_at <= p_now");
+    expect(testClaimMigration).toContain("public.agency_followup_messages.recipient_email_snapshot = allowed.target ->> 'recipientEmail'");
+    expect(testClaimMigration).toContain("public.agency_followup_messages.id::text = allowed.target ->> 'messageId'");
+    expect(testClaimMigration).toContain("FOR UPDATE OF message SKIP LOCKED");
+    expect(testClaimMigration).toContain("REVOKE ALL ON FUNCTION public.claim_agency_followup_test_messages");
+    expect(testClaimMigration).toContain("GRANT EXECUTE ON FUNCTION public.claim_agency_followup_test_messages");
+    expect(testClaimMigration).toContain("TO service_role");
+    expect(service).toContain('supabase.rpc("claim_agency_followup_test_messages"');
+    expect(service).toContain("p_allowed_targets: input.testClaimTargets");
+    expect(service).toContain('supabase.rpc("claim_agency_followup_messages", claimParameters)');
   });
 });

@@ -2,11 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Result = { data: unknown; error: { message: string } | null };
 type Call = { table: string; in: Array<[string, unknown]>; eq: Array<[string, unknown]>; orders: Array<[string, boolean]>; range?: [number, number] };
+type RpcCall = { name: string; args: Record<string, unknown> };
 
 const h = vi.hoisted(() => {
   const calls: Call[] = [];
+  const rpcCalls: RpcCall[] = [];
   const rows: Record<string, unknown[]> = {};
   const supabaseAdmin = {
+    rpc: async (name: string, args: Record<string, unknown>) => {
+      rpcCalls.push({ name, args });
+      return { data: [], error: null };
+    },
     from: (table: string) => {
       const call: Call = { table, in: [], eq: [], orders: [] };
       calls.push(call);
@@ -36,13 +42,13 @@ const h = vi.hoisted(() => {
       return query;
     },
   };
-  return { calls, rows, supabaseAdmin };
+  return { calls, rpcCalls, rows, supabaseAdmin };
 });
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: h.supabaseAdmin }));
 
-import { listAgencyFollowupConsole } from "@/lib/agency-followup-service";
+import { listAgencyFollowupConsole, runAgencyFollowupDispatcher } from "@/lib/agency-followup-service";
 import { agencyFollowupRecipientEmailHash } from "@/lib/agency-followup-domain";
 
 const P1 = "prospect-1";
@@ -107,8 +113,55 @@ function setRows() {
 
 beforeEach(() => {
   h.calls.length = 0;
+  h.rpcCalls.length = 0;
   for (const key of Object.keys(h.rows)) delete h.rows[key];
   setRows();
+});
+
+describe("runAgencyFollowupDispatcher test-mode claim scope", () => {
+  it("uses an atomic claim restricted to the exact configured test message", async () => {
+    const keys = [
+      "AGENCY_FOLLOWUP_SEND_MODE",
+      "AGENCY_FOLLOWUP_FROM",
+      "AGENCY_FOLLOWUP_REPLY_TO",
+      "RESEND_API_KEY",
+      "AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET",
+      "AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST",
+      "AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST",
+    ];
+    const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+    Object.assign(process.env, {
+      AGENCY_FOLLOWUP_SEND_MODE: "test",
+      AGENCY_FOLLOWUP_FROM: "CaseLoad Select <noreply@caseloadselect.ca>",
+      AGENCY_FOLLOWUP_REPLY_TO: "support@caseloadselect.ca",
+      RESEND_API_KEY: "synthetic-api-key",
+      AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: "synthetic-webhook-secret",
+      AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST: "owner@example.test",
+      AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST: JSON.stringify([
+        { enrollmentId: "enrollment-allowed", messageId: "message-allowed", recipientEmail: "owner@example.test" },
+      ]),
+    });
+    try {
+      const result = await runAgencyFollowupDispatcher({ workerId: "test-allowlisted-claim" });
+      expect(result.claimed).toBe(0);
+      expect(h.rpcCalls).toEqual([{
+        name: "claim_agency_followup_test_messages",
+        args: expect.objectContaining({
+          p_allowed_targets: [{
+            enrollmentId: "enrollment-allowed",
+            messageId: "message-allowed",
+            recipientEmail: "owner@example.test",
+          }],
+          p_limit: 1,
+        }),
+      }]);
+    } finally {
+      for (const key of keys) {
+        if (previous[key] === undefined) delete process.env[key];
+        else process.env[key] = previous[key];
+      }
+    }
+  });
 });
 
 describe("listAgencyFollowupConsole operations-state batching", () => {

@@ -20,6 +20,8 @@ export interface AgencyFollowupSendConfig {
   webhookSecretConfigured: boolean;
   /** One message maximum is enforced in every enabled mode. */
   maxBatchSize: 1;
+  /** Exact message/enrollment/recipient targets that test-mode SQL may touch. */
+  testClaimTargets: readonly AgencyFollowupSendTarget[];
   ready: boolean;
   blockers: readonly string[];
   /** Authorization compares the persisted recipient exactly after trimming. */
@@ -101,6 +103,7 @@ export function resolveAgencyFollowupSendConfig(env: Environment = process.env):
     if (mode === "test") {
       if (testRecipients.length === 0) blockers.push("test_recipient_allowlist_empty");
       if (testTargets.length === 0) blockers.push("test_record_allowlist_empty_or_invalid");
+      if (testTargets.length > 100) blockers.push("test_record_allowlist_too_large");
     }
     if (mode === "live" && liveEnrollments.length === 0) blockers.push("live_enrollment_allowlist_empty");
   }
@@ -112,6 +115,9 @@ export function resolveAgencyFollowupSendConfig(env: Environment = process.env):
     apiKeyConfigured,
     webhookSecretConfigured,
     maxBatchSize: 1,
+    testClaimTargets: mode === "test"
+      ? testTargets.map(({ enrollmentId, messageId, recipientEmail }) => ({ enrollmentId, messageId, recipientEmail }))
+      : [],
     ready: mode !== "off" && blockers.length === 0,
     blockers,
     authorize(target) {
