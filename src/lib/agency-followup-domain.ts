@@ -135,7 +135,7 @@ export function agencyFollowupRecipientHash(recipient: AgencyFollowupRecipientSn
 
 /** Separate normalized email fingerprint for exact provider-event recipient correlation. */
 export function agencyFollowupRecipientEmailHash(email: string): string {
-  return sha256(email.trim().toLowerCase());
+  return createHash("sha256").update(email.trim().toLowerCase(), "utf8").digest("hex");
 }
 
 export function agencyFollowupStepsHaveApprovedTemplates(

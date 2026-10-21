@@ -4,6 +4,7 @@ import {
   agencyFollowupContentHash,
   agencyFollowupLogicalMessageKey,
   agencyFollowupRecipientHash,
+  agencyFollowupRecipientEmailHash,
   agencyFollowupStepsHaveApprovedTemplates,
   evaluateAgencyFollowupSend,
   resolveAgencyProviderOutcome,
@@ -87,6 +88,12 @@ describe("Agency follow-up domain", () => {
         readyContext({ approval: { ...approvedSnapshot(), reviewedAt: "not-a-time" } }),
       ),
     ).toContain("approval_invalid_reviewer_or_time");
+  });
+
+  it("hashes a normalized raw email exactly as the database validator does", () => {
+    expect(agencyFollowupRecipientEmailHash(" Jordan@Example.test ")).toBe(
+      "82a430687bf78d6812c1fb0c12180dbdb9f4e3ff537dba38e0895c47ea93622d",
+    );
   });
 
   it("normalizes harmless recipient whitespace and email casing in the approval fingerprint", () => {
