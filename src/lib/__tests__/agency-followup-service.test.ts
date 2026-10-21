@@ -54,6 +54,8 @@ function setRows() {
   h.rows.agency_followup_steps = [];
   h.rows.agency_followup_messages = [P1, P2, P3].map((_, index) => ({
     id: `message-${index + 1}`, enrollment_id: `enrollment-${index + 1}`, step_number: 1, state: "draft",
+    provider_delivery_status: ["delivered", "accepted", "unknown"][index],
+    provider_delivery_status_at: index === 0 ? "2026-10-20T12:00:00.000Z" : null,
     content_snapshot: { subject: "Subject", body: "Body" }, scheduled_at: null,
   }));
   h.rows.agency_prospects = [P1, P2, P3].map((id) => ({ id, firm_name: id, contact_email: `${id}@example.test`, stage: "new" }));
@@ -90,6 +92,12 @@ describe("listAgencyFollowupConsole operations-state batching", () => {
         { prospectId: P1, contactability: "allowed", conversationStatus: "awaiting_reply" },
         { prospectId: P2, contactability: "unknown", conversationStatus: "not_contacted" },
         { prospectId: P3, contactability: "hold", conversationStatus: "replied" },
+      ]);
+    expect(result.items.map(({ providerDeliveryStatus, providerDeliveryStatusAt }) => ({ providerDeliveryStatus, providerDeliveryStatusAt })))
+      .toEqual([
+        { providerDeliveryStatus: "delivered", providerDeliveryStatusAt: "2026-10-20T12:00:00.000Z" },
+        { providerDeliveryStatus: "accepted", providerDeliveryStatusAt: null },
+        { providerDeliveryStatus: "unknown", providerDeliveryStatusAt: null },
       ]);
     for (const table of [
       "prospect_source_links", "prospect_conversation_sources", "prospect_conversations", "prospect_contactability",

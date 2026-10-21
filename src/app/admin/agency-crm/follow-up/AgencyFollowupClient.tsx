@@ -12,7 +12,10 @@ type Journey = {
 type TemplateVersion = { id: string; templateKey: string; version: number; state: string; subject: string; body: string };
 type QueueItem = {
   id: string; enrollmentId: string; prospectId: string; firmName: string; prospectStage: string;
-  journeyName: string; stepNumber: number; state: string; eligibility: string;
+  journeyName: string; stepNumber: number; state: string;
+  providerDeliveryStatus: "unknown" | "accepted" | "delivered" | "failed" | "bounced" | "complained" | "unsubscribed";
+  providerDeliveryStatusAt: string | null;
+  eligibility: string;
   contactability: string; conversationStatus: string; recipientEmail: string; subject: string;
   body: string; scheduledAt: string | null; blockers: string[]; sequenceReleased: boolean;
 };
@@ -46,6 +49,16 @@ const BLOCKER_LABELS: Record<string, string> = {
 function prettyState(value: string): string {
   return value.replaceAll('_', ' ');
 }
+
+const DELIVERY_STATUS_LABELS: Record<QueueItem["providerDeliveryStatus"], string> = {
+  unknown: "Awaiting provider confirmation",
+  accepted: "Accepted by provider; inbox receipt not confirmed",
+  delivered: "Provider reports delivered; inbox placement not confirmed",
+  failed: "Provider reports failure",
+  bounced: "Bounced by recipient mail server",
+  complained: "Marked as spam",
+  unsubscribed: "Recipient unsubscribed",
+};
 
 function normalizeJourneyKey(value: string): string {
   return value.trim().toLowerCase();
@@ -308,6 +321,10 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                   <span data-ui-copy="supporting" className="block w-full text-xs font-semibold uppercase tracking-wide text-black/60">Message {item.stepNumber}</span>
                   <h4 data-ui-copy="heading" className="w-full break-words text-sm font-semibold text-navy sm:text-base [text-wrap:pretty]">{item.subject || 'No subject'}</h4>
                   <span className="block w-full text-xs uppercase tracking-wide text-black/60">{prettyState(item.state)}</span>
+                  <p className="w-full break-words text-xs leading-5 text-black/65" aria-label={`Provider delivery status: ${DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}`}>
+                    Provider delivery: {DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}
+                    {item.providerDeliveryStatusAt && <> · updated {new Date(item.providerDeliveryStatusAt).toLocaleString()}</>}
+                  </p>
                 </div>
                 <p data-ui-copy="body" className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-black/75 [text-wrap:pretty]">{item.body}</p>
                 </div>

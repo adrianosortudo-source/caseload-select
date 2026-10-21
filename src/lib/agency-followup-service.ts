@@ -47,6 +47,8 @@ export interface AgencyFollowupQueueItem {
   journeyName: string;
   stepNumber: number;
   state: string;
+  providerDeliveryStatus: "unknown" | "accepted" | "delivered" | "failed" | "bounced" | "complained" | "unsubscribed";
+  providerDeliveryStatusAt: string | null;
   eligibility: string;
   contactability: AgencyContactability;
   conversationStatus: AgencyConversationStatus;
@@ -482,6 +484,8 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
       journeyName: String(journey?.name ?? "Follow-up journey"),
       stepNumber: Number(message.step_number),
       state: String(message.state),
+      providerDeliveryStatus: String(message.provider_delivery_status ?? "unknown") as AgencyFollowupQueueItem["providerDeliveryStatus"],
+      providerDeliveryStatusAt: typeof message.provider_delivery_status_at === "string" ? message.provider_delivery_status_at : null,
       eligibility: String(enrollment.eligibility_state),
       contactability: operations.contactability,
       conversationStatus: operations.conversationStatus,

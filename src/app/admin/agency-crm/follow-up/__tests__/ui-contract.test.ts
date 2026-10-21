@@ -17,6 +17,8 @@ describe("Agency CRM follow-up operator UI contract", () => {
 
   it("labels the queue, keeps actions per prospect, and states delivery is disabled", () => {
     expect(source).toContain("Prospect review queue");
+    expect(source).toContain("Provider delivery:");
+    expect(source).toContain("inbox receipt not confirmed");
     expect(source).toContain("Create draft review");
     expect(source).toContain("Approve this message");
     expect(source).toContain("Release this prospect");
