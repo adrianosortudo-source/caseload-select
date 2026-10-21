@@ -46,6 +46,7 @@ function readyContext(overrides: Partial<AgencyFollowupSendContext> = {}): Agenc
     conversationStatus: "awaiting_reply",
     eligibility: "eligible",
     eligibilityEvidenceRef: "synthetic-evidence-001",
+    optInState: "granted",
     sequenceReleased: true,
     messageApproved: true,
     approval: approvedSnapshot(),
@@ -122,6 +123,15 @@ describe("Agency follow-up domain", () => {
         "approval_stale_recipient",
       ]),
     );
+  });
+
+  it("requires the latest exact opt-in event to be granted", () => {
+    expect(evaluateAgencyFollowupSend(readyContext({ optInState: "missing" })))
+      .toContain("explicit_opt_in_missing");
+    expect(evaluateAgencyFollowupSend(readyContext({ optInState: "withdrawn" })))
+      .toContain("explicit_opt_in_withdrawn");
+    expect(evaluateAgencyFollowupSend(readyContext({ optInState: "granted" })))
+      .not.toContain("explicit_opt_in_missing");
   });
 
   it("blocks a message until due and until the minimum spacing from provider acceptance has elapsed", () => {

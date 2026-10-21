@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const migrationName = "20261013154000_agency_followup_journeys.sql";
+const migrationName = "20261013173327_agency_followup_journeys.sql";
 const migration = readFileSync(resolve(process.cwd(), "supabase/migrations", migrationName), "utf8");
 const agencyCrmGrants = readFileSync(resolve(process.cwd(), "supabase/migrations", "20261013230354_agency_crm_service_role_grants.sql"), "utf8");
 const agencyCrmSchema = readFileSync(resolve(process.cwd(), "supabase/migrations", "20260625000001_agency_crm.sql"), "utf8");
@@ -12,7 +12,7 @@ const route = readFileSync(resolve(process.cwd(), "src/app/api/admin/agency-crm/
 
 describe("Agency follow-up additive migration and service contract", () => {
   it("uses a versioned journey model tied to current agency prospects and approved template snapshots", () => {
-    expect(migrationName).toMatch(/^20261013154000_/);
+    expect(migrationName).toMatch(/^20261013173327_/);
     for (const table of ["agency_followup_journeys", "agency_followup_template_versions", "agency_followup_steps", "agency_followup_enrollments", "agency_followup_messages", "agency_followup_events"]) {
       expect(migration).toContain(`CREATE TABLE public.${table}`);
     }

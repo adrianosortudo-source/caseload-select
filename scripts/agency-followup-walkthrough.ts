@@ -34,13 +34,17 @@ if (!/^crm-followup-walkthrough-\d{8}(?:-[a-f0-9]{6})?$/.test(STACK_PROJECT_ID) 
   throw new Error("Disposable Supabase project id must use the guarded CRM walkthrough prefix, date, and at most six hex suffix characters.");
 }
 const EXPECTED_MIGRATION_BLOB = "c6d594c51b8c257aaca7a62fff41c96a1534a86a";
-const MIGRATION_PATH = "supabase/migrations/20261013154000_agency_followup_journeys.sql";
+const MIGRATION_PATH = "supabase/migrations/20261013173327_agency_followup_journeys.sql";
+const EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB = "ee1e90d62b102bae25b1f385902898394ccee7f4";
+const FOLLOWUP_EVENT_PRIVILEGES_PATH = "supabase/migrations/20261013174258_harden_agency_followup_events_privileges.sql";
 const EXPECTED_CRM_GRANTS_MIGRATION_BLOB = "af413a079a76e2fc9844f0bb37d61bec3127b558";
 const CRM_GRANTS_MIGRATION_PATH = "supabase/migrations/20261013230354_agency_crm_service_role_grants.sql";
 const EVENT_MIGRATION_PATH = "supabase/migrations/20261020025251_agency_followup_resend_events_and_shared_suppression.sql";
 const EXPECTED_EVENT_MIGRATION_BLOB = "ea4cf8a7186f338d65127d27099902e30949b345";
 const EVENT_ROW_LOCK_GRANT_MIGRATION_PATH = "supabase/migrations/20261020141945_agency_followup_provider_event_row_lock_privilege.sql";
 const EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB = "4c5a29df51e716fe37b2a1ac34a300ad8beef351";
+const OPT_IN_EVENT_MIGRATION_PATH = "supabase/migrations/20261021040000_agency_followup_opt_in_events.sql";
+const EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB = "7f34b1f9f51772557111c5ba35213d9402e1b6f7";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
 const RUN_STARTED_AT = new Date().toISOString();
@@ -229,11 +233,11 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013154000", "20261013230354", "20261020025251", "20261020141945"]],
+      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "4") {
-    throw new Error("Disposable Postgres identity or exact four-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "6") {
+    throw new Error("Disposable Postgres identity or exact six-migration ledger check failed.");
   }
   const tables = await pool.query<{ count: string }>(
     "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
@@ -260,7 +264,7 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
   if (grants.rows[0]?.service_access !== true || grants.rows[0]?.public_access !== false) {
     throw new Error("Disposable Agency CRM service-role grants or public-role revocations are not in the expected state.");
   }
-  progress("disposable identity, all four migration ledger versions, nine follow-up/provider tables, row-lock-only privilege, append-only trigger, and restricted grants checked");
+  progress("disposable identity, all six migration ledger versions, nine follow-up/provider tables, row-lock-only privilege, append-only trigger, and restricted grants checked");
 }
 
 async function verifyProviderEventImmutability(pool: Pool): Promise<void> {
@@ -1663,8 +1667,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
       databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
     },
-    migrationVersions: ["20261013154000", "20261013230354", "20261020025251", "20261020141945"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB],
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB],
     screenshots,
     synthetic: true,
     flows: {
@@ -1923,9 +1927,11 @@ async function main(): Promise<void> {
   let completedSummary: Record<string, unknown> | undefined;
   progress("verifying pushed migration blobs");
   await verifyPushedMigration(MIGRATION_PATH, EXPECTED_MIGRATION_BLOB);
+  await verifyPushedMigration(FOLLOWUP_EVENT_PRIVILEGES_PATH, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB);
   await verifyPushedMigration(CRM_GRANTS_MIGRATION_PATH, EXPECTED_CRM_GRANTS_MIGRATION_BLOB);
   await verifyPushedMigration(EVENT_MIGRATION_PATH, EXPECTED_EVENT_MIGRATION_BLOB);
   await verifyPushedMigration(EVENT_ROW_LOCK_GRANT_MIGRATION_PATH, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB);
+  await verifyPushedMigration(OPT_IN_EVENT_MIGRATION_PATH, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");

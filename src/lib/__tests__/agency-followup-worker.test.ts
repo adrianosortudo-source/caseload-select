@@ -27,6 +27,7 @@ const validContext: AgencyFollowupSendContext = {
   conversationStatus: "awaiting_reply",
   eligibility: "eligible",
   eligibilityEvidenceRef: "synthetic-evidence",
+  optInState: "granted",
   sequenceReleased: true,
   messageApproved: true,
   approval: {

@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type Result = { data: unknown; error: { message: string } | null };
-type Call = { table: string; in: Array<[string, unknown]>; eq: Array<[string, unknown]>; range?: [number, number] };
+type Call = { table: string; in: Array<[string, unknown]>; eq: Array<[string, unknown]>; orders: Array<[string, boolean]>; range?: [number, number] };
 
 const h = vi.hoisted(() => {
   const calls: Call[] = [];
   const rows: Record<string, unknown[]> = {};
   const supabaseAdmin = {
     from: (table: string) => {
-      const call: Call = { table, in: [], eq: [] };
+      const call: Call = { table, in: [], eq: [], orders: [] };
       calls.push(call);
       const query: Record<string, unknown> = {};
       Object.assign(query, {
@@ -16,10 +16,19 @@ const h = vi.hoisted(() => {
         in: (column: string, value: unknown) => { call.in.push([column, value]); return query; },
         eq: (column: string, value: unknown) => { call.eq.push([column, value]); return query; },
         range: (from: number, to: number) => { call.range = [from, to]; return query; },
-        order: () => query,
+        order: (column: string, options?: { ascending?: boolean }) => { call.orders.push([column, options?.ascending !== false]); return query; },
         limit: () => query,
         then: (resolve: (result: Result) => unknown, reject?: (error: unknown) => unknown) => {
-          const allRows = rows[table] ?? [];
+          let allRows = (rows[table] ?? []).filter((row) =>
+            call.eq.every(([column, value]) => (row as Record<string, unknown>)[column] === value) &&
+            call.in.every(([column, values]) => Array.isArray(values) && values.includes((row as Record<string, unknown>)[column])));
+          for (const [column, ascending] of [...call.orders].reverse()) {
+            allRows = [...allRows].sort((left, right) => {
+              const a = String((left as Record<string, unknown>)[column] ?? "");
+              const b = String((right as Record<string, unknown>)[column] ?? "");
+              return (a < b ? -1 : a > b ? 1 : 0) * (ascending ? 1 : -1);
+            });
+          }
           const data = call.range ? allRows.slice(call.range[0], call.range[1] + 1) : allRows;
           return Promise.resolve({ data, error: null }).then(resolve, reject);
         },
@@ -34,6 +43,7 @@ vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: h.supabaseAdmin }));
 
 import { listAgencyFollowupConsole } from "@/lib/agency-followup-service";
+import { agencyFollowupRecipientEmailHash } from "@/lib/agency-followup-domain";
 
 const P1 = "prospect-1";
 const P2 = "prospect-2";
@@ -60,14 +70,32 @@ function setRows() {
   }));
   h.rows.agency_prospects = [P1, P2, P3].map((id) => ({ id, firm_name: id, contact_email: `${id}@example.test`, stage: "new" }));
   h.rows.prospect_source_links = [
-    { id: "source-1", source_record_key: P1 },
-    { id: "source-3", source_record_key: P3 },
+    { id: "source-1", source_record_key: P1, source_system: "agency_crm", active: true, organization_id: "org-1", person_id: "person-1" },
+    { id: "source-3", source_record_key: P3, source_system: "agency_crm_contact", active: true, organization_id: "org-3", person_id: "person-3" },
   ];
   h.rows.prospect_conversation_sources = [
     { source_link_id: "source-1", conversation_id: CONV1 },
     { source_link_id: "source-3", conversation_id: CONV3 },
   ];
-  h.rows.prospect_conversations = [{ id: CONV1, status: "awaiting_reply" }, { id: CONV3, status: "completed" }];
+  h.rows.prospect_conversations = [
+    { id: CONV1, status: "awaiting_reply", organization_id: "org-1", person_id: "person-1" },
+    { id: CONV3, status: "completed", organization_id: "org-3", person_id: "person-3" },
+  ];
+  h.rows.prospect_people = [
+    { id: "person-1", primary_email: `${P1}@example.test` },
+    { id: "person-3", primary_email: `${P3}@example.test` },
+  ];
+  h.rows.prospect_person_firm_roles = [
+    { organization_id: "org-1", person_id: "person-1", active: true },
+    { organization_id: "org-3", person_id: "person-3", active: true },
+  ];
+  h.rows.agency_followup_opt_in_events = [
+    { id: "opt-1", agency_prospect_id: P1, source_link_id: "source-1", conversation_id: CONV1,
+      recipient_email_sha256: agencyFollowupRecipientEmailHash(`${P1}@example.test`), purpose: "agency_followup_email",
+      event_type: "opt_in_granted", recorded_at: "2026-10-20T10:00:00.000Z" },
+    { id: "opt-3", agency_prospect_id: P3, source_link_id: "source-3", conversation_id: CONV3,
+      recipient_email_sha256: agencyFollowupRecipientEmailHash(`${P3}@example.test`), purpose: "agency_followup_email", event_type: "opt_in_withdrawn", recorded_at: "2026-10-20T11:00:00.000Z" },
+  ];
   h.rows.prospect_contactability = [{ conversation_id: CONV1, state: "eligible" }, { conversation_id: CONV3, state: "eligible" }];
   h.rows.prospect_activities = [
     { conversation_id: CONV3, kind: "meeting" },
@@ -99,9 +127,16 @@ describe("listAgencyFollowupConsole operations-state batching", () => {
         { providerDeliveryStatus: "accepted", providerDeliveryStatusAt: null },
         { providerDeliveryStatus: "unknown", providerDeliveryStatusAt: null },
       ]);
+    expect(result.items.map(({ prospectId, optInState, blockers }) => ({ prospectId, optInState, blockers })))
+      .toEqual(expect.arrayContaining([
+        expect.objectContaining({ prospectId: P1, optInState: "granted" }),
+        expect.objectContaining({ prospectId: P2, optInState: "missing", blockers: expect.arrayContaining(["explicit_opt_in_missing"]) }),
+        expect.objectContaining({ prospectId: P3, optInState: "withdrawn", blockers: expect.arrayContaining(["explicit_opt_in_withdrawn"]) }),
+      ]));
     for (const table of [
       "prospect_source_links", "prospect_conversation_sources", "prospect_conversations", "prospect_contactability",
-      "prospect_activities", "prospect_contactability_provider_suppressions",
+      "prospect_activities", "prospect_contactability_provider_suppressions", "prospect_people",
+      "prospect_person_firm_roles", "agency_followup_opt_in_events",
     ]) expect(h.calls.filter((call) => call.table === table)).toHaveLength(1);
     const sourceCall = h.calls.find((call) => call.table === "prospect_source_links")!;
     expect(sourceCall.in).toContainEqual(["source_system", ["agency_crm", "agency_crm_contact"]]);
@@ -124,20 +159,62 @@ describe("listAgencyFollowupConsole operations-state batching", () => {
     }
   });
 
-  it("paginates operation histories beyond the PostgREST page size", async () => {
+  it("uses the newest event for the exact recipient, source, conversation, and purpose", async () => {
+    h.rows.agency_followup_opt_in_events.push({
+      id: "opt-1-withdrawn", agency_prospect_id: P1, source_link_id: "source-1", conversation_id: CONV1,
+      recipient_email_sha256: agencyFollowupRecipientEmailHash(`${P1}@example.test`), purpose: "agency_followup_email",
+      event_type: "opt_in_withdrawn", recorded_at: "2026-10-21T11:00:00.000Z",
+    });
+    const result = await listAgencyFollowupConsole();
+    expect(result.items.find((item) => item.prospectId === P1)).toMatchObject({
+      optInState: "withdrawn", blockers: expect.arrayContaining(["explicit_opt_in_withdrawn"]),
+    });
+  });
+
+  it.each([
+    ["missing opt-in history", () => { h.rows.agency_followup_opt_in_events = []; }, "allowed"],
+    ["wrong canonical email", () => { (h.rows.prospect_people[0] as Record<string, unknown>).primary_email = "other@example.test"; }, "unknown"],
+    ["inactive source link", () => { (h.rows.prospect_source_links[0] as Record<string, unknown>).active = false; }, "unknown"],
+    ["ambiguous active source links", () => { h.rows.prospect_source_links.push({
+      ...(h.rows.prospect_source_links[0] as Record<string, unknown>), id: "source-1-duplicate",
+    }); }, "unknown"],
+    ["conversation bound to the wrong person", () => { (h.rows.prospect_conversations[0] as Record<string, unknown>).person_id = "person-other"; }, "unknown"],
+  ])("fails closed for %s", async (_label, mutate, expectedContactability) => {
+    mutate();
+    const result = await listAgencyFollowupConsole();
+    const item = result.items.find((row) => row.prospectId === P1)!;
+    expect(item.contactability).toBe(expectedContactability);
+    expect(item.optInState).toBe("missing");
+    if (expectedContactability === "unknown") expect(item.blockers).toContain("contactability_unknown");
+    expect(item.blockers).toContain("explicit_opt_in_missing");
+  });
+
+  it("fails closed when exact opt-in history cannot be read", async () => {
+    const originalFrom = h.supabaseAdmin.from;
+    h.supabaseAdmin.from = ((table: string) => {
+      const query = originalFrom(table) as Record<string, unknown>;
+      if (table === "agency_followup_opt_in_events") {
+        query.then = (resolve: (result: Result) => unknown) => Promise.resolve({ data: null, error: { message: "read denied" } }).then(resolve);
+      }
+      return query;
+    }) as typeof h.supabaseAdmin.from;
+    try {
+      await expect(listAgencyFollowupConsole()).rejects.toThrow("Unable to read exact Agency follow-up opt-in history: read denied");
+    } finally {
+      h.supabaseAdmin.from = originalFrom;
+    }
+  });
+
+  it("paginates source history and fails closed when its active source binding is ambiguous", async () => {
     h.rows.prospect_source_links = Array.from({ length: 1001 }, (_, index) => ({ id: `source-${index}`, source_record_key: P1 }));
-    h.rows.prospect_conversation_sources = Array.from({ length: 1001 }, (_, index) => ({
-      source_link_id: `source-${index}`, conversation_id: `conversation-${index}`,
+    h.rows.prospect_source_links = h.rows.prospect_source_links.map((row, index) => ({
+      ...row as Record<string, unknown>, source_system: "agency_crm", active: true, organization_id: "org-1", person_id: `person-${index}`,
     }));
-    h.rows.prospect_conversations = Array.from({ length: 1001 }, (_, index) => ({ id: `conversation-${index}`, status: "awaiting_reply" }));
-    h.rows.prospect_contactability = Array.from({ length: 1001 }, (_, index) => ({ conversation_id: `conversation-${index}`, state: "eligible" }));
-    h.rows.prospect_activities = [];
-    h.rows.prospect_contactability_provider_suppressions = [];
     const result = await listAgencyFollowupConsole();
 
-    expect(result.items[0].contactability).toBe("allowed");
-    for (const table of ["prospect_source_links", "prospect_conversation_sources", "prospect_conversations", "prospect_contactability"])
-      expect(h.calls.filter((call) => call.table === table)).toHaveLength(2);
+    expect(result.items[0].contactability).toBe("unknown");
+    expect(result.items[0].optInState).toBe("missing");
+    expect(h.calls.filter((call) => call.table === "prospect_source_links")).toHaveLength(2);
     expect(h.calls.filter((call) => call.table === "prospect_source_links").map((call) => call.range)).toEqual([[0, 999], [1000, 1999]]);
   });
 });

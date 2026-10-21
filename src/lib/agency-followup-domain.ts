@@ -19,6 +19,8 @@ export type AgencyConversationStatus =
   | "meeting_scheduled"
   | "completed";
 
+export type AgencyFollowupOptInState = "granted" | "withdrawn" | "missing";
+
 export interface AgencyFollowupRecipientSnapshot {
   prospectId: string;
   firmName: string;
@@ -47,6 +49,7 @@ export interface AgencyFollowupSendContext {
   conversationStatus: AgencyConversationStatus;
   eligibility: "eligible" | "ineligible" | "pending" | "unknown";
   eligibilityEvidenceRef: string | null;
+  optInState: AgencyFollowupOptInState;
   sequenceReleased: boolean;
   messageApproved: boolean;
   approval: AgencyFollowupApprovalSnapshot | null;
@@ -67,6 +70,8 @@ export type AgencyFollowupBlockReason =
   | "eligibility_unknown"
   | "eligibility_not_approved"
   | "eligibility_evidence_missing"
+  | "explicit_opt_in_missing"
+  | "explicit_opt_in_withdrawn"
   | "contactability_unknown"
   | "contactability_blocked"
   | "conversation_stopped"
@@ -174,6 +179,8 @@ export function evaluateAgencyFollowupSend(
   if (context.eligibility === "eligible" && !context.eligibilityEvidenceRef?.trim()) {
     blockers.push("eligibility_evidence_missing");
   }
+  if (context.optInState === "withdrawn") blockers.push("explicit_opt_in_withdrawn");
+  else if (context.optInState !== "granted") blockers.push("explicit_opt_in_missing");
   if (context.contactability === "unknown") blockers.push("contactability_unknown");
   else if (context.contactability !== "allowed") blockers.push("contactability_blocked");
   if (STOPPED_CONVERSATION_STATUSES.has(context.conversationStatus)) blockers.push("conversation_stopped");

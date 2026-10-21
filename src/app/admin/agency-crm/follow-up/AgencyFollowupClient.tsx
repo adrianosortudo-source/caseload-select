@@ -15,6 +15,7 @@ type QueueItem = {
   journeyName: string; stepNumber: number; state: string;
   providerDeliveryStatus: "unknown" | "accepted" | "delivered" | "failed" | "bounced" | "complained" | "unsubscribed";
   providerDeliveryStatusAt: string | null;
+  optInState: 'granted' | 'withdrawn' | 'missing';
   eligibility: string;
   contactability: string; conversationStatus: string; recipientEmail: string; subject: string;
   body: string; scheduledAt: string | null; blockers: string[]; sequenceReleased: boolean;
@@ -27,6 +28,8 @@ const BLOCKER_LABELS: Record<string, string> = {
   eligibility_unknown: 'Eligibility is unknown',
   eligibility_not_approved: 'Eligibility is not approved with evidence',
   eligibility_evidence_missing: 'Eligibility evidence is missing',
+  explicit_opt_in_missing: 'Explicit email opt-in evidence is missing',
+  explicit_opt_in_withdrawn: 'Email opt-in was withdrawn',
   sequence_not_released: 'This prospect has not been released',
   message_not_approved: 'This message needs individual approval',
   approval_missing: 'This message needs individual approval',
@@ -310,7 +313,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
               <div className="min-w-0">
                 <h3 className="break-words text-base font-semibold text-navy">{first.firmName}</h3>
                 <p className="mt-1 break-words text-sm text-black/65">{first.recipientEmail || 'No email'} · {first.journeyName} · {prettyState(first.prospectStage)}</p>
-                <p className="mt-1 text-xs text-black/55">Contactability: {prettyState(first.contactability)} · Conversation: {prettyState(first.conversationStatus)} · Eligibility: {prettyState(first.eligibility)}</p>
+                <p className="mt-1 text-xs text-black/55">Contactability: {prettyState(first.contactability)} · Conversation: {prettyState(first.conversationStatus)} · Eligibility: {prettyState(first.eligibility)} · Email opt-in: {prettyState(first.optInState)}</p>
               </div>
               <span className="shrink-0 border border-black/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-black/70">{first.sequenceReleased ? 'Released' : 'Draft'}</span>
             </div>
