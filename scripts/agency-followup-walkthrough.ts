@@ -365,7 +365,7 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
           [conversationId],
         );
       }
-      if (key === "normal") {
+      if (["normal", "pause", "unknown", "window", "lease", "retry"].includes(key)) {
         const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
         const capturedAt = new Date().toISOString();
         const syntheticConsentHash = createHash("sha256").update(syntheticConsent).digest("hex");
@@ -384,13 +384,13 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
             "other_verified_evidence",
             "synthetic-walkthrough-consent-v1",
             syntheticConsentHash,
-            `synthetic://agency-followup-walkthrough/${RUN_ID}/normal-opt-in`,
+            `synthetic://agency-followup-walkthrough/${RUN_ID}/${key}-opt-in`,
             syntheticConsentHash,
             lawyerId,
-            `walkthrough:${RUN_ID}:synthetic-opt-in:${prospectId}`,
+            `walkthrough:${RUN_ID}:synthetic-opt-in:${key}:${prospectId}`,
           ],
         );
-        progress("seeded synthetic-only opt-in grant for the normal prospect; it is not real consent evidence");
+        progress(`seeded synthetic-only opt-in grant for ${key}; it is not real consent evidence`);
       }
       fixtures.prospects[key] = { id: prospectId, firmName, contactName, email, conversationId };
       progress(`seeded synthetic ${key} prospect through Agency CRM history trigger`);
