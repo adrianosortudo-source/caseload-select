@@ -321,7 +321,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                   <span data-ui-copy="supporting" className="block w-full text-xs font-semibold uppercase tracking-wide text-black/60">Message {item.stepNumber}</span>
                   <h4 data-ui-copy="heading" className="w-full break-words text-sm font-semibold text-navy sm:text-base [text-wrap:pretty]">{item.subject || 'No subject'}</h4>
                   <span className="block w-full text-xs uppercase tracking-wide text-black/60">{prettyState(item.state)}</span>
-                  <p className="w-full break-words text-xs leading-5 text-black/65" aria-label={`Provider delivery status: ${DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}`}>
+                  <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65" aria-label={`Provider delivery status: ${DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}`}>
                     Provider delivery: {DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}
                     {item.providerDeliveryStatusAt && <> · updated {new Date(item.providerDeliveryStatusAt).toLocaleString()}</>}
                   </p>
