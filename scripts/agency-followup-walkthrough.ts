@@ -367,7 +367,9 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
       }
       if (["normal", "pause", "unknown", "window", "lease", "retry"].includes(key)) {
         const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
-        const capturedAt = new Date().toISOString();
+        const databaseClock = await pool.query<{ captured_at: Date }>("select clock_timestamp() - interval '1 minute' as captured_at");
+        const capturedAt = databaseClock.rows[0]?.captured_at.toISOString();
+        if (!capturedAt) throw new Error("Could not derive a past synthetic consent timestamp from disposable PostgreSQL.");
         const syntheticConsentHash = createHash("sha256").update(syntheticConsent).digest("hex");
         await pool.query(
           `select * from public.record_agency_followup_opt_in_event(
@@ -1267,7 +1269,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const consentCard = queueCard(page, consentProspect.firmName);
   const syntheticConsentText = "Synthetic consent evidence for local acceptance only; this is not real prospect consent.";
   const syntheticConsentHash = createHash("sha256").update(syntheticConsentText).digest("hex");
-  const consentTimeLocal = (instant: Date) => new Date(instant.getTime() - instant.getTimezoneOffset() * 60_000).toISOString().slice(0, 19);
+  const consentTimeLocal = (instant: Date) => new Date(instant.getTime() - instant.getTimezoneOffset() * 60_000 - 60_000).toISOString().slice(0, 19);
   const recordConsentEvent = async (eventType: "opt_in_granted" | "opt_in_withdrawn") => {
     await consentCard.getByLabel("Record event").selectOption(eventType);
     await consentCard.getByLabel(/Date and time recorded in evidence/).fill(consentTimeLocal(new Date()));
