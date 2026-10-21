@@ -60,6 +60,12 @@ const DELIVERY_STATUS_LABELS: Record<QueueItem["providerDeliveryStatus"], string
   unsubscribed: "Recipient unsubscribed",
 };
 
+function formatProviderDeliveryTimestamp(value: string): string {
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return "recorded time unavailable";
+  return `${timestamp.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
 function normalizeJourneyKey(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -323,7 +329,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                   <span className="block w-full text-xs uppercase tracking-wide text-black/60">{prettyState(item.state)}</span>
                   <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65" aria-label={`Provider delivery status: ${DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}`}>
                     Provider delivery: {DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}
-                    {item.providerDeliveryStatusAt && <> · updated {new Date(item.providerDeliveryStatusAt).toLocaleString()}</>}
+                    {item.providerDeliveryStatusAt && <> · updated {formatProviderDeliveryTimestamp(item.providerDeliveryStatusAt)}</>}
                   </p>
                 </div>
                 <p data-ui-copy="body" className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-black/75 [text-wrap:pretty]">{item.body}</p>
