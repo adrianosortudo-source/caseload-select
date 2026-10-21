@@ -20,7 +20,7 @@ describe("Agency CRM follow-up operator UI contract", () => {
     expect(source).toContain("Create draft review");
     expect(source).toContain("Approve this message");
     expect(source).toContain("Release this prospect");
-    expect(source).toContain("No live provider is configured.");
+    expect(source).toContain("Sending is off. Messages stay queued.");
     expect(source).toContain("Create template draft");
     expect(source).toContain("Create a journey version");
     expect(source).toContain("Minimum spacing between scheduled messages, hours");

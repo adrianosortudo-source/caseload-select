@@ -7,7 +7,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { createConnection } from "node:net";
 import { Pool, type PoolClient } from "pg";
-import { chromium, expect, type APIResponse, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { chromium, expect, type APIResponse, type Browser, type BrowserContext, type Page, type Response as PlaywrightResponse } from "@playwright/test";
 import { createSessionCookie } from "../src/lib/portal-session-cookie";
 import { scheduleAgencyFollowupStep } from "../src/lib/agency-followup-schedule";
 
@@ -708,7 +708,7 @@ async function waitForAction(
     const errorMessage = await recordActionFailure(page, action, button, error);
     throw new Error(`Operator action ${action} button click failed: ${errorMessage}`);
   }
-  let response: Awaited<typeof responsePromise>;
+  let response: PlaywrightResponse;
   try {
     const result = await responsePromise;
     if (!result.ok) throw result.error;
