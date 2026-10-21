@@ -30,8 +30,8 @@ if (relativeStackDir[0] !== "test-results" || relativeStackDir.some((part) => pa
   || !/^crm-local-stack(?:-[A-Za-z0-9-]+)?$/.test(relativeStackDir[1] ?? "")) {
   throw new Error("Disposable stack configuration must stay inside test-results/crm-local-stack[ suffix ].");
 }
-if (!/^crm-followup-walkthrough-\d{8}(?:-[a-f0-9]{8})?$/.test(STACK_PROJECT_ID)) {
-  throw new Error("Disposable Supabase project id must use the guarded CRM walkthrough prefix and date suffix.");
+if (!/^crm-followup-walkthrough-\d{8}(?:-[a-f0-9]{6})?$/.test(STACK_PROJECT_ID) || STACK_PROJECT_ID.length > 40) {
+  throw new Error("Disposable Supabase project id must use the guarded CRM walkthrough prefix, date, and at most six hex suffix characters.");
 }
 const EXPECTED_MIGRATION_BLOB = "c6d594c51b8c257aaca7a62fff41c96a1534a86a";
 const MIGRATION_PATH = "supabase/migrations/20261013154000_agency_followup_journeys.sql";
