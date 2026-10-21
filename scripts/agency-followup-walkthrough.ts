@@ -45,6 +45,8 @@ const EVENT_ROW_LOCK_GRANT_MIGRATION_PATH = "supabase/migrations/20261020141945_
 const EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB = "4c5a29df51e716fe37b2a1ac34a300ad8beef351";
 const OPT_IN_EVENT_MIGRATION_PATH = "supabase/migrations/20261021040000_agency_followup_opt_in_events.sql";
 const EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB = "7f34b1f9f51772557111c5ba35213d9402e1b6f7";
+const OPT_IN_OPERATOR_READ_MIGRATION_PATH = "supabase/migrations/20261021050000_agency_followup_opt_in_operator_read_grant.sql";
+const EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB = "42f33303a7d257e886ee2ad2114c3b3a58fd9eb1";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
@@ -234,11 +236,11 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000"]],
+      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "6") {
-    throw new Error("Disposable Postgres identity or exact six-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "7") {
+    throw new Error("Disposable Postgres identity or exact seven-migration ledger check failed.");
   }
   const tables = await pool.query<{ count: string }>(
     "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
@@ -265,7 +267,14 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
   if (grants.rows[0]?.service_access !== true || grants.rows[0]?.public_access !== false) {
     throw new Error("Disposable Agency CRM service-role grants or public-role revocations are not in the expected state.");
   }
-  progress("disposable identity, all six migration ledger versions, nine follow-up/provider tables, row-lock-only privilege, append-only trigger, and restricted grants checked");
+  const operatorRead = await pool.query<{ id_access: boolean; role_access: boolean; disabled_access: boolean; email_denied: boolean; name_denied: boolean; public_access: boolean }>(
+    "select has_column_privilege('service_role','public.firm_lawyers','id','select') as id_access, has_column_privilege('service_role','public.firm_lawyers','role','select') as role_access, has_column_privilege('service_role','public.firm_lawyers','disabled','select') as disabled_access, not has_column_privilege('service_role','public.firm_lawyers','email','select') as email_denied, not has_column_privilege('service_role','public.firm_lawyers','name','select') as name_denied, not has_column_privilege('anon','public.firm_lawyers','id','select') and not has_column_privilege('authenticated','public.firm_lawyers','id','select') as public_access",
+  );
+  if (operatorRead.rows[0]?.id_access !== true || operatorRead.rows[0]?.role_access !== true || operatorRead.rows[0]?.disabled_access !== true
+    || operatorRead.rows[0]?.email_denied !== true || operatorRead.rows[0]?.name_denied !== true || operatorRead.rows[0]?.public_access !== true) {
+    throw new Error("The opt-in operator lookup must read only service_role id/role/disabled columns; other operator fields and public roles must remain unavailable.");
+  }
+  progress("disposable identity, all seven migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, and least-privilege operator columns checked");
 }
 
 async function verifyProviderEventImmutability(pool: Pool): Promise<void> {
@@ -1776,8 +1785,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
       databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
     },
-    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB],
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB],
     screenshots,
     consentPanelScreenshots,
     syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
@@ -2044,6 +2053,7 @@ async function main(): Promise<void> {
   await verifyPushedMigration(EVENT_MIGRATION_PATH, EXPECTED_EVENT_MIGRATION_BLOB);
   await verifyPushedMigration(EVENT_ROW_LOCK_GRANT_MIGRATION_PATH, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB);
   await verifyPushedMigration(OPT_IN_EVENT_MIGRATION_PATH, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB);
+  await verifyPushedMigration(OPT_IN_OPERATOR_READ_MIGRATION_PATH, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const migrationName = "20261013173327_agency_followup_journeys.sql";
 const migration = readFileSync(resolve(process.cwd(), "supabase/migrations", migrationName), "utf8");
 const agencyCrmGrants = readFileSync(resolve(process.cwd(), "supabase/migrations", "20261013230354_agency_crm_service_role_grants.sql"), "utf8");
+const optInOperatorReadGrant = readFileSync(resolve(process.cwd(), "supabase/migrations", "20261021050000_agency_followup_opt_in_operator_read_grant.sql"), "utf8");
 const agencyCrmSchema = readFileSync(resolve(process.cwd(), "supabase/migrations", "20260625000001_agency_crm.sql"), "utf8");
 const service = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-service.ts"), "utf8");
 const provider = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-resend-provider.ts"), "utf8");
@@ -80,5 +81,13 @@ describe("Agency follow-up additive migration and service contract", () => {
       expect(agencyCrmGrants).toContain(`GRANT ALL ON TABLE public.${table} TO service_role`);
     }
     expect(agencyCrmGrants).not.toMatch(/DISABLE\s+ROW LEVEL SECURITY/i);
+  });
+
+  it("grants the opt-in service lookup only the operator identity columns", () => {
+    expect(optInOperatorReadGrant).toContain("GRANT SELECT (id, role, disabled)");
+    expect(optInOperatorReadGrant).toContain("ON TABLE public.firm_lawyers");
+    expect(optInOperatorReadGrant).toContain("TO service_role");
+    expect(optInOperatorReadGrant).not.toMatch(/GRANT\s+(?:ALL|SELECT\s+ON)\s+(?:TABLE\s+)?public\.firm_lawyers/i);
+    expect(optInOperatorReadGrant).not.toMatch(/SELECT\s*\([^)]*(?:email|name)/i);
   });
 });
