@@ -52,12 +52,17 @@ function prettyState(value: string): string {
 
 const DELIVERY_STATUS_LABELS: Record<QueueItem["providerDeliveryStatus"], string> = {
   unknown: "Awaiting provider confirmation",
-  accepted: "Accepted by provider; inbox receipt not confirmed",
-  delivered: "Provider reports delivered; inbox placement not confirmed",
+  accepted: "Accepted by provider",
+  delivered: "Delivered per provider",
   failed: "Provider reports failure",
   bounced: "Bounced by recipient mail server",
   complained: "Marked as spam",
   unsubscribed: "Recipient unsubscribed",
+};
+
+const DELIVERY_STATUS_NOTES: Partial<Record<QueueItem["providerDeliveryStatus"], string>> = {
+  accepted: "Inbox receipt not confirmed",
+  delivered: "Inbox placement not confirmed",
 };
 
 function formatProviderDeliveryTimestamp(value: string): string {
@@ -330,6 +335,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                   <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65" aria-label={`Provider delivery status: ${DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}`}>
                     Provider delivery: {DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}
                   </p>
+                  {DELIVERY_STATUS_NOTES[item.providerDeliveryStatus] && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">{DELIVERY_STATUS_NOTES[item.providerDeliveryStatus]}</p>}
                   {item.providerDeliveryStatusAt && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Updated: <time dateTime={item.providerDeliveryStatusAt}>{formatProviderDeliveryTimestamp(item.providerDeliveryStatusAt)}</time></p>}
                 </div>
                 <p data-ui-copy="body" className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-black/75 [text-wrap:pretty]">{item.body}</p>
