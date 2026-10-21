@@ -51,7 +51,7 @@ function prettyState(value: string): string {
 }
 
 const DELIVERY_STATUS_LABELS: Record<QueueItem["providerDeliveryStatus"], string> = {
-  unknown: "Awaiting provider confirmation",
+  unknown: "Outcome unknown",
   accepted: "Accepted by provider",
   delivered: "Delivered per provider",
   failed: "Provider reports failure",
