@@ -329,8 +329,8 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                   <span className="block w-full text-xs uppercase tracking-wide text-black/60">{prettyState(item.state)}</span>
                   <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65" aria-label={`Provider delivery status: ${DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}`}>
                     Provider delivery: {DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}
-                    {item.providerDeliveryStatusAt && <> <time className="inline-block whitespace-nowrap" dateTime={item.providerDeliveryStatusAt}>· updated {formatProviderDeliveryTimestamp(item.providerDeliveryStatusAt)}</time></>}
                   </p>
+                  {item.providerDeliveryStatusAt && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Updated: <time dateTime={item.providerDeliveryStatusAt}>{formatProviderDeliveryTimestamp(item.providerDeliveryStatusAt)}</time></p>}
                 </div>
                 <p data-ui-copy="body" className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-black/75 [text-wrap:pretty]">{item.body}</p>
                 </div>
