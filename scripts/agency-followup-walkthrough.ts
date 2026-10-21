@@ -113,15 +113,17 @@ function safeErrorDiagnostics(error: unknown): { errorName: string | number | nu
   };
 }
 
-function safeFailureText(value: unknown, maxLength: number): string {
-  return String(value)
-    .replace(/[\r\n\s]+/g, " ")
+function redactSensitiveText(value: string): string {
+  return value
     .replace(/(SUPABASE_SERVICE_ROLE_KEY|PORTAL_SECRET|AGENCY_FOLLOWUP_WALKTHROUGH_TOKEN)(\s*[=:]\s*)[^\s"']+/g, "$1$2[REDACTED]")
-    .replace(/\b(portal_session|sb-access-token|sb-refresh-token)=([^;\s,"']+)/gi, "$1=[REDACTED]")
-    .replace(/\b(set-cookie|cookie)\s*:\s*[^\s,;]+/gi, "$1: [REDACTED]")
-    .replace(/\bauthorization\s*:\s*(?:bearer\s+)?[^\s,;]+/gi, "authorization: [REDACTED]")
-    .replace(/\b[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{24,}(?:\.[A-Za-z0-9_-]{24,})?\b/g, "[REDACTED_TOKEN]")
-    .slice(0, maxLength);
+    .replace(/\b(set-cookie|cookie|cookies)\s*[:=]\s*[^}\]\r\n]*/gi, "$1: [REDACTED]")
+    .replace(/\bauthorization\s*[:=]\s*[^}\]\r\n]*/gi, "authorization: [REDACTED]")
+    .replace(/\b(portal_session|sb-access-token|sb-refresh-token)\s*=\s*[^;,\s}\]]+/gi, "$1=[REDACTED]")
+    .replace(/\b[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{24,}(?:\.[A-Za-z0-9_-]{24,})?\b/g, "[REDACTED_TOKEN]");
+}
+
+function safeFailureText(value: unknown, maxLength: number): string {
+  return redactSensitiveText(String(value)).replace(/[\r\n\s]+/g, " ").slice(0, maxLength);
 }
 
 function captureSourceState() {
@@ -489,9 +491,7 @@ function startApp(portalSecret: string, walkthroughToken: string, status: Supaba
   let stdoutBytes = 0;
   let stderrBytes = 0;
   let stderrTail = "";
-  const redact = (text: string) => text
-    .replace(/(SUPABASE_SERVICE_ROLE_KEY|PORTAL_SECRET|AGENCY_FOLLOWUP_WALKTHROUGH_TOKEN)(\s*[=:]\s*)[^\s"']+/g, "$1$2[REDACTED]")
-    .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]");
+  const redact = (text: string) => redactSensitiveText(text);
   const envClass = (value: string | undefined) =>
     value === "development" || value === "test" || value === "production" ? value : value ? "other" : "unset";
   const server = spawn(process.execPath, [
@@ -526,7 +526,7 @@ function startApp(portalSecret: string, walkthroughToken: string, status: Supaba
     appendFileSync(stderrPath, safe);
   });
   server.once("spawn", () => progress(`Next child spawned pid=${server.pid}; parent NODE_ENV class=${envClass(process.env.NODE_ENV)}; child NODE_ENV=development`));
-  server.once("error", (error) => progress("local Next process error: " + error.message));
+  server.once("error", (error) => progress("local Next process error: " + safeFailureText(error.message, 300)));
   server.once("exit", (code, signal) => progress(`local Next process exited: code=${code} signal=${signal}; stdoutBytes=${stdoutBytes}; stderrBytes=${stderrBytes}`));
   server.once("close", (code, signal) => {
     progress(`local Next streams closed: code=${code} signal=${signal}; stdoutBytes=${stdoutBytes}; stderrBytes=${stderrBytes}`);
@@ -639,7 +639,7 @@ async function waitForListener(server: ChildProcess, deadline: number): Promise<
           break;
         }
       } catch (error) {
-        throw new Error(`Could not verify owner of reachable 127.0.0.1:55435 listener: ${error instanceof Error ? error.message : String(error)}.`);
+        throw new Error(safeFailureText(`Could not verify owner of reachable 127.0.0.1:55435 listener: ${error instanceof Error ? error.message : String(error)}.`, 1000));
       }
       if (listenerPid === undefined) {
         throw new Error("TCP connect succeeded on 127.0.0.1:55435 but netstat reported no LISTENING owner.");
@@ -681,7 +681,7 @@ function inspectWindowsProcessChain(listenerPid: number, nextPid: number): { isN
       windowsHide: true,
     });
   } catch (error) {
-    throw new Error(`Could not identify port owner process ancestry: ${error instanceof Error ? error.message : String(error)}.`);
+    throw new Error(safeFailureText(`Could not identify port owner process ancestry: ${error instanceof Error ? error.message : String(error)}.`, 1000));
   }
   const parsed = JSON.parse(raw || "[]") as Array<{
     ProcessId: number;
@@ -975,6 +975,7 @@ async function dispatchFake(
   token: string,
   input: { workerId: string; limit?: number; now?: string; outcomePlan?: Array<Record<string, unknown>> },
 ): Promise<Record<string, number>> {
+  setDiagnosticStage("fake_dispatch");
   const response = await context.request.post(APP_ORIGIN + TEST_DISPATCH_PATH, {
     data: { ...input, token },
     timeout: Math.min(90_000, remainingMs()),
@@ -982,7 +983,7 @@ async function dispatchFake(
   if (!response.ok()) {
     const payload = await response.json().catch(() => ({})) as { error?: unknown };
     const detail = typeof payload.error === "string"
-      ? payload.error.replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").replace(/[^A-Za-z0-9_.:-]+/g, "_").slice(0, 200)
+      ? safeFailureText(payload.error, 200).replace(/[^A-Za-z0-9_.:-]+/g, "_")
       : "no_safe_error_detail";
     progress(`fake dispatcher HTTP ${response.status()}; safeError=${detail}`);
     throw new Error("Local fake dispatcher endpoint returned HTTP " + response.status() + ": " + detail);

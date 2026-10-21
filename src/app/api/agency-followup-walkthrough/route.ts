@@ -30,6 +30,6 @@ export async function POST(request: NextRequest) {
       outcomePlan,
     }));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Fake dispatch failed." }, { status: 409 });
+    return NextResponse.json({ error: "Fake dispatch failed." }, { status: 409 });
   }
 }
