@@ -18,6 +18,14 @@ The deterministic fake provider remains local test support only and is not deliv
 - Activating a draft retires the previous active version for that key in one database transaction. Existing enrollments retain their original journey and template references.
 - Review and authoring events are append-only and include the operator identity.
 
+## Consent evidence
+
+- Record a grant only after reviewing source evidence that explicitly permits Agency follow-up email to the exact recipient shown in the prospect queue. The operator attestation in the form requires this for every grant. A business eligibility decision, previous contact, inferred interest, or synthetic fixture is not consent.
+- Record the capture time from the source, its evidence type, the consent-text version and SHA-256, and a durable evidence reference and SHA-256. The time field uses the browser's displayed IANA timezone; convert evidence times from another timezone before entering them. The authenticated operator identity is taken from the server session; it is not supplied by the form.
+- Grant and withdrawal actions append immutable events. Use the consent history view to check the event type, capture and record times, evidence reference and hashes, recipient hash, and recording operator. A reference and hash help locate and verify a reviewed source; they do not by themselves establish that consent was given.
+- Consent is bound to the current prospect source, conversation, and normalized recipient address. A changed recipient requires fresh evidence. Record a withdrawal as soon as it is received; it appends a new event and blocks later follow-up for that address.
+- The form records evidence only. It never dispatches email. The fake provider and synthetic walkthrough must not be used as evidence of consent or live delivery.
+
 ## Scheduling and worker states
 
 Enrollment computes and persists each step's due instant in the configured IANA timezone, using the configured business days and local window start. Immediately before fake-provider handoff, the worker checks the current local weekday and full half-open window `[start, end)`. A delayed claim outside that window is rescheduled to the next configured local opening. Step delays and minimum spacing are applied before the individual prospect is released. Message approval moves that message to the durable `scheduled` queue.

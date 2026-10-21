@@ -35,4 +35,37 @@ describe("Agency CRM follow-up operator UI contract", () => {
     expect(source).toContain("Activate version");
     expect(source).toContain("action: 'pause'");
   });
+
+  it("records append-only consent evidence against the current prospect without accepting a recipient override", () => {
+    expect(source).toContain('data-ui-component-content="agency-follow-up-opt-in"');
+    expect(source).toContain("Current recipient: <strong>{first.recipientEmail || 'No current email on file'}</strong>");
+    expect(source).toContain("Current opt-in state: <strong>{prettyState(first.optInState)}</strong>");
+    expect(source).toContain("Append explicit opt-in grant");
+    expect(source).toContain("Append opt-in withdrawal");
+    expect(source).toContain("Date and time recorded in evidence");
+    expect(source).toContain("Intl.DateTimeFormat().resolvedOptions().timeZone");
+    expect(source).toContain("Convert the evidence time first if it was recorded in another timezone.");
+    expect(source).toContain("Evidence source");
+    expect(source).toContain("Consent text version");
+    expect(source).toContain("Consent text SHA-256");
+    expect(source).toContain("Evidence reference");
+    expect(source).toContain("Evidence SHA-256");
+    expect(source).toContain("any grant explicitly permits Agency follow-up email to this address.");
+    expect(source).toContain("fetch(`/api/admin/agency-crm/follow-up/opt-in?prospectId=${encodeURIComponent(prospectId)}`");
+    expect(source).toContain("View consent history");
+    expect(source).toContain("Recorded by operator:");
+    expect(source).toContain("Evidence reference:");
+    expect(source).toContain("Evidence SHA-256:");
+
+    const requestStart = source.indexOf("fetch('/api/admin/agency-crm/follow-up/opt-in'");
+    const requestEnd = source.indexOf("const result = await response.json()", requestStart);
+    const optInRequest = source.slice(requestStart, requestEnd);
+    expect(requestStart).toBeGreaterThanOrEqual(0);
+    expect(optInRequest).toContain("prospectId,");
+    expect(optInRequest).toContain("eventType: form.eventType");
+    expect(optInRequest).toContain("captureSource: form.captureSource");
+    expect(optInRequest).toContain("evidenceReviewed: form.evidenceReviewed");
+    expect(optInRequest).toContain("idempotencyKey,");
+    expect(optInRequest).not.toMatch(/recipientEmail\s*:/);
+  });
 });

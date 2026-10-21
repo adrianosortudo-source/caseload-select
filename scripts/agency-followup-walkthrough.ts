@@ -46,6 +46,7 @@ const EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB = "4c5a29df51e716fe37b2a1ac34
 const OPT_IN_EVENT_MIGRATION_PATH = "supabase/migrations/20261021040000_agency_followup_opt_in_events.sql";
 const EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB = "7f34b1f9f51772557111c5ba35213d9402e1b6f7";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
+const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
 const RUN_STARTED_AT = new Date().toISOString();
 const SYNTHETIC_WEBHOOK_SECRET = `whsec_${randomBytes(32).toString("base64")}`;
@@ -315,10 +316,11 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["window", "Synthetic Walkthrough Window " + suffix, "Casey Example", "eligible"],
     ["lease", "Synthetic Walkthrough Lease " + suffix, "Quinn Example", "eligible"],
     ["retry", "Synthetic Walkthrough Retry " + suffix, "Devon Example", "eligible"],
+    ["consent", "Synthetic Walkthrough Consent " + suffix, "Taylor Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and seven Agency prospects");
+    progress("seeding synthetic operator and eight Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -1251,6 +1253,64 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
 
   const journeyName = await authorJourney(page);
+  const consentProspect = fixtures.prospects.consent;
+  await createDraft(pool, page, journeyName, consentProspect);
+  const consentCard = queueCard(page, consentProspect.firmName);
+  const syntheticConsentText = "Synthetic consent evidence for local acceptance only; this is not real prospect consent.";
+  const syntheticConsentHash = createHash("sha256").update(syntheticConsentText).digest("hex");
+  const consentTimeLocal = (instant: Date) => new Date(instant.getTime() - instant.getTimezoneOffset() * 60_000).toISOString().slice(0, 19);
+  const recordConsentEvent = async (eventType: "opt_in_granted" | "opt_in_withdrawn") => {
+    await consentCard.getByLabel("Record event").selectOption(eventType);
+    await consentCard.getByLabel(/Date and time recorded in evidence/).fill(consentTimeLocal(new Date()));
+    await consentCard.getByLabel("Evidence source").selectOption("other_verified_evidence");
+    await consentCard.getByLabel("Consent text version").fill("synthetic-walkthrough-consent-v1");
+    await consentCard.getByLabel("Consent text SHA-256").fill(syntheticConsentHash);
+    await consentCard.getByLabel("Evidence reference").fill(`synthetic://agency-followup-walkthrough/${RUN_ID}/consent/${eventType}`);
+    await consentCard.getByLabel("Evidence SHA-256").fill(syntheticConsentHash);
+    await consentCard.getByLabel(/I reviewed this source and confirmed it supports/).check();
+    const submit = consentCard.getByRole("button", { name: "Record append-only consent event" });
+    await expect(submit).toBeEnabled();
+    const sendOptIn = async () => {
+      const responsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/admin/agency-crm/follow-up/opt-in" && response.request().method() === "POST");
+      await submit.click();
+      return responsePromise;
+    };
+    let response = await sendOptIn();
+    if (response.status() === 401) {
+      const health = await page.context().request.get(APP_ORIGIN + API_PATH, { timeout: 15000 }).catch(() => undefined);
+      if (health?.status() === 200) response = await sendOptIn();
+    }
+    let submittedEventType = "unknown";
+    try { submittedEventType = String(response.request().postDataJSON()?.eventType ?? "unknown"); } catch { /* diagnostic only */ }
+    if (submittedEventType !== eventType) throw new Error(`Consent UI expected ${eventType} but submitted ${submittedEventType}.`);
+    if (response.status() !== 201) throw new Error(`Synthetic ${eventType} did not append a new consent event (HTTP ${response.status()}).`);
+    await expect(consentCard.getByRole("status").filter({ hasText: eventType === "opt_in_granted" ? "Opt-in grant recorded" : "Opt-in withdrawal recorded" })).toBeVisible();
+  };
+  await recordConsentEvent("opt_in_granted");
+  const historyButton = consentCard.getByRole("button", { name: "View consent history" });
+  const historyResponsePromise = page.waitForResponse((response) => response.url().includes("/api/admin/agency-crm/follow-up/opt-in?") && response.request().method() === "GET");
+  await historyButton.click();
+  const grantHistoryResponse = await historyResponsePromise;
+  if (!grantHistoryResponse.ok()) throw new Error(`Authenticated consent history returned HTTP ${grantHistoryResponse.status()}.`);
+  const grantHistoryPayload = await grantHistoryResponse.json() as { events?: Array<{ eventType: string; actorOperatorId: string; evidenceReference: string }> };
+  if (!Array.isArray(grantHistoryPayload.events) || grantHistoryPayload.events.length !== 1 || grantHistoryPayload.events[0].eventType !== "opt_in_granted" ||
+      grantHistoryPayload.events[0].actorOperatorId !== fixtures.lawyerId || !grantHistoryPayload.events[0].evidenceReference.endsWith("/opt_in_granted")) {
+    throw new Error("Grant history did not expose the synthetic append-only event and authenticated operator.");
+  }
+  await recordConsentEvent("opt_in_withdrawn");
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
+  const finalHistoryResponse = await context.request.get(`${APP_ORIGIN}/api/admin/agency-crm/follow-up/opt-in?prospectId=${encodeURIComponent(consentProspect.id)}`);
+  if (!finalHistoryResponse.ok()) throw new Error(`Synthetic consent history readback returned HTTP ${finalHistoryResponse.status()}.`);
+  const finalHistoryPayload = await finalHistoryResponse.json() as { events?: Array<{ eventType: string; actorOperatorId: string; evidenceReference: string; recipientEmailSha256: string }> };
+  if (!Array.isArray(finalHistoryPayload.events) || finalHistoryPayload.events.length !== 2 || finalHistoryPayload.events[0].eventType !== "opt_in_granted" ||
+      finalHistoryPayload.events[1].eventType !== "opt_in_withdrawn" || finalHistoryPayload.events.some((entry) => entry.actorOperatorId !== fixtures.lawyerId || !entry.recipientEmailSha256 || !entry.evidenceReference.startsWith("synthetic://"))) {
+    throw new Error("Grant and withdrawal were not preserved in chronological consent history for the signed synthetic operator.");
+  }
+  await expect(consentCard.getByText("Current opt-in state: withdrawn")).toBeVisible({ timeout: 30000 });
+  await expect(consentCard.getByRole("heading", { name: "Opt-in withdrawal · other verified evidence" })).toBeVisible({ timeout: 30000 });
+  await expect(consentCard.getByText(`Evidence reference: synthetic://agency-followup-walkthrough/${RUN_ID}/consent/opt_in_withdrawn`, { exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(consentCard.getByText(`Recorded by operator: ${fixtures.lawyerId}`).last()).toBeVisible({ timeout: 30000 });
+
   const normal = fixtures.prospects.normal;
   await createDraft(pool, page, journeyName, normal);
   setDiagnosticStage("duplicate_enrollment_conflict");
@@ -1566,6 +1626,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await mkdir(screenshotDir, { recursive: true });
   const renderedWidths: number[] = [];
   const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
+  const consentPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string }> = [];
   const stableLayout = async () => page.evaluate(async () => {
     await document.fonts.ready;
     let previous: number[] = [];
@@ -1671,11 +1732,27 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await page.evaluate(() => window.scrollTo(0, 0));
     await stableLayout();
     await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
+    if (CONSENT_PANEL_WIDTHS.includes(width)) {
+      const panel = queueCard(page, consentProspect.firmName).locator('[data-ui-component-content="agency-follow-up-opt-in"]');
+      await panel.scrollIntoViewIfNeeded();
+      await expect(panel).toBeVisible();
+      const captureTimeLabel = panel.locator("label").filter({ hasText: "Date and time recorded in evidence" });
+      await expect(captureTimeLabel).toContainText(/browser timezone: (?!loading).+/i);
+      const overflow = await panel.evaluate((element) => {
+        const nodes = [element, ...Array.from(element.querySelectorAll("*"))];
+        return nodes.filter((node) => node instanceof HTMLElement && node.scrollWidth > node.clientWidth + 1)
+          .map((node) => ({ tag: node.tagName.toLowerCase(), text: (node.textContent ?? "").trim().slice(0, 80), clientWidth: node.clientWidth, scrollWidth: node.scrollWidth }));
+      });
+      if (overflow.length) throw new Error(`Consent panel has horizontal overflow at ${width}px: ${JSON.stringify(overflow.slice(0, 5))}`);
+      const file = path.join(screenshotDir, `${RUN_ID}-consent-${width}.png`);
+      await panel.screenshot({ path: file });
+      consentPanelScreenshots.push({ path: path.relative(process.cwd(), file).replaceAll("\\", "/"), sha256: createHash("sha256").update(await readFile(file)).digest("hex"), viewport: width, panel: "operator consent form and chronological synthetic history" });
+    }
     renderedWidths.push(width);
   }
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
   if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
-  if (screenshots.length !== 12 || !missingAuthoringControlRejected) throw new Error("Incomplete viewport or required-control evidence.");
+  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || !missingAuthoringControlRejected) throw new Error("Incomplete queue, consent-panel viewport, or required-control evidence.");
   const summary = {
     runId: RUN_ID,
     ...sourceAtStart,
@@ -1702,6 +1779,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000"],
     verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB],
     screenshots,
+    consentPanelScreenshots,
+    syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
     synthetic: true,
     flows: {
       templateJourneyEnrollmentReleaseApproval: "passed",
@@ -1719,7 +1798,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     },
     syntheticProspects: Object.keys(fixtures.prospects).length,
     screenshotViewports: renderedWidths,
-    screenshotCount: screenshots.length
+    screenshotCount: screenshots.length,
+    consentPanelScreenshotCount: consentPanelScreenshots.length
   };
   return summary;
   } finally {
