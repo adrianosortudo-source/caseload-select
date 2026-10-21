@@ -29,6 +29,36 @@ function noStore(body: unknown, status: number) {
   return NextResponse.json(body, { status, headers: { "Cache-Control": "no-store, max-age=0" } });
 }
 
+async function readRawBodyWithinLimit(req: Request): Promise<string | null> {
+  if (!req.body) return "";
+
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_BODY_BYTES) {
+        await reader.cancel().catch(() => undefined);
+        return null;
+      }
+      chunks.push(value);
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  const bytes = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 /** Signed, minimized Resend event receiver for Agency CRM follow-up only. */
 export async function POST(req: NextRequest) {
   const secret = process.env.AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET?.trim();
@@ -36,8 +66,8 @@ export async function POST(req: NextRequest) {
 
   const declaredLength = Number(req.headers.get("content-length") ?? 0);
   if (declaredLength > MAX_BODY_BYTES) return noStore({ error: "payload_too_large" }, 413);
-  const rawBody = await req.text();
-  if (Buffer.byteLength(rawBody, "utf8") > MAX_BODY_BYTES) return noStore({ error: "payload_too_large" }, 413);
+  const rawBody = await readRawBodyWithinLimit(req);
+  if (rawBody === null) return noStore({ error: "payload_too_large" }, 413);
 
   const svixId = req.headers.get("svix-id");
   const svixTimestamp = req.headers.get("svix-timestamp");

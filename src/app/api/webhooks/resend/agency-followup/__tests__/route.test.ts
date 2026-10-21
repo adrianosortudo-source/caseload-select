@@ -126,4 +126,22 @@ describe("Resend Agency follow-up webhook", () => {
     expect(response.status).toBe(400);
     expect(supabaseAdmin.rpc).not.toHaveBeenCalled();
   });
+
+  it("rejects oversized streamed bodies without a Content-Length header", async () => {
+    let cancelled = false;
+    const response = await POST(new NextRequest("https://example.test/api/webhooks/resend/agency-followup", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(new Uint8Array(1024 * 1024 + 1));
+        },
+        cancel() { cancelled = true; },
+      }),
+      duplex: "half",
+    }));
+    expect(response.status).toBe(413);
+    expect(cancelled).toBe(true);
+    expect(supabaseAdmin.rpc).not.toHaveBeenCalled();
+  });
 });
