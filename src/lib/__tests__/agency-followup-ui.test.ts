@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canApproveAgencyFollowupMessage } from "@/lib/agency-followup-ui";
+import { agencyFollowupDeliveryStatusLabel, canApproveAgencyFollowupMessage } from "@/lib/agency-followup-ui";
 
 describe("agency follow-up message approval action", () => {
   it("allows review when only approval and send timing are outstanding", () => {
@@ -23,5 +23,28 @@ describe("agency follow-up message approval action", () => {
   it("requires an individually released enrollment and a message awaiting review", () => {
     expect(canApproveAgencyFollowupMessage({ messageState: "awaiting_review", sequenceReleased: false, blockers: [] })).toBe(false);
     expect(canApproveAgencyFollowupMessage({ messageState: "approved", sequenceReleased: true, blockers: [] })).toBe(false);
+  });
+});
+
+describe("agency follow-up delivery status label", () => {
+  it("distinguishes the default status on unsent messages from an ambiguous dispatch", () => {
+    for (const messageState of ["draft", "awaiting_review", "approved", "scheduled", "claimed"]) {
+      expect(agencyFollowupDeliveryStatusLabel({
+        messageState,
+        providerDeliveryStatus: "unknown",
+      })).toBe("Not sent");
+    }
+
+    expect(agencyFollowupDeliveryStatusLabel({
+      messageState: "unknown",
+      providerDeliveryStatus: "unknown",
+    })).toBe("Outcome unknown");
+  });
+
+  it("keeps provider reported statuses and their limits explicit", () => {
+    expect(agencyFollowupDeliveryStatusLabel({ messageState: "accepted", providerDeliveryStatus: "accepted" }))
+      .toBe("Accepted by provider");
+    expect(agencyFollowupDeliveryStatusLabel({ messageState: "accepted", providerDeliveryStatus: "delivered" }))
+      .toBe("Delivered per provider");
   });
 });

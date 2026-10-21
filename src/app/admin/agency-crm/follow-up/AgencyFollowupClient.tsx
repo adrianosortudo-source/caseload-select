@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { canApproveAgencyFollowupMessage } from '@/lib/agency-followup-ui';
+import { agencyFollowupDeliveryStatusLabel, canApproveAgencyFollowupMessage } from '@/lib/agency-followup-ui';
 
 type Journey = {
   id: string; name: string; journeyKey: string; version: number; state: string;
@@ -49,16 +49,6 @@ const BLOCKER_LABELS: Record<string, string> = {
 function prettyState(value: string): string {
   return value.replaceAll('_', ' ');
 }
-
-const DELIVERY_STATUS_LABELS: Record<QueueItem["providerDeliveryStatus"], string> = {
-  unknown: "Outcome unknown",
-  accepted: "Accepted by provider",
-  delivered: "Delivered per provider",
-  failed: "Provider reports failure",
-  bounced: "Bounced by recipient mail server",
-  complained: "Marked as spam",
-  unsubscribed: "Recipient unsubscribed",
-};
 
 const DELIVERY_STATUS_NOTES: Partial<Record<QueueItem["providerDeliveryStatus"], string>> = {
   accepted: "Inbox receipt not confirmed",
@@ -332,8 +322,8 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                   <span data-ui-copy="supporting" className="block w-full text-xs font-semibold uppercase tracking-wide text-black/60">Message {item.stepNumber}</span>
                   <h4 data-ui-copy="heading" className="w-full break-words text-sm font-semibold text-navy sm:text-base [text-wrap:pretty]">{item.subject || 'No subject'}</h4>
                   <span className="block w-full text-xs uppercase tracking-wide text-black/60">{prettyState(item.state)}</span>
-                  <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65" aria-label={`Provider delivery status: ${DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}`}>
-                    Provider delivery: {DELIVERY_STATUS_LABELS[item.providerDeliveryStatus]}
+                  <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65" aria-label={`Provider delivery status: ${agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })}`}>
+                    Provider delivery: {agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })}
                   </p>
                   {DELIVERY_STATUS_NOTES[item.providerDeliveryStatus] && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">{DELIVERY_STATUS_NOTES[item.providerDeliveryStatus]}</p>}
                   {item.providerDeliveryStatusAt && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Updated: <time dateTime={item.providerDeliveryStatusAt}>{formatProviderDeliveryTimestamp(item.providerDeliveryStatusAt)}</time></p>}
