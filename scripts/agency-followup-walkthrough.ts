@@ -368,13 +368,6 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
 
 async function installTemporaryDispatchRoute(): Promise<void> {
   progress("installing temporary local-only fake-dispatch route");
-  try {
-    await readFile(path.join(TEST_DISPATCH_DIR, "route.ts"));
-    throw new Error("A walkthrough dispatch route already exists. Refusing to overwrite it.");
-  } catch (error) {
-    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
-  }
-  await mkdir(TEST_DISPATCH_DIR, { recursive: false });
   const route = `import { NextRequest, NextResponse } from "next/server";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { runFakeAgencyFollowupDispatcher } from "@/lib/agency-followup-service";
@@ -411,6 +404,18 @@ export async function POST(request: NextRequest) {
   }
 }
 `;
+  try {
+    const existingRoute = await readFile(path.join(TEST_DISPATCH_DIR, "route.ts"), "utf8");
+    if (existingRoute.replace(/\r\n/g, "\n") !== route) {
+      throw new Error("A walkthrough dispatch route already exists and does not match the guarded local fake route.");
+    }
+    temporaryRouteSha256 = createHash("sha256").update(existingRoute).digest("hex");
+    progress("verified the tracked loopback-only fake-dispatch route");
+    return;
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
+  }
+  await mkdir(TEST_DISPATCH_DIR, { recursive: false });
   await writeFile(path.join(TEST_DISPATCH_DIR, "route.ts"), route, "utf8");
   temporaryRouteInstalled = true;
   temporaryRouteSha256 = createHash("sha256").update(route).digest("hex");
