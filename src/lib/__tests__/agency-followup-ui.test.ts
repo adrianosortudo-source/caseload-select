@@ -28,12 +28,17 @@ describe("agency follow-up message approval action", () => {
 
 describe("agency follow-up delivery status label", () => {
   it("distinguishes the default status on unsent messages from an ambiguous dispatch", () => {
-    for (const messageState of ["draft", "awaiting_review", "approved", "scheduled", "claimed"]) {
+    for (const messageState of ["draft", "awaiting_review", "approved", "scheduled"]) {
       expect(agencyFollowupDeliveryStatusLabel({
         messageState,
         providerDeliveryStatus: "unknown",
       })).toBe("Not sent");
     }
+
+    expect(agencyFollowupDeliveryStatusLabel({
+      messageState: "claimed",
+      providerDeliveryStatus: "unknown",
+    })).toBe("Dispatch outcome pending");
 
     expect(agencyFollowupDeliveryStatusLabel({
       messageState: "unknown",

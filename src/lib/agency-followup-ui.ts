@@ -29,6 +29,9 @@ export function agencyFollowupDeliveryStatusLabel(input: {
   messageState: string;
   providerDeliveryStatus: AgencyFollowupProviderDeliveryStatus;
 }): string {
+  if (input.messageState === "claimed" && input.providerDeliveryStatus === "unknown") {
+    return "Dispatch outcome pending";
+  }
   if (input.providerDeliveryStatus === "unknown" && input.messageState !== "unknown") {
     return "Not sent";
   }
