@@ -113,6 +113,17 @@ function safeErrorDiagnostics(error: unknown): { errorName: string | number | nu
   };
 }
 
+function safeFailureText(value: unknown, maxLength: number): string {
+  return String(value)
+    .replace(/[\r\n\s]+/g, " ")
+    .replace(/(SUPABASE_SERVICE_ROLE_KEY|PORTAL_SECRET|AGENCY_FOLLOWUP_WALKTHROUGH_TOKEN)(\s*[=:]\s*)[^\s"']+/g, "$1$2[REDACTED]")
+    .replace(/\b(portal_session|sb-access-token|sb-refresh-token)=([^;\s,"']+)/gi, "$1=[REDACTED]")
+    .replace(/\b(set-cookie|cookie)\s*:\s*[^\s,;]+/gi, "$1: [REDACTED]")
+    .replace(/\bauthorization\s*:\s*(?:bearer\s+)?[^\s,;]+/gi, "authorization: [REDACTED]")
+    .replace(/\b[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{24,}(?:\.[A-Za-z0-9_-]{24,})?\b/g, "[REDACTED_TOKEN]")
+    .slice(0, maxLength);
+}
+
 function captureSourceState() {
   const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8", timeout: 30_000 });
   const sourceCommit = git("rev-parse", "HEAD").trim();
@@ -723,12 +734,12 @@ async function recordActionFailure(
       pageText: document.body.innerText.slice(0, 800),
     };
   }).catch(() => null);
-  const browserRuntimeErrors = browserRuntimeErrorsByPage.get(page)?.slice(-20) ?? [];
+  const browserRuntimeErrors = (browserRuntimeErrorsByPage.get(page)?.slice(-20) ?? [])
+    .map((entry) => safeFailureText(entry, 1000));
   await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
   const screenshotPath = path.join(OUTPUT_DIR, "screenshots", `failure-${action}-${RUN_ID}.png`);
   const screenshotWritten = await page.screenshot({ path: screenshotPath, fullPage: false }).then(() => true, () => false);
-  const errorMessage = String(error).replace(/[\r\n\s]+/g, " ")
-    .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 500);
+  const errorMessage = safeFailureText(error, 500);
   const failureReceipt = { runId: RUN_ID, action, errorMessage, diagnostics, browserRuntimeErrors, screenshot: screenshotWritten ? path.basename(screenshotPath) : null, recordedAtUtc: new Date().toISOString() };
   await writeFile(path.join(OUTPUT_DIR, `failure-${action}-${RUN_ID}.json`), JSON.stringify(failureReceipt, null, 2) + "\n", "utf8");
   progress(`operator action ${action} failed; diagnostics=${JSON.stringify(diagnostics)}; screenshot=${screenshotWritten ? path.basename(screenshotPath) : "unavailable"}; message=${errorMessage}`);
@@ -864,7 +875,7 @@ async function authorJourney(page: Page): Promise<string> {
   } catch (error) {
     const options = await journeyOptions.allTextContents().catch(() => []);
     const alert = await page.locator('[role="alert"]').allTextContents().catch(() => []);
-    throw new Error(`Activated journey did not appear in the review selector. Current options=${JSON.stringify(options)}; alerts=${JSON.stringify(alert)}. ${String(error)}`);
+    throw new Error(`Activated journey did not appear in the review selector. Current options=${JSON.stringify(options)}; alerts=${JSON.stringify(alert)}. ${safeFailureText(error, 1000)}`);
   }
 
   const otherJourneyKey = journeyKey + "-other";
@@ -964,7 +975,10 @@ async function dispatchFake(
   token: string,
   input: { workerId: string; limit?: number; now?: string; outcomePlan?: Array<Record<string, unknown>> },
 ): Promise<Record<string, number>> {
-  const response = await context.request.post(APP_ORIGIN + TEST_DISPATCH_PATH, { data: { ...input, token } });
+  const response = await context.request.post(APP_ORIGIN + TEST_DISPATCH_PATH, {
+    data: { ...input, token },
+    timeout: Math.min(90_000, remainingMs()),
+  });
   if (!response.ok()) {
     const payload = await response.json().catch(() => ({})) as { error?: unknown };
     const detail = typeof payload.error === "string"
@@ -1135,7 +1149,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     const layoutChunkBody = await layoutChunkResponse.body();
     progress(`direct app/layout.js asset probe returned HTTP ${layoutChunkResponse.status()}; bytes=${layoutChunkBody.byteLength}; elapsed=${Date.now() - layoutChunkStartedAt}ms`);
   } catch (error) {
-    progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms: ${String(error).replace(/\\s+/g, " ").slice(0, 300)}`);
+    progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms: ${safeFailureText(error, 300)}`);
     throw error;
   }
   if (await page.getByText(/This page couldn.t load/i).count()) {
@@ -1228,14 +1242,13 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
       const screenshotPath = path.join(OUTPUT_DIR, "screenshots", `failure-hydration-${RUN_ID}.png`);
       const screenshotWritten = await page.screenshot({ path: screenshotPath, fullPage: false }).then(() => true, () => false);
-      const errorMessage = String(hydrationError).replace(/[\r\n\s]+/g, " ")
-        .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 1000);
+      const errorMessage = safeFailureText(hydrationError, 1000);
       const failureReceipt = {
         runId: RUN_ID,
         stage: "browser_form_hydration",
         errorMessage,
         diagnostics,
-        browserRuntimeErrors: responseFailures.slice(-20),
+        browserRuntimeErrors: responseFailures.slice(-20).map((entry) => safeFailureText(entry, 1000)),
         screenshot: screenshotWritten ? path.basename(screenshotPath) : null,
         recordedAtUtc: new Date().toISOString(),
       };
@@ -1907,7 +1920,7 @@ async function runJourneyVersionRegression(fixtures: Fixtures, portalSecret: str
         })).catch(() => null);
         await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
         await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", `failure-hydration-${RUN_ID}.png`), fullPage: false }).catch(() => undefined);
-        throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${String(hydrationError)}`);
+        throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${safeFailureText(hydrationError, 1000)}`);
       }
     }
     await authorJourney(page);
@@ -1969,7 +1982,7 @@ async function runManual(context: BrowserContext): Promise<void> {
     const layoutChunkBody = await layoutChunkResponse.body();
     progress(`direct app/layout.js asset probe returned HTTP ${layoutChunkResponse.status()}; bytes=${layoutChunkBody.byteLength}; elapsed=${Date.now() - layoutChunkStartedAt}ms`);
   } catch (error) {
-    progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms: ${String(error).replace(/\\s+/g, " ").slice(0, 300)}`);
+    progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms: ${safeFailureText(error, 300)}`);
     throw error;
   }
   await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
@@ -2149,9 +2162,7 @@ async function main(): Promise<void> {
 }
 
 main().catch(async (error) => {
-  const errorMessage = String(error).replace(/[\r\n\s]+/g, " ")
-    .replace(/(SUPABASE_SERVICE_ROLE_KEY|PORTAL_SECRET|AGENCY_FOLLOWUP_WALKTHROUGH_TOKEN)(\s*[=:]\s*)[^\s"']+/g, "$1$2[REDACTED]")
-    .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]").slice(0, 1500);
+  const errorMessage = safeFailureText(error, 1500);
   const failureReceiptPath = path.join(OUTPUT_DIR, `failure-run-${RUN_ID}.json`);
   await mkdir(OUTPUT_DIR, { recursive: true });
   await writeFile(failureReceiptPath, JSON.stringify({
