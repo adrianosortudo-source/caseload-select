@@ -8,6 +8,8 @@ const rowLockMigrationName = "20261020141945_agency_followup_provider_event_row_
 const rowLockMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", rowLockMigrationName), "utf8");
 const testClaimMigrationName = "20261021173939_agency_followup_test_message_claim.sql";
 const testClaimMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", testClaimMigrationName), "utf8");
+const replayGuardMigrationName = "20261022172352_agency_followup_webhook_replay_quarantine_guard.sql";
+const replayGuardMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", replayGuardMigrationName), "utf8");
 const service = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-service.ts"), "utf8");
 
 describe("Agency follow-up Resend migration contract", () => {
@@ -66,6 +68,14 @@ describe("Agency follow-up Resend migration contract", () => {
 
   it("does not let a late provider failure roll a delivered message backward", () => {
     expect(migration).toContain("WHEN 'failed' THEN 2\n          WHEN 'delivered' THEN 3");
+  });
+
+  it("keeps first-result source and recipient quarantines closed to replay rematching", () => {
+    expect(replayGuardMigration).toContain("IF v_existing_event.processing_result IS DISTINCT FROM 'unmatched_message' THEN");
+    expect(replayGuardMigration).toContain("RETURN jsonb_build_object('result', 'duplicate');");
+    expect(replayGuardMigration).toContain("REVOKE ALL ON FUNCTION public.persist_agency_followup_resend_event");
+    expect(replayGuardMigration).toContain("GRANT EXECUTE ON FUNCTION public.persist_agency_followup_resend_event");
+    expect(replayGuardMigration).toContain("TO service_role");
   });
 
   it("claims only the exact allowlisted enrollment/message pairs in test mode", () => {

@@ -47,6 +47,8 @@ const OPT_IN_EVENT_MIGRATION_PATH = "supabase/migrations/20261021040000_agency_f
 const EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB = "7f34b1f9f51772557111c5ba35213d9402e1b6f7";
 const OPT_IN_OPERATOR_READ_MIGRATION_PATH = "supabase/migrations/20261021050000_agency_followup_opt_in_operator_read_grant.sql";
 const EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB = "42f33303a7d257e886ee2ad2114c3b3a58fd9eb1";
+const WEBHOOK_REPLAY_GUARD_MIGRATION_PATH = "supabase/migrations/20261022172352_agency_followup_webhook_replay_quarantine_guard.sql";
+const EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB = "1ee04f22a7b00fa69eaca227e6443c663e88818a";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
@@ -249,11 +251,18 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000"]],
+      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261022172352"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "7") {
-    throw new Error("Disposable Postgres identity or exact seven-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "8") {
+    throw new Error("Disposable Postgres identity or exact eight-migration ledger check failed.");
+  }
+  const claimRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
+    "select has_function_privilege('service_role', 'public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)', 'execute') as service_access, not has_function_privilege('anon', 'public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)'::regprocedure",
+  );
+  if (claimRpc.rows[0]?.service_access !== true || claimRpc.rows[0]?.anon_denied !== true ||
+    claimRpc.rows[0]?.authenticated_denied !== true || claimRpc.rows[0]?.security_invoker !== true) {
+    throw new Error("The test-message claim RPC must be invoker-only and executable only by service_role.");
   }
   const tables = await pool.query<{ count: string }>(
     "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
@@ -287,9 +296,127 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     || operatorRead.rows[0]?.email_denied !== true || operatorRead.rows[0]?.name_denied !== true || operatorRead.rows[0]?.public_access !== true) {
     throw new Error("The opt-in operator lookup must read only service_role id/role/disabled columns; other operator fields and public roles must remain unavailable.");
   }
-  progress("disposable identity, all seven migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, and least-privilege operator columns checked");
+  progress("disposable identity, all eight migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, least-privilege operator columns, and test-claim RPC grants checked");
 }
 
+async function verifyTestMessageClaimRpc(
+  pool: Pool,
+  input: { messageId: string; enrollmentId: string; recipientEmail: string },
+  now: string,
+): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  const target = { enrollmentId: input.enrollmentId, messageId: input.messageId, recipientEmail: input.recipientEmail };
+  const mismatches = [
+    { ...target, enrollmentId: randomUUID() },
+    { ...target, messageId: randomUUID() },
+    { ...target, recipientEmail: `mismatch-${input.recipientEmail}` },
+  ];
+  try {
+    await client.query("begin");
+    await client.query("set local role service_role");
+    const claim = async (workerId: string, allowedTarget: typeof target, limit = 1) => client.query<{
+      id: string; enrollment_id: string; recipient_email_snapshot: string; attempt_count: number; lease_owner: string;
+    }>(
+      "select id,enrollment_id,recipient_email_snapshot,attempt_count,lease_owner from public.claim_agency_followup_test_messages($1,$2::timestamptz,60,$3,$4::jsonb)",
+      [workerId, now, limit, JSON.stringify([allowedTarget])],
+    );
+    for (const [index, mismatch] of mismatches.entries()) {
+      const excluded = await claim(`walkthrough-test-claim-mismatch-${index}-${RUN_ID}`, mismatch);
+      if (excluded.rows.length !== 0) throw new Error("The test-message claim RPC claimed a target with an enrollment, message, or recipient mismatch.");
+    }
+    await client.query("savepoint invalid_test_claim_limit");
+    let invalidLimitRejected = false;
+    try {
+      await claim(`walkthrough-test-claim-invalid-limit-${RUN_ID}`, target, 2);
+    } catch (error) {
+      invalidLimitRejected = String(error).includes("test mode may claim exactly one message");
+    }
+    await client.query("rollback to savepoint invalid_test_claim_limit");
+    if (!invalidLimitRejected) throw new Error("The test-message claim RPC did not reject a batch size above one.");
+    const claimed = await claim(`walkthrough-test-claim-allowed-${RUN_ID}`, target);
+    if (claimed.rows.length !== 1 || claimed.rows[0]?.id !== target.messageId ||
+      claimed.rows[0]?.enrollment_id !== target.enrollmentId || claimed.rows[0]?.recipient_email_snapshot !== target.recipientEmail ||
+      claimed.rows[0]?.attempt_count !== 1 || claimed.rows[0]?.lease_owner !== `walkthrough-test-claim-allowed-${RUN_ID}`) {
+      throw new Error("The test-message claim RPC did not claim exactly the configured enrollment/message/recipient target.");
+    }
+    await client.query("rollback");
+    progress("runtime test-claim RPC excluded enrollment/message/recipient mismatches, enforced limit one, and claimed the exact synthetic target");
+    return { mismatchedTargetsExcluded: 3, maximumBatchSize: 1, exactTargetClaimed: true, transactionRolledBack: true };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function verifyQuarantinedSourceEventReplay(
+  pool: Pool,
+  prospect: ProspectFixture,
+  providerMessageId: string,
+  occurredAt: string,
+): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  const eventId = `evt_source_quarantine_${RUN_ID}`;
+  const recipientHash = createHash("sha256").update(prospect.email.trim().toLowerCase(), "utf8").digest("hex");
+  try {
+    const sourceLinks = await client.query<{ id: string }>(
+      "select id from public.prospect_source_links where source_system='agency_crm' and source_record_key=$1",
+      [prospect.id],
+    );
+    if (sourceLinks.rows.length !== 1) throw new Error("The synthetic prospect did not have exactly one Agency source link for the quarantine replay check.");
+    const references = await client.query<{ events: string; applications: string }>(
+      "select (select count(*)::text from public.agency_followup_provider_events where source_link_id=$1) as events, (select count(*)::text from public.agency_followup_provider_event_applications where source_link_id=$1) as applications",
+      [sourceLinks.rows[0].id],
+    );
+    if (references.rows[0]?.events !== "0" || references.rows[0]?.applications !== "0") {
+      throw new Error("The synthetic source association is already referenced by provider-event evidence and cannot be quarantined by deleting it.");
+    }
+    const message = await client.query<{ id: string; provider_delivery_status: string }>(
+      "select message.id,message.provider_delivery_status from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.provider_message_id=$2 and message.provider_recipient_email_sha256=$3 and message.state='accepted' and message.provider_accepted_at is not null",
+      [prospect.id, providerMessageId, recipientHash],
+    );
+    if (message.rows.length !== 1) throw new Error("The source-quarantine replay requires one accepted synthetic message with no existing provider-event application.");
+    await client.query("begin");
+    await client.query(
+      "create temporary table walkthrough_source_associations on commit drop as select conversation_id,source_link_id,is_primary,created_at from public.prospect_conversation_sources where source_link_id=$1",
+      [sourceLinks.rows[0].id],
+    );
+    const saved = await client.query<{ count: string }>("select count(*)::text as count from pg_temp.walkthrough_source_associations");
+    if (saved.rows[0]?.count !== "1") throw new Error("The source-quarantine replay fixture must preserve exactly one synthetic source association.");
+    await client.query("delete from public.prospect_conversation_sources where source_link_id=$1", [sourceLinks.rows[0].id]);
+    const parameters = [eventId, providerMessageId, "email.bounced", null, occurredAt, prospect.email, recipientHash];
+    const persist = () => client.query<{ result: { result?: string } }>(
+      "select public.persist_agency_followup_resend_event($1,$2,$3,$4,$5::timestamptz,$6,$7) as result",
+      parameters,
+    );
+    const firstReceipt = await persist();
+    if (firstReceipt.rows[0]?.result?.result !== "unmatched_source") {
+      throw new Error("The synthetic provider event did not record its initial unmatched-source quarantine.");
+    }
+    await client.query(
+      "insert into public.prospect_conversation_sources (conversation_id,source_link_id,is_primary,created_at) select conversation_id,source_link_id,is_primary,created_at from pg_temp.walkthrough_source_associations",
+    );
+    const replay = await persist();
+    const state = await client.query<{ processing_result: string; source_link_id: string | null; applications: string; delivery_status: string }>(
+      "select event.processing_result,event.source_link_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,message.provider_delivery_status as delivery_status from public.agency_followup_provider_events event join public.agency_followup_messages message on message.id=event.message_id where event.provider_event_id=$1",
+      [eventId],
+    );
+    if (replay.rows[0]?.result?.result !== "duplicate" || state.rows[0]?.processing_result !== "unmatched_source" ||
+      state.rows[0]?.source_link_id !== null || state.rows[0]?.applications !== "0" ||
+      state.rows[0]?.delivery_status !== message.rows[0]?.provider_delivery_status) {
+      throw new Error("An identical retry applied a source-quarantined event after the synthetic source mapping became unique.");
+    }
+    await client.query("rollback");
+    progress("source-quarantined signed-event replay remained immutable and caused no delivery or suppression application after mapping repair");
+    return { initialResult: "unmatched_source", replayResult: "duplicate", applications: 0, deliveryStatusUnchanged: true, transactionRolledBack: true };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
 async function verifyProviderEventImmutability(pool: Pool): Promise<void> {
   const client = await pool.connect();
   const providerEventId = `walkthrough-immutability-${RUN_ID}`;
@@ -1360,8 +1487,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   // both updated message states are rendered before changing the DB fixture
   // and doing a full reload, so the refresh and navigation cannot overlap.
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
-  const normalMessages = await pool.query<{ id: string; step_number: number; state: string }>(
-    "select id,step_number,state from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) order by step_number",
+  const normalMessages = await pool.query<{ id: string; enrollment_id: string; recipient_email_snapshot: string; step_number: number; state: string }>(
+    "select id,enrollment_id,recipient_email_snapshot,step_number,state from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) order by step_number",
     [normal.id],
   );
   if (normalMessages.rows.length !== 2 || normalMessages.rows.some((row) => row.state !== "scheduled")) {
@@ -1375,6 +1502,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const acceptedNow = acceptedClock.toISOString();
   const acceptedDueAt = new Date(acceptedClock.getTime() - 60_000).toISOString();
   await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [firstNormalMessage.id, acceptedDueAt]);
+  const testClaimEvidence = await verifyTestMessageClaimRpc(pool, {
+    messageId: firstNormalMessage.id,
+    enrollmentId: firstNormalMessage.enrollment_id,
+    recipientEmail: firstNormalMessage.recipient_email_snapshot,
+  }, acceptedNow);
 
   // Edit a reviewed snapshot in the disposable database to exercise the real
   // invalidation trigger. The trigger must clear reviewer/time and re-open review.
@@ -1558,6 +1690,12 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   );
   const reconciledMessage = await pool.query<{ provider_delivery_status: string }>(
     "select provider_delivery_status from public.agency_followup_messages where id=$1", [retryMessage.id],
+  );
+  const quarantinedSourceReplayEvidence = await verifyQuarantinedSourceEventReplay(
+    pool,
+    fixtures.prospects.normal,
+    accepted.rows[0]!.provider_message_id!,
+    acceptedNow,
   );
   if (reconciledProviderEvent.status !== 200 || reconciledProviderEvent.outcome !== "matched" ||
     duplicateProviderEvent.status !== 200 || duplicateProviderEvent.outcome !== "duplicate" ||
@@ -1801,8 +1939,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
       databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
     },
-    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB],
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261022172352"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB],
     screenshots,
     consentPanelScreenshots,
     syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
@@ -1818,6 +1956,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       businessDayWindow: "weekend claim rescheduled before fake provider",
       retry: "temporary failure and backoff persisted; early claim excluded; due retry accepted exactly once with stable key and two attempts",
       providerEventReplay: "signed event was quarantined before acceptance, reconciled on retry after acceptance, and deduplicated with one durable application",
+      testClaimRpc: testClaimEvidence,
+      sourceQuarantineReplay: quarantinedSourceReplayEvidence,
       concurrentClaim: "exactly one claim",
       staleLeaseOwner: "rejected",
     },
@@ -2070,6 +2210,7 @@ async function main(): Promise<void> {
   await verifyPushedMigration(EVENT_ROW_LOCK_GRANT_MIGRATION_PATH, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB);
   await verifyPushedMigration(OPT_IN_EVENT_MIGRATION_PATH, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB);
   await verifyPushedMigration(OPT_IN_OPERATOR_READ_MIGRATION_PATH, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB);
+  await verifyPushedMigration(WEBHOOK_REPLAY_GUARD_MIGRATION_PATH, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");
