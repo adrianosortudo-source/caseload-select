@@ -92,11 +92,13 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" > "$RUNNER_TEMP/staged-inventory.json"
-          node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/full-ledger.sql"
-          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/full-ledger.json"
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-query > "$RUNNER_TEMP/full-ledger.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/full-ledger-evidence.json"
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-stage "$RUNNER_TEMP/full-ledger-evidence.json" "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" "$RUNNER_TEMP/reader-history-reference-check.json" "$RUNNER_TEMP/full-ledger.json" > "$RUNNER_TEMP/reader-history-stage-check.json"
           node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger.json" "$RUNNER_TEMP/reader-migrations" candidate-reader-repair-pending '["supabase/migrations/20260930050000_prospect_candidate_coverage_warning_index.sql","supabase/migrations/20260930130000_prospect_candidate_reader_defer_legacy_audit.sql","supabase/migrations/20260930225510_prospect_enrichment_apply_refresh_gate.sql","supabase/migrations/20261004120000_prospect_candidate_firm_field_fastpath.sql","supabase/migrations/20261005141204_prospect_candidate_original_status_fastpath.sql","supabase/migrations/20261006003626_prospect_candidate_scoped_reader_fastpaths.sql","supabase/migrations/20261006111650_prospect_candidate_global_text_search_scoped.sql","supabase/migrations/20261006133000_prospect_candidate_global_text_search_set_identity.sql","supabase/migrations/20261006150000_prospect_candidate_global_text_search_warning_fastpath.sql","supabase/migrations/20261006160000_prospect_candidate_global_text_search_index_only.sql","supabase/migrations/20261006170000_prospect_candidate_global_text_search_direct_scope.sql","supabase/migrations/20261006234701_prospect_candidate_global_text_search_bounded_membership.sql","supabase/migrations/20261016042722_prospect_candidate_identity_filter_fastpath.sql"]' > "$RUNNER_TEMP/full-ledger-check.json"
           (cd "$RUNNER_TEMP/reader-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/preflight-plan.json"
           PLAN_PHASE=pre node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs plan "$RUNNER_TEMP/preflight-plan.json" "$RUNNER_TEMP/full-ledger-check.json" > "$RUNNER_TEMP/preflight-plan-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-cleanup "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" "$RUNNER_TEMP/reader-history-reference-check.json" "$RUNNER_TEMP/reader-history-cleanup-check.json" > "$RUNNER_TEMP/reader-history-cleanup-summary.json"
           node scripts/prospect-enrichment/migration-gate.mjs verify-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" "$RUNNER_TEMP/staged-inventory.json" > "$RUNNER_TEMP/stage-check.json"
       - name: Bind preflight evidence to run, source and migration
         shell: bash
@@ -118,6 +120,10 @@ jobs:
             ${{ runner.temp }}/operator-catalog-check.json
             ${{ runner.temp }}/staged-inventory.json
             ${{ runner.temp }}/full-ledger-check.json
+            ${{ runner.temp }}/reader-history-reference-check.json
+            ${{ runner.temp }}/reader-history-stage-check.json
+            ${{ runner.temp }}/reader-history-cleanup-check.json
+            ${{ runner.temp }}/reader-history-cleanup-summary.json
             ${{ runner.temp }}/preflight-plan-check.json
             ${{ runner.temp }}/stage-check.json
           if-no-files-found: error
@@ -194,31 +200,42 @@ jobs:
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/operator-catalog.sql" --output json --agent no > "$RUNNER_TEMP/operator-catalog.json"
           node scripts/prospect-enrichment/additive-release-gate.mjs catalog-bound "$RUNNER_TEMP/operator-catalog.json" "$RUNNER_TEMP/additive-ledger.json" > "$RUNNER_TEMP/operator-catalog-check.json"
           node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations-immediate" > "$RUNNER_TEMP/staged-inventory.json"
-          node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/full-ledger.sql"
-          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/full-ledger.json"
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-query > "$RUNNER_TEMP/full-ledger.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/full-ledger-evidence.json"
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-stage "$RUNNER_TEMP/full-ledger-evidence.json" "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations-immediate" "$RUNNER_TEMP/reader-history-reference-check.json" "$RUNNER_TEMP/full-ledger.json" > "$RUNNER_TEMP/reader-history-stage-check.json"
           node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger.json" "$RUNNER_TEMP/reader-migrations-immediate" candidate-reader-repair-pending '["supabase/migrations/20260930050000_prospect_candidate_coverage_warning_index.sql","supabase/migrations/20260930130000_prospect_candidate_reader_defer_legacy_audit.sql","supabase/migrations/20260930225510_prospect_enrichment_apply_refresh_gate.sql","supabase/migrations/20261004120000_prospect_candidate_firm_field_fastpath.sql","supabase/migrations/20261005141204_prospect_candidate_original_status_fastpath.sql","supabase/migrations/20261006003626_prospect_candidate_scoped_reader_fastpaths.sql","supabase/migrations/20261006111650_prospect_candidate_global_text_search_scoped.sql","supabase/migrations/20261006133000_prospect_candidate_global_text_search_set_identity.sql","supabase/migrations/20261006150000_prospect_candidate_global_text_search_warning_fastpath.sql","supabase/migrations/20261006160000_prospect_candidate_global_text_search_index_only.sql","supabase/migrations/20261006170000_prospect_candidate_global_text_search_direct_scope.sql","supabase/migrations/20261006234701_prospect_candidate_global_text_search_bounded_membership.sql","supabase/migrations/20261016042722_prospect_candidate_identity_filter_fastpath.sql"]' > "$RUNNER_TEMP/full-ledger-check.json"
           (cd "$RUNNER_TEMP/reader-migrations-immediate" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/preflight-plan.json"
           PLAN_PHASE=pre node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs plan "$RUNNER_TEMP/preflight-plan.json" "$RUNNER_TEMP/full-ledger-check.json" > "$RUNNER_TEMP/preflight-plan-check.json"
-          node scripts/prospect-enrichment/migration-gate.mjs verify-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations-immediate" "$RUNNER_TEMP/staged-inventory.json" > "$RUNNER_TEMP/stage-check.json"
           echo "apply_started=true" >> "$GITHUB_OUTPUT"
-          (cd "$RUNNER_TEMP/reader-migrations-immediate" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/apply.json"
+          apply_status=0
+          if (cd "$RUNNER_TEMP/reader-migrations-immediate" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/apply.json"; then
+            :
+          else
+            apply_status=$?
+          fi
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-cleanup "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations-immediate" "$RUNNER_TEMP/reader-history-reference-check.json" "$RUNNER_TEMP/reader-history-cleanup-check.json" > "$RUNNER_TEMP/reader-history-cleanup-summary.json"
+          node scripts/prospect-enrichment/migration-gate.mjs verify-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations-immediate" "$RUNNER_TEMP/staged-inventory.json" > "$RUNNER_TEMP/stage-check.json"
+          exit "$apply_status"
       - name: Verify exact migration ledger statements, catalog contract and empty plan
         if: always() && steps.apply_migration.outputs.apply_started == 'true'
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/post-full-ledger.sql"
-          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/post-full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/post-full-ledger.json"
-          node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/post-full-ledger.json" "$RUNNER_TEMP/reader-migrations-immediate" complete > "$RUNNER_TEMP/post-full-ledger-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations-post" > "$RUNNER_TEMP/post-staged-inventory.json"
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-query > "$RUNNER_TEMP/post-full-ledger.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/post-full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/post-full-ledger-evidence.json"
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-stage "$RUNNER_TEMP/post-full-ledger-evidence.json" "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations-post" "$RUNNER_TEMP/post-reader-history-reference-check.json" "$RUNNER_TEMP/post-full-ledger.json" > "$RUNNER_TEMP/post-reader-history-stage-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/post-full-ledger.json" "$RUNNER_TEMP/reader-migrations-post" complete > "$RUNNER_TEMP/post-full-ledger-check.json"
           node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs target-ledger-query > "$RUNNER_TEMP/target-ledger.sql"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/target-ledger.sql" --output json --agent no > "$RUNNER_TEMP/target-ledger.json"
           node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs target-ledger "$RUNNER_TEMP/target-ledger.json" > "$RUNNER_TEMP/target-ledger-check.json"
           node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs catalog-query > "$RUNNER_TEMP/reader-catalog.sql"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/reader-catalog.sql" --output json --agent no > "$RUNNER_TEMP/reader-catalog.json"
           node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs catalog "$RUNNER_TEMP/reader-catalog.json" > "$RUNNER_TEMP/reader-catalog-check.json"
-          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations-post" > "$RUNNER_TEMP/post-staged-inventory.json"
           (cd "$RUNNER_TEMP/reader-migrations-post" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/post-plan.json"
           PLAN_PHASE=post node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs plan "$RUNNER_TEMP/post-plan.json" "$RUNNER_TEMP/post-full-ledger-check.json" > "$RUNNER_TEMP/post-plan-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-cleanup "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations-post" "$RUNNER_TEMP/post-reader-history-reference-check.json" "$RUNNER_TEMP/post-reader-history-cleanup-check.json" > "$RUNNER_TEMP/post-reader-history-cleanup-summary.json"
+          node scripts/prospect-enrichment/migration-gate.mjs verify-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations-post" "$RUNNER_TEMP/post-staged-inventory.json" > "$RUNNER_TEMP/post-stage-check.json"
       - name: Upload redacted reader repair apply and read-back evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -235,8 +252,13 @@ jobs:
             ${{ runner.temp }}/full-ledger-check.json
             ${{ runner.temp }}/preflight-plan-check.json
             ${{ runner.temp }}/post-full-ledger-check.json
+            ${{ runner.temp }}/post-reader-history-reference-check.json
+            ${{ runner.temp }}/post-reader-history-stage-check.json
+            ${{ runner.temp }}/post-reader-history-cleanup-check.json
+            ${{ runner.temp }}/post-reader-history-cleanup-summary.json
             ${{ runner.temp }}/target-ledger-check.json
             ${{ runner.temp }}/reader-catalog-check.json
             ${{ runner.temp }}/post-plan-check.json
+            ${{ runner.temp }}/post-stage-check.json
           if-no-files-found: ignore
           retention-days: 30
