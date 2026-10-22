@@ -1,0 +1,109 @@
+name: Agency follow-up final-head walkthrough
+
+on:
+  push:
+    branches: [codex/crm-live-followup-20261019]
+    paths:
+      - '.github/workflows/agency-followup-final-head.yml'
+      - 'src/app/admin/agency-crm/follow-up/**'
+      - 'src/app/api/admin/agency-crm/follow-up/**'
+      - 'src/app/api/cron/agency-followup-dispatch/**'
+      - 'src/app/api/webhooks/resend/agency-followup/**'
+      - 'src/lib/agency-followup-*.ts'
+      - 'src/lib/portal-session-cookie.ts'
+      - 'scripts/agency-followup-walkthrough.ts'
+      - 'supabase/config.toml'
+      - 'supabase/migrations/**'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agency-followup-final-head-${{ github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  walkthrough:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION: YES-LOCAL-DISPOSABLE-ONLY
+      AGENCY_FOLLOWUP_STACK_DIR: test-results/crm-local-stack
+      AGENCY_FOLLOWUP_SUPABASE_API_PORT: '55431'
+      AGENCY_FOLLOWUP_SUPABASE_DB_PORT: '55432'
+    steps:
+      - name: Check out the exact pushed PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Set up Supabase CLI
+        uses: supabase/setup-cli@v3
+        with:
+          version: 2.117.0
+
+      - name: Install Chromium and system dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Prepare isolated disposable Supabase project
+        shell: bash
+        run: |
+          set -euo pipefail
+          stack="$GITHUB_WORKSPACE/$AGENCY_FOLLOWUP_STACK_DIR"
+          mkdir -p "$stack/supabase"
+          cp supabase/config.toml "$stack/supabase/config.toml"
+          cp -R supabase/migrations "$stack/supabase/migrations"
+          project_id="crm-followup-walkthrough-$(date -u +%Y%m%d)-$(git rev-parse HEAD | cut -c1-6)"
+          echo "AGENCY_FOLLOWUP_STACK_PROJECT_ID=$project_id" >> "$GITHUB_ENV"
+          export AGENCY_FOLLOWUP_STACK_PROJECT_ID="$project_id"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const file = `${process.env.GITHUB_WORKSPACE}/${process.env.AGENCY_FOLLOWUP_STACK_DIR}/supabase/config.toml`;
+          const projectId = process.env.AGENCY_FOLLOWUP_STACK_PROJECT_ID;
+          let section = '';
+          let text = fs.readFileSync(file, 'utf8');
+          text = text.split(/\r?\n/).map((line) => {
+            const heading = /^\[([^\]]+)\]$/.exec(line);
+            if (heading) section = heading[1];
+            if (/^project_id\s*=/.test(line)) return `project_id = "${projectId}"`;
+            if (section === 'api' && /^port\s*=/.test(line)) return 'port = 55431';
+            if (section === 'db' && /^port\s*=/.test(line)) return 'port = 55432';
+            return line;
+          }).join('\n');
+          fs.writeFileSync(file, text);
+          NODE
+          test "$(grep -E '^project_id\s*=' "$stack/supabase/config.toml" | head -n1 | cut -d '"' -f2)" = "$project_id"
+
+      - name: Start isolated Supabase stack and apply pushed migrations
+        working-directory: test-results/crm-local-stack
+        run: supabase start
+
+      - name: Run final-head Agency database and browser walkthrough
+        run: npm run agency-followup:walkthrough
+
+      - name: Stop isolated Supabase stack
+        if: always()
+        working-directory: test-results/crm-local-stack
+        run: supabase stop --no-backup
+
+      - name: Upload synthetic acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agency-followup-walkthrough-${{ github.sha }}
+          path: test-results/agency-followup-walkthrough/**
+          if-no-files-found: ignore
+          retention-days: 7
