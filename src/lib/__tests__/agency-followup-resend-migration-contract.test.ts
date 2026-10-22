@@ -6,6 +6,8 @@ const migrationName = "20261020025251_agency_followup_resend_events_and_shared_s
 const migration = readFileSync(resolve(process.cwd(), "supabase/migrations", migrationName), "utf8");
 const rowLockMigrationName = "20261020141945_agency_followup_provider_event_row_lock_privilege.sql";
 const rowLockMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", rowLockMigrationName), "utf8");
+const providerEventPrivilegeMigrationName = "20261022222611_agency_followup_provider_event_least_privilege.sql";
+const providerEventPrivilegeMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", providerEventPrivilegeMigrationName), "utf8");
 const testClaimMigrationName = "20261021173939_agency_followup_test_message_claim.sql";
 const testClaimMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", testClaimMigrationName), "utf8");
 const replayGuardMigrationName = "20261022172352_agency_followup_webhook_replay_quarantine_guard.sql";
@@ -35,6 +37,11 @@ describe("Agency follow-up Resend migration contract", () => {
   it("grants only the provider event key update privilege required for row locking", () => {
     expect(rowLockMigration).toContain("GRANT UPDATE (provider_event_id) ON public.agency_followup_provider_events TO service_role");
     expect(rowLockMigration).not.toMatch(/GRANT\s+UPDATE\s+ON\s+public\.agency_followup_provider_events/i);
+    expect(providerEventPrivilegeMigration).toContain("REVOKE ALL PRIVILEGES ON TABLE public.agency_followup_provider_events FROM service_role");
+    expect(providerEventPrivilegeMigration).toContain("GRANT SELECT, INSERT ON TABLE public.agency_followup_provider_events TO service_role");
+    expect(providerEventPrivilegeMigration).toContain("GRANT UPDATE (provider_event_id) ON TABLE public.agency_followup_provider_events TO service_role");
+    expect(providerEventPrivilegeMigration).not.toContain("GRANT UPDATE ON TABLE public.agency_followup_provider_events TO service_role");
+    expect(providerEventPrivilegeMigration).not.toContain("GRANT ALL ON TABLE public.agency_followup_provider_events TO service_role");
     expect(migration).toContain("CREATE TRIGGER agency_followup_provider_events_no_mutation");
     expect(migration).toContain("BEFORE UPDATE OR DELETE ON public.agency_followup_provider_events");
     expect(migration).toContain("SECURITY INVOKER");
