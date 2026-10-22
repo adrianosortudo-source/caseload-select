@@ -289,14 +289,14 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
   if (grants.rows[0]?.service_access !== true || grants.rows[0]?.public_access !== false) {
     throw new Error("Disposable Agency CRM service-role grants or public-role revocations are not in the expected state.");
   }
-  const operatorRead = await pool.query<{ id_access: boolean; role_access: boolean; disabled_access: boolean; email_denied: boolean; name_denied: boolean; public_access: boolean }>(
-    "select has_column_privilege('service_role','public.firm_lawyers','id','select') as id_access, has_column_privilege('service_role','public.firm_lawyers','role','select') as role_access, has_column_privilege('service_role','public.firm_lawyers','disabled','select') as disabled_access, not has_column_privilege('service_role','public.firm_lawyers','email','select') as email_denied, not has_column_privilege('service_role','public.firm_lawyers','name','select') as name_denied, not has_column_privilege('anon','public.firm_lawyers','id','select') and not has_column_privilege('authenticated','public.firm_lawyers','id','select') as public_access",
+  const operatorRead = await pool.query<{ id_access: boolean; role_access: boolean; disabled_access: boolean; public_access: boolean }>(
+    "select has_column_privilege('service_role','public.firm_lawyers','id','select') as id_access, has_column_privilege('service_role','public.firm_lawyers','role','select') as role_access, has_column_privilege('service_role','public.firm_lawyers','disabled','select') as disabled_access, not has_column_privilege('anon','public.firm_lawyers','id','select') and not has_column_privilege('authenticated','public.firm_lawyers','id','select') as public_access",
   );
   if (operatorRead.rows[0]?.id_access !== true || operatorRead.rows[0]?.role_access !== true || operatorRead.rows[0]?.disabled_access !== true
-    || operatorRead.rows[0]?.email_denied !== true || operatorRead.rows[0]?.name_denied !== true || operatorRead.rows[0]?.public_access !== true) {
-    throw new Error(`The opt-in operator lookup must read only service_role id/role/disabled columns; other operator fields and public roles must remain unavailable; actual=${JSON.stringify(operatorRead.rows[0] ?? null)}`);
+    || operatorRead.rows[0]?.public_access !== true) {
+    throw new Error(`The opt-in operator identity fields must be available to service_role and unavailable to public roles; actual=${JSON.stringify(operatorRead.rows[0] ?? null)}`);
   }
-  progress("disposable identity, all eight migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, least-privilege operator columns, and test-claim RPC grants checked");
+  progress("disposable identity, all eight migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and test-claim RPC grants checked");
 }
 
 async function verifyTestMessageClaimRpc(

@@ -62,6 +62,9 @@ describe("recordAgencyFollowupOptInEvent", () => {
       p_event_type: eventType, p_source_link_id: "source", p_conversation_id: "conversation",
       p_recipient_email_sha256: agencyFollowupRecipientEmailHash(EMAIL), p_actor_operator_id: ACTOR,
     }));
+    expect(h.selects.filter((selection) => selection.table === "firm_lawyers")).toEqual([
+      { table: "firm_lawyers", columns: "id,role,disabled" },
+    ]);
   });
   it("rejects a current contact/source-person mismatch without appending", async () => {
     h.rows.prospect_people[0].primary_email = "changed@example.test";
@@ -118,6 +121,9 @@ describe("recordAgencyFollowupOptInEvent", () => {
       table: "agency_followup_opt_in_events",
       columns: "id,event_type,captured_at,recorded_at,capture_source,consent_text_version,consent_text_sha256,evidence_reference,evidence_sha256,recipient_email_sha256,actor_operator_id",
     });
+    expect(h.selects.filter((selection) => selection.table === "firm_lawyers")).toEqual([
+      { table: "firm_lawyers", columns: "id,role,disabled" },
+    ]);
     expect(h.orders).toContainEqual({ table: "agency_followup_opt_in_events", column: "recorded_at", ascending: true });
     expect(h.orders).toContainEqual({ table: "agency_followup_opt_in_events", column: "id", ascending: true });
   });
