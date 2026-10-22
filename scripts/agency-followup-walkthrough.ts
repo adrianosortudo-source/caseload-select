@@ -47,8 +47,12 @@ const OPT_IN_EVENT_MIGRATION_PATH = "supabase/migrations/20261021040000_agency_f
 const EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB = "7f34b1f9f51772557111c5ba35213d9402e1b6f7";
 const OPT_IN_OPERATOR_READ_MIGRATION_PATH = "supabase/migrations/20261021050000_agency_followup_opt_in_operator_read_grant.sql";
 const EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB = "3776336f64ab72907a7f1a2eac1d1926bed1fd13";
+const TEST_MESSAGE_CLAIM_MIGRATION_PATH = "supabase/migrations/20261021173939_agency_followup_test_message_claim.sql";
+const EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB = "81fcf78ff31d62852ce54cba7f3f4e34ec6093df";
 const WEBHOOK_REPLAY_GUARD_MIGRATION_PATH = "supabase/migrations/20261022172352_agency_followup_webhook_replay_quarantine_guard.sql";
 const EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB = "1ee04f22a7b00fa69eaca227e6443c663e88818a";
+const PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_PATH = "supabase/migrations/20261022222611_agency_followup_provider_event_least_privilege.sql";
+const EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB = "1268f5f5883479bb2bf79410f45142303e804d9e";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
@@ -580,7 +584,7 @@ export async function POST(request: NextRequest) {
       outcomePlan,
     }));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Fake dispatch failed." }, { status: 409 });
+    return NextResponse.json({ error: "Fake dispatch failed." }, { status: 409 });
   }
 }
 `;
@@ -1939,8 +1943,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
       databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
     },
-    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261022172352"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB],
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB],
     screenshots,
     consentPanelScreenshots,
     syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
@@ -2210,7 +2214,9 @@ async function main(): Promise<void> {
   await verifyPushedMigration(EVENT_ROW_LOCK_GRANT_MIGRATION_PATH, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB);
   await verifyPushedMigration(OPT_IN_EVENT_MIGRATION_PATH, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB);
   await verifyPushedMigration(OPT_IN_OPERATOR_READ_MIGRATION_PATH, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB);
+  await verifyPushedMigration(TEST_MESSAGE_CLAIM_MIGRATION_PATH, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB);
   await verifyPushedMigration(WEBHOOK_REPLAY_GUARD_MIGRATION_PATH, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB);
+  await verifyPushedMigration(PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_PATH, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");
