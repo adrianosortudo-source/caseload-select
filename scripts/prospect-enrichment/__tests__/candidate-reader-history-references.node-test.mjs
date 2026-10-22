@@ -59,8 +59,8 @@ test("only the two pinned applied agency rows become temporary execution-failing
   assert.equal(proof.remoteVersionCount, 275);
   assert.deepEqual(proof.history, expected);
   assert.equal(proof.references.referenceHashNormalization, "UTF-8 with CRLF normalized to LF");
-  assert.equal(proof.references.boundedReviewReceiptSha256, "d83945f36b37c602be2fca773a0fb0f6678c732ed6a5d532c0e76e0a0f884cef");
-  assert.equal(proof.references.fieldFilterReviewReceiptSha256, "b5d3d28f361aca33dcd516233388a322e8f7f9815bdb10d35e868203499cb793");
+  assert.equal(proof.references.boundedReviewReceiptSha256, "a0f5085a3a81d6160b67b953ae5463641af6e73722aeec9fa6d58cfdd35474d4");
+  assert.equal(proof.references.fieldFilterReviewReceiptSha256, "f7a0903962f839c5d5e7846f080a7222fb06fa47224bd520c2a60ba7ec8e8892");
   assert.equal(proof.compactLedger.length, 275);
   assert.deepEqual(proof.stagedFiles.map(file => file.filename), expected.map(row => `${row.version}_${row.name}.sql`));
   for (const row of expected) {

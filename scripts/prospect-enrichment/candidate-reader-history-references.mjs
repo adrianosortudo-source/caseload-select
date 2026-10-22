@@ -8,7 +8,7 @@ const REFERENCE_PINS = Object.freeze([
     path: "scripts/prospect-enrichment/bounded-original-ledger-reference.json",
     receipt: "scripts/prospect-enrichment/bounded-original-release-review.json",
     sha256: "164e22885c669ab59e99545bc5ec3b5acb9702ee988e2d5980846a972d433bc7",
-    receiptSha256: "d83945f36b37c602be2fca773a0fb0f6678c732ed6a5d532c0e76e0a0f884cef",
+    receiptSha256: "a0f5085a3a81d6160b67b953ae5463641af6e73722aeec9fa6d58cfdd35474d4",
     receiptSchemaVersion: "prospect-bounded-original-release/v1",
     receiptKeys: ["schemaVersion", "projectRef", "cliVersion", "reviewOnly", "approvalGranted", "migration", "ledgerReferenceSha256", "catalogPre", "catalogPost"],
     migration: {
@@ -24,7 +24,7 @@ const REFERENCE_PINS = Object.freeze([
     path: "scripts/prospect-enrichment/field-filter-ledger-reference.json",
     receipt: "scripts/prospect-enrichment/field-filter-release-review.json",
     sha256: "10a7f9ec30a99c555486f8a95e50ff4f6eac60d974923027d60a8c6ce1b3cb85",
-    receiptSha256: "b5d3d28f361aca33dcd516233388a322e8f7f9815bdb10d35e868203499cb793",
+    receiptSha256: "f7a0903962f839c5d5e7846f080a7222fb06fa47224bd520c2a60ba7ec8e8892",
     receiptSchemaVersion: "prospect-field-filter-release/v1",
     receiptKeys: ["schemaVersion", "projectRef", "cliVersion", "reviewOnly", "approvalGranted", "catalogEvidence", "migration", "prerequisite", "ledgerReferenceSha256", "catalogPre", "catalogPost"],
     migration: {
@@ -71,7 +71,8 @@ function verifyPinnedReferences(sourceRoot) {
   for (const pin of REFERENCE_PINS) {
     const checkoutBytes = fs.readFileSync(path.join(sourceRoot, pin.path));
     const referenceBytes = Buffer.from(checkoutBytes.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
-    const receiptBytes = fs.readFileSync(path.join(sourceRoot, pin.receipt));
+    const receiptCheckoutBytes = fs.readFileSync(path.join(sourceRoot, pin.receipt));
+    const receiptBytes = Buffer.from(receiptCheckoutBytes.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
     const receipt = JSON.parse(receiptBytes.toString("utf8"));
     if (hash(referenceBytes) !== pin.sha256 || hash(receiptBytes) !== pin.receiptSha256 ||
         !exact(receipt, pin.receiptKeys) || receipt.schemaVersion !== pin.receiptSchemaVersion ||
@@ -98,6 +99,7 @@ function verifyPinnedReferences(sourceRoot) {
     boundedReferenceSha256: REFERENCE_PINS[0].sha256,
     fieldFilterReferenceSha256: REFERENCE_PINS[1].sha256,
     referenceHashNormalization: "UTF-8 with CRLF normalized to LF",
+    receiptHashNormalization: "UTF-8 with CRLF normalized to LF",
     boundedReviewReceiptSha256: REFERENCE_PINS[0].receiptSha256,
     fieldFilterReviewReceiptSha256: REFERENCE_PINS[1].receiptSha256,
   };
