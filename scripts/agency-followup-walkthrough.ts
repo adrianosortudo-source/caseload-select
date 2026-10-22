@@ -281,7 +281,7 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     || providerGrants.rows[0]?.service_event_table_update !== false
     || providerGrants.rows[0]?.service_event_other_column_update !== false
     || providerGrants.rows[0]?.immutable_event_trigger !== true) {
-    throw new Error("Provider-event row-lock privilege, append-only trigger, or restricted grants are not in the expected state.");
+    throw new Error(`Provider-event row-lock privilege, append-only trigger, or restricted grants are not in the expected state; actual=${JSON.stringify(providerGrants.rows[0] ?? null)}`);
   }
   const grants = await pool.query<{ service_access: boolean; public_access: boolean }>(
     "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access from unnest(array['public.agency_prospects','public.agency_deals','public.agency_reminders']) as crm_table(table_name)",
