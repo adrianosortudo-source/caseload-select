@@ -294,7 +294,7 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
   );
   if (operatorRead.rows[0]?.id_access !== true || operatorRead.rows[0]?.role_access !== true || operatorRead.rows[0]?.disabled_access !== true
     || operatorRead.rows[0]?.email_denied !== true || operatorRead.rows[0]?.name_denied !== true || operatorRead.rows[0]?.public_access !== true) {
-    throw new Error("The opt-in operator lookup must read only service_role id/role/disabled columns; other operator fields and public roles must remain unavailable.");
+    throw new Error(`The opt-in operator lookup must read only service_role id/role/disabled columns; other operator fields and public roles must remain unavailable; actual=${JSON.stringify(operatorRead.rows[0] ?? null)}`);
   }
   progress("disposable identity, all eight migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, least-privilege operator columns, and test-claim RPC grants checked");
 }
