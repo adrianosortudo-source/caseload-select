@@ -106,7 +106,7 @@ describe("candidate reader repair gate", () => {
   expect(apply).toContain("needs: preflight");
   expect(preflight).not.toMatch(/supabase db push[^\n]*--yes/);
   expect(apply.indexOf("PLAN_PHASE=pre")).toBeLessThan(apply.indexOf("--yes"));
-  expect(apply.indexOf("verify-stage")).toBeLessThan(apply.indexOf("--yes"));
+  expect(apply.indexOf("--yes")).toBeLessThan(apply.indexOf("verify-stage"));
   expect([...workflow.matchAll(/^\s+uses: .+$/gm)].every(step => /@[a-f0-9]{40}$/.test(step[0].trim().replace(/^uses: /,"").replace(/\s+#.*$/,"")))).toBe(true);
  });
  it("requires exact candidate reader grants, private helper revocation and supporting indexes", () => {
