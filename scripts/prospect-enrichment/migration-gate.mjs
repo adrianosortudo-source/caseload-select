@@ -4,6 +4,7 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { DATABASE_CA_PATH, verifyDatabaseCaFile } from "./database-ca.mjs";
+import { readerHistoryQuery, stageReaderHistoryReferences, removeReaderHistoryReferences } from "./candidate-reader-history-references.mjs";
 
 export const PROJECT_REF = "ssxryjxifwiivghglqer";
 export const CLI_VERSION = "2.117.0";
@@ -556,6 +557,26 @@ async function main(args) {
   }
   if (command === "full-query" && rest.length === 0) {
     process.stdout.write(fullLedgerQuery());
+    return;
+  }
+  if (command === "reader-history-query" && rest.length === 0) {
+    process.stdout.write(readerHistoryQuery());
+    return;
+  }
+  if (command === "reader-history-stage" && rest.length === 5) {
+    const payload = JSON.parse(fs.readFileSync(rest[0], "utf8"));
+    const proof = stageReaderHistoryReferences(payload, rest[1], rest[2]);
+    const { compactLedger, ...evidence } = proof;
+    fs.writeFileSync(rest[3], JSON.stringify(evidence, null, 2) + "\n", { flag: "wx" });
+    fs.writeFileSync(rest[4], JSON.stringify(compactLedger, null, 2) + "\n", { flag: "wx" });
+    console.log(JSON.stringify({ schemaVersion: evidence.schemaVersion, remoteVersionCount: evidence.remoteVersionCount, stagedFiles: evidence.stagedFiles.length }));
+    return;
+  }
+  if (command === "reader-history-cleanup" && rest.length === 4) {
+    const proof = JSON.parse(fs.readFileSync(rest[2], "utf8"));
+    const result = removeReaderHistoryReferences(rest[0], rest[1], proof);
+    fs.writeFileSync(rest[3], JSON.stringify(result, null, 2) + "\n", { flag: "wx" });
+    console.log(JSON.stringify(result));
     return;
   }
   if (command === "full-ledger" && (rest.length === 3 || rest.length === 4)) {

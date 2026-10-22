@@ -75,10 +75,32 @@ test("reader-repair preflight is static-only, read-only, protected, and bound to
   const fullLedger = step("Require exactly the reader-repair migration suffix in full-ledger preflight");
   const combinedFullLedger = combined.jobs.preflight.steps.find(item => item.name === fullLedger.name);
   assert.equal(fullLedger.run, combinedFullLedger.run);
+  assert.ok(fullLedger.run.indexOf("reader-history-query") < fullLedger.run.indexOf("reader-history-stage"));
+  assert.ok(fullLedger.run.indexOf("reader-history-stage") < fullLedger.run.indexOf("full-ledger-check.json"));
   assert.match(fullLedger.run, /candidate-reader-repair-pending/);
   assert.match(fullLedger.run, /--dry-run --include-all --skip-vault/);
+  assert.match(fullLedger.run, /reader-history-cleanup/);
+  assert.ok(fullLedger.run.indexOf("reader-history-cleanup") < fullLedger.run.indexOf("verify-stage"));
   assert.match(fullLedger.run, /PLAN_PHASE=pre/);
   assert.doesNotMatch(fullLedger.run, /--yes/);
+
+  const applyReadback = combined.jobs.apply.steps.find(item => item.name === "Verify exact migration ledger statements, catalog contract and empty plan");
+  assert.match(applyReadback.run, /reader-history-query/);
+  assert.match(applyReadback.run, /reader-history-stage/);
+  assert.match(applyReadback.run, /reader-history-cleanup/);
+  assert.ok(applyReadback.run.indexOf("reader-history-stage") < applyReadback.run.indexOf("full-ledger-check.json"));
+  assert.ok(applyReadback.run.indexOf("reader-history-cleanup") < applyReadback.run.indexOf("verify-stage"));
+
+  const applyMigration = combined.jobs.apply.steps.find(item => item.name === "Recheck original receipt, full ledger and exact dry-run before apply");
+  const guardStage = applyMigration.run.indexOf("reader-history-stage");
+  const dryRun = applyMigration.run.indexOf("--dry-run --include-all");
+  const apply = applyMigration.run.indexOf("--yes --include-all");
+  const cleanup = applyMigration.run.indexOf("reader-history-cleanup");
+  const cleanInventory = applyMigration.run.indexOf("verify-stage");
+  assert.ok(guardStage >= 0 && guardStage < dryRun && dryRun < apply && apply < cleanup && cleanup < cleanInventory,
+    "pinned history guards must remain staged for the write and be removed before clean source-inventory verification");
+  assert.match(applyMigration.run, /if \(cd .*supabase db push .*--yes --include-all[\s\S]*?then[\s\S]*?apply_status=\$\?/);
+  assert.match(applyMigration.run, /echo "apply_started=true"[\s\S]*?--yes --include-all/);
 
   const binding = step("Bind preflight evidence to run, source and migration");
   const combinedBinding = combined.jobs.preflight.steps.find(item => item.name === binding.name);
@@ -105,6 +127,10 @@ test("reader-repair preflight is static-only, read-only, protected, and bound to
     "operator-catalog-check.json",
     "staged-inventory.json",
     "full-ledger-check.json",
+    "reader-history-reference-check.json",
+    "reader-history-stage-check.json",
+    "reader-history-cleanup-check.json",
+    "reader-history-cleanup-summary.json",
     "preflight-plan-check.json",
     "stage-check.json",
   ]) assert.ok(upload.with.path.includes(artifact), "missing artifact " + artifact);
