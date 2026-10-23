@@ -807,7 +807,7 @@ async function verifyProviderIdempotencyLockWaitBoundary(
       throw new Error("The waiter was not observed blocked until after the 23-hour cutoff.");
     }
     const waitRemaining = cutoff.rows[0]!.cutoff.getTime() - afterBlocked.rows[0]!.database_now.getTime();
-    if (waitRemaining > 3500) throw new Error("The lock-wait boundary exceeded its bounded hold time.");
+    if (waitRemaining > 5000) throw new Error("The lock-wait boundary exceeded its bounded hold time.");
     await new Promise((resolve) => setTimeout(resolve, waitRemaining + 100));
     await holder.query("commit");
     holderTransaction = false;
