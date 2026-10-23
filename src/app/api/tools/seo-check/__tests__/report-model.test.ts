@@ -62,6 +62,33 @@ describe("buildSeoReportModel", () => {
     });
   });
 
+  it("explains mixed content separately from pages that loaded without HTTPS", () => {
+    const mixedOnly = buildSeoReportModel({
+      ...base,
+      issues: [{
+        id: "mixed-content", category: "Technical & Security", status: "warn", title: "Mixed content",
+        detail: "2 HTTP resources on an HTTPS page.", affectedUrls: ["https://example.com/"], affectedCount: 1, totalPages: 2, confidence: "high",
+      }],
+    });
+    expect(mixedOnly.priorityActions[0]).toMatchObject({
+      observed: "1 checked page loaded over HTTPS but included resources served over HTTP.",
+      whyItMatters: "A browser may block or limit resources served over HTTP on an HTTPS page, which can affect how the page appears or works.",
+      nextStep: "Ask your web provider to replace the affected HTTP resource addresses with HTTPS, then confirm the pages still display and work as intended.",
+    });
+    expect(mixedOnly.priorityActions[0].observed).not.toContain("loaded over HTTP rather than HTTPS");
+
+    const both = buildSeoReportModel({
+      ...base,
+      issues: [
+        { id: "https", category: "Technical & Security", status: "fail", title: "HTTPS", detail: "Page loaded over HTTP.", affectedUrls: ["https://example.com/"], affectedCount: 1, totalPages: 2, confidence: "high" },
+        { id: "mixed-content", category: "Technical & Security", status: "warn", title: "Mixed content", detail: "1 HTTP resource on an HTTPS page.", affectedUrls: ["https://example.com/services/"], affectedCount: 1, totalPages: 2, confidence: "high" },
+      ],
+    });
+    expect(both.priorityActions[0].observed).toContain("1 checked page loaded over HTTP rather than HTTPS.");
+    expect(both.priorityActions[0].observed).toContain("Resources served over HTTP were also found on 1 checked page.");
+    expect(both.priorityActions[0].nextStep).toContain("replace HTTP resource addresses on the other affected pages with HTTPS");
+  });
+
   it("keeps search-crawler restrictions separate from training-bot policy and does not infer blocked access when unknown", () => {
     const model = buildSeoReportModel({
       ...base,

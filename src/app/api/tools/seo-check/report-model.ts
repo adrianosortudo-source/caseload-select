@@ -113,7 +113,7 @@ type Family = { id: string; rank: number; title: string; why: string; next: stri
 const FAMILIES: Family[] = [
   { id: "search-exclusion", rank: 1, priority: "Review first", title: "Review which pages should appear in search", why: "If these pages are intended to attract clients, that instruction deserves review. Some exclusions are intentional.", next: "Confirm which affected pages should appear in search, then ask your web provider to review their settings." },
   { id: "robots-access", rank: 1, priority: "Review first", title: "Review crawler access to these pages", why: "This can limit crawling. It does not prove that a URL is absent from search results.", next: "Confirm whether the restriction is intentional before changing it." },
-  { id: "connection", rank: 2, priority: "Review", title: "Review the connection used by these pages", why: "Visitors should have a secure connection when using the site, especially before sharing information.", next: "Ask your web provider to confirm HTTPS is available and consistently used." },
+  { id: "connection", rank: 2, priority: "Review", title: "Review page connection security", why: "Visitors should have a secure connection when using the site, especially before sharing information.", next: "Ask your web provider to confirm HTTPS is available and consistently used." },
   { id: "contact-route", rank: 3, priority: "Review", title: "Make the next contact step easy to find", why: "A clear contact route can help prospective clients understand how to reach the firm.", next: "Review affected pages on desktop and mobile and confirm how a prospective client should contact the firm." },
   { id: "service-information", rank: 4, priority: "Review", title: "Clarify the matters the firm handles", why: "Clear service information can help readers decide whether a page is relevant to their situation.", next: "Review whether main services and intended clients are clear on the relevant pages." },
   { id: "page-labels", rank: 5, priority: "Review", title: "Make page topics easier to understand", why: "Clear page names and headings help readers understand what each inspected page covers.", next: "Review page names, headings and search descriptions for clarity and consistency." },
@@ -184,6 +184,11 @@ function utilityPage(page: ReportPage): boolean { return ["policy", "intake", "t
 
 function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], selectedUrls?: string[]): ReportAction {
   const urls = unique(selectedUrls ?? issues.flatMap((i) => i.affectedUrls));
+  const isPlainHttpIssue = (issue: ReportIssue) => issue.title.toLowerCase() === "https" || /loaded over http|served over http/i.test(`${issue.title} ${issue.detail}`);
+  const plainHttpUrls = unique(issues.filter(isPlainHttpIssue).flatMap((issue) => issue.affectedUrls));
+  const mixedContentUrls = unique(issues.filter((issue) => issue.title.toLowerCase() === "mixed content").flatMap((issue) => issue.affectedUrls));
+  const hasPlainHttp = plainHttpUrls.length > 0;
+  const hasMixedContent = mixedContentUrls.length > 0;
   const evidence = unique(issues.flatMap((i) => [i.evidence, i.detail]).filter((x): x is string => Boolean(x)));
   const sampleUrl = (url: string) => {
     try { return new URL(url).pathname || "/"; } catch { return url; }
@@ -196,10 +201,13 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
     const crawlerNames = unique(evidence.flatMap((line) => ["Googlebot", "Bingbot"].filter((name) => line.includes(name))));
     observed = `The inspected robots.txt rules restrict ${crawlerNames.join(" and ") || "a listed search crawler"} on ${urls.length} checked page${urls.length === 1 ? "" : "s"}.`;
   } else if (family.id === "connection") {
-    const plainHttp = issues.some((issue) => issue.title.toLowerCase() === "https" || /loaded over http|served over http/i.test(`${issue.title} ${issue.detail}`));
-    observed = plainHttp
-      ? `${urls.length} checked page${urls.length === 1 ? "" : "s"} loaded over HTTP rather than HTTPS.`
-      : `The scan recorded mixed-content observations on ${urls.length} checked page${urls.length === 1 ? "" : "s"}.`;
+    if (hasPlainHttp && hasMixedContent) {
+      observed = `${plainHttpUrls.length} checked page${plainHttpUrls.length === 1 ? "" : "s"} loaded over HTTP rather than HTTPS. Resources served over HTTP were also found on ${mixedContentUrls.length} checked page${mixedContentUrls.length === 1 ? "" : "s"}.`;
+    } else if (hasPlainHttp) {
+      observed = `${plainHttpUrls.length} checked page${plainHttpUrls.length === 1 ? "" : "s"} loaded over HTTP rather than HTTPS.`;
+    } else if (hasMixedContent) {
+      observed = `${mixedContentUrls.length} checked page${mixedContentUrls.length === 1 ? "" : "s"} loaded over HTTPS but included resources served over HTTP.`;
+    }
   } else if (family.id === "contact-route") {
     observed = `A clear contact option was not confirmed in the scanned page content on ${urls.length} checked page${urls.length === 1 ? "" : "s"}.`;
   } else if (family.id === "service-information") {
@@ -224,8 +232,16 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
       : "Needs confirmation",
     title: family.title,
     observed,
-    whyItMatters: family.why,
-    nextStep: family.next,
+    whyItMatters: family.id === "connection" && hasMixedContent && hasPlainHttp
+      ? "Some checked pages loaded without HTTPS, and browsers may block or limit resources served over HTTP on other HTTPS pages."
+      : family.id === "connection" && hasMixedContent
+      ? "A browser may block or limit resources served over HTTP on an HTTPS page, which can affect how the page appears or works."
+      : family.why,
+    nextStep: family.id === "connection" && hasMixedContent && hasPlainHttp
+      ? "Ask your web provider to secure the pages loaded over HTTP and replace HTTP resource addresses on the other affected pages with HTTPS."
+      : family.id === "connection" && hasMixedContent
+      ? "Ask your web provider to replace the affected HTTP resource addresses with HTTPS, then confirm the pages still display and work as intended."
+      : family.next,
     affectedUrls: urls,
     affectedCount: urls.length || issues.reduce((n, i) => Math.max(n, i.affectedCount), 0),
     checkedPageCount: pages.length,
