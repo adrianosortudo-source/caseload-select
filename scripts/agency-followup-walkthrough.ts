@@ -2050,15 +2050,28 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       await assertUnoccluded(closeMenu, "Open navigation close button", true);
       await screenshot(`${RUN_ID}-queue-${width}-nav-open.png`, width, "open");
       await closeMenu.click();
+      const closedAt = Date.now();
+      await stableLayout();
+      const closedNavigation = await page.evaluate(() => {
+        const toggle = document.querySelector<HTMLButtonElement>('button[aria-label="Open menu"]');
+        const drawer = document.querySelector<HTMLElement>("aside");
+        const backdrop = drawer?.previousElementSibling as HTMLElement | null;
+        return {
+          expanded: toggle?.getAttribute("aria-expanded"),
+          drawerRight: drawer?.getBoundingClientRect().right ?? null,
+          backdropOpacity: Number.parseFloat(backdrop ? getComputedStyle(backdrop).opacity : "1"),
+        };
+      });
+      if (closedNavigation.expanded !== "false" || closedNavigation.drawerRight === null || closedNavigation.drawerRight > 1 || closedNavigation.backdropOpacity > 0.01) {
+        throw new Error(`Mobile navigation did not reach a closed, unobscured state at ${width}px: ${JSON.stringify(closedNavigation)}.`);
+      }
       if (width === 640) {
-        const closedAt = Date.now();
         const immediatePath = path.join(screenshotDir, RUN_ID + "-reproduction-640-after-close.png");
         await page.screenshot({ path: immediatePath, fullPage: false });
         reproduction.push({ path: path.relative(process.cwd(), immediatePath).replaceAll("\\", "/"),
           sha256: createHash("sha256").update(await readFile(immediatePath)).digest("hex"),
           elapsedAfterCloseMs: Date.now() - closedAt });
       }
-      await stableLayout();
     }
     const failures = await auditRenderedCopy(page);
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -2092,6 +2105,17 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       const panel = queueCard(page, consentProspect.firmName).locator('[data-ui-component-content="agency-follow-up-opt-in"]');
       await panel.scrollIntoViewIfNeeded();
       await expect(panel).toBeVisible();
+      const panelGeometry = await panel.evaluate((element) => {
+        const header = document.querySelector<HTMLButtonElement>('button[aria-label="Open menu"]')?.parentElement;
+        return {
+          top: element.getBoundingClientRect().top,
+          headerBottom: header?.getBoundingClientRect().bottom ?? 0,
+          columnCount: getComputedStyle(element.querySelector("form")!).gridTemplateColumns.split(" ").length,
+        };
+      });
+      const expectedColumns = width >= 1024 ? 2 : 1;
+      if (panelGeometry.columnCount !== expectedColumns) throw new Error(`Consent form must have ${expectedColumns} columns at ${width}px, found ${panelGeometry.columnCount}.`);
+      if (width < 768 && panelGeometry.top < panelGeometry.headerBottom - 1) throw new Error(`Consent panel is obscured by the fixed operator bar at ${width}px: ${JSON.stringify(panelGeometry)}.`);
       const captureTimeLabel = panel.locator("label").filter({ hasText: "Date and time recorded in evidence" });
       await expect(captureTimeLabel).toContainText(/browser timezone: (?!loading).+/i);
       const overflow = await panel.evaluate((element) => {

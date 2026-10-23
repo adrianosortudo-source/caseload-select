@@ -36,6 +36,16 @@ describe("Agency CRM follow-up operator UI contract", () => {
     expect(source).toContain("action: 'pause'");
   });
 
+  it("keeps the consent panel clear of the mobile operator bar and readable until the desktop grid breakpoint", () => {
+    const consentStart = source.indexOf('data-ui-component-content="agency-follow-up-opt-in"');
+    const consentEnd = source.indexOf("</section>", consentStart);
+    const consentPanel = source.slice(consentStart, consentEnd);
+    expect(consentStart).toBeGreaterThanOrEqual(0);
+    expect(consentPanel).toContain("scroll-mt-16 w-full min-w-0 border");
+    expect(consentPanel).toContain("gap-3 lg:grid-cols-2");
+    expect(consentPanel).not.toContain("gap-3 sm:grid-cols-2");
+  });
+
   it("records append-only consent evidence against the current prospect without accepting a recipient override", () => {
     expect(source).toContain('data-ui-component-content="agency-follow-up-opt-in"');
     expect(source).toContain("Current recipient: <strong>{first.recipientEmail || 'No current email on file'}</strong>");

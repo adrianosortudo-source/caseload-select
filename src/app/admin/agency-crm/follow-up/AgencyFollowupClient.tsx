@@ -471,7 +471,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
               </section>)}
             </div>
 
-            <section data-ui-component-content="agency-follow-up-opt-in" aria-labelledby={`opt-in-title-${enrollmentId}`} className="mt-4 w-full min-w-0 border border-black/10 bg-stone-50 p-3 sm:p-4">
+            <section data-ui-component-content="agency-follow-up-opt-in" aria-labelledby={`opt-in-title-${enrollmentId}`} className="mt-4 scroll-mt-16 w-full min-w-0 border border-black/10 bg-stone-50 p-3 sm:p-4">
               <h4 id={`opt-in-title-${enrollmentId}`} data-ui-copy="heading" className="w-full text-balance text-sm font-semibold text-navy sm:text-base max-[360px]:text-[13px] max-[360px]:[text-wrap:normal]">Record email opt-in evidence</h4>
               <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]">Use the source evidence for this exact contact. Recording a grant or withdrawal appends an audit event and does not send email.</p>
               <p className="mt-2 w-full break-words text-sm text-black/75">Current recipient: <strong>{first.recipientEmail || 'No current email on file'}</strong> · Current opt-in state: <strong>{prettyState(first.optInState)}</strong></p>
@@ -496,7 +496,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                   </li>)}
                 </ol>}
               </div>}
-              <form className="mt-3 grid w-full min-w-0 gap-3 sm:grid-cols-2" onSubmit={(event) => void recordOptIn(event, enrollmentId, first.prospectId)}>
+              <form className="mt-3 grid w-full min-w-0 gap-3 lg:grid-cols-2" onSubmit={(event) => void recordOptIn(event, enrollmentId, first.prospectId)}>
                 <label className="block min-w-0 text-sm font-medium text-black/80">Record event
                   <select required className="mt-1 block w-full min-w-0 border border-black/20 bg-white px-3 py-2" value={optInForm.eventType} onChange={(event) => updateOptIn(enrollmentId, { eventType: event.target.value as OptInEventType })}>
                     <option value="">Choose grant or withdrawal</option>
@@ -530,11 +530,11 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                 <label className="block min-w-0 text-sm font-medium text-black/80">Evidence SHA-256
                   <input required maxLength={64} minLength={64} pattern="[a-fA-F0-9]{64}" className="mt-1 block w-full min-w-0 border border-black/20 bg-white px-3 py-2 font-mono text-xs" value={optInForm.evidenceSha256} onChange={(event) => updateOptIn(enrollmentId, { evidenceSha256: event.target.value })} placeholder="64 hexadecimal characters" />
                 </label>
-                <label className="block w-full min-w-0 text-sm text-black/80 sm:col-span-2">
+                <label className="block w-full min-w-0 text-sm text-black/80 lg:col-span-2">
                   <input required type="checkbox" className="h-4 w-4 align-middle" checked={optInForm.evidenceReviewed} onChange={(event) => updateOptIn(enrollmentId, { evidenceReviewed: event.target.checked })} />
                   <span data-ui-copy="supporting" className="mt-2 block w-full leading-6">I reviewed this source and confirmed it supports the selected event and current recipient; any grant explicitly permits Agency follow-up email to this address.</span>
                 </label>
-                {optInSuccessByEnrollment[enrollmentId] && <p role="status" data-ui-copy="supporting" className="w-full text-sm text-green-800 sm:col-span-2">{optInSuccessByEnrollment[enrollmentId]}</p>}
+                {optInSuccessByEnrollment[enrollmentId] && <p role="status" data-ui-copy="supporting" className="w-full text-sm text-green-800 lg:col-span-2">{optInSuccessByEnrollment[enrollmentId]}</p>}
                 <button className="justify-self-start border border-navy px-3 py-2 text-sm font-semibold text-navy disabled:opacity-50" disabled={busy || !first.recipientEmail}>Record append-only consent event</button>
               </form>
             </section>
