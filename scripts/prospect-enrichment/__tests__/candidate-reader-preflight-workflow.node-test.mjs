@@ -79,7 +79,9 @@ test("reader-repair preflight is static-only, read-only, protected, and bound to
   assert.ok(fullLedger.run.indexOf("reader-history-stage") < fullLedger.run.indexOf("full-ledger-check.json"));
   assert.match(fullLedger.run, /candidate-reader-repair-held-pending/);
   assert.match(fullLedger.run, /reader-repair-stage/);
-  assert.match(fullLedger.run, /full-ledger\.json" "\$RUNNER_TEMP\/reader-migrations" candidate-reader-repair-held-pending[\s\S]*? "\$GITHUB_WORKSPACE"/);
+  const fullLedgerCommand = fullLedger.run.split("\n").find(line => line.includes("migration-gate.mjs full-ledger "));
+  assert.ok(fullLedgerCommand, "full-ledger command is missing");
+  assert.match(fullLedgerCommand, /full-ledger\.json" "\$RUNNER_TEMP\/reader-migrations" candidate-reader-repair-held-pending '[^']*' "\$GITHUB_WORKSPACE" > "\$RUNNER_TEMP\/full-ledger-check\.json"/);
   assert.match(fullLedger.run, /--dry-run --include-all --skip-vault/);
   assert.match(fullLedger.run, /reader-history-cleanup/);
   assert.ok(fullLedger.run.indexOf("reader-history-cleanup") < fullLedger.run.indexOf("verify-stage"));
