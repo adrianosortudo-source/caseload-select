@@ -66,6 +66,13 @@ export const CANDIDATE_READER_REPAIR_PATHS = Object.freeze([
   "supabase/migrations/20261006234701_prospect_candidate_global_text_search_bounded_membership.sql",
   "supabase/migrations/20261016042722_prospect_candidate_identity_filter_fastpath.sql",
 ]);
+export const CANDIDATE_READER_REPAIR_HELD_MIGRATION = Object.freeze({
+  path: "supabase/migrations/20261013230354_agency_crm_service_role_grants.sql",
+  version: "20261013230354",
+  name: "agency_crm_service_role_grants",
+  bytes: 634,
+  sha256: "0dce15f75e20ea8d170b862a7a5075e675570e23f1dca53c4ed76bc531d41568",
+});
 export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
 export const RELEASE_PATH = "scripts/prospect-enrichment/migration-release.json";
@@ -145,9 +152,31 @@ function sourceMigrationInventory(sourceRoot, { requirePreviewSources = true } =
   return { root, migrations };
 }
 
+function verifyCandidateReaderRepairHeldMigration(sourceRoot) {
+  const root = fs.realpathSync(sourceRoot);
+  const absolute = path.join(root, CANDIDATE_READER_REPAIR_HELD_MIGRATION.path);
+  const stat = fs.lstatSync(absolute);
+  if (stat.isSymbolicLink() || !stat.isFile()) fail("reader_repair_held_migration_source_invalid");
+  const raw = fs.readFileSync(absolute);
+  const canonical = Buffer.from(raw.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
+  if (!canonical.length || !Buffer.from(canonical.toString("utf8"), "utf8").equals(canonical) ||
+      canonical.length !== CANDIDATE_READER_REPAIR_HELD_MIGRATION.bytes ||
+      sha256(canonical) !== CANDIDATE_READER_REPAIR_HELD_MIGRATION.sha256) fail("reader_repair_held_migration_source_mismatch");
+  return CANDIDATE_READER_REPAIR_HELD_MIGRATION;
+}
+
 /** Copy a complete, byte-verified production CLI history into a fresh staging directory. */
 export function stageProductionWorkdir(sourceRoot, destinationRoot) {
   return stageMigrationWorkdir(sourceRoot, destinationRoot, []);
+}
+
+/** Stage the reviewed reader history while keeping the exact unrelated Agency CRM grant migration held. */
+export function stageCandidateReaderRepairWorkdir(sourceRoot, destinationRoot) {
+  const heldMigration = verifyCandidateReaderRepairHeldMigration(sourceRoot);
+  return {
+    ...stageMigrationWorkdir(sourceRoot, destinationRoot, [heldMigration.path]),
+    readerRepairHeldMigration: heldMigration,
+  };
 }
 
 /** Stage the exact failed candidate suffix one migration at a time for reviewed recovery. */
@@ -178,11 +207,16 @@ export function verifyProductionWorkdir(sourceRoot, stagedRoot, proof) {
   const source = sourceMigrationInventory(sourceRoot);
   const staged = sourceMigrationInventory(stagedRoot, { requirePreviewSources: false });
   if (proof.prerequisiteOnly !== undefined && proof.prerequisiteOnly !== true) fail("staged_proof_invalid");
+  if (proof.prerequisiteOnly === true && proof.readerRepairHeldMigration !== undefined) fail("staged_proof_invalid");
+  const heldMigration = proof.readerRepairHeldMigration === undefined
+    ? undefined
+    : verifyCandidateReaderRepairHeldMigration(source.root);
+  if (heldMigration && !same(proof.readerRepairHeldMigration, heldMigration)) fail("reader_repair_held_migration_mismatch");
   const deferred = proof.prerequisiteOnly === true ? CANDIDATE_RELEASE_PATHS.slice(8) : [];
   if (deferred.length && (proof.additiveReceiptSha256 !== sha256(fs.readFileSync(path.join(source.root, "scripts/prospect-enrichment/additive-release-review.json"))) ||
       !same(proof.deferredCandidateMigrations?.map(item => item.path), deferred))) fail("prerequisite_receipt_prefix_mismatch");
   if (deferred.length && !same(proof.deferredCandidateMigrations, JSON.parse(fs.readFileSync(path.join(source.root, "scripts/prospect-enrichment/additive-release-review.json"), "utf8")).migrations.slice(8))) fail("prerequisite_receipt_prefix_mismatch");
-  const excluded = new Set([...PREVIEW_MIGRATION_PATHS, ...deferred]);
+  const excluded = new Set([...PREVIEW_MIGRATION_PATHS, ...deferred, ...(heldMigration ? [heldMigration.path] : [])]);
   const included = source.migrations.filter(item => !excluded.has(item.path));
   if (staged.root !== proof.stagedRoot || !same(staged.migrations, included) || staged.migrations.length !== proof.migrationCount) fail("staged_migration_source_mismatch");
   const inventorySha256 = sha256(JSON.stringify(included.map(({ path, version, name, bytes, sha256: digest }) => ({ path, version, name, bytes, sha256: digest }))));
@@ -196,7 +230,8 @@ export function verifyProductionWorkdir(sourceRoot, stagedRoot, proof) {
   });
   if (!configs[0].equals(configs[1]) || sha256(configs[1]) !== proof.configSha256) fail("staged_config_mismatch");
   if (findProjectEnvFiles(file => fs.existsSync(path.join(staged.root, file))).length) fail("project_database_env_files_prohibited");
-  return { stagedRoot: staged.root, migrationCount: included.length, inventorySha256, configSha256: proof.configSha256, verified: true };
+  return { stagedRoot: staged.root, migrationCount: included.length, inventorySha256, configSha256: proof.configSha256,
+    ...(heldMigration ? { readerRepairHeldMigration: heldMigration } : {}), verified: true };
 }
 
 function stageMigrationWorkdir(sourceRoot, destinationRoot, deferredPaths) {
@@ -269,13 +304,18 @@ export function fullLedgerQuery() {
 }
 
 export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePendingPaths) {
-  if (!Array.isArray(rows) || !["qualification-pending", "enrichment-pending", "complete", "candidate-pending", "candidate-reader-repair-pending", "candidate-registration-repair-pending", "candidate-projection-repair-pending"].includes(phase)) fail("invalid_full_ledger_input");
+  const heldReaderRepairPhase = ["candidate-reader-repair-held-pending", "candidate-reader-repair-held-complete"].includes(phase);
+  if (!Array.isArray(rows) || !["qualification-pending", "enrichment-pending", "complete", "candidate-pending", "candidate-reader-repair-pending", "candidate-reader-repair-held-pending", "candidate-reader-repair-held-complete", "candidate-registration-repair-pending", "candidate-projection-repair-pending"].includes(phase)) fail("invalid_full_ledger_input");
   if (phase === "candidate-pending") {
     if (!Array.isArray(candidatePendingPaths)) fail("invalid_candidate_pending_suffix");
     const prefixLength = CANDIDATE_RELEASE_PATHS.length - candidatePendingPaths.length;
     if (prefixLength < 0 || !same(candidatePendingPaths, CANDIDATE_RELEASE_PATHS.slice(prefixLength))) fail("invalid_candidate_pending_suffix");
   } else if (phase === "candidate-reader-repair-pending") {
     if (!same(candidatePendingPaths, CANDIDATE_READER_REPAIR_PATHS)) fail("invalid_candidate_reader_repair_pending_scope");
+  } else if (phase === "candidate-reader-repair-held-pending") {
+    if (!same(candidatePendingPaths, CANDIDATE_READER_REPAIR_PATHS)) fail("invalid_candidate_reader_repair_pending_scope");
+  } else if (phase === "candidate-reader-repair-held-complete") {
+    if (candidatePendingPaths !== undefined) fail("invalid_full_ledger_input");
   } else if (phase === "candidate-registration-repair-pending") {
     if (!same(candidatePendingPaths, [CANDIDATE_REGISTRATION_REPAIR_PATH])) fail("invalid_candidate_registration_repair_pending_scope");
   } else if (phase === "candidate-projection-repair-pending") {
@@ -296,15 +336,32 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
     if (!local || name !== expectedName) fail("remote_migration_source_missing_or_mismatched");
   }
   const pending = [...localByVersion.values()].filter(item => !remote.has(item.version)).map(item => item.path).sort();
+  let pendingPaths = pending;
+  let heldMigrations;
+  if (heldReaderRepairPhase) {
+    const heldMigration = verifyCandidateReaderRepairHeldMigration(sourceRoot);
+    if (!pending.includes(heldMigration.path)) fail("reader_repair_held_migration_not_pending");
+    const readerPending = pending.filter(item => item !== heldMigration.path);
+    if (phase === "candidate-reader-repair-held-pending") {
+      const permittedSuffixes = CANDIDATE_READER_REPAIR_PATHS.map((_, index) => CANDIDATE_READER_REPAIR_PATHS.slice(index));
+      if (!permittedSuffixes.some(suffix => same(readerPending, [...suffix].sort()))) fail("unexpected_full_history_delta");
+      pendingPaths = readerPending;
+    } else {
+      if (!same(pending, [heldMigration.path])) fail("unexpected_full_history_delta");
+      pendingPaths = [];
+    }
+    heldMigrations = [{ ...heldMigration, status: "held-unapplied" }];
+  }
   const expected = phase === "qualification-pending"
     ? [...QUALIFICATION_HISTORY.map(item => item.path), ...MIGRATION_PATHS].sort()
     : phase === "enrichment-pending" ? [...MIGRATION_PATHS].sort()
-      : ["candidate-pending", "candidate-reader-repair-pending", "candidate-registration-repair-pending", "candidate-projection-repair-pending"].includes(phase) ? [...candidatePendingPaths].sort() : [];
+      : ["candidate-pending", "candidate-reader-repair-pending", "candidate-reader-repair-held-pending", "candidate-registration-repair-pending", "candidate-projection-repair-pending"].includes(phase) ? [...candidatePendingPaths].sort() : [];
   if (phase === "candidate-reader-repair-pending") {
     const permittedSuffixes = CANDIDATE_READER_REPAIR_PATHS.map((_, index) => CANDIDATE_READER_REPAIR_PATHS.slice(index));
     if (!permittedSuffixes.some(suffix => same(pending, [...suffix].sort()))) fail("unexpected_full_history_delta");
-  } else if (!same(pending, expected)) fail("unexpected_full_history_delta");
-  return { phase, remoteVersionCount: remote.size, stagedMigrationCount: localByVersion.size, pendingPaths: pending, completeSourceCoverage: true };
+  } else if (!heldReaderRepairPhase && !same(pending, expected)) fail("unexpected_full_history_delta");
+  return { phase, remoteVersionCount: remote.size, stagedMigrationCount: localByVersion.size, pendingPaths,
+    ...(heldMigrations ? { heldMigrations } : {}), completeSourceCoverage: true };
 }
 
 export function verifyQualificationHistorySources(sourceRoot) {
@@ -541,6 +598,10 @@ async function main(args) {
   }
   if (command === "stage" && rest.length === 2) {
     console.log(JSON.stringify(stageProductionWorkdir(rest[0], rest[1])));
+    return;
+  }
+  if (command === "reader-repair-stage" && rest.length === 2) {
+    console.log(JSON.stringify(stageCandidateReaderRepairWorkdir(rest[0], rest[1])));
     return;
   }
   if (command === "candidate-recovery-stage" && rest.length === 3) {

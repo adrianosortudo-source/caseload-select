@@ -4,6 +4,7 @@ import {
   catalogQuery, verifyReaderCatalog, verifyReaderRepairPlan,
   verifyReaderRepairReceipt,
 } from "../../../scripts/prospect-enrichment/candidate-reader-repair-gate.mjs";
+import { CANDIDATE_READER_REPAIR_HELD_MIGRATION } from "../../../scripts/prospect-enrichment/migration-gate.mjs";
 const source = verifyReaderRepairReceipt(JSON.parse(fs.readFileSync("scripts/prospect-enrichment/candidate-reader-repair-review.json","utf8")));
 const expectCatalog = {
  candidate_list_service_role_execute:true,candidate_list_anon_execute:false,candidate_list_auth_execute:false,
@@ -78,7 +79,8 @@ describe("candidate reader repair gate", () => {
    const eleventh="20261006170000_prospect_candidate_global_text_search_direct_scope.sql";
    const twelfth="20261006234701_prospect_candidate_global_text_search_bounded_membership.sql";
    const thirteenth="20261016042722_prospect_candidate_identity_filter_fastpath.sql";
-  const pending=(files:string[])=>({phase:"candidate-reader-repair-pending",pendingPaths:files.map(file=>"supabase/migrations/"+file)});
+  const heldMigrations=[{...CANDIDATE_READER_REPAIR_HELD_MIGRATION,status:"held-unapplied"}];
+  const pending=(files:string[])=>({phase:"candidate-reader-repair-held-pending",pendingPaths:files.map(file=>"supabase/migrations/"+file),heldMigrations});
    expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,second,third,fourth,fifth,sixth,seventh,eighth,ninth,tenth,eleventh,twelfth,thirteenth],seeds:[],roles:[]},pending([first,second,third,fourth,fifth,sixth,seventh,eighth,ninth,tenth,eleventh,twelfth,thirteenth]),"pre").exactScope).toBe(true);
    expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[second,third,fourth,fifth,sixth,seventh,eighth,ninth,tenth,eleventh,twelfth,thirteenth],seeds:[],roles:[]},pending([second,third,fourth,fifth,sixth,seventh,eighth,ninth,tenth,eleventh,twelfth,thirteenth]),"pre").exactScope).toBe(true);
    expect(verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[third,fourth,fifth,sixth,seventh,eighth,ninth,tenth,eleventh,twelfth,thirteenth],seeds:[],roles:[]},pending([third,fourth,fifth,sixth,seventh,eighth,ninth,tenth,eleventh,twelfth,thirteenth]),"pre").exactScope).toBe(true);
@@ -92,7 +94,7 @@ describe("candidate reader repair gate", () => {
    expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,second,fourth,fifth,sixth,seventh,eighth,ninth,tenth,eleventh,twelfth,thirteenth],seeds:[],roles:[]},pending([first,second,fourth,fifth,sixth,seventh,eighth,ninth,tenth,eleventh,twelfth,thirteenth]),"pre")).toThrow("unexpected_reader_repair_plan");
    expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[ninth,tenth,eleventh,twelfth,thirteenth,eighth],seeds:[],roles:[]},pending([ninth,tenth,eleventh,twelfth,thirteenth,eighth]),"pre")).toThrow("unexpected_reader_repair_plan");
   expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},pending([first,second]),"post")).toThrow("invalid_reader_repair_plan");
-  expect(verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},{phase:"complete",pendingPaths:[]},"post").upToDate).toBe(true);
+  expect(verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},{phase:"candidate-reader-repair-held-complete",pendingPaths:[],heldMigrations},"post").upToDate).toBe(true);
  });
  it("binds two protected reviews to one source and makes apply depend on a read-only artifact", () => {
   const workflow=fs.readFileSync(".github/workflows/prospect-candidate-reader-repair.yml","utf8");

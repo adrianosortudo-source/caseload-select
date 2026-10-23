@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CANDIDATE_READER_REPAIR_PATHS, PROJECT_REF, sha256, verifyLedgerStatements } from "./migration-gate.mjs";
+import { CANDIDATE_READER_REPAIR_HELD_MIGRATION, CANDIDATE_READER_REPAIR_PATHS, PROJECT_REF, sha256, verifyLedgerStatements } from "./migration-gate.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const receiptPath = "scripts/prospect-enrichment/candidate-reader-repair-review.json";
 const fail = code => { throw new Error(code); };
@@ -51,7 +51,8 @@ export function verifyReaderRepairReceipt(receipt,sourceRoot=root) {
 }
 export function verifyReaderRepairPlan(plan,ledgerCheck,phase) {
  if(!isRecord(plan)||!isRecord(ledgerCheck)||!["pre","post"].includes(phase)||
-  ledgerCheck.phase!==(phase==="pre"?"candidate-reader-repair-pending":"complete")||!Array.isArray(ledgerCheck.pendingPaths)) fail("invalid_reader_repair_plan");
+  ledgerCheck.phase!==(phase==="pre"?"candidate-reader-repair-held-pending":"candidate-reader-repair-held-complete")||!Array.isArray(ledgerCheck.pendingPaths)||
+  !same(ledgerCheck.heldMigrations,[{...CANDIDATE_READER_REPAIR_HELD_MIGRATION,status:"held-unapplied"}])) fail("invalid_reader_repair_plan");
  const pendingPaths=ledgerCheck.pendingPaths;
  const permittedPending=phase==="pre"
   ? repairMigrations.map((_,index)=>repairMigrations.slice(index).map(item=>item.path))

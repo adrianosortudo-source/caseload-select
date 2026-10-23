@@ -11,6 +11,7 @@ import {
   targetLedgerQuery,
   verifyTargetLedgerStatements,
 } from "../candidate-reader-repair-gate.mjs";
+import { CANDIDATE_READER_REPAIR_HELD_MIGRATION } from "../migration-gate.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -51,7 +52,8 @@ test("reader repair preflight allows only its exact ordered suffix and post-read
   const directScope = "20261006170000_prospect_candidate_global_text_search_direct_scope.sql";
   const boundedMembership = "20261006234701_prospect_candidate_global_text_search_bounded_membership.sql";
   const identityFastpath = "20261016042722_prospect_candidate_identity_filter_fastpath.sql";
-  const pending = paths => ({ phase: "candidate-reader-repair-pending", pendingPaths: paths.map(file => "supabase/migrations/" + file) });
+  const held = [{ ...CANDIDATE_READER_REPAIR_HELD_MIGRATION, status: "held-unapplied" }];
+  const pending = paths => ({ phase: "candidate-reader-repair-held-pending", pendingPaths: paths.map(file => "supabase/migrations/" + file), heldMigrations: held });
   assert.deepEqual(verifyReaderRepairPlan(
       { dryRun: true, upToDate: false, migrations: [earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly,directScope,boundedMembership,identityFastpath], seeds: [], roles: [] },
       pending([earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly,directScope,boundedMembership,identityFastpath]),
@@ -101,9 +103,13 @@ test("reader repair preflight allows only its exact ordered suffix and post-read
   ), /unexpected_reader_repair_plan/);
   assert.deepEqual(verifyReaderRepairPlan(
     { dryRun: true, upToDate: true, migrations: [], seeds: [], roles: [] },
-    { phase: "complete", pendingPaths: [] },
+    { phase: "candidate-reader-repair-held-complete", pendingPaths: [], heldMigrations: held },
     "post",
   ), { phase: "post", migrations: [], dryRun: true, upToDate: true, exactScope: true });
+  assert.throws(() => verifyReaderRepairPlan(
+    { dryRun: true, upToDate: false, migrations: [identityFastpath], seeds: [], roles: [] },
+    { ...pending([identityFastpath]), heldMigrations: [] }, "pre",
+  ), /invalid_reader_repair_plan/);
 });
 
 test("reader catalog readback requires indexes, privileges and the refresh-trigger security/transition contract", () => {
