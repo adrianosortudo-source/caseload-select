@@ -454,9 +454,10 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                   <span data-ui-copy="supporting" className="block w-full text-xs font-semibold uppercase tracking-wide text-black/60">Message {item.stepNumber}</span>
                   <h4 data-ui-copy="heading" className="w-full break-words text-balance text-sm font-semibold text-navy sm:text-base max-[360px]:text-[13px] max-[360px]:[text-wrap:normal]">{item.subject || 'No subject'}</h4>
                   <span className="block w-full text-xs uppercase tracking-wide text-black/60">{prettyState(item.state)}</span>
-                  <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65 max-[360px]:text-[13px]" aria-label={`Provider delivery status: ${agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })}`}>
-                    <span className="whitespace-normal break-words">Provider delivery: {agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })}</span>
-                  </p>
+                  <dl className="w-full">
+                    <dt data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Provider delivery:</dt>
+                    <dd data-ui-copy="supporting" className="m-0 w-full break-words text-xs leading-5 text-black/65 max-[360px]:text-[13px]">{agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })}</dd>
+                  </dl>
                   {DELIVERY_STATUS_NOTES[item.providerDeliveryStatus] && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">{DELIVERY_STATUS_NOTES[item.providerDeliveryStatus]}</p>}
                   {item.providerDeliveryStatusAt && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Updated: <time dateTime={item.providerDeliveryStatusAt}>{formatProviderDeliveryTimestamp(item.providerDeliveryStatusAt)}</time></p>}
                 </div>
