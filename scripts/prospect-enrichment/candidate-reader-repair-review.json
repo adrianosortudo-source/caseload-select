@@ -107,6 +107,14 @@
       "name": "prospect_candidate_identity_filter_fastpath",
       "bytes": 4487,
       "sha256": "f2487ec703b7dd9081c9b12d220b8af7d9c4aa7b2e1a49500ef457e6530148e4"
+    },
+    {
+      "path": "supabase/migrations/20261023214500_prospect_candidate_identity_state_fastpath.sql",
+      "filename": "20261023214500_prospect_candidate_identity_state_fastpath.sql",
+      "version": "20261023214500",
+      "name": "prospect_candidate_identity_state_fastpath",
+      "bytes": 4686,
+      "sha256": "5d8212818d850a9a1ba8bfe3e712482180cea8210136bc0ae09b4ec047c94b42"
     }
   ],
   "exclusions": [

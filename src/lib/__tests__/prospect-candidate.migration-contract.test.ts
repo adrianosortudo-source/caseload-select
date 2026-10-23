@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const sql = readFileSync(resolve(process.cwd(), "supabase/migrations/20260924172758_prospect_enrichment_candidate_profiles.sql"), "utf8");
 const scopedReaderSql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261006003626_prospect_candidate_scoped_reader_fastpaths.sql"), "utf8");
+const identityStateSql = readFileSync(resolve(process.cwd(), "supabase/migrations/20261023214500_prospect_candidate_identity_state_fastpath.sql"), "utf8");
 const publicReads = ["list_prospect_research_candidates_v1", "get_prospect_research_candidate_v1",
   "list_prospect_research_candidate_history_v1", "get_prospect_research_candidate_revision_chunk_v1"];
 
@@ -117,5 +118,24 @@ describe("scoped candidate reader migration contract", () => {
     expect(scopedReaderSql).toContain("THEN prospect_candidate_private.list_candidates_for_text(p_filters,p_limit,p_after_id,p_coverage_revision)");
     expect(scopedReaderSql).toContain("RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER SET search_path = ''");
     expect(scopedReaderSql).not.toMatch(/\b(?:INSERT INTO|UPDATE public\.|DELETE FROM)\b/i);
+  });
+});
+
+describe("identity-state candidate reader migration contract", () => {
+  it("filters the state-only page without constructing verified-firm member arrays", () => {
+    expect(identityStateSql.match(/^BEGIN;$/gm)).toHaveLength(1);
+    expect(identityStateSql.match(/^COMMIT;$/gm)).toHaveLength(1);
+    expect(identityStateSql).toContain("CREATE FUNCTION prospect_candidate_private.list_candidates_for_identity_state(");
+    expect(identityStateSql).toContain("prospect_candidate_private.identity_links_at(cutoff)");
+    expect(identityStateSql).toContain("WHERE CASE WHEN links.firm_count=1 THEN 'resolved'");
+    expect(identityStateSql).toContain("'filteredCount',(SELECT count(*) FROM filtered)");
+    expect(identityStateSql).toContain("'coverageRevision',cutoff,'readWarnings',warnings,'complete',warnings='[]'::jsonb");
+    expect(identityStateSql).not.toContain("array_agg(");
+    expect(identityStateSql).not.toContain("matches_group(");
+    expect(identityStateSql).toContain("REVOKE ALL ON FUNCTION prospect_candidate_private.list_candidates_for_identity_state");
+    expect(identityStateSql).toContain("TO service_role");
+    expect(identityStateSql).toContain("WHEN p_filters ? 'identityState' AND (p_filters-'identityState')='{}'::jsonb");
+    expect(identityStateSql).toContain("RETURNS jsonb LANGUAGE sql STABLE SECURITY INVOKER SET search_path = ''");
+    expect(identityStateSql).not.toMatch(/\b(?:INSERT INTO|UPDATE public\.|DELETE FROM)\b/i);
   });
 });

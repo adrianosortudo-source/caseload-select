@@ -386,6 +386,19 @@ suite("all-candidate immutable PostgreSQL projection", () => {
       const unresolvedPage = await list(db, unresolved);
       expect(unresolvedPage.items[0]).toMatchObject({ identityState: "unresolved", verifiedFirmId: null });
       expect(unresolvedPage).toEqual(await list(db, { ...unresolved, text: "" }, 100, null, unresolvedPage.coverageRevision));
+      const unresolvedInventory = await db.query<{ count: string }>(
+        `WITH identities AS MATERIALIZED (
+           SELECT candidate_id,count(DISTINCT verified_firm_id) AS firm_count
+           FROM prospect_candidate_private.identity_links_at($1::bigint) GROUP BY candidate_id
+         )
+         SELECT count(*)::text AS count
+         FROM public.prospect_research_candidates c LEFT JOIN identities i ON i.candidate_id=c.id
+         WHERE c.created_revision<=$1::bigint AND coalesce(i.firm_count,0)=0`,
+        [unresolvedPage.coverageRevision]);
+      const broadUnresolved = await list(db, { identityState: "unresolved" }, 100, null, unresolvedPage.coverageRevision);
+      expect(broadUnresolved.filteredCount).toBe(Number(unresolvedInventory.rows[0].count));
+      expect(broadUnresolved.items.length).toBeLessThanOrEqual(100);
+      expect(broadUnresolved.items.every(item => item.identityState === "unresolved" && item.verifiedFirmId === null)).toBe(true);
       await expectRejected(db, "SELECT public.list_prospect_research_candidates_v1($1,10,NULL,NULL)", [JSON.stringify({ identityNamespace: a.identityNamespace })]);
       await expectRejected(db, "SELECT public.list_prospect_research_candidates_v1($1,10,NULL,NULL)", [JSON.stringify({ ...b, fieldValue: false })]);
       // The guarded migration refuses a different/already replaced body before executing DDL.
