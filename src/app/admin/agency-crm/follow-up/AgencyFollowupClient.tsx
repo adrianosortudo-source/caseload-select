@@ -282,7 +282,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
         <div data-ui-component-content="agency-follow-up-authoring" className="w-full min-w-0 space-y-5">
         <div className="w-full min-w-0">
           <h2 id="author-title" data-ui-copy="heading" className="w-full text-balance text-lg font-semibold text-navy">Author versioned journeys</h2>
-          <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/60 [text-wrap:balance]">Template content is immutable after creation. New copy or schedule changes create new versions.</p>
+          <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/60 max-sm:[text-wrap:balance] sm:[text-wrap:pretty]">Template content is immutable after creation. New copy or schedule changes create new versions.</p>
         </div>
         <form className="grid w-full min-w-0 gap-3 lg:grid-cols-3" onSubmit={async (event) => {
           event.preventDefault();
