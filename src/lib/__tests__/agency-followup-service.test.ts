@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type Result = { data: unknown; error: { message: string } | null };
 type Call = { table: string; in: Array<[string, unknown]>; eq: Array<[string, unknown]>; orders: Array<[string, boolean]>; range?: [number, number] };
@@ -52,6 +52,7 @@ vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: h.supabaseAdmin }));
 import {
   approveAgencyFollowupTemplateVersion,
   listAgencyFollowupConsole,
+  runFakeAgencyFollowupDispatcher,
   runAgencyFollowupDispatcher,
 } from "@/lib/agency-followup-service";
 import { agencyFollowupRecipientEmailHash } from "@/lib/agency-followup-domain";
@@ -188,6 +189,64 @@ describe("runAgencyFollowupDispatcher test-mode claim scope", () => {
         else process.env[key] = previous[key];
       }
     }
+  });
+});
+
+describe("Agency follow-up dispatcher claim policy", () => {
+  const liveEnrollmentId = "10000000-0000-4000-8000-000000000001";
+  const keys = [
+    "AGENCY_FOLLOWUP_SEND_MODE",
+    "AGENCY_FOLLOWUP_FROM",
+    "AGENCY_FOLLOWUP_REPLY_TO",
+    "RESEND_API_KEY",
+    "AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET",
+    "AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST",
+  ];
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
+
+  beforeEach(() => {
+    Object.assign(process.env, {
+      AGENCY_FOLLOWUP_SEND_MODE: "live",
+      AGENCY_FOLLOWUP_FROM: "CaseLoad Select <noreply@caseloadselect.ca>",
+      AGENCY_FOLLOWUP_REPLY_TO: "support@caseloadselect.ca",
+      RESEND_API_KEY: "synthetic-api-key",
+      AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: "synthetic-webhook-secret",
+      AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST: liveEnrollmentId,
+    });
+  });
+
+  afterEach(() => {
+    for (const key of keys) {
+      if (previous[key] === undefined) delete process.env[key];
+      else process.env[key] = previous[key];
+    }
+  });
+
+  it("uses only the enrollment-filtered RPC in live mode", async () => {
+    const result = await runAgencyFollowupDispatcher({ workerId: "live-allowlisted-claim" });
+    expect(result.claimed).toBe(0);
+    expect(h.rpcCalls).toEqual([{
+      name: "claim_agency_followup_live_messages",
+      args: expect.objectContaining({
+        p_allowed_enrollment_ids: [liveEnrollmentId],
+        p_limit: 1,
+      }),
+    }]);
+  });
+
+  it("fails closed before any claim when a live enrollment id is malformed", async () => {
+    process.env.AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST = "not-a-uuid";
+    const result = await runAgencyFollowupDispatcher({ workerId: "live-invalid-claim" });
+    expect(result.claimed).toBe(0);
+    expect(h.rpcCalls).toEqual([]);
+  });
+
+  it("keeps synthetic fake dispatch on the unrestricted claim RPC", async () => {
+    await runFakeAgencyFollowupDispatcher({ workerId: "synthetic-broad-claim", outcomePlan: [] });
+    expect(h.rpcCalls).toEqual([{
+      name: "claim_agency_followup_messages",
+      args: expect.objectContaining({ p_worker_id: "synthetic-broad-claim" }),
+    }]);
   });
 });
 

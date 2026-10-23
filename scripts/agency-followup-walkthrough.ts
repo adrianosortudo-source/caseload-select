@@ -55,6 +55,10 @@ const PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_PATH = "supabase/migrations/20261
 const EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB = "1268f5f5883479bb2bf79410f45142303e804d9e";
 const TEMPLATE_APPROVAL_ATOMIC_MIGRATION_PATH = "supabase/migrations/20261023170628_agency_followup_template_approval_atomic.sql";
 const EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB = "62d25762c0e753cb7fbe3577e4e7119b41514af2";
+const LIVE_MESSAGE_CLAIM_MIGRATION_PATH = "supabase/migrations/20261023185535_agency_followup_live_message_claim.sql";
+const EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB = "caf1aa2eb9ffe6a3a9ac9e1b3f500e870068f4c0";
+const PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_PATH = "supabase/migrations/20261023185615_agency_followup_provider_idempotency_fence.sql";
+const EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB = "65cdcf1d16a7f2c61af9ec3cbf38341e59b9d35e";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
@@ -238,7 +242,7 @@ async function verifyPushedMigration(pathname: string, expectedBlob: string): Pr
 }
 
 function verifyPushedHead(sourceCommit: string): void {
-  const remoteRef = "refs/heads/codex/crm-live-followup-20261019";
+  const remoteRef = "refs/heads/codex/crm-live-followup-release-20261023";
   const remoteCommit = execFileSync("git", ["ls-remote", "origin", remoteRef], { encoding: "utf8", timeout: 60_000 })
     .split(/\r?\n/).map((line) => line.trim()).find((line) => line.endsWith(`\t${remoteRef}`))?.split(/\s+/, 1)[0];
   if (remoteCommit !== sourceCommit) {
@@ -257,11 +261,11 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261022172352", "20261023170628"]],
+      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "9") {
-    throw new Error("Disposable Postgres identity or exact nine-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "13") {
+    throw new Error("Disposable Postgres identity or exact thirteen-migration ledger check failed.");
   }
   const templateApprovalRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
     "select has_function_privilege('service_role', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as service_access, not has_function_privilege('anon', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.approve_agency_followup_template_version(uuid,uuid)'::regprocedure",
@@ -276,6 +280,24 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
   if (claimRpc.rows[0]?.service_access !== true || claimRpc.rows[0]?.anon_denied !== true ||
     claimRpc.rows[0]?.authenticated_denied !== true || claimRpc.rows[0]?.security_invoker !== true) {
     throw new Error("The test-message claim RPC must be invoker-only and executable only by service_role.");
+  }
+  const liveClaimRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
+    "select has_function_privilege('service_role', 'public.claim_agency_followup_live_messages(text,timestamptz,integer,integer,uuid[])', 'execute') as service_access, not has_function_privilege('anon', 'public.claim_agency_followup_live_messages(text,timestamptz,integer,integer,uuid[])', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.claim_agency_followup_live_messages(text,timestamptz,integer,integer,uuid[])', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.claim_agency_followup_live_messages(text,timestamptz,integer,integer,uuid[])'::regprocedure",
+  );
+  if (liveClaimRpc.rows[0]?.service_access !== true || liveClaimRpc.rows[0]?.anon_denied !== true ||
+    liveClaimRpc.rows[0]?.authenticated_denied !== true || liveClaimRpc.rows[0]?.security_invoker !== true) {
+    throw new Error("The live-enrollment claim RPC must be invoker-only and executable only by service_role.");
+  }
+  const providerHandoffRpc = await pool.query<{
+    service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean;
+    first_use_column: boolean; immutable_trigger: boolean;
+  }>(
+    "select has_function_privilege('service_role', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as service_access, not has_function_privilege('anon', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as authenticated_denied, not prosecdef as security_invoker, exists(select 1 from information_schema.columns where table_schema='public' and table_name='agency_followup_messages' and column_name='provider_idempotency_first_used_at') as first_use_column, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_messages'::regclass and tgname='agency_followup_provider_idempotency_first_use_immutable' and not tgisinternal and tgenabled in ('O','A')) as immutable_trigger from pg_proc where oid='public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)'::regprocedure",
+  );
+  if (providerHandoffRpc.rows[0]?.service_access !== true || providerHandoffRpc.rows[0]?.anon_denied !== true ||
+    providerHandoffRpc.rows[0]?.authenticated_denied !== true || providerHandoffRpc.rows[0]?.security_invoker !== true ||
+    providerHandoffRpc.rows[0]?.first_use_column !== true || providerHandoffRpc.rows[0]?.immutable_trigger !== true) {
+    throw new Error("The durable provider handoff RPC, timestamp, immutable trigger, or restricted grants are not in the expected state.");
   }
   const tables = await pool.query<{ count: string }>(
     "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
@@ -309,7 +331,7 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     || operatorRead.rows[0]?.public_access !== true) {
     throw new Error(`The opt-in operator identity fields must be available to service_role and unavailable to public roles; actual=${JSON.stringify(operatorRead.rows[0] ?? null)}`);
   }
-  progress("disposable identity, all nine acceptance migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and CRM RPC grants checked");
+  progress("disposable identity, all thirteen acceptance migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and CRM RPC grants checked");
 }
 
 async function verifyTemplateApprovalRollback(pool: Pool, actorId: string): Promise<Record<string, unknown>> {
@@ -491,6 +513,328 @@ async function verifyTestMessageClaimRpc(
   }
 }
 
+async function verifyLiveClaimRpc(
+  pool: Pool,
+  input: { allowedMessageId: string; offListMessageId: string; expiredOffListMessageId: string },
+  now: string,
+): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  const workerId = `walkthrough-live-claim-${RUN_ID}`;
+  const dueAt = new Date(Date.parse(now) - 60_000).toISOString();
+  try {
+    await client.query("begin");
+    await client.query("set local role service_role");
+    const identities = await client.query<{ id: string; enrollment_id: string }>(
+      "select id,enrollment_id from public.agency_followup_messages where id=any($1::uuid[])",
+      [[input.allowedMessageId, input.offListMessageId, input.expiredOffListMessageId]],
+    );
+    const byId = new Map(identities.rows.map((row) => [row.id, row]));
+    const allowed = byId.get(input.allowedMessageId);
+    const offList = byId.get(input.offListMessageId);
+    const expiredOffList = byId.get(input.expiredOffListMessageId);
+    if (!allowed || !offList || !expiredOffList || new Set(identities.rows.map((row) => row.enrollment_id)).size !== 3) {
+      throw new Error("The live-claim fixture must use three existing messages from three distinct synthetic enrollments.");
+    }
+    await client.query(
+      "update public.agency_followup_messages set state='scheduled',scheduled_at=$2,lease_owner=null,lease_until=null where id=$1",
+      [allowed.id, dueAt],
+    );
+    await client.query(
+      "update public.agency_followup_messages set state='scheduled',scheduled_at=$2,lease_owner=null,lease_until=null where id=$1",
+      [offList.id, dueAt],
+    );
+    await client.query(
+      "update public.agency_followup_messages set state='claimed',scheduled_at=$2,lease_owner=$3,lease_until=$4::timestamptz,attempt_count=attempt_count+1 where id=$1",
+      [expiredOffList.id, dueAt, `${workerId}-expired`, new Date(Date.parse(now) - 60_000).toISOString()],
+    );
+    const before = await client.query<{
+      id: string; state: string; scheduled_at: Date; attempt_count: number; lease_owner: string | null; lease_until: Date | null;
+    }>(
+      "select id,state,scheduled_at,attempt_count,lease_owner,lease_until from public.agency_followup_messages where id=any($1::uuid[]) order by id",
+      [[offList.id, expiredOffList.id]],
+    );
+    const claim = async (allowedIds: string[], limit = 1) => client.query<{
+      id: string; enrollment_id: string; attempt_count: number; lease_owner: string;
+    }>(
+      "select id,enrollment_id,attempt_count,lease_owner from public.claim_agency_followup_live_messages($1,$2::timestamptz,60,$3,$4::uuid[])",
+      [workerId, now, limit, allowedIds],
+    );
+    let emptyRejected = false;
+    await client.query("savepoint invalid_live_claim_empty");
+    try { await claim([]); } catch (error) { emptyRejected = String(error).includes("live enrollment allowlist is invalid"); }
+    await client.query("rollback to savepoint invalid_live_claim_empty");
+    let oversizedRejected = false;
+    await client.query("savepoint invalid_live_claim_limit");
+    try { await claim([allowed.enrollment_id], 2); } catch (error) { oversizedRejected = String(error).includes("exactly one message"); }
+    await client.query("rollback to savepoint invalid_live_claim_limit");
+    if (!emptyRejected || !oversizedRejected) throw new Error("The live claim RPC accepted an empty allowlist or a limit above one.");
+    const claimed = await claim([allowed.enrollment_id]);
+    if (claimed.rows.length !== 1 || claimed.rows[0]?.id !== allowed.id ||
+      claimed.rows[0]?.enrollment_id !== allowed.enrollment_id || claimed.rows[0]?.lease_owner !== workerId) {
+      throw new Error("The live claim RPC did not claim the one due message in the allowlisted enrollment.");
+    }
+    const after = await client.query<{
+      id: string; state: string; scheduled_at: Date; attempt_count: number; lease_owner: string | null; lease_until: Date | null;
+    }>(
+      "select id,state,scheduled_at,attempt_count,lease_owner,lease_until from public.agency_followup_messages where id=any($1::uuid[]) order by id",
+      [[offList.id, expiredOffList.id]],
+    );
+    const snapshot = (row: typeof before.rows[number] | undefined) => row && ({
+      id: row.id, state: row.state, scheduledAt: row.scheduled_at.toISOString(), attemptCount: Number(row.attempt_count),
+      leaseOwner: row.lease_owner, leaseUntil: row.lease_until?.toISOString() ?? null,
+    });
+    const event = await client.query<{ count: string }>(
+      "select count(*)::text as count from public.agency_followup_events where idempotency_key=$1",
+      [`lease-expired:${expiredOffList.id}`],
+    );
+    if (JSON.stringify(before.rows.map(snapshot)) !== JSON.stringify(after.rows.map(snapshot)) || event.rows[0]?.count !== "0") {
+      throw new Error("The live claim RPC changed or quarantined an off-list due/expired message.");
+    }
+    await client.query("rollback");
+    progress("runtime live claim RPC claimed the allowlisted message, rejected empty/oversized input, and left off-list due and expired rows unchanged");
+    return { allowlistedMessageClaimed: true, emptyAllowlistRejected: true, limitAboveOneRejected: true, offListScheduledUntouched: true, offListExpiredLeaseUntouched: true, transactionRolledBack: true };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function verifyProviderIdempotencyFenceRpc(
+  pool: Pool,
+  input: { firstUseMessageId: string; insideWindowMessageId: string; expiredWindowMessageId: string },
+): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  const claims = new Map<string, { owner: string; attemptCount: number }>();
+  const insertFixture = async (sourceMessageId: string, owner: string, age: string | null) => {
+    const result = await client.query<{ id: string; attempt_count: number }>(
+      `with source as (
+         select message.*, enrollment.journey_id
+         from public.agency_followup_messages message
+         join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id
+         where message.id=$1
+       ), step as (
+         insert into public.agency_followup_steps (journey_id,step_number,template_version_id,delay_business_days)
+         select source.journey_id,
+                (select coalesce(max(existing.step_number),0)+1 from public.agency_followup_steps existing where existing.journey_id=source.journey_id),
+                source.template_version_id,0
+         from source
+         returning id,journey_id,step_number
+       )
+       insert into public.agency_followup_messages (
+         enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256,
+         recipient_name_snapshot,recipient_email_snapshot,recipient_sha256,
+         approved_content_sha256,approved_recipient_sha256,reviewed_by_operator_id,reviewed_at,
+         scheduled_at,logical_message_key,provider_idempotency_key,attempt_count,lease_owner,lease_until,
+         provider_idempotency_first_used_at
+       )
+       select source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot,
+              source.content_sha256,source.recipient_name_snapshot,source.recipient_email_snapshot,source.recipient_sha256,
+              source.content_sha256,source.recipient_sha256,source.reviewed_by_operator_id,coalesce(source.reviewed_at,clock_timestamp()),
+              clock_timestamp(),$2,$3,1,$4,clock_timestamp()+interval '5 minutes',
+              case when $5::text is null then null else clock_timestamp()-$5::interval end
+       from source join step on step.journey_id=source.journey_id
+       returning id,attempt_count`,
+      [sourceMessageId, `walkthrough-provider-window-${RUN_ID}-${owner}`, `walkthrough-provider-key-${RUN_ID}-${owner}`, owner, age],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("A dedicated provider-window message fixture could not be inserted.");
+    return { id: row.id, owner, attemptCount: Number(row.attempt_count) };
+  };
+  try {
+    await client.query("begin");
+    await client.query("set local role service_role");
+    const firstClaim = await insertFixture(input.firstUseMessageId, `first-${RUN_ID}`, null);
+    const insideClaim = await insertFixture(input.insideWindowMessageId, `inside-${RUN_ID}`, "22 hours 59 minutes 59 seconds");
+    const expiredClaim = await insertFixture(input.expiredWindowMessageId, `expired-${RUN_ID}`, "23 hours");
+    for (const claim of [firstClaim, insideClaim, expiredClaim]) claims.set(claim.id, claim);
+    const prepare = async (id: string) => {
+      const claim = claims.get(id)!;
+      const result = await client.query<{ state: string }>(
+        "select public.prepare_agency_followup_provider_attempt($1::uuid,(select enrollment_id from public.agency_followup_messages where id=$1::uuid),$2,$3,300,82800) as state",
+        [id, claim.owner, claim.attemptCount],
+      );
+      return result.rows[0]?.state;
+    };
+
+    const firstUseState = await prepare(firstClaim.id);
+    const firstTimestamp = await client.query<{ first_used_at: Date }>(
+      "select provider_idempotency_first_used_at as first_used_at from public.agency_followup_messages where id=$1", [firstClaim.id],
+    );
+    const firstUseAgain = await prepare(firstClaim.id);
+    const stableTimestamp = await client.query<{ first_used_at: Date }>(
+      "select provider_idempotency_first_used_at as first_used_at from public.agency_followup_messages where id=$1", [firstClaim.id],
+    );
+    if (firstUseState !== "ready" || firstUseAgain !== "ready" || !firstTimestamp.rows[0]?.first_used_at ||
+      firstTimestamp.rows[0].first_used_at.toISOString() !== stableTimestamp.rows[0]?.first_used_at.toISOString()) {
+      throw new Error("The provider handoff RPC did not reserve and preserve the first-use time for a new message.");
+    }
+
+    let timestampMutationRejected = false;
+    await client.query("savepoint immutable_first_use");
+    try {
+      await client.query("update public.agency_followup_messages set provider_idempotency_first_used_at=null where id=$1", [firstClaim.id]);
+    } catch (error) {
+      timestampMutationRejected = String(error).includes("timestamp is immutable");
+    }
+    await client.query("rollback to savepoint immutable_first_use");
+    if (!timestampMutationRejected) throw new Error("The provider first-use timestamp could be cleared after reservation.");
+
+    const insideState = await prepare(insideClaim.id);
+    const insideTimestamp = await client.query<{ age_seconds: number }>(
+      "select extract(epoch from clock_timestamp()-provider_idempotency_first_used_at)::integer as age_seconds from public.agency_followup_messages where id=$1",
+      [insideClaim.id],
+    );
+    const insideRetryAllowed = insideState === "ready" && Number(insideTimestamp.rows[0]?.age_seconds) < 82_800;
+    const expiredState = await prepare(expiredClaim.id);
+    const expired = await client.query<{ state: string; last_error_code: string | null; scheduled_at: Date | null; lease_owner: string | null; unknown_events: string }>(
+      "select message.state,message.last_error_code,message.scheduled_at,message.lease_owner,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-window-expired:'||message.id::text) as unknown_events from public.agency_followup_messages message where message.id=$1",
+      [expiredClaim.id],
+    );
+    if (!insideRetryAllowed || expiredState !== "expired" || expired.rows[0]?.state !== "unknown" ||
+      expired.rows[0]?.last_error_code !== "resend_idempotency_window_expired" || expired.rows[0]?.scheduled_at !== null ||
+      expired.rows[0]?.lease_owner !== null || expired.rows[0]?.unknown_events !== "1") {
+      throw new Error("The provider handoff RPC did not allow an in-window retry and atomically quarantine an expired key.");
+    }
+    await client.query("rollback");
+    progress("runtime provider handoff RPC persisted an immutable first-use time, allowed a retry under 23 hours, and atomically quarantined a 23-hour-old key; historical test timestamps were supplied at INSERT");
+    return { firstUseReservedOnce: true, timestampImmutable: true, retryUnder23HoursAllowed: true, retryAt23HoursQuarantined: true, historicalTimestampsSeededAtInsert: true, networkHandoff: "none", transactionRolledBack: true };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function verifyProviderIdempotencyLockWaitBoundary(
+  pool: Pool,
+  sourceMessageId: string,
+): Promise<Record<string, unknown>> {
+  const holder = await pool.connect();
+  const waiter = await pool.connect();
+  let holderTransaction = false;
+  let waiterTransaction = false;
+  let rpcPromise: Promise<{ state: string | undefined }> | null = null;
+  let rpcSettled = false;
+  let fixture: { id: string; owner: string; attemptCount: number } | null = null;
+  try {
+    await holder.query("begin");
+    holderTransaction = true;
+    await holder.query("set local role service_role");
+    const inserted = await holder.query<{ id: string; attempt_count: number }>(
+      `with source as (
+         select message.*, enrollment.journey_id
+         from public.agency_followup_messages message
+         join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id
+         where message.id=$1
+       ), step as (
+         insert into public.agency_followup_steps (journey_id,step_number,template_version_id,delay_business_days)
+         select source.journey_id,
+                (select coalesce(max(existing.step_number),0)+1 from public.agency_followup_steps existing where existing.journey_id=source.journey_id),
+                source.template_version_id,0
+         from source
+         returning id,journey_id,step_number
+       )
+       insert into public.agency_followup_messages (
+         enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256,
+         recipient_name_snapshot,recipient_email_snapshot,recipient_sha256,
+         approved_content_sha256,approved_recipient_sha256,reviewed_by_operator_id,reviewed_at,
+         scheduled_at,logical_message_key,provider_idempotency_key,attempt_count,lease_owner,lease_until,
+         provider_idempotency_first_used_at
+       )
+       select source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot,
+              source.content_sha256,source.recipient_name_snapshot,source.recipient_email_snapshot,source.recipient_sha256,
+              source.content_sha256,source.recipient_sha256,source.reviewed_by_operator_id,coalesce(source.reviewed_at,clock_timestamp()),
+              clock_timestamp(),$2,$3,1,$4,clock_timestamp()+interval '5 minutes',
+              clock_timestamp()-interval '22 hours 59 minutes 56 seconds'
+       from source join step on step.journey_id=source.journey_id
+       returning id,attempt_count`,
+      [sourceMessageId, `walkthrough-provider-boundary-${RUN_ID}`, `walkthrough-provider-boundary-key-${RUN_ID}`, `boundary-${RUN_ID}`],
+    );
+    if (!inserted.rows[0]) throw new Error("The retry-boundary message fixture could not be inserted.");
+    fixture = { id: inserted.rows[0].id, owner: `boundary-${RUN_ID}`, attemptCount: Number(inserted.rows[0].attempt_count) };
+    await holder.query("commit");
+    holderTransaction = false;
+
+    const locked = await holder.query<{ pid: number }>("select pg_backend_pid() as pid");
+    const waiting = await waiter.query<{ pid: number }>("select pg_backend_pid() as pid");
+    const holderPid = Number(locked.rows[0]?.pid);
+    const waiterPid = Number(waiting.rows[0]?.pid);
+    await holder.query("begin");
+    holderTransaction = true;
+    await holder.query("set local role service_role");
+    await holder.query("select id from public.agency_followup_messages where id=$1 for update", [fixture.id]);
+    const cutoff = await pool.query<{ cutoff: Date; database_now: Date }>(
+      "select provider_idempotency_first_used_at+interval '23 hours' as cutoff,clock_timestamp() as database_now from public.agency_followup_messages where id=$1",
+      [fixture.id],
+    );
+    const secondsRemaining = (cutoff.rows[0]!.cutoff.getTime() - cutoff.rows[0]!.database_now.getTime()) / 1000;
+    if (secondsRemaining <= 0.5 || secondsRemaining > 5) {
+      throw new Error(`The lock-wait boundary fixture did not start inside the 23-hour window with a bounded margin (${secondsRemaining.toFixed(3)} seconds).`);
+    }
+    const before = await pool.query<{ database_now: Date }>("select clock_timestamp() as database_now");
+    if (cutoff.rows[0]!.cutoff.getTime() <= before.rows[0]!.database_now.getTime()) {
+      throw new Error("The guarded RPC could not be proven to start before the 23-hour cutoff.");
+    }
+    await waiter.query("begin");
+    waiterTransaction = true;
+    await waiter.query("set local role service_role");
+    rpcPromise = waiter.query<{ state: string }>(
+      "select public.prepare_agency_followup_provider_attempt($1::uuid,(select enrollment_id from public.agency_followup_messages where id=$1::uuid),$2,$3,300,82800) as state",
+      [fixture.id, fixture.owner, fixture.attemptCount],
+    ).then((result) => ({ state: result.rows[0]?.state }));
+    rpcPromise.then(() => { rpcSettled = true; }, () => { rpcSettled = true; });
+
+    const lockDeadline = Date.now() + 1500;
+    let blocked = false;
+    while (Date.now() < lockDeadline) {
+      const activity = await pool.query<{ blocked: boolean }>(
+        "select array_position(pg_blocking_pids($1::integer),$2::integer) is not null as blocked",
+        [waiterPid, holderPid],
+      );
+      if (activity.rows[0]?.blocked) { blocked = true; break; }
+      if (rpcSettled) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (!blocked || rpcSettled) {
+      throw new Error("The provider handoff RPC did not block behind the held message row before the 23-hour cutoff.");
+    }
+
+    const afterBlocked = await pool.query<{ database_now: Date }>("select clock_timestamp() as database_now");
+    if (cutoff.rows[0]!.cutoff.getTime() <= afterBlocked.rows[0]!.database_now.getTime()) {
+      throw new Error("The waiter was not observed blocked until after the 23-hour cutoff.");
+    }
+    const waitRemaining = cutoff.rows[0]!.cutoff.getTime() - afterBlocked.rows[0]!.database_now.getTime();
+    if (waitRemaining > 3500) throw new Error("The lock-wait boundary exceeded its bounded hold time.");
+    await new Promise((resolve) => setTimeout(resolve, waitRemaining + 100));
+    await holder.query("commit");
+    holderTransaction = false;
+    const outcome = await Promise.race([
+      rpcPromise,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("The blocked provider handoff RPC did not resume within 3 seconds after lock release.")), 3000)),
+    ]);
+    if (outcome.state !== "expired") throw new Error(`The lock-waiting RPC returned ${String(outcome.state)} after crossing the provider retention cutoff.`);
+    await waiter.query("commit");
+    waiterTransaction = false;
+    const persisted = await pool.query<{ state: string; last_error_code: string | null; events: string }>(
+      "select message.state,message.last_error_code,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-window-expired:'||message.id::text) as events from public.agency_followup_messages message where message.id=$1",
+      [fixture.id],
+    );
+    if (persisted.rows[0]?.state !== "unknown" || persisted.rows[0]?.last_error_code !== "resend_idempotency_window_expired" || persisted.rows[0]?.events !== "1") {
+      throw new Error("The lock-waiting RPC did not atomically quarantine the message and add one UNKNOWN event.");
+    }
+    progress("provider handoff call was observed waiting on a row lock before the 23-hour cutoff, then returned expired and persisted one UNKNOWN event after the cutoff; no provider adapter was called");
+    return { rpcBlockedBeforeCutoff: true, cutoffCrossedWhileBlocked: true, returnedExpiredAfterLock: true, unknownPersisted: true, oneUnknownEvent: true, providerHandoff: "none", boundedLockHold: true };
+  } finally {
+    if (holderTransaction) await holder.query("rollback").catch(() => undefined);
+    if (waiterTransaction) await waiter.query("rollback").catch(() => undefined);
+    if (rpcPromise && rpcSettled === false) await Promise.race([rpcPromise.catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 3000))]);
+    holder.release();
+    waiter.release();
+  }
+}
 async function verifyQuarantinedSourceEventReplay(
   pool: Pool,
   prospect: ProspectFixture,
@@ -1979,6 +2323,18 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   );
   if (properDisposition.rows.length !== 1) throw new Error("The current lease owner could not persist its disposition.");
 
+  const liveClaimEvidence = await verifyLiveClaimRpc(pool, {
+    allowedMessageId: firstNormalMessage.id,
+    offListMessageId: retryMessage.id,
+    expiredOffListMessageId: leaseMessage.rows[0].id,
+  }, new Date().toISOString());
+  const providerIdempotencyFenceEvidence = await verifyProviderIdempotencyFenceRpc(pool, {
+    firstUseMessageId: firstNormalMessage.id,
+    insideWindowMessageId: retryMessage.id,
+    expiredWindowMessageId: leaseMessage.rows[0].id,
+  });
+  const providerIdempotencyLockWaitEvidence = await verifyProviderIdempotencyLockWaitBoundary(pool, firstNormalMessage.id);
+
   const screenshotDir = path.join(OUTPUT_DIR, "screenshots");
   await mkdir(screenshotDir, { recursive: true });
   const renderedWidths: number[] = [];
@@ -2158,8 +2514,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
       databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
     },
-    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB],
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB],
     screenshots,
     consentPanelScreenshots,
     syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
@@ -2178,6 +2534,9 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       retry: "temporary failure and backoff persisted; early claim excluded; due retry accepted exactly once with stable key and two attempts",
       providerEventReplay: "signed event was quarantined before acceptance, reconciled on retry after acceptance, and deduplicated with one durable application",
       testClaimRpc: testClaimEvidence,
+      liveEnrollmentClaimRpc: liveClaimEvidence,
+      providerIdempotencyRetryFence: providerIdempotencyFenceEvidence,
+      providerIdempotencyLockWaitBoundary: providerIdempotencyLockWaitEvidence,
       sourceQuarantineReplay: quarantinedSourceReplayEvidence,
       concurrentClaim: "exactly one claim",
       staleLeaseOwner: "rejected",
@@ -2435,6 +2794,8 @@ async function main(): Promise<void> {
   await verifyPushedMigration(WEBHOOK_REPLAY_GUARD_MIGRATION_PATH, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB);
   await verifyPushedMigration(PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_PATH, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB);
   await verifyPushedMigration(TEMPLATE_APPROVAL_ATOMIC_MIGRATION_PATH, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB);
+  await verifyPushedMigration(LIVE_MESSAGE_CLAIM_MIGRATION_PATH, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB);
+  await verifyPushedMigration(PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_PATH, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");

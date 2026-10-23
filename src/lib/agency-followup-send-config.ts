@@ -22,6 +22,8 @@ export interface AgencyFollowupSendConfig {
   maxBatchSize: 1;
   /** Exact message/enrollment/recipient targets that test-mode SQL may touch. */
   testClaimTargets: readonly AgencyFollowupSendTarget[];
+  /** Enrollment UUIDs that live-mode SQL may claim messages for. */
+  liveClaimEnrollmentIds: readonly string[];
   ready: boolean;
   blockers: readonly string[];
   /** Authorization compares the persisted recipient exactly after trimming. */
@@ -38,6 +40,7 @@ interface TestAllowlistEntry {
 
 const VERIFIED_SENDER_DOMAIN = "caseloadselect.ca";
 const EMAIL_RE = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function parseMode(value: string | undefined): AgencyFollowupSendMode {
   switch (value?.trim().toLowerCase()) {
@@ -93,6 +96,7 @@ export function resolveAgencyFollowupSendConfig(env: Environment = process.env):
   const testRecipients = parseEmailList(env.AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST);
   const testTargets = parseTestAllowlist(env.AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST);
   const liveEnrollments = parseEmailList(env.AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST);
+  const liveEnrollmentIds = [...new Set(liveEnrollments.map((id) => id.trim().toLowerCase()))];
 
   const blockers: string[] = [];
   if (mode !== "off") {
@@ -105,7 +109,11 @@ export function resolveAgencyFollowupSendConfig(env: Environment = process.env):
       if (testTargets.length === 0) blockers.push("test_record_allowlist_empty_or_invalid");
       if (testTargets.length > 100) blockers.push("test_record_allowlist_too_large");
     }
-    if (mode === "live" && liveEnrollments.length === 0) blockers.push("live_enrollment_allowlist_empty");
+    if (mode === "live") {
+      if (liveEnrollmentIds.length === 0) blockers.push("live_enrollment_allowlist_empty");
+      if (liveEnrollmentIds.some((id) => !UUID_RE.test(id))) blockers.push("live_enrollment_allowlist_invalid");
+      if (liveEnrollmentIds.length > 100) blockers.push("live_enrollment_allowlist_too_large");
+    }
   }
 
   const config: AgencyFollowupSendConfig = {
@@ -118,6 +126,7 @@ export function resolveAgencyFollowupSendConfig(env: Environment = process.env):
     testClaimTargets: mode === "test"
       ? testTargets.map(({ enrollmentId, messageId, recipientEmail }) => ({ enrollmentId, messageId, recipientEmail }))
       : [],
+    liveClaimEnrollmentIds: mode === "live" && blockers.length === 0 ? liveEnrollmentIds : [],
     ready: mode !== "off" && blockers.length === 0,
     blockers,
     authorize(target) {
@@ -141,7 +150,7 @@ export function resolveAgencyFollowupSendConfig(env: Environment = process.env):
         if (!allowedRecord) reasons.push("test_enrollment_message_recipient_not_allowlisted");
         return reasons;
       }
-      return liveEnrollments.includes(target.enrollmentId) ? [] : ["live_enrollment_not_allowlisted"];
+      return liveEnrollmentIds.includes(target.enrollmentId) ? [] : ["live_enrollment_not_allowlisted"];
     },
   };
   return config;

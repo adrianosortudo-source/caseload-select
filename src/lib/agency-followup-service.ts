@@ -903,13 +903,19 @@ export async function pauseAgencyFollowupEnrollment(input: {
 }
 
 /** Shared validated repository used by both deterministic tests and real delivery. */
+type AgencyFollowupClaimPolicy =
+  | { mode: "unrestricted" }
+  | { mode: "test"; targets: readonly { enrollmentId: string; messageId: string; recipientEmail: string }[] }
+  | { mode: "live"; enrollmentIds: readonly string[] };
+
 async function runAgencyFollowupDispatcherWithProvider(input: {
   workerId: string;
   provider: AgencyFollowupProvider;
+  claimPolicy: AgencyFollowupClaimPolicy;
+  requireProviderHandoffGuard?: boolean;
   now?: string;
   leaseSeconds?: number;
   limit?: number;
-  testClaimTargets?: readonly { enrollmentId: string; messageId: string; recipientEmail: string }[];
 }): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
   if (!input.workerId.trim()) throw new Error("A worker id is required.");
   const now = input.now ?? new Date().toISOString();
@@ -921,15 +927,20 @@ async function runAgencyFollowupDispatcherWithProvider(input: {
         p_lease_seconds: claimInput.leaseSeconds,
         p_limit: claimInput.limit,
       };
-      const result = input.testClaimTargets
+      const result = input.claimPolicy.mode === "test"
         ? await supabase.rpc("claim_agency_followup_test_messages", {
           p_worker_id: claimInput.workerId,
           p_now: claimInput.now,
           p_lease_seconds: claimInput.leaseSeconds,
           p_limit: claimInput.limit,
-          p_allowed_targets: input.testClaimTargets,
+          p_allowed_targets: input.claimPolicy.targets,
         })
-        : await supabase.rpc("claim_agency_followup_messages", claimParameters);
+        : input.claimPolicy.mode === "live"
+          ? await supabase.rpc("claim_agency_followup_live_messages", {
+            ...claimParameters,
+            p_allowed_enrollment_ids: input.claimPolicy.enrollmentIds,
+          })
+          : await supabase.rpc("claim_agency_followup_messages", claimParameters);
       if (result.error) throw new Error("Unable to claim due Agency follow-up messages.");
       return (result.data as DbRow[]).map((row) => ({
         id: String(row.id),
@@ -965,6 +976,23 @@ async function runAgencyFollowupDispatcherWithProvider(input: {
         throw new Error("Unable to atomically persist the Agency follow-up result; the message remains quarantined from automatic retry.");
       }
     },
+    ...(input.requireProviderHandoffGuard ? {
+      async prepareProviderAttempt(claim: AgencyFollowupClaim, leaseSeconds: number): Promise<"ready" | "expired" | "stale"> {
+        const prepared = await supabase.rpc("prepare_agency_followup_provider_attempt", {
+          p_message_id: claim.id,
+          p_enrollment_id: claim.enrollmentId,
+          p_lease_owner: claim.leaseOwner,
+          p_attempt_count: claim.attemptCount,
+          p_lease_seconds: leaseSeconds,
+          p_max_idempotency_age_seconds: 82_800,
+        });
+        if (prepared.error) throw new Error("Unable to reserve the durable Agency follow-up provider key; no email was sent.");
+        if (prepared.data !== "ready" && prepared.data !== "expired" && prepared.data !== "stale") {
+          throw new Error("The durable Agency follow-up provider guard returned an invalid state; no email was sent.");
+        }
+        return prepared.data;
+      },
+    } : {}),
   };
 
   return dispatchAgencyFollowupBatch({
@@ -974,6 +1002,7 @@ async function runAgencyFollowupDispatcherWithProvider(input: {
     now,
     leaseSeconds: input.leaseSeconds,
     limit: input.limit,
+    requireProviderHandoffGuard: input.requireProviderHandoffGuard,
   });
 }
 
@@ -991,7 +1020,7 @@ export async function runFakeAgencyFollowupDispatcher(input: {
     throw new Error("Synthetic provider outcomes are available only outside production.");
   }
   const provider = input.outcomePlan ? new FakeAgencyFollowupProvider(input.outcomePlan) : defaultFakeFollowupProvider;
-  return runAgencyFollowupDispatcherWithProvider({ ...input, provider });
+  return runAgencyFollowupDispatcherWithProvider({ ...input, provider, claimPolicy: { mode: "unrestricted" } });
 }
 
 /** Real dispatcher. Off or incomplete send configuration returns before any queue claim. */
@@ -1009,6 +1038,9 @@ export async function runAgencyFollowupDispatcher(input: {
     ...input,
     provider,
     limit: config.maxBatchSize,
-    testClaimTargets: config.mode === "test" ? config.testClaimTargets : undefined,
+    requireProviderHandoffGuard: true,
+    claimPolicy: config.mode === "test"
+      ? { mode: "test", targets: config.testClaimTargets }
+      : { mode: "live", enrollmentIds: config.liveClaimEnrollmentIds },
   });
 }

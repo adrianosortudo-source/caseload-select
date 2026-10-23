@@ -60,11 +60,15 @@ export class FakeAgencyFollowupProvider implements AgencyFollowupProvider {
 }
 
 export interface AgencyFollowupAttemptResult {
-  state: AgencyOutboxResolution | "blocked";
+  state: AgencyOutboxResolution | "blocked" | "stale";
   blockers: string[];
   logicalMessageKey: string;
   providerOutcome?: AgencyProviderOutcome;
 }
+
+export const AGENCY_FOLLOWUP_RESEND_IDEMPOTENCY_WINDOW_EXPIRED = "resend_idempotency_window_expired";
+
+export type AgencyFollowupProviderHandoffGate = "ready" | "expired" | "stale";
 
 export async function runAgencyFollowupAttempt(
   input: {
@@ -72,11 +76,25 @@ export async function runAgencyFollowupAttempt(
     messageId: string;
     context: AgencyFollowupSendContext;
     provider: AgencyFollowupProvider;
+    beforeProviderHandoff?: () => Promise<AgencyFollowupProviderHandoffGate>;
   },
 ): Promise<AgencyFollowupAttemptResult> {
   const logicalMessageKey = agencyFollowupLogicalMessageKey(input.enrollmentId, input.messageId);
   const blockers = evaluateAgencyFollowupSend(input.context);
   if (blockers.length > 0) return { state: "blocked", blockers, logicalMessageKey };
+
+  if (input.beforeProviderHandoff) {
+    const gate = await input.beforeProviderHandoff();
+    if (gate === "stale") return { state: "stale", blockers: [], logicalMessageKey };
+    if (gate === "expired") {
+      return {
+        state: "quarantine_unknown",
+        blockers: [],
+        logicalMessageKey,
+        providerOutcome: { kind: "unknown", detail: AGENCY_FOLLOWUP_RESEND_IDEMPOTENCY_WINDOW_EXPIRED },
+      };
+    }
+  }
 
   const outcome = await input.provider.send({
     idempotencyKey: logicalMessageKey,

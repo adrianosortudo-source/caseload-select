@@ -78,22 +78,50 @@ describe("Agency follow-up send configuration", () => {
   });
 
   it("requires a non-empty exact live enrollment allowlist and permits only listed enrollments", () => {
+    const allowedEnrollmentId = "abcdefab-cdef-4abc-8def-abcdefabcdef";
     const live = {
       AGENCY_FOLLOWUP_SEND_MODE: "live",
       AGENCY_FOLLOWUP_FROM: configured.AGENCY_FOLLOWUP_FROM,
       AGENCY_FOLLOWUP_REPLY_TO: configured.AGENCY_FOLLOWUP_REPLY_TO,
       RESEND_API_KEY: configured.RESEND_API_KEY,
       AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: configured.AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET,
-      AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST: "enrollment-live-01",
+      AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST: allowedEnrollmentId.toUpperCase(),
     };
     const config = resolveAgencyFollowupSendConfig(live);
     expect(config.ready).toBe(true);
     expect(config.maxBatchSize).toBe(1);
-    expect(config.authorize({ enrollmentId: "enrollment-live-01", messageId: "message-99", recipientEmail: "firm@example.test" })).toEqual([]);
-    expect(config.authorize({ enrollmentId: "enrollment-live-02", messageId: "message-99", recipientEmail: "firm@example.test" })).toEqual([
+    expect(config.liveClaimEnrollmentIds).toEqual([allowedEnrollmentId]);
+    expect(config.authorize({ enrollmentId: allowedEnrollmentId, messageId: "message-99", recipientEmail: "firm@example.test" })).toEqual([]);
+    expect(config.authorize({ enrollmentId: "10000000-0000-4000-8000-000000000002", messageId: "message-99", recipientEmail: "firm@example.test" })).toEqual([
       "live_enrollment_not_allowlisted",
     ]);
     expect(resolveAgencyFollowupSendConfig({ ...live, AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST: "" }).ready).toBe(false);
+  });
+
+  it("fails closed for malformed or oversized live enrollment UUID allowlists", () => {
+    const live = {
+      AGENCY_FOLLOWUP_SEND_MODE: "live",
+      AGENCY_FOLLOWUP_FROM: configured.AGENCY_FOLLOWUP_FROM,
+      AGENCY_FOLLOWUP_REPLY_TO: configured.AGENCY_FOLLOWUP_REPLY_TO,
+      RESEND_API_KEY: configured.RESEND_API_KEY,
+      AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: configured.AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET,
+    };
+    const malformed = resolveAgencyFollowupSendConfig({
+      ...live,
+      AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST: "not-a-uuid",
+    });
+    expect(malformed.ready).toBe(false);
+    expect(malformed.liveClaimEnrollmentIds).toEqual([]);
+    expect(malformed.blockers).toContain("live_enrollment_allowlist_invalid");
+
+    const oversized = resolveAgencyFollowupSendConfig({
+      ...live,
+      AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST: Array.from({ length: 101 }, (_, index) =>
+        `10000000-0000-4000-8000-${String(index + 1).padStart(12, "0")}`).join(","),
+    });
+    expect(oversized.ready).toBe(false);
+    expect(oversized.liveClaimEnrollmentIds).toEqual([]);
+    expect(oversized.blockers).toContain("live_enrollment_allowlist_too_large");
   });
 
   it("parses only the bounded, exact logical-message-key format", () => {

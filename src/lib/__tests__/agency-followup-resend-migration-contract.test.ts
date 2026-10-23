@@ -10,8 +10,12 @@ const providerEventPrivilegeMigrationName = "20261022222611_agency_followup_prov
 const providerEventPrivilegeMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", providerEventPrivilegeMigrationName), "utf8");
 const testClaimMigrationName = "20261021173939_agency_followup_test_message_claim.sql";
 const testClaimMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", testClaimMigrationName), "utf8");
+const liveClaimMigrationName = "20261023185535_agency_followup_live_message_claim.sql";
+const liveClaimMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", liveClaimMigrationName), "utf8");
 const replayGuardMigrationName = "20261022172352_agency_followup_webhook_replay_quarantine_guard.sql";
 const replayGuardMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", replayGuardMigrationName), "utf8");
+const idempotencyFenceMigrationName = "20261023185615_agency_followup_provider_idempotency_fence.sql";
+const idempotencyFenceMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", idempotencyFenceMigrationName), "utf8");
 const service = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-service.ts"), "utf8");
 
 describe("Agency follow-up Resend migration contract", () => {
@@ -74,7 +78,7 @@ describe("Agency follow-up Resend migration contract", () => {
   });
 
   it("does not let a late provider failure roll a delivered message backward", () => {
-    expect(migration).toContain("WHEN 'failed' THEN 2\n          WHEN 'delivered' THEN 3");
+    expect(migration).toMatch(/WHEN 'failed' THEN 2\s+WHEN 'delivered' THEN 3/);
   });
 
   it("keeps first-result source and recipient quarantines closed to replay rematching", () => {
@@ -98,7 +102,48 @@ describe("Agency follow-up Resend migration contract", () => {
     expect(testClaimMigration).toContain("GRANT EXECUTE ON FUNCTION public.claim_agency_followup_test_messages");
     expect(testClaimMigration).toContain("TO service_role");
     expect(service).toContain('supabase.rpc("claim_agency_followup_test_messages"');
-    expect(service).toContain("p_allowed_targets: input.testClaimTargets");
+    expect(service).toContain("p_allowed_targets: input.claimPolicy.targets");
     expect(service).toContain('supabase.rpc("claim_agency_followup_messages", claimParameters)');
+  });
+
+  it("claims and quarantines only allowlisted enrollments in live mode", () => {
+    expect(liveClaimMigration).toContain("CREATE OR REPLACE FUNCTION public.claim_agency_followup_live_messages(");
+    expect(liveClaimMigration).toContain("p_allowed_enrollment_ids uuid[]");
+    expect(liveClaimMigration).toContain("p_limit IS DISTINCT FROM 1");
+    expect(liveClaimMigration).toContain("message.enrollment_id = ANY(p_allowed_enrollment_ids)");
+    expect(liveClaimMigration).toContain("AND enrollment_id = ANY(p_allowed_enrollment_ids)");
+    expect(liveClaimMigration).toContain("message.state = 'scheduled' AND message.scheduled_at <= p_now");
+    expect(liveClaimMigration).toContain("FOR UPDATE OF message SKIP LOCKED");
+    expect(liveClaimMigration).toContain("SECURITY INVOKER");
+    expect(liveClaimMigration).toContain("REVOKE ALL ON FUNCTION public.claim_agency_followup_live_messages");
+    expect(liveClaimMigration).toContain("GRANT EXECUTE ON FUNCTION public.claim_agency_followup_live_messages");
+    expect(liveClaimMigration).toContain("TO service_role");
+    expect(service).toContain('supabase.rpc("claim_agency_followup_live_messages"');
+    expect(service).toContain("p_allowed_enrollment_ids: input.claimPolicy.enrollmentIds");
+    expect(service).toContain('mode: "unrestricted"');
+  });
+
+  it("persists the first Resend key-use time and quarantines retries before the 24-hour provider expiry", () => {
+    expect(idempotencyFenceMigration).toContain("ADD COLUMN provider_idempotency_first_used_at timestamptz NULL");
+    expect(idempotencyFenceMigration).toContain("min(event.occurred_at)");
+    expect(idempotencyFenceMigration).toContain("'resend_concurrent_idempotent_requests'");
+    expect(idempotencyFenceMigration).toContain("'resend_rate_limit_exceeded'");
+    expect(idempotencyFenceMigration).toContain("provider_idempotency_first_used_at IS DISTINCT FROM OLD.provider_idempotency_first_used_at");
+    expect(idempotencyFenceMigration).toContain("BEFORE INSERT OR UPDATE OF provider_idempotency_first_used_at");
+    expect(idempotencyFenceMigration).toContain("NEW.provider_idempotency_first_used_at := LEAST(");
+    expect(idempotencyFenceMigration).toContain("CREATE OR REPLACE FUNCTION public.prepare_agency_followup_provider_attempt(");
+    expect(idempotencyFenceMigration).toContain("message.lease_owner = btrim(p_lease_owner)");
+    expect(idempotencyFenceMigration).toContain("message.attempt_count = p_attempt_count");
+    expect(idempotencyFenceMigration).toContain("message.lease_until > v_now");
+    expect(idempotencyFenceMigration).toContain("v_now timestamptz := clock_timestamp()");
+    expect(idempotencyFenceMigration).toContain("p_max_idempotency_age_seconds NOT BETWEEN 3600 AND 82800");
+    expect(idempotencyFenceMigration).toContain("RETURN 'stale'");
+    expect(idempotencyFenceMigration).toContain("RETURN 'expired'");
+    expect(idempotencyFenceMigration).toContain("'resend_idempotency_window_expired'");
+    expect(idempotencyFenceMigration).toContain("'provider_unknown'");
+    expect(idempotencyFenceMigration).toContain("REVOKE ALL ON FUNCTION public.prepare_agency_followup_provider_attempt");
+    expect(idempotencyFenceMigration).toContain("GRANT EXECUTE ON FUNCTION public.prepare_agency_followup_provider_attempt");
+    expect(idempotencyFenceMigration).toContain("TO service_role");
+    expect(idempotencyFenceMigration).not.toContain("SECURITY DEFINER");
   });
 });
