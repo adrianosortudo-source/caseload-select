@@ -396,7 +396,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
       <section aria-labelledby="enroll-title" className="w-full min-w-0 border border-black/10 bg-white p-2 sm:p-5">
         <div data-ui-component-content="agency-follow-up-enrollment" className="w-full min-w-0">
         <h2 id="enroll-title" data-ui-copy="heading" className="w-full text-lg font-semibold text-navy">Start a prospect review</h2>
-        <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/60">Enrollment creates a draft with message snapshots. It does not contact the prospect.</p>
+        <p data-ui-copy="supporting" className="mt-1 w-full text-pretty text-sm leading-6 text-black/60">Enrollment creates a draft with message snapshots. It does not contact the prospect.</p>
         <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
           <label className="block min-w-0 text-sm font-medium text-black/80">
             Journey version
