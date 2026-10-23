@@ -325,7 +325,7 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
     if (typeof heldSourceRoot !== "string" || !path.isAbsolute(heldSourceRoot)) fail("reader_repair_held_source_root_required");
   } else if (heldSourceRoot !== undefined) fail("invalid_full_ledger_input");
   const { migrations } = sourceMigrationInventory(sourceRoot, { requirePreviewSources: false });
-  const localByVersion = new Map(migrations.map(item => [item.version, item]));
+  const localByVersion = new Map(migrations.filter(item => !PREVIEW_MIGRATION_PATHS.includes(item.path)).map(item => [item.version, item]));
   const heldMigration = heldReaderRepairPhase ? verifyCandidateReaderRepairHeldMigration(heldSourceRoot) : undefined;
   if (heldMigration && localByVersion.has(heldMigration.version)) fail("reader_repair_held_migration_staged");
   const remote = new Map();
