@@ -112,7 +112,7 @@ test("reader repair preflight allows only its exact ordered suffix and post-read
   ), /invalid_reader_repair_plan/);
   assert.throws(() => verifyReaderRepairPlan(
     { dryRun: true, upToDate: false, migrations: [identityFastpath], seeds: [], roles: [] },
-    { ...pending([identityFastpath]), heldMigrations: held.slice(0, 1) }, "pre",
+    { ...pending([identityFastpath]), heldMigrations: [...held, held[0]] }, "pre",
   ), /invalid_reader_repair_plan/);
 });
 
