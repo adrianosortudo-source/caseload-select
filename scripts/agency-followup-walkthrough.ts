@@ -2463,15 +2463,22 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await stableLayout();
     await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
     if (width === 320) {
-      const providerStatus = page.locator('[data-ui-component-content="agency-follow-up-message"] p[aria-label^="Provider delivery status:"]').first();
-      if (!(await providerStatus.count())) throw new Error("The synthetic review queue did not render a provider delivery status paragraph.");
+      const providerStatus = page.locator('[data-ui-component-content="agency-follow-up-message"] dl').first();
+      const providerStatusLabel = providerStatus.locator('dt[data-ui-copy="supporting"]');
+      const providerStatusValue = providerStatus.locator('dd[data-ui-copy="supporting"]');
+      if ((await providerStatusLabel.count()) !== 1 || (await providerStatusValue.count()) !== 1) throw new Error("The synthetic review queue did not render one provider delivery label/value pair.");
+      if ((await providerStatusLabel.innerText()).trim() !== "Provider delivery:" || !(await providerStatusValue.innerText()).trim()) throw new Error("The synthetic review queue rendered an invalid provider delivery label/value pair.");
       await providerStatus.scrollIntoViewIfNeeded();
       await stableLayout();
-      const statusGeometry = await providerStatus.evaluate((element) => ({
-        clientWidth: element.clientWidth,
-        scrollWidth: element.scrollWidth,
-        text: (element.textContent ?? "").trim(),
-      }));
+      const statusGeometry = await providerStatus.evaluate((element) => {
+        const value = element.querySelector<HTMLElement>('dd[data-ui-copy="supporting"]');
+        if (!value) throw new Error("Provider delivery status value is missing.");
+        return {
+          clientWidth: value.clientWidth,
+          scrollWidth: value.scrollWidth,
+          text: (element.textContent ?? "").trim(),
+        };
+      });
       if (statusGeometry.scrollWidth > statusGeometry.clientWidth + 1) {
         throw new Error(`Provider delivery status overflows its content width at 320px: ${JSON.stringify(statusGeometry)}.`);
       }
