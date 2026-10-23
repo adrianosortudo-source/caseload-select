@@ -364,8 +364,8 @@ async function verifyQuarantinedSourceEventReplay(
   const eventId = `evt_source_quarantine_${RUN_ID}`;
   const recipientHash = createHash("sha256").update(prospect.email.trim().toLowerCase(), "utf8").digest("hex");
   try {
-    const sourceLinks = await client.query<{ id: string }>(
-      "select id from public.prospect_source_links where source_system='agency_crm' and source_record_key=$1",
+    const sourceLinks = await client.query<{ id: string; organization_id: string; person_id: string | null; conversation_id: string }>(
+      "select source_link.id,source_link.organization_id,source_link.person_id,association.conversation_id from public.prospect_source_links source_link join public.prospect_conversation_sources association on association.source_link_id=source_link.id where source_link.source_system='agency_crm' and source_link.source_record_key=$1",
       [prospect.id],
     );
     if (sourceLinks.rows.length !== 1) throw new Error("The synthetic prospect did not have exactly one Agency source link for the quarantine replay check.");
@@ -374,7 +374,7 @@ async function verifyQuarantinedSourceEventReplay(
       [sourceLinks.rows[0].id],
     );
     if (references.rows[0]?.events !== "0" || references.rows[0]?.applications !== "0") {
-      throw new Error("The synthetic source association is already referenced by provider-event evidence and cannot be quarantined by deleting it.");
+      throw new Error("The synthetic Agency source is already referenced by provider-event evidence and cannot be used for an isolated quarantine replay check.");
     }
     const message = await client.query<{ id: string; provider_delivery_status: string }>(
       "select message.id,message.provider_delivery_status from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.provider_message_id=$2 and message.provider_recipient_email_sha256=$3 and message.state='accepted' and message.provider_accepted_at is not null",
@@ -382,13 +382,30 @@ async function verifyQuarantinedSourceEventReplay(
     );
     if (message.rows.length !== 1) throw new Error("The source-quarantine replay requires one accepted synthetic message with no existing provider-event application.");
     await client.query("begin");
-    await client.query(
-      "create temporary table walkthrough_source_associations on commit drop as select conversation_id,source_link_id,is_primary,created_at from public.prospect_conversation_sources where source_link_id=$1",
-      [sourceLinks.rows[0].id],
+    const contactSource = await client.query<{ id: string; organization_id: string; person_id: string | null; associations: string }>(
+      "select source_link.id,source_link.organization_id,source_link.person_id,(select count(*)::text from public.prospect_conversation_sources association where association.source_link_id=source_link.id) as associations from public.prospect_source_links source_link where source_link.source_system='agency_crm_contact' and source_link.source_record_key=$1",
+      [prospect.id],
     );
-    const saved = await client.query<{ count: string }>("select count(*)::text as count from pg_temp.walkthrough_source_associations");
-    if (saved.rows[0]?.count !== "1") throw new Error("The source-quarantine replay fixture must preserve exactly one synthetic source association.");
-    await client.query("delete from public.prospect_conversation_sources where source_link_id=$1", [sourceLinks.rows[0].id]);
+    if (contactSource.rows.length > 1) throw new Error("The synthetic prospect has ambiguous contact-source links for the quarantine replay check.");
+    if (contactSource.rows.length === 1 && (contactSource.rows[0].associations !== "0" ||
+      contactSource.rows[0].organization_id !== sourceLinks.rows[0].organization_id ||
+      contactSource.rows[0].person_id !== sourceLinks.rows[0].person_id)) {
+      throw new Error("The synthetic contact-source link is already mapped or does not match the Agency source identity needed for quarantine replay.");
+    }
+    const orphanSource = contactSource.rows[0]?.id
+      ? contactSource.rows[0]
+      : (await client.query<{ id: string; organization_id: string; person_id: string | null; associations: string }>(
+        "insert into public.prospect_source_links (source_system,source_record_key,organization_id,person_id,source_payload,history_coverage) select 'agency_crm_contact',source_record_key,organization_id,person_id,jsonb_build_object('syntheticPurpose','provider_event_source_quarantine'), 'history_unknown' from public.prospect_source_links where id=$1 returning id,organization_id,person_id,'0'::text as associations",
+        [sourceLinks.rows[0].id],
+      )).rows[0];
+    if (!orphanSource || orphanSource.associations !== "0") throw new Error("The synthetic orphan contact-source link was not prepared without detaching protected Agency history.");
+    const orphanReferences = await client.query<{ events: string; applications: string }>(
+      "select (select count(*)::text from public.agency_followup_provider_events where source_link_id=$1) as events, (select count(*)::text from public.agency_followup_provider_event_applications where source_link_id=$1) as applications",
+      [orphanSource.id],
+    );
+    if (orphanReferences.rows[0]?.events !== "0" || orphanReferences.rows[0]?.applications !== "0") {
+      throw new Error("The orphan contact-source fixture already has provider-event evidence.");
+    }
     const parameters = [eventId, providerMessageId, "email.bounced", null, occurredAt, prospect.email, recipientHash];
     const persist = () => client.query<{ result: { result?: string } }>(
       "select public.persist_agency_followup_resend_event($1,$2,$3,$4,$5::timestamptz,$6,$7) as result",
@@ -399,7 +416,8 @@ async function verifyQuarantinedSourceEventReplay(
       throw new Error("The synthetic provider event did not record its initial unmatched-source quarantine.");
     }
     await client.query(
-      "insert into public.prospect_conversation_sources (conversation_id,source_link_id,is_primary,created_at) select conversation_id,source_link_id,is_primary,created_at from pg_temp.walkthrough_source_associations",
+      "insert into public.prospect_conversation_sources (conversation_id,source_link_id,is_primary) values ($1,$2,false)",
+      [sourceLinks.rows[0].conversation_id, orphanSource.id],
     );
     const replay = await persist();
     const state = await client.query<{ processing_result: string; source_link_id: string | null; applications: string; delivery_status: string }>(
@@ -412,8 +430,8 @@ async function verifyQuarantinedSourceEventReplay(
       throw new Error("An identical retry applied a source-quarantined event after the synthetic source mapping became unique.");
     }
     await client.query("rollback");
-    progress("source-quarantined signed-event replay remained immutable and caused no delivery or suppression application after mapping repair");
-    return { initialResult: "unmatched_source", replayResult: "duplicate", applications: 0, deliveryStatusUnchanged: true, transactionRolledBack: true };
+    progress("source-quarantined signed-event replay remained immutable after an orphan contact-source mapping was added; protected Agency and opt-in history stayed attached");
+    return { initialResult: "unmatched_source", replayResult: "duplicate", applications: 0, deliveryStatusUnchanged: true, transactionRolledBack: true, existingSourceHistoryDetached: false };
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     throw error;
