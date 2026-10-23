@@ -8,10 +8,11 @@ const h = vi.hoisted(() => {
   const calls: Call[] = [];
   const rpcCalls: RpcCall[] = [];
   const rows: Record<string, unknown[]> = {};
+  let rpcError: { message: string } | null = null;
   const supabaseAdmin = {
     rpc: async (name: string, args: Record<string, unknown>) => {
       rpcCalls.push({ name, args });
-      return { data: [], error: null };
+      return { data: [], error: rpcError };
     },
     from: (table: string) => {
       const call: Call = { table, in: [], eq: [], orders: [] };
@@ -42,13 +43,17 @@ const h = vi.hoisted(() => {
       return query;
     },
   };
-  return { calls, rpcCalls, rows, supabaseAdmin };
+  return { calls, rpcCalls, rows, supabaseAdmin, setRpcError: (error: { message: string } | null) => { rpcError = error; } };
 });
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: h.supabaseAdmin }));
 
-import { listAgencyFollowupConsole, runAgencyFollowupDispatcher } from "@/lib/agency-followup-service";
+import {
+  approveAgencyFollowupTemplateVersion,
+  listAgencyFollowupConsole,
+  runAgencyFollowupDispatcher,
+} from "@/lib/agency-followup-service";
 import { agencyFollowupRecipientEmailHash } from "@/lib/agency-followup-domain";
 
 const P1 = "prospect-1";
@@ -114,8 +119,30 @@ function setRows() {
 beforeEach(() => {
   h.calls.length = 0;
   h.rpcCalls.length = 0;
+  h.setRpcError(null);
   for (const key of Object.keys(h.rows)) delete h.rows[key];
   setRows();
+});
+
+describe("approveAgencyFollowupTemplateVersion", () => {
+  it("uses one RPC for the approval row transition and its audit event", async () => {
+    await approveAgencyFollowupTemplateVersion({ templateVersionId: "template-1", actorId: "operator-1" });
+
+    expect(h.calls).toEqual([]);
+    expect(h.rpcCalls).toEqual([{
+      name: "approve_agency_followup_template_version",
+      args: { p_template_version_id: "template-1", p_actor_operator_id: "operator-1" },
+    }]);
+  });
+
+  it("surfaces an atomic approval RPC failure", async () => {
+    h.setRpcError({ message: "only a draft agency follow-up template version can be approved" });
+
+    await expect(approveAgencyFollowupTemplateVersion({ templateVersionId: "template-1", actorId: "operator-1" }))
+      .rejects.toThrow("Unable to approve template version: only a draft agency follow-up template version can be approved");
+    expect(h.calls).toEqual([]);
+    expect(h.rpcCalls).toHaveLength(1);
+  });
 });
 
 describe("runAgencyFollowupDispatcher test-mode claim scope", () => {

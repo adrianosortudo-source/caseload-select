@@ -583,21 +583,11 @@ export async function approveAgencyFollowupTemplateVersion(input: {
   templateVersionId: string;
   actorId: string;
 }): Promise<void> {
-  const reviewedAt = new Date().toISOString();
-  const updated = await supabase.from("agency_followup_template_versions").update({
-    state: "approved",
-    approved_by_operator_id: input.actorId,
-    approved_at: reviewedAt,
-  }).eq("id", input.templateVersionId).eq("state", "draft").select("id,template_key,version,content_sha256").single();
-  if (updated.error) throw new Error(`Unable to approve template version: ${updated.error.message}`);
-  const row = updated.data as DbRow;
-  await appendAuditEvent({
-    templateVersionId: input.templateVersionId,
-    eventType: "template_approved",
-    idempotencyKey: `template-approved:${input.templateVersionId}:${input.actorId}`,
-    payload: { templateKey: row.template_key, version: row.version, contentSha256: row.content_sha256, reviewerId: input.actorId, reviewedAt },
-    actorId: input.actorId,
+  const { error } = await supabase.rpc("approve_agency_followup_template_version", {
+    p_template_version_id: input.templateVersionId,
+    p_actor_operator_id: input.actorId,
   });
+  if (error) throw new Error(`Unable to approve template version: ${error.message}`);
 }
 
 export async function createAgencyFollowupJourneyVersion(input: {

@@ -53,6 +53,8 @@ const WEBHOOK_REPLAY_GUARD_MIGRATION_PATH = "supabase/migrations/20261022172352_
 const EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB = "1ee04f22a7b00fa69eaca227e6443c663e88818a";
 const PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_PATH = "supabase/migrations/20261022222611_agency_followup_provider_event_least_privilege.sql";
 const EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB = "1268f5f5883479bb2bf79410f45142303e804d9e";
+const TEMPLATE_APPROVAL_ATOMIC_MIGRATION_PATH = "supabase/migrations/20261023170628_agency_followup_template_approval_atomic.sql";
+const EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB = "62d25762c0e753cb7fbe3577e4e7119b41514af2";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
@@ -255,11 +257,18 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261022172352"]],
+      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261022172352", "20261023170628"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "8") {
-    throw new Error("Disposable Postgres identity or exact eight-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "9") {
+    throw new Error("Disposable Postgres identity or exact nine-migration ledger check failed.");
+  }
+  const templateApprovalRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
+    "select has_function_privilege('service_role', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as service_access, not has_function_privilege('anon', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.approve_agency_followup_template_version(uuid,uuid)'::regprocedure",
+  );
+  if (templateApprovalRpc.rows[0]?.service_access !== true || templateApprovalRpc.rows[0]?.anon_denied !== true ||
+    templateApprovalRpc.rows[0]?.authenticated_denied !== true || templateApprovalRpc.rows[0]?.security_invoker !== true) {
+    throw new Error("The template-approval RPC must be invoker-only and executable only by service_role.");
   }
   const claimRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
     "select has_function_privilege('service_role', 'public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)', 'execute') as service_access, not has_function_privilege('anon', 'public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)'::regprocedure",
@@ -300,7 +309,135 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     || operatorRead.rows[0]?.public_access !== true) {
     throw new Error(`The opt-in operator identity fields must be available to service_role and unavailable to public roles; actual=${JSON.stringify(operatorRead.rows[0] ?? null)}`);
   }
-  progress("disposable identity, all eight migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and test-claim RPC grants checked");
+  progress("disposable identity, all nine acceptance migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and CRM RPC grants checked");
+}
+
+async function verifyTemplateApprovalRollback(pool: Pool, actorId: string): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  const suffix = randomUUID().replaceAll("-", "");
+  const templateKey = `walkthrough-rollback-${suffix}`;
+  const subject = "Synthetic approval rollback probe";
+  const body = "This draft exists only inside the disposable walkthrough transaction.";
+  const contentHash = createHash("sha256").update(`${subject}\n${body}`, "utf8").digest("hex");
+  const functionName = `walkthrough_reject_template_approval_${suffix}`;
+  const triggerName = `walkthrough_reject_template_approval_${suffix}`;
+  try {
+    await client.query("begin");
+    const activeActor = await client.query<{ role: string; disabled: boolean }>(
+      "select role,disabled from public.firm_lawyers where id=$1",
+      [actorId],
+    );
+    if (activeActor.rows[0]?.role !== "operator" || activeActor.rows[0]?.disabled !== false) {
+      throw new Error("The walkthrough rollback probe requires its seeded actor to be an active operator.");
+    }
+    const inserted = await client.query<{ id: string }>(
+      "insert into public.agency_followup_template_versions (template_key,version,channel,subject,body,content_sha256,state,created_by_operator_id) values ($1,1,'email',$2,$3,$4,'draft',$5) returning id",
+      [templateKey, subject, body, contentHash, actorId],
+    );
+    const templateId = inserted.rows[0]?.id;
+    if (!templateId) throw new Error("The disposable rollback probe draft was not created.");
+    const rejectedActorStates: string[] = [];
+    const assertActorRejected = async (label: string, candidateActorId: string, mutation?: "lawyer" | "disabled") => {
+      const savepoint = `before_actor_guard_${rejectedActorStates.length}`;
+      await client.query(`savepoint ${savepoint}`);
+      if (mutation === "lawyer") await client.query("update public.firm_lawyers set role='lawyer' where id=$1", [actorId]);
+      if (mutation === "disabled") await client.query("update public.firm_lawyers set disabled=true where id=$1", [actorId]);
+      await client.query("set local role service_role");
+      let rejected = false;
+      try {
+        await client.query("select public.approve_agency_followup_template_version($1::uuid,$2::uuid)", [templateId, candidateActorId]);
+      } catch (error) {
+        rejected = String(error).includes("only an active operator may approve an agency follow-up template version");
+      }
+      await client.query(`rollback to savepoint ${savepoint}`);
+      await client.query(`release savepoint ${savepoint}`);
+      if (!rejected) throw new Error(`The approval RPC did not reject the ${label} actor.`);
+      const [template, events, restoredActor] = await Promise.all([
+        client.query<{ state: string }>("select state from public.agency_followup_template_versions where id=$1", [templateId]),
+        client.query<{ count: string }>("select count(*)::text as count from public.agency_followup_events where template_version_id=$1 and event_type='template_approved'", [templateId]),
+        client.query<{ role: string; disabled: boolean }>("select role,disabled from public.firm_lawyers where id=$1", [actorId]),
+      ]);
+      if (template.rows[0]?.state !== "draft" || events.rows[0]?.count !== "0" || restoredActor.rows[0]?.role !== "operator" || restoredActor.rows[0]?.disabled !== false) {
+        throw new Error(`Rejecting the ${label} actor changed approval state, audit history, or the seeded operator fixture.`);
+      }
+      rejectedActorStates.push(label);
+    };
+    await assertActorRejected("missing", randomUUID());
+    await assertActorRejected("non-operator", actorId, "lawyer");
+    await assertActorRejected("disabled operator", actorId, "disabled");
+    await client.query(`
+      create function public.${functionName}() returns trigger
+      language plpgsql as $$
+      begin
+        if new.template_version_id = '${templateId}'::uuid and new.event_type = 'template_approved' then
+          raise exception 'walkthrough injected template approval audit failure';
+        end if;
+        return new;
+      end;
+      $$
+    `);
+    await client.query(`create trigger ${triggerName} before insert on public.agency_followup_events for each row execute function public.${functionName}()`);
+    await client.query("savepoint before_template_approval_failure");
+    await client.query("set local role service_role");
+    let auditFailureInjected = false;
+    try {
+      await client.query("select public.approve_agency_followup_template_version($1::uuid,$2::uuid)", [templateId, actorId]);
+    } catch (error) {
+      auditFailureInjected = String(error).includes("walkthrough injected template approval audit failure");
+    }
+    await client.query("rollback to savepoint before_template_approval_failure");
+    if (!auditFailureInjected) throw new Error("The disposable approval RPC did not reach the injected audit-insert failure.");
+    const [template, events] = await Promise.all([
+      client.query<{ state: string; approved_by_operator_id: string | null; approved_at: Date | null }>(
+        "select state,approved_by_operator_id,approved_at from public.agency_followup_template_versions where id=$1",
+        [templateId],
+      ),
+      client.query<{ count: string }>(
+        "select count(*)::text as count from public.agency_followup_events where template_version_id=$1 and event_type='template_approved'",
+        [templateId],
+      ),
+    ]);
+    const row = template.rows[0];
+    if (row?.state !== "draft" || row.approved_by_operator_id !== null || row.approved_at !== null || events.rows[0]?.count !== "0") {
+      throw new Error("A failed approval audit insert did not roll back the template approval row and audit event together.");
+    }
+    progress("disposable RPC rejected missing, non-operator, and disabled actors; injected audit-insert failure left its template draft and no approval event");
+    return { rejectedActorStates, injectedAuditFailure: true, rowStateAfterFailure: row.state, approvalActorAfterFailure: row.approved_by_operator_id, approvalTimeAfterFailure: row.approved_at, approvalEventCountAfterFailure: 0, transactionRolledBackInFinally: true };
+  } finally {
+    try { await client.query("rollback").catch(() => undefined); }
+    finally { client.release(); }
+  }
+}
+
+async function verifyTemplateApprovalAudit(pool: Pool, templateKey: string, actorId: string): Promise<Record<string, unknown>> {
+  const template = await pool.query<{
+    id: string; state: string; version: number; template_key: string; content_sha256: string;
+    approved_by_operator_id: string | null; approved_at: Date | null;
+  }>(
+    "select id,state,version,template_key,content_sha256,approved_by_operator_id,approved_at from public.agency_followup_template_versions where template_key=$1 and version=1",
+    [templateKey],
+  );
+  const row = template.rows[0];
+  if (template.rows.length !== 1 || !row || row.state !== "approved" || row.approved_by_operator_id !== actorId || !row.approved_at) {
+    throw new Error("The synthetic template approval row did not persist its exact reviewer and approval time.");
+  }
+  const events = await pool.query<{
+    idempotency_key: string; event_payload: Record<string, unknown>; actor_operator_id: string | null; occurred_at: Date;
+  }>(
+    "select idempotency_key,event_payload,actor_operator_id,occurred_at from public.agency_followup_events where template_version_id=$1 and event_type='template_approved'",
+    [row.id],
+  );
+  const event = events.rows[0];
+  const reviewedAt = typeof event?.event_payload.reviewedAt === "string" ? Date.parse(event.event_payload.reviewedAt) : Number.NaN;
+  if (events.rows.length !== 1 || !event || event.actor_operator_id !== actorId ||
+    event.idempotency_key !== `template-approved:${row.id}:${actorId}` ||
+    event.event_payload.templateKey !== row.template_key || Number(event.event_payload.version) !== row.version ||
+    event.event_payload.contentSha256 !== row.content_sha256 || event.event_payload.reviewerId !== actorId ||
+    !Number.isFinite(reviewedAt) || reviewedAt !== row.approved_at.getTime()) {
+    throw new Error("The synthetic template approval audit event did not exactly match the approved row's reviewer, time, content hash, key, and version.");
+  }
+  progress("synthetic template approval row and exactly one audit event matched reviewer, timestamp, content hash, key, and version");
+  return { templateId: row.id, templateKey: row.template_key, version: row.version, reviewerId: actorId, approvedAt: row.approved_at.toISOString(), contentSha256: row.content_sha256, approvalEventIdempotencyKey: event.idempotency_key, approvalEventCount: 1, auditReviewedAtMatchesApprovedAt: true };
 }
 
 async function verifyTestMessageClaimRpc(
@@ -1016,7 +1153,7 @@ function queueCard(page: Page, firmName: string) {
   return page.locator('section[aria-labelledby="queue-title"] article').filter({ hasText: firmName }).first();
 }
 
-async function authorJourney(page: Page): Promise<string> {
+async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: string) => Promise<void>): Promise<string> {
   const suffix = randomUUID().slice(0, 8);
   const templateKey = "walkthrough-" + suffix;
   const journeyKey = "walkthrough-" + suffix;
@@ -1029,6 +1166,7 @@ async function authorJourney(page: Page): Promise<string> {
   const templateApprovalButton = templateCard.getByRole("button", { name: "Approve template v1" });
   await templateApprovalButton.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
   await waitForAction(page, "template_approve", templateApprovalButton);
+  await afterTemplateApproval?.(templateKey);
   const approvedTemplateOption = page.getByLabel("Template version").locator("option").filter({ hasText: templateKey + " v1" });
   await expect(approvedTemplateOption).toHaveCount(1, { timeout: Math.min(90_000, remainingMs()) });
 
@@ -1282,7 +1420,7 @@ async function auditRenderedCopy(page: Page): Promise<string[]> {
   });
 }
 
-async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecret: string, walkthroughToken: string): Promise<Record<string, unknown>> {
+async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecret: string, walkthroughToken: string, templateApprovalRollbackEvidence: Record<string, unknown>): Promise<Record<string, unknown>> {
   const browser = await chromium.launch({ headless: true });
   activeBrowser = browser;
   const context = await signedContext(browser, fixtures, portalSecret);
@@ -1292,6 +1430,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   page.setDefaultNavigationTimeout(180_000);
   const responseFailures: string[] = [];
   const recoveredBrowserRuntimeErrors: string[] = [];
+  let templateApprovalAuditEvidence: Record<string, unknown> | undefined;
   let initialChunkRecoveryReloaded = false;
   browserRuntimeErrorsByPage.set(page, responseFailures);
   page.on("pageerror", (error) => responseFailures.push("page error: " + error.message));
@@ -1456,7 +1595,9 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     }
   }
 
-  const journeyName = await authorJourney(page);
+  const journeyName = await authorJourney(page, async (templateKey) => {
+    templateApprovalAuditEvidence = await verifyTemplateApprovalAudit(pool, templateKey, fixtures.lawyerId);
+  });
   const consentProspect = fixtures.prospects.consent;
   await createDraft(pool, page, journeyName, consentProspect);
   const consentCard = queueCard(page, consentProspect.firmName);
@@ -1967,7 +2108,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
   if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
-  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || !missingAuthoringControlRejected) throw new Error("Incomplete queue, consent-panel viewport, or required-control evidence.");
+  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, authoring approval, or required-control evidence.");
   const summary = {
     runId: RUN_ID,
     ...sourceAtStart,
@@ -1991,14 +2132,16 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
       databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
     },
-    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB],
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB],
     screenshots,
     consentPanelScreenshots,
     syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
+    templateApprovalAuditAtomicityFailureRollback: templateApprovalRollbackEvidence,
     synthetic: true,
     flows: {
       templateJourneyEnrollmentReleaseApproval: "passed",
+      templateApprovalAuditAtomicity: templateApprovalAuditEvidence,
       repeatedEnrollment: "409 and one enrollment",
       pause: "approved message cancelled; unapproved message preserved for review",
       suppression: "release blocked",
@@ -2265,6 +2408,7 @@ async function main(): Promise<void> {
   await verifyPushedMigration(TEST_MESSAGE_CLAIM_MIGRATION_PATH, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB);
   await verifyPushedMigration(WEBHOOK_REPLAY_GUARD_MIGRATION_PATH, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB);
   await verifyPushedMigration(PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_PATH, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB);
+  await verifyPushedMigration(TEMPLATE_APPROVAL_ATOMIC_MIGRATION_PATH, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");
@@ -2299,6 +2443,7 @@ async function main(): Promise<void> {
   } finally {
     seedClient.release();
   }
+  const templateApprovalRollbackEvidence = await verifyTemplateApprovalRollback(pool, fixtures.lawyerId);
   await mkdir(OUTPUT_DIR, { recursive: true });
   await writeFile(path.join(OUTPUT_DIR, "next-server.log"), "", "utf8");
   await writeFile(path.join(OUTPUT_DIR, "next-server.stdout.log"), "", "utf8");
@@ -2322,7 +2467,7 @@ async function main(): Promise<void> {
     }
     completedSummary = JOURNEY_VERSION_REGRESSION_ONLY
       ? await runJourneyVersionRegression(fixtures, portalSecret)
-      : await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken);
+      : await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken, templateApprovalRollbackEvidence);
   } catch (error) {
     failureLifecycleContext = {
       abortState: runAbortController?.signal.aborted ?? null,
