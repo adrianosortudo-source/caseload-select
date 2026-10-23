@@ -11,7 +11,7 @@ import {
   targetLedgerQuery,
   verifyTargetLedgerStatements,
 } from "../candidate-reader-repair-gate.mjs";
-import { CANDIDATE_READER_REPAIR_HELD_MIGRATION } from "../migration-gate.mjs";
+import { CANDIDATE_READER_REPAIR_HELD_MIGRATIONS } from "../migration-gate.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 
@@ -52,7 +52,7 @@ test("reader repair preflight allows only its exact ordered suffix and post-read
   const directScope = "20261006170000_prospect_candidate_global_text_search_direct_scope.sql";
   const boundedMembership = "20261006234701_prospect_candidate_global_text_search_bounded_membership.sql";
   const identityFastpath = "20261016042722_prospect_candidate_identity_filter_fastpath.sql";
-  const held = [{ ...CANDIDATE_READER_REPAIR_HELD_MIGRATION, status: "held-unapplied" }];
+  const held = CANDIDATE_READER_REPAIR_HELD_MIGRATIONS.map(migration => ({ ...migration, status: "held-unapplied" }));
   const pending = paths => ({ phase: "candidate-reader-repair-held-pending", pendingPaths: paths.map(file => "supabase/migrations/" + file), heldMigrations: held });
   assert.deepEqual(verifyReaderRepairPlan(
       { dryRun: true, upToDate: false, migrations: [earlier, later, refreshGate, firmFieldFastpath, originalStatusFastpath, scopedReader, globalTextScoped, setIdentity, warningFastpath,indexOnly,directScope,boundedMembership,identityFastpath], seeds: [], roles: [] },
@@ -109,6 +109,10 @@ test("reader repair preflight allows only its exact ordered suffix and post-read
   assert.throws(() => verifyReaderRepairPlan(
     { dryRun: true, upToDate: false, migrations: [identityFastpath], seeds: [], roles: [] },
     { ...pending([identityFastpath]), heldMigrations: [] }, "pre",
+  ), /invalid_reader_repair_plan/);
+  assert.throws(() => verifyReaderRepairPlan(
+    { dryRun: true, upToDate: false, migrations: [identityFastpath], seeds: [], roles: [] },
+    { ...pending([identityFastpath]), heldMigrations: held.slice(0, 1) }, "pre",
   ), /invalid_reader_repair_plan/);
 });
 
