@@ -77,7 +77,9 @@ test("reader-repair preflight is static-only, read-only, protected, and bound to
   assert.equal(fullLedger.run, combinedFullLedger.run);
   assert.ok(fullLedger.run.indexOf("reader-history-query") < fullLedger.run.indexOf("reader-history-stage"));
   assert.ok(fullLedger.run.indexOf("reader-history-stage") < fullLedger.run.indexOf("full-ledger-check.json"));
-  assert.match(fullLedger.run, /candidate-reader-repair-pending/);
+  assert.match(fullLedger.run, /candidate-reader-repair-held-pending/);
+  assert.match(fullLedger.run, /reader-repair-stage/);
+  assert.match(fullLedger.run, /full-ledger\.json" "\$GITHUB_WORKSPACE" candidate-reader-repair-held-pending/);
   assert.match(fullLedger.run, /--dry-run --include-all --skip-vault/);
   assert.match(fullLedger.run, /reader-history-cleanup/);
   assert.ok(fullLedger.run.indexOf("reader-history-cleanup") < fullLedger.run.indexOf("verify-stage"));
@@ -86,10 +88,12 @@ test("reader-repair preflight is static-only, read-only, protected, and bound to
 
   const applyReadback = combined.jobs.apply.steps.find(item => item.name === "Verify exact migration ledger statements, catalog contract and empty plan");
   assert.match(applyReadback.run, /reader-history-query/);
+  assert.match(applyReadback.run, /reader-repair-stage/);
   assert.match(applyReadback.run, /reader-history-stage/);
   assert.match(applyReadback.run, /reader-history-cleanup/);
   assert.ok(applyReadback.run.indexOf("reader-history-stage") < applyReadback.run.indexOf("full-ledger-check.json"));
   assert.ok(applyReadback.run.indexOf("reader-history-cleanup") < applyReadback.run.indexOf("verify-stage"));
+  assert.match(applyReadback.run, /full-ledger\.json" "\$GITHUB_WORKSPACE" candidate-reader-repair-held-complete/);
 
   const applyMigration = combined.jobs.apply.steps.find(item => item.name === "Recheck original receipt, full ledger and exact dry-run before apply");
   const guardStage = applyMigration.run.indexOf("reader-history-stage");
@@ -101,6 +105,8 @@ test("reader-repair preflight is static-only, read-only, protected, and bound to
     "pinned history guards must remain staged for the write and be removed before clean source-inventory verification");
   assert.match(applyMigration.run, /if \(cd .*supabase db push .*--yes --include-all[\s\S]*?then[\s\S]*?apply_status=\$\?/);
   assert.match(applyMigration.run, /echo "apply_started=true"[\s\S]*?--yes --include-all/);
+  assert.match(applyMigration.run, /full-ledger\.json" "\$GITHUB_WORKSPACE" candidate-reader-repair-held-pending/);
+  assert.match(applyMigration.run, /reader-repair-stage/);
 
   const binding = step("Bind preflight evidence to run, source and migration");
   const combinedBinding = combined.jobs.preflight.steps.find(item => item.name === binding.name);

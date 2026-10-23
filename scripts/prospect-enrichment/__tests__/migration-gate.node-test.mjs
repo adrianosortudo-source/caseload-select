@@ -8,8 +8,8 @@ import yaml from "js-yaml";
 import {
   CONFIRMATION, MIGRATION_PATHS, PROJECT_REF, RELEASE_PATH,
   PREVIEW_MIGRATION_PATHS, QUALIFICATION_HISTORY, QUALIFICATION_HISTORY_CONFIRMATION,
-  CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, CANDIDATE_READER_REPAIR_PATHS, CANDIDATE_REGISTRATION_REPAIR_PATH, CANDIDATE_PROJECTION_REPAIR_PATH, HISTORICAL_LEDGER_NAME_ALIASES,
-  compareQualificationCatalogs, stageProductionWorkdir, stagePrerequisiteWorkdir, verifyFullMigrationLedger, verifyQualificationRepairAuthorization,
+  CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, CANDIDATE_READER_REPAIR_PATHS, CANDIDATE_READER_REPAIR_HELD_MIGRATION, CANDIDATE_REGISTRATION_REPAIR_PATH, CANDIDATE_PROJECTION_REPAIR_PATH, HISTORICAL_LEDGER_NAME_ALIASES,
+  compareQualificationCatalogs, stageProductionWorkdir, stagePrerequisiteWorkdir, stageCandidateReaderRepairWorkdir, verifyProductionWorkdir, verifyFullMigrationLedger, verifyQualificationRepairAuthorization,
   createReleaseManifest, findProjectEnvFiles, ledgerQuery, sha256, verifyConfirmation, verifyDirectDatabaseUrl, verifyExecutionGate,
   verifyLedgerStatements, verifyMigrationLedger, verifyMigrationPlan, verifyReleaseManifest,
 } from "../migration-gate.mjs";
@@ -392,7 +392,7 @@ test("candidate full ledger accepts exact ordered receipt suffix and rejects unr
   assert.throws(() => verifyFullMigrationLedger([baselineRow], base, "candidate-pending", CANDIDATE_RELEASE_PATHS), /unexpected_full_history_delta/);
 });
 
-test("candidate reader repair permits only its exact ordered suffix after the existing reader fix and candidate release", t => {
+test("candidate reader repair permits only its exact suffix while one exact unrelated migration stays held", t => {
   const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "candidate-reader-ledger-test-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const dir = path.join(base, "supabase", "migrations");
@@ -401,22 +401,53 @@ test("candidate reader repair permits only its exact ordered suffix after the ex
   for (const relative of ["supabase/migrations/" + baseline, ...CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, ...CANDIDATE_READER_REPAIR_PATHS]) {
     fs.writeFileSync(path.join(dir, path.basename(relative)), "SELECT 1;\n");
   }
+  fs.writeFileSync(path.join(dir, path.basename(CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)),
+    fs.readFileSync(path.join(root, CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)));
   const makeRow = relative => {
     const match = /^(\d+)_(.+)\.sql$/.exec(path.basename(relative));
     return { version: match[1], name: match[2] };
   };
   const applied = [makeRow(baseline), ...CANDIDATE_RELEASE_PATHS.map(makeRow), makeRow(CANDIDATE_READER_TIMEOUT_PATH)].sort((a, b) => a.version.localeCompare(b.version));
-  assert.deepEqual(verifyFullMigrationLedger(applied, base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS).pendingPaths, [...CANDIDATE_READER_REPAIR_PATHS]);
+  const pre = verifyFullMigrationLedger(applied, base, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS);
+  assert.deepEqual(pre.pendingPaths, [...CANDIDATE_READER_REPAIR_PATHS]);
+  assert.deepEqual(pre.heldMigrations, [{ ...CANDIDATE_READER_REPAIR_HELD_MIGRATION, status: "held-unapplied" }]);
   for (let appliedCount = 1; appliedCount < CANDIDATE_READER_REPAIR_PATHS.length; appliedCount++) {
     const appliedPrefix = [...applied, ...CANDIDATE_READER_REPAIR_PATHS.slice(0, appliedCount).map(makeRow)].sort((a, b) => a.version.localeCompare(b.version));
-    assert.deepEqual(verifyFullMigrationLedger(appliedPrefix, base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS).pendingPaths,
+    assert.deepEqual(verifyFullMigrationLedger(appliedPrefix, base, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS).pendingPaths,
       CANDIDATE_READER_REPAIR_PATHS.slice(appliedCount));
   }
-  assert.throws(() => verifyFullMigrationLedger(applied, base, "candidate-reader-repair-pending", []), /invalid_candidate_reader_repair_pending_scope/);
-  assert.throws(() => verifyFullMigrationLedger(applied, base, "candidate-reader-repair-pending", [...CANDIDATE_READER_REPAIR_PATHS].reverse()), /invalid_candidate_reader_repair_pending_scope/);
-  assert.throws(() => verifyFullMigrationLedger(applied.filter(row => row.version !== makeRow(CANDIDATE_READER_TIMEOUT_PATH).version), base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS), /unexpected_full_history_delta/);
+  assert.throws(() => verifyFullMigrationLedger(applied, base, "candidate-reader-repair-held-pending", []), /invalid_candidate_reader_repair_pending_scope/);
+  assert.throws(() => verifyFullMigrationLedger(applied, base, "candidate-reader-repair-held-pending", [...CANDIDATE_READER_REPAIR_PATHS].reverse()), /invalid_candidate_reader_repair_pending_scope/);
+  assert.throws(() => verifyFullMigrationLedger(applied.filter(row => row.version !== makeRow(CANDIDATE_READER_TIMEOUT_PATH).version), base, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS), /unexpected_full_history_delta/);
   const laterAppliedOnly = [...applied, makeRow(CANDIDATE_READER_REPAIR_PATHS[1])].sort((a, b) => a.version.localeCompare(b.version));
-  assert.throws(() => verifyFullMigrationLedger(laterAppliedOnly, base, "candidate-reader-repair-pending", CANDIDATE_READER_REPAIR_PATHS), /unexpected_full_history_delta/);
+  assert.throws(() => verifyFullMigrationLedger(laterAppliedOnly, base, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS), /unexpected_full_history_delta/);
+  const unexpected = path.join(dir, "20261017000000_unknown.sql"); fs.writeFileSync(unexpected, "SELECT 9;\n");
+  assert.throws(() => verifyFullMigrationLedger(applied, base, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS), /unexpected_full_history_delta/);
+  fs.rmSync(unexpected);
+  const changedHold = path.join(dir, path.basename(CANDIDATE_READER_REPAIR_HELD_MIGRATION.path));
+  fs.writeFileSync(changedHold, "SELECT changed;\n");
+  assert.throws(() => verifyFullMigrationLedger(applied, base, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS), /reader_repair_held_migration_source_mismatch/);
+  fs.writeFileSync(changedHold, fs.readFileSync(path.join(root, CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)));
+  const appliedAllReader = [...applied, ...CANDIDATE_READER_REPAIR_PATHS.map(makeRow)].sort((a, b) => a.version.localeCompare(b.version));
+  const post = verifyFullMigrationLedger(appliedAllReader, base, "candidate-reader-repair-held-complete");
+  assert.deepEqual(post.pendingPaths, []);
+  assert.deepEqual(post.heldMigrations, [{ ...CANDIDATE_READER_REPAIR_HELD_MIGRATION, status: "held-unapplied" }]);
+  const heldWasApplied = [...appliedAllReader, makeRow(CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)].sort((a, b) => a.version.localeCompare(b.version));
+  assert.throws(() => verifyFullMigrationLedger(heldWasApplied, base, "candidate-reader-repair-held-complete"), /reader_repair_held_migration_not_pending|unexpected_full_history_delta/);
+});
+
+test("reader-repair stage excludes only the exact held migration and verifies the staged proof", t => {
+  const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "candidate-reader-stage-test-"));
+  t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const destination = path.join(base, "stage");
+  const proof = stageCandidateReaderRepairWorkdir(root, destination);
+  const heldExclusion = proof.exclusions.find(item => item.path === CANDIDATE_READER_REPAIR_HELD_MIGRATION.path);
+  assert.ok(heldExclusion);
+  assert.equal(heldExclusion.version, CANDIDATE_READER_REPAIR_HELD_MIGRATION.version);
+  assert.equal(heldExclusion.name, CANDIDATE_READER_REPAIR_HELD_MIGRATION.name);
+  assert.equal(fs.existsSync(path.join(destination, CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)), false);
+  assert.equal(fs.existsSync(path.join(destination, CANDIDATE_READER_REPAIR_PATHS.at(-1))), true);
+  assert.equal(verifyProductionWorkdir(root, destination, proof).stagedRoot, fs.realpathSync(destination));
 });
 
 test("qualification catalog comparison rejects missing tables, changed indexes, constraints, and column privileges", t => {
