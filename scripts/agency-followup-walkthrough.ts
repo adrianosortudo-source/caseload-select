@@ -784,11 +784,11 @@ async function waitForListener(server: ChildProcess, deadline: number): Promise<
       if (listenerPid === undefined) {
         throw new Error(`TCP connect succeeded on 127.0.0.1:55435 but ${process.platform === "win32" ? "netstat" : "ss"} reported no listener owner.`);
       }
-      const owner = inspectWindowsProcessChain(listenerPid, server.pid!);
+      const owner = inspectProcessChain(listenerPid, server.pid!);
       if (!owner.isNextDescendant) {
-        throw new Error(`Port 55435 is owned by unrelated PID ${listenerPid}, not Next child PID ${server.pid}; child exitCode=${server.exitCode} signalCode=${server.signalCode}. Owner chain: ${owner.summary}`);
+        throw new Error(`Port 55435 is owned by unrelated PID ${listenerPid}, not launched Next process PID ${server.pid}; child exitCode=${server.exitCode} signalCode=${server.signalCode}. Owner chain: ${owner.summary}`);
       }
-      progress(`Verified 127.0.0.1:55435 LISTENING owner PID=${listenerPid} is descended from Next child PID=${server.pid}; child exitCode=${server.exitCode}; signalCode=${server.signalCode}; process chain: ${owner.summary}`);
+      progress(`Verified 127.0.0.1:55435 listener owner PID=${listenerPid} is descended from launched Next process PID=${server.pid}; child exitCode=${server.exitCode}; signalCode=${server.signalCode}; process chain: ${owner.summary}`);
       return;
     }
     await delay(Math.min(500, remainingMs(deadline)));
@@ -796,9 +796,30 @@ async function waitForListener(server: ChildProcess, deadline: number): Promise<
   throw new Error("Next did not bind 127.0.0.1:55435 within 10 minutes.");
 }
 
-function inspectWindowsProcessChain(listenerPid: number, nextPid: number): { isNextDescendant: boolean; summary: string } {
+function inspectProcessChain(listenerPid: number, nextPid: number): { isNextDescendant: boolean; summary: string } {
   if (process.platform !== "win32") {
-    return { isNextDescendant: listenerPid === nextPid, summary: `owner=${listenerPid}, next=${nextPid}` };
+    const chain: string[] = [];
+    let current = listenerPid;
+    try {
+      for (let depth = 0; depth < 10 && current > 0; depth++) {
+        const raw = execFileSync("ps", ["-o", "pid=,ppid=,comm=", "-p", String(current)], {
+          encoding: "utf8",
+          timeout: 5000,
+          windowsHide: true,
+        }).trim();
+        const match = /^(\d+)\s+(\d+)\s+(.+)$/.exec(raw);
+        if (!match) break;
+        const pid = Number(match[1]);
+        const parentPid = Number(match[2]);
+        chain.push(`${match[3]} pid=${pid} parent=${parentPid}`);
+        if (pid === nextPid) return { isNextDescendant: true, summary: chain.join(" <- ") };
+        if (parentPid === pid) break;
+        current = parentPid;
+      }
+    } catch (error) {
+      throw new Error(safeFailureText(`Could not identify port owner process ancestry: ${error instanceof Error ? error.message : String(error)}.`, 1000));
+    }
+    return { isNextDescendant: false, summary: chain.join(" <- ") || `owner PID ${listenerPid} not found in process table` };
   }
   const script = [
     `$current=${listenerPid}`,
