@@ -8,7 +8,7 @@ import yaml from "js-yaml";
 import {
   CONFIRMATION, MIGRATION_PATHS, PROJECT_REF, RELEASE_PATH,
   PREVIEW_MIGRATION_PATHS, QUALIFICATION_HISTORY, QUALIFICATION_HISTORY_CONFIRMATION,
-  CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, CANDIDATE_READER_REPAIR_PATHS, CANDIDATE_READER_REPAIR_HELD_MIGRATION, CANDIDATE_REGISTRATION_REPAIR_PATH, CANDIDATE_PROJECTION_REPAIR_PATH, HISTORICAL_LEDGER_NAME_ALIASES,
+  CANDIDATE_RELEASE_PATHS, CANDIDATE_READER_TIMEOUT_PATH, CANDIDATE_READER_REPAIR_PATHS, CANDIDATE_READER_REPAIR_HELD_MIGRATION, CANDIDATE_READER_REPAIR_HELD_MIGRATIONS, CANDIDATE_REGISTRATION_REPAIR_PATH, CANDIDATE_PROJECTION_REPAIR_PATH, HISTORICAL_LEDGER_NAME_ALIASES,
   compareQualificationCatalogs, stageProductionWorkdir, stagePrerequisiteWorkdir, stageCandidateReaderRepairWorkdir, verifyProductionWorkdir, verifyFullMigrationLedger, verifyQualificationRepairAuthorization,
   createReleaseManifest, findProjectEnvFiles, ledgerQuery, sha256, verifyConfirmation, verifyDirectDatabaseUrl, verifyExecutionGate,
   verifyLedgerStatements, verifyMigrationLedger, verifyMigrationPlan, verifyReleaseManifest,
@@ -411,7 +411,9 @@ test("candidate reader repair matches pinned history guards and checks held CRM 
   }
   for (const file of historyReferences) fs.writeFileSync(path.join(stagedDir, file),
     "-- Applied ledger reference only; historical source SQL is never replayed.\nDO $reader_history_reference$ BEGIN RAISE EXCEPTION 'reader_history_reference_execution_prohibited'; END $reader_history_reference$;\n");
-  fs.copyFileSync(path.join(root, CANDIDATE_READER_REPAIR_HELD_MIGRATION.path), path.join(sourceDir, path.basename(CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)));
+  for (const held of CANDIDATE_READER_REPAIR_HELD_MIGRATIONS) {
+    fs.copyFileSync(path.join(root, held.path), path.join(sourceDir, path.basename(held.path)));
+  }
   const makeRow = relative => {
     const match = /^(\d+)_(.+)\.sql$/.exec(path.basename(relative));
     return { version: match[1], name: match[2] };
@@ -426,7 +428,7 @@ test("candidate reader repair matches pinned history guards and checks held CRM 
     verifyFullMigrationLedger(rows, staged, "candidate-reader-repair-held-pending", suffix, source);
   const pre = verify(applied);
   assert.deepEqual(pre.pendingPaths, [...CANDIDATE_READER_REPAIR_PATHS]);
-  assert.deepEqual(pre.heldMigrations, [{ ...CANDIDATE_READER_REPAIR_HELD_MIGRATION, status: "held-unapplied" }]);
+  assert.deepEqual(pre.heldMigrations, CANDIDATE_READER_REPAIR_HELD_MIGRATIONS.map(item => ({ ...item, status: "held-unapplied" })));
   for (let appliedCount = 1; appliedCount < CANDIDATE_READER_REPAIR_PATHS.length; appliedCount++) {
     const appliedPrefix = [...applied, ...CANDIDATE_READER_REPAIR_PATHS.slice(0, appliedCount).map(makeRow)].sort((a, b) => a.version.localeCompare(b.version));
     assert.deepEqual(verify(appliedPrefix).pendingPaths, CANDIDATE_READER_REPAIR_PATHS.slice(appliedCount));
@@ -452,15 +454,18 @@ test("candidate reader repair matches pinned history guards and checks held CRM 
   const heldWasApplied = [...applied, makeRow(CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)].sort((a, b) => a.version.localeCompare(b.version));
   assert.throws(() => verifyFullMigrationLedger(heldWasApplied, staged, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS, source),
     /reader_repair_held_migration_already_applied/);
+  const secondHeldWasApplied = [...applied, makeRow(CANDIDATE_READER_REPAIR_HELD_MIGRATIONS[1].path)].sort((a, b) => a.version.localeCompare(b.version));
+  assert.throws(() => verifyFullMigrationLedger(secondHeldWasApplied, staged, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS, source),
+    /reader_repair_held_migration_already_applied/);
   const appliedAllReader = [...applied, ...CANDIDATE_READER_REPAIR_PATHS.map(makeRow)].sort((a, b) => a.version.localeCompare(b.version));
   const post = verifyFullMigrationLedger(appliedAllReader, staged, "candidate-reader-repair-held-complete", undefined, source);
   assert.deepEqual(post.pendingPaths, []);
-  assert.deepEqual(post.heldMigrations, [{ ...CANDIDATE_READER_REPAIR_HELD_MIGRATION, status: "held-unapplied" }]);
+  assert.deepEqual(post.heldMigrations, CANDIDATE_READER_REPAIR_HELD_MIGRATIONS.map(item => ({ ...item, status: "held-unapplied" })));
   assert.throws(() => verifyFullMigrationLedger(appliedAllReader, staged, "candidate-reader-repair-held-complete", undefined),
     /reader_repair_held_source_root_required/);
 });
 
-test("reader-repair stage excludes only the exact held migration and verifies the staged proof", t => {
+test("reader-repair stage excludes each exact held migration and verifies the staged proof", t => {
   const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "candidate-reader-stage-test-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const sourceRoot = path.join(base, "source");
@@ -469,13 +474,16 @@ test("reader-repair stage excludes only the exact held migration and verifies th
   fs.cpSync(path.join(root, "supabase", "migrations"), path.join(sourceRoot, "supabase", "migrations"), { recursive: true });
   fs.copyFileSync(path.join(root, "supabase", "config.toml"), path.join(sourceRoot, "supabase", "config.toml"));
   const proof = stageCandidateReaderRepairWorkdir(sourceRoot, destination);
-  const heldExclusion = proof.exclusions.find(item => item.path === CANDIDATE_READER_REPAIR_HELD_MIGRATION.path);
-  assert.ok(heldExclusion);
-  assert.equal(heldExclusion.version, CANDIDATE_READER_REPAIR_HELD_MIGRATION.version);
-  assert.equal(heldExclusion.name, CANDIDATE_READER_REPAIR_HELD_MIGRATION.name);
-  assert.equal(fs.existsSync(path.join(destination, CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)), false);
+  for (const held of CANDIDATE_READER_REPAIR_HELD_MIGRATIONS) {
+    const heldExclusion = proof.exclusions.find(item => item.path === held.path);
+    assert.ok(heldExclusion);
+    assert.equal(heldExclusion.version, held.version);
+    assert.equal(heldExclusion.name, held.name);
+    assert.equal(fs.existsSync(path.join(destination, held.path)), false);
+  }
   assert.equal(fs.existsSync(path.join(destination, CANDIDATE_READER_REPAIR_PATHS.at(-1))), true);
   assert.equal(verifyProductionWorkdir(sourceRoot, destination, proof).stagedRoot, fs.realpathSync(destination));
+  assert.deepEqual(proof.readerRepairHeldMigrations, CANDIDATE_READER_REPAIR_HELD_MIGRATIONS);
 });
 
 test("qualification catalog comparison rejects missing tables, changed indexes, constraints, and column privileges", t => {
