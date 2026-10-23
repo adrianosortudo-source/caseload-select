@@ -2103,7 +2103,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
     if (CONSENT_PANEL_WIDTHS.includes(width)) {
       const panel = queueCard(page, consentProspect.firmName).locator('[data-ui-component-content="agency-follow-up-opt-in"]');
-      await panel.scrollIntoViewIfNeeded();
+      await panel.evaluate((element) => element.scrollIntoView({ block: "start" }));
+      await stableLayout();
       await expect(panel).toBeVisible();
       const panelGeometry = await panel.evaluate((element) => {
         const header = document.querySelector<HTMLButtonElement>('button[aria-label="Open menu"]')?.parentElement;
