@@ -1731,6 +1731,9 @@ async function auditRenderedCopy(page: Page): Promise<string[]> {
         const tag = component.dataset.uiComponentContent + "/" + copy.dataset.uiCopy;
         const box = copy.getBoundingClientRect();
         if (Math.abs(box.left - left) > 1 || Math.abs(box.right - right) > 1) failures.push(tag + ": copy does not use full content width");
+        if (copy.matches('p[aria-label^="Provider delivery status:"]') && copy.scrollWidth > copy.clientWidth + 1) {
+          failures.push(tag + ": provider delivery status overflows its content width");
+        }
         if (copy.textContent?.includes("\u2014")) failures.push(tag + ": em dash");
         const words: Array<{ top: number; left: number; right: number; text: string }> = [];
         const walker = document.createTreeWalker(copy, NodeFilter.SHOW_TEXT);
@@ -2340,6 +2343,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const renderedWidths: number[] = [];
   const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
   const consentPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string }> = [];
+  const providerStatusScreenshots: Array<{ path: string; sha256: string; viewport: number; contentWidth: number; scrollWidth: number; text: string }> = [];
   const stableLayout = async () => page.evaluate(async () => {
     await document.fonts.ready;
     let previous: number[] = [];
@@ -2458,6 +2462,30 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await page.evaluate(() => window.scrollTo(0, 0));
     await stableLayout();
     await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
+    if (width === 320) {
+      const providerStatus = page.locator('[data-ui-component-content="agency-follow-up-message"] p[aria-label^="Provider delivery status:"]').first();
+      if (!(await providerStatus.count())) throw new Error("The synthetic review queue did not render a provider delivery status paragraph.");
+      await providerStatus.scrollIntoViewIfNeeded();
+      await stableLayout();
+      const statusGeometry = await providerStatus.evaluate((element) => ({
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        text: (element.textContent ?? "").trim(),
+      }));
+      if (statusGeometry.scrollWidth > statusGeometry.clientWidth + 1) {
+        throw new Error(`Provider delivery status overflows its content width at 320px: ${JSON.stringify(statusGeometry)}.`);
+      }
+      const statusScreenshotPath = path.join(screenshotDir, `${RUN_ID}-provider-status-320.png`);
+      await page.screenshot({ path: statusScreenshotPath, fullPage: false });
+      providerStatusScreenshots.push({
+        path: path.relative(process.cwd(), statusScreenshotPath).replaceAll("\\", "/"),
+        sha256: createHash("sha256").update(await readFile(statusScreenshotPath)).digest("hex"),
+        viewport: width,
+        contentWidth: statusGeometry.clientWidth,
+        scrollWidth: statusGeometry.scrollWidth,
+        text: statusGeometry.text,
+      });
+    }
     if (CONSENT_PANEL_WIDTHS.includes(width)) {
       const panel = queueCard(page, consentProspect.firmName).locator('[data-ui-component-content="agency-follow-up-opt-in"]');
       await panel.evaluate((element) => element.scrollIntoView({ block: "start" }));
@@ -2490,7 +2518,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
   if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
-  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, authoring approval, or required-control evidence.");
+  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, authoring approval, or required-control evidence.");
   const summary = {
     runId: RUN_ID,
     ...sourceAtStart,
@@ -2518,6 +2546,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB],
     screenshots,
     consentPanelScreenshots,
+    providerStatusScreenshots,
     syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
     templateApprovalAuditAtomicityFailureRollback: templateApprovalRollbackEvidence,
     synthetic: true,
