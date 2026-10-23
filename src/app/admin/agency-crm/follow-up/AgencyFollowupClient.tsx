@@ -281,8 +281,8 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
       <section aria-labelledby="author-title" className="w-full min-w-0 border border-black/10 bg-white p-4 sm:p-5">
         <div data-ui-component-content="agency-follow-up-authoring" className="w-full min-w-0 space-y-5">
         <div className="w-full min-w-0">
-          <h2 id="author-title" data-ui-copy="heading" className="w-full text-lg font-semibold text-navy">Author versioned journeys</h2>
-          <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/60 [text-wrap:pretty]">Template content is immutable after creation. New copy or schedule changes create new versions.</p>
+          <h2 id="author-title" data-ui-copy="heading" className="w-full text-balance text-lg font-semibold text-navy">Author versioned journeys</h2>
+          <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/60 [text-wrap:balance]">Template content is immutable after creation. New copy or schedule changes create new versions.</p>
         </div>
         <form className="grid w-full min-w-0 gap-3 lg:grid-cols-3" onSubmit={async (event) => {
           event.preventDefault();
@@ -452,9 +452,9 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                 <div data-ui-component-content="agency-follow-up-message" className="w-full min-w-0">
                 <div className="space-y-1">
                   <span data-ui-copy="supporting" className="block w-full text-xs font-semibold uppercase tracking-wide text-black/60">Message {item.stepNumber}</span>
-                  <h4 data-ui-copy="heading" className="w-full break-words text-sm font-semibold text-navy sm:text-base [text-wrap:pretty]">{item.subject || 'No subject'}</h4>
+                  <h4 data-ui-copy="heading" className="w-full break-words text-balance text-sm font-semibold text-navy sm:text-base">{item.subject || 'No subject'}</h4>
                   <span className="block w-full text-xs uppercase tracking-wide text-black/60">{prettyState(item.state)}</span>
-                  <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65" aria-label={`Provider delivery status: ${agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })}`}>
+                  <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65 [text-wrap:balance]" aria-label={`Provider delivery status: ${agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })}`}>
                     Provider delivery: {agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })}
                   </p>
                   {DELIVERY_STATUS_NOTES[item.providerDeliveryStatus] && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">{DELIVERY_STATUS_NOTES[item.providerDeliveryStatus]}</p>}
@@ -472,7 +472,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
             </div>
 
             <section data-ui-component-content="agency-follow-up-opt-in" aria-labelledby={`opt-in-title-${enrollmentId}`} className="mt-4 w-full min-w-0 border border-black/10 bg-stone-50 p-3 sm:p-4">
-              <h4 id={`opt-in-title-${enrollmentId}`} data-ui-copy="heading" className="w-full text-sm font-semibold text-navy sm:text-base">Record email opt-in evidence</h4>
+              <h4 id={`opt-in-title-${enrollmentId}`} data-ui-copy="heading" className="w-full text-balance text-sm font-semibold text-navy sm:text-base">Record email opt-in evidence</h4>
               <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]">Use the source evidence for this exact contact. Recording a grant or withdrawal appends an audit event and does not send email.</p>
               <p className="mt-2 w-full break-words text-sm text-black/75">Current recipient: <strong>{first.recipientEmail || 'No current email on file'}</strong> · Current opt-in state: <strong>{prettyState(first.optInState)}</strong></p>
               <button type="button" className="mt-2 text-sm font-semibold text-navy underline disabled:opacity-50" disabled={optInHistory.loading} aria-expanded={optInHistoryOpen} onClick={() => {
