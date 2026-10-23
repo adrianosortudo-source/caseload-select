@@ -791,6 +791,7 @@ function startApp(portalSecret: string, walkthroughToken: string, status: Supaba
       PORTAL_SECRET: portalSecret,
       AGENCY_FOLLOWUP_WALKTHROUGH_TOKEN: walkthroughToken,
       AGENCY_FOLLOWUP_SEND_MODE: "off",
+      AGENCY_FOLLOWUP_WALKTHROUGH_CAPTURE: "1",
       AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: SYNTHETIC_WEBHOOK_SECRET,
       PORT: "55435",
       NODE_ENV: "development",
