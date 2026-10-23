@@ -11,6 +11,7 @@ import * as currentCore from '../src/app/api/tools/seo-check/engine-core';
 import * as currentChecks from '../src/app/api/tools/seo-check/page-checks';
 import * as currentRendering from '../src/app/api/tools/seo-check/rendering-analysis';
 import { buildIssues } from '../src/app/api/tools/seo-check/analysis';
+import type { PageResult } from '../src/app/api/tools/seo-check/analysis';
 
 async function main() {
   const root = resolve('test-results/seo-lawyer-report');
@@ -46,7 +47,7 @@ async function main() {
     const beforeUncapped = oldCore.computeWeightedScore(beforeCategories);
     const before = oldCore.applyEligibilityCaps(beforeUncapped, oldCore.deriveEligibilityGates(beforeCategories, oldRendering.aggregateRenderingSummary(beforePages)?.risk));
     const after = currentCore.computeWeightedScore(afterCategories);
-    const noindex = afterPages.filter(page => !page.indexability.indexable).map(page => page.url);
+    const noindex = afterPages.filter((page: PageResult) => !page.indexability.indexable).map((page: PageResult) => page.url);
     assert.deepEqual(noindex, beforePages.filter((page: typeof beforePages[number]) => !page.indexability.indexable).map((page: typeof beforePages[number]) => page.url), 'Changing the method must not change these observed directives');
     const issues = buildIssues(afterPages);
     assert(!issues.some(issue => issue.id.startsWith('eligibility-')), 'New report must not synthesize a site cap');
