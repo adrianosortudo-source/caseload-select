@@ -4,6 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  catalogQuery,
   catalogExpectations,
   verifyReaderCatalog,
   verifyReaderRepairPlan,
@@ -125,6 +126,9 @@ test("reader repair preflight allows only its exact ordered suffix and post-read
 });
 
 test("reader catalog readback requires indexes, privileges and the refresh-trigger security/transition contract", () => {
+  assert.match(catalogQuery, /jsonb_object_agg\(key,value\)/);
+  assert.doesNotMatch(catalogQuery, /json_build_object\(\s*'candidate_list_service_role_execute'/);
+  assert.equal((catalogQuery.match(/\n\('(?:[^']|'')+'/g) ?? []).length, Object.keys(catalogExpectations).length);
   assert.equal(verifyReaderCatalog([{ reader_contract: { ...catalogExpectations } }]).verified, true);
   assert.throws(() => verifyReaderCatalog([{ reader_contract: { ...catalogExpectations, invalid_date_coverage_index: false } }]), /reader_catalog_contract_mismatch/);
   assert.throws(() => verifyReaderCatalog([{ reader_contract: { ...catalogExpectations, original_status_exact_index: false } }]), /reader_catalog_contract_mismatch/);
