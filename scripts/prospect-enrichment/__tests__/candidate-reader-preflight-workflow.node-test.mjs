@@ -79,7 +79,7 @@ test("reader-repair preflight is static-only, read-only, protected, and bound to
   assert.ok(fullLedger.run.indexOf("reader-history-stage") < fullLedger.run.indexOf("full-ledger-check.json"));
   assert.match(fullLedger.run, /candidate-reader-repair-held-pending/);
   assert.match(fullLedger.run, /reader-repair-stage/);
-  assert.match(fullLedger.run, /full-ledger\.json" "\$GITHUB_WORKSPACE" candidate-reader-repair-held-pending/);
+  assert.match(fullLedger.run, /full-ledger\.json" "\$RUNNER_TEMP\/reader-migrations" candidate-reader-repair-held-pending[\s\S]*? "\$GITHUB_WORKSPACE"/);
   assert.match(fullLedger.run, /--dry-run --include-all --skip-vault/);
   assert.match(fullLedger.run, /reader-history-cleanup/);
   assert.ok(fullLedger.run.indexOf("reader-history-cleanup") < fullLedger.run.indexOf("verify-stage"));
@@ -93,7 +93,7 @@ test("reader-repair preflight is static-only, read-only, protected, and bound to
   assert.match(applyReadback.run, /reader-history-cleanup/);
   assert.ok(applyReadback.run.indexOf("reader-history-stage") < applyReadback.run.indexOf("full-ledger-check.json"));
   assert.ok(applyReadback.run.indexOf("reader-history-cleanup") < applyReadback.run.indexOf("verify-stage"));
-  assert.match(applyReadback.run, /full-ledger\.json" "\$GITHUB_WORKSPACE" candidate-reader-repair-held-complete/);
+  assert.match(applyReadback.run, /post-full-ledger\.json" "\$RUNNER_TEMP\/reader-migrations-post" candidate-reader-repair-held-complete - "\$GITHUB_WORKSPACE"/);
 
   const applyMigration = combined.jobs.apply.steps.find(item => item.name === "Recheck original receipt, full ledger and exact dry-run before apply");
   const guardStage = applyMigration.run.indexOf("reader-history-stage");
@@ -105,7 +105,7 @@ test("reader-repair preflight is static-only, read-only, protected, and bound to
     "pinned history guards must remain staged for the write and be removed before clean source-inventory verification");
   assert.match(applyMigration.run, /if \(cd .*supabase db push .*--yes --include-all[\s\S]*?then[\s\S]*?apply_status=\$\?/);
   assert.match(applyMigration.run, /echo "apply_started=true"[\s\S]*?--yes --include-all/);
-  assert.match(applyMigration.run, /full-ledger\.json" "\$GITHUB_WORKSPACE" candidate-reader-repair-held-pending/);
+  assert.match(applyMigration.run, /full-ledger\.json" "\$RUNNER_TEMP\/reader-migrations-immediate" candidate-reader-repair-held-pending[\s\S]*? "\$GITHUB_WORKSPACE"/);
   assert.match(applyMigration.run, /reader-repair-stage/);
 
   const binding = step("Bind preflight evidence to run, source and migration");
