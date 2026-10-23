@@ -19,10 +19,9 @@ import { Agent } from "undici";
 import {
   type AiBotStatus,
   type ParsedRobots,
-  type EligibilityCapApplied,
-  type PageType,
   AI_SEARCH_BOTS,
   AI_TRAINING_BOTS,
+  USER_INITIATED_BOTS,
   SCANNER_TOKEN,
   ipInBlockedRange,
   isSsrfBlocked,
@@ -37,11 +36,7 @@ import {
   resolveScan,
   computeGrade,
   computeWeightedScore,
-  aiScoresFromItems,
   CATEGORY_WEIGHTS,
-  applyEligibilityCaps,
-  deriveEligibilityGates,
-  describeEligibilityCaps,
   SCAN_MODE_DEFAULTS,
 } from "./engine-core";
 import { type TtfbMeasurement } from "./content-signals";
@@ -49,7 +44,6 @@ import { buildPageResult, aggregateCategories, computeTopFixes } from "./page-ch
 import {
   type PageResult,
   type SeoCheckResult,
-  type Issue,
   buildIssues,
   buildSiteStructureIssues,
   buildInternalSummary,
@@ -334,35 +328,6 @@ const FRONTIER_CAP = 600;
 // Dedupe / membership key. URL already lowercases scheme + host; we strip the
 // fragment and a trailing slash but PRESERVE path and query case, because URL
 // paths can be case-sensitive and this key is also reused as a fetch URL.
-/**
- * Turn an applied eligibility cap into a top-priority finding, so the reason a
- * headline score is capped appears in the same issues list as everything else
- * rather than only in a response field the report does not render.
- */
-function eligibilityIssues(
-  capsApplied: EligibilityCapApplied[],
-  uncapped: number,
-  homeUrl: string,
-  totalPages: number
-): Issue[] {
-  return capsApplied.map((c) => ({
-    id: `eligibility-${c.gate}`,
-    category: "Indexability",
-    severity: "critical" as const,
-    status: "fail" as const,
-    title: `Score capped at ${c.cap}: ${c.headline}`,
-    detail: `${c.reason} The rest of the audit scored ${uncapped}, but that is not reachable while this holds, so the headline score is capped at ${c.cap}.`,
-    fix: c.fix,
-    affectedUrls: [homeUrl],
-    affectedCount: 1,
-    totalPages,
-    pageTypeImpact: ["homepage" as PageType],
-    confidence: "high" as const,
-    effort: "medium" as const,
-    priority: 100,
-  }));
-}
-
 /* ────────────────────────────────────────────────────────
    POST handler
    ──────────────────────────────────────────────────────── */
@@ -640,25 +605,18 @@ export async function POST(req: NextRequest) {
 
     // Backward-compatible aggregation.
     const aggregatedCategories = aggregateCategories(forFindings);
-    // Declared here rather than further down because the eligibility gates
-    // below need the rendering risk before the headline score is settled.
+    // Rendering evidence remains part of the report, while the v3 headline
+    // score comes only from the weighted, applicable check categories below.
     const renderingSummary = aggregateRenderingSummary(forFindings);
-    const eligibilityGates = deriveEligibilityGates(aggregatedCategories, renderingSummary?.risk);
-    const uncappedScore = computeWeightedScore(aggregatedCategories);
-    const overallScore = applyEligibilityCaps(uncappedScore, eligibilityGates);
-    const capsApplied = describeEligibilityCaps(eligibilityGates);
+    const overallScore = computeWeightedScore(aggregatedCategories);
     const grade = computeGrade(overallScore);
-
-    const perPageAi = forFindings.map((p) => {
-      const ai = p.categories.find((c) => c.name === "AI Visibility");
-      return aiScoresFromItems(ai ? ai.items : []);
-    });
-    const aiSearchScore = perPageAi.length > 0 ? Math.round(perPageAi.reduce((s, a) => s + a.search, 0) / perPageAi.length) : 0;
-    const aiPolicyScore = perPageAi.length > 0 ? Math.round(perPageAi.reduce((s, a) => s + a.policy, 0) / perPageAi.length) : 50;
+    const aiSearchScore = null;
+    const aiPolicyScore = null;
 
     const aiBots: AiBotStatus[] = [
-      ...AI_SEARCH_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : false, category: "search" as const })),
-      ...AI_TRAINING_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : false, category: "training" as const })),
+      ...AI_SEARCH_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : null, category: "search" as const })),
+      ...AI_TRAINING_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : null, category: "training" as const })),
+      ...USER_INITIATED_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : null, category: "user-initiated" as const })),
     ];
     const intentAlignment = aggregateIntentAlignment(forFindings);
 
@@ -668,14 +626,8 @@ export async function POST(req: NextRequest) {
     const discoveryConfidence = computeDiscoveryConfidence(pages.length, sitemapSet?.size ?? 0, homeInternalLinkCount, maxPages);
     const pageIssues = buildIssues(forFindings, effectiveContentPages);
     const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence, uncrawledUrls, wpStarterUrls);
-    const capIssues = eligibilityIssues(
-      capsApplied,
-      uncappedScore,
-      pages[0]?.url ?? `https://${domain}`,
-      pages.length
-    );
-    const issues = [...pageIssues, ...structureIssues, ...capIssues].sort(compareIssuesByPriority);
-    const internalSummary = buildInternalSummary(pages, issues, overallScore, aiSearchScore);
+    const issues = [...pageIssues, ...structureIssues].sort(compareIssuesByPriority);
+    const internalSummary = buildInternalSummary(pages, issues, overallScore);
     const breakdown = severityBreakdown(issues);
 
     // The internal prospecting layer (summary + per-issue internal notes and
@@ -688,6 +640,7 @@ export async function POST(req: NextRequest) {
 
     const result: SeoCheckResult = {
       domain,
+      methodologyVersion: 3,
       scanMode,
       pagesScanned: pages.length,
       pages,
@@ -695,9 +648,9 @@ export async function POST(req: NextRequest) {
       overallScore,
       grade,
       aiSearchScore,
-      aiSearchGrade: computeGrade(aiSearchScore),
+      aiSearchGrade: null,
       aiPolicyScore,
-      aiPolicyGrade: computeGrade(aiPolicyScore),
+      aiPolicyGrade: null,
       aiBots,
       ...(intentAlignment ? { intentAlignment } : {}),
       ...(renderingSummary ? { renderingSummary } : {}),
@@ -707,20 +660,22 @@ export async function POST(req: NextRequest) {
       severityBreakdown: breakdown,
       partial,
       discoveryConfidence,
-      ...(capsApplied.length > 0 ? { eligibility: { uncappedScore, capsApplied } } : {}),
       buildSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
       checkedAt: new Date().toISOString(),
       // Trust-fix pass WI-8 (acceptance criterion): expose exactly which
       // checks contribute to no grade, built from the actual scored:false
       // flags set this scan (not a hand-maintained list that can drift).
       scoring: {
+        methodologyVersion: 3,
+        label: "Website checks",
+        assessed: aggregatedCategories.some((category) => (CATEGORY_WEIGHTS[category.name] ?? 6) > 0 && category.maxScore > 0),
         categoryWeights: CATEGORY_WEIGHTS,
         unscoredLabels: [...new Set(
           pages.flatMap((p) => p.categories.flatMap((c) => c.items))
             .filter((i) => i.scored === false)
             .map((i) => i.label)
         )].sort(),
-        note: "Unscored checks are shown for completeness and excluded from every grade.",
+        note: "A weighted summary of applicable checks on the pages inspected. It is not a measurement of rankings, enquiries, legal content quality, or AI citations.",
       },
     };
 

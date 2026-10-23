@@ -510,14 +510,14 @@ describe("buildInternalSummary", () => {
   })];
 
   it("is deterministic for the same input", () => {
-    const a = buildInternalSummary(goodPages, buildIssues(goodPages), 80, 80);
-    const b = buildInternalSummary(goodPages, buildIssues(goodPages), 80, 80);
+    const a = buildInternalSummary(goodPages, buildIssues(goodPages), 80);
+    const b = buildInternalSummary(goodPages, buildIssues(goodPages), 80);
     expect(a).toEqual(b);
   });
 
   it("keeps prospectFitScore within [0,100] and never NaN", () => {
     for (const score of [0, 20, 50, 80, 100]) {
-      const s = buildInternalSummary(goodPages, [], score, score);
+      const s = buildInternalSummary(goodPages, [], score);
       expect(s.prospectFitScore).toBeGreaterThanOrEqual(0);
       expect(s.prospectFitScore).toBeLessThanOrEqual(100);
       expect(Number.isNaN(s.prospectFitScore)).toBe(false);
@@ -530,7 +530,7 @@ describe("buildInternalSummary", () => {
       categories: [cat("Indexability", [{ label: "Indexable", status: "fail", detail: "" }])],
       phone: false, contactForm: false, cta: false, testimonials: false, credentials: false,
     })];
-    const s = buildInternalSummary(weak, buildIssues(weak), 20, 20);
+    const s = buildInternalSummary(weak, buildIssues(weak), 20);
     expect(s.websiteMaturity).toBe("poor");
     expect(["high", "urgent"]).toContain(s.urgencyLevel);
     expect(s.trustAndConversionGaps.length).toBeGreaterThan(0);
@@ -542,9 +542,31 @@ describe("buildInternalSummary", () => {
       categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "" }])],
       phone: false, contactForm: false, cta: false, testimonials: false, credentials: false,
     })];
-    const s = buildInternalSummary(noTrust, [], 60, 60);
+    const s = buildInternalSummary(noTrust, [], 60);
     expect(s.trustAndConversionGaps).toContain("No clear consultation call to action");
     expect(s.trustAndConversionGaps).toContain("No visible phone number");
+  });
+
+  it("does not use legacy AI-only findings to shape prospecting claims or fit", () => {
+    const aiOnly = {
+      ...buildIssues(goodPages)[0],
+      category: "AI Visibility",
+      title: "Not positioned to be found or cited in AI search",
+      detail: "A historical heuristic assigned a low AI visibility score.",
+      prospectingAngle: "Open on the firm's AI visibility blockers.",
+      severity: "critical" as const,
+      status: "fail" as const,
+    };
+    const baseline = buildInternalSummary(goodPages, [], 80);
+    const withLegacyAi = buildInternalSummary(goodPages, [aiOnly], 80);
+
+    expect(withLegacyAi.prospectFitScore).toBe(baseline.prospectFitScore);
+    expect(withLegacyAi.urgencyLevel).toBe(baseline.urgencyLevel);
+    expect(withLegacyAi.likelyPainPoints.join(" ")).not.toMatch(/AI visibility|AI search|cited/i);
+    expect(withLegacyAi.strongestOutreachHooks.join(" ")).not.toMatch(/AI visibility|AI search|cited/i);
+    expect(withLegacyAi.recommendedOpeningAngle).not.toMatch(/AI visibility|AI search|cited/i);
+    expect(withLegacyAi.topRevenueOpportunities.join(" ")).not.toMatch(/AI visibility|AI search|cited/i);
+    expect(withLegacyAi.aiVisibilityBlockers).toEqual([]);
   });
 });
 
@@ -558,7 +580,7 @@ describe("buildSiteStructureIssues", () => {
     const titles = issues.map((i) => i.title);
     expect(titles).toContain("No practice-area pages found");
     expect(titles).toContain("No XML sitemap found");
-    expect(titles).toContain("No attorney / team page found");
+    expect(titles).toContain("No attorney or team page found in checked pages");
   });
 
   it("does not flag missing practice pages on a one-page site whose homepage signals practice areas", () => {
@@ -613,13 +635,12 @@ describe("buildSiteStructureIssues", () => {
       // /about carries the lawyer's Person schema even though it is not a /team URL
       mkPage({ url: "https://x.com/about", pageType: "about", hasPerson: true, categories: c }),
     ];
-    expect(buildSiteStructureIssues(pages, true).map((i) => i.title)).not.toContain("No attorney / team page found");
+    expect(buildSiteStructureIssues(pages, true).map((i) => i.title)).not.toContain("No attorney or team page found in checked pages");
   });
 
-  it("reframes a missing team page as blocked (not absent) when robots.txt disallows team paths", () => {
-    // Field case gosailaw.com: robots.txt Disallows /team-member/ and every
-    // individual bio slug, so the crawler genuinely cannot reach them. The
-    // firm has the content; it is hiding it from crawlers by accident.
+  it("does not claim the team page is blocked or absent when robots.txt disallows team paths", () => {
+    // A robots rule tells us the crawler cannot inspect these paths; it does
+    // not establish that a team page exists or that it is missing.
     const c = [cat("On-Page SEO", [{ label: "Page title", status: "pass" as const, detail: "" }])];
     const pages = [mkPage({ url: "https://x.com/", pageType: "homepage", categories: c })];
     const parsedRobots = parseRobotsTxt([
@@ -628,8 +649,8 @@ describe("buildSiteStructureIssues", () => {
       "Disallow: /team-member-jane-doe/",
     ].join("\n"));
     const titles = buildSiteStructureIssues(pages, true, parsedRobots).map((i) => i.title);
-    expect(titles).toContain("Attorney / team pages blocked from crawlers");
-    expect(titles).not.toContain("No attorney / team page found");
+    expect(titles).not.toContain("Attorney / team pages blocked from crawlers");
+    expect(titles).toContain("No attorney or team page found in checked pages");
   });
 
   it("keeps the generic missing-team-page finding when no robots block explains it", () => {
@@ -637,7 +658,7 @@ describe("buildSiteStructureIssues", () => {
     const pages = [mkPage({ url: "https://x.com/", pageType: "homepage", categories: c })];
     const parsedRobots = parseRobotsTxt(["User-agent: *", "Disallow: /wp-admin/"].join("\n"));
     const titles = buildSiteStructureIssues(pages, true, parsedRobots).map((i) => i.title);
-    expect(titles).toContain("No attorney / team page found");
+    expect(titles).toContain("No attorney or team page found in checked pages");
     expect(titles).not.toContain("Attorney / team pages blocked from crawlers");
   });
 
@@ -648,8 +669,8 @@ describe("buildSiteStructureIssues", () => {
     const lowConf = buildSiteStructureIssues(pages, false, null, "low");
     const practiceHigh = highConf.find((i) => i.title === "No practice-area pages found");
     const practiceLow = lowConf.find((i) => i.title === "No practice-area pages found");
-    const teamHigh = highConf.find((i) => i.title === "No attorney / team page found");
-    const teamLow = lowConf.find((i) => i.title === "No attorney / team page found");
+    const teamHigh = highConf.find((i) => i.title === "No attorney or team page found in checked pages");
+    const teamLow = lowConf.find((i) => i.title === "No attorney or team page found in checked pages");
     expect(practiceHigh?.severity).toBe("high");
     expect(practiceLow?.severity).toBe("medium");
     expect(teamHigh?.severity).toBe("medium");

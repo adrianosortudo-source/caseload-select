@@ -30,6 +30,13 @@ export interface CheckItem {
   // (llms.txt, FAQPage/Review schema) and for security-hygiene headers that
   // should never imply a search-visibility gain. Absent/undefined means scored.
   scored?: boolean;
+  /** Whether the check applies to this page, or whether its status is unknown. */
+  applicability?: "applicable" | "not-applicable" | "unknown";
+  failCount?: number;
+  warnCount?: number;
+  applicableCount?: number;
+  notAssessedCount?: number;
+  notApplicableCount?: number;
 }
 
 export interface CategoryResult {
@@ -37,12 +44,13 @@ export interface CategoryResult {
   score: number;
   maxScore: number;
   items: CheckItem[];
+  counts?: { fail: number; warn: number; applicable: number; notAssessed: number; notApplicable: number };
 }
 
 export interface AiBotStatus {
   name: string;
-  blocked: boolean;
-  category: "search" | "training";
+  blocked: boolean | null;
+  category: "search" | "training" | "user-initiated";
 }
 
 export type PageType =
@@ -119,30 +127,30 @@ export function resolveScan(input: {
    Bot registries
    ──────────────────────────────────────────────────────── */
 
-// AI search / answer-retrieval bots. Blocking these costs the firm visibility
-// in AI search surfaces. ClaudeBot is included here because Anthropic uses it
-// for answer retrieval in Claude's web-enabled responses, alongside the
-// dedicated Claude-SearchBot token; it is NOT a training-only crawler.
+// Autonomous AI search crawlers. Robots.txt observations describe rules only;
+// they do not establish indexing, retrieval, or citation outcomes.
 export const AI_SEARCH_BOTS = [
-  { token: "ChatGPT-User", label: "ChatGPT Search" },
   { token: "OAI-SearchBot", label: "OpenAI SearchBot" },
   { token: "PerplexityBot", label: "Perplexity" },
-  { token: "Perplexity-User", label: "Perplexity User" },
-  { token: "ClaudeBot", label: "Claude" },
   { token: "Claude-SearchBot", label: "Claude Search" },
 ];
 
-// Training / content-use bots. Blocking these protects content from model
-// training. Google-Extended controls Gemini training/grounding use and is NEVER
-// an AI search visibility signal: blocking it does not remove the firm from
-// Google Search or AI Overviews.
+// Training / content-use bots. Their rules describe content-use choices and
+// are not a search visibility or Website checks score signal.
 export const AI_TRAINING_BOTS = [
   { token: "GPTBot", label: "GPTBot (training)" },
+  { token: "ClaudeBot", label: "ClaudeBot (training)" },
   { token: "CCBot", label: "Common Crawl" },
   { token: "Bytespider", label: "Bytespider" },
   { token: "Meta-ExternalAgent", label: "Meta" },
   { token: "Applebot-Extended", label: "Applebot" },
   { token: "Google-Extended", label: "Google-Extended (AI use)" },
+];
+
+export const USER_INITIATED_BOTS = [
+  { token: "ChatGPT-User", label: "ChatGPT-User" },
+  { token: "Perplexity-User", label: "Perplexity-User" },
+  { token: "Claude-User", label: "Claude-User" },
 ];
 
 export const SCANNER_TOKEN = "CaseLoadSelect-SEOCheck";
@@ -152,20 +160,14 @@ export const GENERIC_ANCHORS = new Set([
   "this", "go", "see more", "continue", "details", "info",
 ]);
 
-// Weights are set from measured discriminating power across a 21-site sample
-// of real Ontario firm sites, not from intuition. The three categories that
-// used to hold 30% of the grade (Indexability, Technical & Security,
-// Rendering) returned a mean of 96% with almost no variance: they are
-// eligibility questions, not quality signals, and they are now handled by
-// applyEligibilityCaps instead of by weight. Weight moved to the categories
-// that actually separate a marketed firm from an unmarketed one: Schema
-// (measured spread 58), On-Page SEO (50), Local SEO (40), Legal Marketing
-// (36) and Performance (38).
+// Product checklist priorities for the Website checks summary. These weights
+// are not a measurement of rankings, enquiries, legal content quality, or AI
+// citations. AI observations are kept visible but excluded from the score.
 export const CATEGORY_WEIGHTS: Record<string, number> = {
   "On-Page SEO": 20,
   "Indexability": 8,
   "Schema & Structured Data": 16,
-  "AI Visibility": 14,
+  "AI Visibility": 0,
   "Legal Marketing": 16,
   "Local SEO": 12,
   "Technical & Security": 4,
@@ -582,21 +584,19 @@ export function applyPageTypeApplicability(
       const exemptForType = !contentPage && CONTENT_ONLY_LABELS.has(item.label);
       const exemptFunnel = funnelPage && FUNNEL_EXEMPT_LABELS.has(item.label);
       const exemptBreadcrumb = item.label === "Breadcrumb schema" && breadcrumbExempt;
-      if ((exemptForType || exemptFunnel || exemptBreadcrumb) && item.status !== "pass") {
+      if (exemptForType || exemptFunnel || exemptBreadcrumb) {
         changed = true;
         return {
-          label: item.label,
+          ...item,
           status: "pass" as const,
-          // A check that does not apply to this page type must not pay full
-          // marks. Before this flag the exemption awarded 10 points per item,
-          // so a homepage banked a free pass for Breadcrumb schema and any
-          // non-article page banked five free passes for the AEO content
-          // checks. Not applicable means it contributes nothing in either
-          // direction: scoreItems skips it entirely.
           scored: false,
-          detail: exemptBreadcrumb
-            ? `Not required on the homepage or a language root. ${item.detail}`
-            : `Not required for a ${pageTypeLabel(pageType).toLowerCase()} page. ${item.detail}`,
+          applicability: "not-applicable" as const,
+          detail: item.status === "pass"
+            ? item.detail
+            : `${exemptBreadcrumb
+              ? "Not required on the homepage or a language root."
+              : `Not required for this ${pageTypeLabel(pageType).toLowerCase()} page.`} ${item.detail}`,
+          fix: undefined,
         };
       }
       return item;
@@ -615,7 +615,7 @@ export function scoreItems(items: CheckItem[]): { score: number; maxScore: numbe
   let score = 0;
   let maxScore = 0;
   for (const item of items) {
-    if (item.scored === false) continue;
+    if (item.scored === false || item.applicability === "not-applicable" || item.applicability === "unknown") continue;
     maxScore += 10;
     if (item.status === "pass") score += 10;
     else if (item.status === "warn") score += 5;
@@ -635,10 +635,8 @@ export function computeGrade(score: number): string {
 }
 
 /**
- * Weighted site / page score. A category with a critical-class failure is
- * capped so a wall of low-value passes cannot inflate the headline number:
- * a category that is below 35% pulls its own contribution down further via a
- * soft penalty, so failing categories visibly depress the overall score.
+ * Weighted site / page score. AI visibility checks are reported separately
+ * and have no established scoring basis for this diagnostic.
  */
 export function computeWeightedScore(categories: CategoryResult[]): number {
   let weightedSum = 0;
@@ -649,10 +647,8 @@ export function computeWeightedScore(categories: CategoryResult[]): number {
     // absence must never drag the overall score down.
     if (cat.maxScore <= 0) continue;
     const weight = CATEGORY_WEIGHTS[cat.name] ?? 6;
-    let pct = (cat.score / cat.maxScore) * 100;
-    // Soft floor penalty: badly failing categories are pulled down so the
-    // headline score is not propped up by many trivial passes elsewhere.
-    if (pct < 35) pct = pct * 0.8;
+    if (weight <= 0) continue;
+    const pct = (cat.score / cat.maxScore) * 100;
     weightedSum += pct * weight;
     totalWeight += weight;
   }

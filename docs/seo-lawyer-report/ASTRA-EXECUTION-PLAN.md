@@ -431,3 +431,114 @@ Official bot facts verified by web_research:
 - Perplexity:https://docs.perplexity.ai/docs/resources/perplexity-crawlers . PerplexityBot search, not foundation-model training; Perplexity-User user fetch generally ignores robots because user requested it. Never turn its robots rule into a confirmed access/search block.
 
 Historical audit registry MEMORY.md32-40 identified cap/trust boundaries; current source verified those implementation facts. Historical scores are not current claims beyond separately preserved baseline.
+
+## 14. Design lock: selected Option 1, Decision Brief
+
+Authority: Adriano selected **1**, the Decision Brief, after reviewing the three standalone report prototypes. This resumes the original repair task using that visual/content hierarchy. This addendum resolves presentation decisions; all earlier methodology, evidence, testing, scope and delivery requirements remain binding.
+
+Exact reference files:
+- `D:\00_Work\01_CaseLoad_Select\09_Internal\SEO_Report_Design_2026-10-23\option-a.html`
+- `D:\00_Work\01_CaseLoad_Select\09_Internal\SEO_Report_Design_2026-10-23\app.js`, specifically `optionA`, `fullFinding`, and the shared strengths/AI/limits/evidence/CTA sections used by Option A.
+- `D:\00_Work\01_CaseLoad_Select\09_Internal\SEO_Report_Design_2026-10-23\styles.css`, specifically the shared/brief presentation and responsive/print rules applicable to Option A.
+
+These are layout and content-organization references, not an alternative source of audited data. Do not edit or repair the prototypes as part of implementation. Do not copy their hardcoded Soni findings, counts, dates, strengths or narrative into production. Do not import their option-selection navigation, design-preview notices, option B board/tabs, or option C guided-navigation interface into the tool.
+
+### 14.1. Locked composition
+
+Use a continuous single-column reading sequence with all priority explanations visible. Preserve the incumbent CaseLoad branding and use the Decision Brief's restrained paper background, white finding panels, navy access-summary band, clear typographic hierarchy and generous vertical spacing through the existing app styling system. Do not add a new global stylesheet or alter other pages.
+
+The production report order is:
+1. Domain, report title and short firm-specific interpretation of the actual leading finding; a neutral scope statement when no finding qualifies.
+2. Visible checked-page count, HTML-scan scope, checked timestamp and partial status, plus copy/print controls. Controls occupy their own row rather than narrowing explanatory copy.
+3. Compact **Website checks** value and its methodology explanation. Use the real method-3 result only, never a fabricated prototype score. No large gauge, letter-grade hero, AEO score or content-policy score. Historical and not-assessed cases follow A1/A5.
+4. Prominent navy access-summary band using actual checked-page counts and distinct homepage evidence. The prototype's **4 of 10** and homepage observation are examples, not defaults. Label noindex as an exclusion instruction, not confirmed Google indexing; separate robots crawl restrictions. If the homepage was not inspected, say so instead of borrowing another page's evidence. If evidence is unavailable, show **Not assessed**. Zero observed exclusions must not imply the whole site is indexed or fully crawlable.
+5. **Start with these findings**, containing at most three full-width finding panels selected by B1. Each panel shows rank/review status and affected count, then title and the three visible labels **What we found**, **Why it matters**, **What to do next**. These labels implement the same observed/whyItMatters/nextStep model fields; they do not create another copy source.
+6. Each panel has **View pages and supporting evidence**, a native disclosure containing the exact affected URLs and bounded secondary evidence. Critical uncertainty remains visible above the disclosure. No raw code or provider implementation instructions in the three primary explanation blocks.
+7. **Observed strengths**, populated only from B3 evidence. This is the selected prototype's presentation label for the strengths section previously called What the scan found working. Omit the section if no supported strengths exist.
+8. **AI access and content observations**, neutral and ungraded.
+9. **Keep the scope in mind**, containing the complete always-visible B4 limitations and partial-scan notice where applicable.
+10. **How to interpret this report**, an optional supporting disclosure for methodology and secondary observations. It may explain why there is no AI grade; it must not hide the main scope limitations or replace the score explanation.
+11. One **Discuss these findings** CTA with the approved B5 body and **Book a conversation** link, followed by the existing reset/timestamp controls as appropriate.
+
+Use the prototype's explanation-first reading behavior, not its sample recommendation order. The production model remains responsible for ranking, deduplication, empty states, exact counts, utility exclusions and uncertainty. Never force policy links/profile references into slots two/three because they appear in the mockup. If fewer than three findings qualify, show fewer; use the B1 empty state when none qualify.
+
+### 14.2. Responsive and export requirements
+
+The access band may have two equal cells on a sufficiently wide viewport and must stack when its text cannot use its full usable width. Finding cards remain full-width at every viewport. Rank/count controls wrap in their own row; they never reserve a narrow prose column. Reuse native disclosure/copy/print behavior and preserve existing embed integration.
+
+Screen, copied summary, public print and server PDF use the same report model and Decision Brief reading order. Print/PDF may expand evidence for a complete record. No priority, count, score label, caveat or audience-boundary drift is allowed. Keep operator-only content explicitly internal and absent from public outputs.
+
+Prototype selection approves the direction, not final rendered acceptance. Prior prototype checking recorded 36 orphan findings across all three options; that aggregate is neither Option A's defect count nor approval of the production report. Do not carry known wrapping defects into implementation or claim the prototype passed all gates.
+
+Validate the implemented Decision Brief at all six required widths: **1440, 1024, 768, 640, 375, 320 CSS pixels**. Fix actual mobile and other orphan/width defects structurally, using the rendered-copy gates. No manual line breaks, nonbreaking spaces, arbitrary text measures, forced tiny type or fabricated copy changes solely to mask wrapping. The remaining original Phase G accessibility, overflow, font, print/PDF, evidence and public-data tests apply in full.
+
+### 14.3. Delivery authority
+
+Current AGENTS.md has broader task-scoped merge wording. For this task Adriano specifically requested a PR for review before merge, and the direct task instruction controls: **open the PR and leave it unmerged**. No direct production deployment. Parent/root owns commits, pushes and PR; Luna implements/tests; Astra reviews without product edits. Do not treat the selected design as authorization to merge or deploy.
+
+## 15. Binding brand correction for the selected Decision Brief
+
+Adriano identified branding problems in the selected prototype. Option 1's explanation-first structure remains selected; its original visual styling is not the brand authority. Parent is revising the standalone Option A reference. **Luna must hold UI styling work until parent supplies that revised reference**, while continuing authorized non-UI work. No change to scoring, report data, finding ranking or evidence boundaries follows from this correction.
+
+### 15.1. Active authority and precedence
+
+Read and apply these active sources, inspected by Astra for this addendum:
+- `D:\00_Work\01_CaseLoad_Select\01_Brand\CANONICAL_AUTHORITY.md`.
+- `D:\00_Work\01_CaseLoad_Select\01_Brand\BrandBook\V2_Canonical\BrandBook_ACTS_V2.html`, Chapter 7 Visual system (lines 398-440) and Chapter 8 Core identifiers (lines 442-480).
+- `D:\00_Work\01_CaseLoad_Select\01_Brand\Distinctive_Asset_System_V1\canonical\Round3_v1\CANONICAL_CHARTER.md` and its canonical application/evidence system.
+- `D:\00_Work\01_CaseLoad_Select\01_Brand\Logos\CaseLoadSelect\CANONICAL_SIEVE_V2.md` and `ASSET_MANIFEST_V2.json`.
+
+Brand Book V2.0.2 and Round 3 are complementary canonical authorities. Preserve Round 3's observed field, visible selection, source/reason, uncertainty and lawyer-decision boundary. A sample CSS implementation is not permission to copy values or geometry conflicting with the explicit current visual rules or Adriano's task instructions. In particular, do not copy the older Round 3 sample's different gold value, body-font choice, one-sided notice border or decorative endpoint into this utility report.
+
+The file `BrandBook/V2_Canonical/AMENDMENT_2026-08-13_gold-deep-accent.md` explicitly says **DRAFT for approval**, with decision date pending. Its Gold Deep `#7A6748` is not active authority. Do not use it, or another invented gold/brown substitute, to repair contrast.
+
+### 15.2. Exact palette and surface roles
+
+Use only the five named brand colors for this scoped report:
+- Deep Black / Ink: `#0D1520`.
+- Navy: `#1E2F58`.
+- Gold: `#C4B49A`.
+- Parchment: `#F4F3EF`.
+- White: `#FFFFFF`.
+
+Default report canvas: Parchment. Reading panels: White or the uninterrupted page surface. Primary prose: Ink; headings and functional emphasis: Navy/Ink. Access summary may remain Navy with White text. CTA may use Navy/Ink with White text. Status and confidence are communicated by plain-language labels, typography and spacing, not new green/amber/red palettes.
+
+Gold is a documented semantic accent or approved logo endpoint, not long prose, decoration or low-contrast text on White/Parchment. On light surfaces use Ink/Navy for compact metadata and links. On Navy/Ink, short Gold labels are permitted only after contrast verification. White secondary text on dark surfaces may use an opacity only when the resulting contrast is measured and passes; no unreadable muted copy. Thin functional divider colors may derive from the named palette without introducing another branded accent. Test normal text at 4.5:1 and all relevant UI states; do not assume palette membership proves contrast.
+
+### 15.3. Exact typography roles
+
+- **Manrope 800**: report title, section headings and finding titles. No substitute 700/750 heading style from the initial prototype.
+- **DM Sans 400**: all explanatory prose, interface explanations, captions, tables, evidence records and long form-control copy. The initial prototype's Manrope body styling is superseded. Use semantic emphasis sparingly; do not switch explanatory paragraphs to Oxanium.
+- **Oxanium 600**: compact metadata, short state/priority labels, navigation/control labels where compact, and numerals. Long labels become short Oxanium labels plus separate DM Sans explanations, never compressed multi-line display text.
+
+Load the actual approved font families through existing app assets/dependencies. Inspect the rendered computed family/weight after fonts load; a CSS fallback is not acceptance. PDF uses the same type roles with fonts actually embedded/registered, including DM Sans body copy. Add only the minimal scoped asset/registration work needed, approved by parent if outside the original allowlist.
+
+### 15.4. Geometry and decoration prohibitions
+
+Use flat surfaces and square geometry. **No rounded corners**, including report panels, access summary, tags, buttons, disclosures, CTA and toast surfaces introduced by this report. **No shadows, gradients, blur, accent rails, thick one-sided borders, paired decorative rules, decorative grids or ornamental textures.** No fake selected-state borders or framing whose only purpose is visual excitement.
+
+Hierarchy comes from spacing, typography, surface tone and a single thin full-width divider where it identifies a real relationship. Do not stack adjacent rules. Keep all prose on its complete usable component track. Grid children use zero minimum width and stack before text becomes cramped. Existing full-width/orphan/mobile rules remain binding; do not narrow paragraphs to imitate a specimen.
+
+This is a utility report. **No H1 terminal square**, no square as punctuation on finding headings, and no standalone Gold square added to evidence/status/CTA panels. The approved logo's permanent Gold Sieve endpoint remains part of the unmodified logo. Round 3 evidence semantics do not authorize an additional decorative terminal mark here.
+
+### 15.5. Approved identifier asset
+
+Use the actual production CaseLoad Select horizontal lockup for the surface, not a retyped wordmark, handmade SVG icon or reconstructed Sieve. Verified canonical manifest entries:
+- `lockup-horizontal-light-transparent.png`, 794x117, SHA256 `D73D4D4E4848AB8BF899C79BB2A49D72D2F631102CDB40B01D734407F3A38BF2`, for White/Parchment.
+- `lockup-horizontal-dark-transparent.png`, 794x117, SHA256 `C9B2B3CF4C823B4991DB3791BC3B854F1A0F63E903995A0DE8F76568ACDC871F`, for Navy/Ink.
+
+Canonical exports are under `D:\00_Work\01_CaseLoad_Select\01_Brand\Logos\CaseLoadSelect\`; the Brand Book also carries canonical copies under `BrandBook/V2_Canonical/assets/logos/`. Verify selected source bytes against the manifest before reuse. Prefer an already matching app asset; otherwise parent authorizes copying the exact asset into an appropriate scoped public asset path. Preserve aspect ratio, full mark, intended background, approved clear space and legibility. No filters, recoloring, opacity, crop, stretch, rearrangement or CSS effects. If an explicit minimum-size/clear-space measurement cannot be found in governed records, report that evidence gap to parent rather than claiming an invented measurement is approved.
+
+Logo geometry remains fifteen equal squares, rows 5/4/3/2/1, offsets 0/1/1/2/2 and one Gold endpoint. This is a validation fact, not an instruction to redraw the asset.
+
+### 15.6. Brand acceptance and revised reference
+
+Parent's revised Option A replaces the initial prototype as visual reference at the same selected reference paths or an explicitly announced revised path. Preserve section14's Decision Brief sequence and visible explanations; do not reopen layout selection. Record the revised reference file hashes in final evidence when consumed.
+
+At all six required widths, inspect actual heading/body/metadata fonts, exact palette, correct logo variant, square geometry, no prohibited decoration, contrast, full-width copy and orphan behavior. Verify print and server PDF too. Prototype selection and prototype brand correction do not waive production rendered acceptance. Do not claim the report is brand-compliant until actual rendered checks pass.
+
+## 16. Scope clarification: in-tool report and native browser print
+
+Adriano clarified that this repair is for the lawyer-facing report displayed by the SEO check tool. Users can use their browser's existing print command to make a PDF when they choose. Do not redesign, integrate, brand, test, or deliver the legacy server-rendered PDF export as part of this work. This section overrides earlier references in this plan to server-PDF parity, PDF fonts, PDF tests, or PDF artifact acceptance.
+
+Do not add an in-tool print or PDF control. Users may invoke their browser print command themselves; existing print CSS may remain as compatibility styling. No print-preview or PDF artifact gate is required. The primary rendered acceptance remains the in-tool report at all six required viewport widths, with matching copied-summary content and the requested accessibility checks.

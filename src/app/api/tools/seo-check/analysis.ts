@@ -13,38 +13,19 @@
  */
 
 import {
-  type CheckItem,
   type CategoryResult,
   type AiBotStatus,
   type PageType,
   type ScanMode,
   type ParsedRobots,
   COMMERCIAL_PAGE_TYPES,
-  pageTypeLabel,
   classifyPageType,
 } from "./engine-core";
-
-// Matches robots.txt Disallow paths that name team/attorney content (team
-// pages, individual bio slugs, staff directories). Used to distinguish "the
-// firm has no team page" from "the firm has one but is blocking crawlers
-// from it", which is a materially different (and more actionable) finding.
-const TEAM_PATH_RE = /team|attorney|lawyer|our-team|staff|people|bio|counsel/i;
 
 function setsEqual<T>(a: Set<T>, b: Set<T>): boolean {
   if (a.size !== b.size) return false;
   for (const v of a) if (!b.has(v)) return false;
   return true;
-}
-
-function disallowedPaths(parsedRobots: ParsedRobots | null): string[] {
-  if (!parsedRobots) return [];
-  const paths: string[] = [];
-  for (const group of parsedRobots.groups) {
-    for (const rule of group.rules) {
-      if (rule.type === "disallow" && rule.path) paths.push(rule.path);
-    }
-  }
-  return paths;
 }
 
 /**
@@ -104,6 +85,7 @@ export interface Indexability {
   headerNofollow: boolean;
   indexable: boolean;
   inSitemap: boolean | null;
+  sitemapComplete?: boolean;
   mixedSignals: boolean;
 }
 
@@ -164,7 +146,7 @@ export interface PageResult {
   pageType: PageType;
   pageScore: number;
   pageGrade: string;
-  aiVisibilityScore: number;
+  aiVisibilityScore: number | null;
   categories: CategoryResult[];
   failCount: number;
   warnCount: number;
@@ -212,6 +194,11 @@ export interface Issue {
   evidence?: string;
   affectedUrls: string[];
   affectedCount: number;
+  failCount?: number;
+  warnCount?: number;
+  applicableCount?: number;
+  notAssessedCount?: number;
+  notApplicableCount?: number;
   totalPages: number;
   pageTypeImpact: PageType[];
   confidence: Confidence;
@@ -245,16 +232,17 @@ export interface InternalSummary {
 
 export interface SeoCheckResult {
   domain: string;
+  methodologyVersion: number;
   scanMode: ScanMode;
   pagesScanned: number;
   pages: PageResult[];
   categories: CategoryResult[];
   overallScore: number;
   grade: string;
-  aiSearchScore: number;
-  aiSearchGrade: string;
-  aiPolicyScore: number;
-  aiPolicyGrade: string;
+  aiSearchScore: number | null;
+  aiSearchGrade: string | null;
+  aiPolicyScore: number | null;
+  aiPolicyGrade: string | null;
   aiBots: AiBotStatus[];
   intentAlignment?: SiteIntentResult;
   renderingSummary?: SiteRenderingSummary;
@@ -284,6 +272,9 @@ export interface SeoCheckResult {
    * (security headers, llms.txt, FAQPage schema, Review/Rating schema).
    */
   scoring?: {
+    methodologyVersion: number;
+    label: "Website checks";
+    assessed: boolean;
     categoryWeights: Record<string, number>;
     unscoredLabels: string[];
     note: string;
@@ -419,7 +410,7 @@ function severityFor(category: string, label: string, status: "warn" | "fail", d
 }
 
 /** Internal note + outreach angle, derived from category and severity. */
-function internalAngle(category: string, severity: Severity): { note: string; angle: string } {
+function internalAngle(category: string, _severity: Severity): { note: string; angle: string } {
   const c = category;
   if (c === "Indexability") {
     return {
@@ -561,6 +552,7 @@ export function buildIssues(pages: PageResult[], effectiveContentPages: number =
       if (page.pageType === "policy" && !POLICY_RELEVANT_CATEGORIES.has(cat.name)) continue;
       for (const item of cat.items) {
         if (item.status === "pass") continue;
+        if (item.applicability === "not-applicable" || item.applicability === "unknown") continue;
         // Avoid double-counting schema absence: when no JSON-LD exists, the
         // "structured data" issue already carries the actionable finding.
         if (cat.name === "Schema & Structured Data" && item.label === "JSON-LD validity" && /no blocks to validate/i.test(item.detail)) continue;
@@ -691,6 +683,12 @@ export function buildIssues(pages: PageResult[], effectiveContentPages: number =
       ? `1 page: ${[...reportedUrls][0]}`
       : `${affectedCount} of ${totalPages} pages, including ${distinctEvidencePaths([...reportedUrls]).slice(0, 3).join(", ")}`;
 
+    const matchingItems = pages.flatMap((page) => page.categories
+      .filter((category) => category.name === acc.category)
+      .flatMap((category) => category.items.filter((item) => item.label === acc.label)));
+    const applicableItems = matchingItems.filter((item) => item.applicability !== "not-applicable" && item.applicability !== "unknown");
+    const notAssessedCount = matchingItems.filter((item) => item.applicability === "unknown" || (item.scored === false && item.applicability !== "not-applicable")).length;
+
     issues.push({
       id: slug(acc.category, acc.label),
       category: acc.category,
@@ -702,6 +700,10 @@ export function buildIssues(pages: PageResult[], effectiveContentPages: number =
       evidence,
       affectedUrls: [...reportedUrls],
       affectedCount,
+      failCount: applicableItems.filter((item) => item.status === "fail").length,
+      warnCount: applicableItems.filter((item) => item.status === "warn").length,
+      applicableCount: applicableItems.length,
+      notAssessedCount,
       totalPages,
       pageTypeImpact,
       confidence,
@@ -812,7 +814,7 @@ export function severityBreakdown(issues: Issue[]): SeverityBreakdown {
 export function buildSiteStructureIssues(
   pages: PageResult[],
   hasSitemap: boolean,
-  parsedRobots: ParsedRobots | null = null,
+  _parsedRobots: ParsedRobots | null = null,
   discoveryConfidence: DiscoveryConfidence = "high",
   uncrawledUrls: string[] = [],
   wpStarterUrls: string[] = []
@@ -821,7 +823,6 @@ export function buildSiteStructureIssues(
   const home = pages[0];
   const out: Issue[] = [];
   const hasType = (t: PageType) => pages.some((p) => p.pageType === t);
-  const teamPathsBlocked = disallowedPaths(parsedRobots).filter((p) => TEAM_PATH_RE.test(p));
   // URLs the crawler DISCOVERED (homepage nav, sitemap) but never scanned
   // because the page budget ran out. An absence claim ("no team page") is
   // false when a matching page is sitting unscanned in the frontier. Field
@@ -892,22 +893,12 @@ export function buildSiteStructureIssues(
       "The firm's highest-value services do not have their own pages, so the searches that matter most have nowhere to land.", 84);
   }
 
-  if (!hasTeamSignal && teamPathsBlocked.length > 0) {
-    // The crawler already knows robots.txt blocks team/attorney paths, so the
-    // honest finding is "these pages exist and are hidden from crawlers," not
-    // "these pages do not exist." Different root cause, different fix, and a
-    // stronger prospecting angle (the firm already built the content).
-    push("structure-attorney-blocked", "AI Visibility", "medium", "Attorney / team pages blocked from crawlers",
-      `robots.txt blocks crawler access to attorney or team pages (${teamPathsBlocked.slice(0, 3).join(", ")}), so search engines and AI systems cannot read content the firm already built.`,
-      "Remove the robots.txt Disallow rule blocking team or attorney pages so search engines and AI systems can index them.",
-      "low", "The firm already has this content; it is hiding it from search by accident. Very easy, very visible fix.",
-      "The firm's attorney bios exist, but robots.txt is quietly blocking search engines and AI systems from reading them. That is a five-minute fix with real visibility upside.", 60);
-  } else if (!hasTeamSignal) {
-    push("structure-attorney", "AI Visibility", capForLowConfidence("medium"), "No attorney / team page found",
-      "No attorney or team page was found. These pages carry expertise and authorship signals consistent with published search and AI guidance." + lowConfidenceSuffix,
+  if (!hasTeamSignal) {
+    push("structure-attorney", "Legal Marketing", capForLowConfidence("medium"), "No attorney or team page found in checked pages",
+      "No attorney or team page was found in the pages inspected." + lowConfidenceSuffix,
       "Add an attorney/team page with each lawyer's bio, credentials, and Person schema.",
-      "medium", "Authority and AI-authorship gap. Easy to package, helps E-E-A-T and AI sourcing.",
-      "There is no page establishing who the lawyers are, an expertise signal consistent with published search and AI guidance.", 58);
+      "medium", "Review which lawyer biographies and credentials are presented on the inspected pages.",
+      "The pages inspected did not confirm where the firm presents its lawyers and credentials. Verify manually before raising this with the firm.", 58);
   }
 
   if (wpStarterUrls.length > 0) {
@@ -924,8 +915,8 @@ export function buildSiteStructureIssues(
 
   if (!hasSitemap) {
     push("structure-sitemap", "Indexability", "medium", "No XML sitemap found",
-      "No XML sitemap was found at the default location or in robots.txt. Search engines have no map of the site.",
-      "Publish an XML sitemap listing important pages and reference it from robots.txt.",
+      "No XML sitemap was found at the locations checked. A sitemap can help discovery, and pages may still be found through links.",
+      "Consider providing a sitemap for important pages and referencing it from robots.txt.",
       "low", "Quick technical win. Signals an unmaintained setup; cheap to fix and easy to show.",
       "The site has no sitemap, so search engines are discovering pages by luck rather than by a map the firm controls.", 56);
   }
@@ -944,15 +935,21 @@ function uniq(arr: string[]): string[] {
 export function buildInternalSummary(
   pages: PageResult[],
   issues: Issue[],
-  overallScore: number,
-  aiSearchScore: number
+  overallScore: number
 ): InternalSummary {
   const totalPages = pages.length || 1;
   const home = pages[0];
-  const crit = issues.filter((i) => i.severity === "critical");
-  const high = issues.filter((i) => i.severity === "high");
+  // AI-only heuristic findings are not a basis for prospect fit, urgency, or
+  // outreach positioning. Keep the legacy field below empty for saved-schema
+  // compatibility, but do not let those findings influence a new summary.
+  const summaryIssues = issues.filter((i) =>
+    i.category.trim().toLowerCase() !== "ai visibility" &&
+    !/\bAI[- ](?:visibility|search|citation|readiness)\b|\b(?:answer[- ]engine|llms\.txt|GPTBot|ClaudeBot|Claude-SearchBot|PerplexityBot|ChatGPT-User)\b|not positioned to be found or cited in AI search/i.test(`${i.title} ${i.detail}`)
+  );
+  const crit = summaryIssues.filter((i) => i.severity === "critical");
+  const high = summaryIssues.filter((i) => i.severity === "high");
 
-  const byCat = (cat: string) => issues.filter((i) => i.category === cat);
+  const byCat = (cat: string) => summaryIssues.filter((i) => i.category === cat);
 
   // Website maturity from headline score, breadth, and structured data.
   const hasSchema = pages.some((p) => p.schema.blocks > 0 && p.schema.invalidBlocks === 0);
@@ -976,7 +973,6 @@ export function buildInternalSummary(
   let fit = 50;
   fit += { poor: -18, basic: 18, decent: 12, strong: -14 }[websiteMaturity];
   fit += Math.min(20, (crit.length * 7) + (high.length * 3));
-  if (aiSearchScore < 50) fit += 6;
   if (byCat("Legal Marketing").length > 0) fit += 6;
   if (byCat("Local SEO").length > 0) fit += 4;
   const prospectFitScore = Math.max(0, Math.min(100, Math.round(fit)));
@@ -984,11 +980,10 @@ export function buildInternalSummary(
   // Pain points: categories with the most weighted findings, human phrasing.
   const painByCat: Array<[string, string]> = [
     ["Indexability", "Pages held back from search engines by technical settings"],
-    ["AI Visibility", "Not positioned to be found or cited in AI search"],
     ["Legal Marketing", "Intake and trust cues are thin for a firm site"],
     ["On-Page SEO", "Core on-page signals missing across multiple pages"],
     ["Local SEO", "Weak local signals for the firm's catchment"],
-    ["Schema & Structured Data", "No structured data for search and AI to read"],
+    ["Schema & Structured Data", "No structured business data surfaced for the inspected pages"],
     ["Technical & Security", "Technical and security basics not in place"],
   ];
   const likelyPainPoints = uniq(
@@ -1000,33 +995,31 @@ export function buildInternalSummary(
   // Outreach hooks: the prospecting angle of the top-priority issues, de-duped
   // by angle text.
   const strongestOutreachHooks = uniq(
-    issues.slice(0, 6).map((i) => i.prospectingAngle || "")
+    summaryIssues.slice(0, 6).map((i) => i.prospectingAngle || "")
   ).slice(0, 3);
 
   // Opening angle: lead with the single highest-priority blocker category.
-  const lead = issues[0];
+  const lead = summaryIssues[0];
   const recommendedOpeningAngle = lead
     ? lead.prospectingAngle ||
       "Open on the firm's strongest practice area and where its site is quietly underselling it."
     : "The site is in good shape. Open on growth and case selection rather than fixing problems.";
 
-  const revenueCats = ["Legal Marketing", "Local SEO", "On-Page SEO", "AI Visibility"];
+  const revenueCats = ["Legal Marketing", "Local SEO", "On-Page SEO"];
   const topRevenueOpportunities = uniq(
-    issues
+    summaryIssues
       .filter((i) => revenueCats.includes(i.category) && (i.severity === "critical" || i.severity === "high"))
       .slice(0, 4)
       .map((i) => `${i.title} (${i.category})`)
   );
 
   const technicalBlockers = uniq(
-    issues
+    summaryIssues
       .filter((i) => (i.category === "Indexability" || i.category === "Technical & Security") && i.status === "fail")
       .map((i) => i.title)
   ).slice(0, 5);
 
-  const aiVisibilityBlockers = uniq(
-    byCat("AI Visibility").filter((i) => i.status === "fail" || i.severity === "high").map((i) => i.title)
-  ).slice(0, 5);
+  const aiVisibilityBlockers: string[] = [];
 
   const localSeoOpportunities = uniq(byCat("Local SEO").map((i) => i.title)).slice(0, 5);
 

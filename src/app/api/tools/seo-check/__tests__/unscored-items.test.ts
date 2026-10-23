@@ -12,10 +12,21 @@ vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: async () => null }));
 
 import { scoreItems, computeWeightedScore, aiScoresFromItems, type CheckItem, type CategoryResult } from "../engine-core";
 import { aggregateCategories } from "../page-checks";
+import { buildIssues } from "../analysis";
 import type { PageResult, Indexability, SchemaSummary, LawFirmSignals } from "../analysis";
 import type { PageType } from "../engine-core";
 
 describe("scoreItems: scored:false items are excluded from both score and maxScore", () => {
+  it("not-applicable and unknown checks are excluded in both passing and failing states", () => {
+    const items: CheckItem[] = [
+      { label: "Applicable", status: "pass", detail: "" },
+      { label: "Exempt fail", status: "fail", detail: "Observed", scored: false, applicability: "not-applicable" },
+      { label: "Exempt pass", status: "pass", detail: "Observed", scored: false, applicability: "not-applicable" },
+      { label: "Unknown fail", status: "fail", detail: "Not assessed", scored: false, applicability: "unknown" },
+      { label: "Unknown pass", status: "pass", detail: "Not assessed", scored: false, applicability: "unknown" },
+    ];
+    expect(scoreItems(items)).toEqual({ score: 10, maxScore: 10 });
+  });
   it("a warn(unscored) item does not lower the score below what the scored pass earns", () => {
     const items: CheckItem[] = [
       { label: "A", status: "pass", detail: "" },
@@ -144,9 +155,9 @@ describe("aggregateCategories: the scored flag and maxScore survive the per-page
   function mkPage(url: string, pageType: PageType, categories: CategoryResult[]): PageResult {
     const allItems = categories.flatMap((c) => c.items);
     return {
-      url, title: "Test page", pageType, pageScore: 50, pageGrade: "C+", aiVisibilityScore: 50,
-      categories, failCount: allItems.filter((i) => i.status === "fail").length,
-      warnCount: allItems.filter((i) => i.status === "warn").length,
+      url, title: "Test page", pageType, pageScore: 50, pageGrade: "C+", aiVisibilityScore: null,
+      categories, failCount: allItems.filter((i) => i.status === "fail" && i.scored !== false && i.applicability !== "not-applicable" && i.applicability !== "unknown").length,
+      warnCount: allItems.filter((i) => i.status === "warn" && i.scored !== false && i.applicability !== "not-applicable" && i.applicability !== "unknown").length,
       httpStatus: 200, indexable: true, indexability, schema, lawFirm,
       wordCount: 500, keyWarnings: [],
     };
@@ -209,5 +220,56 @@ describe("aggregateCategories: the scored flag and maxScore survive the per-page
     ];
     const [aggregated] = aggregateCategories(pages);
     expect(aggregated).toMatchObject({ score: 0, maxScore: 0 });
+  });
+
+  it("unions categories across pages and averages only page categories with positive maxScore without early rounding", () => {
+    const pages = [
+      mkPage("https://x.com/", "homepage", [
+        { name: "Only on page one", score: 1, maxScore: 3, items: [{ label: "A", status: "pass", detail: "" }] },
+        { name: "Shared", score: 0, maxScore: 0, items: [{ label: "B", status: "fail", detail: "", scored: false }] },
+      ]),
+      mkPage("https://x.com/about", "about", [
+        { name: "Only on page two", score: 6, maxScore: 10, items: [{ label: "C", status: "pass", detail: "" }] },
+        { name: "Shared", score: 2, maxScore: 4, items: [{ label: "B", status: "pass", detail: "" }] },
+      ]),
+    ];
+    const aggregated = aggregateCategories(pages);
+    expect(aggregated.map((category) => category.name)).toEqual(["Only on page one", "Shared", "Only on page two"]);
+    expect(aggregated[0].score).toBeCloseTo(10 / 3, 12);
+    expect(aggregated[0].maxScore).toBe(10);
+    expect(aggregated[1]).toMatchObject({ score: 5, maxScore: 10 });
+  });
+
+  it("keeps pass/fail/warn counts separate and excludes not-applicable and unknown observations", () => {
+    const pages = [mkPage("https://x.com/", "homepage", [{
+      name: "Example",
+      score: 10,
+      maxScore: 10,
+      items: [
+        { label: "Scored fail", status: "fail", detail: "" },
+        { label: "Scored warn", status: "warn", detail: "" },
+        { label: "Exempt fail", status: "fail", detail: "", scored: false, applicability: "not-applicable" },
+        { label: "Unknown warn", status: "warn", detail: "", scored: false, applicability: "unknown" },
+      ],
+    }])];
+    const [aggregate] = aggregateCategories(pages);
+    expect(aggregate.counts).toEqual({ fail: 1, warn: 1, applicable: 2, notAssessed: 1, notApplicable: 1 });
+    expect(aggregate.items.find((item) => item.label === "Exempt fail")).toMatchObject({ failCount: 0, applicableCount: 0, notAssessedCount: 0, notApplicableCount: 1, applicability: "not-applicable" });
+  });
+
+  it("does not create findings from not-applicable or unknown failures and reports each count separately", () => {
+    const category = (items: CheckItem[]): CategoryResult => ({ name: "Legal Marketing", score: 0, maxScore: 10, items });
+    const pages = [
+      mkPage("https://x.com/practice", "practice", [category([
+        { label: "Page-specific check", status: "fail", detail: "Observed failure." },
+        { label: "Exempt check", status: "fail", detail: "Outside scope.", scored: false, applicability: "not-applicable" },
+      ])]),
+      mkPage("https://x.com/about", "about", [category([
+        { label: "Page-specific check", status: "warn", detail: "Not assessed.", scored: false, applicability: "unknown" },
+      ])]),
+    ];
+    const issues = buildIssues(pages);
+    expect(issues.map((issue) => issue.title)).toEqual(["Page-specific check"]);
+    expect(issues[0]).toMatchObject({ failCount: 1, warnCount: 0, applicableCount: 1, notAssessedCount: 1 });
   });
 });

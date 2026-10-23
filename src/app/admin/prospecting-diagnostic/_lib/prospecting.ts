@@ -441,13 +441,11 @@ function buildCompetitorComparison(primary: SeoCheckResult | null, scans: Domain
 
   const primaryIntent = primary?.intentAlignment?.score ?? null;
   const primaryOverall = primary?.overallScore ?? null;
-  const primaryAi = primary?.aiSearchScore ?? null;
   const gaps: string[] = [];
   const advantages: string[] = [];
 
   const bestIntent = Math.max(...reachable.map((r) => r.intentScore ?? -1), -1);
   const bestOverall = Math.max(...reachable.map((r) => r.overallScore ?? -1), -1);
-  const bestAi = Math.max(...reachable.map((r) => r.aiSearchScore ?? -1), -1);
 
   if (primaryIntent !== null && bestIntent >= 0) {
     if (primaryIntent + 10 < bestIntent) gaps.push(`Competitors show stronger target-intent alignment (${bestIntent}/100 vs ${primaryIntent}/100).`);
@@ -457,11 +455,6 @@ function buildCompetitorComparison(primary: SeoCheckResult | null, scans: Domain
     if (primaryOverall + 10 < bestOverall) gaps.push(`A competitor has a stronger overall SEO foundation (${bestOverall}/100 vs ${primaryOverall}/100).`);
     else if (primaryOverall >= bestOverall + 10) advantages.push(`The target site has a stronger overall SEO foundation than scanned competitors (${primaryOverall}/100 vs ${bestOverall}/100).`);
   }
-  if (primaryAi !== null && bestAi >= 0) {
-    if (primaryAi + 10 < bestAi) gaps.push(`A competitor is cleaner for AI search access/readiness (${bestAi}/100 vs ${primaryAi}/100).`);
-    else if (primaryAi >= bestAi + 10) advantages.push(`The target site is cleaner for AI search than scanned competitors (${primaryAi}/100 vs ${bestAi}/100).`);
-  }
-
   if (gaps.length === 0 && advantages.length === 0 && reachable.length > 0) {
     advantages.push("The scanned competitors are close enough that page-level positioning and intake quality should decide the outreach angle.");
   }
@@ -514,9 +507,8 @@ function buildStrategicQuestions(
   questions.push("Which practice areas feel underrepresented online compared with the work you actually want?");
 
   // Authority-weighted question when the firm's visibility signals are thin.
-  const aiThin = (primary?.aiSearchScore ?? 100) < 55;
   const authorityGap = actsFindings.authority.some((f) => !f.title.endsWith("looks solid"));
-  if (aiThin || authorityGap) {
+  if (authorityGap) {
     questions.push("How are clients finding the firm today, mostly referrals, search, or paid ads?");
   }
 
