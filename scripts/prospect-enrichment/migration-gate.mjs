@@ -303,7 +303,7 @@ export function fullLedgerQuery() {
   return "SELECT version, name FROM supabase_migrations.schema_migrations ORDER BY version;\n";
 }
 
-export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePendingPaths) {
+export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePendingPaths, heldSourceRoot) {
   const heldReaderRepairPhase = ["candidate-reader-repair-held-pending", "candidate-reader-repair-held-complete"].includes(phase);
   if (!Array.isArray(rows) || !["qualification-pending", "enrichment-pending", "complete", "candidate-pending", "candidate-reader-repair-pending", "candidate-reader-repair-held-pending", "candidate-reader-repair-held-complete", "candidate-registration-repair-pending", "candidate-projection-repair-pending"].includes(phase)) fail("invalid_full_ledger_input");
   if (phase === "candidate-pending") {
@@ -321,14 +321,20 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
   } else if (phase === "candidate-projection-repair-pending") {
     if (!same(candidatePendingPaths, [CANDIDATE_PROJECTION_REPAIR_PATH])) fail("invalid_candidate_projection_repair_pending_scope");
   } else if (candidatePendingPaths !== undefined) fail("invalid_full_ledger_input");
+  if (heldReaderRepairPhase) {
+    if (typeof heldSourceRoot !== "string" || !path.isAbsolute(heldSourceRoot)) fail("reader_repair_held_source_root_required");
+  } else if (heldSourceRoot !== undefined) fail("invalid_full_ledger_input");
   const { migrations } = sourceMigrationInventory(sourceRoot, { requirePreviewSources: false });
-  const localByVersion = new Map(migrations.filter(item => !PREVIEW_MIGRATION_PATHS.includes(item.path)).map(item => [item.version, item]));
+  const localByVersion = new Map(migrations.map(item => [item.version, item]));
+  const heldMigration = heldReaderRepairPhase ? verifyCandidateReaderRepairHeldMigration(heldSourceRoot) : undefined;
+  if (heldMigration && localByVersion.has(heldMigration.version)) fail("reader_repair_held_migration_staged");
   const remote = new Map();
   for (const row of rows) {
     if (!isRecord(row) || !same(Object.keys(row).sort(), ["name", "version"]) || typeof row.version !== "string" || typeof row.name !== "string" || remote.has(row.version)) fail("invalid_full_ledger_rows");
     remote.set(row.version, row.name);
   }
   if (!same([...remote.keys()], [...remote.keys()].sort())) fail("full_ledger_rows_not_ordered");
+  if (heldMigration && remote.has(heldMigration.version)) fail("reader_repair_held_migration_already_applied");
   for (const [version, name] of remote) {
     const local = localByVersion.get(version);
     const alias = HISTORICAL_LEDGER_NAME_ALIASES[version];
@@ -339,15 +345,12 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
   let pendingPaths = pending;
   let heldMigrations;
   if (heldReaderRepairPhase) {
-    const heldMigration = verifyCandidateReaderRepairHeldMigration(sourceRoot);
-    if (!pending.includes(heldMigration.path)) fail("reader_repair_held_migration_not_pending");
-    const readerPending = pending.filter(item => item !== heldMigration.path);
     if (phase === "candidate-reader-repair-held-pending") {
       const permittedSuffixes = CANDIDATE_READER_REPAIR_PATHS.map((_, index) => CANDIDATE_READER_REPAIR_PATHS.slice(index));
-      if (!permittedSuffixes.some(suffix => same(readerPending, [...suffix].sort()))) fail("unexpected_full_history_delta");
-      pendingPaths = readerPending;
+      if (!permittedSuffixes.some(suffix => same(pending, [...suffix].sort()))) fail("unexpected_full_history_delta");
+      pendingPaths = pending;
     } else {
-      if (!same(pending, [heldMigration.path])) fail("unexpected_full_history_delta");
+      if (pending.length !== 0) fail("unexpected_full_history_delta");
       pendingPaths = [];
     }
     heldMigrations = [{ ...heldMigration, status: "held-unapplied" }];
@@ -640,10 +643,12 @@ async function main(args) {
     console.log(JSON.stringify(result));
     return;
   }
-  if (command === "full-ledger" && (rest.length === 3 || rest.length === 4)) {
+  if (command === "full-ledger" && [3, 4, 5].includes(rest.length)) {
     const payload = JSON.parse(fs.readFileSync(rest[0], "utf8"));
     const rows = Array.isArray(payload) ? payload : Array.isArray(payload?.data) ? payload.data : payload?.rows;
-    console.log(JSON.stringify(verifyFullMigrationLedger(rows, rest[1], rest[2], rest.length === 4 ? JSON.parse(rest[3]) : undefined)));
+    const candidatePendingPaths = rest.length >= 4 && rest[3] !== "-" ? JSON.parse(rest[3]) : undefined;
+    const heldSourceRoot = rest.length === 5 ? rest[4] : undefined;
+    console.log(JSON.stringify(verifyFullMigrationLedger(rows, rest[1], rest[2], candidatePendingPaths, heldSourceRoot)));
     return;
   }
   if (command === "ledger-delta" && rest.length === 4) {
