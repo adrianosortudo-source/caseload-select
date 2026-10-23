@@ -439,15 +439,19 @@ test("candidate reader repair permits only its exact suffix while one exact unre
 test("reader-repair stage excludes only the exact held migration and verifies the staged proof", t => {
   const base = fs.mkdtempSync(path.join(process.env.TEMP ?? process.cwd(), "candidate-reader-stage-test-"));
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
+  const sourceRoot = path.join(base, "source");
   const destination = path.join(base, "stage");
-  const proof = stageCandidateReaderRepairWorkdir(root, destination);
+  fs.mkdirSync(path.join(sourceRoot, "supabase"), { recursive: true });
+  fs.cpSync(path.join(root, "supabase", "migrations"), path.join(sourceRoot, "supabase", "migrations"), { recursive: true });
+  fs.copyFileSync(path.join(root, "supabase", "config.toml"), path.join(sourceRoot, "supabase", "config.toml"));
+  const proof = stageCandidateReaderRepairWorkdir(sourceRoot, destination);
   const heldExclusion = proof.exclusions.find(item => item.path === CANDIDATE_READER_REPAIR_HELD_MIGRATION.path);
   assert.ok(heldExclusion);
   assert.equal(heldExclusion.version, CANDIDATE_READER_REPAIR_HELD_MIGRATION.version);
   assert.equal(heldExclusion.name, CANDIDATE_READER_REPAIR_HELD_MIGRATION.name);
   assert.equal(fs.existsSync(path.join(destination, CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)), false);
   assert.equal(fs.existsSync(path.join(destination, CANDIDATE_READER_REPAIR_PATHS.at(-1))), true);
-  assert.equal(verifyProductionWorkdir(root, destination, proof).stagedRoot, fs.realpathSync(destination));
+  assert.equal(verifyProductionWorkdir(sourceRoot, destination, proof).stagedRoot, fs.realpathSync(destination));
 });
 
 test("qualification catalog comparison rejects missing tables, changed indexes, constraints, and column privileges", t => {
