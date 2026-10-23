@@ -19,6 +19,7 @@ import {
   type ScanMode,
   type ParsedRobots,
   COMMERCIAL_PAGE_TYPES,
+  pageTypeLabel,
   classifyPageType,
 } from "./engine-core";
 
