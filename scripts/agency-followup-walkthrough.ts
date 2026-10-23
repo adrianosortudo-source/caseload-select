@@ -755,25 +755,34 @@ async function waitForListener(server: ChildProcess, deadline: number): Promise<
       }
       let listenerPid: number | undefined;
       try {
-        progress("loopback TCP connected; resolving listener PID with bounded netstat inspection");
-        const netstat = execFileSync("netstat", ["-ano", "-p", "tcp"], {
+        const windows = process.platform === "win32";
+        progress(`loopback TCP connected; resolving listener PID with bounded ${windows ? "netstat" : "ss"} inspection`);
+        const listenerTable = execFileSync(windows ? "netstat" : "ss", windows ? ["-ano", "-p", "tcp"] : ["-ltnp"], {
           encoding: "utf8",
           timeout: 30000,
           windowsHide: true,
         });
-        for (const line of netstat.split(/\r?\n/)) {
-          const fields = line.trim().split(/\s+/);
-          if (fields.length < 5 || fields[0].toUpperCase() !== "TCP") continue;
-          if (!fields[1].endsWith(":55435") || fields[3].toUpperCase() !== "LISTENING") continue;
-          const pid = Number(fields[4]);
-          if (Number.isInteger(pid) && pid > 0) listenerPid = pid;
-          break;
+        for (const line of listenerTable.split(/\r?\n/)) {
+          if (!line.includes(":55435")) continue;
+          if (windows) {
+            const fields = line.trim().split(/\s+/);
+            if (fields.length < 5 || fields[0].toUpperCase() !== "TCP" || fields[3].toUpperCase() !== "LISTENING") continue;
+            const pid = Number(fields[4]);
+            if (Number.isInteger(pid) && pid > 0) listenerPid = pid;
+          } else {
+            const fields = line.trim().split(/\s+/);
+            if (fields.length < 4 || fields[0].toUpperCase() !== "LISTEN") continue;
+            const pidMatch = /\bpid=(\d+)\b/.exec(line);
+            const pid = Number(pidMatch?.[1]);
+            if (Number.isInteger(pid) && pid > 0) listenerPid = pid;
+          }
+          if (listenerPid !== undefined) break;
         }
       } catch (error) {
         throw new Error(safeFailureText(`Could not verify owner of reachable 127.0.0.1:55435 listener: ${error instanceof Error ? error.message : String(error)}.`, 1000));
       }
       if (listenerPid === undefined) {
-        throw new Error("TCP connect succeeded on 127.0.0.1:55435 but netstat reported no LISTENING owner.");
+        throw new Error(`TCP connect succeeded on 127.0.0.1:55435 but ${process.platform === "win32" ? "netstat" : "ss"} reported no listener owner.`);
       }
       const owner = inspectWindowsProcessChain(listenerPid, server.pid!);
       if (!owner.isNextDescendant) {
