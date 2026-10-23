@@ -73,6 +73,16 @@ export const CANDIDATE_READER_REPAIR_HELD_MIGRATION = Object.freeze({
   bytes: 634,
   sha256: "0dce15f75e20ea8d170b862a7a5075e675570e23f1dca53c4ed76bc531d41568",
 });
+export const CANDIDATE_READER_REPAIR_HELD_MIGRATIONS = Object.freeze([
+  CANDIDATE_READER_REPAIR_HELD_MIGRATION,
+  Object.freeze({
+    path: "supabase/migrations/20261013154000_agency_followup_journeys.sql",
+    version: "20261013154000",
+    name: "agency_followup_journeys",
+    bytes: 23863,
+    sha256: "7499b1cf07c3339f8fa603b48fab3f1308c136efa03d32ce6bfb2ffc26a3fef4",
+  }),
+]);
 export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
 export const RELEASE_PATH = "scripts/prospect-enrichment/migration-release.json";
@@ -152,17 +162,18 @@ function sourceMigrationInventory(sourceRoot, { requirePreviewSources = true } =
   return { root, migrations };
 }
 
-function verifyCandidateReaderRepairHeldMigration(sourceRoot) {
+function verifyCandidateReaderRepairHeldMigrations(sourceRoot) {
   const root = fs.realpathSync(sourceRoot);
-  const absolute = path.join(root, CANDIDATE_READER_REPAIR_HELD_MIGRATION.path);
-  const stat = fs.lstatSync(absolute);
-  if (stat.isSymbolicLink() || !stat.isFile()) fail("reader_repair_held_migration_source_invalid");
-  const raw = fs.readFileSync(absolute);
-  const canonical = Buffer.from(raw.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
-  if (!canonical.length || !Buffer.from(canonical.toString("utf8"), "utf8").equals(canonical) ||
-      canonical.length !== CANDIDATE_READER_REPAIR_HELD_MIGRATION.bytes ||
-      sha256(canonical) !== CANDIDATE_READER_REPAIR_HELD_MIGRATION.sha256) fail("reader_repair_held_migration_source_mismatch");
-  return CANDIDATE_READER_REPAIR_HELD_MIGRATION;
+  return CANDIDATE_READER_REPAIR_HELD_MIGRATIONS.map(expected => {
+    const absolute = path.join(root, expected.path);
+    const stat = fs.lstatSync(absolute);
+    if (stat.isSymbolicLink() || !stat.isFile()) fail("reader_repair_held_migration_source_invalid");
+    const raw = fs.readFileSync(absolute);
+    const canonical = Buffer.from(raw.toString("utf8").replace(/\r\n/g, "\n"), "utf8");
+    if (!canonical.length || !Buffer.from(canonical.toString("utf8"), "utf8").equals(canonical) ||
+        canonical.length !== expected.bytes || sha256(canonical) !== expected.sha256) fail("reader_repair_held_migration_source_mismatch");
+    return expected;
+  });
 }
 
 /** Copy a complete, byte-verified production CLI history into a fresh staging directory. */
@@ -170,12 +181,12 @@ export function stageProductionWorkdir(sourceRoot, destinationRoot) {
   return stageMigrationWorkdir(sourceRoot, destinationRoot, []);
 }
 
-/** Stage the reviewed reader history while keeping the exact unrelated Agency CRM grant migration held. */
+/** Stage the reviewed reader history while keeping the exact unrelated Agency CRM migrations held. */
 export function stageCandidateReaderRepairWorkdir(sourceRoot, destinationRoot) {
-  const heldMigration = verifyCandidateReaderRepairHeldMigration(sourceRoot);
+  const heldMigrations = verifyCandidateReaderRepairHeldMigrations(sourceRoot);
   return {
-    ...stageMigrationWorkdir(sourceRoot, destinationRoot, [heldMigration.path]),
-    readerRepairHeldMigration: heldMigration,
+    ...stageMigrationWorkdir(sourceRoot, destinationRoot, heldMigrations.map(item => item.path)),
+    readerRepairHeldMigrations: heldMigrations,
   };
 }
 
@@ -207,16 +218,16 @@ export function verifyProductionWorkdir(sourceRoot, stagedRoot, proof) {
   const source = sourceMigrationInventory(sourceRoot);
   const staged = sourceMigrationInventory(stagedRoot, { requirePreviewSources: false });
   if (proof.prerequisiteOnly !== undefined && proof.prerequisiteOnly !== true) fail("staged_proof_invalid");
-  if (proof.prerequisiteOnly === true && proof.readerRepairHeldMigration !== undefined) fail("staged_proof_invalid");
-  const heldMigration = proof.readerRepairHeldMigration === undefined
+  if (proof.prerequisiteOnly === true && proof.readerRepairHeldMigrations !== undefined) fail("staged_proof_invalid");
+  const heldMigrations = proof.readerRepairHeldMigrations === undefined
     ? undefined
-    : verifyCandidateReaderRepairHeldMigration(source.root);
-  if (heldMigration && !same(proof.readerRepairHeldMigration, heldMigration)) fail("reader_repair_held_migration_mismatch");
+    : verifyCandidateReaderRepairHeldMigrations(source.root);
+  if (heldMigrations && !same(proof.readerRepairHeldMigrations, heldMigrations)) fail("reader_repair_held_migration_mismatch");
   const deferred = proof.prerequisiteOnly === true ? CANDIDATE_RELEASE_PATHS.slice(8) : [];
   if (deferred.length && (proof.additiveReceiptSha256 !== sha256(fs.readFileSync(path.join(source.root, "scripts/prospect-enrichment/additive-release-review.json"))) ||
       !same(proof.deferredCandidateMigrations?.map(item => item.path), deferred))) fail("prerequisite_receipt_prefix_mismatch");
   if (deferred.length && !same(proof.deferredCandidateMigrations, JSON.parse(fs.readFileSync(path.join(source.root, "scripts/prospect-enrichment/additive-release-review.json"), "utf8")).migrations.slice(8))) fail("prerequisite_receipt_prefix_mismatch");
-  const excluded = new Set([...PREVIEW_MIGRATION_PATHS, ...deferred, ...(heldMigration ? [heldMigration.path] : [])]);
+  const excluded = new Set([...PREVIEW_MIGRATION_PATHS, ...deferred, ...(heldMigrations ? heldMigrations.map(item => item.path) : [])]);
   const included = source.migrations.filter(item => !excluded.has(item.path));
   if (staged.root !== proof.stagedRoot || !same(staged.migrations, included) || staged.migrations.length !== proof.migrationCount) fail("staged_migration_source_mismatch");
   const inventorySha256 = sha256(JSON.stringify(included.map(({ path, version, name, bytes, sha256: digest }) => ({ path, version, name, bytes, sha256: digest }))));
@@ -231,7 +242,7 @@ export function verifyProductionWorkdir(sourceRoot, stagedRoot, proof) {
   if (!configs[0].equals(configs[1]) || sha256(configs[1]) !== proof.configSha256) fail("staged_config_mismatch");
   if (findProjectEnvFiles(file => fs.existsSync(path.join(staged.root, file))).length) fail("project_database_env_files_prohibited");
   return { stagedRoot: staged.root, migrationCount: included.length, inventorySha256, configSha256: proof.configSha256,
-    ...(heldMigration ? { readerRepairHeldMigration: heldMigration } : {}), verified: true };
+    ...(heldMigrations ? { readerRepairHeldMigrations: heldMigrations } : {}), verified: true };
 }
 
 function stageMigrationWorkdir(sourceRoot, destinationRoot, deferredPaths) {
@@ -326,15 +337,15 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
   } else if (heldSourceRoot !== undefined) fail("invalid_full_ledger_input");
   const { migrations } = sourceMigrationInventory(sourceRoot, { requirePreviewSources: false });
   const localByVersion = new Map(migrations.filter(item => !PREVIEW_MIGRATION_PATHS.includes(item.path)).map(item => [item.version, item]));
-  const heldMigration = heldReaderRepairPhase ? verifyCandidateReaderRepairHeldMigration(heldSourceRoot) : undefined;
-  if (heldMigration && localByVersion.has(heldMigration.version)) fail("reader_repair_held_migration_staged");
+  const heldMigrationSources = heldReaderRepairPhase ? verifyCandidateReaderRepairHeldMigrations(heldSourceRoot) : undefined;
+  if (heldMigrationSources?.some(item => localByVersion.has(item.version))) fail("reader_repair_held_migration_staged");
   const remote = new Map();
   for (const row of rows) {
     if (!isRecord(row) || !same(Object.keys(row).sort(), ["name", "version"]) || typeof row.version !== "string" || typeof row.name !== "string" || remote.has(row.version)) fail("invalid_full_ledger_rows");
     remote.set(row.version, row.name);
   }
   if (!same([...remote.keys()], [...remote.keys()].sort())) fail("full_ledger_rows_not_ordered");
-  if (heldMigration && remote.has(heldMigration.version)) fail("reader_repair_held_migration_already_applied");
+  if (heldMigrationSources?.some(item => remote.has(item.version))) fail("reader_repair_held_migration_already_applied");
   for (const [version, name] of remote) {
     const local = localByVersion.get(version);
     const alias = HISTORICAL_LEDGER_NAME_ALIASES[version];
@@ -353,7 +364,9 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
       if (pending.length !== 0) fail("unexpected_full_history_delta");
       pendingPaths = [];
     }
-    heldMigrations = [{ ...heldMigration, status: "held-unapplied" }];
+    // The separately stamped Agency CRM journeys source is held even though the live
+    // ledger contains its prior pinned historical version at 20261013173327.
+    heldMigrations = heldMigrationSources.map(item => ({ ...item, status: "held-unapplied" }));
   }
   const expected = phase === "qualification-pending"
     ? [...QUALIFICATION_HISTORY.map(item => item.path), ...MIGRATION_PATHS].sort()
