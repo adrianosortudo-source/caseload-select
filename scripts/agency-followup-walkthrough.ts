@@ -779,8 +779,10 @@ async function verifyProviderIdempotencyFenceRpc(
     );
     const row = result.rows[0];
     if (!row) throw new Error("A dedicated provider-window message fixture could not be inserted.");
+    // This RPC contract checks immutable idempotency state, not business hours;
+    // use an all-day synthetic window. Separate walkthrough cases test scheduling blocks.
     await client.query(
-      "update public.agency_followup_journeys set minimum_spacing_hours=0 where id=(select journey_id from public.agency_followup_enrollments where id=$1)",
+      "update public.agency_followup_journeys set minimum_spacing_hours=0,timezone='UTC',business_days=ARRAY[1,2,3,4,5,6,7]::smallint[],local_window_start=TIME '00:00:00',local_window_end=TIME '24:00:00' where id=(select journey_id from public.agency_followup_enrollments where id=$1)",
       [row.enrollment_id],
     );
     await client.query(
@@ -790,7 +792,7 @@ async function verifyProviderIdempotencyFenceRpc(
            reviewed_by_operator_id=coalesce(predecessor.reviewed_by_operator_id,target.reviewed_by_operator_id),
            reviewed_at=coalesce(predecessor.reviewed_at,target.reviewed_at,clock_timestamp()-interval '2 days'),
            provider_message_id=coalesce(predecessor.provider_message_id,'walkthrough-predecessor-'||predecessor.id::text),
-           provider_accepted_at=coalesce(predecessor.provider_accepted_at,clock_timestamp()-interval '2 days'),
+           provider_accepted_at=clock_timestamp()-interval '2 days',
            lease_owner=null,lease_until=null,unknown_since=null,last_error_code=null,updated_at=clock_timestamp()
        from public.agency_followup_messages target
        where target.id=$1 and predecessor.enrollment_id=target.enrollment_id and predecessor.step_number<target.step_number`,
