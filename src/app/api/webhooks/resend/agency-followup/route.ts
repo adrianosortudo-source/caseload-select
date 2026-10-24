@@ -232,7 +232,7 @@ export async function POST(req: NextRequest) {
     }
     if (!validEmail(data.email)) return noStore({ error: "invalid_contact_event" }, 400);
     recipientEmail = data.email;
-    recipientHash = null;
+    recipientHash = agencyFollowupRecipientEmailHash(data.email);
     contactStatus = "unsubscribed";
   } else if (MESSAGE_EVENTS.has(event.type)) {
     if (typeof data.email_id !== "string" || data.email_id.trim() !== data.email_id ||
@@ -250,17 +250,24 @@ export async function POST(req: NextRequest) {
     return noStore({ ok: true, ignored: true }, 202);
   }
 
-  const result = await supabaseAdmin.rpc("persist_agency_followup_resend_event", {
-    p_provider_event_id: svixId,
-    p_provider_message_id: providerMessageId,
-    p_event_type: event.type,
-    p_contact_status: contactStatus,
-    p_occurred_at: occurredAt.toISOString(),
-    p_recipient_email: recipientEmail,
-    p_recipient_sha256: recipientHash,
-    p_agency_followup_message_id: parsedTags.messageId,
-    p_agency_followup_enrollment_id: parsedTags.enrollmentId,
-  });
+  const result = event.type === "contact.updated"
+    ? await supabaseAdmin.rpc("persist_agency_followup_resend_contact_event", {
+      p_provider_event_id: svixId,
+      p_occurred_at: occurredAt.toISOString(),
+      p_recipient_email: recipientEmail,
+      p_recipient_sha256: recipientHash as string,
+    })
+    : await supabaseAdmin.rpc("persist_agency_followup_resend_event", {
+      p_provider_event_id: svixId,
+      p_provider_message_id: providerMessageId,
+      p_event_type: event.type,
+      p_contact_status: contactStatus,
+      p_occurred_at: occurredAt.toISOString(),
+      p_recipient_email: recipientEmail,
+      p_recipient_sha256: recipientHash,
+      p_agency_followup_message_id: parsedTags.messageId,
+      p_agency_followup_enrollment_id: parsedTags.enrollmentId,
+    });
   if (result.error) {
     // Keep the response generic, but record the PostgreSQL error class for
     // server-side diagnosis without logging recipient or event contents.

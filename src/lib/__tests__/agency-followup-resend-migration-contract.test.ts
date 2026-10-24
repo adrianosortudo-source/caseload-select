@@ -24,6 +24,7 @@ const resendWebhookRoute = readFileSync(resolve(process.cwd(), "src/app/api/webh
 const walkthrough = readFileSync(resolve(process.cwd(), "scripts/agency-followup-walkthrough.ts"), "utf8");
 const service = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-service.ts"), "utf8");
 const suppressionMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20261024054520_agency_followup_resend_suppressed_status.sql"), "utf8");
+const handoffClockContactMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20261024213806_agency_followup_handoff_clock_recheck_and_contact_suppression.sql"), "utf8");
 
 describe("Agency follow-up Resend migration contract", () => {
   it("keeps webhook evidence append-only, minimized, private, and replay-safe", () => {
@@ -395,5 +396,50 @@ describe("Agency follow-up Resend migration contract", () => {
     expect(resendWebhookRoute).toContain('supabaseAdmin.rpc("persist_agency_followup_resend_event"');
     expect(walkthrough).toContain("persist_agency_followup_resend_event($1,$2,$3,$4,$5::timestamptz,$6,$7,$8::uuid,$9::uuid)");
     expect(walkthrough).not.toMatch(/persist_agency_followup_resend_event\(\$1,\$2,\$3,\$4,\$5::timestamptz,\$6,\$7\)/);
+  });
+  it("refreshes handoff time after contended locks and applies contact unsubscribes with typed hash-only evidence", () => {
+    const handoff = handoffClockContactMigration.match(
+      /CREATE OR REPLACE FUNCTION public\.authorize_agency_followup_provider_handoff\([\s\S]*?END \$\$;/i,
+    )?.[0] ?? "";
+    expect(handoff).not.toBe("");
+    expect(handoff).not.toContain("now_at timestamptz:=clock_timestamp()");
+    const predecessorLock = handoff.indexOf("ORDER BY pm.step_number,pm.id FOR SHARE;");
+    const clockRefresh = handoff.indexOf("now_at:=clock_timestamp();", predecessorLock);
+    const leaseCheck = handoff.indexOf("m.lease_until<=now_at", clockRefresh);
+    expect(predecessorLock).toBeGreaterThanOrEqual(0);
+    expect(clockRefresh).toBeGreaterThan(predecessorLock);
+    expect(leaseCheck).toBeGreaterThan(clockRefresh);
+    const futureReviewCheck = handoff.indexOf("m.reviewed_at>now_at THEN blockers:=pg_catalog.array_append(blockers,'approval_invalid_reviewer_or_time')", clockRefresh);
+    expect(futureReviewCheck).toBeGreaterThan(clockRefresh);
+    expect(futureReviewCheck).toBeGreaterThan(leaseCheck);
+    expect(handoff).toContain("lease_until>now_at");
+
+    expect(handoffClockContactMigration).toContain("'matched_contact'");
+    expect(handoffClockContactMigration).toContain("agency_followup_provider_events_match_shape_check");
+    expect(handoffClockContactMigration).toContain("recipient_sha256 IS NOT NULL");
+    expect(handoffClockContactMigration).toContain("agency_followup_provider_contact_applications");
+    expect(handoffClockContactMigration).toContain("FOREIGN KEY (provider_event_id,event_type,processing_result)");
+    expect(handoffClockContactMigration).toContain("ENABLE ROW LEVEL SECURITY");
+    expect(handoffClockContactMigration).toContain("FORCE ROW LEVEL SECURITY");
+    expect(handoffClockContactMigration).toContain("REVOKE ALL ON FUNCTION public.persist_agency_followup_resend_contact_event");
+    expect(handoffClockContactMigration).toMatch(/GRANT EXECUTE ON FUNCTION\s+public\.persist_agency_followup_resend_contact_event\(text,timestamptz,text,text\)\s+TO service_role/i);
+    expect(handoffClockContactMigration).not.toContain("SECURITY DEFINER");
+
+    const contactFunction = handoffClockContactMigration.match(
+      /CREATE OR REPLACE FUNCTION public\.persist_agency_followup_resend_contact_event\([\s\S]*?END;\s*\$\$;/i,
+    )?.[0] ?? "";
+    expect(contactFunction).not.toBe("");
+    expect(contactFunction).toContain("public.agency_followup_email_sha256(p_recipient_email)");
+    expect(contactFunction).toContain("p_recipient_sha256");
+    expect(contactFunction).toContain("legacy_unmatched");
+    expect(contactFunction).toContain("ambiguous_source");
+    expect(contactFunction).toContain("provider_event_id,conversation_id,source_link_id");
+    expect(contactFunction).toContain("'resend_email_unsubscribed'");
+    expect(contactFunction).not.toContain("agency_followup_provider_event_applications");
+    const inboxInsert = contactFunction.match(
+      /INSERT INTO public\.agency_followup_provider_events \([\s\S]*?\) VALUES \([\s\S]*?\)/i,
+    )?.[0] ?? "";
+    expect(inboxInsert).not.toContain("p_recipient_email");
+    expect(inboxInsert).toContain("p_recipient_sha256");
   });
 });

@@ -27,6 +27,12 @@ describe('prospect operations UI contract', () => {
     expect(source).toContain("normalizedChannel = kind === 'bounce' ? 'email' : kind === 'meeting' ? 'video'");
   });
 
+  it('keeps future actions separate from a completed meeting outcome', () => {
+    const source = read('ProspectActivityPanel.tsx');
+    expect(source).toContain('placeholder="What happened at the meeting"');
+    expect(source).not.toContain('What happened or what comes next');
+    expect(source).toContain('Next action');
+  });
   it('provides operator controls for contactability and next action tracking', () => {
     const source = read('ProspectActivityPanel.tsx');
     expect(source).toContain('data-ui-component-content="prospect-contact-controls"');

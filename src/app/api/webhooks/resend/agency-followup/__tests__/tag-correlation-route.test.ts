@@ -69,6 +69,27 @@ describe("Resend Agency follow-up tagged webhook correlation", () => {
     }));
   });
 
+  it.each(["email.bounced", "email.complained", "email.unsubscribed", "email.suppressed"])(
+    "forwards signed %s events with exact message, recipient hash and tags",
+    async (eventType) => {
+      const event = emailSent({
+        agency_followup_message_id: messageId,
+        agency_followup_enrollment_id: enrollmentId,
+      });
+      event.type = eventType;
+      const response = await POST(signedRequest(event));
+
+      expect(response.status).toBe(200);
+      expect(mocks.rpc).toHaveBeenCalledWith("persist_agency_followup_resend_event", expect.objectContaining({
+        p_provider_message_id: "re_synthetic_accepted",
+        p_event_type: eventType,
+        p_recipient_email: "Owner@example.com",
+        p_recipient_sha256: agencyFollowupRecipientEmailHash("Owner@example.com"),
+        p_agency_followup_message_id: messageId,
+        p_agency_followup_enrollment_id: enrollmentId,
+      }));
+    },
+  );
   it("preserves historical tagless events and passes a null pair", async () => {
     const response = await POST(signedRequest(emailSent()));
 
@@ -102,6 +123,25 @@ describe("Resend Agency follow-up tagged webhook correlation", () => {
     expect(mocks.rpc).not.toHaveBeenCalled();
   });
 
+  it("forwards contact unsubscribes through the hash-only contact RPC without message tags", async () => {
+    const recipientEmail = "owner@example.com";
+    const response = await POST(signedRequest({
+      type: "contact.updated",
+      created_at: "2026-10-24T17:00:00.000Z",
+      data: { email: recipientEmail, unsubscribed: true },
+    }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.rpc).toHaveBeenCalledWith("persist_agency_followup_resend_contact_event", expect.objectContaining({
+      p_provider_event_id: "evt_tag_correlation",
+      p_occurred_at: "2026-10-24T17:00:00.000Z",
+      p_recipient_email: recipientEmail,
+      p_recipient_sha256: agencyFollowupRecipientEmailHash(recipientEmail),
+    }));
+    const rpcArgs = mocks.rpc.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(rpcArgs).not.toHaveProperty("p_agency_followup_message_id");
+    expect(rpcArgs).not.toHaveProperty("p_agency_followup_enrollment_id");
+  });
   it("rejects known identity tags on contact updates", async () => {
     const response = await POST(signedRequest({
       type: "contact.updated",

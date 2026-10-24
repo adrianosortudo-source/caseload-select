@@ -18,6 +18,22 @@ Enabled Resend modes still require the API key, signed-webhook secret, feature-s
 
 Replies and bookings are still operator-reconciled through the Agency prospect activity workflow unless a verified automatic integration is added. A saved operator activity is not mailbox or calendar reconciliation. The follow-up gate must recheck stop signals before each dispatch.
 
+## Manual reply and booking reconciliation
+
+No automatic mailbox or calendar ingestion is verified for this workflow. Before approving or releasing a message, and again immediately before every dispatch, check the prospect's actual inbox and calendar history. Do not treat an empty CRM activity list as proof that no reply or booking exists.
+
+In the Agency prospect's activity panel, choose **Activity type** and record only confirmed events:
+
+- For an inbound reply, choose **Human reply**, select the recorded **Reply disposition**, then choose **Save activity**. A declined reply sets the conversation to declined; other human replies set it to replied.
+- For a booked meeting that has not happened yet, choose **Meeting** and leave **Meeting outcome** blank. This sets meeting_scheduled. After the meeting, record the verified outcome; a non-empty outcome sets completed.
+- For a confirmed delivery failure, choose **Bounce**. This sets unreachable.
+- Use the separate **Contact controls** section for a verified future next action. Do not put a future action in **Meeting outcome**.
+
+After saving, refresh the prospect activity history and confirm the expected conversation status is visible. The database handoff gate blocks all five statuses (replied, unreachable, declined, meeting_scheduled, and completed) immediately before provider handoff. If a status, identity, reply, booking, suppression, or inbox/calendar check is uncertain, do not approve or dispatch; resolve it through the authorized operator workflow first.
+
+Saving an activity records CRM evidence. It does not send a message, inspect external mailboxes/calendars automatically, or prove that an operator completed those external checks.
+
+
 ## Authoring and versioning
 
 - Template content is immutable. Create a new `template_key` version for changed copy, then record an operator approval on that version.
