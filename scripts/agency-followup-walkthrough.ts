@@ -2374,7 +2374,29 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   );
   const taggedMessage = taggedUnknownRow.rows[0];
   if (!taggedMessage) throw new Error("Tagged UNKNOWN reconciliation message was not created.");
-  await pool.query("update public.agency_followup_messages set scheduled_at=$2 where id=$1", [taggedMessage.id, acceptedDueAt]);
+  const taggedJourneyPolicyResult = await pool.query<{
+    journey_id: string;
+    business_days: number[];
+    local_window_start: string;
+    local_window_end: string;
+  }>(
+    `select journey.id as journey_id,journey.business_days,
+            journey.local_window_start::text as local_window_start,
+            journey.local_window_end::text as local_window_end
+     from public.agency_followup_messages message
+     join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id
+     join public.agency_followup_journeys journey on journey.id=enrollment.journey_id
+     where message.id=$1`,
+    [taggedMessage.id],
+  );
+  const taggedJourneyPolicy = taggedJourneyPolicyResult.rows[0];
+  if (!taggedJourneyPolicy) throw new Error("Tagged UNKNOWN journey policy could not be read from the disposable database.");
+  // The database gate uses its real clock. Make the disposable message due now;
+  // the all-day window below is temporary and restored before the window test.
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=clock_timestamp()-interval '10 minutes' where id=$1",
+    [taggedMessage.id],
+  );
   const taggedOwner = `synthetic-tagged-unknown-${RUN_ID}`;
   const taggedClaimed = await withFixtureClaim(pool, taggedMessage.id, async () => pool.query<{
     id: string; enrollment_id: string; attempt_count: number; lease_owner: string; state: string;
@@ -2388,6 +2410,14 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
   const taggedGateClient = await pool.connect();
   try {
+    await pool.query(
+      `update public.agency_followup_journeys
+       set business_days=array[1,2,3,4,5,6,7]::integer[],
+           local_window_start='00:00:00'::time,
+           local_window_end='24:00:00'::time
+       where id=$1`,
+      [taggedJourneyPolicy.journey_id],
+    );
     await taggedGateClient.query("begin");
     await taggedGateClient.query("set local role service_role");
     const gate = await authorizeProviderHandoff(taggedGateClient, {
@@ -2428,7 +2458,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
         requestPresent: Boolean(gate.request),
         recipientMatches,
       };
-      throw new Error(`The tagged UNKNOWN fixture failed final handoff authorization: ${JSON.stringify(safeGateDetails)}`);
+      progress("tagged UNKNOWN handoff gate flags: " + Object.entries(safeGateDetails).map(([key, value]) => key + "=" + String(value)).join(","));
+      throw new Error("The tagged UNKNOWN fixture failed final handoff authorization; see the safe gate flags above.");
     }
     await taggedGateClient.query("commit");
   } catch (error) {
@@ -2436,6 +2467,19 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw error;
   } finally {
     taggedGateClient.release();
+    await pool.query(
+      `update public.agency_followup_journeys
+       set business_days=$2::integer[],
+           local_window_start=$3::time,
+           local_window_end=$4::time
+       where id=$1`,
+      [
+        taggedJourneyPolicy.journey_id,
+        taggedJourneyPolicy.business_days,
+        taggedJourneyPolicy.local_window_start,
+        taggedJourneyPolicy.local_window_end,
+      ],
+    );
   }
 
   const taggedProviderMessageId = `fake-provider-tagged-unknown-${RUN_ID}`;
