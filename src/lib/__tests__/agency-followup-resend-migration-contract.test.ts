@@ -184,7 +184,7 @@ describe("Agency follow-up Resend migration contract", () => {
     expect(serializedHandoffGateMigration).toContain("'previous_step_pending'");
     expect(serializedHandoffGateMigration).toContain("'previous_step_unresolved'");
     expect(serializedHandoffGateMigration).toContain("'minimum_spacing_not_elapsed'");
-    expect(serializedHandoffGateMigration).toContain("'result','ready','request',jsonb_build_object('idempotencyKey'");
+    expect(serializedHandoffGateMigration).toContain("'result','ready','request',pg_catalog.jsonb_build_object('idempotencyKey'");
     expect(serializedHandoffGateMigration).toContain("'recipientEmail'");
     expect(serializedHandoffGateMigration).toContain("'subject'");
     expect(serializedHandoffGateMigration).toContain("'body'");
