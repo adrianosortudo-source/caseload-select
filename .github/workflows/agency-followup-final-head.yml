@@ -3,19 +3,7 @@ name: Agency follow-up final-head walkthrough
 on:
   push:
     branches: [codex/crm-live-followup-20261019]
-    paths:
-      - '.github/workflows/agency-followup-final-head.yml'
-      - 'src/app/admin/agency-crm/follow-up/**'
-      - 'src/app/api/admin/agency-crm/follow-up/**'
-      - 'src/app/api/cron/agency-followup-dispatch/**'
-      - 'src/app/api/webhooks/resend/agency-followup/**'
-      - 'src/lib/agency-followup-*.ts'
-      - 'src/lib/portal-session-cookie.ts'
-      - 'scripts/agency-followup-walkthrough.ts'
-      - 'supabase/config.toml'
-      - 'supabase/migrations/**'
-      - 'package.json'
-      - 'package-lock.json'
+# Run acceptance at the exact head after every push to this release branch.
 
 permissions:
   contents: read
