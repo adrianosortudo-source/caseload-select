@@ -277,8 +277,16 @@ describe("Agency follow-up Resend migration contract", () => {
         expect(delegatedScope).not.toBe("");
         expect(delegatedCatalogLock, "opt-in scope must acquire catalog lock first").toBeGreaterThanOrEqual(0);
         expect(delegatedIdentityLock, "opt-in scope must acquire identity lock second").toBeGreaterThan(delegatedCatalogLock);
+      } else if (writer === "lock_agency_followup_source_link_before_write") {
+        const delegatedIdentitySet = serializedHandoffGateMigration.match(/CREATE OR REPLACE FUNCTION public\.lock_agency_followup_identity_set\([\s\S]*?END \$\$;/i)?.[0] ?? "";
+        const delegatedCatalogLock = delegatedIdentitySet.indexOf("PERFORM public.lock_agency_followup_mapping_catalog()");
+        const delegatedIdentityLock = delegatedIdentitySet.indexOf("PERFORM public.lock_agency_followup_identity(prospect_id)");
+        expect(body).toContain("public.lock_agency_followup_identity_set(prospect_ids)");
+        expect(delegatedIdentitySet).not.toBe("");
+        expect(delegatedCatalogLock, "shared identity set must acquire catalog lock first").toBeGreaterThanOrEqual(0);
+        expect(delegatedIdentityLock, "shared identity set must acquire identity lock second").toBeGreaterThan(delegatedCatalogLock);
       } else {
-        expect(body, `${writer} must acquire the mapping catalog lock first`).toContain("public.lock_agency_followup_mapping_catalog");
+        expect(body, \`\${writer} must acquire the mapping catalog lock first\`).toContain("public.lock_agency_followup_mapping_catalog");
       }
     }
     const gateFunction = serializedHandoffGateMigration.match(/CREATE OR REPLACE FUNCTION public\.authorize_agency_followup_provider_handoff\([\s\S]*?END \$\$;/i)?.[0] ?? "";
@@ -311,10 +319,15 @@ describe("Agency follow-up Resend migration contract", () => {
     expect(service).toContain('supabase.rpc("authorize_agency_followup_provider_handoff"');
     expect(service).not.toContain('supabase.rpc("prepare_agency_followup_provider_attempt"');
     expect(service).toContain('response.result === "deferred"');
-    expect(service).toContain('typeof response.blocker === "string"');
+    expect(service).toContain('typeof response.blocker !== "string"');
     expect(service).toContain('return { result: "blocked", blockers: response.blockers as string[] }');
     expect(service).toContain('return { result: "deferred", blocker: response.blocker, retryAt: response.retryAt }');
-    expect(service).toContain('return { result: "ready", request: request as AgencyFollowupProviderRequest }');
+        expect(service).toContain('response.result === "ready"');
+    expect(service).toContain("request: {");
+    expect(service).toContain("idempotencyKey: expectedKey");
+    expect(service).toContain("recipientEmail: authorizedRequest.recipientEmail");
+    expect(service).toContain("subject: authorizedRequest.subject");
+    expect(service).toContain("body: authorizedRequest.body");
   });
 
   it("promotes only an exact signed email.sent tag pair after the provider outcome is UNKNOWN", () => {
