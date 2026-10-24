@@ -286,7 +286,7 @@ describe("Agency follow-up Resend migration contract", () => {
         expect(delegatedCatalogLock, "shared identity set must acquire catalog lock first").toBeGreaterThanOrEqual(0);
         expect(delegatedIdentityLock, "shared identity set must acquire identity lock second").toBeGreaterThan(delegatedCatalogLock);
       } else {
-        expect(body, \`\${writer} must acquire the mapping catalog lock first\`).toContain("public.lock_agency_followup_mapping_catalog");
+        expect(body, `${writer} must acquire the mapping catalog lock first`).toContain("public.lock_agency_followup_mapping_catalog");
       }
     }
     const gateFunction = serializedHandoffGateMigration.match(/CREATE OR REPLACE FUNCTION public\.authorize_agency_followup_provider_handoff\([\s\S]*?END \$\$;/i)?.[0] ?? "";
