@@ -2394,8 +2394,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       messageId: taggedMessage.id, enrollmentId: taggedMessage.enrollment_id,
       owner: taggedOwner, attemptCount: Number(taggedLease.attempt_count),
     });
-    if (gate.result !== "ready" || gate.request?.recipientEmail !== taggedMessage.recipient_email_snapshot) {
-      throw new Error("The tagged UNKNOWN fixture did not pass the final handoff authorization before its synthetic send.");
+    const recipientMatches = gate.request?.recipientEmail === taggedMessage.recipient_email_snapshot;
+    if (gate.result !== "ready" || !recipientMatches) {
+      const safeGateDetails = { result: gate.result, blockers: gate.blockers ?? [], blocker: gate.blocker ?? null, requestPresent: Boolean(gate.request), recipientMatches };
+      throw new Error(`The tagged UNKNOWN fixture failed final handoff authorization: ${JSON.stringify(safeGateDetails)}`);
     }
     await taggedGateClient.query("commit");
   } catch (error) {
