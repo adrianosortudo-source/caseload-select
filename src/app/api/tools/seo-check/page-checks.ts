@@ -16,7 +16,6 @@ import {
   type CheckItem,
   type CategoryResult,
   type ParsedRobots,
-  type PageType,
   AI_SEARCH_BOTS,
   AI_TRAINING_BOTS,
   SCANNER_TOKEN,
@@ -485,7 +484,7 @@ function checkOnPageSeo(html: string, pageUrl: string): CategoryResult {
 }
 
 /* 2. Indexability */
-function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean; google: boolean; bing: boolean }): CategoryResult {
+function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean | null; google: boolean | null; bing: boolean | null }): CategoryResult {
   const items: CheckItem[] = [];
 
   items.push({ label: "HTTP status", status: "pass", detail: `Returned HTTP ${idx.httpStatus}.` });
@@ -499,9 +498,9 @@ function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean;
   }
 
   if (idx.metaNoindex || idx.headerNoindex) {
-    items.push({ label: "Indexable", status: "fail", detail: `Page is set to noindex (${idx.metaNoindex ? "meta robots" : "X-Robots-Tag"}). Search engines will drop it from results.`, fix: "Remove the noindex directive if this page should rank." });
+    items.push({ label: "Indexable", status: "fail", detail: `Page contains a noindex instruction (${idx.metaNoindex ? "meta robots" : "X-Robots-Tag"}) asking search engines to leave it out of results. This does not confirm its current indexing status.`, fix: "Confirm whether this page should appear in search before changing its noindex setting." });
   } else {
-    items.push({ label: "Indexable", status: "pass", detail: "No noindex directive. Page is eligible to be indexed." });
+    items.push({ label: "Indexable", status: "pass", detail: "No noindex instruction was observed. This does not confirm the page is indexed." });
   }
 
   if (idx.metaNofollow || idx.headerNofollow) {
@@ -513,7 +512,7 @@ function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean;
   if (!idx.canonical) {
     items.push({ label: "Canonical tag", status: "warn", detail: "No canonical tag. Duplicate URL variations can split ranking signals.", fix: "Add <link rel=\"canonical\"> pointing to the preferred URL for this page." });
   } else if (idx.canonicalSameOrigin === false) {
-    items.push({ label: "Canonical tag", status: "fail", detail: "Canonical points to a different domain. This can deindex the page in favour of another site.", fix: "Point the canonical at the correct URL on this same domain." });
+    items.push({ label: "Canonical tag", status: "fail", detail: "The canonical points to a different domain. Confirm that this cross-domain canonical is intentional.", fix: "Ask your web provider to verify the intended canonical URL before changing it." });
   } else if (idx.canonicalSelf === false) {
     items.push({ label: "Canonical tag", status: "warn", detail: "Canonical points to a different page. Confirm that is intentional consolidation, not an error.", fix: "Set a self-referencing canonical unless this page is a deliberate duplicate of another." });
   } else {
@@ -521,16 +520,18 @@ function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean;
   }
 
   if (idx.mixedSignals) {
-    items.push({ label: "Mixed indexability signals", status: "fail", detail: "Conflicting signals (for example noindex together with a canonical). Search engines may handle the page unpredictably.", fix: "Decide whether the page should be indexed and make the canonical and robots directives agree." });
+    items.push({ label: "Mixed indexability signals", status: "fail", detail: "This page has a noindex instruction and a different same-origin canonical URL. Review whether this combination is intentional.", fix: "Confirm the intended page version before changing the canonical or noindex instruction." });
   } else {
     items.push({ label: "Mixed indexability signals", status: "pass", detail: "Indexability signals are consistent." });
   }
 
-  if (robotsAllowed.scanner && robotsAllowed.google && robotsAllowed.bing) {
-    items.push({ label: "robots.txt crawl access", status: "pass", detail: "Googlebot and Bingbot are allowed to crawl this path." });
+  const blockedSearchEngines = [robotsAllowed.google === false && "Googlebot", robotsAllowed.bing === false && "Bingbot"].filter(Boolean).join(", ");
+  if (blockedSearchEngines) {
+    items.push({ label: "robots.txt crawl access", status: "fail", detail: `Blocked for ${blockedSearchEngines} on this page path in robots.txt. This does not establish whether the URL is indexed.`, fix: "Confirm whether this restriction is intentional before changing it." });
+  } else if (robotsAllowed.google === null || robotsAllowed.bing === null) {
+    items.push({ label: "robots.txt crawl access", status: "warn", scored: false, applicability: "unknown", detail: "Could not assess Googlebot and Bingbot access for this page because no accessible robots.txt was observed." });
   } else {
-    const blocked = [!robotsAllowed.google && "Googlebot", !robotsAllowed.bing && "Bingbot"].filter(Boolean).join(", ");
-    items.push({ label: "robots.txt crawl access", status: blocked ? "fail" : "warn", detail: blocked ? `Blocked for ${blocked} in robots.txt.` : "Crawl access is restricted for some agents.", fix: "Remove the Disallow rule for this path so search engines can crawl it." });
+    items.push({ label: "robots.txt crawl access", status: "pass", detail: "No blocking rule for Googlebot or Bingbot was observed on this page path in robots.txt. This does not establish whether the URL is indexed." });
   }
 
   // A noindex page is deliberately excluded from search, and Google's own
@@ -541,12 +542,14 @@ function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean;
   // firm may not want indexed in the first place.
   if (idx.metaNoindex || idx.headerNoindex) {
     items.push({ label: "Sitemap membership", status: "pass", detail: "Page is noindexed, so its absence from the XML sitemap is expected, not a gap." });
+  } else if (idx.inSitemap === null && !idx.sitemapComplete) {
+    items.push({ label: "Sitemap membership", status: "warn", scored: false, applicability: "unknown", detail: "Could not verify whether this page is listed because the sitemap data was incomplete." });
   } else if (idx.inSitemap === null) {
-    items.push({ label: "Sitemap membership", status: "warn", detail: "No sitemap found, so this page is not listed for discovery.", fix: "Publish an XML sitemap that lists your important pages and reference it in robots.txt." });
+    items.push({ label: "Sitemap membership", status: "warn", detail: "No sitemap was found. Search engines may still discover pages through links.", fix: "Consider providing a sitemap to help search engines discover important pages." });
   } else if (idx.inSitemap) {
     items.push({ label: "Sitemap membership", status: "pass", detail: "Page is listed in the XML sitemap." });
   } else {
-    items.push({ label: "Sitemap membership", status: "warn", detail: "Page is not listed in the XML sitemap.", fix: "Add this page to your XML sitemap so search engines discover it reliably." });
+    items.push({ label: "Sitemap membership", status: "warn", detail: "This page was not found in the sitemap data inspected. Search engines may still discover it through links.", fix: "Confirm whether this page should be listed in the sitemap." });
   }
 
   const { score, maxScore } = scoreItems(items);
@@ -580,12 +583,9 @@ const ENTITY_SURFACES: Array<{ match: RegExp; name: string; directory: boolean }
 /**
  * Entity sameAs coverage.
  *
- * Directory work has an on-page shadow. Per PB_Capture_DirectorySubmission_v5
- * section 12, every captured listing URL must be pushed into the entity graph's
- * sameAs array, because those URLs are what let search and answer engines
- * reconcile the firm as a single entity across the web. A firm can hold eight
- * live listings and still publish none of them here, and the audit could not
- * see the difference: sameAs was a boolean folded into a six-field composite.
+ * This check reports only the sameAs URLs observed in the inspected structured
+ * data. It cannot establish which profiles or listings the firm maintains or
+ * intends to associate, or how any search or AI service interprets them.
  *
  * Deliberately NOT checked: whether the values match what those surfaces
  * publish. The playbook's purpose-class rule says an approved difference is not
@@ -596,10 +596,10 @@ export function checkEntitySameAs(schema: SchemaSummary, hasBusiness: boolean): 
   if (!hasBusiness) {
     return {
       label: "Entity sameAs coverage",
-      status: "fail",
+      status: "pass",
       scored: false,
+      applicability: "not-applicable",
       detail: "Not applicable: no business entity in the structured data to attach profile or listing URLs to.",
-      fix: "Add a LegalService or LocalBusiness block first, then add its directory and profile URLs as sameAs.",
     };
   }
 
@@ -607,9 +607,9 @@ export function checkEntitySameAs(schema: SchemaSummary, hasBusiness: boolean): 
   if (urls.length === 0) {
     return {
       label: "Entity sameAs coverage",
-      status: "fail",
-      detail: "No sameAs URLs in the business entity. Directory and profile listings are not connected to the entity, so search and AI systems cannot reconcile them as the same firm.",
-      fix: "Add a sameAs array to the business entity listing your Google Business Profile, law society directory, and other claimed listing URLs.",
+      status: "pass",
+      scored: false,
+      detail: "No sameAs URLs were observed in the business entity's structured data. This scan cannot establish which profiles or listings the firm maintains or intends to associate.",
     };
   }
 
@@ -628,6 +628,7 @@ export function checkEntitySameAs(schema: SchemaSummary, hasBusiness: boolean): 
     return {
       label: "Entity sameAs coverage",
       status: "pass",
+      scored: false,
       detail: `${urls.length} sameAs URLs covering ${directories.length} directory surfaces (${found}).`,
     };
   }
@@ -635,17 +636,18 @@ export function checkEntitySameAs(schema: SchemaSummary, hasBusiness: boolean): 
   if (directories.length === 0) {
     return {
       label: "Entity sameAs coverage",
-      status: "fail",
-      detail: `${urls.length} sameAs URLs, but none point at a directory or map surface (${found}). Social profiles alone do not establish the firm as a local entity.`,
-      fix: "Add your Google Business Profile URL and your law society directory URL to the sameAs array.",
+      status: "pass",
+      scored: false,
+      detail: `${urls.length} sameAs URLs were observed, but none matched a directory or map surface recognized by this check (${found}). This does not establish the firm's local entity status.`,
     };
   }
 
   return {
     label: "Entity sameAs coverage",
-    status: "warn",
-    detail: `${urls.length} sameAs URLs covering only ${directories.length} directory surface${directories.length > 1 ? "s" : ""} (${found}). Claimed listings that never reach the entity graph do not help search or AI systems connect them to this firm.`,
-    fix: "Add the remaining claimed listing URLs to sameAs: Google Business Profile, law society directory, Bing Places, Apple Business Connect.",
+    status: "pass",
+    scored: false,
+      detail: `${urls.length} sameAs URLs were observed, including ${directories.length} directory surface${directories.length > 1 ? "s" : ""} recognized by this check (${found}). This scan cannot determine whether other claimed listings exist or should be associated.`,
+      fix: "Confirm which official profile and directory URLs should be associated with the business entity.",
   };
 }
 
@@ -656,7 +658,7 @@ export function checkSchemaMarkup(schema: SchemaSummary, serviceAreaLikely: bool
   const items: CheckItem[] = [];
 
   if (schema.blocks === 0) {
-    items.push({ label: "JSON-LD structured data", status: "fail", detail: "No JSON-LD blocks found. Structured data is how search and AI read who you are.", fix: "Add at least one <script type=\"application/ld+json\"> block with your business information." });
+    items.push({ label: "JSON-LD structured data", status: "fail", detail: "No JSON-LD structured data was observed in the inspected HTML.", fix: "Ask your web provider whether structured data is appropriate for the firm's business and services." });
   } else {
     items.push({ label: "JSON-LD structured data", status: "pass", detail: `${schema.blocks} JSON-LD block${schema.blocks > 1 ? "s" : ""} found.` });
   }
@@ -757,34 +759,31 @@ export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | nul
   const bodyText = extractBodyText(html);
 
   if (!parsedRobots) {
-    items.push({ label: "AI search bot access", status: "warn", detail: "No robots.txt found. AI crawlers can access your site, but you have no explicit policy.", fix: "Create a robots.txt that explicitly allows AI search crawlers (ChatGPT-User, PerplexityBot, ClaudeBot)." });
+    items.push({ label: "AI search bot access", status: "warn", scored: false, applicability: "unknown", detail: "No accessible robots.txt was observed. Rules for AI search crawlers could not be assessed." });
   } else {
     const blockedSearch = AI_SEARCH_BOTS.filter((b) => checkBotBlockedParsed(parsedRobots, b.token));
     if (blockedSearch.length === 0) {
-      items.push({ label: "AI search bot access", status: "pass", detail: "All major AI search crawlers can access your site." });
+      items.push({ label: "AI search bot access", status: "pass", detail: "No blocking rule for the listed autonomous AI search crawlers was observed in robots.txt. This does not establish whether a service reads or cites the page." });
     } else if (blockedSearch.length <= 2) {
-      items.push({ label: "AI search bot access", status: "warn", detail: `${blockedSearch.length} AI search crawler${blockedSearch.length > 1 ? "s" : ""} blocked: ${blockedSearch.map((b) => b.label).join(", ")}.`, fix: "Unblock AI search crawlers in robots.txt so they can read this content. Reading does not guarantee citation." });
+      items.push({ label: "AI search bot access", status: "warn", detail: `robots.txt contains rules that restrict ${blockedSearch.length} listed autonomous AI search crawler${blockedSearch.length > 1 ? "s" : ""}: ${blockedSearch.map((b) => b.label).join(", ")}. This does not establish whether a service reads or cites the page.`, fix: "Confirm whether these crawler instructions reflect the firm's intended policy." });
     } else {
-      items.push({ label: "AI search bot access", status: "fail", detail: `${blockedSearch.length} of ${AI_SEARCH_BOTS.length} AI search crawlers blocked. Your content will not surface in AI search.`, fix: "Remove Disallow rules for AI search bots (ChatGPT-User, PerplexityBot, ClaudeBot) in robots.txt." });
+      items.push({ label: "AI search bot access", status: "fail", detail: `robots.txt contains rules that restrict ${blockedSearch.length} of ${AI_SEARCH_BOTS.length} listed autonomous AI search crawlers. This does not establish whether a service reads or cites the page.`, fix: "Confirm whether these crawler instructions reflect the firm's intended policy." });
     }
   }
 
   if (!parsedRobots) {
-    items.push({ label: "AI training bot control", status: "warn", detail: "No robots.txt. You have no control over AI training crawlers using your content.", fix: "Add a robots.txt with Disallow rules for training-only bots (GPTBot, CCBot) to control training use." });
+    items.push({ label: "AI training bot control", status: "warn", scored: false, applicability: "unknown", detail: "No accessible robots.txt was observed. Rules for AI training crawlers could not be assessed." });
   } else {
     const blockedTraining = AI_TRAINING_BOTS.filter((b) => checkBotBlockedParsed(parsedRobots, b.token));
-    if (blockedTraining.length >= 3) {
-      items.push({ label: "AI training bot control", status: "pass", detail: `${blockedTraining.length} training-only crawlers blocked. Deliberate control of training use.` });
-    } else if (blockedTraining.length > 0) {
-      items.push({ label: "AI training bot control", status: "warn", detail: `Only ${blockedTraining.length} of ${AI_TRAINING_BOTS.length} training crawlers blocked.`, fix: "Block additional training-only bots (GPTBot, CCBot, Bytespider) in robots.txt to control training use." });
-    } else {
-      items.push({ label: "AI training bot control", status: "warn", detail: "No training-only crawlers blocked. Your content may be used to train AI models.", fix: "Add Disallow rules for GPTBot, CCBot, and Bytespider in robots.txt if you want to control AI training use." });
-    }
+    const listed = blockedTraining.map((b) => b.label);
+    items.push({ label: "AI training bot control", status: "warn", scored: false, detail: blockedTraining.length > 0
+      ? `robots.txt contains restrictions for ${blockedTraining.length} listed training/content-use crawler${blockedTraining.length > 1 ? "s" : ""}: ${listed.join(", ")}. This records instructions, not crawler behavior.`
+      : "No restriction for the listed training/content-use crawlers was observed in robots.txt. This records instructions, not crawler behavior." });
   }
 
   const orgDesc = extractMetaContent(html, "description");
   if ((schema.hasOrganization || schema.hasLocalBusiness || schema.hasLegalService) && schema.fields.name) {
-    items.push({ label: "Entity description", status: "pass", detail: "A named business entity is described in structured data for AI to read." });
+    items.push({ label: "Entity description", status: "pass", detail: "Structured data includes a named business entity." });
   } else if (orgDesc) {
     items.push({ label: "Entity description", status: "warn", detail: "A meta description exists, but no named business entity is described in structured data.", fix: "Add a LegalService or Organization schema block with a clear name and description." });
   } else {
@@ -792,9 +791,9 @@ export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | nul
   }
 
   if (schema.hasAttorney || schema.hasPerson) {
-    items.push({ label: "Attorney / person schema", status: "pass", detail: "Attorney or Person schema present. Supports authorship and expertise signals." });
+    items.push({ label: "Attorney / person schema", status: "pass", detail: "Attorney or Person schema was observed in the inspected HTML." });
   } else {
-    items.push({ label: "Attorney / person schema", status: "warn", detail: "No Attorney or Person schema. Identified, credentialed authors are consistent with published guidance for consequential legal content.", fix: "Add Attorney or Person schema for the firm's lawyers, linked to the business entity." });
+    items.push({ label: "Attorney / person schema", status: "warn", detail: "No Attorney or Person schema was observed in the inspected HTML. This does not establish whether lawyer details appear elsewhere on the site.", fix: "Ask your web provider whether lawyer profile structured data would accurately describe the firm's pages." });
   }
 
   const h2s = extractAllTags(html, "h2");
@@ -807,11 +806,11 @@ export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | nul
   // presence or absence says nothing about whether any AI assistant actually
   // cites the page.
   if (questionHeadings.length >= 3) {
-    items.push({ label: "Question-format headings", status: "pass", detail: `${questionHeadings.length} question headings found. Question-shaped headings may help AI systems extract answers; this does not guarantee citation.` });
+    items.push({ label: "Question-format headings", status: "pass", scored: false, detail: `${questionHeadings.length} headings ending in a question mark or starting with a question word were observed. This describes formatting only; it does not measure AI visibility.` });
   } else if (questionHeadings.length > 0) {
-    items.push({ label: "Question-format headings", status: "warn", detail: `Only ${questionHeadings.length} question heading${questionHeadings.length > 1 ? "s" : ""}. More may help AI systems pull answers from the page, though this is an optimization, not a guarantee.`, fix: "Reframe section headings as questions people actually ask, like \"What happens if...\" or \"How long does...\"" });
+    items.push({ label: "Question-format headings", status: "warn", scored: false, detail: `${questionHeadings.length} headings ending in a question mark or starting with a question word were observed. This describes formatting only; it does not measure AI visibility.` });
   } else {
-    items.push({ label: "Question-format headings", status: "fail", detail: "No question-format headings. Q&A-shaped headings are one optional signal AI systems may use to extract answers, not a requirement.", fix: "Add H2 or H3 headings phrased as questions that match queries people type into AI search." });
+    items.push({ label: "Question-format headings", status: "pass", scored: false, detail: "No headings ending in a question mark or starting with a question word were observed. This describes formatting only; it does not measure AI visibility." });
   }
 
   // Boundary note: this is a coarse, general-purpose structural heuristic for
@@ -827,26 +826,26 @@ export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | nul
   const sentences = bodyText.split(/[.!?]+/).filter((s) => s.trim().length > 20);
   const directAnswers = sentences.filter((s) => /\b(is|are|means|refers to|defined as|consists of|requires|involves)\b/i.test(s));
   if (directAnswers.length >= 5) {
-    items.push({ label: "Direct-answer sentences", status: "pass", detail: "Content includes clear definitional sentences that may be easier for AI systems to extract as answers." });
+    items.push({ label: "Direct-answer sentences", status: "pass", scored: false, detail: `${directAnswers.length} sentences matched a broad definition-wording pattern. This is not an assessment of answer quality or AI visibility.` });
   } else if (directAnswers.length > 0) {
-    items.push({ label: "Direct-answer sentences", status: "warn", detail: "Some direct-answer content found. More clear definitions may help AI systems extract answers, though this is an optimization, not a requirement.", fix: "Write more sentences that directly answer questions: \"X is...\", \"X means...\", \"X requires...\"" });
+    items.push({ label: "Direct-answer sentences", status: "pass", scored: false, detail: `${directAnswers.length} sentences matched a broad definition-wording pattern. This is not an assessment of answer quality or AI visibility.` });
   } else {
-    items.push({ label: "Direct-answer sentences", status: "fail", detail: "No direct-answer patterns detected. Explicit definitional sentences are one optional signal that may help AI systems extract answers, not a requirement.", fix: "Include explicit definitional sentences. Example: \"A power of attorney is a legal document that...\"" });
+    items.push({ label: "Direct-answer sentences", status: "pass", scored: false, detail: "No sentences matched the broad definition-wording pattern. This is not an assessment of answer quality or AI visibility." });
   }
 
   const anchorTags = html.match(/<a[^>]+href=["']https?:\/\/([^"']+)["']/gi) || [];
   const authoritative = anchorTags.filter((a) => /\.(gov|edu)|canlii|justice|courts?|lawsociety|cba\.org|ontario\.ca|canada\.ca/i.test(a));
   if (authoritative.length >= 1) {
-    items.push({ label: "Authoritative citations", status: "pass", detail: `${authoritative.length} link${authoritative.length > 1 ? "s" : ""} to authoritative sources. Supports credibility for AI sourcing.` });
+    items.push({ label: "Authoritative citations", status: "pass", detail: `${authoritative.length} external link${authoritative.length > 1 ? "s" : ""} matched the check's list of government, court, or legal organization domains.` });
   } else {
-    items.push({ label: "Authoritative citations", status: "warn", detail: "No outbound links to authoritative legal sources.", fix: "Link to government, court, or law-society resources where relevant. Corroborating links are a useful credibility signal." });
+    items.push({ label: "Authoritative citations", status: "warn", detail: "No external links matching the check's list of government, court, or legal organization domains were observed. This does not assess whether other sources are reliable.", fix: "Review whether linking to official legal resources would help readers verify information on this page." });
   }
 
   const hasAuthorMeta = extractMetaContent(html, "author") !== null;
   if (hasAuthorMeta || schema.hasPerson || schema.hasAttorney) {
-    items.push({ label: "Author / reviewer signals", status: "pass", detail: "Author or reviewer attribution found. Supports source credibility for AI." });
+    items.push({ label: "Author / reviewer signals", status: "pass", detail: "An author meta tag or Person/Attorney structured data was observed in the inspected HTML." });
   } else {
-    items.push({ label: "Author / reviewer signals", status: "warn", detail: "No author or reviewer attribution. Identified authorship is a useful credibility signal for search and AI.", fix: "Add author metadata or Person schema, and a reviewed-by line where a lawyer has checked the content." });
+    items.push({ label: "Author / reviewer signals", status: "warn", detail: "No author meta tag or Person/Attorney structured data was observed in the inspected HTML. This does not establish whether an author or reviewer is named elsewhere on the page.", fix: "Review whether the page should identify its author or legal reviewer for readers." });
   }
 
   // Trust-fix pass WI-4: unscored both directions, framed experimental. No
@@ -867,8 +866,9 @@ export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | nul
     items.push({ label: "Semantic HTML structure", status: "fail", detail: "Minimal semantic HTML. Semantic elements make structure machine-readable; div-only markup gives parsers less to work with.", fix: "Use semantic HTML elements instead of generic containers." });
   }
 
-  const { score, maxScore } = scoreItems(items);
-  return { name: "AI Visibility", score, maxScore, items };
+  const unscoredItems = items.map((item) => ({ ...item, scored: false }));
+  const { score, maxScore } = scoreItems(unscoredItems);
+  return { name: "AI Visibility", score, maxScore, items: unscoredItems };
 }
 
 /* 5. Legal Marketing */
@@ -1196,7 +1196,7 @@ function buildIndexability(
   }
 
   const noindex = metaNoindex || headerNoindex;
-  const mixedSignals = (noindex && !!canonicalRaw) || canonicalSameOrigin === false;
+  const mixedSignals = noindex && canonicalSelf === false && canonicalSameOrigin !== false;
 
   let inSitemap: boolean | null = null;
   if (sitemapSet && sitemapSet.size > 0) {
@@ -1210,10 +1210,8 @@ function buildIndexability(
     if (!inSitemap) {
       try { if ((new URL(finalUrl).pathname || "/") === "/") inSitemap = true; } catch { /* keep computed value */ }
     }
-    // If the sitemap was too large to read fully, we cannot prove a page is
-    // absent from it, so we do not fire the false "not listed" finding. Treat
-    // membership as unproven-but-present rather than asserting a gap.
-    if (!inSitemap && !sitemapComplete) inSitemap = true;
+    // If the sitemap was too large to read fully, membership stays unknown.
+    if (!inSitemap && !sitemapComplete) inSitemap = null;
   }
 
   return {
@@ -1229,12 +1227,13 @@ function buildIndexability(
     headerNofollow,
     indexable: !noindex,
     inSitemap,
+    sitemapComplete,
     mixedSignals,
   };
 }
 
-function robotsAllowedFor(parsedRobots: ParsedRobots | null, path: string): { scanner: boolean; google: boolean; bing: boolean } {
-  if (!parsedRobots) return { scanner: true, google: true, bing: true };
+function robotsAllowedFor(parsedRobots: ParsedRobots | null, path: string): { scanner: boolean | null; google: boolean | null; bing: boolean | null } {
+  if (!parsedRobots) return { scanner: null, google: null, bing: null };
   return {
     scanner: !checkBotBlockedParsed(parsedRobots, SCANNER_TOKEN, path),
     google: !checkBotBlockedParsed(parsedRobots, "Googlebot", path),
@@ -1299,12 +1298,13 @@ export function buildPageResult(
   const pageGrade = computeGrade(pageScore);
 
   const aiCat = categories.find((c) => c.name === "AI Visibility");
-  const aiVisibilityScore = aiCat && aiCat.maxScore > 0 ? Math.round((aiCat.score / aiCat.maxScore) * 100) : 0;
+  const aiVisibilityScore = aiCat && aiCat.maxScore > 0 ? Math.round((aiCat.score / aiCat.maxScore) * 100) : null;
 
   const allItems = categories.flatMap((c) => c.items);
-  const failCount = allItems.filter((i) => i.status === "fail").length;
-  const warnCount = allItems.filter((i) => i.status === "warn").length;
-  const keyWarnings = allItems.filter((i) => i.status === "fail").slice(0, 3).map((i) => i.label);
+  const applicableItems = allItems.filter((i) => i.scored !== false && i.applicability !== "not-applicable" && i.applicability !== "unknown");
+  const failCount = applicableItems.filter((i) => i.status === "fail").length;
+  const warnCount = applicableItems.filter((i) => i.status === "warn").length;
+  const keyWarnings = applicableItems.filter((i) => i.status === "fail").slice(0, 3).map((i) => i.label);
 
   return {
     url: finalUrl,
@@ -1340,7 +1340,7 @@ export function computeTopFixes(pages: PageResult[], limit: number): TopFix[] {
   for (const page of pages) {
     for (const cat of page.categories) {
       for (const item of cat.items) {
-        if (item.status === "pass") continue;
+        if (item.status === "pass" || item.applicability === "not-applicable" || item.applicability === "unknown" || cat.name === "AI Visibility") continue;
         const key = `${cat.name}::${item.label}`;
         const existing = fixMap.get(key);
         if (!existing) fixMap.set(key, { status: item.status, category: cat.name, fix: item.fix, pagesAffected: new Set([page.url]) });
@@ -1355,32 +1355,51 @@ export function computeTopFixes(pages: PageResult[], limit: number): TopFix[] {
 }
 
 export function aggregateCategories(pages: PageResult[]): CategoryResult[] {
-  const catNames = pages[0].categories.map((c) => c.name);
+  if (pages.length === 0) return [];
+  const catNames = [...new Set(pages.flatMap((p) => p.categories.map((c) => c.name)))];
   return catNames.map((name) => {
     const pageCats = pages.map((p) => p.categories.find((c) => c.name === name)).filter((c): c is CategoryResult => !!c);
-    const avgPct = pageCats.length > 0
-      ? pageCats.reduce((sum, c) => sum + (c.maxScore > 0 ? c.score / c.maxScore : 0), 0) / pageCats.length
+    const applicablePageCats = pageCats.filter((c) => c.maxScore > 0);
+    const avgPct = applicablePageCats.length > 0
+      ? applicablePageCats.reduce((sum, c) => sum + c.score / c.maxScore, 0) / applicablePageCats.length
       : 0;
     const allLabels = [...new Set(pageCats.flatMap((c) => c.items.map((i) => i.label)))];
     const items: CheckItem[] = allLabels.map((label) => {
       const instances = pageCats.flatMap((c) => c.items.filter((i) => i.label === label));
-      const failCount = instances.filter((i) => i.status === "fail").length;
-      const warnCount = instances.filter((i) => i.status === "warn").length;
-      const status: "pass" | "warn" | "fail" = failCount > 0 ? "fail" : warnCount > 0 ? "warn" : "pass";
-      const representative = instances.find((i) => i.status === "fail") ?? instances.find((i) => i.status === "warn") ?? instances[0];
+      const applicable = instances.filter((i) => i.applicability !== "not-applicable" && i.applicability !== "unknown");
+      const failCount = applicable.filter((i) => i.status === "fail").length;
+      const warnCount = applicable.filter((i) => i.status === "warn").length;
+      const statusInstances = applicable.length > 0 ? applicable : instances;
+      const status: "pass" | "warn" | "fail" = statusInstances.some((i) => i.status === "fail")
+        ? "fail"
+        : statusInstances.some((i) => i.status === "warn") ? "warn" : "pass";
+      const representative = statusInstances.find((i) => i.status === "fail") ?? statusInstances.find((i) => i.status === "warn") ?? statusInstances[0];
+      if (!representative) return { label, status: "pass", detail: "Not assessed.", scored: false, applicability: "unknown" };
       let detail = representative.detail;
-      if (pages.length > 1) {
-        const affected = failCount || warnCount;
-        if (affected > 0 && affected < pages.length) detail += ` (${affected} of ${pages.length} pages)`;
-        else if (affected === pages.length) detail += ` (all ${pages.length} pages)`;
+      if (applicable.length > 1) {
+        const affected = failCount + warnCount;
+        if (affected > 0) detail += ` (${failCount} fail, ${warnCount} warn across ${applicable.length} applicable page checks)`;
       }
       // Carry the trust-fix `scored` flag through the merge, or the aggregated
       // report loses every "excluded from the SEO score" treatment the per-page
       // checks set (security headers, llms.txt, FAQPage / Review schema). An
       // item counts as unscored only when it is unscored on every page it
       // appears on, so a label that is scored anywhere still grades.
-      const unscored = instances.every((i) => i.scored === false);
-      return { label, status, detail, fix: representative.fix, ...(unscored ? { scored: false } : {}) };
+      const unscored = applicable.length === 0 || applicable.every((i) => i.scored === false);
+      const allNotApplicable = instances.every((i) => i.applicability === "not-applicable");
+      const hasUnknown = instances.some((i) => i.applicability === "unknown");
+      const applicability = applicable.length > 0 ? "applicable" as const : allNotApplicable ? "not-applicable" as const : hasUnknown ? "unknown" as const : undefined;
+      const applicableScored = applicable.filter((i) => i.scored !== false);
+      return {
+        label, status, detail, fix: representative.fix,
+        ...(unscored ? { scored: false } : {}),
+        ...(applicability ? { applicability } : {}),
+        failCount,
+        warnCount,
+        applicableCount: applicableScored.length,
+        notAssessedCount: instances.filter((i) => i.applicability === "unknown" || (i.scored === false && i.applicability !== "not-applicable")).length,
+        notApplicableCount: instances.filter((i) => i.applicability === "not-applicable").length,
+      };
     });
     // maxScore comes from scoreItems so unscored items stay out of the
     // denominator, and an all-unscored category reports 0/0 rather than 0/N
@@ -1390,7 +1409,16 @@ export function aggregateCategories(pages: PageResult[]): CategoryResult[] {
     // multi-page grading is unchanged: a label failing on 1 of 10 pages still
     // costs a tenth of the category rather than the whole item.
     const { maxScore } = scoreItems(items);
-    const score = Math.round(avgPct * maxScore);
-    return { name, score, maxScore, items };
+    const score = avgPct * maxScore;
+    const allPageItems = pageCats.flatMap((c) => c.items);
+    const assessedItems = allPageItems.filter((i) => i.scored !== false && i.applicability !== "not-applicable" && i.applicability !== "unknown");
+    const counts = {
+      fail: assessedItems.filter((i) => i.status === "fail").length,
+      warn: assessedItems.filter((i) => i.status === "warn").length,
+      applicable: assessedItems.length,
+      notAssessed: allPageItems.filter((i) => i.applicability === "unknown" || (i.scored === false && i.applicability !== "not-applicable")).length,
+      notApplicable: allPageItems.filter((i) => i.applicability === "not-applicable").length,
+    };
+    return { name, score, maxScore, items, counts };
   });
 }

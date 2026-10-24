@@ -303,7 +303,7 @@ describe("applyPageTypeApplicability", () => {
     const items = out.flatMap((c) => c.items);
     expect(items.every((i) => i.status === "pass")).toBe(true);
     expect(items.every((i) => i.fix === undefined)).toBe(true);
-    expect(items.find((i) => i.label === "Word count")?.detail).toMatch(/not required for a contact page/i);
+    expect(items.find((i) => i.label === "Word count")?.detail).toMatch(/not required for this contact page/i);
   });
 
   it("leaves AEO/content-depth checks alone on a practice page", () => {

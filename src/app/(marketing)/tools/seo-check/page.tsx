@@ -9,13 +9,13 @@ import SeoCheckTool from "@/components/seo-check/SeoCheckTool";
 
 export const metadata: Metadata = {
   robots: { index: false, follow: false },
-  title: "Free SEO & AI Visibility Check · CaseLoad Select",
+  title: "Free Law Firm SEO Check · CaseLoad Select",
   description:
-    "Run a multi-page diagnostic of your law firm's SEO health and AI search visibility. Dozens of signals across nine categories including indexability, AI bot access, schema readiness, local search, and security. Free, no account required.",
+    "Review public website signals across up to 10 pages. See affected-page evidence and prioritized next steps. AI-related observations do not grade visibility or predict citations.",
   openGraph: {
-    title: "Free SEO & AI Visibility Check · CaseLoad Select",
+    title: "Free Law Firm SEO Check · CaseLoad Select",
     description:
-      "Run a multi-page diagnostic of your law firm's SEO health and AI search visibility. Free, no account required.",
+      "Review public website signals across up to 10 pages, with affected-page evidence and prioritized next steps. AI observations do not predict citations.",
     type: "website",
     locale: "en_CA",
   },
@@ -48,24 +48,20 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
         <section className="seo-hero">
           <div className="seo-hero-eyebrow">Free tool · Multi-page scan · No account</div>
           <h1 className="seo-hero-title">
-            SEO &amp; AI Visibility Check<span className="ts" />
+            Law Firm SEO Check<span className="ts" />
           </h1>
           <p className="seo-hero-sub">
-            Most law firm websites are invisible to AI search. Google&apos;s AI Overviews,
-            ChatGPT, and Perplexity now answer legal questions directly, citing the firms
-            with the strongest signals. This diagnostic crawls your site and checks dozens of
-            signals across SEO health and AI search readiness, then scores what actually drives
-            visibility today.
+            Review public website signals across up to 10 pages. Findings show affected pages, why they may matter, and general next steps. AI observations are not a visibility grade or citation prediction.
           </p>
 
           <div className="seo-hero-stats">
             <div className="seo-hero-stat">
-              <div className="seo-hero-stat-num">70+</div>
-              <div className="seo-hero-stat-label">Signals checked</div>
+              <div className="seo-hero-stat-num">Up to 10</div>
+              <div className="seo-hero-stat-label">Pages checked</div>
             </div>
             <div className="seo-hero-stat">
-              <div className="seo-hero-stat-num">9</div>
-              <div className="seo-hero-stat-label">Categories scored</div>
+              <div className="seo-hero-stat-num">10</div>
+              <div className="seo-hero-stat-label">Weighted categories</div>
             </div>
             <div className="seo-hero-stat">
               <div className="seo-hero-stat-num">0</div>
@@ -82,7 +78,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           <div className="seo-categories-header">
             <span className="seo-cat-eyebrow">What we check</span>
             <h2 className="seo-categories-title">
-              The categories that shape your visibility<span className="ts" />
+              Scan checks<span className="ts" />
             </h2>
           </div>
           <div className="seo-categories-grid">
@@ -104,11 +100,9 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
             </div>
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">3</div>
-              <h3 className="seo-cat-preview-name">AI Visibility</h3>
+              <h3 className="seo-cat-preview-name">AI access observations</h3>
               <p className="seo-cat-preview-desc">
-                AI search bot access, training bot control, llms.txt, question headings,
-                direct-answer patterns, author attribution, entity signals. Whether AI models
-                can find and cite your content.
+                The scan records AI crawler settings and content patterns. It cannot show whether an AI service accesses or cites the firm.
               </p>
             </div>
             <div className="seo-cat-preview">
@@ -179,6 +173,8 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           margin-bottom: var(--sp-5);
         }
         .seo-hero-title {
+          width: 100%;
+          max-width: none;
           font-family: var(--font-display);
           font-size: var(--fs-hero);
           font-weight: 800;
@@ -188,11 +184,12 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           margin: 0 0 var(--sp-5);
         }
         .seo-hero-sub {
+          width: 100%;
+          max-width: none;
           font-size: var(--fs-lead);
           color: var(--text-muted);
           line-height: 1.65;
           margin: 0 auto var(--sp-7);
-          max-width: 640px;
         }
         .seo-hero-stats {
           display: grid;
@@ -247,6 +244,8 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           display: block;
         }
         .seo-categories-title {
+          width: 100%;
+          max-width: none;
           font-family: var(--font-display);
           font-size: var(--fs-h2);
           font-weight: 800;

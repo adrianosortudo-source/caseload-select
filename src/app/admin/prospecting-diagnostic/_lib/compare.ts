@@ -21,6 +21,7 @@ export interface ScoreDelta {
   before: number | null;
   after: number | null;
   delta: number | null;
+  methodChanged?: boolean;
 }
 
 export interface IssueMovement {
@@ -45,11 +46,16 @@ export interface DiagnosticComparison {
   bestIntentPageBefore: string | null;
   bestIntentPageAfter: string | null;
   recommendedNextAction: string;
+  methodChanged: boolean;
 }
 
 function primaryResult(run: SavedRunLike): SeoCheckResult | null {
   const primary = run.scans.find((s) => s.role === "primary" && s.result);
   return primary?.result ?? null;
+}
+
+function methodologyVersion(result: SeoCheckResult | null | undefined): number {
+  return typeof result?.methodologyVersion === "number" ? result.methodologyVersion : 2;
 }
 
 function issueKey(issue: SeoCheckIssue): string {
@@ -75,14 +81,21 @@ function scoreDelta(label: string, before: number | null | undefined, after: num
   return { label, before: b, after: a, delta: b === null || a === null ? null : a - b };
 }
 
-function competitorMap(run: SavedRunLike): Map<string, { overall: number | null; ai: number | null; intent: number | null }> {
-  const map = new Map<string, { overall: number | null; ai: number | null; intent: number | null }>();
+function comparableScoreDelta(label: string, before: number | null | undefined, after: number | null | undefined, methodChanged: boolean): ScoreDelta {
+  return methodChanged
+    ? { label, before: null, after: null, delta: null, methodChanged: true }
+    : scoreDelta(label, before, after);
+}
+
+function competitorMap(run: SavedRunLike): Map<string, { overall: number | null; ai: number | null; intent: number | null; methodologyVersion: number }> {
+  const map = new Map<string, { overall: number | null; ai: number | null; intent: number | null; methodologyVersion: number }>();
   for (const scan of run.scans) {
     if (scan.role !== "competitor" || !scan.result) continue;
     map.set(scan.domain, {
       overall: scan.result.overallScore ?? null,
       ai: scan.result.aiSearchScore ?? null,
       intent: scan.result.intentAlignment?.score ?? null,
+      methodologyVersion: methodologyVersion(scan.result),
     });
   }
   return map;
@@ -105,6 +118,10 @@ function competitorChanges(before: SavedRunLike, after: SavedRunLike): string[] 
       continue;
     }
     if (!old || !cur) continue;
+    if (old.methodologyVersion !== cur.methodologyVersion) {
+      out.push(`${domain}: Method changed.`);
+      continue;
+    }
     const parts: string[] = [];
     if (old.overall !== null && cur.overall !== null && old.overall !== cur.overall) parts.push(`SEO ${old.overall} to ${cur.overall}`);
     if (old.ai !== null && cur.ai !== null && old.ai !== cur.ai) parts.push(`AI ${old.ai} to ${cur.ai}`);
@@ -119,6 +136,7 @@ function bestIntentPage(run: SavedRunLike): string | null {
 }
 
 function nextAction(comparison: Omit<DiagnosticComparison, "recommendedNextAction">): string {
+  if (comparison.methodChanged) return "Method changed. Review the findings directly because numeric score changes are suppressed.";
   const seo = comparison.scoreDeltas.find((s) => s.label === "SEO Health")?.delta ?? 0;
   const intent = comparison.scoreDeltas.find((s) => s.label === "Intent Alignment")?.delta ?? 0;
   const unresolvedHigh = comparison.persistentIssues.filter((i) => i.afterSeverity === "critical" || i.afterSeverity === "high");
@@ -136,6 +154,7 @@ function nextAction(comparison: Omit<DiagnosticComparison, "recommendedNextActio
 export function compareDiagnostics(before: SavedRunLike, after: SavedRunLike): DiagnosticComparison {
   const beforePrimary = primaryResult(before);
   const afterPrimary = primaryResult(after);
+  const methodChanged = methodologyVersion(beforePrimary) !== methodologyVersion(afterPrimary);
   const beforeIssues = new Map((beforePrimary?.issues ?? []).map((issue) => [issueKey(issue), issue]));
   const afterIssues = new Map((afterPrimary?.issues ?? []).map((issue) => [issueKey(issue), issue]));
 
@@ -166,10 +185,10 @@ export function compareDiagnostics(before: SavedRunLike, after: SavedRunLike): D
     before,
     after,
     scoreDeltas: [
-      scoreDelta("SEO Health", before.overall_score ?? beforePrimary?.overallScore, after.overall_score ?? afterPrimary?.overallScore),
-      scoreDelta("AI Search", before.ai_search_score ?? beforePrimary?.aiSearchScore, after.ai_search_score ?? afterPrimary?.aiSearchScore),
-      scoreDelta("Intent Alignment", before.intent_score ?? beforePrimary?.intentAlignment?.score, after.intent_score ?? afterPrimary?.intentAlignment?.score),
-      scoreDelta("Prospect Fit", before.prospect_fit_score ?? beforePrimary?.internalSummary?.prospectFitScore, after.prospect_fit_score ?? afterPrimary?.internalSummary?.prospectFitScore),
+      comparableScoreDelta("SEO Health", before.overall_score ?? beforePrimary?.overallScore, after.overall_score ?? afterPrimary?.overallScore, methodChanged),
+      comparableScoreDelta("AI Search", before.ai_search_score ?? beforePrimary?.aiSearchScore, after.ai_search_score ?? afterPrimary?.aiSearchScore, methodChanged),
+      comparableScoreDelta("Intent Alignment", before.intent_score ?? beforePrimary?.intentAlignment?.score, after.intent_score ?? afterPrimary?.intentAlignment?.score, methodChanged),
+      comparableScoreDelta("Prospect Fit", before.prospect_fit_score ?? beforePrimary?.internalSummary?.prospectFitScore, after.prospect_fit_score ?? afterPrimary?.internalSummary?.prospectFitScore, methodChanged),
       scoreDelta("Pages Scanned", before.total_pages_scanned || before.pages_scanned, after.total_pages_scanned || after.pages_scanned),
     ],
     newIssues,
@@ -178,6 +197,7 @@ export function compareDiagnostics(before: SavedRunLike, after: SavedRunLike): D
     competitorChanges: competitorChanges(before, after),
     bestIntentPageBefore: bestIntentPage(before),
     bestIntentPageAfter: bestIntentPage(after),
+    methodChanged,
   };
 
   return { ...partial, recommendedNextAction: nextAction(partial) };

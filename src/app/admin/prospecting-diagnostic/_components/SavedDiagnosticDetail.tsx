@@ -62,6 +62,8 @@ function slugify(s: string): string {
 export default function SavedDiagnosticDetail({ run, priorRunId }: { run: SavedDiagnosticRunPayload; priorRunId?: string }) {
   const [copied, setCopied] = useState("");
   const diag = run.diagnostic;
+  const primaryResult = run.scans.find((scan) => scan.role === "primary")?.result;
+  const methodologyVersion = typeof primaryResult?.methodologyVersion === "number" ? primaryResult.methodologyVersion : 2;
 
   async function copy(key: string, text: string) {
     try {
@@ -95,8 +97,8 @@ export default function SavedDiagnosticDetail({ run, priorRunId }: { run: SavedD
       <div className="lg:col-span-2 space-y-6">
         <section className="bg-white border border-black/8 p-5 sm:p-6">
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <ScoreBox label="SEO" value={run.overall_score} suffix="/100" />
-            <ScoreBox label="AI Search" value={run.ai_search_score} suffix="/100" />
+            <ScoreBox label={methodologyVersion >= 3 ? "Website checks" : "Historical score"} value={run.overall_score} suffix="/100" />
+            <ScoreBox label="AI Search" value={run.ai_search_score} emptyLabel="Not scored" suffix="/100" />
             <ScoreBox label="Intent" value={run.intent_score} suffix="/100" />
             <ScoreBox label="Fit" value={run.prospect_fit_score} suffix="/100" />
             <ScoreBox label="Pages" value={run.total_pages_scanned || run.pages_scanned} />
@@ -149,7 +151,7 @@ export default function SavedDiagnosticDetail({ run, priorRunId }: { run: SavedD
                 r.domain,
                 r.reachable ? String(r.pagesScanned) : "n/a",
                 r.overallScore === null ? "n/a" : String(r.overallScore),
-                r.aiSearchScore === null ? "n/a" : String(r.aiSearchScore),
+                r.aiSearchScore === null ? "Not scored" : String(r.aiSearchScore),
                 r.intentScore === null ? "n/a" : String(r.intentScore),
                 r.note,
               ])}
@@ -315,11 +317,11 @@ export default function SavedDiagnosticDetail({ run, priorRunId }: { run: SavedD
   );
 }
 
-function ScoreBox({ label, value, suffix = "" }: { label: string; value: number | null | undefined; suffix?: string }) {
+function ScoreBox({ label, value, suffix = "", emptyLabel = "n/a" }: { label: string; value: number | null | undefined; suffix?: string; emptyLabel?: string }) {
   return (
     <div className="border border-black/8 bg-parchment p-3">
       <div className="text-[10px] uppercase tracking-wider text-black/45 font-semibold">{label}</div>
-      <div className="font-display text-2xl font-extrabold text-navy mt-1">{value ?? "n/a"}{value !== null && value !== undefined ? suffix : ""}</div>
+      <div className="font-display text-2xl font-extrabold text-navy mt-1">{value ?? emptyLabel}{value !== null && value !== undefined ? suffix : ""}</div>
     </div>
   );
 }
@@ -431,8 +433,8 @@ function InternalScores({ scans }: { scans: DomainScan[] }) {
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-black/60">
                 <span>Role</span><span className="text-right">{s.role}</span>
                 <span>Overall</span><span className="text-right font-semibold text-navy">{r.overallScore}/100 ({r.grade})</span>
-                <span>AI search</span><span className="text-right font-semibold text-navy">{r.aiSearchScore}/100</span>
-                <span>AI policy</span><span className="text-right font-semibold text-navy">{r.aiPolicyScore}/100</span>
+                <span>AI search</span><span className="text-right font-semibold text-navy">{r.aiSearchScore === null ? "Not scored" : `${r.aiSearchScore}/100`}</span>
+                <span>AI policy</span><span className="text-right font-semibold text-navy">{r.aiPolicyScore === null ? "Not scored" : `${r.aiPolicyScore}/100`}</span>
                 {r.intentAlignment && (
                   <>
                     <span>Intent</span><span className="text-right font-semibold text-navy">{r.intentAlignment.score}/100</span>

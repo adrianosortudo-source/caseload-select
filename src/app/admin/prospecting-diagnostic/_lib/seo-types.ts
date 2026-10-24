@@ -23,6 +23,8 @@ export interface SeoCheckItem {
   status: "pass" | "warn" | "fail";
   detail: string;
   fix?: string;
+  scored?: boolean;
+  applicability?: "applicable" | "not-applicable" | "unknown";
 }
 
 export interface SeoCategoryResult {
@@ -43,6 +45,10 @@ export interface SeoCheckIssue {
   evidence?: string;
   affectedUrls: string[];
   affectedCount: number;
+  failCount?: number;
+  warnCount?: number;
+  applicableCount?: number;
+  notAssessedCount?: number;
   totalPages: number;
   pageTypeImpact?: string[];
   confidence: Confidence;
@@ -155,6 +161,7 @@ export interface SeoPageResult {
 
 export interface SeoCheckResult {
   domain: string;
+  methodologyVersion?: number | null;
   scanMode: "quick" | "standard" | "deep";
   pagesScanned: number;
   /** Present on the live API response; read by the enrichment research packet. */
@@ -162,10 +169,10 @@ export interface SeoCheckResult {
   categories: SeoCategoryResult[];
   overallScore: number;
   grade: string;
-  aiSearchScore: number;
-  aiSearchGrade: string;
-  aiPolicyScore: number;
-  aiPolicyGrade: string;
+  aiSearchScore: number | null;
+  aiSearchGrade: string | null;
+  aiPolicyScore: number | null;
+  aiPolicyGrade: string | null;
   intentAlignment?: SeoIntentAlignment;
   renderingSummary?: SeoRenderingSummary;
   issues: SeoCheckIssue[];
@@ -173,4 +180,12 @@ export interface SeoCheckResult {
   severityBreakdown: SeverityBreakdown;
   partial?: boolean;
   checkedAt: string;
+  scoring?: {
+    methodologyVersion: number;
+    label: "Website checks";
+    assessed: boolean;
+    categoryWeights: Record<string, number>;
+    unscoredLabels: string[];
+    note: string;
+  };
 }
