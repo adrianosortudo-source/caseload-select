@@ -65,7 +65,7 @@ export function verifyReaderRepairPlan(plan,ledgerCheck,phase) {
   plan.upToDate!==(phase==="post")||!same(plan.migrations,pending)||!same(plan.seeds,[])||!same(plan.roles,[])) fail("unexpected_reader_repair_plan");
  return {phase,migrations:pending,dryRun:true,upToDate:phase==="post",exactScope:true};
 }
-export const catalogQuery=[
+const catalogQueryParts=[
 "SELECT json_build_object(",
 " 'candidate_list_service_role_execute',has_function_privilege('service_role','public.list_prospect_research_candidates_v1(jsonb,integer,uuid,bigint)','EXECUTE'),",
 " 'candidate_list_anon_execute',has_function_privilege('anon','public.list_prospect_research_candidates_v1(jsonb,integer,uuid,bigint)','EXECUTE'),",
@@ -123,6 +123,20 @@ export const catalogQuery=[
 " 'apply_refresh_current_identity_excluded',(SELECT position('h.package_id IS DISTINCT FROM NEW.id' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure)",
 ") AS reader_contract;"
 ].join("\n");
+const catalogChecks=catalogQueryParts
+ .replace(/^SELECT json_build_object\(\n/,"")
+ .replace(/\n\) AS reader_contract;$/g,"")
+ .split(",\n")
+ .map(line=>{
+  const match=line.match(/^\s*'([^']+)',([\s\S]*)$/);
+  if(!match) fail("reader_catalog_query_invalid");
+  return `('${match[1].replace(/'/g,"''")}',${match[2].replace(/,$/,"")})`;
+ });
+if(catalogChecks.length!==Object.keys(catalogExpectations).length) fail("reader_catalog_query_invalid");
+export const catalogQuery=`SELECT json_build_object('reader_contract',jsonb_object_agg(key,value))
+FROM (VALUES
+${catalogChecks.join(",\n")}
+) AS reader_contract_checks(key,value);`;
 export function targetLedgerQuery() {
  return `SELECT version,name,statements FROM supabase_migrations.schema_migrations WHERE version IN (${repairMigrations.map(identity=>`'${identity.version}'`).join(",")}) ORDER BY version;\n`;
 }
