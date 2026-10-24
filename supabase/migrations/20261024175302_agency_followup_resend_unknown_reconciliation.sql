@@ -251,6 +251,8 @@ BEGIN
             v_enrollment_id := NULL;
             v_prospect_id := NULL;
             v_processing_result := 'unmatched_recipient';
+          ELSE
+            v_processing_result := 'matched';
           END IF;
         END IF;
       ELSE
