@@ -131,12 +131,33 @@ export function stageReaderHistoryReferences(payload, sourceRoot, stagedRoot) {
   const stage = fs.realpathSync(stagedRoot);
   if (!path.isAbsolute(stagedRoot) || isWithin(source, stage) || isWithin(stage, source)) fail("reader_history_stage_path_prohibited");
   const directory = path.join(stagedRoot, "supabase", "migrations");
+  const sourceDirectory = path.join(source, "supabase", "migrations");
   const stagedFiles = [];
   for (const row of HISTORY) {
-    const target = path.join(directory, filename(row));
+    const file = filename(row);
+    const sourcePath = path.join(sourceDirectory, file);
+    const target = path.join(directory, file);
+    let sourceBytes;
+    try {
+      const stat = fs.lstatSync(sourcePath);
+      if (stat.isSymbolicLink() || !stat.isFile()) fail("reader_history_source_file_invalid");
+      sourceBytes = fs.readFileSync(sourcePath);
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
+    let targetExists = false;
+    try {
+      const stat = fs.lstatSync(target);
+      if (stat.isSymbolicLink() || !stat.isFile()) fail("reader_history_staged_file_invalid");
+      targetExists = true;
+      const stagedSourceBytes = fs.readFileSync(target);
+      if (!sourceBytes || !stagedSourceBytes.equals(sourceBytes)) fail("reader_history_staged_source_mismatch");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+    }
     const bytes = Buffer.from(guard(row), "utf8");
-    fs.writeFileSync(target, bytes, { flag: "wx" });
-    stagedFiles.push({ filename: filename(row), sha256: hash(bytes) });
+    fs.writeFileSync(target, bytes, { flag: targetExists ? "w" : "wx" });
+    stagedFiles.push({ filename: file, sha256: hash(bytes), sourceIncluded: targetExists, sourceSha256: targetExists ? hash(sourceBytes) : null });
   }
   return {
     schemaVersion: "candidate-reader-history-references/v1",
@@ -158,14 +179,28 @@ export function removeReaderHistoryReferences(sourceRoot, stagedRoot, proof) {
       proof.stagedRoot !== stage || !same(proof.references, references) ||
       !same(proof.history, HISTORY) || !Array.isArray(proof.stagedFiles) || proof.stagedFiles.length !== HISTORY.length) fail("reader_history_stage_proof_invalid");
   const directory = path.join(stagedRoot, "supabase", "migrations");
+  const sourceDirectory = path.join(source, "supabase", "migrations");
   for (let index = 0; index < HISTORY.length; index++) {
     const expected = proof.stagedFiles[index];
     const row = HISTORY[index];
     const file = filename(row);
-    const bytes = fs.readFileSync(path.join(directory, file));
-    if (!exact(expected, ["filename", "sha256"]) || expected.filename !== file || expected.sha256 !== hash(Buffer.from(guard(row), "utf8")) ||
-        hash(bytes) !== expected.sha256 || !bytes.equals(Buffer.from(guard(row), "utf8"))) fail("reader_history_stage_changed");
-    fs.unlinkSync(path.join(directory, file));
+    const target = path.join(directory, file);
+    const bytes = fs.readFileSync(target);
+    if (!exact(expected, ["filename", "sha256", "sourceIncluded", "sourceSha256"]) || expected.filename !== file ||
+        typeof expected.sourceIncluded !== "boolean" || expected.sha256 !== hash(Buffer.from(guard(row), "utf8")) ||
+        hash(bytes) !== expected.sha256 || !bytes.equals(Buffer.from(guard(row), "utf8")) ||
+        (expected.sourceIncluded ? !/^[a-f0-9]{64}$/.test(expected.sourceSha256 ?? "") : expected.sourceSha256 !== null)) fail("reader_history_stage_changed");
+    if (expected.sourceIncluded) {
+      const sourcePath = path.join(sourceDirectory, file);
+      const stat = fs.lstatSync(sourcePath);
+      if (stat.isSymbolicLink() || !stat.isFile()) fail("reader_history_source_file_invalid");
+      const sourceBytes = fs.readFileSync(sourcePath);
+      if (hash(sourceBytes) !== expected.sourceSha256) fail("reader_history_source_changed");
+      fs.writeFileSync(target, sourceBytes, { flag: "w" });
+      if (!fs.readFileSync(target).equals(sourceBytes)) fail("reader_history_restore_failed");
+    } else {
+      fs.unlinkSync(target);
+    }
   }
   return { removedGuardReferences: HISTORY.map(filename), verified: true };
 }
