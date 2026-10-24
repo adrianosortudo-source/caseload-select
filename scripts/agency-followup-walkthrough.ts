@@ -117,6 +117,31 @@ function parseDisposablePort(raw: string | undefined, fallback: number, label: s
   return port;
 }
 
+function chooseWindowSafeTimezone(now: Date): string {
+  const candidates = [
+    "UTC", "America/St_Johns", "America/Toronto", "America/Los_Angeles",
+    "Pacific/Honolulu", "Atlantic/Azores", "Europe/London", "Europe/Paris",
+    "Africa/Johannesburg", "Asia/Dubai", "Asia/Kolkata", "Asia/Kathmandu",
+    "Asia/Tokyo", "Australia/Adelaide", "Australia/Sydney", "Pacific/Kiritimati",
+  ];
+  const choices = candidates.map((timeZone) => {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(now);
+    const hour = Number(parts.find((part) => part.type === "hour")?.value) % 24;
+    const minute = Number(parts.find((part) => part.type === "minute")?.value);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+      throw new Error("Could not read the synthetic journey timezone clock.");
+    }
+    return { timeZone, minutesUntilClose: 23 * 60 + 59 - (hour * 60 + minute) };
+  }).sort((left, right) => right.minutesUntilClose - left.minutesUntilClose);
+  const selected = choices[0];
+  if (!selected || selected.minutesUntilClose < 120) {
+    throw new Error("Could not select a synthetic journey timezone at least two hours before its 23:59 close.");
+  }
+  return selected.timeZone;
+}
+
 function safeDiagnosticAtom(value: unknown): string | number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   return typeof value === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(value) ? value : null;
@@ -1723,7 +1748,7 @@ function queueCard(page: Page, firmName: string) {
   return page.locator('section[aria-labelledby="queue-title"] article').filter({ hasText: firmName }).first();
 }
 
-async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: string) => Promise<void>): Promise<string> {
+async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: string) => Promise<void>): Promise<{ journeyName: string; taggedUnknownJourneyName: string }> {
   const suffix = randomUUID().slice(0, 8);
   const templateKey = "walkthrough-" + suffix;
   const journeyKey = "walkthrough-" + suffix;
@@ -1797,7 +1822,23 @@ async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: s
     otherKeyV1RemainsAvailable: true,
   };
   await page.getByLabel("Journey version").selectOption({ label: journeyName + " v2" });
-  return journeyName + " v2";
+
+  const taggedUnknownJourneyKey = "walkthrough-unknown-" + suffix;
+  const taggedUnknownJourneyName = "Synthetic tagged UNKNOWN " + suffix;
+  await page.getByLabel("Journey key").fill(taggedUnknownJourneyKey);
+  await page.getByLabel("Journey name").fill(taggedUnknownJourneyName);
+  await page.getByLabel("IANA timezone").fill(chooseWindowSafeTimezone(new Date()));
+  await page.getByLabel("Local window start").fill("00:00");
+  await page.getByLabel("Local window end").fill("23:59");
+  for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
+    await page.getByLabel(day, { exact: true }).check();
+  }
+  await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
+  const taggedUnknownDraft = page.getByText(taggedUnknownJourneyName + " v1 · draft", { exact: false }).locator("..");
+  await waitForAction(page, "journey_activate", taggedUnknownDraft.getByRole("button", { name: "Activate version" }));
+  const taggedUnknownOption = journeyOptions.filter({ hasText: taggedUnknownJourneyName + " v1" });
+  await expect(taggedUnknownOption).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+  return { journeyName: journeyName + " v2", taggedUnknownJourneyName: taggedUnknownJourneyName + " v1" };
 }
 
 async function createDraft(pool: Pool, page: Page, journeyVersionLabel: string, prospect: ProspectFixture): Promise<void> {
@@ -2168,7 +2209,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     }
   }
 
-  const journeyName = await authorJourney(page, async (templateKey) => {
+  const { journeyName, taggedUnknownJourneyName } = await authorJourney(page, async (templateKey) => {
     templateApprovalAuditEvidence = await verifyTemplateApprovalAudit(pool, templateKey, fixtures.lawyerId);
   });
   const consentProspect = fixtures.prospects.consent;
@@ -2365,7 +2406,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
 
   const taggedUnknownProspect = fixtures.prospects.tagged_unknown;
-  await createDraft(pool, page, journeyName, taggedUnknownProspect);
+  await createDraft(pool, page, taggedUnknownJourneyName, taggedUnknownProspect);
   await markEligibleAndRelease(page, taggedUnknownProspect);
   await waitForAction(page, "approve", queueCard(page, taggedUnknownProspect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
   const taggedUnknownRow = await pool.query<{ id: string; enrollment_id: string; recipient_email_snapshot: string }>(
@@ -2374,35 +2415,23 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   );
   const taggedMessage = taggedUnknownRow.rows[0];
   if (!taggedMessage) throw new Error("Tagged UNKNOWN reconciliation message was not created.");
-  const taggedJourneyPolicyResult = await pool.query<{
-    journey_id: string;
-    business_days: number[];
-    local_window_start: string;
-    local_window_end: string;
-  }>(
-    `select journey.id as journey_id,journey.business_days,
-            journey.local_window_start::text as local_window_start,
-            journey.local_window_end::text as local_window_end
-     from public.agency_followup_messages message
-     join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id
-     join public.agency_followup_journeys journey on journey.id=enrollment.journey_id
-     where message.id=$1`,
-    [taggedMessage.id],
-  );
-  const taggedJourneyPolicy = taggedJourneyPolicyResult.rows[0];
-  if (!taggedJourneyPolicy) throw new Error("Tagged UNKNOWN journey policy could not be read from the disposable database.");
-  // The database gate uses its real clock. Make the disposable message due now;
-  // the all-day window below is temporary and restored before the window test.
+  // The all-days policy was authored as a new immutable journey version through the UI.
+  // Make only this disposable message due against the same database clock used for its claim.
   await pool.query(
     "update public.agency_followup_messages set scheduled_at=clock_timestamp()-interval '10 minutes' where id=$1",
     [taggedMessage.id],
   );
+  const taggedDbNowResult = await pool.query<{ now: Date }>("select clock_timestamp() as now");
+  const taggedDbNow = taggedDbNowResult.rows[0]?.now;
+  if (!(taggedDbNow instanceof Date) || !Number.isFinite(taggedDbNow.getTime())) {
+    throw new Error("The database clock for the tagged UNKNOWN synthetic claim could not be read.");
+  }
   const taggedOwner = `synthetic-tagged-unknown-${RUN_ID}`;
   const taggedClaimed = await withFixtureClaim(pool, taggedMessage.id, async () => pool.query<{
     id: string; enrollment_id: string; attempt_count: number; lease_owner: string; state: string;
   }>(
     "select id,enrollment_id,attempt_count,lease_owner,state from public.claim_agency_followup_messages($1,$2,120,1)",
-    [taggedOwner, acceptedNow],
+    [taggedOwner, taggedDbNow.toISOString()],
   ));
   const taggedLease = taggedClaimed.rows[0];
   if (!taggedLease || taggedLease.id !== taggedMessage.id || taggedLease.state !== "claimed" || taggedLease.lease_owner !== taggedOwner) {
@@ -2410,14 +2439,6 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
   const taggedGateClient = await pool.connect();
   try {
-    await pool.query(
-      `update public.agency_followup_journeys
-       set business_days=array[1,2,3,4,5,6,7]::integer[],
-           local_window_start='00:00:00'::time,
-           local_window_end='24:00:00'::time
-       where id=$1`,
-      [taggedJourneyPolicy.journey_id],
-    );
     await taggedGateClient.query("begin");
     await taggedGateClient.query("set local role service_role");
     const gate = await authorizeProviderHandoff(taggedGateClient, {
@@ -2467,19 +2488,6 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw error;
   } finally {
     taggedGateClient.release();
-    await pool.query(
-      `update public.agency_followup_journeys
-       set business_days=$2::integer[],
-           local_window_start=$3::time,
-           local_window_end=$4::time
-       where id=$1`,
-      [
-        taggedJourneyPolicy.journey_id,
-        taggedJourneyPolicy.business_days,
-        taggedJourneyPolicy.local_window_start,
-        taggedJourneyPolicy.local_window_end,
-      ],
-    );
   }
 
   const taggedProviderMessageId = `fake-provider-tagged-unknown-${RUN_ID}`;
