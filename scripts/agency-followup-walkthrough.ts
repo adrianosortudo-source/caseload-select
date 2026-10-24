@@ -2538,7 +2538,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await unknownDispositionClient.query(
       "select public.persist_agency_followup_disposition($1::uuid,$2::uuid,$3,$4,$5::jsonb)",
       [taggedMessage.id, taggedMessage.enrollment_id, taggedOwner, Number(taggedLease.attempt_count),
-        JSON.stringify({ state: "unknown", detail: "synthetic_tagged_email_sent_interruption" })],
+        JSON.stringify({ state: "unknown", detail: "synthetic_tagged_email_sent_interruption", at: taggedDbNow.toISOString() })],
     );
     await unknownDispositionClient.query("commit");
   } catch (error) {
