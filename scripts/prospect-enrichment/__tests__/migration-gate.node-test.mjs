@@ -461,6 +461,23 @@ test("candidate reader repair matches pinned history guards and checks held CRM 
   const post = verifyFullMigrationLedger(appliedAllReader, staged, "candidate-reader-repair-held-complete", undefined, source);
   assert.deepEqual(post.pendingPaths, []);
   assert.deepEqual(post.heldMigrations, CANDIDATE_READER_REPAIR_HELD_MIGRATIONS.map(item => ({ ...item, status: "held-unapplied" })));
+  const unrelatedPending = "supabase/migrations/20990101000000_unreviewed_pending.sql";
+  fs.writeFileSync(path.join(stagedDir, path.basename(unrelatedPending)), "SELECT 1;\n");
+  let deltaError;
+  try {
+    verifyFullMigrationLedger(appliedAllReader, staged, "candidate-reader-repair-held-complete", undefined, source);
+  } catch (error) {
+    deltaError = error;
+  }
+  assert.equal(deltaError?.message, "unexpected_full_history_delta");
+  assert.deepEqual(deltaError?.safeDiagnostic, {
+    schemaVersion: "prospect-enrichment-ledger-diagnostic/v1",
+    ok: false,
+    code: "unexpected_full_history_delta",
+    remoteVersionCount: appliedAllReader.length,
+    stagedMigrationCount: appliedAllReader.length + 1,
+    pendingPaths: [unrelatedPending],
+  });
   assert.throws(() => verifyFullMigrationLedger(appliedAllReader, staged, "candidate-reader-repair-held-complete", undefined),
     /reader_repair_held_source_root_required/);
 });
