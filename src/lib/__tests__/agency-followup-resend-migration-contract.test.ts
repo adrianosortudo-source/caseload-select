@@ -436,10 +436,11 @@ describe("Agency follow-up Resend migration contract", () => {
     expect(contactFunction).toContain("provider_event_id,conversation_id,source_link_id");
     expect(contactFunction).toContain("'resend_email_unsubscribed'");
     expect(contactFunction).not.toContain("agency_followup_provider_event_applications");
-    const inboxInsert = contactFunction.match(
-      /INSERT INTO public\.agency_followup_provider_events \([\s\S]*?\) VALUES \([\s\S]*?\)/i,
-    )?.[0] ?? "";
-    expect(inboxInsert).not.toContain("p_recipient_email");
-    expect(inboxInsert).toContain("p_recipient_sha256");
+    expect(contactFunction).toContain(
+      "provider_event_id,provider_message_id,event_type,contact_status,occurred_at,recipient_sha256,",
+    );
+    expect(contactFunction).toContain(
+      "btrim(p_provider_event_id),NULL,'contact.updated','unsubscribed',p_occurred_at,p_recipient_sha256,",
+    );
   });
 });

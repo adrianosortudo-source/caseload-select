@@ -102,11 +102,11 @@ describe("Resend Agency follow-up webhook", () => {
       data: { email: "owner@example.com", unsubscribed: true },
     }));
     expect(response.status).toBe(200);
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("persist_agency_followup_resend_event", expect.objectContaining({
-      p_provider_message_id: null,
-      p_contact_status: "unsubscribed",
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("persist_agency_followup_resend_contact_event", expect.objectContaining({
+      p_provider_event_id: "evt_123",
+      p_occurred_at: "2026-10-19T12:00:00.000Z",
       p_recipient_email: "owner@example.com",
-      p_recipient_sha256: null,
+      p_recipient_sha256: agencyFollowupRecipientEmailHash("owner@example.com"),
     }));
   });
 
@@ -117,9 +117,11 @@ describe("Resend Agency follow-up webhook", () => {
       data: { email: "owner@example.com", status: "unsubscribed" },
     }));
     expect(response.status).toBe(200);
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("persist_agency_followup_resend_event", expect.objectContaining({
-      p_contact_status: "unsubscribed",
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("persist_agency_followup_resend_contact_event", expect.objectContaining({
+      p_provider_event_id: "evt_123",
+      p_occurred_at: "2026-10-19T12:00:00.000Z",
       p_recipient_email: "owner@example.com",
+      p_recipient_sha256: agencyFollowupRecipientEmailHash("owner@example.com"),
     }));
   });
 

@@ -1194,13 +1194,14 @@ async function verifyProviderIdempotencyLockWaitBoundary(
       await waiter.query("begin");
       waiterTransaction = true;
       await waiter.query("set local role service_role");
-      rpcPromise = waiter.query<{ authorization: unknown }>({
+      await waiter.query("select set_config('statement_timeout',$1,true)", [String(lockWaitQueryTimeoutMs) + "ms"]);
+      const pendingRpcPromise = waiter.query<{ authorization: unknown }>({
         text: "select public.authorize_agency_followup_provider_handoff($1::uuid," +
           "(select enrollment_id from public.agency_followup_messages where id=$1::uuid),$2,$3,300,82800) as authorization",
         values: [fixture.id, enrollmentId, owner, fixture.attempt_count],
-        query_timeout: lockWaitQueryTimeoutMs,
       }).then((result) => result.rows[0]?.authorization);
-      void rpcPromise.then(() => { rpcSettled = true; }, () => { rpcSettled = true; });
+      rpcPromise = pendingRpcPromise;
+      void pendingRpcPromise.then(() => { rpcSettled = true; }, () => { rpcSettled = true; });
 
       const observationDeadline = Date.now() + 5_000;
       let observedWait: { database_now: Date; state: string | null; wait_event_type: string | null } | undefined;
