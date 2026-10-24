@@ -27,6 +27,7 @@ const validContext: AgencyFollowupSendContext = {
   conversationStatus: "awaiting_reply",
   eligibility: "eligible",
   eligibilityEvidenceRef: "synthetic-evidence",
+  optInState: "granted",
   sequenceReleased: true,
   messageApproved: true,
   approval: {
@@ -53,6 +54,7 @@ const claim: AgencyFollowupClaim = {
 class SyntheticRepository implements AgencyFollowupWorkerRepository {
   readonly dispositions: AgencyFollowupWorkerDisposition[] = [];
   claimCalls = 0;
+  prepareProviderAttempt?: AgencyFollowupWorkerRepository["prepareProviderAttempt"];
   private available: Array<{ claim: AgencyFollowupClaim; dueAt: number }>;
 
   constructor(private readonly context: AgencyFollowupSendContext, claims = [claim]) {
@@ -237,5 +239,95 @@ describe("Agency follow-up fake dispatcher", () => {
     expect((await dispatchAgencyFollowupBatch({ repository, provider, workerId: "synthetic-worker", now: validContext.now })).claimed).toBe(0);
     expect(provider.uniqueIdempotencyKeysSeen).toBe(1);
     expect(provider.sendCalls).toBe(1);
+  });
+
+  it("reserves the provider key immediately before handoff and preserves the stable retry key", async () => {
+    const repository = new SyntheticRepository(validContext);
+    const prepared: Array<{ messageId: string; enrollmentId: string; leaseOwner: string; leaseSeconds: number }> = [];
+    repository.prepareProviderAttempt = async (current, leaseSeconds) => {
+      prepared.push({
+        messageId: current.id,
+        enrollmentId: current.enrollmentId,
+        leaseOwner: current.leaseOwner,
+        leaseSeconds,
+      });
+      return "ready";
+    };
+    const provider = new FakeAgencyFollowupProvider([
+      { kind: "definitive_retryable_failure", code: "resend_rate_limit_exceeded" },
+      { kind: "accepted", providerMessageId: "resend-second-attempt", acceptedAt: "2026-10-12T15:01:00.000Z" },
+    ]);
+    const first = await dispatchAgencyFollowupBatch({
+      repository, provider, workerId: "synthetic-worker", now: validContext.now,
+      requireProviderHandoffGuard: true,
+    });
+    const scheduled = repository.dispositions[0];
+    if (scheduled.state !== "scheduled") throw new Error("Expected the first provider response to schedule a same-key retry.");
+    const second = await dispatchAgencyFollowupBatch({
+      repository, provider, workerId: "synthetic-worker", now: scheduled.retryAt,
+      requireProviderHandoffGuard: true,
+    });
+
+    expect(first.retryScheduled).toBe(1);
+    expect(second.accepted).toBe(1);
+    expect(prepared).toHaveLength(2);
+    expect(prepared.every((item) => item.messageId === claim.id && item.enrollmentId === claim.enrollmentId)).toBe(true);
+    expect(prepared.every((item) => item.leaseSeconds === 120)).toBe(true);
+    expect(provider.uniqueIdempotencyKeysSeen).toBe(1);
+    expect(provider.sendCalls).toBe(2);
+  });
+
+  it("does not call the provider after the durable idempotency window expires", async () => {
+    const repository = new SyntheticRepository(validContext);
+    repository.prepareProviderAttempt = async () => {
+      repository.dispositions.push({
+        state: "unknown", detail: "resend_idempotency_window_expired", at: validContext.now,
+      });
+      return "expired";
+    };
+    const provider = new FakeAgencyFollowupProvider();
+    const result = await dispatchAgencyFollowupBatch({
+      repository, provider, workerId: "synthetic-worker", now: validContext.now,
+      requireProviderHandoffGuard: true,
+    });
+
+    expect(result).toMatchObject({ claimed: 1, unknown: 1, accepted: 0, retryScheduled: 0 });
+    expect(repository.dispositions).toHaveLength(1);
+    expect(repository.dispositions[0]).toMatchObject({ state: "unknown", detail: "resend_idempotency_window_expired" });
+    expect(provider.sendCalls).toBe(0);
+  });
+
+  it("skips a stale lease and fails closed when a required guard is absent", async () => {
+    const staleRepository = new SyntheticRepository(validContext);
+    staleRepository.prepareProviderAttempt = async () => "stale";
+    const staleProvider = new FakeAgencyFollowupProvider();
+    const stale = await dispatchAgencyFollowupBatch({
+      repository: staleRepository, provider: staleProvider, workerId: "synthetic-worker", now: validContext.now,
+      requireProviderHandoffGuard: true,
+    });
+    expect(stale).toMatchObject({ claimed: 1, accepted: 0, unknown: 0 });
+    expect(staleProvider.sendCalls).toBe(0);
+    expect(staleRepository.dispositions).toHaveLength(0);
+
+    const missingGuardRepository = new SyntheticRepository(validContext);
+    await expect(dispatchAgencyFollowupBatch({
+      repository: missingGuardRepository, provider: new FakeAgencyFollowupProvider(),
+      workerId: "synthetic-worker", now: validContext.now, requireProviderHandoffGuard: true,
+    })).rejects.toThrow("durable pre-handoff guard");
+    expect(missingGuardRepository.claimCalls).toBe(0);
+  });
+
+  it("does not reserve provider key age when send-time blockers fail", async () => {
+    const repository = new SyntheticRepository({ ...validContext, contactability: "unsubscribed" });
+    let gateCalls = 0;
+    repository.prepareProviderAttempt = async () => { gateCalls += 1; return "ready"; };
+    const provider = new FakeAgencyFollowupProvider();
+    const result = await dispatchAgencyFollowupBatch({
+      repository, provider, workerId: "synthetic-worker", now: validContext.now,
+      requireProviderHandoffGuard: true,
+    });
+    expect(result.blocked).toBe(1);
+    expect(gateCalls).toBe(0);
+    expect(provider.sendCalls).toBe(0);
   });
 });

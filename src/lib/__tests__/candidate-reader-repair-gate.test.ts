@@ -100,7 +100,8 @@ describe("candidate reader repair gate", () => {
    expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[first,second,fourth,fifth,sixth,seventh,eighth,ninth,tenth,eleventh,twelfth,thirteenth],seeds:[],roles:[]},pending([first,second,fourth,fifth,sixth,seventh,eighth,ninth,tenth,eleventh,twelfth,thirteenth]),"pre")).toThrow("unexpected_reader_repair_plan");
    expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[ninth,tenth,eleventh,twelfth,thirteenth,eighth],seeds:[],roles:[]},pending([ninth,tenth,eleventh,twelfth,thirteenth,eighth]),"pre")).toThrow("unexpected_reader_repair_plan");
   expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},pending([first,second]),"post")).toThrow("invalid_reader_repair_plan");
-  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[fourteenth],seeds:[],roles:[]},{...pending([fourteenth]),heldMigrations:heldMigrations.slice(0,1)},"pre")).toThrow("invalid_reader_repair_plan");
+  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[thirteenth],seeds:[],roles:[]},{...pending([thirteenth]),heldMigrations:[...heldMigrations,heldMigrations[0]]},"pre")).toThrow("invalid_reader_repair_plan");
+  expect(()=>verifyReaderRepairPlan({dryRun:true,upToDate:false,migrations:[fourteenth],seeds:[],roles:[]},{...pending([fourteenth]),heldMigrations:[]},"pre")).toThrow("invalid_reader_repair_plan");
   expect(verifyReaderRepairPlan({dryRun:true,upToDate:true,migrations:[],seeds:[],roles:[]},{phase:"candidate-reader-repair-held-complete",pendingPaths:[],heldMigrations},"post").upToDate).toBe(true);
  });
  it("binds two protected reviews to one source and makes apply depend on a read-only artifact", () => {

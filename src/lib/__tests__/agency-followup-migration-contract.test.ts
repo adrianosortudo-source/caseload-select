@@ -2,16 +2,19 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const migrationName = "20261013154000_agency_followup_journeys.sql";
+const migrationName = "20261013173327_agency_followup_journeys.sql";
 const migration = readFileSync(resolve(process.cwd(), "supabase/migrations", migrationName), "utf8");
+const templateApprovalMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", "20261023170628_agency_followup_template_approval_atomic.sql"), "utf8");
 const agencyCrmGrants = readFileSync(resolve(process.cwd(), "supabase/migrations", "20261013230354_agency_crm_service_role_grants.sql"), "utf8");
+const optInOperatorReadGrant = readFileSync(resolve(process.cwd(), "supabase/migrations", "20261021050000_agency_followup_opt_in_operator_read_grant.sql"), "utf8");
 const agencyCrmSchema = readFileSync(resolve(process.cwd(), "supabase/migrations", "20260625000001_agency_crm.sql"), "utf8");
 const service = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-service.ts"), "utf8");
+const provider = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-resend-provider.ts"), "utf8");
 const route = readFileSync(resolve(process.cwd(), "src/app/api/admin/agency-crm/follow-up/route.ts"), "utf8");
 
 describe("Agency follow-up additive migration and service contract", () => {
   it("uses a versioned journey model tied to current agency prospects and approved template snapshots", () => {
-    expect(migrationName).toMatch(/^20261013154000_/);
+    expect(migrationName).toMatch(/^20261013173327_/);
     for (const table of ["agency_followup_journeys", "agency_followup_template_versions", "agency_followup_steps", "agency_followup_enrollments", "agency_followup_messages", "agency_followup_events"]) {
       expect(migration).toContain(`CREATE TABLE public.${table}`);
     }
@@ -41,8 +44,7 @@ describe("Agency follow-up additive migration and service contract", () => {
     expect(migration).toContain("SECURITY INVOKER");
     expect(migration).not.toContain("SECURITY DEFINER");
     expect(migration).toContain("lease-expired:' || expired.id::text");
-    expect(service).toContain("sameIdempotencyKey: true");
-    expect(service).toContain("automaticRetry: false");
+    expect(provider).toContain("CreateEmailRequestOptions = { idempotencyKey: request.idempotencyKey }");
     expect(service).toContain('rpc("claim_agency_followup_messages"');
     expect(service).toContain("new FakeAgencyFollowupProvider()");
   });
@@ -57,6 +59,23 @@ describe("Agency follow-up additive migration and service contract", () => {
     expect(service).toContain("createAgencyFollowupTemplateVersion");
     expect(service).toContain("createAgencyFollowupJourneyVersion");
     expect(service).toContain('state: "scheduled"');
+  });
+
+  it("approves a template and appends its audit event in one restricted invoker RPC", () => {
+    expect(templateApprovalMigration).toContain("CREATE OR REPLACE FUNCTION public.approve_agency_followup_template_version(");
+    expect(templateApprovalMigration).toContain("SECURITY INVOKER");
+    expect(templateApprovalMigration).toContain("SET search_path = ''");
+    expect(templateApprovalMigration).toMatch(/FROM public\.firm_lawyers\s+WHERE id = p_actor_operator_id\s+AND role = 'operator'\s+AND disabled = false/);
+    expect(templateApprovalMigration).toContain("only an active operator may approve an agency follow-up template version");
+    expect(templateApprovalMigration).toMatch(/WHERE id = p_template_version_id\s+AND state = 'draft'/);
+    expect(templateApprovalMigration).toContain("INSERT INTO public.agency_followup_events (");
+    expect(templateApprovalMigration).toContain("'template_approved'");
+    expect(templateApprovalMigration).toContain("'template-approved:' || v_template.id::text || ':' || p_actor_operator_id::text");
+    expect(templateApprovalMigration).toContain("REVOKE ALL ON FUNCTION public.approve_agency_followup_template_version(uuid, uuid)");
+    expect(templateApprovalMigration).toMatch(/GRANT EXECUTE ON FUNCTION public\.approve_agency_followup_template_version\(uuid, uuid\)\s+TO service_role/);
+    expect(templateApprovalMigration).not.toContain("SECURITY DEFINER");
+    expect(service).toContain('rpc("approve_agency_followup_template_version"');
+    expect(service).not.toMatch(/from\("agency_followup_template_versions"\)\.update\(\{\s*state:\s*"approved"/);
   });
 
   it("keeps these tables service-role only and uses the existing shared conversation history", () => {
@@ -80,5 +99,13 @@ describe("Agency follow-up additive migration and service contract", () => {
       expect(agencyCrmGrants).toContain(`GRANT ALL ON TABLE public.${table} TO service_role`);
     }
     expect(agencyCrmGrants).not.toMatch(/DISABLE\s+ROW LEVEL SECURITY/i);
+  });
+
+  it("grants the opt-in service lookup only the operator identity columns", () => {
+    expect(optInOperatorReadGrant).toContain("GRANT SELECT (id, role, disabled)");
+    expect(optInOperatorReadGrant).toContain("ON TABLE public.firm_lawyers");
+    expect(optInOperatorReadGrant).toContain("TO service_role");
+    expect(optInOperatorReadGrant).not.toMatch(/GRANT\s+(?:ALL|SELECT\s+ON)\s+(?:TABLE\s+)?public\.firm_lawyers/i);
+    expect(optInOperatorReadGrant).not.toMatch(/SELECT\s*\([^)]*(?:email|name)/i);
   });
 });

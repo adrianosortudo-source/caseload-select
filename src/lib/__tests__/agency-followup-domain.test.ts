@@ -4,6 +4,7 @@ import {
   agencyFollowupContentHash,
   agencyFollowupLogicalMessageKey,
   agencyFollowupRecipientHash,
+  agencyFollowupRecipientEmailHash,
   agencyFollowupStepsHaveApprovedTemplates,
   evaluateAgencyFollowupSend,
   resolveAgencyProviderOutcome,
@@ -46,6 +47,7 @@ function readyContext(overrides: Partial<AgencyFollowupSendContext> = {}): Agenc
     conversationStatus: "awaiting_reply",
     eligibility: "eligible",
     eligibilityEvidenceRef: "synthetic-evidence-001",
+    optInState: "granted",
     sequenceReleased: true,
     messageApproved: true,
     approval: approvedSnapshot(),
@@ -88,6 +90,12 @@ describe("Agency follow-up domain", () => {
     ).toContain("approval_invalid_reviewer_or_time");
   });
 
+  it("hashes a normalized raw email exactly as the database validator does", () => {
+    expect(agencyFollowupRecipientEmailHash(" Jordan@Example.test ")).toBe(
+      "82a430687bf78d6812c1fb0c12180dbdb9f4e3ff537dba38e0895c47ea93622d",
+    );
+  });
+
   it("normalizes harmless recipient whitespace and email casing in the approval fingerprint", () => {
     expect(agencyFollowupRecipientHash(recipient)).toBe(
       agencyFollowupRecipientHash({
@@ -122,6 +130,15 @@ describe("Agency follow-up domain", () => {
         "approval_stale_recipient",
       ]),
     );
+  });
+
+  it("requires the latest exact opt-in event to be granted", () => {
+    expect(evaluateAgencyFollowupSend(readyContext({ optInState: "missing" })))
+      .toContain("explicit_opt_in_missing");
+    expect(evaluateAgencyFollowupSend(readyContext({ optInState: "withdrawn" })))
+      .toContain("explicit_opt_in_withdrawn");
+    expect(evaluateAgencyFollowupSend(readyContext({ optInState: "granted" })))
+      .not.toContain("explicit_opt_in_missing");
   });
 
   it("blocks a message until due and until the minimum spacing from provider acceptance has elapsed", () => {

@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { canApproveAgencyFollowupMessage } from '@/lib/agency-followup-ui';
+import { agencyFollowupDeliveryStatusLabel, canApproveAgencyFollowupMessage } from '@/lib/agency-followup-ui';
 
 type Journey = {
   id: string; name: string; journeyKey: string; version: number; state: string;
@@ -12,18 +12,59 @@ type Journey = {
 type TemplateVersion = { id: string; templateKey: string; version: number; state: string; subject: string; body: string };
 type QueueItem = {
   id: string; enrollmentId: string; prospectId: string; firmName: string; prospectStage: string;
-  journeyName: string; stepNumber: number; state: string; eligibility: string;
+  journeyName: string; stepNumber: number; state: string;
+  providerDeliveryStatus: "unknown" | "accepted" | "delivered" | "failed" | "bounced" | "complained" | "unsubscribed" | "suppressed";
+  providerDeliveryStatusAt: string | null;
+  optInState: 'granted' | 'withdrawn' | 'missing';
+  eligibility: string;
   contactability: string; conversationStatus: string; recipientEmail: string; subject: string;
   body: string; scheduledAt: string | null; blockers: string[]; sequenceReleased: boolean;
 };
-type ConsoleData = { journeys: Journey[]; templates: TemplateVersion[]; items: QueueItem[] };
+type ConsoleData = { send: { mode: 'off' | 'test' | 'live'; ready: boolean }; journeys: Journey[]; templates: TemplateVersion[]; items: QueueItem[] };
 type ProspectMatch = { id: string; firm_name: string; contact_name?: string | null; contact_email?: string | null; stage?: string };
+type OptInEventType = 'opt_in_granted' | 'opt_in_withdrawn' | '';
+type OptInCaptureSource = 'subject_web_form' | 'subject_email' | 'signed_document' | 'recorded_verbal_consent' | 'other_verified_evidence' | '';
+type OptInFormState = {
+  eventType: OptInEventType;
+  capturedAtLocal: string;
+  captureSource: OptInCaptureSource;
+  consentTextVersion: string;
+  consentTextSha256: string;
+  evidenceReference: string;
+  evidenceSha256: string;
+  evidenceReviewed: boolean;
+  idempotencyKey: string;
+};
+type OptInHistoryEvent = {
+  eventId: string;
+  eventType: 'opt_in_granted' | 'opt_in_withdrawn';
+  capturedAt: string;
+  recordedAt: string;
+  captureSource: string;
+  consentTextVersion: string;
+  consentTextSha256: string;
+  evidenceReference: string;
+  evidenceSha256: string;
+  recipientEmailSha256: string;
+  actorOperatorId: string;
+};
+type OptInHistoryState = { loading: boolean; loaded: boolean; events: OptInHistoryEvent[]; error: string };
+
+function emptyOptInForm(): OptInFormState {
+  return {
+    eventType: '', capturedAtLocal: '', captureSource: '', consentTextVersion: '',
+    consentTextSha256: '', evidenceReference: '', evidenceSha256: '', evidenceReviewed: false,
+    idempotencyKey: '',
+  };
+}
 
 const BLOCKER_LABELS: Record<string, string> = {
   eligibility_pending: 'Eligibility has not been recorded',
   eligibility_unknown: 'Eligibility is unknown',
   eligibility_not_approved: 'Eligibility is not approved with evidence',
   eligibility_evidence_missing: 'Eligibility evidence is missing',
+  explicit_opt_in_missing: 'Explicit email opt-in evidence is missing',
+  explicit_opt_in_withdrawn: 'Email opt-in was withdrawn',
   sequence_not_released: 'This prospect has not been released',
   message_not_approved: 'This message needs individual approval',
   approval_missing: 'This message needs individual approval',
@@ -47,6 +88,17 @@ function prettyState(value: string): string {
   return value.replaceAll('_', ' ');
 }
 
+const DELIVERY_STATUS_NOTES: Partial<Record<QueueItem["providerDeliveryStatus"], string>> = {
+  accepted: "Inbox receipt not confirmed",
+  delivered: "Inbox placement not confirmed",
+};
+
+function formatProviderDeliveryTimestamp(value: string): string {
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) return "recorded time unavailable";
+  return `${timestamp.toISOString().slice(0, 16).replace("T", " ")} UTC`;
+}
+
 function normalizeJourneyKey(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -59,6 +111,11 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
   const [matches, setMatches] = useState<ProspectMatch[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [optInByEnrollment, setOptInByEnrollment] = useState<Record<string, OptInFormState>>({});
+  const [captureTimeZone, setCaptureTimeZone] = useState('');
+  const [optInSuccessByEnrollment, setOptInSuccessByEnrollment] = useState<Record<string, string>>({});
+  const [optInHistoryOpenByEnrollment, setOptInHistoryOpenByEnrollment] = useState<Record<string, boolean>>({});
+  const [optInHistoryByEnrollment, setOptInHistoryByEnrollment] = useState<Record<string, OptInHistoryState>>({});
   const [evidenceByEnrollment, setEvidenceByEnrollment] = useState<Record<string, string>>({});
   const [basisByEnrollment, setBasisByEnrollment] = useState<Record<string, string>>({});
   const [templateKey, setTemplateKey] = useState('');
@@ -72,6 +129,10 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
   const [localWindowEnd, setLocalWindowEnd] = useState('17:00');
   const [minimumSpacingHours, setMinimumSpacingHours] = useState('168');
   const [journeySteps, setJourneySteps] = useState([{ templateVersionId: '', delayBusinessDays: '0' }]);
+
+  useEffect(() => {
+    setCaptureTimeZone(Intl.DateTimeFormat().resolvedOptions().timeZone || 'local time');
+  }, []);
 
   async function act(body: Record<string, unknown>) {
     setBusy(true);
@@ -105,12 +166,101 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
     }
   }
 
+  function updateOptIn(enrollmentId: string, update: Partial<OptInFormState>) {
+    setOptInSuccessByEnrollment((current) => ({ ...current, [enrollmentId]: '' }));
+    setOptInByEnrollment((current) => ({
+      ...current,
+      [enrollmentId]: { ...(current[enrollmentId] ?? emptyOptInForm()), ...update, idempotencyKey: '' },
+    }));
+  }
+
+  async function recordOptIn(event: FormEvent, enrollmentId: string, prospectId: string) {
+    event.preventDefault();
+    const form = optInByEnrollment[enrollmentId] ?? emptyOptInForm();
+    const capturedAtDate = new Date(form.capturedAtLocal);
+    if (!form.capturedAtLocal || Number.isNaN(capturedAtDate.getTime())) {
+      setError('Enter the date and time shown by the consent evidence.');
+      return;
+    }
+    const idempotencyKey = form.idempotencyKey || `agency-followup-opt-in:${prospectId}:${crypto.randomUUID()}`;
+    setBusy(true);
+    setError('');
+    setOptInSuccessByEnrollment((current) => ({ ...current, [enrollmentId]: '' }));
+    setOptInByEnrollment((current) => ({
+      ...current,
+      [enrollmentId]: { ...form, idempotencyKey },
+    }));
+    try {
+      const response = await fetch('/api/admin/agency-crm/follow-up/opt-in', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prospectId,
+          eventType: form.eventType,
+          capturedAt: capturedAtDate.toISOString(),
+          captureSource: form.captureSource,
+          consentTextVersion: form.consentTextVersion,
+          consentTextSha256: form.consentTextSha256.trim().toLowerCase(),
+          evidenceReference: form.evidenceReference,
+          evidenceSha256: form.evidenceSha256.trim().toLowerCase(),
+          idempotencyKey,
+          evidenceReviewed: form.evidenceReviewed,
+        }),
+      });
+      const result = await response.json().catch(() => ({})) as { error?: string; replayed?: boolean };
+      if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
+      const eventLabel = form.eventType === 'opt_in_granted' ? 'Opt-in grant' : 'Opt-in withdrawal';
+      setOptInSuccessByEnrollment((current) => ({
+        ...current,
+        [enrollmentId]: `${eventLabel} recorded${result.replayed ? ' as an exact replay' : ''}. The current opt-in state will refresh from the consent record.`,
+      }));
+      setOptInByEnrollment((current) => ({ ...current, [enrollmentId]: emptyOptInForm() }));
+      setOptInHistoryByEnrollment((current) => ({
+        ...current,
+        [enrollmentId]: { loading: false, loaded: false, events: [], error: '' },
+      }));
+      router.refresh();
+      if (optInHistoryOpenByEnrollment[enrollmentId]) void loadOptInHistory(enrollmentId, prospectId);
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function loadOptInHistory(enrollmentId: string, prospectId: string) {
+    setOptInHistoryByEnrollment((current) => ({
+      ...current,
+      [enrollmentId]: { loading: true, loaded: current[enrollmentId]?.loaded ?? false, events: current[enrollmentId]?.events ?? [], error: '' },
+    }));
+    try {
+      const response = await fetch(`/api/admin/agency-crm/follow-up/opt-in?prospectId=${encodeURIComponent(prospectId)}`, { cache: 'no-store' });
+      const result = await response.json().catch(() => ({})) as { events?: OptInHistoryEvent[]; error?: string };
+      if (!response.ok) throw new Error(result.error ?? `Request failed (${response.status})`);
+      setOptInHistoryByEnrollment((current) => ({
+        ...current,
+        [enrollmentId]: { loading: false, loaded: true, events: result.events ?? [], error: '' },
+      }));
+    } catch (cause) {
+      setOptInHistoryByEnrollment((current) => ({
+        ...current,
+        [enrollmentId]: { loading: false, loaded: false, events: current[enrollmentId]?.events ?? [], error: (cause as Error).message },
+      }));
+    }
+  }
+
   const byEnrollment = new Map<string, QueueItem[]>();
   for (const item of initialData.items) {
     const group = byEnrollment.get(item.enrollmentId) ?? [];
     group.push(item);
     byEnrollment.set(item.enrollmentId, group);
   }
+  const sendStatus = initialData.send.mode === 'off'
+    ? 'Sending is off. Messages stay queued.'
+    : !initialData.send.ready
+      ? 'Sending is unavailable until required configuration is complete.'
+      : initialData.send.mode === 'test'
+        ? 'Test mode is limited to allowlisted recipients and records.'
+        : 'Live mode is enabled. Each dispatch is limited to one message.';
 
   return (
     <main className="w-full min-w-0 space-y-6">
@@ -121,7 +271,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
           <p className="mt-2 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]" data-ui-copy="body">
             Review one prospect at a time. Record eligibility, release, and each message approval separately.
           </p>
-          <p className="mt-1 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]" data-ui-copy="supporting">Approvals enqueue reviewed messages. No live provider is configured.</p>
+          <p className="mt-1 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]" data-ui-copy="supporting">Approvals enqueue reviewed messages. {sendStatus}</p>
         </div>
         <a className="shrink-0 text-sm font-semibold text-navy underline" href="/admin/agency-crm">Return to Agency CRM</a>
       </header>
@@ -131,8 +281,8 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
       <section aria-labelledby="author-title" className="w-full min-w-0 border border-black/10 bg-white p-4 sm:p-5">
         <div data-ui-component-content="agency-follow-up-authoring" className="w-full min-w-0 space-y-5">
         <div className="w-full min-w-0">
-          <h2 id="author-title" data-ui-copy="heading" className="w-full text-lg font-semibold text-navy">Author versioned journeys</h2>
-          <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/60 [text-wrap:pretty]">Template content is immutable after creation. New copy or schedule changes create new versions.</p>
+          <h2 id="author-title" data-ui-copy="heading" className="w-full text-balance text-lg font-semibold text-navy max-[360px]:text-base max-[360px]:[text-wrap:normal]">Author versioned journeys</h2>
+          <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/60 max-[360px]:text-[13px] max-[360px]:leading-5 max-sm:[text-wrap:normal] sm:[text-wrap:pretty]">Template content is immutable after creation. New copy or schedule changes create new versions.</p>
         </div>
         <form className="grid w-full min-w-0 gap-3 lg:grid-cols-3" onSubmit={async (event) => {
           event.preventDefault();
@@ -246,7 +396,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
       <section aria-labelledby="enroll-title" className="w-full min-w-0 border border-black/10 bg-white p-2 sm:p-5">
         <div data-ui-component-content="agency-follow-up-enrollment" className="w-full min-w-0">
         <h2 id="enroll-title" data-ui-copy="heading" className="w-full text-lg font-semibold text-navy">Start a prospect review</h2>
-        <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/60">Enrollment creates a draft with message snapshots. It does not contact the prospect.</p>
+        <p data-ui-copy="supporting" className="mt-1 w-full text-pretty text-sm leading-6 text-black/60">Enrollment creates a draft with message snapshots. It does not contact the prospect.</p>
         <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-2">
           <label className="block min-w-0 text-sm font-medium text-black/80">
             Journey version
@@ -284,12 +434,15 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
         {byEnrollment.size === 0 && <div className="w-full border border-black/10 bg-white p-5 text-sm leading-6 text-black/65">No follow-up drafts yet. Choose an active journey and a prospect above to create the first review.</div>}
         {[...byEnrollment.entries()].map(([enrollmentId, items]) => {
           const first = items[0];
+          const optInForm = optInByEnrollment[enrollmentId] ?? emptyOptInForm();
+          const optInHistory = optInHistoryByEnrollment[enrollmentId] ?? { loading: false, loaded: false, events: [], error: '' };
+          const optInHistoryOpen = optInHistoryOpenByEnrollment[enrollmentId] ?? false;
           return <article key={enrollmentId} className="w-full min-w-0 border border-black/10 bg-white p-4 sm:p-5">
             <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
                 <h3 className="break-words text-base font-semibold text-navy">{first.firmName}</h3>
                 <p className="mt-1 break-words text-sm text-black/65">{first.recipientEmail || 'No email'} · {first.journeyName} · {prettyState(first.prospectStage)}</p>
-                <p className="mt-1 text-xs text-black/55">Contactability: {prettyState(first.contactability)} · Conversation: {prettyState(first.conversationStatus)} · Eligibility: {prettyState(first.eligibility)}</p>
+                <p className="mt-1 text-xs text-black/55">Contactability: {prettyState(first.contactability)} · Conversation: {prettyState(first.conversationStatus)} · Eligibility: {prettyState(first.eligibility)} · Email opt-in: {prettyState(first.optInState)}</p>
               </div>
               <span className="shrink-0 border border-black/15 px-2 py-1 text-xs font-semibold uppercase tracking-wide text-black/70">{first.sequenceReleased ? 'Released' : 'Draft'}</span>
             </div>
@@ -299,8 +452,14 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                 <div data-ui-component-content="agency-follow-up-message" className="w-full min-w-0">
                 <div className="space-y-1">
                   <span data-ui-copy="supporting" className="block w-full text-xs font-semibold uppercase tracking-wide text-black/60">Message {item.stepNumber}</span>
-                  <h4 data-ui-copy="heading" className="w-full break-words text-sm font-semibold text-navy sm:text-base [text-wrap:pretty]">{item.subject || 'No subject'}</h4>
+                  <h4 data-ui-copy="heading" className="w-full break-words text-balance text-sm font-semibold text-navy sm:text-base max-[360px]:text-[13px] max-[360px]:[text-wrap:normal]">{item.subject || 'No subject'}</h4>
                   <span className="block w-full text-xs uppercase tracking-wide text-black/60">{prettyState(item.state)}</span>
+                  <dl className="w-full">
+                    <dt data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Provider delivery:</dt>
+                    <dd data-ui-copy="supporting" className="m-0 w-full break-words text-xs leading-5 text-black/65 max-[360px]:text-[13px]">{agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })}</dd>
+                  </dl>
+                  {DELIVERY_STATUS_NOTES[item.providerDeliveryStatus] && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">{DELIVERY_STATUS_NOTES[item.providerDeliveryStatus]}</p>}
+                  {item.providerDeliveryStatusAt && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Updated: <time dateTime={item.providerDeliveryStatusAt}>{formatProviderDeliveryTimestamp(item.providerDeliveryStatusAt)}</time></p>}
                 </div>
                 <p data-ui-copy="body" className="mt-2 w-full whitespace-pre-wrap break-words text-sm leading-6 text-black/75 [text-wrap:pretty]">{item.body}</p>
                 </div>
@@ -312,6 +471,74 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                 </div>
               </section>)}
             </div>
+
+            <section data-ui-component-content="agency-follow-up-opt-in" aria-labelledby={`opt-in-title-${enrollmentId}`} className="mt-4 scroll-mt-16 w-full min-w-0 border border-black/10 bg-stone-50 p-3 sm:p-4">
+              <h4 id={`opt-in-title-${enrollmentId}`} data-ui-copy="heading" className="w-full text-balance text-sm font-semibold text-navy sm:text-base max-[360px]:text-[13px] max-[360px]:[text-wrap:normal]">Record email opt-in evidence</h4>
+              <p data-ui-copy="supporting" className="mt-1 w-full text-sm leading-6 text-black/65 [text-wrap:pretty]">Use the source evidence for this exact contact. Recording a grant or withdrawal appends an audit event and does not send email.</p>
+              <p className="mt-2 w-full break-words text-sm text-black/75">Current recipient: <strong>{first.recipientEmail || 'No current email on file'}</strong> · Current opt-in state: <strong>{prettyState(first.optInState)}</strong></p>
+              <button type="button" className="mt-2 text-sm font-semibold text-navy underline disabled:opacity-50" disabled={optInHistory.loading} aria-expanded={optInHistoryOpen} onClick={() => {
+                const open = !optInHistoryOpen;
+                setOptInHistoryOpenByEnrollment((current) => ({ ...current, [enrollmentId]: open }));
+                if (open && !optInHistory.loaded) void loadOptInHistory(enrollmentId, first.prospectId);
+              }}>{optInHistoryOpen ? 'Hide consent history' : 'View consent history'}</button>
+              {optInHistoryOpen && <div className="mt-3 w-full min-w-0 border-t border-black/10 pt-3">
+                {optInHistory.loading && <p data-ui-copy="supporting" className="w-full text-sm text-black/65">Loading consent history…</p>}
+                {optInHistory.error && <p role="alert" data-ui-copy="supporting" className="w-full text-sm text-red-800">{optInHistory.error}</p>}
+                {!optInHistory.loading && !optInHistory.error && optInHistory.loaded && optInHistory.events.length === 0 && <p data-ui-copy="supporting" className="w-full text-sm text-black/65">No consent events have been recorded.</p>}
+                {optInHistory.events.length > 0 && <ol className="w-full min-w-0 space-y-3">
+                  {[...optInHistory.events].reverse().map((entry) => <li key={entry.eventId} className="w-full min-w-0 border border-black/10 bg-white p-3">
+                    <h5 className="w-full break-words text-sm font-semibold text-navy">{entry.eventType === 'opt_in_granted' ? 'Opt-in grant' : 'Opt-in withdrawal'} · {prettyState(entry.captureSource)}</h5>
+                    <p className="mt-1 w-full break-words text-xs leading-5 text-black/70">Captured: {formatProviderDeliveryTimestamp(entry.capturedAt)} · Recorded: {formatProviderDeliveryTimestamp(entry.recordedAt)}</p>
+                    <p className="mt-1 w-full break-words text-xs leading-5 text-black/70">Consent text: {entry.consentTextVersion} · SHA-256 {entry.consentTextSha256}</p>
+                    <p className="mt-1 w-full break-words text-xs leading-5 text-black/70">Evidence reference: {entry.evidenceReference}</p>
+                    <p className="mt-1 w-full break-all text-xs leading-5 text-black/70">Evidence SHA-256: {entry.evidenceSha256}</p>
+                    <p className="mt-1 w-full break-all text-xs leading-5 text-black/70">Recipient SHA-256: {entry.recipientEmailSha256}</p>
+                    <p className="mt-1 w-full break-all text-xs leading-5 text-black/70">Recorded by operator: {entry.actorOperatorId}</p>
+                  </li>)}
+                </ol>}
+              </div>}
+              <form className="mt-3 grid w-full min-w-0 gap-3 lg:grid-cols-2" onSubmit={(event) => void recordOptIn(event, enrollmentId, first.prospectId)}>
+                <label className="block min-w-0 text-sm font-medium text-black/80">Record event
+                  <select required className="mt-1 block w-full min-w-0 border border-black/20 bg-white px-3 py-2" value={optInForm.eventType} onChange={(event) => updateOptIn(enrollmentId, { eventType: event.target.value as OptInEventType })}>
+                    <option value="">Choose grant or withdrawal</option>
+                    <option value="opt_in_granted">Append explicit opt-in grant</option>
+                    <option value="opt_in_withdrawn">Append opt-in withdrawal</option>
+                  </select>
+                </label>
+                <label className="block min-w-0 text-sm font-medium text-black/80">Date and time recorded in evidence (browser timezone: {captureTimeZone || 'loading'})
+                  <input required type="datetime-local" step="1" className="mt-1 block w-full min-w-0 border border-black/20 bg-white px-3 py-2" value={optInForm.capturedAtLocal} onChange={(event) => updateOptIn(enrollmentId, { capturedAtLocal: event.target.value })} />
+                  <span className="mt-1 block text-xs font-normal text-black/70">Convert the evidence time first if it was recorded in another timezone.</span>
+                </label>
+                <label className="block min-w-0 text-sm font-medium text-black/80">Evidence source
+                  <select required className="mt-1 block w-full min-w-0 border border-black/20 bg-white px-3 py-2" value={optInForm.captureSource} onChange={(event) => updateOptIn(enrollmentId, { captureSource: event.target.value as OptInCaptureSource })}>
+                    <option value="">Choose a source type</option>
+                    <option value="subject_web_form">Subject web form</option>
+                    <option value="subject_email">Email from the subject</option>
+                    <option value="signed_document">Signed document</option>
+                    <option value="recorded_verbal_consent">Recorded verbal consent</option>
+                    <option value="other_verified_evidence">Other verified evidence</option>
+                  </select>
+                </label>
+                <label className="block min-w-0 text-sm font-medium text-black/80">Consent text version
+                  <input required maxLength={200} className="mt-1 block w-full min-w-0 border border-black/20 bg-white px-3 py-2" value={optInForm.consentTextVersion} onChange={(event) => updateOptIn(enrollmentId, { consentTextVersion: event.target.value })} placeholder="Version of the exact consent wording" />
+                </label>
+                <label className="block min-w-0 text-sm font-medium text-black/80">Consent text SHA-256
+                  <input required maxLength={64} minLength={64} pattern="[a-fA-F0-9]{64}" className="mt-1 block w-full min-w-0 border border-black/20 bg-white px-3 py-2 font-mono text-xs" value={optInForm.consentTextSha256} onChange={(event) => updateOptIn(enrollmentId, { consentTextSha256: event.target.value })} placeholder="64 hexadecimal characters" />
+                </label>
+                <label className="block min-w-0 text-sm font-medium text-black/80">Evidence reference
+                  <input required maxLength={2000} className="mt-1 block w-full min-w-0 border border-black/20 bg-white px-3 py-2" value={optInForm.evidenceReference} onChange={(event) => updateOptIn(enrollmentId, { evidenceReference: event.target.value })} placeholder="Durable reference to the reviewed record" />
+                </label>
+                <label className="block min-w-0 text-sm font-medium text-black/80">Evidence SHA-256
+                  <input required maxLength={64} minLength={64} pattern="[a-fA-F0-9]{64}" className="mt-1 block w-full min-w-0 border border-black/20 bg-white px-3 py-2 font-mono text-xs" value={optInForm.evidenceSha256} onChange={(event) => updateOptIn(enrollmentId, { evidenceSha256: event.target.value })} placeholder="64 hexadecimal characters" />
+                </label>
+                <label className="block w-full min-w-0 text-sm text-black/80 lg:col-span-2">
+                  <input required type="checkbox" className="h-4 w-4 align-middle" checked={optInForm.evidenceReviewed} onChange={(event) => updateOptIn(enrollmentId, { evidenceReviewed: event.target.checked })} />
+                  <span data-ui-copy="supporting" className="mt-2 block w-full leading-6">I reviewed this source and confirmed it supports the selected event and current recipient; any grant explicitly permits Agency follow-up email to this address.</span>
+                </label>
+                {optInSuccessByEnrollment[enrollmentId] && <p role="status" data-ui-copy="supporting" className="w-full text-sm text-green-800 lg:col-span-2">{optInSuccessByEnrollment[enrollmentId]}</p>}
+                <button className="justify-self-start border border-navy px-3 py-2 text-sm font-semibold text-navy disabled:opacity-50" disabled={busy || !first.recipientEmail}>Record append-only consent event</button>
+              </form>
+            </section>
 
             <div className="mt-4 grid min-w-0 gap-3 border-t border-black/10 pt-4 lg:grid-cols-2">
               <form className="flex min-w-0 flex-col gap-2" onSubmit={(event) => { event.preventDefault(); void act({ action: 'eligibility', enrollmentId, state: 'eligible', evidenceRef: evidenceByEnrollment[enrollmentId] }); }}>

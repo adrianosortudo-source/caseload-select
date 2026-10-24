@@ -1,34 +1,78 @@
 import { createHash, createHmac, randomBytes, randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync } from "node:fs";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { spawn, type ChildProcess } from "node:child_process";
 import { setTimeout as delay } from "node:timers/promises";
 import { createConnection } from "node:net";
 import { Pool, type PoolClient } from "pg";
-import { chromium, expect, type APIResponse, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { chromium, expect, type APIResponse, type Browser, type BrowserContext, type Page, type Response as PlaywrightResponse } from "@playwright/test";
 import { createSessionCookie } from "../src/lib/portal-session-cookie";
 import { scheduleAgencyFollowupStep } from "../src/lib/agency-followup-schedule";
 
-const STACK_DIR = path.resolve("test-results/crm-local-stack");
+const DEFAULT_STACK_DIR = "test-results/crm-local-stack";
+const DEFAULT_STACK_PROJECT_ID = "crm-followup-walkthrough-20261013";
+const STACK_DIR = path.resolve(process.env.AGENCY_FOLLOWUP_STACK_DIR || DEFAULT_STACK_DIR);
 const OUTPUT_DIR = path.resolve("test-results/agency-followup-walkthrough");
 const APP_ORIGIN = "http://127.0.0.1:55435";
 const API_PATH = "/api/admin/agency-crm/follow-up";
 const TEST_DISPATCH_PATH = "/api/agency-followup-walkthrough";
 const TEST_DISPATCH_DIR = path.resolve("src/app/api/agency-followup-walkthrough");
-const STACK_PROJECT_ID = "crm-followup-walkthrough-20261013";
+const STACK_PROJECT_ID = process.env.AGENCY_FOLLOWUP_STACK_PROJECT_ID || DEFAULT_STACK_PROJECT_ID;
+const SUPABASE_API_PORT = parseDisposablePort(process.env.AGENCY_FOLLOWUP_SUPABASE_API_PORT, 55431, "Supabase API");
+const SUPABASE_DB_PORT = parseDisposablePort(process.env.AGENCY_FOLLOWUP_SUPABASE_DB_PORT, 55432, "Supabase database");
+if (SUPABASE_API_PORT === SUPABASE_DB_PORT || SUPABASE_API_PORT === 55435 || SUPABASE_DB_PORT === 55435) {
+  throw new Error("Disposable Supabase API/database ports must be distinct and must not overlap the local app port.");
+}
+const relativeStackDir = path.relative(process.cwd(), STACK_DIR).split(path.sep);
+if (relativeStackDir[0] !== "test-results" || relativeStackDir.some((part) => part === "..")
+  || !/^crm-local-stack(?:-[A-Za-z0-9-]+)?$/.test(relativeStackDir[1] ?? "")) {
+  throw new Error("Disposable stack configuration must stay inside test-results/crm-local-stack[ suffix ].");
+}
+if (!/^crm-followup-walkthrough-\d{8}(?:-[a-f0-9]{6})?$/.test(STACK_PROJECT_ID) || STACK_PROJECT_ID.length > 40) {
+  throw new Error("Disposable Supabase project id must use the guarded CRM walkthrough prefix, date, and at most six hex suffix characters.");
+}
 const EXPECTED_MIGRATION_BLOB = "c6d594c51b8c257aaca7a62fff41c96a1534a86a";
-const MIGRATION_PATH = "supabase/migrations/20261013154000_agency_followup_journeys.sql";
+const MIGRATION_PATH = "supabase/migrations/20261013173327_agency_followup_journeys.sql";
+const EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB = "ee1e90d62b102bae25b1f385902898394ccee7f4";
+const FOLLOWUP_EVENT_PRIVILEGES_PATH = "supabase/migrations/20261013174258_harden_agency_followup_events_privileges.sql";
 const EXPECTED_CRM_GRANTS_MIGRATION_BLOB = "af413a079a76e2fc9844f0bb37d61bec3127b558";
 const CRM_GRANTS_MIGRATION_PATH = "supabase/migrations/20261013230354_agency_crm_service_role_grants.sql";
+const EVENT_MIGRATION_PATH = "supabase/migrations/20261020025251_agency_followup_resend_events_and_shared_suppression.sql";
+const EXPECTED_EVENT_MIGRATION_BLOB = "ea4cf8a7186f338d65127d27099902e30949b345";
+const EVENT_ROW_LOCK_GRANT_MIGRATION_PATH = "supabase/migrations/20261020141945_agency_followup_provider_event_row_lock_privilege.sql";
+const EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB = "4c5a29df51e716fe37b2a1ac34a300ad8beef351";
+const OPT_IN_EVENT_MIGRATION_PATH = "supabase/migrations/20261021040000_agency_followup_opt_in_events.sql";
+const EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB = "7f34b1f9f51772557111c5ba35213d9402e1b6f7";
+const OPT_IN_OPERATOR_READ_MIGRATION_PATH = "supabase/migrations/20261021050000_agency_followup_opt_in_operator_read_grant.sql";
+const EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB = "3776336f64ab72907a7f1a2eac1d1926bed1fd13";
+const TEST_MESSAGE_CLAIM_MIGRATION_PATH = "supabase/migrations/20261021173939_agency_followup_test_message_claim.sql";
+const EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB = "81fcf78ff31d62852ce54cba7f3f4e34ec6093df";
+const WEBHOOK_REPLAY_GUARD_MIGRATION_PATH = "supabase/migrations/20261022172352_agency_followup_webhook_replay_quarantine_guard.sql";
+const EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB = "1ee04f22a7b00fa69eaca227e6443c663e88818a";
+const PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_PATH = "supabase/migrations/20261022222611_agency_followup_provider_event_least_privilege.sql";
+const EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB = "1268f5f5883479bb2bf79410f45142303e804d9e";
+const TEMPLATE_APPROVAL_ATOMIC_MIGRATION_PATH = "supabase/migrations/20261023170628_agency_followup_template_approval_atomic.sql";
+const EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB = "62d25762c0e753cb7fbe3577e4e7119b41514af2";
+const LIVE_MESSAGE_CLAIM_MIGRATION_PATH = "supabase/migrations/20261023185535_agency_followup_live_message_claim.sql";
+const EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB = "caf1aa2eb9ffe6a3a9ac9e1b3f500e870068f4c0";
+const PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_PATH = "supabase/migrations/20261023185615_agency_followup_provider_idempotency_fence.sql";
+const EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB = "65cdcf1d16a7f2c61af9ec3cbf38341e59b9d35e";
+const RESEND_SUPPRESSED_STATUS_MIGRATION_PATH = "supabase/migrations/20261024054520_agency_followup_resend_suppressed_status.sql";
+const EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB = "5f257491d03b362c59a484c942be1f127f0996fb";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
+const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
 const RUN_STARTED_AT = new Date().toISOString();
+const SYNTHETIC_WEBHOOK_SECRET = `whsec_${randomBytes(32).toString("base64")}`;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 if (!UUID.test(RUN_ID)) throw new Error("Acceptance run ID must be a UUID.");
+const browserRuntimeErrorsByPage = new WeakMap<Page, string[]>();
 const MANUAL = process.argv.includes("--manual");
 const JOURNEY_VERSION_REGRESSION_ONLY = process.argv.includes("--journey-version-regression");
+const FAILURE_CAPTURE_PREFLIGHT_ONLY = process.argv.includes("--failure-capture-preflight");
+const WEBHOOK_PREFLIGHT_ONLY = process.argv.includes("--webhook-preflight-only");
 const WALKTHROUGH_STARTED_AT = Date.now();
 const WALKTHROUGH_TIMEOUT_MS = 20 * 60_000;
 let interrupted = false;
@@ -59,6 +103,15 @@ function setDiagnosticStage(stage: string): void {
   diagnosticStageStartedAt = Date.now();
 }
 
+function parseDisposablePort(raw: string | undefined, fallback: number, label: string): number {
+  if (!raw) return fallback;
+  const port = Number(raw);
+  if (!Number.isInteger(port) || port < 55430 || port > 55499) {
+    throw new Error(`${label} port must be an unused loopback-only test port from 55430 through 55499.`);
+  }
+  return port;
+}
+
 function safeDiagnosticAtom(value: unknown): string | number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   return typeof value === "string" && /^[A-Za-z0-9_.-]{1,64}$/.test(value) ? value : null;
@@ -74,18 +127,29 @@ function safeErrorDiagnostics(error: unknown): { errorName: string | number | nu
   };
 }
 
+function redactSensitiveText(value: string): string {
+  return value
+    .replace(/(SUPABASE_SERVICE_ROLE_KEY|PORTAL_SECRET|AGENCY_FOLLOWUP_WALKTHROUGH_TOKEN)(\s*[=:]\s*)[^\s"']+/g, "$1$2[REDACTED]")
+    .replace(/\b(set-cookie|cookie|cookies)\s*[:=]\s*[^}\]\r\n]*/gi, "$1: [REDACTED]")
+    .replace(/\bauthorization\s*[:=]\s*[^}\]\r\n]*/gi, "authorization: [REDACTED]")
+    .replace(/\b(portal_session|sb-access-token|sb-refresh-token)\s*=\s*[^;,\s}\]]+/gi, "$1=[REDACTED]")
+    .replace(/\b[A-Za-z0-9_-]{24,}\.[A-Za-z0-9_-]{24,}(?:\.[A-Za-z0-9_-]{24,})?\b/g, "[REDACTED_TOKEN]");
+}
+
+function safeFailureText(value: unknown, maxLength: number): string {
+  return redactSensitiveText(String(value)).replace(/[\r\n\s]+/g, " ").slice(0, maxLength);
+}
+
 function captureSourceState() {
-  const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8" });
+  const git = (...args: string[]) => execFileSync("git", args, { encoding: "utf8", timeout: 30_000 });
   const sourceCommit = git("rev-parse", "HEAD").trim();
-  const workingTreeStatus = git("status", "--porcelain", "--untracked-files=all");
-  const untrackedSource = git("ls-files", "--others", "--exclude-standard", "-z").split("\0").filter(Boolean)
-    .map((file) => ({ path: file, sha256: createHash("sha256").update(readFileSync(file)).digest("hex") }));
+  const workingTreeStatus = git("status", "--porcelain", "--untracked-files=normal");
+  const untrackedSource = workingTreeStatus.split(/\r?\n/).filter((line) => line.startsWith("?? "))
+    .map((line) => line.slice(3));
   const fingerprint = createHash("sha256")
-    .update(execFileSync("git", ["diff", "HEAD", "--binary"]))
-    .update(execFileSync("git", ["diff", "--cached", "--binary"]))
-    .update(workingTreeStatus).update(JSON.stringify(untrackedSource)).digest("hex");
+    .update(sourceCommit).update("\0").update(workingTreeStatus).digest("hex");
   return { sourceCommit, workingTreeState: workingTreeStatus ? "dirty" : "clean",
-    workingTreeStatus, diffFingerprintSha256: fingerprint, untrackedSource };
+    workingTreeStatus, cleanTreeIdentitySha256: fingerprint, untrackedSource };
 }
 process.on("SIGINT", () => { interrupted = true; });
 
@@ -114,8 +178,8 @@ function must(value: string | undefined, label: string): string {
 
 function assertLoopbackApi(raw: string): URL {
   const url = new URL(raw);
-  if (url.protocol !== "http:" || url.hostname !== "127.0.0.1" || url.port !== "55431") {
-    throw new Error("The disposable walkthrough requires Supabase API http://127.0.0.1:55431.");
+  if (url.protocol !== "http:" || url.hostname !== "127.0.0.1" || url.port !== String(SUPABASE_API_PORT)) {
+    throw new Error(`The disposable walkthrough requires Supabase API http://127.0.0.1:${SUPABASE_API_PORT}.`);
   }
   return url;
 }
@@ -123,8 +187,8 @@ function assertLoopbackApi(raw: string): URL {
 function assertLoopbackDatabase(raw: string): URL {
   const url = new URL(raw);
   if (!["postgres:", "postgresql:"].includes(url.protocol) || url.hostname !== "127.0.0.1" ||
-    url.port !== "55432" || url.pathname !== "/postgres") {
-    throw new Error("The disposable walkthrough requires direct Postgres at 127.0.0.1:55432/postgres.");
+    url.port !== String(SUPABASE_DB_PORT) || url.pathname !== "/postgres") {
+    throw new Error(`The disposable walkthrough requires direct Postgres at 127.0.0.1:${SUPABASE_DB_PORT}/postgres.`);
   }
   return url;
 }
@@ -151,8 +215,8 @@ function getSupabaseStatus(): SupabaseStatus {
   // Sign only in process memory; the key and secret are never written or logged.
   const jwt = `${signed}.${createHmac("sha256", jwtSecret).update(signed).digest("base64url")}`;
   const status: SupabaseStatus = {
-    API_URL: "http://127.0.0.1:55431",
-    DB_URL: "postgresql://postgres:postgres@127.0.0.1:55432/postgres",
+    API_URL: `http://127.0.0.1:${SUPABASE_API_PORT}`,
+    DB_URL: `postgresql://postgres:postgres@127.0.0.1:${SUPABASE_DB_PORT}/postgres`,
     SERVICE_ROLE_KEY: jwt,
   };
   assertLoopbackApi(must(status.API_URL, "Local Supabase API"));
@@ -173,9 +237,18 @@ async function verifyLocalPostgrest(status: SupabaseStatus): Promise<void> {
 
 async function verifyPushedMigration(pathname: string, expectedBlob: string): Promise<void> {
   // Ask Git to apply the path clean filters so Windows CRLF checkouts match the pushed blob.
-  const workingBlob = execFileSync("git", ["hash-object", "--path", pathname, pathname], { encoding: "utf8" }).trim();
+  const workingBlob = execFileSync("git", ["hash-object", "--path", pathname, pathname], { encoding: "utf8", timeout: 30_000 }).trim();
   if (workingBlob !== expectedBlob) {
     throw new Error(`Refusing local database use because ${path.basename(pathname)} no longer matches its verified pushed blob.`);
+  }
+}
+
+function verifyPushedHead(sourceCommit: string): void {
+  const remoteRef = "refs/heads/codex/crm-live-followup-20261019";
+  const remoteCommit = execFileSync("git", ["ls-remote", "origin", remoteRef], { encoding: "utf8", timeout: 60_000 })
+    .split(/\r?\n/).map((line) => line.trim()).find((line) => line.endsWith(`\t${remoteRef}`))?.split(/\s+/, 1)[0];
+  if (remoteCommit !== sourceCommit) {
+    throw new Error("Refusing walkthrough because the pushed CRM branch tip does not equal the exact source commit.");
   }
 }
 
@@ -190,25 +263,698 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013154000", "20261013230354"]],
+      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "2") {
-    throw new Error("Disposable Postgres identity or exact two-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "14") {
+    throw new Error("Disposable Postgres identity or exact fourteen-migration ledger check failed.");
+  }
+  const templateApprovalRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
+    "select has_function_privilege('service_role', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as service_access, not has_function_privilege('anon', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.approve_agency_followup_template_version(uuid,uuid)'::regprocedure",
+  );
+  if (templateApprovalRpc.rows[0]?.service_access !== true || templateApprovalRpc.rows[0]?.anon_denied !== true ||
+    templateApprovalRpc.rows[0]?.authenticated_denied !== true || templateApprovalRpc.rows[0]?.security_invoker !== true) {
+    throw new Error("The template-approval RPC must be invoker-only and executable only by service_role.");
+  }
+  const claimRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
+    "select has_function_privilege('service_role', 'public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)', 'execute') as service_access, not has_function_privilege('anon', 'public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.claim_agency_followup_test_messages(text,timestamptz,integer,integer,jsonb)'::regprocedure",
+  );
+  if (claimRpc.rows[0]?.service_access !== true || claimRpc.rows[0]?.anon_denied !== true ||
+    claimRpc.rows[0]?.authenticated_denied !== true || claimRpc.rows[0]?.security_invoker !== true) {
+    throw new Error("The test-message claim RPC must be invoker-only and executable only by service_role.");
+  }
+  const liveClaimRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
+    "select has_function_privilege('service_role', 'public.claim_agency_followup_live_messages(text,timestamptz,integer,integer,uuid[])', 'execute') as service_access, not has_function_privilege('anon', 'public.claim_agency_followup_live_messages(text,timestamptz,integer,integer,uuid[])', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.claim_agency_followup_live_messages(text,timestamptz,integer,integer,uuid[])', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.claim_agency_followup_live_messages(text,timestamptz,integer,integer,uuid[])'::regprocedure",
+  );
+  if (liveClaimRpc.rows[0]?.service_access !== true || liveClaimRpc.rows[0]?.anon_denied !== true ||
+    liveClaimRpc.rows[0]?.authenticated_denied !== true || liveClaimRpc.rows[0]?.security_invoker !== true) {
+    throw new Error("The live-enrollment claim RPC must be invoker-only and executable only by service_role.");
+  }
+  const providerHandoffRpc = await pool.query<{
+    service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean;
+    first_use_column: boolean; immutable_trigger: boolean;
+  }>(
+    "select has_function_privilege('service_role', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as service_access, not has_function_privilege('anon', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as authenticated_denied, not prosecdef as security_invoker, exists(select 1 from information_schema.columns where table_schema='public' and table_name='agency_followup_messages' and column_name='provider_idempotency_first_used_at') as first_use_column, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_messages'::regclass and tgname='agency_followup_provider_idempotency_first_use_immutable' and not tgisinternal and tgenabled in ('O','A')) as immutable_trigger from pg_proc where oid='public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)'::regprocedure",
+  );
+  if (providerHandoffRpc.rows[0]?.service_access !== true || providerHandoffRpc.rows[0]?.anon_denied !== true ||
+    providerHandoffRpc.rows[0]?.authenticated_denied !== true || providerHandoffRpc.rows[0]?.security_invoker !== true ||
+    providerHandoffRpc.rows[0]?.first_use_column !== true || providerHandoffRpc.rows[0]?.immutable_trigger !== true) {
+    throw new Error("The durable provider handoff RPC, timestamp, immutable trigger, or restricted grants are not in the expected state.");
   }
   const tables = await pool.query<{ count: string }>(
     "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
     [["agency_followup_template_versions", "agency_followup_journeys", "agency_followup_steps",
-      "agency_followup_enrollments", "agency_followup_messages", "agency_followup_events"]],
+      "agency_followup_enrollments", "agency_followup_messages", "agency_followup_events",
+      "agency_followup_provider_events", "agency_followup_provider_event_applications",
+      "prospect_contactability_provider_suppressions"]],
   );
-  if (tables.rows[0]?.count !== "6") throw new Error("The verified disposable stack does not contain all six Agency follow-up tables.");
+  if (tables.rows[0]?.count !== "9") throw new Error("The verified disposable stack does not contain the six follow-up and three provider-event tables.");
+  const providerGrants = await pool.query<{ service_access: boolean; public_access: boolean; public_update_access: boolean; service_event_column_update: boolean; service_event_table_update: boolean; service_event_other_column_update: boolean; immutable_event_trigger: boolean }>(
+    "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access, bool_or(has_table_privilege('anon', table_name, 'update') or has_table_privilege('authenticated', table_name, 'update')) as public_update_access, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'provider_event_id', 'update') as service_event_column_update, has_table_privilege('service_role', 'public.agency_followup_provider_events', 'update') as service_event_table_update, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'processing_result', 'update') as service_event_other_column_update, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_provider_events'::regclass and tgname='agency_followup_provider_events_no_mutation' and not tgisinternal and tgenabled in ('O','A') and (tgtype & 2) = 2 and (tgtype & 8) = 8 and (tgtype & 16) = 16) as immutable_event_trigger from unnest(array['public.agency_followup_provider_events','public.agency_followup_provider_event_applications','public.prospect_contactability_provider_suppressions']) as event_table(table_name)",
+  );
+  if (providerGrants.rows[0]?.service_access !== true || providerGrants.rows[0]?.public_access !== false
+    || providerGrants.rows[0]?.public_update_access !== false
+    || providerGrants.rows[0]?.service_event_column_update !== true
+    || providerGrants.rows[0]?.service_event_table_update !== false
+    || providerGrants.rows[0]?.service_event_other_column_update !== false
+    || providerGrants.rows[0]?.immutable_event_trigger !== true) {
+    throw new Error(`Provider-event row-lock privilege, append-only trigger, or restricted grants are not in the expected state; actual=${JSON.stringify(providerGrants.rows[0] ?? null)}`);
+  }
   const grants = await pool.query<{ service_access: boolean; public_access: boolean }>(
     "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access from unnest(array['public.agency_prospects','public.agency_deals','public.agency_reminders']) as crm_table(table_name)",
   );
   if (grants.rows[0]?.service_access !== true || grants.rows[0]?.public_access !== false) {
     throw new Error("Disposable Agency CRM service-role grants or public-role revocations are not in the expected state.");
   }
-  progress("disposable identity, both migration ledger versions, six follow-up tables, and Agency CRM grants checked");
+  const operatorRead = await pool.query<{ id_access: boolean; role_access: boolean; disabled_access: boolean; public_access: boolean }>(
+    "select has_column_privilege('service_role','public.firm_lawyers','id','select') as id_access, has_column_privilege('service_role','public.firm_lawyers','role','select') as role_access, has_column_privilege('service_role','public.firm_lawyers','disabled','select') as disabled_access, not has_column_privilege('anon','public.firm_lawyers','id','select') and not has_column_privilege('authenticated','public.firm_lawyers','id','select') as public_access",
+  );
+  if (operatorRead.rows[0]?.id_access !== true || operatorRead.rows[0]?.role_access !== true || operatorRead.rows[0]?.disabled_access !== true
+    || operatorRead.rows[0]?.public_access !== true) {
+    throw new Error(`The opt-in operator identity fields must be available to service_role and unavailable to public roles; actual=${JSON.stringify(operatorRead.rows[0] ?? null)}`);
+  }
+  progress("disposable identity, all fourteen acceptance migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and CRM RPC grants checked");
+}
+
+async function verifyTemplateApprovalRollback(pool: Pool, actorId: string): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  const suffix = randomUUID().replaceAll("-", "");
+  const templateKey = `walkthrough-rollback-${suffix}`;
+  const subject = "Synthetic approval rollback probe";
+  const body = "This draft exists only inside the disposable walkthrough transaction.";
+  const contentHash = createHash("sha256").update(`${subject}\n${body}`, "utf8").digest("hex");
+  const functionName = `walkthrough_reject_template_approval_${suffix}`;
+  const triggerName = `walkthrough_reject_template_approval_${suffix}`;
+  try {
+    await client.query("begin");
+    const activeActor = await client.query<{ role: string; disabled: boolean }>(
+      "select role,disabled from public.firm_lawyers where id=$1",
+      [actorId],
+    );
+    if (activeActor.rows[0]?.role !== "operator" || activeActor.rows[0]?.disabled !== false) {
+      throw new Error("The walkthrough rollback probe requires its seeded actor to be an active operator.");
+    }
+    const inserted = await client.query<{ id: string }>(
+      "insert into public.agency_followup_template_versions (template_key,version,channel,subject,body,content_sha256,state,created_by_operator_id) values ($1,1,'email',$2,$3,$4,'draft',$5) returning id",
+      [templateKey, subject, body, contentHash, actorId],
+    );
+    const templateId = inserted.rows[0]?.id;
+    if (!templateId) throw new Error("The disposable rollback probe draft was not created.");
+    const rejectedActorStates: string[] = [];
+    const assertActorRejected = async (label: string, candidateActorId: string, mutation?: "lawyer" | "disabled") => {
+      const savepoint = `before_actor_guard_${rejectedActorStates.length}`;
+      await client.query(`savepoint ${savepoint}`);
+      if (mutation === "lawyer") await client.query("update public.firm_lawyers set role='lawyer' where id=$1", [actorId]);
+      if (mutation === "disabled") await client.query("update public.firm_lawyers set disabled=true where id=$1", [actorId]);
+      await client.query("set local role service_role");
+      let rejected = false;
+      try {
+        await client.query("select public.approve_agency_followup_template_version($1::uuid,$2::uuid)", [templateId, candidateActorId]);
+      } catch (error) {
+        rejected = String(error).includes("only an active operator may approve an agency follow-up template version");
+      }
+      await client.query(`rollback to savepoint ${savepoint}`);
+      await client.query(`release savepoint ${savepoint}`);
+      if (!rejected) throw new Error(`The approval RPC did not reject the ${label} actor.`);
+      const [template, events, restoredActor] = await Promise.all([
+        client.query<{ state: string }>("select state from public.agency_followup_template_versions where id=$1", [templateId]),
+        client.query<{ count: string }>("select count(*)::text as count from public.agency_followup_events where template_version_id=$1 and event_type='template_approved'", [templateId]),
+        client.query<{ role: string; disabled: boolean }>("select role,disabled from public.firm_lawyers where id=$1", [actorId]),
+      ]);
+      if (template.rows[0]?.state !== "draft" || events.rows[0]?.count !== "0" || restoredActor.rows[0]?.role !== "operator" || restoredActor.rows[0]?.disabled !== false) {
+        throw new Error(`Rejecting the ${label} actor changed approval state, audit history, or the seeded operator fixture.`);
+      }
+      rejectedActorStates.push(label);
+    };
+    await assertActorRejected("missing", randomUUID());
+    await assertActorRejected("non-operator", actorId, "lawyer");
+    await assertActorRejected("disabled operator", actorId, "disabled");
+    await client.query(`
+      create function public.${functionName}() returns trigger
+      language plpgsql as $$
+      begin
+        if new.template_version_id = '${templateId}'::uuid and new.event_type = 'template_approved' then
+          raise exception 'walkthrough injected template approval audit failure';
+        end if;
+        return new;
+      end;
+      $$
+    `);
+    await client.query(`create trigger ${triggerName} before insert on public.agency_followup_events for each row execute function public.${functionName}()`);
+    await client.query("savepoint before_template_approval_failure");
+    await client.query("set local role service_role");
+    let auditFailureInjected = false;
+    try {
+      await client.query("select public.approve_agency_followup_template_version($1::uuid,$2::uuid)", [templateId, actorId]);
+    } catch (error) {
+      auditFailureInjected = String(error).includes("walkthrough injected template approval audit failure");
+    }
+    await client.query("rollback to savepoint before_template_approval_failure");
+    if (!auditFailureInjected) throw new Error("The disposable approval RPC did not reach the injected audit-insert failure.");
+    const [template, events] = await Promise.all([
+      client.query<{ state: string; approved_by_operator_id: string | null; approved_at: Date | null }>(
+        "select state,approved_by_operator_id,approved_at from public.agency_followup_template_versions where id=$1",
+        [templateId],
+      ),
+      client.query<{ count: string }>(
+        "select count(*)::text as count from public.agency_followup_events where template_version_id=$1 and event_type='template_approved'",
+        [templateId],
+      ),
+    ]);
+    const row = template.rows[0];
+    if (row?.state !== "draft" || row.approved_by_operator_id !== null || row.approved_at !== null || events.rows[0]?.count !== "0") {
+      throw new Error("A failed approval audit insert did not roll back the template approval row and audit event together.");
+    }
+    progress("disposable RPC rejected missing, non-operator, and disabled actors; injected audit-insert failure left its template draft and no approval event");
+    return { rejectedActorStates, injectedAuditFailure: true, rowStateAfterFailure: row.state, approvalActorAfterFailure: row.approved_by_operator_id, approvalTimeAfterFailure: row.approved_at, approvalEventCountAfterFailure: 0, transactionRolledBackInFinally: true };
+  } finally {
+    try { await client.query("rollback").catch(() => undefined); }
+    finally { client.release(); }
+  }
+}
+
+async function verifyTemplateApprovalAudit(pool: Pool, templateKey: string, actorId: string): Promise<Record<string, unknown>> {
+  const template = await pool.query<{
+    id: string; state: string; version: number; template_key: string; content_sha256: string;
+    approved_by_operator_id: string | null; approved_at: Date | null;
+  }>(
+    "select id,state,version,template_key,content_sha256,approved_by_operator_id,approved_at from public.agency_followup_template_versions where template_key=$1 and version=1",
+    [templateKey],
+  );
+  const row = template.rows[0];
+  if (template.rows.length !== 1 || !row || row.state !== "approved" || row.approved_by_operator_id !== actorId || !row.approved_at) {
+    throw new Error("The synthetic template approval row did not persist its exact reviewer and approval time.");
+  }
+  const events = await pool.query<{
+    idempotency_key: string; event_payload: Record<string, unknown>; actor_operator_id: string | null; occurred_at: Date;
+  }>(
+    "select idempotency_key,event_payload,actor_operator_id,occurred_at from public.agency_followup_events where template_version_id=$1 and event_type='template_approved'",
+    [row.id],
+  );
+  const event = events.rows[0];
+  const reviewedAt = typeof event?.event_payload.reviewedAt === "string" ? Date.parse(event.event_payload.reviewedAt) : Number.NaN;
+  if (events.rows.length !== 1 || !event || event.actor_operator_id !== actorId ||
+    event.idempotency_key !== `template-approved:${row.id}:${actorId}` ||
+    event.event_payload.templateKey !== row.template_key || Number(event.event_payload.version) !== row.version ||
+    event.event_payload.contentSha256 !== row.content_sha256 || event.event_payload.reviewerId !== actorId ||
+    !Number.isFinite(reviewedAt) || reviewedAt !== row.approved_at.getTime()) {
+    throw new Error("The synthetic template approval audit event did not exactly match the approved row's reviewer, time, content hash, key, and version.");
+  }
+  progress("synthetic template approval row and exactly one audit event matched reviewer, timestamp, content hash, key, and version");
+  return { templateId: row.id, templateKey: row.template_key, version: row.version, reviewerId: actorId, approvedAt: row.approved_at.toISOString(), contentSha256: row.content_sha256, approvalEventIdempotencyKey: event.idempotency_key, approvalEventCount: 1, auditReviewedAtMatchesApprovedAt: true };
+}
+
+async function verifyTestMessageClaimRpc(
+  pool: Pool,
+  input: { messageId: string; enrollmentId: string; recipientEmail: string },
+  now: string,
+): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  const target = { enrollmentId: input.enrollmentId, messageId: input.messageId, recipientEmail: input.recipientEmail };
+  const mismatches = [
+    { ...target, enrollmentId: randomUUID() },
+    { ...target, messageId: randomUUID() },
+    { ...target, recipientEmail: `mismatch-${input.recipientEmail}` },
+  ];
+  try {
+    await client.query("begin");
+    await client.query("set local role service_role");
+    const claim = async (workerId: string, allowedTarget: typeof target, limit = 1) => client.query<{
+      id: string; enrollment_id: string; recipient_email_snapshot: string; attempt_count: number; lease_owner: string;
+    }>(
+      "select id,enrollment_id,recipient_email_snapshot,attempt_count,lease_owner from public.claim_agency_followup_test_messages($1,$2::timestamptz,60,$3,$4::jsonb)",
+      [workerId, now, limit, JSON.stringify([allowedTarget])],
+    );
+    for (const [index, mismatch] of mismatches.entries()) {
+      const excluded = await claim(`walkthrough-test-claim-mismatch-${index}-${RUN_ID}`, mismatch);
+      if (excluded.rows.length !== 0) throw new Error("The test-message claim RPC claimed a target with an enrollment, message, or recipient mismatch.");
+    }
+    await client.query("savepoint invalid_test_claim_limit");
+    let invalidLimitRejected = false;
+    try {
+      await claim(`walkthrough-test-claim-invalid-limit-${RUN_ID}`, target, 2);
+    } catch (error) {
+      invalidLimitRejected = String(error).includes("test mode may claim exactly one message");
+    }
+    await client.query("rollback to savepoint invalid_test_claim_limit");
+    if (!invalidLimitRejected) throw new Error("The test-message claim RPC did not reject a batch size above one.");
+    const claimed = await claim(`walkthrough-test-claim-allowed-${RUN_ID}`, target);
+    if (claimed.rows.length !== 1 || claimed.rows[0]?.id !== target.messageId ||
+      claimed.rows[0]?.enrollment_id !== target.enrollmentId || claimed.rows[0]?.recipient_email_snapshot !== target.recipientEmail ||
+      claimed.rows[0]?.attempt_count !== 1 || claimed.rows[0]?.lease_owner !== `walkthrough-test-claim-allowed-${RUN_ID}`) {
+      throw new Error("The test-message claim RPC did not claim exactly the configured enrollment/message/recipient target.");
+    }
+    await client.query("rollback");
+    progress("runtime test-claim RPC excluded enrollment/message/recipient mismatches, enforced limit one, and claimed the exact synthetic target");
+    return { mismatchedTargetsExcluded: 3, maximumBatchSize: 1, exactTargetClaimed: true, transactionRolledBack: true };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function verifyLiveClaimRpc(
+  pool: Pool,
+  input: { allowedMessageId: string; offListMessageId: string; expiredOffListMessageId: string },
+  now: string,
+): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  const workerId = `walkthrough-live-claim-${RUN_ID}`;
+  const dueAt = new Date(Date.parse(now) - 60_000).toISOString();
+  try {
+    await client.query("begin");
+    await client.query("set local role service_role");
+    const identities = await client.query<{ id: string; enrollment_id: string }>(
+      "select id,enrollment_id from public.agency_followup_messages where id=any($1::uuid[])",
+      [[input.allowedMessageId, input.offListMessageId, input.expiredOffListMessageId]],
+    );
+    const byId = new Map(identities.rows.map((row) => [row.id, row]));
+    const allowed = byId.get(input.allowedMessageId);
+    const offList = byId.get(input.offListMessageId);
+    const expiredOffList = byId.get(input.expiredOffListMessageId);
+    if (!allowed || !offList || !expiredOffList || new Set(identities.rows.map((row) => row.enrollment_id)).size !== 3) {
+      throw new Error("The live-claim fixture must use three existing messages from three distinct synthetic enrollments.");
+    }
+    await client.query(
+      "update public.agency_followup_messages set state='scheduled',scheduled_at=$2,lease_owner=null,lease_until=null where id=$1",
+      [allowed.id, dueAt],
+    );
+    await client.query(
+      "update public.agency_followup_messages set state='scheduled',scheduled_at=$2,lease_owner=null,lease_until=null where id=$1",
+      [offList.id, dueAt],
+    );
+    await client.query(
+      "update public.agency_followup_messages set state='claimed',scheduled_at=$2,lease_owner=$3,lease_until=$4::timestamptz,attempt_count=attempt_count+1 where id=$1",
+      [expiredOffList.id, dueAt, `${workerId}-expired`, new Date(Date.parse(now) - 60_000).toISOString()],
+    );
+    const before = await client.query<{
+      id: string; state: string; scheduled_at: Date; attempt_count: number; lease_owner: string | null; lease_until: Date | null;
+    }>(
+      "select id,state,scheduled_at,attempt_count,lease_owner,lease_until from public.agency_followup_messages where id=any($1::uuid[]) order by id",
+      [[offList.id, expiredOffList.id]],
+    );
+    const claim = async (allowedIds: string[], limit = 1) => client.query<{
+      id: string; enrollment_id: string; attempt_count: number; lease_owner: string;
+    }>(
+      "select id,enrollment_id,attempt_count,lease_owner from public.claim_agency_followup_live_messages($1,$2::timestamptz,60,$3,$4::uuid[])",
+      [workerId, now, limit, allowedIds],
+    );
+    let emptyRejected = false;
+    await client.query("savepoint invalid_live_claim_empty");
+    try { await claim([]); } catch (error) { emptyRejected = String(error).includes("live enrollment allowlist is invalid"); }
+    await client.query("rollback to savepoint invalid_live_claim_empty");
+    let oversizedRejected = false;
+    await client.query("savepoint invalid_live_claim_limit");
+    try { await claim([allowed.enrollment_id], 2); } catch (error) { oversizedRejected = String(error).includes("exactly one message"); }
+    await client.query("rollback to savepoint invalid_live_claim_limit");
+    if (!emptyRejected || !oversizedRejected) throw new Error("The live claim RPC accepted an empty allowlist or a limit above one.");
+    const claimed = await claim([allowed.enrollment_id]);
+    if (claimed.rows.length !== 1 || claimed.rows[0]?.id !== allowed.id ||
+      claimed.rows[0]?.enrollment_id !== allowed.enrollment_id || claimed.rows[0]?.lease_owner !== workerId) {
+      throw new Error("The live claim RPC did not claim the one due message in the allowlisted enrollment.");
+    }
+    const after = await client.query<{
+      id: string; state: string; scheduled_at: Date; attempt_count: number; lease_owner: string | null; lease_until: Date | null;
+    }>(
+      "select id,state,scheduled_at,attempt_count,lease_owner,lease_until from public.agency_followup_messages where id=any($1::uuid[]) order by id",
+      [[offList.id, expiredOffList.id]],
+    );
+    const snapshot = (row: typeof before.rows[number] | undefined) => row && ({
+      id: row.id, state: row.state, scheduledAt: row.scheduled_at.toISOString(), attemptCount: Number(row.attempt_count),
+      leaseOwner: row.lease_owner, leaseUntil: row.lease_until?.toISOString() ?? null,
+    });
+    const event = await client.query<{ count: string }>(
+      "select count(*)::text as count from public.agency_followup_events where idempotency_key=$1",
+      [`lease-expired:${expiredOffList.id}`],
+    );
+    if (JSON.stringify(before.rows.map(snapshot)) !== JSON.stringify(after.rows.map(snapshot)) || event.rows[0]?.count !== "0") {
+      throw new Error("The live claim RPC changed or quarantined an off-list due/expired message.");
+    }
+    await client.query("rollback");
+    progress("runtime live claim RPC claimed the allowlisted message, rejected empty/oversized input, and left off-list due and expired rows unchanged");
+    return { allowlistedMessageClaimed: true, emptyAllowlistRejected: true, limitAboveOneRejected: true, offListScheduledUntouched: true, offListExpiredLeaseUntouched: true, transactionRolledBack: true };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function verifyProviderIdempotencyFenceRpc(
+  pool: Pool,
+  input: { firstUseMessageId: string; insideWindowMessageId: string; expiredWindowMessageId: string },
+): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  const claims = new Map<string, { owner: string; attemptCount: number }>();
+  const insertFixture = async (sourceMessageId: string, owner: string, age: string | null) => {
+    const result = await client.query<{ id: string; attempt_count: number }>(
+      `with source as (
+         select message.*, enrollment.journey_id
+         from public.agency_followup_messages message
+         join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id
+         where message.id=$1
+       ), step as (
+         insert into public.agency_followup_steps (journey_id,step_number,template_version_id,delay_business_days)
+         select source.journey_id,
+                (select coalesce(max(existing.step_number),0)+1 from public.agency_followup_steps existing where existing.journey_id=source.journey_id),
+                source.template_version_id,0
+         from source
+         returning id,journey_id,step_number
+       )
+       insert into public.agency_followup_messages (
+         enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256,
+         recipient_name_snapshot,recipient_email_snapshot,recipient_sha256,
+         approved_content_sha256,approved_recipient_sha256,reviewed_by_operator_id,reviewed_at,
+         scheduled_at,logical_message_key,provider_idempotency_key,attempt_count,lease_owner,lease_until,
+         provider_idempotency_first_used_at
+       )
+       select source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot,
+              source.content_sha256,source.recipient_name_snapshot,source.recipient_email_snapshot,source.recipient_sha256,
+              source.content_sha256,source.recipient_sha256,source.reviewed_by_operator_id,coalesce(source.reviewed_at,clock_timestamp()),
+              clock_timestamp(),$2,$3,1,$4,clock_timestamp()+interval '5 minutes',
+              case when $5::text is null then null else clock_timestamp()-$5::interval end
+       from source join step on step.journey_id=source.journey_id
+       returning id,attempt_count`,
+      [sourceMessageId, `walkthrough-provider-window-${RUN_ID}-${owner}`, `walkthrough-provider-key-${RUN_ID}-${owner}`, owner, age],
+    );
+    const row = result.rows[0];
+    if (!row) throw new Error("A dedicated provider-window message fixture could not be inserted.");
+    return { id: row.id, owner, attemptCount: Number(row.attempt_count) };
+  };
+  try {
+    await client.query("begin");
+    await client.query("set local role service_role");
+    const firstClaim = await insertFixture(input.firstUseMessageId, `first-${RUN_ID}`, null);
+    const insideClaim = await insertFixture(input.insideWindowMessageId, `inside-${RUN_ID}`, "22 hours 59 minutes 59 seconds");
+    const expiredClaim = await insertFixture(input.expiredWindowMessageId, `expired-${RUN_ID}`, "23 hours");
+    for (const claim of [firstClaim, insideClaim, expiredClaim]) claims.set(claim.id, claim);
+    const prepare = async (id: string) => {
+      const claim = claims.get(id)!;
+      const result = await client.query<{ state: string }>(
+        "select public.prepare_agency_followup_provider_attempt($1::uuid,(select enrollment_id from public.agency_followup_messages where id=$1::uuid),$2,$3,300,82800) as state",
+        [id, claim.owner, claim.attemptCount],
+      );
+      return result.rows[0]?.state;
+    };
+
+    const firstUseState = await prepare(firstClaim.id);
+    const firstTimestamp = await client.query<{ first_used_at: Date }>(
+      "select provider_idempotency_first_used_at as first_used_at from public.agency_followup_messages where id=$1", [firstClaim.id],
+    );
+    const firstUseAgain = await prepare(firstClaim.id);
+    const stableTimestamp = await client.query<{ first_used_at: Date }>(
+      "select provider_idempotency_first_used_at as first_used_at from public.agency_followup_messages where id=$1", [firstClaim.id],
+    );
+    if (firstUseState !== "ready" || firstUseAgain !== "ready" || !firstTimestamp.rows[0]?.first_used_at ||
+      firstTimestamp.rows[0].first_used_at.toISOString() !== stableTimestamp.rows[0]?.first_used_at.toISOString()) {
+      throw new Error("The provider handoff RPC did not reserve and preserve the first-use time for a new message.");
+    }
+
+    let timestampMutationRejected = false;
+    await client.query("savepoint immutable_first_use");
+    try {
+      await client.query("update public.agency_followup_messages set provider_idempotency_first_used_at=null where id=$1", [firstClaim.id]);
+    } catch (error) {
+      timestampMutationRejected = String(error).includes("timestamp is immutable");
+    }
+    await client.query("rollback to savepoint immutable_first_use");
+    if (!timestampMutationRejected) throw new Error("The provider first-use timestamp could be cleared after reservation.");
+
+    const insideState = await prepare(insideClaim.id);
+    const insideTimestamp = await client.query<{ age_seconds: number }>(
+      "select extract(epoch from clock_timestamp()-provider_idempotency_first_used_at)::integer as age_seconds from public.agency_followup_messages where id=$1",
+      [insideClaim.id],
+    );
+    const insideRetryAllowed = insideState === "ready" && Number(insideTimestamp.rows[0]?.age_seconds) < 82_800;
+    const expiredState = await prepare(expiredClaim.id);
+    const expired = await client.query<{ state: string; last_error_code: string | null; scheduled_at: Date | null; lease_owner: string | null; unknown_events: string }>(
+      "select message.state,message.last_error_code,message.scheduled_at,message.lease_owner,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-window-expired:'||message.id::text) as unknown_events from public.agency_followup_messages message where message.id=$1",
+      [expiredClaim.id],
+    );
+    if (!insideRetryAllowed || expiredState !== "expired" || expired.rows[0]?.state !== "unknown" ||
+      expired.rows[0]?.last_error_code !== "resend_idempotency_window_expired" || expired.rows[0]?.scheduled_at !== null ||
+      expired.rows[0]?.lease_owner !== null || expired.rows[0]?.unknown_events !== "1") {
+      throw new Error("The provider handoff RPC did not allow an in-window retry and atomically quarantine an expired key.");
+    }
+    await client.query("rollback");
+    progress("runtime provider handoff RPC persisted an immutable first-use time, allowed a retry under 23 hours, and atomically quarantined a 23-hour-old key; historical test timestamps were supplied at INSERT");
+    return { firstUseReservedOnce: true, timestampImmutable: true, retryUnder23HoursAllowed: true, retryAt23HoursQuarantined: true, historicalTimestampsSeededAtInsert: true, networkHandoff: "none", transactionRolledBack: true };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+async function verifyProviderIdempotencyLockWaitBoundary(
+  pool: Pool,
+  sourceMessageId: string,
+): Promise<Record<string, unknown>> {
+  const holder = await pool.connect();
+  const waiter = await pool.connect();
+  let holderTransaction = false;
+  let waiterTransaction = false;
+  let rpcPromise: Promise<{ state: string | undefined }> | null = null;
+  let rpcSettled = false;
+  let fixture: { id: string; owner: string; attemptCount: number } | null = null;
+  try {
+    await holder.query("begin");
+    holderTransaction = true;
+    await holder.query("set local role service_role");
+    const inserted = await holder.query<{ id: string; attempt_count: number }>(
+      `with source as (
+         select message.*, enrollment.journey_id
+         from public.agency_followup_messages message
+         join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id
+         where message.id=$1
+       ), step as (
+         insert into public.agency_followup_steps (journey_id,step_number,template_version_id,delay_business_days)
+         select source.journey_id,
+                (select coalesce(max(existing.step_number),0)+1 from public.agency_followup_steps existing where existing.journey_id=source.journey_id),
+                source.template_version_id,0
+         from source
+         returning id,journey_id,step_number
+       )
+       insert into public.agency_followup_messages (
+         enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256,
+         recipient_name_snapshot,recipient_email_snapshot,recipient_sha256,
+         approved_content_sha256,approved_recipient_sha256,reviewed_by_operator_id,reviewed_at,
+         scheduled_at,logical_message_key,provider_idempotency_key,attempt_count,lease_owner,lease_until,
+         provider_idempotency_first_used_at
+       )
+       select source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot,
+              source.content_sha256,source.recipient_name_snapshot,source.recipient_email_snapshot,source.recipient_sha256,
+              source.content_sha256,source.recipient_sha256,source.reviewed_by_operator_id,coalesce(source.reviewed_at,clock_timestamp()),
+              clock_timestamp(),$2,$3,1,$4,clock_timestamp()+interval '5 minutes',
+              clock_timestamp()-interval '22 hours 59 minutes 56 seconds'
+       from source join step on step.journey_id=source.journey_id
+       returning id,attempt_count`,
+      [sourceMessageId, `walkthrough-provider-boundary-${RUN_ID}`, `walkthrough-provider-boundary-key-${RUN_ID}`, `boundary-${RUN_ID}`],
+    );
+    if (!inserted.rows[0]) throw new Error("The retry-boundary message fixture could not be inserted.");
+    fixture = { id: inserted.rows[0].id, owner: `boundary-${RUN_ID}`, attemptCount: Number(inserted.rows[0].attempt_count) };
+    await holder.query("commit");
+    holderTransaction = false;
+
+    const locked = await holder.query<{ pid: number }>("select pg_backend_pid() as pid");
+    const waiting = await waiter.query<{ pid: number }>("select pg_backend_pid() as pid");
+    const holderPid = Number(locked.rows[0]?.pid);
+    const waiterPid = Number(waiting.rows[0]?.pid);
+    await holder.query("begin");
+    holderTransaction = true;
+    await holder.query("set local role service_role");
+    await holder.query("select id from public.agency_followup_messages where id=$1 for update", [fixture.id]);
+    const cutoff = await pool.query<{ cutoff: Date; database_now: Date }>(
+      "select provider_idempotency_first_used_at+interval '23 hours' as cutoff,clock_timestamp() as database_now from public.agency_followup_messages where id=$1",
+      [fixture.id],
+    );
+    const secondsRemaining = (cutoff.rows[0]!.cutoff.getTime() - cutoff.rows[0]!.database_now.getTime()) / 1000;
+    if (secondsRemaining <= 0.5 || secondsRemaining > 5) {
+      throw new Error(`The lock-wait boundary fixture did not start inside the 23-hour window with a bounded margin (${secondsRemaining.toFixed(3)} seconds).`);
+    }
+    const before = await pool.query<{ database_now: Date }>("select clock_timestamp() as database_now");
+    if (cutoff.rows[0]!.cutoff.getTime() <= before.rows[0]!.database_now.getTime()) {
+      throw new Error("The guarded RPC could not be proven to start before the 23-hour cutoff.");
+    }
+    await waiter.query("begin");
+    waiterTransaction = true;
+    await waiter.query("set local role service_role");
+    rpcPromise = waiter.query<{ state: string }>(
+      "select public.prepare_agency_followup_provider_attempt($1::uuid,(select enrollment_id from public.agency_followup_messages where id=$1::uuid),$2,$3,300,82800) as state",
+      [fixture.id, fixture.owner, fixture.attemptCount],
+    ).then((result) => ({ state: result.rows[0]?.state }));
+    rpcPromise.then(() => { rpcSettled = true; }, () => { rpcSettled = true; });
+
+    const lockDeadline = Date.now() + 1500;
+    let blocked = false;
+    while (Date.now() < lockDeadline) {
+      const activity = await pool.query<{ blocked: boolean }>(
+        "select array_position(pg_blocking_pids($1::integer),$2::integer) is not null as blocked",
+        [waiterPid, holderPid],
+      );
+      if (activity.rows[0]?.blocked) { blocked = true; break; }
+      if (rpcSettled) break;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (!blocked || rpcSettled) {
+      throw new Error("The provider handoff RPC did not block behind the held message row before the 23-hour cutoff.");
+    }
+
+    const afterBlocked = await pool.query<{ database_now: Date }>("select clock_timestamp() as database_now");
+    if (cutoff.rows[0]!.cutoff.getTime() <= afterBlocked.rows[0]!.database_now.getTime()) {
+      throw new Error("The waiter was not observed blocked until after the 23-hour cutoff.");
+    }
+    const waitRemaining = cutoff.rows[0]!.cutoff.getTime() - afterBlocked.rows[0]!.database_now.getTime();
+    if (waitRemaining > 5000) throw new Error("The lock-wait boundary exceeded its bounded hold time.");
+    await new Promise((resolve) => setTimeout(resolve, waitRemaining + 100));
+    await holder.query("commit");
+    holderTransaction = false;
+    const outcome = await Promise.race([
+      rpcPromise,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("The blocked provider handoff RPC did not resume within 3 seconds after lock release.")), 3000)),
+    ]);
+    if (outcome.state !== "expired") throw new Error(`The lock-waiting RPC returned ${String(outcome.state)} after crossing the provider retention cutoff.`);
+    await waiter.query("commit");
+    waiterTransaction = false;
+    const persisted = await pool.query<{ state: string; last_error_code: string | null; events: string }>(
+      "select message.state,message.last_error_code,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-window-expired:'||message.id::text) as events from public.agency_followup_messages message where message.id=$1",
+      [fixture.id],
+    );
+    if (persisted.rows[0]?.state !== "unknown" || persisted.rows[0]?.last_error_code !== "resend_idempotency_window_expired" || persisted.rows[0]?.events !== "1") {
+      throw new Error("The lock-waiting RPC did not atomically quarantine the message and add one UNKNOWN event.");
+    }
+    progress("provider handoff call was observed waiting on a row lock before the 23-hour cutoff, then returned expired and persisted one UNKNOWN event after the cutoff; no provider adapter was called");
+    return { rpcBlockedBeforeCutoff: true, cutoffCrossedWhileBlocked: true, returnedExpiredAfterLock: true, unknownPersisted: true, oneUnknownEvent: true, providerHandoff: "none", boundedLockHold: true };
+  } finally {
+    if (holderTransaction) await holder.query("rollback").catch(() => undefined);
+    if (waiterTransaction) await waiter.query("rollback").catch(() => undefined);
+    if (rpcPromise && rpcSettled === false) await Promise.race([rpcPromise.catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 3000))]);
+    holder.release();
+    waiter.release();
+  }
+}
+async function verifyQuarantinedSourceEventReplay(
+  pool: Pool,
+  prospect: ProspectFixture,
+  providerMessageId: string,
+  occurredAt: string,
+): Promise<Record<string, unknown>> {
+  const client = await pool.connect();
+  const eventId = `evt_source_quarantine_${RUN_ID}`;
+  const recipientHash = createHash("sha256").update(prospect.email.trim().toLowerCase(), "utf8").digest("hex");
+  try {
+    const sourceLinks = await client.query<{ id: string; organization_id: string; person_id: string | null; conversation_id: string }>(
+      "select source_link.id,source_link.organization_id,source_link.person_id,association.conversation_id from public.prospect_source_links source_link join public.prospect_conversation_sources association on association.source_link_id=source_link.id where source_link.source_system='agency_crm' and source_link.source_record_key=$1",
+      [prospect.id],
+    );
+    if (sourceLinks.rows.length !== 1) throw new Error("The synthetic prospect did not have exactly one Agency source link for the quarantine replay check.");
+    const references = await client.query<{ events: string; applications: string }>(
+      "select (select count(*)::text from public.agency_followup_provider_events where source_link_id=$1) as events, (select count(*)::text from public.agency_followup_provider_event_applications where source_link_id=$1) as applications",
+      [sourceLinks.rows[0].id],
+    );
+    if (references.rows[0]?.events !== "0" || references.rows[0]?.applications !== "0") {
+      throw new Error("The synthetic Agency source is already referenced by provider-event evidence and cannot be used for an isolated quarantine replay check.");
+    }
+    const message = await client.query<{ id: string; provider_delivery_status: string }>(
+      "select message.id,message.provider_delivery_status from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.provider_message_id=$2 and message.provider_recipient_email_sha256=$3 and message.state='accepted' and message.provider_accepted_at is not null",
+      [prospect.id, providerMessageId, recipientHash],
+    );
+    if (message.rows.length !== 1) throw new Error("The source-quarantine replay requires one accepted synthetic message with no existing provider-event application.");
+    await client.query("begin");
+    const contactSource = await client.query<{ id: string; organization_id: string; person_id: string | null; associations: string }>(
+      "select source_link.id,source_link.organization_id,source_link.person_id,(select count(*)::text from public.prospect_conversation_sources association where association.source_link_id=source_link.id) as associations from public.prospect_source_links source_link where source_link.source_system='agency_crm_contact' and source_link.source_record_key=$1",
+      [prospect.id],
+    );
+    if (contactSource.rows.length > 1) throw new Error("The synthetic prospect has ambiguous contact-source links for the quarantine replay check.");
+    if (contactSource.rows.length === 1 && (contactSource.rows[0].associations !== "0" ||
+      contactSource.rows[0].organization_id !== sourceLinks.rows[0].organization_id ||
+      contactSource.rows[0].person_id !== sourceLinks.rows[0].person_id)) {
+      throw new Error("The synthetic contact-source link is already mapped or does not match the Agency source identity needed for quarantine replay.");
+    }
+    const orphanSource = contactSource.rows[0]?.id
+      ? contactSource.rows[0]
+      : (await client.query<{ id: string; organization_id: string; person_id: string | null; associations: string }>(
+        "insert into public.prospect_source_links (source_system,source_record_key,organization_id,person_id,source_payload,history_coverage) select 'agency_crm_contact',source_record_key,organization_id,person_id,jsonb_build_object('syntheticPurpose','provider_event_source_quarantine'), 'history_unknown' from public.prospect_source_links where id=$1 returning id,organization_id,person_id,'0'::text as associations",
+        [sourceLinks.rows[0].id],
+      )).rows[0];
+    if (!orphanSource || orphanSource.associations !== "0") throw new Error("The synthetic orphan contact-source link was not prepared without detaching protected Agency history.");
+    const orphanReferences = await client.query<{ events: string; applications: string }>(
+      "select (select count(*)::text from public.agency_followup_provider_events where source_link_id=$1) as events, (select count(*)::text from public.agency_followup_provider_event_applications where source_link_id=$1) as applications",
+      [orphanSource.id],
+    );
+    if (orphanReferences.rows[0]?.events !== "0" || orphanReferences.rows[0]?.applications !== "0") {
+      throw new Error("The orphan contact-source fixture already has provider-event evidence.");
+    }
+    const parameters = [eventId, providerMessageId, "email.bounced", null, occurredAt, prospect.email, recipientHash];
+    const persist = () => client.query<{ result: { result?: string } }>(
+      "select public.persist_agency_followup_resend_event($1,$2,$3,$4,$5::timestamptz,$6,$7) as result",
+      parameters,
+    );
+    const firstReceipt = await persist();
+    if (firstReceipt.rows[0]?.result?.result !== "unmatched_source") {
+      throw new Error("The synthetic provider event did not record its initial unmatched-source quarantine.");
+    }
+    await client.query(
+      "insert into public.prospect_conversation_sources (conversation_id,source_link_id,is_primary) values ($1,$2,false)",
+      [sourceLinks.rows[0].conversation_id, orphanSource.id],
+    );
+    const replay = await persist();
+    const state = await client.query<{ processing_result: string; source_link_id: string | null; applications: string; delivery_status: string }>(
+      "select event.processing_result,event.source_link_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,message.provider_delivery_status as delivery_status from public.agency_followup_provider_events event join public.agency_followup_messages message on message.id=event.message_id where event.provider_event_id=$1",
+      [eventId],
+    );
+    if (replay.rows[0]?.result?.result !== "duplicate" || state.rows[0]?.processing_result !== "unmatched_source" ||
+      state.rows[0]?.source_link_id !== null || state.rows[0]?.applications !== "0" ||
+      state.rows[0]?.delivery_status !== message.rows[0]?.provider_delivery_status) {
+      throw new Error("An identical retry applied a source-quarantined event after the synthetic source mapping became unique.");
+    }
+    await client.query("rollback");
+    progress("source-quarantined signed-event replay remained immutable after an orphan contact-source mapping was added; protected Agency and opt-in history stayed attached");
+    return { initialResult: "unmatched_source", replayResult: "duplicate", applications: 0, deliveryStatusUnchanged: true, transactionRolledBack: true, existingSourceHistoryDetached: false };
+  } catch (error) {
+    await client.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+async function verifyProviderEventImmutability(pool: Pool): Promise<void> {
+  const client = await pool.connect();
+  const providerEventId = `walkthrough-immutability-${RUN_ID}`;
+  try {
+    await client.query("begin");
+    await client.query("set local role service_role");
+    await client.query(
+      "insert into public.agency_followup_provider_events (provider_event_id,event_type,occurred_at,processing_result) values ($1,'email.sent',now(),'unmatched_message')",
+      [providerEventId],
+    );
+    await client.query("savepoint update_immutability_probe");
+    let updateRejected = false;
+    try {
+      await client.query("update public.agency_followup_provider_events set provider_event_id=provider_event_id where provider_event_id=$1", [providerEventId]);
+    } catch (error) {
+      updateRejected = String(error).includes("Agency follow-up provider events are append-only");
+    }
+    await client.query("rollback to savepoint update_immutability_probe");
+    if (!updateRejected) throw new Error("The provider event UPDATE immutability probe was not rejected by the append-only trigger.");
+    await client.query("reset role");
+    await client.query("savepoint delete_immutability_probe");
+    let deleteRejected = false;
+    try {
+      await client.query("delete from public.agency_followup_provider_events where provider_event_id=$1", [providerEventId]);
+    } catch (error) {
+      deleteRejected = String(error).includes("Agency follow-up provider events are append-only");
+    }
+    await client.query("rollback to savepoint delete_immutability_probe");
+    if (!deleteRejected) throw new Error("The provider event DELETE immutability probe was not rejected by the append-only trigger.");
+    progress("disposable service_role UPDATE and owner DELETE probes were rejected by the append-only trigger; transaction rolled back");
+  } finally {
+    try { await client.query("rollback"); } finally { client.release(); }
+  }
 }
 
 async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
@@ -224,10 +970,11 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["window", "Synthetic Walkthrough Window " + suffix, "Casey Example", "eligible"],
     ["lease", "Synthetic Walkthrough Lease " + suffix, "Quinn Example", "eligible"],
     ["retry", "Synthetic Walkthrough Retry " + suffix, "Devon Example", "eligible"],
+    ["consent", "Synthetic Walkthrough Consent " + suffix, "Taylor Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and seven Agency prospects");
+    progress("seeding synthetic operator and eight Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -263,6 +1010,35 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
           [conversationId],
         );
       }
+      if (["normal", "pause", "unknown", "window", "lease", "retry"].includes(key)) {
+        const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
+        const databaseClock = await pool.query<{ captured_at: Date }>("select clock_timestamp() - interval '1 minute' as captured_at");
+        const capturedAt = databaseClock.rows[0]?.captured_at.toISOString();
+        if (!capturedAt) throw new Error("Could not derive a past synthetic consent timestamp from disposable PostgreSQL.");
+        const syntheticConsentHash = createHash("sha256").update(syntheticConsent).digest("hex");
+        await pool.query(
+          `select * from public.record_agency_followup_opt_in_event(
+            $1::uuid, $2::uuid, $3::uuid, $4::text, $5::text, $6::timestamptz,
+            $7::text, $8::text, $9::text, $10::text, $11::text, $12::uuid, $13::text
+          )`,
+          [
+            prospectId,
+            sourceId,
+            conversationId,
+            createHash("sha256").update(email.trim().toLowerCase()).digest("hex"),
+            "opt_in_granted",
+            capturedAt,
+            "other_verified_evidence",
+            "synthetic-walkthrough-consent-v1",
+            syntheticConsentHash,
+            `synthetic://agency-followup-walkthrough/${RUN_ID}/${key}-opt-in`,
+            syntheticConsentHash,
+            lawyerId,
+            `walkthrough:${RUN_ID}:synthetic-opt-in:${key}:${prospectId}`,
+          ],
+        );
+        progress(`seeded synthetic-only opt-in grant for ${key}; it is not real consent evidence`);
+      }
       fixtures.prospects[key] = { id: prospectId, firmName, contactName, email, conversationId };
       progress(`seeded synthetic ${key} prospect through Agency CRM history trigger`);
     }
@@ -277,13 +1053,6 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
 
 async function installTemporaryDispatchRoute(): Promise<void> {
   progress("installing temporary local-only fake-dispatch route");
-  try {
-    await readFile(path.join(TEST_DISPATCH_DIR, "route.ts"));
-    throw new Error("A walkthrough dispatch route already exists. Refusing to overwrite it.");
-  } catch (error) {
-    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
-  }
-  await mkdir(TEST_DISPATCH_DIR, { recursive: false });
   const route = `import { NextRequest, NextResponse } from "next/server";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { runFakeAgencyFollowupDispatcher } from "@/lib/agency-followup-service";
@@ -316,10 +1085,22 @@ export async function POST(request: NextRequest) {
       outcomePlan,
     }));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Fake dispatch failed." }, { status: 409 });
+    return NextResponse.json({ error: "Fake dispatch failed." }, { status: 409 });
   }
 }
 `;
+  try {
+    const existingRoute = await readFile(path.join(TEST_DISPATCH_DIR, "route.ts"), "utf8");
+    if (existingRoute.replace(/\r\n/g, "\n") !== route) {
+      throw new Error("A walkthrough dispatch route already exists and does not match the guarded local fake route.");
+    }
+    temporaryRouteSha256 = createHash("sha256").update(existingRoute).digest("hex");
+    progress("verified the tracked loopback-only fake-dispatch route");
+    return;
+  } catch (error) {
+    if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") throw error;
+  }
+  await mkdir(TEST_DISPATCH_DIR, { recursive: false });
   await writeFile(path.join(TEST_DISPATCH_DIR, "route.ts"), route, "utf8");
   temporaryRouteInstalled = true;
   temporaryRouteSha256 = createHash("sha256").update(route).digest("hex");
@@ -342,9 +1123,7 @@ function startApp(portalSecret: string, walkthroughToken: string, status: Supaba
   let stdoutBytes = 0;
   let stderrBytes = 0;
   let stderrTail = "";
-  const redact = (text: string) => text
-    .replace(/(SUPABASE_SERVICE_ROLE_KEY|PORTAL_SECRET|AGENCY_FOLLOWUP_WALKTHROUGH_TOKEN)(\s*[=:]\s*)[^\s"']+/g, "$1$2[REDACTED]")
-    .replace(/[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_JWT]");
+  const redact = (text: string) => redactSensitiveText(text);
   const envClass = (value: string | undefined) =>
     value === "development" || value === "test" || value === "production" ? value : value ? "other" : "unset";
   const server = spawn(process.execPath, [
@@ -357,6 +1136,9 @@ function startApp(portalSecret: string, walkthroughToken: string, status: Supaba
       SUPABASE_SERVICE_ROLE_KEY: status.SERVICE_ROLE_KEY,
       PORTAL_SECRET: portalSecret,
       AGENCY_FOLLOWUP_WALKTHROUGH_TOKEN: walkthroughToken,
+      AGENCY_FOLLOWUP_SEND_MODE: "off",
+      AGENCY_FOLLOWUP_WALKTHROUGH_CAPTURE: "1",
+      AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: SYNTHETIC_WEBHOOK_SECRET,
       PORT: "55435",
       NODE_ENV: "development",
     },
@@ -377,7 +1159,7 @@ function startApp(portalSecret: string, walkthroughToken: string, status: Supaba
     appendFileSync(stderrPath, safe);
   });
   server.once("spawn", () => progress(`Next child spawned pid=${server.pid}; parent NODE_ENV class=${envClass(process.env.NODE_ENV)}; child NODE_ENV=development`));
-  server.once("error", (error) => progress("local Next process error: " + error.message));
+  server.once("error", (error) => progress("local Next process error: " + safeFailureText(error.message, 300)));
   server.once("exit", (code, signal) => progress(`local Next process exited: code=${code} signal=${signal}; stdoutBytes=${stdoutBytes}; stderrBytes=${stderrBytes}`));
   server.once("close", (code, signal) => {
     progress(`local Next streams closed: code=${code} signal=${signal}; stdoutBytes=${stdoutBytes}; stderrBytes=${stderrBytes}`);
@@ -475,31 +1257,40 @@ async function waitForListener(server: ChildProcess, deadline: number): Promise<
       }
       let listenerPid: number | undefined;
       try {
-        progress("loopback TCP connected; resolving listener PID with bounded netstat inspection");
-        const netstat = execFileSync("netstat", ["-ano", "-p", "tcp"], {
+        const windows = process.platform === "win32";
+        progress(`loopback TCP connected; resolving listener PID with bounded ${windows ? "netstat" : "ss"} inspection`);
+        const listenerTable = execFileSync(windows ? "netstat" : "ss", windows ? ["-ano", "-p", "tcp"] : ["-ltnp"], {
           encoding: "utf8",
           timeout: 30000,
           windowsHide: true,
         });
-        for (const line of netstat.split(/\r?\n/)) {
-          const fields = line.trim().split(/\s+/);
-          if (fields.length < 5 || fields[0].toUpperCase() !== "TCP") continue;
-          if (!fields[1].endsWith(":55435") || fields[3].toUpperCase() !== "LISTENING") continue;
-          const pid = Number(fields[4]);
-          if (Number.isInteger(pid) && pid > 0) listenerPid = pid;
-          break;
+        for (const line of listenerTable.split(/\r?\n/)) {
+          if (!line.includes(":55435")) continue;
+          if (windows) {
+            const fields = line.trim().split(/\s+/);
+            if (fields.length < 5 || fields[0].toUpperCase() !== "TCP" || fields[3].toUpperCase() !== "LISTENING") continue;
+            const pid = Number(fields[4]);
+            if (Number.isInteger(pid) && pid > 0) listenerPid = pid;
+          } else {
+            const fields = line.trim().split(/\s+/);
+            if (fields.length < 4 || fields[0].toUpperCase() !== "LISTEN") continue;
+            const pidMatch = /\bpid=(\d+)\b/.exec(line);
+            const pid = Number(pidMatch?.[1]);
+            if (Number.isInteger(pid) && pid > 0) listenerPid = pid;
+          }
+          if (listenerPid !== undefined) break;
         }
       } catch (error) {
-        throw new Error(`Could not verify owner of reachable 127.0.0.1:55435 listener: ${error instanceof Error ? error.message : String(error)}.`);
+        throw new Error(safeFailureText(`Could not verify owner of reachable 127.0.0.1:55435 listener: ${error instanceof Error ? error.message : String(error)}.`, 1000));
       }
       if (listenerPid === undefined) {
-        throw new Error("TCP connect succeeded on 127.0.0.1:55435 but netstat reported no LISTENING owner.");
+        throw new Error(`TCP connect succeeded on 127.0.0.1:55435 but ${process.platform === "win32" ? "netstat" : "ss"} reported no listener owner.`);
       }
-      const owner = inspectWindowsProcessChain(listenerPid, server.pid!);
+      const owner = inspectProcessChain(listenerPid, server.pid!);
       if (!owner.isNextDescendant) {
-        throw new Error(`Port 55435 is owned by unrelated PID ${listenerPid}, not Next child PID ${server.pid}; child exitCode=${server.exitCode} signalCode=${server.signalCode}. Owner chain: ${owner.summary}`);
+        throw new Error(`Port 55435 is owned by unrelated PID ${listenerPid}, not launched Next process PID ${server.pid}; child exitCode=${server.exitCode} signalCode=${server.signalCode}. Owner chain: ${owner.summary}`);
       }
-      progress(`Verified 127.0.0.1:55435 LISTENING owner PID=${listenerPid} is descended from Next child PID=${server.pid}; child exitCode=${server.exitCode}; signalCode=${server.signalCode}; process chain: ${owner.summary}`);
+      progress(`Verified 127.0.0.1:55435 listener owner PID=${listenerPid} is descended from launched Next process PID=${server.pid}; child exitCode=${server.exitCode}; signalCode=${server.signalCode}; process chain: ${owner.summary}`);
       return;
     }
     await delay(Math.min(500, remainingMs(deadline)));
@@ -507,9 +1298,30 @@ async function waitForListener(server: ChildProcess, deadline: number): Promise<
   throw new Error("Next did not bind 127.0.0.1:55435 within 10 minutes.");
 }
 
-function inspectWindowsProcessChain(listenerPid: number, nextPid: number): { isNextDescendant: boolean; summary: string } {
+function inspectProcessChain(listenerPid: number, nextPid: number): { isNextDescendant: boolean; summary: string } {
   if (process.platform !== "win32") {
-    return { isNextDescendant: listenerPid === nextPid, summary: `owner=${listenerPid}, next=${nextPid}` };
+    const chain: string[] = [];
+    let current = listenerPid;
+    try {
+      for (let depth = 0; depth < 10 && current > 0; depth++) {
+        const raw = execFileSync("ps", ["-o", "pid=,ppid=,comm=", "-p", String(current)], {
+          encoding: "utf8",
+          timeout: 5000,
+          windowsHide: true,
+        }).trim();
+        const match = /^(\d+)\s+(\d+)\s+(.+)$/.exec(raw);
+        if (!match) break;
+        const pid = Number(match[1]);
+        const parentPid = Number(match[2]);
+        chain.push(`${match[3]} pid=${pid} parent=${parentPid}`);
+        if (pid === nextPid) return { isNextDescendant: true, summary: chain.join(" <- ") };
+        if (parentPid === pid) break;
+        current = parentPid;
+      }
+    } catch (error) {
+      throw new Error(safeFailureText(`Could not identify port owner process ancestry: ${error instanceof Error ? error.message : String(error)}.`, 1000));
+    }
+    return { isNextDescendant: false, summary: chain.join(" <- ") || `owner PID ${listenerPid} not found in process table` };
   }
   const script = [
     `$current=${listenerPid}`,
@@ -532,7 +1344,7 @@ function inspectWindowsProcessChain(listenerPid: number, nextPid: number): { isN
       windowsHide: true,
     });
   } catch (error) {
-    throw new Error(`Could not identify port owner process ancestry: ${error instanceof Error ? error.message : String(error)}.`);
+    throw new Error(safeFailureText(`Could not identify port owner process ancestry: ${error instanceof Error ? error.message : String(error)}.`, 1000));
   }
   const parsed = JSON.parse(raw || "[]") as Array<{
     ProcessId: number;
@@ -564,6 +1376,39 @@ async function signedContext(browser: Browser, fixtures: Fixtures, portalSecret:
   return context;
 }
 
+async function recordActionFailure(
+  page: Page,
+  action: string,
+  button: ReturnType<Page["getByRole"]>,
+  error: unknown,
+): Promise<string> {
+  const diagnostics = await button.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const hitTarget = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+    return {
+      buttonText: element.textContent?.trim().slice(0, 100) ?? "",
+      disabled: (element as HTMLButtonElement).disabled,
+      ariaDisabled: element.getAttribute("aria-disabled"),
+      visible: rect.width > 0 && rect.height > 0,
+      pointerEvents: getComputedStyle(element).pointerEvents,
+      hitTargetTag: hitTarget?.tagName ?? null,
+      hitTargetText: hitTarget?.textContent?.trim().slice(0, 100) ?? "",
+      pageTitle: document.title,
+      pageText: document.body.innerText.slice(0, 800),
+    };
+  }).catch(() => null);
+  const browserRuntimeErrors = (browserRuntimeErrorsByPage.get(page)?.slice(-20) ?? [])
+    .map((entry) => safeFailureText(entry, 1000));
+  await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
+  const screenshotPath = path.join(OUTPUT_DIR, "screenshots", `failure-${action}-${RUN_ID}.png`);
+  const screenshotWritten = await page.screenshot({ path: screenshotPath, fullPage: false }).then(() => true, () => false);
+  const errorMessage = safeFailureText(error, 500);
+  const failureReceipt = { runId: RUN_ID, action, errorMessage, diagnostics, browserRuntimeErrors, screenshot: screenshotWritten ? path.basename(screenshotPath) : null, recordedAtUtc: new Date().toISOString() };
+  await writeFile(path.join(OUTPUT_DIR, `failure-${action}-${RUN_ID}.json`), JSON.stringify(failureReceipt, null, 2) + "\n", "utf8");
+  progress(`operator action ${action} failed; diagnostics=${JSON.stringify(diagnostics)}; screenshot=${screenshotWritten ? path.basename(screenshotPath) : "unavailable"}; message=${errorMessage}`);
+  return errorMessage;
+}
+
 async function waitForAction(
   page: Page,
   action: string,
@@ -571,48 +1416,71 @@ async function waitForAction(
   enabledTimeoutMs = 30_000,
 ): Promise<void> {
   setDiagnosticStage(`browser_action_${action}`);
-  await button.waitFor({ state: "visible" });
-  if (!(await button.isEnabled())) {
-    const state = await button.evaluate((element) => {
-      const form = element.closest("form");
-      return {
-        buttonDisabled: (element as HTMLButtonElement).disabled,
-        reactAttached: Boolean(form && Object.keys(form).some((key) => key.startsWith("__reactProps$"))),
-        controls: [...(form?.querySelectorAll("input,textarea,select") ?? [])].map((control) => ({
-          valueLength: (control as HTMLInputElement).value.length,
-          reactAttached: Object.keys(control).some((key) => key.startsWith("__reactProps$")),
-        })),
-      };
-    });
-    progress(`button ${action} initially disabled; React form diagnostics=${JSON.stringify(state)}`);
+  try {
+    await button.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
+    if (!(await button.isEnabled())) {
+      const state = await button.evaluate((element) => {
+        const form = element.closest("form");
+        return {
+          buttonDisabled: (element as HTMLButtonElement).disabled,
+          reactAttached: Boolean(form && Object.keys(form).some((key) => key.startsWith("__reactProps$"))),
+          controls: [...(form?.querySelectorAll("input,textarea,select") ?? [])].map((control) => ({
+            valueLength: (control as HTMLInputElement).value.length,
+            reactAttached: Object.keys(control).some((key) => key.startsWith("__reactProps$")),
+          })),
+        };
+      });
+      progress(`button ${action} initially disabled; React form diagnostics=${JSON.stringify(state)}`);
+    }
+    await expect(button).toBeEnabled({ timeout: Math.min(enabledTimeoutMs, remainingMs()) });
+  } catch (error) {
+    const errorMessage = await recordActionFailure(page, action, button, error);
+    throw new Error(`Operator action ${action} readiness failed: ${errorMessage}`);
   }
-  await expect(button).toBeEnabled({ timeout: enabledTimeoutMs });
-  // App Router can return server HTML before the client bundle has hydrated.
-  // Wait for the first page's network work to settle before relying on React
-  // event handlers, especially on a cold local compile.
-  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
-  await page.waitForTimeout(500);
-  // Install the response listener only after readiness waits. Starting its
-  // timeout before hydration can expire before the click is even issued.
+  // The initial page explicitly verifies controlled-input hydration. For later
+  // actions, the enabled locator and Playwright's click actionability checks
+  // provide the readiness gate without waiting on unrelated page network work.
+  // Start the correlated response waiter immediately before the click.
   const responsePromise = page.waitForResponse((response) => {
     const matched = new URL(response.url()).pathname === API_PATH && response.request().method() === "POST";
     if (matched) progress(`waiter matched Agency CRM POST response HTTP ${response.status()}`);
     return matched;
-  }, { timeout: 60000 });
-  await button.click();
-  let response: Awaited<typeof responsePromise>;
+  }, { timeout: Math.min(60_000, remainingMs()) }).then(
+    (response) => ({ ok: true as const, response }),
+    (error: unknown) => ({ ok: false as const, error }),
+  );
   try {
-    response = await responsePromise;
+    await button.click({ timeout: Math.min(60_000, remainingMs()) });
   } catch (error) {
-    const diagnostics = await page.evaluate(() => ({
-      buttonDisabled: (document.activeElement as HTMLButtonElement | null)?.disabled ?? null,
-      alerts: [...document.querySelectorAll('[role="alert"]')].map((node) => node.textContent?.trim() ?? ""),
-      readyState: document.readyState,
-      pageText: document.body.innerText.slice(0, 1200),
-    })).catch(() => null);
-    await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
-    await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", `failure-${action}.png`), fullPage: true }).catch(() => undefined);
-    throw new Error(`Operator action ${action} produced no POST response. UI diagnostics: ${JSON.stringify(diagnostics)}. ${String(error)}`);
+    const errorMessage = await recordActionFailure(page, action, button, error);
+    throw new Error(`Operator action ${action} button click failed: ${errorMessage}`);
+  }
+  let response: PlaywrightResponse;
+  try {
+    const result = await responsePromise;
+    if (!result.ok) throw result.error;
+    response = result.response;
+  } catch (error) {
+    const errorMessage = await recordActionFailure(page, action, button, error);
+    throw new Error(`Operator action ${action} produced no POST response: ${errorMessage}`);
+  }
+  if (response.status() === 401) {
+    const payload = await response.json().catch(() => ({})) as { error?: unknown };
+    if (payload.error === "Unauthorized") {
+      // Membership revalidation can fail closed when the disposable local
+      // PostgREST fetch has a brief transport interruption. Retry only after
+      // this same signed browser session proves the protected GET is healthy.
+      const health = await page.context().request.get(APP_ORIGIN + API_PATH, { timeout: 15000 }).catch(() => undefined);
+      if (health?.status() === 200) {
+        progress(`operator action ${action} received transient 401; same-session authenticated health check returned 200; retrying once`);
+        const retryResponse = page.waitForResponse((candidate) =>
+          new URL(candidate.url()).pathname === API_PATH && candidate.request().method() === "POST",
+          { timeout: 60000 },
+        );
+        await button.click();
+        response = await retryResponse;
+      }
+    }
   }
   let actualAction = "unknown";
   try { actualAction = String(response.request().postDataJSON()?.action ?? "unknown"); } catch { /* keep the diagnostic label */ }
@@ -632,7 +1500,7 @@ function queueCard(page: Page, firmName: string) {
   return page.locator('section[aria-labelledby="queue-title"] article').filter({ hasText: firmName }).first();
 }
 
-async function authorJourney(page: Page): Promise<string> {
+async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: string) => Promise<void>): Promise<string> {
   const suffix = randomUUID().slice(0, 8);
   const templateKey = "walkthrough-" + suffix;
   const journeyKey = "walkthrough-" + suffix;
@@ -645,6 +1513,7 @@ async function authorJourney(page: Page): Promise<string> {
   const templateApprovalButton = templateCard.getByRole("button", { name: "Approve template v1" });
   await templateApprovalButton.waitFor({ state: "visible", timeout: Math.min(90_000, remainingMs()) });
   await waitForAction(page, "template_approve", templateApprovalButton);
+  await afterTemplateApproval?.(templateKey);
   const approvedTemplateOption = page.getByLabel("Template version").locator("option").filter({ hasText: templateKey + " v1" });
   await expect(approvedTemplateOption).toHaveCount(1, { timeout: Math.min(90_000, remainingMs()) });
 
@@ -670,7 +1539,7 @@ async function authorJourney(page: Page): Promise<string> {
   } catch (error) {
     const options = await journeyOptions.allTextContents().catch(() => []);
     const alert = await page.locator('[role="alert"]').allTextContents().catch(() => []);
-    throw new Error(`Activated journey did not appear in the review selector. Current options=${JSON.stringify(options)}; alerts=${JSON.stringify(alert)}. ${String(error)}`);
+    throw new Error(`Activated journey did not appear in the review selector. Current options=${JSON.stringify(options)}; alerts=${JSON.stringify(alert)}. ${safeFailureText(error, 1000)}`);
   }
 
   const otherJourneyKey = journeyKey + "-other";
@@ -681,7 +1550,7 @@ async function authorJourney(page: Page): Promise<string> {
   const otherJourneyDraft = page.getByText(otherJourneyName + " v1 · draft", { exact: false }).locator("..");
   await waitForAction(page, "journey_activate", otherJourneyDraft.getByRole("button", { name: "Activate version" }));
   const otherJourneyOption = journeyOptions.filter({ hasText: otherJourneyName + " v1" });
-  await expect(otherJourneyOption).toHaveCount(1);
+  await expect(otherJourneyOption).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
 
   const mixedCaseJourneyKey = "  " + journeyKey.toUpperCase() + "  ";
   if (mixedCaseJourneyKey.trim().toLowerCase() !== journeyKey) {
@@ -692,12 +1561,12 @@ async function authorJourney(page: Page): Promise<string> {
   await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
   const journeyV2Draft = page.getByText(journeyName + " v2 · draft", { exact: false }).locator("..");
   await waitForAction(page, "journey_activate", journeyV2Draft.getByRole("button", { name: "Activate version" }));
-  await expect(page.getByText(journeyName + " v1 · retired", { exact: false })).toBeVisible();
-  await expect(page.getByText(journeyName + " v2 · active", { exact: false })).toBeVisible();
-  await expect(versionOneOption).toHaveCount(0);
+  await expect(page.getByText(journeyName + " v1 · retired", { exact: false })).toBeVisible({ timeout: Math.min(30_000, remainingMs()) });
+  await expect(page.getByText(journeyName + " v2 · active", { exact: false })).toBeVisible({ timeout: Math.min(30_000, remainingMs()) });
+  await expect(versionOneOption).toHaveCount(0, { timeout: Math.min(30_000, remainingMs()) });
   const versionTwoOption = journeyOptions.filter({ hasText: journeyName + " v2" });
-  await expect(versionTwoOption).toHaveCount(1);
-  await expect(otherJourneyOption).toHaveCount(1);
+  await expect(versionTwoOption).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+  await expect(otherJourneyOption).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
   journeyVersionRegressionResult = {
     sameKeyV1Retired: true,
     sameKeyV1AbsentFromSelector: true,
@@ -748,7 +1617,21 @@ async function markEligibleAndRelease(page: Page, prospect: ProspectFixture): Pr
 }
 
 async function postAction(context: BrowserContext, data: Record<string, unknown>): Promise<APIResponse> {
-  return context.request.post(APP_ORIGIN + API_PATH, { data });
+  let response = await context.request.post(APP_ORIGIN + API_PATH, { data });
+  if (response.status() === 401) {
+    const payload = await response.json().catch(() => ({})) as { error?: unknown };
+    if (payload.error === "Unauthorized") {
+      // The disposable local membership lookup can briefly fail closed before
+      // the protected API is healthy again. A 401 is rejected before action
+      // dispatch, so retry once only after this same signed context proves GET.
+      const health = await context.request.get(APP_ORIGIN + API_PATH, { timeout: 15000 }).catch(() => undefined);
+      if (health?.status() === 200) {
+        progress(`synthetic ${String(data.action ?? "unknown")} probe received transient 401; same-session authenticated health check returned 200; retrying once`);
+        response = await context.request.post(APP_ORIGIN + API_PATH, { data });
+      }
+    }
+  }
+  return response;
 }
 
 async function dispatchFake(
@@ -756,9 +1639,65 @@ async function dispatchFake(
   token: string,
   input: { workerId: string; limit?: number; now?: string; outcomePlan?: Array<Record<string, unknown>> },
 ): Promise<Record<string, number>> {
-  const response = await context.request.post(APP_ORIGIN + TEST_DISPATCH_PATH, { data: { ...input, token } });
-  if (!response.ok()) throw new Error("Local fake dispatcher endpoint returned HTTP " + response.status() + ".");
+  setDiagnosticStage("fake_dispatch");
+  const response = await context.request.post(APP_ORIGIN + TEST_DISPATCH_PATH, {
+    data: { ...input, token },
+    timeout: Math.min(90_000, remainingMs()),
+  });
+  if (!response.ok()) {
+    const payload = await response.json().catch(() => ({})) as { error?: unknown };
+    const detail = typeof payload.error === "string"
+      ? safeFailureText(payload.error, 200).replace(/[^A-Za-z0-9_.:-]+/g, "_")
+      : "no_safe_error_detail";
+    progress(`fake dispatcher HTTP ${response.status()}; safeError=${detail}`);
+    throw new Error("Local fake dispatcher endpoint returned HTTP " + response.status() + ": " + detail);
+  }
   return await response.json() as Record<string, number>;
+}
+
+async function postSyntheticResendEvent(providerEventId: string, payload: Record<string, unknown>): Promise<{ status: number; outcome: string; error: string }> {
+  setDiagnosticStage("synthetic_signed_webhook");
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const rawBody = JSON.stringify(payload);
+  const signingKey = Buffer.from(SYNTHETIC_WEBHOOK_SECRET.slice("whsec_".length), "base64");
+  const signature = createHmac("sha256", signingKey)
+    .update(`${providerEventId}.${timestamp}.${rawBody}`, "utf8")
+    .digest("base64");
+  progress("sending synthetic signed provider event to the local webhook");
+  const response = await fetch(APP_ORIGIN + "/api/webhooks/resend/agency-followup", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "svix-id": providerEventId,
+      "svix-timestamp": timestamp,
+      "svix-signature": `v1,${signature}`,
+    },
+    body: rawBody,
+    signal: AbortSignal.timeout(Math.min(90_000, remainingMs())),
+  });
+  const result = await response.json().catch(() => ({})) as { outcome?: unknown; error?: unknown };
+  const receipt = {
+    status: response.status,
+    outcome: typeof result.outcome === "string" ? result.outcome : "none",
+    error: typeof result.error === "string" ? result.error.replace(/[^A-Za-z0-9_.:-]+/g, "_").slice(0, 120) : "none",
+  };
+  progress(`synthetic signed provider event returned HTTP ${receipt.status}; outcome=${receipt.outcome}; error=${receipt.error}`);
+  return receipt;
+}
+
+async function warmResendWebhookRoute(): Promise<void> {
+  setDiagnosticStage("resend_webhook_cold_route_preflight");
+  const response = await fetch(APP_ORIGIN + "/api/webhooks/resend/agency-followup", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+    signal: AbortSignal.timeout(Math.min(180_000, remainingMs())),
+  });
+  const result = await response.json().catch(() => ({})) as { error?: unknown };
+  if (response.status !== 400 || result.error !== "invalid_signature") {
+    throw new Error(`Unsigned local webhook preflight expected HTTP 400 invalid_signature; got HTTP ${response.status}.`);
+  }
+  progress("local webhook route compiled; unsigned preflight returned HTTP 400 before persistence");
 }
 
 async function withFixtureClaim<T>(pool: Pool, messageId: string, operation: () => Promise<T>): Promise<T> {
@@ -794,6 +1733,9 @@ async function auditRenderedCopy(page: Page): Promise<string[]> {
         const tag = component.dataset.uiComponentContent + "/" + copy.dataset.uiCopy;
         const box = copy.getBoundingClientRect();
         if (Math.abs(box.left - left) > 1 || Math.abs(box.right - right) > 1) failures.push(tag + ": copy does not use full content width");
+        if (copy.matches('p[aria-label^="Provider delivery status:"]') && copy.scrollWidth > copy.clientWidth + 1) {
+          failures.push(tag + ": provider delivery status overflows its content width");
+        }
         if (copy.textContent?.includes("\u2014")) failures.push(tag + ": em dash");
         const words: Array<{ top: number; left: number; right: number; text: string }> = [];
         const walker = document.createTreeWalker(copy, NodeFilter.SHOW_TEXT);
@@ -828,7 +1770,7 @@ async function auditRenderedCopy(page: Page): Promise<string[]> {
   });
 }
 
-async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecret: string, walkthroughToken: string): Promise<Record<string, unknown>> {
+async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecret: string, walkthroughToken: string, templateApprovalRollbackEvidence: Record<string, unknown>): Promise<Record<string, unknown>> {
   const browser = await chromium.launch({ headless: true });
   activeBrowser = browser;
   const context = await signedContext(browser, fixtures, portalSecret);
@@ -837,6 +1779,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   page.setDefaultTimeout(30000);
   page.setDefaultNavigationTimeout(180_000);
   const responseFailures: string[] = [];
+  const recoveredBrowserRuntimeErrors: string[] = [];
+  let templateApprovalAuditEvidence: Record<string, unknown> | undefined;
+  let initialChunkRecoveryReloaded = false;
+  browserRuntimeErrorsByPage.set(page, responseFailures);
   page.on("pageerror", (error) => responseFailures.push("page error: " + error.message));
   page.on("console", (message) => {
     const text = message.text();
@@ -868,19 +1814,54 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await page.goto(APP_ORIGIN + "/admin/agency-crm/follow-up", { waitUntil: "domcontentloaded", timeout: 180_000 });
   const layoutChunkStartedAt = Date.now();
   try {
-    const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(30000, remainingMs()) });
+    const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(180_000, remainingMs()) });
     const layoutChunkBody = await layoutChunkResponse.body();
     progress(`direct app/layout.js asset probe returned HTTP ${layoutChunkResponse.status()}; bytes=${layoutChunkBody.byteLength}; elapsed=${Date.now() - layoutChunkStartedAt}ms`);
   } catch (error) {
-    progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms: ${String(error).replace(/\\s+/g, " ").slice(0, 300)}`);
+    progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms: ${safeFailureText(error, 300)}`);
     throw error;
   }
   if (await page.getByText(/This page couldn.t load/i).count()) {
     progress("Next rendered its chunk-recovery page during cold compilation; reloading once after the direct asset probe");
     await page.reload({ waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+    initialChunkRecoveryReloaded = true;
   }
   await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
+
+  if (FAILURE_CAPTURE_PREFLIGHT_ONLY) {
+    const disabledButton = page.locator("button[disabled]").first();
+    await disabledButton.waitFor({ state: "visible", timeout: Math.min(15_000, remainingMs()) });
+    try {
+      await waitForAction(page, "capture_preflight", disabledButton, 1000);
+      throw new Error("Failure-capture preflight unexpectedly accepted a disabled control.");
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes("Operator action capture_preflight readiness failed:")) throw error;
+    }
+    const receiptPath = path.join(OUTPUT_DIR, `failure-capture_preflight-${RUN_ID}.json`);
+    const receipt = JSON.parse(await readFile(receiptPath, "utf8")) as { runId?: string; action?: string; errorMessage?: string; screenshot?: string };
+    if (receipt.runId !== RUN_ID || receipt.action !== "capture_preflight" || !receipt.errorMessage || !receipt.screenshot) {
+      throw new Error("Failure-capture preflight receipt is missing its run, action, error, or screenshot fields.");
+    }
+    const screenshotPath = path.join(OUTPUT_DIR, "screenshots", receipt.screenshot);
+    const screenshotBytes = await readFile(screenshotPath);
+    if (!screenshotBytes.byteLength) throw new Error("Failure-capture preflight screenshot is empty.");
+    const receiptSha256 = createHash("sha256").update(await readFile(receiptPath)).digest("hex");
+    const screenshotSha256 = createHash("sha256").update(screenshotBytes).digest("hex");
+    progress(`failure-capture preflight verified receipt=${path.basename(receiptPath)} bytes=${(await readFile(receiptPath)).byteLength} sha256=${receiptSha256}; screenshot=${receipt.screenshot} bytes=${screenshotBytes.byteLength} sha256=${screenshotSha256}`);
+    return {
+      runId: RUN_ID,
+      ...sourceAtStart,
+      sourceAtStart,
+      synthetic: true,
+      failureCapturePreflight: { action: receipt.action, errorRecorded: true, screenshotCaptured: true, receiptPath: path.relative(process.cwd(), receiptPath), receiptSha256, screenshotPath: path.relative(process.cwd(), screenshotPath), screenshotBytes: screenshotBytes.byteLength, screenshotSha256 },
+      startedAtUtc: RUN_STARTED_AT,
+      endedAtUtc: new Date().toISOString(),
+      command: "npm run agency-followup:walkthrough -- --failure-capture-preflight",
+    };
+  }
+
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
+  setDiagnosticStage("browser_form_hydration");
   try {
     await page.waitForFunction(() => {
       // The template key is a controlled input with an onChange handler, so
@@ -928,14 +1909,106 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
         pageText: document.body.innerText.slice(0, 1000),
       })).catch(() => null);
       await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
-      await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", "failure-hydration.png"), fullPage: true }).catch(() => undefined);
-      throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${String(hydrationError)}`);
+      const screenshotPath = path.join(OUTPUT_DIR, "screenshots", `failure-hydration-${RUN_ID}.png`);
+      const screenshotWritten = await page.screenshot({ path: screenshotPath, fullPage: false }).then(() => true, () => false);
+      const errorMessage = safeFailureText(hydrationError, 1000);
+      const failureReceipt = {
+        runId: RUN_ID,
+        stage: "browser_form_hydration",
+        errorMessage,
+        diagnostics,
+        browserRuntimeErrors: responseFailures.slice(-20).map((entry) => safeFailureText(entry, 1000)),
+        screenshot: screenshotWritten ? path.basename(screenshotPath) : null,
+        recordedAtUtc: new Date().toISOString(),
+      };
+      const receiptPath = path.join(OUTPUT_DIR, `failure-browser_form_hydration-${RUN_ID}.json`);
+      await writeFile(receiptPath, JSON.stringify(failureReceipt, null, 2) + "\n", "utf8");
+      progress(`operator form hydration failed; receipt=${path.basename(receiptPath)}; screenshot=${failureReceipt.screenshot ?? "unavailable"}; browserErrors=${JSON.stringify(failureReceipt.browserRuntimeErrors)}`);
+      throw new Error(`Operator UI did not hydrate its controlled template input. Receipt=${path.basename(receiptPath)}; ${errorMessage}`);
     }
   }
 
-  const journeyName = await authorJourney(page);
+  // A cold Next dev compilation can time out the initial App Router layout
+  // chunk. Treat only that exact error as recovered, and only after the
+  // controlled reload above plus the controlled-input hydration assertion
+  // succeeded. Keep the original error in the run receipt for auditability.
+  if (initialChunkRecoveryReloaded) {
+    const recoveredChunkFailure = /^(?:page error|browser console): .*ChunkLoadError: Loading chunk app\/layout failed\./;
+    for (let index = responseFailures.length - 1; index >= 0; index--) {
+      if (recoveredChunkFailure.test(responseFailures[index])) {
+        recoveredBrowserRuntimeErrors.unshift(responseFailures[index]);
+        responseFailures.splice(index, 1);
+      }
+    }
+    if (recoveredBrowserRuntimeErrors.length) {
+      progress(`initial layout chunk error recovered by one reload and successful form hydration; captured=${JSON.stringify(recoveredBrowserRuntimeErrors)}`);
+    }
+  }
+
+  const journeyName = await authorJourney(page, async (templateKey) => {
+    templateApprovalAuditEvidence = await verifyTemplateApprovalAudit(pool, templateKey, fixtures.lawyerId);
+  });
+  const consentProspect = fixtures.prospects.consent;
+  await createDraft(pool, page, journeyName, consentProspect);
+  const consentCard = queueCard(page, consentProspect.firmName);
+  const syntheticConsentText = "Synthetic consent evidence for local acceptance only; this is not real prospect consent.";
+  const syntheticConsentHash = createHash("sha256").update(syntheticConsentText).digest("hex");
+  const consentTimeLocal = (instant: Date) => new Date(instant.getTime() - instant.getTimezoneOffset() * 60_000 - 60_000).toISOString().slice(0, 19);
+  const recordConsentEvent = async (eventType: "opt_in_granted" | "opt_in_withdrawn") => {
+    await consentCard.getByLabel("Record event").selectOption(eventType);
+    await consentCard.getByLabel(/Date and time recorded in evidence/).fill(consentTimeLocal(new Date()));
+    await consentCard.getByLabel("Evidence source").selectOption("other_verified_evidence");
+    await consentCard.getByLabel("Consent text version").fill("synthetic-walkthrough-consent-v1");
+    await consentCard.getByLabel("Consent text SHA-256").fill(syntheticConsentHash);
+    await consentCard.getByLabel("Evidence reference").fill(`synthetic://agency-followup-walkthrough/${RUN_ID}/consent/${eventType}`);
+    await consentCard.getByLabel("Evidence SHA-256").fill(syntheticConsentHash);
+    await consentCard.getByLabel(/I reviewed this source and confirmed it supports/).check();
+    const submit = consentCard.getByRole("button", { name: "Record append-only consent event" });
+    await expect(submit).toBeEnabled();
+    const sendOptIn = async () => {
+      const responsePromise = page.waitForResponse((response) => new URL(response.url()).pathname === "/api/admin/agency-crm/follow-up/opt-in" && response.request().method() === "POST");
+      await submit.click();
+      return responsePromise;
+    };
+    let response = await sendOptIn();
+    if (response.status() === 401) {
+      const health = await page.context().request.get(APP_ORIGIN + API_PATH, { timeout: 15000 }).catch(() => undefined);
+      if (health?.status() === 200) response = await sendOptIn();
+    }
+    let submittedEventType = "unknown";
+    try { submittedEventType = String(response.request().postDataJSON()?.eventType ?? "unknown"); } catch { /* diagnostic only */ }
+    if (submittedEventType !== eventType) throw new Error(`Consent UI expected ${eventType} but submitted ${submittedEventType}.`);
+    if (response.status() !== 201) throw new Error(`Synthetic ${eventType} did not append a new consent event (HTTP ${response.status()}).`);
+    await expect(consentCard.getByRole("status").filter({ hasText: eventType === "opt_in_granted" ? "Opt-in grant recorded" : "Opt-in withdrawal recorded" })).toBeVisible();
+  };
+  await recordConsentEvent("opt_in_granted");
+  const historyButton = consentCard.getByRole("button", { name: "View consent history" });
+  const historyResponsePromise = page.waitForResponse((response) => response.url().includes("/api/admin/agency-crm/follow-up/opt-in?") && response.request().method() === "GET");
+  await historyButton.click();
+  const grantHistoryResponse = await historyResponsePromise;
+  if (!grantHistoryResponse.ok()) throw new Error(`Authenticated consent history returned HTTP ${grantHistoryResponse.status()}.`);
+  const grantHistoryPayload = await grantHistoryResponse.json() as { events?: Array<{ eventType: string; actorOperatorId: string; evidenceReference: string }> };
+  if (!Array.isArray(grantHistoryPayload.events) || grantHistoryPayload.events.length !== 1 || grantHistoryPayload.events[0].eventType !== "opt_in_granted" ||
+      grantHistoryPayload.events[0].actorOperatorId !== fixtures.lawyerId || !grantHistoryPayload.events[0].evidenceReference.endsWith("/opt_in_granted")) {
+    throw new Error("Grant history did not expose the synthetic append-only event and authenticated operator.");
+  }
+  await recordConsentEvent("opt_in_withdrawn");
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
+  const finalHistoryResponse = await context.request.get(`${APP_ORIGIN}/api/admin/agency-crm/follow-up/opt-in?prospectId=${encodeURIComponent(consentProspect.id)}`);
+  if (!finalHistoryResponse.ok()) throw new Error(`Synthetic consent history readback returned HTTP ${finalHistoryResponse.status()}.`);
+  const finalHistoryPayload = await finalHistoryResponse.json() as { events?: Array<{ eventType: string; actorOperatorId: string; evidenceReference: string; recipientEmailSha256: string }> };
+  if (!Array.isArray(finalHistoryPayload.events) || finalHistoryPayload.events.length !== 2 || finalHistoryPayload.events[0].eventType !== "opt_in_granted" ||
+      finalHistoryPayload.events[1].eventType !== "opt_in_withdrawn" || finalHistoryPayload.events.some((entry) => entry.actorOperatorId !== fixtures.lawyerId || !entry.recipientEmailSha256 || !entry.evidenceReference.startsWith("synthetic://"))) {
+    throw new Error("Grant and withdrawal were not preserved in chronological consent history for the signed synthetic operator.");
+  }
+  await expect(consentCard.getByText("Current opt-in state: withdrawn")).toBeVisible({ timeout: 30000 });
+  await expect(consentCard.getByRole("heading", { name: "Opt-in withdrawal · other verified evidence" })).toBeVisible({ timeout: 30000 });
+  await expect(consentCard.getByText(`Evidence reference: synthetic://agency-followup-walkthrough/${RUN_ID}/consent/opt_in_withdrawn`, { exact: true })).toBeVisible({ timeout: 30000 });
+  await expect(consentCard.getByText(`Recorded by operator: ${fixtures.lawyerId}`).last()).toBeVisible({ timeout: 30000 });
+
   const normal = fixtures.prospects.normal;
   await createDraft(pool, page, journeyName, normal);
+  setDiagnosticStage("duplicate_enrollment_conflict");
   const duplicate = await postAction(context, {
     action: "enroll",
     journeyId: await page.getByLabel("Journey version").inputValue(),
@@ -952,8 +2025,13 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await expect(normalCard.getByText("scheduled", { exact: true }).first()).toBeVisible({ timeout: 30000 });
   await expect(normalCard.getByRole("button", { name: "Approve this message" })).toHaveCount(1, { timeout: 30000 });
   await waitForAction(page, "approve", queueCard(page, normal.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
-  const normalMessages = await pool.query<{ id: string; step_number: number; state: string }>(
-    "select id,step_number,state from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) order by step_number",
+  await expect(queueCard(page, normal.firmName).getByText("scheduled", { exact: true })).toHaveCount(2, { timeout: 30000 });
+  // The action starts an App Router refresh without awaiting it. Wait until
+  // both updated message states are rendered before changing the DB fixture
+  // and doing a full reload, so the refresh and navigation cannot overlap.
+  await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
+  const normalMessages = await pool.query<{ id: string; enrollment_id: string; recipient_email_snapshot: string; step_number: number; state: string }>(
+    "select id,enrollment_id,recipient_email_snapshot,step_number,state from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) order by step_number",
     [normal.id],
   );
   if (normalMessages.rows.length !== 2 || normalMessages.rows.some((row) => row.state !== "scheduled")) {
@@ -967,6 +2045,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const acceptedNow = acceptedClock.toISOString();
   const acceptedDueAt = new Date(acceptedClock.getTime() - 60_000).toISOString();
   await pool.query("update agency_followup_messages set scheduled_at=$2 where id=$1", [firstNormalMessage.id, acceptedDueAt]);
+  const testClaimEvidence = await verifyTestMessageClaimRpc(pool, {
+    messageId: firstNormalMessage.id,
+    enrollmentId: firstNormalMessage.enrollment_id,
+    recipientEmail: firstNormalMessage.recipient_email_snapshot,
+  }, acceptedNow);
 
   // Edit a reviewed snapshot in the disposable database to exercise the real
   // invalidation trigger. The trigger must clear reviewer/time and re-open review.
@@ -1033,7 +2116,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     workerId: "synthetic-walkthrough-unknown",
     now: acceptedNow,
     limit: 1,
-    outcomePlan: [{ kind: "unknown", detail: "synthetic interruption after fake handoff" }],
+    outcomePlan: [{ kind: "unknown", detail: "synthetic_interruption_after_fake_handoff" }],
   }));
   const unknownRow = await pool.query<{ state: string; unknown_since: string | null }>(
     "select state,unknown_since from agency_followup_messages where id=$1",
@@ -1114,9 +2197,20 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     retryClient.release();
   }
 
+  const resendEventId = `evt_walkthrough_${RUN_ID}`;
+  const retryProviderMessageId = "fake-provider-retry-" + RUN_ID;
+  const signedDeliveryEvent = {
+    type: "email.delivered",
+    created_at: retryDueAt,
+    data: { email_id: retryProviderMessageId, to: [retryProspect.email] },
+  };
+  const earlyProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
+  if (earlyProviderEvent.status !== 503 || earlyProviderEvent.outcome !== "unmatched_message") {
+    throw new Error("An early signed provider event was not durably quarantined and returned for retry.");
+  }
   const retryAcceptance = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-retry-accepted", now: retryDueAt, limit: 1,
-    outcomePlan: [{ kind: "accepted", providerMessageId: "fake-provider-retry-" + RUN_ID, acceptedAt: retryDueAt }],
+    outcomePlan: [{ kind: "accepted", providerMessageId: retryProviderMessageId, acceptedAt: retryDueAt }],
   }));
   const retryReplay = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-retry-replay", now: new Date(Date.parse(retryDueAt) + 1000).toISOString(), limit: 1,
@@ -1130,7 +2224,68 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     acceptedRetry.rows[0]?.acceptances !== "1") {
     throw new Error("The due retry did not persist exactly one acceptance with two attempts and the same logical key.");
   }
+  const reconciledProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
+  const duplicateProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
+  progress(`synthetic provider event replay: first=${JSON.stringify(reconciledProviderEvent)}; duplicate=${JSON.stringify(duplicateProviderEvent)}`);
+  const providerEventState = await pool.query<{ processing_result: string; message_id: string | null; applications: string; applied_message_id: string | null; applied_result: string | null; durable_events: string }>(
+    "select provider_event.processing_result,provider_event.message_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id and application.message_id=$2) as applications,(select application.message_id from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_message_id,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_result,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-event:'||provider_event.provider_event_id) as durable_events from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$1",
+    [resendEventId, retryMessage.id],
+  );
+  const reconciledMessage = await pool.query<{ provider_delivery_status: string }>(
+    "select provider_delivery_status from public.agency_followup_messages where id=$1", [retryMessage.id],
+  );
+  const quarantinedSourceReplayEvidence = await verifyQuarantinedSourceEventReplay(
+    pool,
+    fixtures.prospects.normal,
+    accepted.rows[0]!.provider_message_id!,
+    acceptedNow,
+  );
+  if (reconciledProviderEvent.status !== 200 || reconciledProviderEvent.outcome !== "matched" ||
+    duplicateProviderEvent.status !== 200 || duplicateProviderEvent.outcome !== "duplicate" ||
+    providerEventState.rows[0]?.processing_result !== "unmatched_message" || providerEventState.rows[0]?.message_id !== null ||
+    providerEventState.rows[0]?.applications !== "1" || providerEventState.rows[0]?.applied_message_id !== retryMessage.id ||
+    providerEventState.rows[0]?.applied_result !== "matched" || providerEventState.rows[0]?.durable_events !== "1" ||
+    reconciledMessage.rows[0]?.provider_delivery_status !== "delivered") {
+    throw new Error("The signed provider event did not reconcile after acceptance exactly once with an authoritative application row.");
+  }
 
+
+  const suppressionEventId = `evt_suppressed_${RUN_ID}`;
+  const suppressionTime = new Date(Date.parse(retryDueAt) + 2000).toISOString();
+  const signedSuppressionEvent = {
+    type: "email.suppressed",
+    created_at: suppressionTime,
+    data: { email_id: retryProviderMessageId, to: [retryProspect.email] },
+  };
+  const suppressionReceipt = await postSyntheticResendEvent(suppressionEventId, signedSuppressionEvent);
+  const duplicateSuppressionReceipt = await postSyntheticResendEvent(suppressionEventId, signedSuppressionEvent);
+  const suppressedState = await pool.query<{
+    delivery_status: string; suppression_reason: string | null; contact_state: string | null;
+    suppression_rows: string; applications: string; audit_events: string;
+  }>(
+    "select message.provider_delivery_status as delivery_status,contactability.reason as suppression_reason,contactability.state as contact_state,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.conversation_id=event.conversation_id and suppression.suppression_reason='resend_email_suppressed') as suppression_rows,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,(select count(*)::text from public.agency_followup_events audit where audit.message_id=message.id and audit.event_type='provider_suppressed') as audit_events from public.agency_followup_provider_events event join public.agency_followup_messages message on message.id=event.message_id left join public.prospect_contactability contactability on contactability.conversation_id=event.conversation_id where event.provider_event_id=$1",
+    [suppressionEventId],
+  );
+  const lateAcceptance = await postSyntheticResendEvent(`evt_late_sent_${RUN_ID}`, {
+    type: "email.sent",
+    created_at: retryDueAt,
+    data: { email_id: retryProviderMessageId, to: [retryProspect.email] },
+  });
+  const statusAfterLateAcceptance = await pool.query<{ provider_delivery_status: string; contact_state: string | null; suppression_rows: string }>(
+    "select message.provider_delivery_status,contactability.state as contact_state,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.conversation_id=contactability.conversation_id and suppression.suppression_reason='resend_email_suppressed') as suppression_rows from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id join public.prospect_source_links source_link on source_link.source_record_key=enrollment.prospect_id::text and source_link.source_system='agency_crm' join public.prospect_conversation_sources association on association.source_link_id=source_link.id join public.prospect_contactability contactability on contactability.conversation_id=association.conversation_id where message.id=$1",
+    [retryMessage.id],
+  );
+  if (suppressionReceipt.status !== 200 || suppressionReceipt.outcome !== "matched" ||
+    duplicateSuppressionReceipt.status !== 200 || duplicateSuppressionReceipt.outcome !== "duplicate" ||
+    suppressedState.rows[0]?.delivery_status !== "suppressed" || suppressedState.rows[0]?.contact_state !== "suppressed" ||
+    suppressedState.rows[0]?.suppression_reason !== "resend_email_suppressed" || suppressedState.rows[0]?.suppression_rows !== "1" ||
+    suppressedState.rows[0]?.applications !== "1" || suppressedState.rows[0]?.audit_events !== "1" ||
+    lateAcceptance.status !== 200 || lateAcceptance.outcome !== "matched" ||
+    statusAfterLateAcceptance.rows[0]?.provider_delivery_status !== "suppressed" ||
+    statusAfterLateAcceptance.rows[0]?.contact_state !== "suppressed" || statusAfterLateAcceptance.rows[0]?.suppression_rows !== "1") {
+    throw new Error("The signed provider suppression did not remain durable, exactly-once, shared, or terminal after an older acceptance event.");
+  }
+  progress("synthetic signed email.suppressed event created one shared stop and audit; duplicate was idempotent; older email.sent did not downgrade status");
   // Exercise actual schedule policy immediately before handoff with a delayed
   // weekend claim. The current weekday/window come from the persisted journey.
   const windowProspect = fixtures.prospects.window;
@@ -1210,10 +2365,24 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   );
   if (properDisposition.rows.length !== 1) throw new Error("The current lease owner could not persist its disposition.");
 
+  const liveClaimEvidence = await verifyLiveClaimRpc(pool, {
+    allowedMessageId: firstNormalMessage.id,
+    offListMessageId: retryMessage.id,
+    expiredOffListMessageId: leaseMessage.rows[0].id,
+  }, new Date().toISOString());
+  const providerIdempotencyFenceEvidence = await verifyProviderIdempotencyFenceRpc(pool, {
+    firstUseMessageId: firstNormalMessage.id,
+    insideWindowMessageId: retryMessage.id,
+    expiredWindowMessageId: leaseMessage.rows[0].id,
+  });
+  const providerIdempotencyLockWaitEvidence = await verifyProviderIdempotencyLockWaitBoundary(pool, firstNormalMessage.id);
+
   const screenshotDir = path.join(OUTPUT_DIR, "screenshots");
   await mkdir(screenshotDir, { recursive: true });
   const renderedWidths: number[] = [];
   const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
+  const consentPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string }> = [];
+  const providerStatusScreenshots: Array<{ path: string; sha256: string; viewport: number; contentWidth: number; scrollWidth: number; text: string }> = [];
   const stableLayout = async () => page.evaluate(async () => {
     await document.fonts.ready;
     let previous: number[] = [];
@@ -1239,7 +2408,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   });
   const screenshot = async (filename: string, width: number, navigationState: string) => {
     const file = path.join(screenshotDir, filename);
-    await page.screenshot({ path: file, fullPage: true });
+    await page.screenshot({ path: file, fullPage: false });
     const digest = createHash("sha256").update(await readFile(file)).digest("hex");
     screenshots.push({ path: path.relative(process.cwd(), file).replaceAll("\\", "/"), sha256: digest, viewport: width, navigationState });
   };
@@ -1281,15 +2450,28 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       await assertUnoccluded(closeMenu, "Open navigation close button", true);
       await screenshot(`${RUN_ID}-queue-${width}-nav-open.png`, width, "open");
       await closeMenu.click();
+      const closedAt = Date.now();
+      await stableLayout();
+      const closedNavigation = await page.evaluate(() => {
+        const toggle = document.querySelector<HTMLButtonElement>('button[aria-label="Open menu"]');
+        const drawer = document.querySelector<HTMLElement>("aside");
+        const backdrop = drawer?.previousElementSibling as HTMLElement | null;
+        return {
+          expanded: toggle?.getAttribute("aria-expanded"),
+          drawerRight: drawer?.getBoundingClientRect().right ?? null,
+          backdropOpacity: Number.parseFloat(backdrop ? getComputedStyle(backdrop).opacity : "1"),
+        };
+      });
+      if (closedNavigation.expanded !== "false" || closedNavigation.drawerRight === null || closedNavigation.drawerRight > 1 || closedNavigation.backdropOpacity > 0.01) {
+        throw new Error(`Mobile navigation did not reach a closed, unobscured state at ${width}px: ${JSON.stringify(closedNavigation)}.`);
+      }
       if (width === 640) {
-        const closedAt = Date.now();
         const immediatePath = path.join(screenshotDir, RUN_ID + "-reproduction-640-after-close.png");
-        await page.screenshot({ path: immediatePath, fullPage: true });
+        await page.screenshot({ path: immediatePath, fullPage: false });
         reproduction.push({ path: path.relative(process.cwd(), immediatePath).replaceAll("\\", "/"),
           sha256: createHash("sha256").update(await readFile(immediatePath)).digest("hex"),
           elapsedAfterCloseMs: Date.now() - closedAt });
       }
-      await stableLayout();
     }
     const failures = await auditRenderedCopy(page);
     await page.evaluate(() => window.scrollTo(0, 0));
@@ -1319,11 +2501,70 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await page.evaluate(() => window.scrollTo(0, 0));
     await stableLayout();
     await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
+    if (width === 320) {
+      const providerStatus = queueCard(page, retryProspect.firmName).locator('[data-ui-component-content="agency-follow-up-message"] dl').first();
+      const providerStatusLabel = providerStatus.locator('dt[data-ui-copy="supporting"]');
+      const providerStatusValue = providerStatus.locator('dd[data-ui-copy="supporting"]');
+      if ((await providerStatusLabel.count()) !== 1 || (await providerStatusValue.count()) !== 1) throw new Error("The synthetic review queue did not render one provider delivery label/value pair.");
+      if ((await providerStatusLabel.innerText()).trim() !== "Provider delivery:" || (await providerStatusValue.innerText()).trim() !== "Blocked by provider") throw new Error("The synthetic suppression event was not rendered as a provider-blocked delivery status.");
+      await providerStatus.scrollIntoViewIfNeeded();
+      await stableLayout();
+      const statusGeometry = await providerStatus.evaluate((element) => {
+        const value = element.querySelector<HTMLElement>('dd[data-ui-copy="supporting"]');
+        if (!value) throw new Error("Provider delivery status value is missing.");
+        return {
+          clientWidth: value.clientWidth,
+          scrollWidth: value.scrollWidth,
+          text: (element.textContent ?? "").trim(),
+        };
+      });
+      if (statusGeometry.scrollWidth > statusGeometry.clientWidth + 1) {
+        throw new Error(`Provider delivery status overflows its content width at 320px: ${JSON.stringify(statusGeometry)}.`);
+      }
+      const statusScreenshotPath = path.join(screenshotDir, `${RUN_ID}-provider-status-320.png`);
+      await page.screenshot({ path: statusScreenshotPath, fullPage: false });
+      providerStatusScreenshots.push({
+        path: path.relative(process.cwd(), statusScreenshotPath).replaceAll("\\", "/"),
+        sha256: createHash("sha256").update(await readFile(statusScreenshotPath)).digest("hex"),
+        viewport: width,
+        contentWidth: statusGeometry.clientWidth,
+        scrollWidth: statusGeometry.scrollWidth,
+        text: statusGeometry.text,
+      });
+    }
+    if (CONSENT_PANEL_WIDTHS.includes(width)) {
+      const panel = queueCard(page, consentProspect.firmName).locator('[data-ui-component-content="agency-follow-up-opt-in"]');
+      await panel.evaluate((element) => element.scrollIntoView({ block: "start" }));
+      await stableLayout();
+      await expect(panel).toBeVisible();
+      const panelGeometry = await panel.evaluate((element) => {
+        const header = document.querySelector<HTMLButtonElement>('button[aria-label="Open menu"]')?.parentElement;
+        return {
+          top: element.getBoundingClientRect().top,
+          headerBottom: header?.getBoundingClientRect().bottom ?? 0,
+          columnCount: getComputedStyle(element.querySelector("form")!).gridTemplateColumns.split(" ").length,
+        };
+      });
+      const expectedColumns = width >= 1024 ? 2 : 1;
+      if (panelGeometry.columnCount !== expectedColumns) throw new Error(`Consent form must have ${expectedColumns} columns at ${width}px, found ${panelGeometry.columnCount}.`);
+      if (width < 768 && panelGeometry.top < panelGeometry.headerBottom - 1) throw new Error(`Consent panel is obscured by the fixed operator bar at ${width}px: ${JSON.stringify(panelGeometry)}.`);
+      const captureTimeLabel = panel.locator("label").filter({ hasText: "Date and time recorded in evidence" });
+      await expect(captureTimeLabel).toContainText(/browser timezone: (?!loading).+/i);
+      const overflow = await panel.evaluate((element) => {
+        const nodes = [element, ...Array.from(element.querySelectorAll("*"))];
+        return nodes.filter((node) => node instanceof HTMLElement && node.scrollWidth > node.clientWidth + 1)
+          .map((node) => ({ tag: node.tagName.toLowerCase(), text: (node.textContent ?? "").trim().slice(0, 80), clientWidth: node.clientWidth, scrollWidth: node.scrollWidth }));
+      });
+      if (overflow.length) throw new Error(`Consent panel has horizontal overflow at ${width}px: ${JSON.stringify(overflow.slice(0, 5))}`);
+      const file = path.join(screenshotDir, `${RUN_ID}-consent-${width}.png`);
+      await panel.screenshot({ path: file });
+      consentPanelScreenshots.push({ path: path.relative(process.cwd(), file).replaceAll("\\", "/"), sha256: createHash("sha256").update(await readFile(file)).digest("hex"), viewport: width, panel: "operator consent form and chronological synthetic history" });
+    }
     renderedWidths.push(width);
   }
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
   if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
-  if (screenshots.length !== 12 || !missingAuthoringControlRejected) throw new Error("Incomplete viewport or required-control evidence.");
+  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, authoring approval, or required-control evidence.");
   const summary = {
     runId: RUN_ID,
     ...sourceAtStart,
@@ -1331,17 +2572,33 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     temporaryDispatchRoute: { path: path.relative(process.cwd(), TEST_DISPATCH_DIR), sha256: temporaryRouteSha256 },
     reproduction,
     missingAuthoringControlRejected,
+    recoveredBrowserRuntimeErrors,
     startedAtUtc: RUN_STARTED_AT,
     endedAtUtc: new Date().toISOString(),
     command: "npm run agency-followup:walkthrough",
     exitCode: 0,
-    testedEnvironment: { appOrigin: APP_ORIGIN, databaseProjectId: STACK_PROJECT_ID, databaseHost: "loopback", provider: "network-free fake", databaseReusedWithoutReset: true },
-    migrationVersions: ["20261013154000", "20261013230354"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB],
+    testedEnvironment: {
+      appOrigin: APP_ORIGIN,
+      databaseProjectId: STACK_PROJECT_ID,
+      databaseConfigDirectory: path.relative(process.cwd(), STACK_DIR),
+      databaseApiPort: SUPABASE_API_PORT,
+      databaseDirectPort: SUPABASE_DB_PORT,
+      databaseHost: "loopback",
+      provider: "network-free fake",
+      databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
+      databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
+    },
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB],
     screenshots,
+    consentPanelScreenshots,
+    providerStatusScreenshots,
+    syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
+    templateApprovalAuditAtomicityFailureRollback: templateApprovalRollbackEvidence,
     synthetic: true,
     flows: {
       templateJourneyEnrollmentReleaseApproval: "passed",
+      templateApprovalAuditAtomicity: templateApprovalAuditEvidence,
       repeatedEnrollment: "409 and one enrollment",
       pause: "approved message cancelled; unapproved message preserved for review",
       suppression: "release blocked",
@@ -1350,12 +2607,19 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       unknown: "quarantined and not reclaimed",
       businessDayWindow: "weekend claim rescheduled before fake provider",
       retry: "temporary failure and backoff persisted; early claim excluded; due retry accepted exactly once with stable key and two attempts",
+      providerEventReplay: "signed event was quarantined before acceptance, reconciled on retry after acceptance, and deduplicated with one durable application",
+      testClaimRpc: testClaimEvidence,
+      liveEnrollmentClaimRpc: liveClaimEvidence,
+      providerIdempotencyRetryFence: providerIdempotencyFenceEvidence,
+      providerIdempotencyLockWaitBoundary: providerIdempotencyLockWaitEvidence,
+      sourceQuarantineReplay: quarantinedSourceReplayEvidence,
       concurrentClaim: "exactly one claim",
       staleLeaseOwner: "rejected",
     },
     syntheticProspects: Object.keys(fixtures.prospects).length,
     screenshotViewports: renderedWidths,
-    screenshotCount: screenshots.length
+    screenshotCount: screenshots.length,
+    consentPanelScreenshotCount: consentPanelScreenshots.length
   };
   return summary;
   } finally {
@@ -1451,8 +2715,8 @@ async function runJourneyVersionRegression(fixtures: Fixtures, portalSecret: str
           pageText: document.body.innerText.slice(0, 1000),
         })).catch(() => null);
         await mkdir(path.join(OUTPUT_DIR, "screenshots"), { recursive: true });
-        await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", `failure-hydration-${RUN_ID}.png`), fullPage: true }).catch(() => undefined);
-        throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${String(hydrationError)}`);
+        await page.screenshot({ path: path.join(OUTPUT_DIR, "screenshots", `failure-hydration-${RUN_ID}.png`), fullPage: false }).catch(() => undefined);
+        throw new Error(`Operator UI did not hydrate its controlled template input. Diagnostics: ${JSON.stringify(diagnostics)}; browserErrors=${JSON.stringify(responseFailures.slice(0, 20))}. ${safeFailureText(hydrationError, 1000)}`);
       }
     }
     await authorJourney(page);
@@ -1510,11 +2774,11 @@ async function runManual(context: BrowserContext): Promise<void> {
   await page.goto(APP_ORIGIN + "/admin/agency-crm/follow-up", { waitUntil: "domcontentloaded", timeout: 180_000 });
   const layoutChunkStartedAt = Date.now();
   try {
-    const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(30000, remainingMs()) });
+    const layoutChunkResponse = await context.request.get(APP_ORIGIN + "/_next/static/chunks/app/layout.js", { timeout: Math.min(180_000, remainingMs()) });
     const layoutChunkBody = await layoutChunkResponse.body();
     progress(`direct app/layout.js asset probe returned HTTP ${layoutChunkResponse.status()}; bytes=${layoutChunkBody.byteLength}; elapsed=${Date.now() - layoutChunkStartedAt}ms`);
   } catch (error) {
-    progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms: ${String(error).replace(/\\s+/g, " ").slice(0, 300)}`);
+    progress(`direct app/layout.js asset probe failed after ${Date.now() - layoutChunkStartedAt}ms: ${safeFailureText(error, 300)}`);
     throw error;
   }
   await page.locator('[data-ui-component-content="agency-follow-up-queue"]').waitFor();
@@ -1529,31 +2793,101 @@ async function runManual(context: BrowserContext): Promise<void> {
   });
 }
 
+async function runWebhookPreflightOnly(status: SupabaseStatus, portalSecret: string, walkthroughToken: string): Promise<void> {
+  const pool = new Pool({ connectionString: status.DB_URL, max: 2, ssl: false, connectionTimeoutMillis: 5000, query_timeout: 20000 });
+  let server: ChildProcess | undefined;
+  try {
+    await verifyLocalPostgrest(status);
+    await verifyDisposableTarget(pool);
+    await verifyProviderEventImmutability(pool);
+    const before = await countRows(pool, "select count(*)::text as count from public.agency_followup_provider_events");
+    await mkdir(OUTPUT_DIR, { recursive: true });
+    await writeFile(path.join(OUTPUT_DIR, "next-server.log"), "", "utf8");
+    await writeFile(path.join(OUTPUT_DIR, "next-server.stdout.log"), "", "utf8");
+    await writeFile(path.join(OUTPUT_DIR, "next-server.stderr.log"), "", "utf8");
+    server = startApp(portalSecret, walkthroughToken, status);
+    activeNextServer = server;
+    const listenerDeadline = Math.min(absoluteDeadline, Date.now() + 120_000);
+    await waitForListener(server, listenerDeadline);
+    await warmResendWebhookRoute();
+    const after = await countRows(pool, "select count(*)::text as count from public.agency_followup_provider_events");
+    if (after !== before) throw new Error("Unsigned webhook preflight changed the disposable provider-event count.");
+    const sourceAfterCleanup = captureSourceState();
+    if (sourceAfterCleanup.workingTreeState !== "clean") throw new Error("Source changed during webhook preflight.");
+    const receipt = {
+      runId: RUN_ID,
+      command: "node --import tsx scripts/agency-followup-walkthrough.ts --webhook-preflight-only",
+      sourceCommit: sourceAfterCleanup.sourceCommit,
+      databaseProjectId: STACK_PROJECT_ID,
+      databaseHost: "loopback",
+      browserLaunched: false,
+      unsignedRequest: "HTTP 400 invalid_signature",
+      providerEventCountUnchanged: true,
+      temporaryDispatchRouteInstalled: false,
+      completedAtUtc: new Date().toISOString(),
+    };
+    await writeFile(path.join(OUTPUT_DIR, `webhook-preflight-${RUN_ID}.json`), JSON.stringify(receipt, null, 2) + "\n", "utf8");
+    console.log(JSON.stringify(receipt, null, 2));
+  } finally {
+    if (server) {
+      stopApp(server);
+      if (activeNextServer === server) activeNextServer = undefined;
+    }
+    await pool.end();
+  }
+}
+
 async function main(): Promise<void> {
   if (JOURNEY_VERSION_REGRESSION_ONLY && MANUAL) {
     throw new Error("The focused journey-version regression cannot be combined with --manual.");
   }
+  if (FAILURE_CAPTURE_PREFLIGHT_ONLY && (JOURNEY_VERSION_REGRESSION_ONLY || MANUAL)) {
+    throw new Error("The failure-capture preflight cannot be combined with another browser walkthrough mode.");
+  }
+  progress(`acceptance run id=${RUN_ID}`);
   progress("validating disposable local-only confirmation");
   if (must(process.env.AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION, "Disposable database confirmation") !== "YES-LOCAL-DISPOSABLE-ONLY") {
     throw new Error("Set AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION=YES-LOCAL-DISPOSABLE-ONLY for this disposable local walkthrough.");
   }
-  sourceAtStart = captureSourceState();
-  let completedSummary: Record<string, unknown> | undefined;
   absoluteDeadline = Date.now() + WALKTHROUGH_TIMEOUT_MS;
+  progress("checking pushed source HEAD and bounded clean-tree status");
+  sourceAtStart = captureSourceState();
+  if (sourceAtStart.workingTreeState !== "clean") {
+    throw new Error("Refusing walkthrough because the exact pushed source worktree is not clean.");
+  }
+  verifyPushedHead(sourceAtStart.sourceCommit);
+  let completedSummary: Record<string, unknown> | undefined;
   progress("verifying pushed migration blobs");
   await verifyPushedMigration(MIGRATION_PATH, EXPECTED_MIGRATION_BLOB);
+  await verifyPushedMigration(FOLLOWUP_EVENT_PRIVILEGES_PATH, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB);
   await verifyPushedMigration(CRM_GRANTS_MIGRATION_PATH, EXPECTED_CRM_GRANTS_MIGRATION_BLOB);
+  await verifyPushedMigration(EVENT_MIGRATION_PATH, EXPECTED_EVENT_MIGRATION_BLOB);
+  await verifyPushedMigration(EVENT_ROW_LOCK_GRANT_MIGRATION_PATH, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB);
+  await verifyPushedMigration(OPT_IN_EVENT_MIGRATION_PATH, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB);
+  await verifyPushedMigration(OPT_IN_OPERATOR_READ_MIGRATION_PATH, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB);
+  await verifyPushedMigration(TEST_MESSAGE_CLAIM_MIGRATION_PATH, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB);
+  await verifyPushedMigration(WEBHOOK_REPLAY_GUARD_MIGRATION_PATH, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB);
+  await verifyPushedMigration(PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_PATH, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB);
+  await verifyPushedMigration(TEMPLATE_APPROVAL_ATOMIC_MIGRATION_PATH, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB);
+  await verifyPushedMigration(LIVE_MESSAGE_CLAIM_MIGRATION_PATH, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB);
+  await verifyPushedMigration(PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_PATH, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB);
+  await verifyPushedMigration(RESEND_SUPPRESSED_STATUS_MIGRATION_PATH, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");
-  await verifyLocalPostgrest(status);
   const portalSecret = randomBytes(32).toString("hex") + "-test-only";
   const walkthroughToken = randomBytes(32).toString("hex") + "-test-only";
+  if (WEBHOOK_PREFLIGHT_ONLY) {
+    progress("running bounded cold webhook route preflight only; no browser or synthetic event persistence");
+    await runWebhookPreflightOnly(status, portalSecret, walkthroughToken);
+    return;
+  }
+  await verifyLocalPostgrest(status);
   process.env.NEXT_PUBLIC_SUPABASE_URL = status.API_URL;
   process.env.SUPABASE_SERVICE_ROLE_KEY = status.SERVICE_ROLE_KEY;
   process.env.PORTAL_SECRET = portalSecret;
   const pool = new Pool({ connectionString: status.DB_URL, max: 8, ssl: false, connectionTimeoutMillis: 5000, query_timeout: 20000 });
-  if (!MANUAL) runAbortController = new AbortController();
+  runAbortController = new AbortController();
   const hardStop = MANUAL ? undefined : setTimeout(() => {
     interrupted = true;
     runAbortController?.abort(new Error("Overall walkthrough deadline exceeded."));
@@ -1564,6 +2898,7 @@ async function main(): Promise<void> {
   hardStop?.unref();
   try {
   await verifyDisposableTarget(pool);
+  await verifyProviderEventImmutability(pool);
   const seedClient = await pool.connect();
   let fixtures: Fixtures;
   try {
@@ -1571,6 +2906,7 @@ async function main(): Promise<void> {
   } finally {
     seedClient.release();
   }
+  const templateApprovalRollbackEvidence = await verifyTemplateApprovalRollback(pool, fixtures.lawyerId);
   await mkdir(OUTPUT_DIR, { recursive: true });
   await writeFile(path.join(OUTPUT_DIR, "next-server.log"), "", "utf8");
   await writeFile(path.join(OUTPUT_DIR, "next-server.stdout.log"), "", "utf8");
@@ -1583,6 +2919,7 @@ async function main(): Promise<void> {
   let context: BrowserContext | undefined;
   try {
     await waitForApp(server, fixtures);
+    await warmResendWebhookRoute();
     progress("authenticated API is ready; opening actual operator queue UI");
     if (MANUAL) {
       browser = await chromium.launch({ headless: false });
@@ -1593,7 +2930,7 @@ async function main(): Promise<void> {
     }
     completedSummary = JOURNEY_VERSION_REGRESSION_ONLY
       ? await runJourneyVersionRegression(fixtures, portalSecret)
-      : await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken);
+      : await runBrowserWalkthrough(pool, fixtures, portalSecret, walkthroughToken, templateApprovalRollbackEvidence);
   } catch (error) {
     failureLifecycleContext = {
       abortState: runAbortController?.signal.aborted ?? null,
@@ -1628,15 +2965,33 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch((error) => {
-  console.error("Agency follow-up synthetic walkthrough failed " + JSON.stringify({
+main().catch(async (error) => {
+  const errorMessage = safeFailureText(error, 1500);
+  const failureReceiptPath = path.join(OUTPUT_DIR, `failure-run-${RUN_ID}.json`);
+  await mkdir(OUTPUT_DIR, { recursive: true });
+  await writeFile(failureReceiptPath, JSON.stringify({
+    runId: RUN_ID,
     stage: diagnosticStage,
     stageElapsedMs: Date.now() - diagnosticStageStartedAt,
+    errorMessage,
+    ...safeErrorDiagnostics(error),
+    abortState: failureLifecycleContext?.abortState ?? runAbortController?.signal.aborted ?? null,
+    nextChildPid: failureLifecycleContext?.nextChildPid ?? activeNextServer?.pid ?? null,
+    nextChildExitCode: failureLifecycleContext?.nextChildExitCode ?? activeNextServer?.exitCode ?? null,
+    nextChildSignalCode: failureLifecycleContext?.nextChildSignalCode ?? activeNextServer?.signalCode ?? null,
+    recordedAtUtc: new Date().toISOString(),
+  }, null, 2) + "\n", "utf8");
+  console.error("Agency follow-up synthetic walkthrough failed " + JSON.stringify({
+    runId: RUN_ID,
+    stage: diagnosticStage,
+    stageElapsedMs: Date.now() - diagnosticStageStartedAt,
+    errorMessage,
     ...safeErrorDiagnostics(error),
     abortState: failureLifecycleContext?.abortState ?? runAbortController?.signal.aborted ?? null,
     nextChildPid: failureLifecycleContext?.nextChildPid ?? activeNextServer?.pid ?? null,
     nextChildExitCode: failureLifecycleContext?.nextChildExitCode ?? activeNextServer?.exitCode ?? null,
     nextChildSignalCode: failureLifecycleContext?.nextChildSignalCode ?? activeNextServer?.signalCode ?? null,
   }));
+  console.error(`Failure receipt: ${failureReceiptPath}`);
   process.exitCode = 1;
 });
