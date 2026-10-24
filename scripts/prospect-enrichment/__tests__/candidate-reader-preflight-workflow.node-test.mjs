@@ -149,3 +149,44 @@ test("reader-repair preflight is static-only, read-only, protected, and bound to
   assert.equal((workflowText.match(/supabase\s+db\s+push\s+--db-url/g) ?? []).length, 1);
   assert.equal((workflowText.match(/--dry-run/g) ?? []).length, 1);
 });
+
+
+test("read-only reader reconciliation verifies pinned historical migration sources and cleans temporary references", () => {
+  const workflowPath = ".github/workflows/prospect-candidate-reader-reconcile.yml";
+  const workflowText = fs.readFileSync(path.join(root, workflowPath), "utf8");
+  const workflow = yaml.load(workflowText);
+  const job = workflow.jobs.reconcile;
+  const steps = job.steps;
+  const step = name => steps.find(item => item.name === name);
+
+  assert.deepEqual(Object.keys(workflow.jobs), ["reconcile"]);
+  assert.deepEqual(workflow.permissions, { contents: "read" });
+  assert.equal(job.environment.name, "Production prospect migrations");
+  assert.equal(job.env.CREDENTIAL_GATE, "candidate-reader-repair");
+
+  const sourceStage = step("Verify connection and exact reader migration sources");
+  assert.match(sourceStage.run, /reader-repair-stage/);
+  assert.doesNotMatch(sourceStage.run, /verify-stage/);
+
+  const ledger = step("Read full migration ledger and verify pinned historical source references");
+  assert.ok(ledger.run.indexOf("reader-history-query") < ledger.run.indexOf("reader-history-stage"));
+  assert.ok(ledger.run.indexOf("reader-history-stage") < ledger.run.indexOf("full-ledger-check.json"));
+  assert.match(ledger.run, /candidate-reader-repair-held-complete - "\$GITHUB_WORKSPACE"/);
+
+  const plan = step("Require an empty read-only migration dry-run");
+  const cleanup = step("Remove temporary historical migration references and verify clean source stage");
+  assert.ok(plan.run.includes("--dry-run --include-all --skip-vault"));
+  assert.ok(steps.indexOf(plan) < steps.indexOf(cleanup));
+  assert.ok(cleanup.run.indexOf("reader-history-cleanup") < cleanup.run.indexOf("verify-stage"));
+  assert.doesNotMatch(workflowText, /--yes/);
+
+  const upload = step("Upload redacted read-only reconciliation evidence");
+  for (const artifact of [
+    "full-ledger-check.json",
+    "reader-history-reference-check.json",
+    "reader-history-stage-check.json",
+    "reader-history-cleanup-check.json",
+    "reader-history-cleanup-summary.json",
+    "stage-check.json",
+  ]) assert.ok(upload.with.path.includes(artifact), "missing artifact " + artifact);
+});
