@@ -25,8 +25,16 @@ const walkthrough = readFileSync(resolve(process.cwd(), "scripts/agency-followup
 const service = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-service.ts"), "utf8");
 const suppressionMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20261024054520_agency_followup_resend_suppressed_status.sql"), "utf8");
 const handoffClockContactMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20261024213806_agency_followup_handoff_clock_recheck_and_contact_suppression.sql"), "utf8");
+const activityLockOrderFixMigrationName = "20261024233611_agency_followup_activity_lock_order_fix.sql";
+const activityLockOrderFixMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", activityLockOrderFixMigrationName), "utf8");
 
 describe("Agency follow-up Resend migration contract", () => {
+  it("orders the activity identity lock by its distinct key", () => {
+    expect(activityLockOrderFixMigration).toContain("CREATE OR REPLACE FUNCTION public.lock_agency_followup_activity_before_insert()");
+    expect(activityLockOrderFixMigration).toMatch(/SELECT DISTINCT prospect\.id AS prospect_id[\s\S]*?ORDER BY prospect\.id\s+LOOP/i);
+    expect(activityLockOrderFixMigration).not.toContain("ORDER BY prospect.id,source_link.id");
+  });
+
   it("keeps webhook evidence append-only, minimized, private, and replay-safe", () => {
     expect(migration).toContain("CREATE TABLE public.agency_followup_provider_events");
     expect(migration).toContain("provider_event_id text PRIMARY KEY");
