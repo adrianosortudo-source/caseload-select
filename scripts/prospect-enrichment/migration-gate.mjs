@@ -65,6 +65,7 @@ export const CANDIDATE_READER_REPAIR_PATHS = Object.freeze([
   "supabase/migrations/20261006170000_prospect_candidate_global_text_search_direct_scope.sql",
   "supabase/migrations/20261006234701_prospect_candidate_global_text_search_bounded_membership.sql",
   "supabase/migrations/20261016042722_prospect_candidate_identity_filter_fastpath.sql",
+  "supabase/migrations/20261023214500_prospect_candidate_identity_state_fastpath.sql",
 ]);
 export const CANDIDATE_READER_REPAIR_HELD_MIGRATION = Object.freeze({
   path: "supabase/migrations/20261013230354_agency_crm_service_role_grants.sql",

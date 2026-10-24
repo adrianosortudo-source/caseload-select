@@ -10,7 +10,7 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.
 const preflightPath = ".github/workflows/prospect-candidate-reader-preflight.yml";
 const combinedPath = ".github/workflows/prospect-candidate-reader-repair.yml";
 
-test("reader-repair preflight is static-only, read-only, protected, and bound to the reviewed 13-migration receipt", () => {
+test("reader-repair preflight is static-only, read-only, protected, and bound to the reviewed 14-migration receipt", () => {
   const workflowText = fs.readFileSync(path.join(root, preflightPath), "utf8");
   const workflow = yaml.load(workflowText);
   const combined = yaml.load(fs.readFileSync(path.join(root, combinedPath), "utf8"));
@@ -117,7 +117,7 @@ test("reader-repair preflight is static-only, read-only, protected, and bound to
   assert.match(binding.run, /sourceSha:process\.env\.REVIEWED_SOURCE_SHA/);
   assert.match(binding.run, /receiptSha256:/);
   assert.match(binding.run, /databaseWrites:0/);
-  assert.match(binding.run, /r[.]migrations\.length!==13/);
+  assert.match(binding.run, /r[.]migrations\.length!==14/);
 
   const upload = step("Upload redacted read-only preflight evidence");
   assert.equal(upload.uses, "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02");
