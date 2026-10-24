@@ -1111,6 +1111,14 @@ async function verifyQuarantinedSourceEventReplay(
       [prospect.id, providerMessageId, recipientHash],
     );
     if (message.rows.length !== 1) throw new Error("The source-quarantine replay requires one accepted synthetic message with no existing provider-event application.");
+    const globalProviderMatches = await client.query<{ count: string }>(
+      "select count(*)::text as count from public.agency_followup_messages where provider_message_id=$1 and provider_recipient_email_sha256=$2 and state='accepted' and provider_accepted_at is not null",
+      [providerMessageId, recipientHash],
+    );
+    if (globalProviderMatches.rows[0]?.count !== "1") {
+      throw new Error("The source-quarantine replay requires a globally unique accepted provider identity; matching synthetic rows="
+        + (globalProviderMatches.rows[0]?.count ?? "unknown"));
+    }
     await client.query("begin");
     const contactSource = await client.query<{ id: string; organization_id: string; person_id: string | null; associations: string }>(
       "select source_link.id,source_link.organization_id,source_link.person_id,(select count(*)::text from public.prospect_conversation_sources association where association.source_link_id=source_link.id) as associations from public.prospect_source_links source_link where source_link.source_system='agency_crm_contact' and source_link.source_record_key=$1",
@@ -2332,7 +2340,13 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await page.reload({ waitUntil: "networkidle" });
   await expect(queueCard(page, normal.firmName).getByText("awaiting review", { exact: true })).toBeVisible();
 
-  const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, { workerId: "synthetic-walkthrough-accepted", now: acceptedNow, limit: 1 }));
+  const acceptedProviderMessageId = `fake-provider-normal-${RUN_ID}`;
+  const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-accepted",
+    now: acceptedNow,
+    limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: acceptedProviderMessageId, acceptedAt: acceptedNow }],
+  }));
   const accepted = await pool.query<{ state: string; provider_message_id: string | null }>(
     "select state,provider_message_id from agency_followup_messages where id=$1",
     [firstNormalMessage.id],
