@@ -81,7 +81,11 @@ export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTO
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
 export const RELEASE_PATH = "scripts/prospect-enrichment/migration-release.json";
 export const sha256 = (value) => createHash("sha256").update(value).digest("hex");
-const fail = (code) => { throw new Error(code); };
+const fail = (code, safeDiagnostic) => {
+  const error = new Error(code);
+  if (safeDiagnostic) error.safeDiagnostic = safeDiagnostic;
+  throw error;
+};
 const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 const isRecord = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
 const hasAsciiControl = (value, upper) => Array.from(value).some(char => char.charCodeAt(0) <= upper || char.charCodeAt(0) === 127);
@@ -355,7 +359,14 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
       if (!permittedSuffixes.some(suffix => same(pending, [...suffix].sort()))) fail("unexpected_full_history_delta");
       pendingPaths = pending;
     } else {
-      if (pending.length !== 0) fail("unexpected_full_history_delta");
+      if (pending.length !== 0) fail("unexpected_full_history_delta", {
+        schemaVersion: "prospect-enrichment-ledger-diagnostic/v1",
+        ok: false,
+        code: "unexpected_full_history_delta",
+        remoteVersionCount: remote.size,
+        stagedMigrationCount: localByVersion.size,
+        pendingPaths: pending,
+      });
       pendingPaths = [];
     }
     // The 20261013173327 journeys source is already present in the live ledger and remains in staged history.
@@ -711,6 +722,23 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   main(process.argv.slice(2)).catch(error => {
     // Never print raw query output, environment values or command failure payloads.
     const message = error instanceof Error ? error.message : "migration_gate_failed";
+    const diagnostic = error && typeof error === "object" ? error.safeDiagnostic : undefined;
+    if (message === "unexpected_full_history_delta" &&
+        isRecord(diagnostic) &&
+        diagnostic.schemaVersion === "prospect-enrichment-ledger-diagnostic/v1" &&
+        diagnostic.ok === false &&
+        diagnostic.code === message &&
+        Number.isSafeInteger(diagnostic.remoteVersionCount) &&
+        Number.isSafeInteger(diagnostic.stagedMigrationCount) &&
+        Array.isArray(diagnostic.pendingPaths) &&
+        diagnostic.pendingPaths.every(item => typeof item === "string" &&
+          item.startsWith("supabase/migrations/") &&
+          item.endsWith(".sql") &&
+          !item.slice("supabase/migrations/".length).includes("/"))) {
+      // Emit only validated migration paths and counts into the redacted check artifact.
+      // Keep the gate failed and never include raw ledger rows or connection values.
+      process.stdout.write(JSON.stringify(diagnostic) + "\n");
+    }
     process.stderr.write(/^[a-z0-9_]+$/.test(message) ? message + "\n" : "migration_gate_failed\n");
     process.exitCode = 1;
   });
