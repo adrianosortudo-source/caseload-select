@@ -173,6 +173,8 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           margin-bottom: var(--sp-5);
         }
         .seo-hero-title {
+          width: 100%;
+          max-width: none;
           font-family: var(--font-display);
           font-size: var(--fs-hero);
           font-weight: 800;
@@ -182,11 +184,12 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           margin: 0 0 var(--sp-5);
         }
         .seo-hero-sub {
+          width: 100%;
+          max-width: none;
           font-size: var(--fs-lead);
           color: var(--text-muted);
           line-height: 1.65;
           margin: 0 auto var(--sp-7);
-          max-width: 640px;
         }
         .seo-hero-stats {
           display: grid;
@@ -241,6 +244,8 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           display: block;
         }
         .seo-categories-title {
+          width: 100%;
+          max-width: none;
           font-family: var(--font-display);
           font-size: var(--fs-h2);
           font-weight: 800;
