@@ -478,6 +478,15 @@ test("candidate reader repair matches pinned history guards and checks held CRM 
     stagedMigrationCount: appliedAllReader.length + 1,
     pendingPaths: [unrelatedPending],
   });
+  const ledgerFile = path.join(base, "full-ledger.json");
+  fs.writeFileSync(ledgerFile, JSON.stringify(appliedAllReader) + "\n");
+  const cli = spawnSync(process.execPath, [
+    path.join(root, "scripts/prospect-enrichment/migration-gate.mjs"),
+    "full-ledger", ledgerFile, staged, "candidate-reader-repair-held-complete", "-", source,
+  ], { encoding: "utf8" });
+  assert.equal(cli.status, 1, cli.stderr);
+  assert.equal(cli.stderr.trim(), "unexpected_full_history_delta");
+  assert.deepEqual(JSON.parse(cli.stdout), deltaError.safeDiagnostic);
   assert.throws(() => verifyFullMigrationLedger(appliedAllReader, staged, "candidate-reader-repair-held-complete", undefined),
     /reader_repair_held_source_root_required/);
 });
