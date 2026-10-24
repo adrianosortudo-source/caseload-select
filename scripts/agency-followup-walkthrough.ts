@@ -2396,7 +2396,38 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     });
     const recipientMatches = gate.request?.recipientEmail === taggedMessage.recipient_email_snapshot;
     if (gate.result !== "ready" || !recipientMatches) {
-      const safeGateDetails = { result: gate.result, blockers: gate.blockers ?? [], blocker: gate.blocker ?? null, requestPresent: Boolean(gate.request), recipientMatches };
+      const gateBlockers = gate.blockers ?? [];
+      const safeGateDetails = {
+        ready: gate.result === "ready",
+        blocked: gate.result === "blocked",
+        deferred: gate.result === "deferred",
+        expired: gate.result === "expired",
+        stale: gate.result === "stale",
+        blockerCount: gateBlockers.length,
+        contactabilityUnknown: gateBlockers.includes("contactability_unknown"),
+        contactabilityBlocked: gateBlockers.includes("contactability_blocked"),
+        conversationStopped: gateBlockers.includes("conversation_stopped"),
+        prospectStatusStopped: gateBlockers.includes("prospect_status_stopped"),
+        sequenceNotReleased: gateBlockers.includes("sequence_not_released"),
+        eligibilityNotApproved: gateBlockers.includes("eligibility_not_approved"),
+        eligibilityEvidenceMissing: gateBlockers.includes("eligibility_evidence_missing"),
+        recipientEmailInvalid: gateBlockers.includes("recipient_email_invalid"),
+        recipientIdentityMissing: gateBlockers.includes("recipient_identity_missing"),
+        explicitOptInWithdrawn: gateBlockers.includes("explicit_opt_in_withdrawn"),
+        explicitOptInMissing: gateBlockers.includes("explicit_opt_in_missing"),
+        approvalStaleRecipient: gateBlockers.includes("approval_stale_recipient"),
+        approvalMissing: gateBlockers.includes("approval_missing"),
+        approvalReviewerInvalid: gateBlockers.includes("approval_invalid_reviewer_or_time"),
+        approvalStaleContent: gateBlockers.includes("approval_stale_content"),
+        previousStepUnresolved: gateBlockers.includes("previous_step_unresolved"),
+        notDue: gateBlockers.includes("not_due"),
+        invalidSchedule: gateBlockers.includes("invalid_schedule"),
+        outsideSendWindow: gateBlockers.includes("outside_send_window"),
+        spacingNotElapsed: gateBlockers.includes("minimum_spacing_not_elapsed"),
+        previousStepPending: gate.blocker === "previous_step_pending",
+        requestPresent: Boolean(gate.request),
+        recipientMatches,
+      };
       throw new Error(`The tagged UNKNOWN fixture failed final handoff authorization: ${JSON.stringify(safeGateDetails)}`);
     }
     await taggedGateClient.query("commit");
