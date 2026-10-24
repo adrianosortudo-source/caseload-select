@@ -137,7 +137,11 @@ test("guarded historical source references preserve the exact reader-repair suff
     assert.deepEqual(bytes, fs.readFileSync(path.join(root, "supabase", "migrations", path.basename(filename))));
     expectedBytes.push(bytes);
   }
-  for (const filename of expectedPaths) fs.rmSync(filename);
+
+  fs.writeFileSync(expectedPaths[0], "SELECT 9;\n");
+  assert.throws(() => stageReaderHistoryReferences(liveRows(), root, stage), /reader_history_staged_source_mismatch/);
+  assert.equal(fs.readFileSync(expectedPaths[0], "utf8"), "SELECT 9;\n");
+  fs.writeFileSync(expectedPaths[0], expectedBytes[0]);
   const pendingVersions = new Set(CANDIDATE_READER_REPAIR_PATHS.map(item => path.basename(item).split("_")[0]));
   const expectedVersions = new Set(expected.map(row => row.version));
   const activeRows = fs.readdirSync(path.join(stage, "supabase", "migrations")).sort()
@@ -159,7 +163,6 @@ test("guarded historical source references preserve the exact reader-repair suff
   assert.deepEqual(ledger.pendingPaths, CANDIDATE_READER_REPAIR_PATHS);
   const { compactLedger, ...historyEvidence } = historyProof;
   removeReaderHistoryReferences(root, stage, historyEvidence);
-  expectedPaths.forEach((filename, index) => fs.writeFileSync(filename, expectedBytes[index], { flag: "wx" }));
   expectedPaths.forEach((filename, index) => assert.deepEqual(fs.readFileSync(filename), expectedBytes[index]));
   assert.equal(verifyProductionWorkdir(root, stage, stageProof).verified, true);
 });
