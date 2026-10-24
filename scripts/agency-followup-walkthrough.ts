@@ -642,6 +642,16 @@ type AgencyProviderAuthorization = {
   retryAt?: string;
 };
 
+type ExactAgencyProviderRequest = NonNullable<AgencyProviderAuthorization["request"]>;
+
+function hasExactProviderRequest(actual: unknown, expected: ExactAgencyProviderRequest): boolean {
+  if (!actual || typeof actual !== "object" || Array.isArray(actual)) return false;
+  const value = actual as Record<string, unknown>;
+  const keys = ["body", "idempotencyKey", "recipientEmail", "subject"] as const;
+  return Object.keys(value).length === keys.length &&
+    keys.every((key) => Object.prototype.hasOwnProperty.call(value, key) && value[key] === expected[key]);
+}
+
 async function authorizeProviderHandoff(
   client: PoolClient,
   input: { messageId: string; enrollmentId: string; owner: string; attemptCount: number },
@@ -792,13 +802,22 @@ async function verifyProviderIdempotencyFenceRpc(
       subject: snapshot.content_snapshot.subject,
       body: snapshot.content_snapshot.body,
     };
-    if (firstUseState.result !== "ready" || firstUseAgain.result !== "ready" ||
-      JSON.stringify(firstUseState.request) !== JSON.stringify(expectedRequest) ||
-      snapshot.logical_message_key !== expectedRequest.idempotencyKey || snapshot.content_sha256 !== contentHash ||
-      snapshot.approved_content_sha256 !== contentHash || snapshot.recipient_sha256 !== recipientHash ||
-      snapshot.approved_recipient_sha256 !== recipientHash || !firstTimestamp.rows[0]?.first_used_at ||
-      firstTimestamp.rows[0].first_used_at.toISOString() !== stableTimestamp.rows[0]?.first_used_at.toISOString()) {
-      throw new Error("The final authorization did not return the exact approved request/hash or reserve and preserve first-use time.");
+    const authorizationsReady = firstUseState.result === "ready" && firstUseAgain.result === "ready";
+    const firstRequestExact = hasExactProviderRequest(firstUseState.request, expectedRequest);
+    const repeatedRequestExact = hasExactProviderRequest(firstUseAgain.request, expectedRequest);
+    const approvedHashesMatch = snapshot.logical_message_key === expectedRequest.idempotencyKey &&
+      snapshot.content_sha256 === contentHash && snapshot.approved_content_sha256 === contentHash &&
+      snapshot.recipient_sha256 === recipientHash && snapshot.approved_recipient_sha256 === recipientHash;
+    const firstUsedAt = firstTimestamp.rows[0]?.first_used_at;
+    const firstUsedAgainAt = stableTimestamp.rows[0]?.first_used_at;
+    const firstUseReserved = firstUsedAt instanceof Date;
+    const firstUseStable = firstUseReserved && firstUsedAgainAt instanceof Date &&
+      firstUsedAt.toISOString() === firstUsedAgainAt.toISOString();
+    if (!authorizationsReady || !firstRequestExact || !repeatedRequestExact || !approvedHashesMatch ||
+      !firstUseReserved || !firstUseStable) {
+      throw new Error(`The final authorization did not preserve its exact approved request/hash and first-use time: ${JSON.stringify({
+        authorizationsReady, firstRequestExact, repeatedRequestExact, approvedHashesMatch, firstUseReserved, firstUseStable,
+      })}`);
     }
 
     let timestampMutationRejected = false;
