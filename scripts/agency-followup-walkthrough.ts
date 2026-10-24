@@ -2252,6 +2252,70 @@ async function dispatchFake(
   return await response.json() as Record<string, number>;
 }
 
+async function diagnoseBouncedResendFailureInRollback(
+  pool: Pool,
+  providerEventId: string,
+  providerMessageId: string,
+  occurredAt: string,
+  recipientEmail: string,
+): Promise<string> {
+  const client = await pool.connect();
+  let transactionStarted = false;
+  let discardClient = false;
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+    await client.query("SET LOCAL ROLE service_role");
+    const recipientHash = createHash("sha256")
+      .update(recipientEmail.trim().toLowerCase(), "utf8")
+      .digest("hex");
+    const result = await client.query<{ result: { result?: unknown } }>(
+      "select public.persist_agency_followup_resend_event($1,$2,$3,$4,$5::timestamptz,$6,$7,$8::uuid,$9::uuid) as result",
+      [providerEventId, providerMessageId, "email.bounced", null, occurredAt, recipientEmail, recipientHash, null, null],
+    );
+    const outcome = typeof result.rows[0]?.result?.result === "string"
+      ? result.rows[0].result.result
+      : "unknown";
+    return JSON.stringify({ mode: "rollback_only", rpc: "returned", outcome });
+  } catch (cause) {
+    const failure = cause as { code?: unknown; where?: unknown; schema?: unknown; table?: unknown; constraint?: unknown };
+    const code = typeof failure.code === "string" && /^[A-Z0-9]{5}$/.test(failure.code)
+      ? failure.code
+      : "unknown";
+    const context = typeof failure.where === "string"
+      ? failure.where.split(/\r?\n/)
+          .filter((line) => line.startsWith("PL/pgSQL function "))
+          .map((line) => line.replace(/[^A-Za-z0-9_.,() ]/g, "").replace(/\s+/g, " "))
+          .slice(-5)
+      : [];
+    const safeName = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_.]+$/.test(value)
+      ? value
+      : undefined;
+    const classification = code === "42P10"
+      ? "no_unique_or_exclusion_constraint_for_on_conflict"
+      : "database_error_redacted";
+    return JSON.stringify({
+      mode: "rollback_only",
+      rpc: "failed",
+      code,
+      classification,
+      context,
+      schema: safeName(failure.schema),
+      table: safeName(failure.table),
+      constraint: safeName(failure.constraint),
+    });
+  } finally {
+    if (transactionStarted) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        discardClient = true;
+      }
+    }
+    client.release(discardClient);
+  }
+}
+
 async function postSyntheticResendEvent(providerEventId: string, payload: Record<string, unknown>): Promise<{ status: number; outcome: string; error: string }> {
   setDiagnosticStage("synthetic_signed_webhook");
   const timestamp = String(Math.floor(Date.now() / 1000));
@@ -3087,6 +3151,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     };
     const receipt = await postSyntheticResendEvent(eventId, payload);
     const duplicateReceipt = await postSyntheticResendEvent(eventId, payload);
+    if (eventCase.type === "email.bounced" && (receipt.status === 500 || duplicateReceipt.status === 500)) {
+      const diagnostic = await diagnoseBouncedResendFailureInRollback(pool, eventId, retryProviderMessageId, eventTime, retryProspect.email);
+      progress("rollback-only sanitized database diagnosis for email.bounced: " + diagnostic);
+    }
     const appliedState = await pool.query<{
       processing_result: string; message_id: string | null; applications: string; applied_result: string | null;
       suppression_rows: string; audit_events: string; delivery_status: string | null; contact_state: string | null;
