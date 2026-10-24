@@ -13,9 +13,39 @@ ALTER TABLE public.agency_followup_provider_events
     'email.complained','email.unsubscribed','email.suppressed','email.opened','email.clicked','contact.updated'
   ));
 
+DO $migration$
+DECLARE
+  v_constraint_count integer;
+  v_constraint_name text;
+BEGIN
+  SELECT count(*), min(constraint_row.conname)
+    INTO v_constraint_count, v_constraint_name
+  FROM pg_catalog.pg_constraint AS constraint_row
+  JOIN pg_catalog.pg_attribute AS column_row
+    ON column_row.attrelid = constraint_row.conrelid
+   AND column_row.attname = 'suppression_reason'
+   AND NOT column_row.attisdropped
+   AND column_row.attnum = ANY (constraint_row.conkey)
+  WHERE constraint_row.conrelid = 'public.prospect_contactability_provider_suppressions'::regclass
+    AND constraint_row.contype = 'c'
+    AND pg_catalog.pg_get_constraintdef(constraint_row.oid) LIKE '%resend_email_bounced%'
+    AND pg_catalog.pg_get_constraintdef(constraint_row.oid) LIKE '%resend_email_complaint%'
+    AND pg_catalog.pg_get_constraintdef(constraint_row.oid) LIKE '%resend_email_unsubscribed%'
+    AND pg_catalog.pg_get_constraintdef(constraint_row.oid) NOT LIKE '%resend_email_suppressed%';
+
+  IF v_constraint_count <> 1 THEN
+    RAISE EXCEPTION 'expected one existing provider suppression reason check, found %', v_constraint_count;
+  END IF;
+
+  EXECUTE format(
+    'ALTER TABLE public.prospect_contactability_provider_suppressions DROP CONSTRAINT %I',
+    v_constraint_name
+  );
+END;
+$migration$;
+
 ALTER TABLE public.prospect_contactability_provider_suppressions
-  DROP CONSTRAINT prospect_contactability_provider_suppressions_suppression_reason_check,
-  ADD CONSTRAINT prospect_contactability_provider_suppressions_suppression_reason_check CHECK (suppression_reason IN (
+  ADD CONSTRAINT prospect_provider_suppression_reason_check CHECK (suppression_reason IN (
     'resend_email_bounced','resend_email_complaint','resend_email_unsubscribed','resend_email_suppressed'
   ));
 

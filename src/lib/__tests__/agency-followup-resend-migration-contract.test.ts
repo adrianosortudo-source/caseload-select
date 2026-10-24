@@ -94,6 +94,10 @@ describe("Agency follow-up Resend migration contract", () => {
     expect(suppressionMigration).toContain("'email.suppressed'");
     expect(suppressionMigration).toContain("'resend_email_suppressed'");
     expect(suppressionMigration).toContain("'provider_suppressed'");
+    expect(suppressionMigration).toContain("pg_catalog.pg_constraint");
+    expect(suppressionMigration).toContain("pg_catalog.pg_get_constraintdef");
+    expect(suppressionMigration).toContain("DROP CONSTRAINT %I");
+    expect(suppressionMigration).toContain("ADD CONSTRAINT prospect_provider_suppression_reason_check");
     expect(suppressionMigration).toMatch(/WHEN 'email\.suppressed' THEN 'suppressed'/);
     expect(suppressionMigration).toMatch(/WHEN 'suppressed' THEN 7 ELSE 0 END/);
     expect(suppressionMigration).toContain("p_event_type IN ('email.bounced', 'email.complained', 'email.unsubscribed', 'email.suppressed', 'contact.updated')");
