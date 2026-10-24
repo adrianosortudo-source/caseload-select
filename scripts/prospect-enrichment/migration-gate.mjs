@@ -734,7 +734,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         diagnostic.pendingPaths.every(item => typeof item === "string" &&
           item.startsWith("supabase/migrations/") &&
           item.endsWith(".sql") &&
-          item.indexOf("/") === item.lastIndexOf("/"))) {
+          !item.slice("supabase/migrations/".length).includes("/"))) {
       // Emit only validated migration paths and counts into the redacted check artifact.
       // Keep the gate failed and never include raw ledger rows or connection values.
       process.stdout.write(JSON.stringify(diagnostic) + "\n");
