@@ -85,16 +85,16 @@ jobs:
           set -euo pipefail
           test "$(supabase --version)" = "2.117.0"
           node scripts/prospect-enrichment/migration-gate.mjs connection > "$RUNNER_TEMP/connection-check.json"
-          node scripts/prospect-enrichment/migration-gate.mjs stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" > "$RUNNER_TEMP/staged-inventory.json"
-          node scripts/prospect-enrichment/migration-gate.mjs verify-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" "$RUNNER_TEMP/staged-inventory.json" > "$RUNNER_TEMP/stage-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs reader-repair-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" > "$RUNNER_TEMP/staged-inventory.json"
 
-      - name: Read full migration ledger and prove all source files are applied
+      - name: Read full migration ledger and verify pinned historical source references
         shell: bash
         run: |
           set -euo pipefail
-          node scripts/prospect-enrichment/migration-gate.mjs full-query > "$RUNNER_TEMP/full-ledger.sql"
-          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/full-ledger.json"
-          node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger.json" "$RUNNER_TEMP/reader-migrations" complete > "$RUNNER_TEMP/full-ledger-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-query > "$RUNNER_TEMP/full-ledger.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/full-ledger.sql" --output json --agent no > "$RUNNER_TEMP/full-ledger-evidence.json"
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-stage "$RUNNER_TEMP/full-ledger-evidence.json" "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" "$RUNNER_TEMP/reader-history-reference-check.json" "$RUNNER_TEMP/full-ledger.json" > "$RUNNER_TEMP/reader-history-stage-check.json"
+          node scripts/prospect-enrichment/migration-gate.mjs full-ledger "$RUNNER_TEMP/full-ledger.json" "$RUNNER_TEMP/reader-migrations" candidate-reader-repair-held-complete - "$GITHUB_WORKSPACE" > "$RUNNER_TEMP/full-ledger-check.json"
 
       - name: Verify all eleven exact reader-repair statements and catalog contracts
         shell: bash
@@ -114,6 +114,13 @@ jobs:
           (cd "$RUNNER_TEMP/reader-migrations" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$RUNNER_TEMP/post-plan.json"
           PLAN_PHASE=post node scripts/prospect-enrichment/candidate-reader-repair-gate.mjs plan "$RUNNER_TEMP/post-plan.json" "$RUNNER_TEMP/full-ledger-check.json" > "$RUNNER_TEMP/post-plan-check.json"
 
+      - name: Remove temporary historical migration references and verify clean source stage
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/migration-gate.mjs reader-history-cleanup "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" "$RUNNER_TEMP/reader-history-reference-check.json" "$RUNNER_TEMP/reader-history-cleanup-check.json" > "$RUNNER_TEMP/reader-history-cleanup-summary.json"
+          node scripts/prospect-enrichment/migration-gate.mjs verify-stage "$GITHUB_WORKSPACE" "$RUNNER_TEMP/reader-migrations" "$RUNNER_TEMP/staged-inventory.json" > "$RUNNER_TEMP/stage-check.json"
+
       - name: Bind redacted reconciliation evidence to source and run
         shell: bash
         run: |
@@ -132,6 +139,10 @@ jobs:
             ${{ runner.temp }}/staged-inventory.json
             ${{ runner.temp }}/stage-check.json
             ${{ runner.temp }}/full-ledger-check.json
+            ${{ runner.temp }}/reader-history-reference-check.json
+            ${{ runner.temp }}/reader-history-stage-check.json
+            ${{ runner.temp }}/reader-history-cleanup-check.json
+            ${{ runner.temp }}/reader-history-cleanup-summary.json
             ${{ runner.temp }}/target-ledger-check.json
             ${{ runner.temp }}/reader-catalog-check.json
             ${{ runner.temp }}/post-plan-check.json
