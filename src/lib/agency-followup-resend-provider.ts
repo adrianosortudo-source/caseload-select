@@ -61,6 +61,10 @@ function isProviderMessageId(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= 500 && value === value.trim();
 }
 
+function isCanonicalUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
+}
+
 export function createAgencyFollowupResendProvider(input: {
   env?: Record<string, string | undefined>;
   config?: AgencyFollowupSendConfig;
@@ -87,7 +91,7 @@ export function createAgencyFollowupResendProvider(input: {
       }
 
       const logicalIdentity = parseAgencyFollowupLogicalKey(request.idempotencyKey);
-      if (!logicalIdentity) {
+      if (!logicalIdentity || !isCanonicalUuid(logicalIdentity.messageId) || !isCanonicalUuid(logicalIdentity.enrollmentId)) {
         return { kind: "blocked", blockers: ["logical_message_identity_invalid"] };
       }
       const targetBlockers = config.authorize({
@@ -106,6 +110,10 @@ export function createAgencyFollowupResendProvider(input: {
         to: request.recipientEmail,
         subject: request.subject,
         text: request.body,
+        tags: [
+          { name: "agency_followup_message_id", value: logicalIdentity.messageId },
+          { name: "agency_followup_enrollment_id", value: logicalIdentity.enrollmentId },
+        ],
       };
       const options: CreateEmailRequestOptions = { idempotencyKey: request.idempotencyKey };
 

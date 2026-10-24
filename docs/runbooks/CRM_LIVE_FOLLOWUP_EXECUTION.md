@@ -4,28 +4,38 @@ Status: implementation in progress. Production delivery is disabled until a sepa
 
 ## Source and safety boundary
 
-- Worktree: `D:\00_Work\01_CaseLoad_Select\.worktrees\crm-live-followup-20261019`
-- Branch: `codex/crm-live-followup-20261019`
-- Current refreshed baseline: `5f96d8162550585a53c813de094163365d51ec2c`
-- Canonical repo: `D:\00_Work\01_CaseLoad_Select\05_Product\caseload-select-app`
-- Preserve `crm-followup-acceptance-20261014`; do not reset, recreate, or modify it.
-- Resend mode defaults to `off`. Never put provider or Supabase secrets in this file, source, logs, screenshots, or run manifests.
-- Do not send email, configure production secrets, apply a production migration, create production records, activate a campaign, or merge without action-specific authority.
-- Resend requires verified explicit opt-in. The current Agency prospect model stores eligibility evidence references and operational contactability, but that does not establish opt-in. Keep the live cohort gate closed until exact evidence is reviewed.
-- Migrations must be committed and pushed before applying them to the disposable database. Verify the exact migration ledger version and hash first.
+- Worktree: D:\00_Work\01_CaseLoad_Select\.worktrees\crm-live-followup-final-gates-20261024
+- Branch: codex/crm-live-followup-final-gates-20261024
+- Base and current HEAD before local changes: a7ed25c81aea7b04f9d88afd83c91c1e16d543b7
+- Canonical repo: D:\00_Work\01_CaseLoad_Select\05_Product\caseload-select-app
+- Preserve crm-followup-acceptance-20261014 and every other worktree/container; never reset, recreate, delete, or prune them.
+- PR #414 is complete. This is additive work on a fresh branch; its old approval does not authorize a new PR merge.
+- Resend mode defaults to off. Never put provider or Supabase secrets in this file, source, logs, screenshots, or run manifests.
+- No email, production secrets, production migration, production record, campaign activation, deployment, or merge without action-specific authority.
+- Resend requires recorded, verified explicit opt-in. The owner specified that only contacts with explicit opt-in may be considered; this does not prove that any exact cohort has qualifying evidence.
+- Migrations must be committed and pushed before application to the disposable database. Verify the exact migration ledger version and hash before applying.
+- The handoff database gate authorizes a point-in-time provider request. Its database transaction ends before the separate Resend HTTP call; do not claim that a stop or consent update is serialized against delivery during that gap.
+
+### Current implementation state
+
+- Migration 20261024171116_agency_followup_serialized_provider_handoff_gate.sql adds database-authoritative consent/contactability/approval/schedule/predecessor checks and catalog-before-identity-before-row locking. Its BEFORE STATEMENT catalog locks serialize mapping writers before row-level triggers.
+- Migration 20261024175302_agency_followup_resend_unknown_reconciliation.sql records signed Agency message/enrollment tags and reconciles only exact tagged email.sent events to UNKNOWN messages. New signed tag pairs are immutable on the provider inbox row; first successful replay binding is stored in the separate append-only application row. Legacy unmatched_message rows can be enriched only when tag capture was unavailable and prior message/enrollment binding is null.
+- Both migrations and the route/provider changes are uncommitted. The exact source hashes are recorded in docs/agency-followup-operations.md; neither migration has been applied.
+- The single npm ci is still running. Tests, typecheck, lint, disposable database walkthrough, and headed browser acceptance have not passed or run on this source.
+- Docker Desktop UI says engine running, but docker info currently returns HTTP 500 for API v1.56 and v1.52. No disposable stack is running. Do not reset/remove Docker data or existing stacks.
+- Read-only production route readback in signed-in Chrome at 2026-10-24 14:38 America/Toronto showed sending off, zero prospects, zero messages, and no drafts. Provider configuration was not exposed and remains unverified.
+- The previous PR #414 CI and walkthrough runs are baseline evidence only, not evidence for this branch.
 
 ## Implementation sequence
 
-1. Separate the reusable Agency repository/dispatcher from the fake adapter without changing current claim, lease, identity, approval, suppression, spacing, retry, and UNKNOWN behavior.
-2. Implement a dedicated Resend adapter. Require verified sender, monitored reply address, explicit send mode and exact allowlists. Use the stable logical idempotency key. Missing or invalid provider configuration blocks delivery.
-3. Persist provider message IDs and accepted time atomically with durable logical-message uniqueness. Preserve UNKNOWN quarantine on ambiguous handoff or post-acceptance persistence failure.
-4. Add an authenticated cron dispatch route. Disabled mode returns before any claim. Bound batch size and sanitize responses.
-5. Add signed Resend webhook reconciliation using the raw request body. Enforce unique provider event identity, exact provider-message/recipient fingerprint mapping, duplicate/out-of-order safety, and shared bounce/complaint/unsubscribe suppression.
-   - An early `unmatched_message` event is stored without PII and returns 503 so the provider retries. After acceptance is persisted, an identical signed replay may create one append-only application row and apply side effects transactionally. The inbox row retains its original first-receipt result; the application row is the authoritative resolved message/source binding.
-   - `unmatched_recipient`, `unmatched_source`, and `ambiguous_source` remain quarantined with no delivery or suppression side effect. They require an authorized operator database review; never rewrite an event or attach it to a guessed contact.
-6. Verify reply and booking stop behavior. If automatic ingestion is absent, document operator reconciliation and require a fresh check before every pilot dispatch.
-7. Update only the Agency Follow-up operator UI/API with accurate configured/mode/outcome status. Keep technical settings and secrets out of user-facing copy.
-8. Add adapter, dispatch, persistence, webhook and rendered acceptance coverage. Keep synthetic provider calls network-mocked.
+1. Baseline delivery was merged in PR #414. Do not reopen or amend that PR.
+2. The fresh branch adds the transactional final handoff authorization, message/enrollment-tagged Resend sends, and signed tagged-event reconciliation for UNKNOWN outcomes. Independent review caught and corrected a legacy replay binding defect and a mapping-writer lock-order deadlock. The corresponding contract assertions and walkthrough fixtures are updated.
+3. Complete the existing npm ci. Once it exits successfully, run the focused provider, webhook route, worker, migration-contract, and tagged replay tests, then typecheck and scoped lint. Rerun any failed command after making a scoped correction. Do not call a dependency/setup failure a passing test.
+4. Fetch and compare current origin/main; review the full diff and hashes; commit and push every change before applying either migration. Create a new PR and require CI to validate the exact pushed head.
+5. Verify Docker and the unique disposable project/ports. Apply only the pushed migration versions to a fresh synthetic database. Run database mutation/concurrency/replay walkthroughs, headed browser acceptance at every required viewport, and save exact command/exit/result plus screenshot hashes.
+6. After acceptance evidence is complete, prepare the new PR and release packet. The new PR needs its own explicit merge approval. Do not direct-deploy; verify automatic deployment only after an authorized merge.
+7. Keep provider mode off until the production provider/webhook configuration and owner-controlled test recipient/copy are explicitly approved. One controlled inbox test must prove provider acceptance, signed delivery receipt, inbox receipt, and duplicate-dispatch safety. Get explicit approval for any real prospect cohort; only contacts with recorded explicit opt-in are eligible.
+8. Replies and bookings remain manually reconciled through the Agency CRM activity workflow until a verified automatic integration exists. Record this operational limitation and recheck stop history before any later dispatch.
 
 ## Acceptance commands
 

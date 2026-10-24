@@ -9,6 +9,7 @@ import { createConnection } from "node:net";
 import { Pool, type PoolClient } from "pg";
 import { chromium, expect, type APIResponse, type Browser, type BrowserContext, type Page, type Response as PlaywrightResponse } from "@playwright/test";
 import { createSessionCookie } from "../src/lib/portal-session-cookie";
+import { agencyFollowupContentHash, agencyFollowupLogicalMessageKey, agencyFollowupRecipientHash } from "../src/lib/agency-followup-domain";
 import { scheduleAgencyFollowupStep } from "../src/lib/agency-followup-schedule";
 
 const DEFAULT_STACK_DIR = "test-results/crm-local-stack";
@@ -61,6 +62,10 @@ const PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_PATH = "supabase/migrations/202610231
 const EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB = "65cdcf1d16a7f2c61af9ec3cbf38341e59b9d35e";
 const RESEND_SUPPRESSED_STATUS_MIGRATION_PATH = "supabase/migrations/20261024054520_agency_followup_resend_suppressed_status.sql";
 const EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB = "5f257491d03b362c59a484c942be1f127f0996fb";
+const SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_PATH = "supabase/migrations/20261024171116_agency_followup_serialized_provider_handoff_gate.sql";
+const EXPECTED_SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_BLOB = "e5fd4410be2cbae3d5c0a6294a5d2d14ec96bdac";
+const UNKNOWN_RESEND_RECONCILIATION_MIGRATION_PATH = "supabase/migrations/20261024175302_agency_followup_resend_unknown_reconciliation.sql";
+const EXPECTED_UNKNOWN_RESEND_RECONCILIATION_MIGRATION_BLOB = "e566a537c831c38211e92a3ba612994a1302e9c0";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
@@ -263,11 +268,11 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520"]],
+      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520", "20261024171116", "20261024175302"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "14") {
-    throw new Error("Disposable Postgres identity or exact fourteen-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "16") {
+    throw new Error("Disposable Postgres identity or exact sixteen-migration ledger check failed.");
   }
   const templateApprovalRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
     "select has_function_privilege('service_role', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as service_access, not has_function_privilege('anon', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.approve_agency_followup_template_version(uuid,uuid)'::regprocedure",
@@ -292,14 +297,15 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
   }
   const providerHandoffRpc = await pool.query<{
     service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean;
-    first_use_column: boolean; immutable_trigger: boolean;
+    fixed_search_path: boolean; old_prepare_revoked: boolean; first_use_column: boolean; immutable_trigger: boolean;
   }>(
-    "select has_function_privilege('service_role', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as service_access, not has_function_privilege('anon', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as authenticated_denied, not prosecdef as security_invoker, exists(select 1 from information_schema.columns where table_schema='public' and table_name='agency_followup_messages' and column_name='provider_idempotency_first_used_at') as first_use_column, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_messages'::regclass and tgname='agency_followup_provider_idempotency_first_use_immutable' and not tgisinternal and tgenabled in ('O','A')) as immutable_trigger from pg_proc where oid='public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)'::regprocedure",
+    "select has_function_privilege('service_role', proc.oid, 'execute') as service_access, not has_function_privilege('anon', proc.oid, 'execute') as anon_denied, not has_function_privilege('authenticated', proc.oid, 'execute') as authenticated_denied, not proc.prosecdef as security_invoker, coalesce(proc.proconfig @> ARRAY['search_path=\"\"']::text[], false) as fixed_search_path, not coalesce((select has_function_privilege('service_role', old.oid, 'execute') from pg_proc old where old.oid = to_regprocedure('public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)')), false) as old_prepare_revoked, exists(select 1 from information_schema.columns where table_schema='public' and table_name='agency_followup_messages' and column_name='provider_idempotency_first_used_at') as first_use_column, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_messages'::regclass and tgname='agency_followup_provider_idempotency_first_use_immutable' and not tgisinternal and tgenabled in ('O','A')) as immutable_trigger from pg_proc proc where proc.oid='public.authorize_agency_followup_provider_handoff(uuid,uuid,text,integer,integer,integer)'::regprocedure",
   );
   if (providerHandoffRpc.rows[0]?.service_access !== true || providerHandoffRpc.rows[0]?.anon_denied !== true ||
     providerHandoffRpc.rows[0]?.authenticated_denied !== true || providerHandoffRpc.rows[0]?.security_invoker !== true ||
+    providerHandoffRpc.rows[0]?.fixed_search_path !== true || providerHandoffRpc.rows[0]?.old_prepare_revoked !== true ||
     providerHandoffRpc.rows[0]?.first_use_column !== true || providerHandoffRpc.rows[0]?.immutable_trigger !== true) {
-    throw new Error("The durable provider handoff RPC, timestamp, immutable trigger, or restricted grants are not in the expected state.");
+    throw new Error("The serialized provider authorization RPC, legacy bypass revocation, timestamp, immutable trigger, or restricted grants are not in the expected state.");
   }
   const tables = await pool.query<{ count: string }>(
     "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
@@ -333,7 +339,7 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     || operatorRead.rows[0]?.public_access !== true) {
     throw new Error(`The opt-in operator identity fields must be available to service_role and unavailable to public roles; actual=${JSON.stringify(operatorRead.rows[0] ?? null)}`);
   }
-  progress("disposable identity, all fourteen acceptance migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and CRM RPC grants checked");
+  progress("disposable identity, all fifteen acceptance migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and CRM RPC grants checked");
 }
 
 async function verifyTemplateApprovalRollback(pool: Pool, actorId: string): Promise<Record<string, unknown>> {
@@ -603,14 +609,64 @@ async function verifyLiveClaimRpc(
   }
 }
 
+type AgencyProviderAuthorization = {
+  result: "ready" | "blocked" | "deferred" | "expired" | "stale";
+  request?: { idempotencyKey: string; recipientEmail: string; subject: string; body: string };
+  blockers?: string[];
+  blocker?: string;
+  retryAt?: string;
+};
+
+async function authorizeProviderHandoff(
+  client: PoolClient,
+  input: { messageId: string; enrollmentId: string; owner: string; attemptCount: number },
+): Promise<AgencyProviderAuthorization> {
+  const result = await client.query<{ authorization: unknown }>(
+    "select public.authorize_agency_followup_provider_handoff($1::uuid,$2::uuid,$3,$4,300,82800) as authorization",
+    [input.messageId, input.enrollmentId, input.owner, input.attemptCount],
+  );
+  const value = result.rows[0]?.authorization;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("The disposable provider authorization RPC returned no JSON object.");
+  }
+  const authorization = value as Record<string, unknown>;
+  if (!(["ready", "blocked", "deferred", "expired", "stale"] as unknown[]).includes(authorization.result)) {
+    throw new Error("The disposable provider authorization RPC returned an unknown result state.");
+  }
+  if (authorization.result === "ready") {
+    const request = authorization.request as Record<string, unknown> | undefined;
+    if (!request || typeof request.idempotencyKey !== "string" || typeof request.recipientEmail !== "string" ||
+        typeof request.subject !== "string" || typeof request.body !== "string") {
+      throw new Error("The ready provider authorization did not contain an exact request payload.");
+    }
+  } else if (authorization.request !== undefined) {
+    throw new Error("A non-ready provider authorization exposed a send request.");
+  }
+  if (authorization.result === "blocked" && (!Array.isArray(authorization.blockers) || authorization.blockers.length === 0)) {
+    throw new Error("The blocked provider authorization did not contain blocker reasons.");
+  }
+  if (authorization.result === "deferred" && (typeof authorization.blocker !== "string" || typeof authorization.retryAt !== "string")) {
+    throw new Error("The deferred provider authorization did not contain its blocker and retryAt.");
+  }
+  return authorization as AgencyProviderAuthorization;
+}
+
 async function verifyProviderIdempotencyFenceRpc(
   pool: Pool,
   input: { firstUseMessageId: string; insideWindowMessageId: string; expiredWindowMessageId: string },
 ): Promise<Record<string, unknown>> {
   const client = await pool.connect();
-  const claims = new Map<string, { owner: string; attemptCount: number }>();
+  const claims = new Map<string, { owner: string; attemptCount: number; enrollmentId: string; stepNumber: number }>();
   const insertFixture = async (sourceMessageId: string, owner: string, age: string | null) => {
-    const result = await client.query<{ id: string; attempt_count: number }>(
+    const sourceIdentity = await client.query<{ enrollment_id: string }>(
+      "select enrollment_id from public.agency_followup_messages where id=$1",
+      [sourceMessageId],
+    );
+    const enrollmentId = sourceIdentity.rows[0]?.enrollment_id;
+    if (!enrollmentId) throw new Error("A source enrollment was not found for the provider authorization fixture.");
+    const id = randomUUID();
+    const logicalKey = agencyFollowupLogicalMessageKey(enrollmentId, id);
+    const result = await client.query<{ id: string; enrollment_id: string; attempt_count: number; step_number: number }>(
       `with source as (
          select message.*, enrollment.journey_id
          from public.agency_followup_messages message
@@ -625,24 +681,41 @@ async function verifyProviderIdempotencyFenceRpc(
          returning id,journey_id,step_number
        )
        insert into public.agency_followup_messages (
-         enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256,
+         id,enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256,
          recipient_name_snapshot,recipient_email_snapshot,recipient_sha256,
          approved_content_sha256,approved_recipient_sha256,reviewed_by_operator_id,reviewed_at,
          scheduled_at,logical_message_key,provider_idempotency_key,attempt_count,lease_owner,lease_until,
          provider_idempotency_first_used_at
        )
-       select source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot,
+       select $2::uuid,source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot,
               source.content_sha256,source.recipient_name_snapshot,source.recipient_email_snapshot,source.recipient_sha256,
               source.content_sha256,source.recipient_sha256,source.reviewed_by_operator_id,coalesce(source.reviewed_at,clock_timestamp()),
-              clock_timestamp(),$2,$3,1,$4,clock_timestamp()+interval '5 minutes',
+              clock_timestamp(),$3,$3,1,$4,clock_timestamp()+interval '5 minutes',
               case when $5::text is null then null else clock_timestamp()-$5::interval end
        from source join step on step.journey_id=source.journey_id
-       returning id,attempt_count`,
-      [sourceMessageId, `walkthrough-provider-window-${RUN_ID}-${owner}`, `walkthrough-provider-key-${RUN_ID}-${owner}`, owner, age],
+       returning id,enrollment_id,attempt_count,step_number`,
+      [sourceMessageId, id, logicalKey, owner, age],
     );
     const row = result.rows[0];
     if (!row) throw new Error("A dedicated provider-window message fixture could not be inserted.");
-    return { id: row.id, owner, attemptCount: Number(row.attempt_count) };
+    await client.query(
+      "update public.agency_followup_journeys set minimum_spacing_hours=0 where id=(select journey_id from public.agency_followup_enrollments where id=$1)",
+      [row.enrollment_id],
+    );
+    await client.query(
+      `update public.agency_followup_messages predecessor
+       set state='accepted', scheduled_at=coalesce(predecessor.scheduled_at,clock_timestamp()-interval '2 days'),
+           approved_content_sha256=predecessor.content_sha256, approved_recipient_sha256=predecessor.recipient_sha256,
+           reviewed_by_operator_id=coalesce(predecessor.reviewed_by_operator_id,target.reviewed_by_operator_id),
+           reviewed_at=coalesce(predecessor.reviewed_at,target.reviewed_at,clock_timestamp()-interval '2 days'),
+           provider_message_id=coalesce(predecessor.provider_message_id,'walkthrough-predecessor-'||predecessor.id::text),
+           provider_accepted_at=coalesce(predecessor.provider_accepted_at,clock_timestamp()-interval '2 days'),
+           lease_owner=null,lease_until=null,unknown_since=null,last_error_code=null,updated_at=clock_timestamp()
+       from public.agency_followup_messages target
+       where target.id=$1 and predecessor.enrollment_id=target.enrollment_id and predecessor.step_number<target.step_number`,
+      [row.id],
+    );
+    return { id: row.id, owner, attemptCount: Number(row.attempt_count), enrollmentId: row.enrollment_id, stepNumber: Number(row.step_number) };
   };
   try {
     await client.query("begin");
@@ -653,11 +726,7 @@ async function verifyProviderIdempotencyFenceRpc(
     for (const claim of [firstClaim, insideClaim, expiredClaim]) claims.set(claim.id, claim);
     const prepare = async (id: string) => {
       const claim = claims.get(id)!;
-      const result = await client.query<{ state: string }>(
-        "select public.prepare_agency_followup_provider_attempt($1::uuid,(select enrollment_id from public.agency_followup_messages where id=$1::uuid),$2,$3,300,82800) as state",
-        [id, claim.owner, claim.attemptCount],
-      );
-      return result.rows[0]?.state;
+      return authorizeProviderHandoff(client, { messageId: id, enrollmentId: claim.enrollmentId, owner: claim.owner, attemptCount: claim.attemptCount });
     };
 
     const firstUseState = await prepare(firstClaim.id);
@@ -668,9 +737,43 @@ async function verifyProviderIdempotencyFenceRpc(
     const stableTimestamp = await client.query<{ first_used_at: Date }>(
       "select provider_idempotency_first_used_at as first_used_at from public.agency_followup_messages where id=$1", [firstClaim.id],
     );
-    if (firstUseState !== "ready" || firstUseAgain !== "ready" || !firstTimestamp.rows[0]?.first_used_at ||
+    const expected = await client.query<{
+      message_id: string; enrollment_id: string; logical_message_key: string; recipient_email_snapshot: string;
+      content_snapshot: { channel: "email"; subject: string; body: string };
+      content_sha256: string; recipient_sha256: string; approved_content_sha256: string; approved_recipient_sha256: string;
+      prospect_id: string; firm_name: string; contact_name: string | null; contact_email: string;
+    }>(
+      `select message.id as message_id,message.enrollment_id,message.logical_message_key,message.recipient_email_snapshot,
+              message.content_snapshot,message.content_sha256,message.recipient_sha256,
+              message.approved_content_sha256,message.approved_recipient_sha256,
+              prospect.id as prospect_id,prospect.firm_name,prospect.contact_name,prospect.contact_email
+       from public.agency_followup_messages message
+       join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id
+       join public.agency_prospects prospect on prospect.id=enrollment.prospect_id
+       where message.id=$1`, [firstClaim.id],
+    );
+    const snapshot = expected.rows[0];
+    if (!snapshot) throw new Error("The final-gate request fixture could not be read back.");
+    const contentHash = agencyFollowupContentHash(snapshot.content_snapshot);
+    const recipientHash = agencyFollowupRecipientHash({
+      prospectId: snapshot.prospect_id,
+      firmName: snapshot.firm_name,
+      contactName: snapshot.contact_name,
+      contactEmail: snapshot.contact_email,
+    });
+    const expectedRequest = {
+      idempotencyKey: agencyFollowupLogicalMessageKey(snapshot.enrollment_id, snapshot.message_id),
+      recipientEmail: snapshot.recipient_email_snapshot,
+      subject: snapshot.content_snapshot.subject,
+      body: snapshot.content_snapshot.body,
+    };
+    if (firstUseState.result !== "ready" || firstUseAgain.result !== "ready" ||
+      JSON.stringify(firstUseState.request) !== JSON.stringify(expectedRequest) ||
+      snapshot.logical_message_key !== expectedRequest.idempotencyKey || snapshot.content_sha256 !== contentHash ||
+      snapshot.approved_content_sha256 !== contentHash || snapshot.recipient_sha256 !== recipientHash ||
+      snapshot.approved_recipient_sha256 !== recipientHash || !firstTimestamp.rows[0]?.first_used_at ||
       firstTimestamp.rows[0].first_used_at.toISOString() !== stableTimestamp.rows[0]?.first_used_at.toISOString()) {
-      throw new Error("The provider handoff RPC did not reserve and preserve the first-use time for a new message.");
+      throw new Error("The final authorization did not return the exact approved request/hash or reserve and preserve first-use time.");
     }
 
     let timestampMutationRejected = false;
@@ -688,20 +791,117 @@ async function verifyProviderIdempotencyFenceRpc(
       "select extract(epoch from clock_timestamp()-provider_idempotency_first_used_at)::integer as age_seconds from public.agency_followup_messages where id=$1",
       [insideClaim.id],
     );
-    const insideRetryAllowed = insideState === "ready" && Number(insideTimestamp.rows[0]?.age_seconds) < 82_800;
+    const insideRetryAllowed = insideState.result === "ready" && Number(insideTimestamp.rows[0]?.age_seconds) < 82_800;
     const expiredState = await prepare(expiredClaim.id);
     const expired = await client.query<{ state: string; last_error_code: string | null; scheduled_at: Date | null; lease_owner: string | null; unknown_events: string }>(
       "select message.state,message.last_error_code,message.scheduled_at,message.lease_owner,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-window-expired:'||message.id::text) as unknown_events from public.agency_followup_messages message where message.id=$1",
       [expiredClaim.id],
     );
-    if (!insideRetryAllowed || expiredState !== "expired" || expired.rows[0]?.state !== "unknown" ||
+    if (!insideRetryAllowed || expiredState.result !== "expired" || expired.rows[0]?.state !== "unknown" ||
       expired.rows[0]?.last_error_code !== "resend_idempotency_window_expired" || expired.rows[0]?.scheduled_at !== null ||
       expired.rows[0]?.lease_owner !== null || expired.rows[0]?.unknown_events !== "1") {
       throw new Error("The provider handoff RPC did not allow an in-window retry and atomically quarantine an expired key.");
     }
+
+    const dispositionSnapshot = async (messageId: string) => {
+      const result = await client.query<{ state: string; lease_owner: string | null; event_count: number }>(
+        `select message.state,message.lease_owner,
+                (select count(*)::integer from public.agency_followup_events event where event.message_id=message.id) as event_count
+         from public.agency_followup_messages message where message.id=$1`, [messageId],
+      );
+      if (!result.rows[0]) throw new Error("The final-gate disposition fixture disappeared.");
+      return result.rows[0];
+    };
+    const assertPureGateResult = async (
+      claim: { id: string; owner: string; attemptCount: number; enrollmentId: string },
+      expected: { result: "blocked" | "deferred"; blocker: string },
+    ) => {
+      const before = await dispositionSnapshot(claim.id);
+      const checked = await authorizeProviderHandoff(client, {
+        messageId: claim.id, enrollmentId: claim.enrollmentId, owner: claim.owner, attemptCount: claim.attemptCount,
+      });
+      const after = await dispositionSnapshot(claim.id);
+      const hasBlocker = checked.result === "blocked"
+        ? checked.blockers?.includes(expected.blocker) === true
+        : checked.blocker === expected.blocker && typeof checked.retryAt === "string" && Number.isFinite(Date.parse(checked.retryAt));
+      if (checked.result !== expected.result || !hasBlocker || checked.request !== undefined ||
+        before.state !== "claimed" || before.lease_owner !== claim.owner || after.state !== before.state ||
+        after.lease_owner !== before.lease_owner || after.event_count !== before.event_count) {
+        throw new Error(`The ${expected.blocker} gate did not return a payload-free ${expected.result} result without persisting worker disposition.`);
+      }
+      return checked;
+    };
+
+    // A terminal UNKNOWN predecessor must stop the sequence. The gate is a pure
+    // authorization check; the worker persists the blocked disposition separately.
+    const unresolvedClaim = await insertFixture(input.firstUseMessageId, `unresolved-${RUN_ID}`, null);
+    await client.query(
+      `update public.agency_followup_messages predecessor
+       set state='unknown',unknown_since=clock_timestamp(),lease_owner=null,lease_until=null,provider_accepted_at=null,
+           last_error_code='walkthrough_unknown_predecessor',updated_at=clock_timestamp()
+       where predecessor.id=(select prior.id from public.agency_followup_messages target
+         join public.agency_followup_messages prior on prior.enrollment_id=target.enrollment_id and prior.step_number<target.step_number
+         where target.id=$1 order by prior.step_number desc limit 1)`, [unresolvedClaim.id],
+    );
+    await assertPureGateResult(unresolvedClaim, { result: "blocked", blocker: "previous_step_unresolved" });
+
+    // A claimed predecessor defers the target and returns its retry time without
+    // moving the target or creating an event; the caller owns that disposition.
+    const pendingClaim = await insertFixture(input.insideWindowMessageId, `pending-${RUN_ID}`, null);
+    await client.query(
+      `update public.agency_followup_messages predecessor
+       set state='claimed',unknown_since=null,provider_accepted_at=null,lease_owner='walkthrough-prior-${RUN_ID}',
+           lease_until=clock_timestamp()+interval '4 minutes',last_error_code=null,updated_at=clock_timestamp()
+       where predecessor.id=(select prior.id from public.agency_followup_messages target
+         join public.agency_followup_messages prior on prior.enrollment_id=target.enrollment_id and prior.step_number<target.step_number
+         where target.id=$1 order by prior.step_number desc limit 1)`, [pendingClaim.id],
+    );
+    const checkedPending = await assertPureGateResult(pendingClaim, { result: "deferred", blocker: "previous_step_pending" });
+    if (Date.parse(checkedPending.retryAt!) <= Date.now()) throw new Error("A claimed predecessor returned a non-future retryAt.");
+
+    const spacingClaim = await insertFixture(input.expiredWindowMessageId, `spacing-${RUN_ID}`, null);
+    await client.query("update public.agency_followup_journeys set minimum_spacing_hours=1 where id=(select journey_id from public.agency_followup_enrollments where id=$1)", [spacingClaim.enrollmentId]);
+    await client.query(
+      `update public.agency_followup_messages predecessor
+       set state='accepted',unknown_since=null,provider_accepted_at=clock_timestamp(),lease_owner=null,lease_until=null,
+           last_error_code=null,updated_at=clock_timestamp()
+       where predecessor.id=(select prior.id from public.agency_followup_messages target
+         join public.agency_followup_messages prior on prior.enrollment_id=target.enrollment_id and prior.step_number<target.step_number
+         where target.id=$1 order by prior.step_number desc limit 1)`, [spacingClaim.id],
+    );
+    const checkedSpacing = await assertPureGateResult(spacingClaim, { result: "deferred", blocker: "minimum_spacing_not_elapsed" });
+    if (Date.parse(checkedSpacing.retryAt!) <= Date.now()) throw new Error("A recent accepted predecessor returned a non-future spacing retryAt.");
+
+    const notDueClaim = await insertFixture(input.firstUseMessageId, `not-due-${RUN_ID}`, null);
+    const scheduledRetryAt = await client.query<{ retry_at: Date }>(
+      "update public.agency_followup_messages set scheduled_at=clock_timestamp()+interval '5 minutes' where id=$1 returning scheduled_at as retry_at",
+      [notDueClaim.id],
+    );
+    const checkedNotDue = await assertPureGateResult(notDueClaim, { result: "deferred", blocker: "not_due" });
+    if (Math.abs(Date.parse(checkedNotDue.retryAt!) - scheduledRetryAt.rows[0]!.retry_at.getTime()) > 1_000) {
+      throw new Error("The standalone not-due result did not return the target's exact scheduled retryAt.");
+    }
+
+    const changedAssociationClaim = await insertFixture(input.firstUseMessageId, `association-change-${RUN_ID}`, null);
+    const identityMapping = await client.query<{ source_link_id: string; person_id: string; other_person_id: string | null }>(
+      `select source_link.id as source_link_id,source_link.person_id,
+              (select person.id from public.prospect_people person
+               where person.organization_id=source_link.organization_id and person.id<>source_link.person_id
+               order by person.id limit 1) as other_person_id
+       from public.agency_followup_enrollments enrollment
+       join public.agency_followup_messages target on target.enrollment_id=enrollment.id
+       join public.prospect_source_links source_link on source_link.source_record_key=enrollment.prospect_id::text
+         and source_link.source_system in ('agency_crm','agency_crm_contact') and source_link.active
+       where target.id=$1`, [changedAssociationClaim.id],
+    );
+    const mapping = identityMapping.rows[0];
+    if (!mapping?.other_person_id) throw new Error("The disposable identity fixture has no alternate person for the association revalidation check.");
+    await client.query("update public.prospect_source_links set person_id=$2 where id=$1", [mapping.source_link_id, mapping.other_person_id]);
+    await assertPureGateResult(changedAssociationClaim, { result: "blocked", blocker: "contactability_unknown" });
+
     await client.query("rollback");
-    progress("runtime provider handoff RPC persisted an immutable first-use time, allowed a retry under 23 hours, and atomically quarantined a 23-hour-old key; historical test timestamps were supplied at INSERT");
-    return { firstUseReservedOnce: true, timestampImmutable: true, retryUnder23HoursAllowed: true, retryAt23HoursQuarantined: true, historicalTimestampsSeededAtInsert: true, networkHandoff: "none", transactionRolledBack: true };
+    progress("runtime serialized authorization returned the exact approved request/hash, preserved immutable first-use time, allowed an in-window retry, quarantined an expired key, blocked unknown predecessors and changed identity mappings, deferred claimed/recently-accepted predecessors and not-due messages, exposed no send payload on non-ready results, and left disposition to the worker");
+    return { firstUseReservedOnce: true, timestampImmutable: true, retryUnder23HoursAllowed: true, retryAt23HoursQuarantined: true, unknownPredecessorBlocked: true, changedIdentityBlocked: true, claimedPredecessorDeferred: true, minimumSpacingDeferred: true, standaloneNotDueDeferred: true, nonReadyHasNoRequest: true, gateDoesNotPersistDisposition: true, historicalTimestampsSeededAtInsert: true, networkHandoff: "none", transactionRolledBack: true };
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     throw error;
@@ -718,10 +918,18 @@ async function verifyProviderIdempotencyLockWaitBoundary(
   const waiter = await pool.connect();
   let holderTransaction = false;
   let waiterTransaction = false;
-  let rpcPromise: Promise<{ state: string | undefined }> | null = null;
+  let rpcPromise: Promise<{ result: string | undefined }> | null = null;
   let rpcSettled = false;
   let fixture: { id: string; owner: string; attemptCount: number } | null = null;
   try {
+    const sourceIdentity = await holder.query<{ enrollment_id: string }>(
+      "select enrollment_id from public.agency_followup_messages where id=$1",
+      [sourceMessageId],
+    );
+    const enrollmentId = sourceIdentity.rows[0]?.enrollment_id;
+    if (!enrollmentId) throw new Error("The retry-boundary source enrollment was not found.");
+    const fixtureId = randomUUID();
+    const logicalKey = agencyFollowupLogicalMessageKey(enrollmentId, fixtureId);
     await holder.query("begin");
     holderTransaction = true;
     await holder.query("set local role service_role");
@@ -740,23 +948,37 @@ async function verifyProviderIdempotencyLockWaitBoundary(
          returning id,journey_id,step_number
        )
        insert into public.agency_followup_messages (
-         enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256,
+         id,enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256,
          recipient_name_snapshot,recipient_email_snapshot,recipient_sha256,
          approved_content_sha256,approved_recipient_sha256,reviewed_by_operator_id,reviewed_at,
          scheduled_at,logical_message_key,provider_idempotency_key,attempt_count,lease_owner,lease_until,
          provider_idempotency_first_used_at
        )
-       select source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot,
+       select $2::uuid,source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot,
               source.content_sha256,source.recipient_name_snapshot,source.recipient_email_snapshot,source.recipient_sha256,
               source.content_sha256,source.recipient_sha256,source.reviewed_by_operator_id,coalesce(source.reviewed_at,clock_timestamp()),
-              clock_timestamp(),$2,$3,1,$4,clock_timestamp()+interval '5 minutes',
+              clock_timestamp(),$3,$3,1,$4,clock_timestamp()+interval '5 minutes',
               clock_timestamp()-interval '22 hours 59 minutes 56 seconds'
        from source join step on step.journey_id=source.journey_id
        returning id,attempt_count`,
-      [sourceMessageId, `walkthrough-provider-boundary-${RUN_ID}`, `walkthrough-provider-boundary-key-${RUN_ID}`, `boundary-${RUN_ID}`],
+      [sourceMessageId, fixtureId, logicalKey, `boundary-${RUN_ID}`],
     );
     if (!inserted.rows[0]) throw new Error("The retry-boundary message fixture could not be inserted.");
     fixture = { id: inserted.rows[0].id, owner: `boundary-${RUN_ID}`, attemptCount: Number(inserted.rows[0].attempt_count) };
+    await holder.query("update public.agency_followup_journeys set minimum_spacing_hours=0 where id=(select journey_id from public.agency_followup_enrollments where id=$1)", [enrollmentId]);
+    await holder.query(
+      `update public.agency_followup_messages predecessor
+       set state='accepted', scheduled_at=coalesce(predecessor.scheduled_at,clock_timestamp()-interval '2 days'),
+           approved_content_sha256=predecessor.content_sha256, approved_recipient_sha256=predecessor.recipient_sha256,
+           reviewed_by_operator_id=coalesce(predecessor.reviewed_by_operator_id,target.reviewed_by_operator_id),
+           reviewed_at=coalesce(predecessor.reviewed_at,target.reviewed_at,clock_timestamp()-interval '2 days'),
+           provider_message_id=coalesce(predecessor.provider_message_id,'walkthrough-predecessor-'||predecessor.id::text),
+           provider_accepted_at=coalesce(predecessor.provider_accepted_at,clock_timestamp()-interval '2 days'),
+           lease_owner=null,lease_until=null,unknown_since=null,last_error_code=null,updated_at=clock_timestamp()
+       from public.agency_followup_messages target
+       where target.id=$1 and predecessor.enrollment_id=target.enrollment_id and predecessor.step_number<target.step_number`,
+      [fixture.id],
+    );
     await holder.query("commit");
     holderTransaction = false;
 
@@ -783,10 +1005,10 @@ async function verifyProviderIdempotencyLockWaitBoundary(
     await waiter.query("begin");
     waiterTransaction = true;
     await waiter.query("set local role service_role");
-    rpcPromise = waiter.query<{ state: string }>(
-      "select public.prepare_agency_followup_provider_attempt($1::uuid,(select enrollment_id from public.agency_followup_messages where id=$1::uuid),$2,$3,300,82800) as state",
+    rpcPromise = waiter.query<{ authorization: { result: string } }>(
+      "select public.authorize_agency_followup_provider_handoff($1::uuid,(select enrollment_id from public.agency_followup_messages where id=$1::uuid),$2,$3,300,82800) as authorization",
       [fixture.id, fixture.owner, fixture.attemptCount],
-    ).then((result) => ({ state: result.rows[0]?.state }));
+    ).then((result) => ({ result: result.rows[0]?.authorization?.result }));
     rpcPromise.then(() => { rpcSettled = true; }, () => { rpcSettled = true; });
 
     const lockDeadline = Date.now() + 1500;
@@ -817,7 +1039,7 @@ async function verifyProviderIdempotencyLockWaitBoundary(
       rpcPromise,
       new Promise<never>((_, reject) => setTimeout(() => reject(new Error("The blocked provider handoff RPC did not resume within 3 seconds after lock release.")), 3000)),
     ]);
-    if (outcome.state !== "expired") throw new Error(`The lock-waiting RPC returned ${String(outcome.state)} after crossing the provider retention cutoff.`);
+    if (outcome.result !== "expired") throw new Error(`The lock-waiting RPC returned ${String(outcome.result)} after crossing the provider retention cutoff.`);
     await waiter.query("commit");
     waiterTransaction = false;
     const persisted = await pool.query<{ state: string; last_error_code: string | null; events: string }>(
@@ -889,9 +1111,9 @@ async function verifyQuarantinedSourceEventReplay(
     if (orphanReferences.rows[0]?.events !== "0" || orphanReferences.rows[0]?.applications !== "0") {
       throw new Error("The orphan contact-source fixture already has provider-event evidence.");
     }
-    const parameters = [eventId, providerMessageId, "email.bounced", null, occurredAt, prospect.email, recipientHash];
+    const parameters = [eventId, providerMessageId, "email.bounced", null, occurredAt, prospect.email, recipientHash, null, null];
     const persist = () => client.query<{ result: { result?: string } }>(
-      "select public.persist_agency_followup_resend_event($1,$2,$3,$4,$5::timestamptz,$6,$7) as result",
+      "select public.persist_agency_followup_resend_event($1,$2,$3,$4,$5::timestamptz,$6,$7,$8::uuid,$9::uuid) as result",
       parameters,
     );
     const firstReceipt = await persist();
@@ -971,10 +1193,11 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["lease", "Synthetic Walkthrough Lease " + suffix, "Quinn Example", "eligible"],
     ["retry", "Synthetic Walkthrough Retry " + suffix, "Devon Example", "eligible"],
     ["consent", "Synthetic Walkthrough Consent " + suffix, "Taylor Example", "eligible"],
+    ["tagged_unknown", "Synthetic Walkthrough Tagged UNKNOWN " + suffix, "Sam Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and eight Agency prospects");
+    progress("seeding synthetic operator and nine Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -2140,6 +2363,178 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   if (unknownResult.unknown !== 1 || unknownRow.rows[0]?.state !== "unknown" || !unknownRow.rows[0]?.unknown_since || unknownWasReclaimed) {
     throw new Error("UNKNOWN provider outcome was not quarantined or was automatically reclaimed.");
   }
+
+  const taggedUnknownProspect = fixtures.prospects.tagged_unknown;
+  await createDraft(pool, page, journeyName, taggedUnknownProspect);
+  await markEligibleAndRelease(page, taggedUnknownProspect);
+  await waitForAction(page, "approve", queueCard(page, taggedUnknownProspect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const taggedUnknownRow = await pool.query<{ id: string; enrollment_id: string; recipient_email_snapshot: string }>(
+    "select message.id,message.enrollment_id,message.recipient_email_snapshot from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.step_number=1",
+    [taggedUnknownProspect.id],
+  );
+  const taggedMessage = taggedUnknownRow.rows[0];
+  if (!taggedMessage) throw new Error("Tagged UNKNOWN reconciliation message was not created.");
+  await pool.query("update public.agency_followup_messages set scheduled_at=$2 where id=$1", [taggedMessage.id, acceptedDueAt]);
+  const taggedOwner = `synthetic-tagged-unknown-${RUN_ID}`;
+  const taggedClaimed = await withFixtureClaim(pool, taggedMessage.id, async () => pool.query<{
+    id: string; enrollment_id: string; attempt_count: number; lease_owner: string; state: string;
+  }>(
+    "select id,enrollment_id,attempt_count,lease_owner,state from public.claim_agency_followup_messages($1,$2,120,1)",
+    [taggedOwner, acceptedNow],
+  ));
+  const taggedLease = taggedClaimed.rows[0];
+  if (!taggedLease || taggedLease.id !== taggedMessage.id || taggedLease.state !== "claimed" || taggedLease.lease_owner !== taggedOwner) {
+    throw new Error("The signed UNKNOWN-tag fixture could not be claimed by the real database claim RPC.");
+  }
+  const taggedGateClient = await pool.connect();
+  try {
+    await taggedGateClient.query("begin");
+    await taggedGateClient.query("set local role service_role");
+    const gate = await authorizeProviderHandoff(taggedGateClient, {
+      messageId: taggedMessage.id, enrollmentId: taggedMessage.enrollment_id,
+      owner: taggedOwner, attemptCount: Number(taggedLease.attempt_count),
+    });
+    if (gate.result !== "ready" || gate.request?.recipientEmail !== taggedMessage.recipient_email_snapshot) {
+      throw new Error("The tagged UNKNOWN fixture did not pass the final handoff authorization before its synthetic send.");
+    }
+    await taggedGateClient.query("commit");
+  } catch (error) {
+    await taggedGateClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    taggedGateClient.release();
+  }
+
+  const taggedProviderMessageId = `fake-provider-tagged-unknown-${RUN_ID}`;
+  const taggedResendEventId = `evt_tagged_unknown_${RUN_ID}`;
+  const taggedEventBase = {
+    type: "email.sent",
+    created_at: acceptedNow,
+    data: {
+      email_id: taggedProviderMessageId,
+      to: [taggedMessage.recipient_email_snapshot.toUpperCase()],
+      tags: {
+        agency_followup_message_id: taggedMessage.id,
+        agency_followup_enrollment_id: taggedMessage.enrollment_id,
+      },
+    },
+  };
+  const claimedTaggedReceipt = await postSyntheticResendEvent(taggedResendEventId, taggedEventBase);
+  const claimedTaggedEvidence = await pool.query<{ processing_result: string; message_id: string | null; enrollment_id: string | null; signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean; applications: string }>(
+    "select event.processing_result,event.message_id,event.enrollment_id,event.signed_agency_followup_message_id as signed_message_id,event.signed_agency_followup_enrollment_id as signed_enrollment_id,event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    [taggedResendEventId],
+  );
+  if (claimedTaggedReceipt.status !== 503 || claimedTaggedReceipt.outcome !== "unmatched_message" ||
+      claimedTaggedEvidence.rows[0]?.processing_result !== "unmatched_message" || claimedTaggedEvidence.rows[0]?.message_id !== taggedMessage.id ||
+      claimedTaggedEvidence.rows[0]?.enrollment_id !== taggedMessage.enrollment_id ||
+      claimedTaggedEvidence.rows[0]?.signed_message_id !== taggedMessage.id || claimedTaggedEvidence.rows[0]?.signed_enrollment_id !== taggedMessage.enrollment_id ||
+      claimedTaggedEvidence.rows[0]?.tags_recorded !== true ||
+      claimedTaggedEvidence.rows[0]?.applications !== "0") {
+    throw new Error("A signed tagged email.sent arriving while claimed was not stored unmatched for safe replay.");
+  }
+  const changedTaggedReplay = await postSyntheticResendEvent(taggedResendEventId, {
+    ...taggedEventBase,
+    data: { ...taggedEventBase.data, tags: { ...taggedEventBase.data.tags, agency_followup_message_id: randomUUID() } },
+  });
+  const immutableTaggedInbox = await pool.query<{ processing_result: string; signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean }>(
+    "select processing_result,signed_agency_followup_message_id as signed_message_id,signed_agency_followup_enrollment_id as signed_enrollment_id,signed_agency_followup_tags_recorded as tags_recorded from public.agency_followup_provider_events where provider_event_id=$1",
+    [taggedResendEventId],
+  );
+  if (changedTaggedReplay.status !== 500 || changedTaggedReplay.error !== "event_persistence_failed" ||
+      immutableTaggedInbox.rows[0]?.processing_result !== "unmatched_message" || immutableTaggedInbox.rows[0]?.signed_message_id !== taggedMessage.id ||
+      immutableTaggedInbox.rows[0]?.signed_enrollment_id !== taggedMessage.enrollment_id || immutableTaggedInbox.rows[0]?.tags_recorded !== true) {
+    throw new Error("A repeated signed event ID with a changed tag pair altered its immutable inbox binding.");
+  }
+
+  const unknownDispositionClient = await pool.connect();
+  try {
+    await unknownDispositionClient.query("begin");
+    await unknownDispositionClient.query("set local role service_role");
+    await unknownDispositionClient.query(
+      "select public.persist_agency_followup_disposition($1::uuid,$2::uuid,$3,$4,$5::jsonb)",
+      [taggedMessage.id, taggedMessage.enrollment_id, taggedOwner, Number(taggedLease.attempt_count),
+        JSON.stringify({ state: "unknown", detail: "synthetic_tagged_email_sent_interruption" })],
+    );
+    await unknownDispositionClient.query("commit");
+  } catch (error) {
+    await unknownDispositionClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    unknownDispositionClient.release();
+  }
+  const exactTaggedMessageBeforeReplay = await pool.query<{ state: string; provider_message_id: string | null; accepted_events: string }>(
+    "select message.state,message.provider_message_id,(select count(*)::text from public.agency_followup_events event where event.message_id=message.id and event.event_type='provider_accepted') as accepted_events from public.agency_followup_messages message where message.id=$1",
+    [taggedMessage.id],
+  );
+  if (exactTaggedMessageBeforeReplay.rows[0]?.state !== "unknown" || exactTaggedMessageBeforeReplay.rows[0]?.provider_message_id !== null ||
+      exactTaggedMessageBeforeReplay.rows[0]?.accepted_events !== "0") {
+    throw new Error("The synthetic worker did not leave the tagged message quarantined UNKNOWN before replay.");
+  }
+
+  const rejectedTaggedEvents = [
+    {
+      id: `evt_wrong_message_tag_${RUN_ID}`,
+      payload: { ...taggedEventBase, data: { ...taggedEventBase.data, tags: {
+        agency_followup_message_id: randomUUID(),
+        agency_followup_enrollment_id: taggedMessage.enrollment_id,
+      } } },
+      name: "wrong message tag",
+      outcome: "unmatched_message",
+      status: 503,
+    },
+    {
+      id: `evt_wrong_enrollment_tag_${RUN_ID}`,
+      payload: { ...taggedEventBase, data: { ...taggedEventBase.data, tags: {
+        agency_followup_message_id: taggedMessage.id,
+        agency_followup_enrollment_id: randomUUID(),
+      } } },
+      name: "wrong enrollment tag",
+      outcome: "unmatched_message",
+      status: 503,
+    },
+    {
+      id: `evt_wrong_tagged_recipient_${RUN_ID}`,
+      payload: { ...taggedEventBase, data: { ...taggedEventBase.data, to: ["different-recipient@example.test"] } },
+      name: "wrong normalized recipient",
+      outcome: "unmatched_recipient",
+      status: 200,
+    },
+    {
+      id: `evt_tagged_not_sent_${RUN_ID}`,
+      payload: { ...taggedEventBase, type: "email.delivered" },
+      name: "non-email.sent event",
+      outcome: "unmatched_message",
+      status: 503,
+    },
+  ];
+  for (const rejected of rejectedTaggedEvents) {
+    const receipt = await postSyntheticResendEvent(rejected.id, rejected.payload);
+    const unchanged = await pool.query<{ state: string; provider_message_id: string | null; accepted_events: string; applications: string; signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean }>(
+      "select message.state,message.provider_message_id,(select count(*)::text from public.agency_followup_events event where event.message_id=message.id and event.event_type='provider_accepted') as accepted_events,(select count(*)::text from public.agency_followup_provider_event_applications application join public.agency_followup_provider_events provider_event on provider_event.provider_event_id=application.provider_event_id where application.message_id=message.id and provider_event.provider_event_id=$2) as applications,(select provider_event.signed_agency_followup_message_id from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$2) as signed_message_id,(select provider_event.signed_agency_followup_enrollment_id from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$2) as signed_enrollment_id,(select provider_event.signed_agency_followup_tags_recorded from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$2) as tags_recorded from public.agency_followup_messages message where message.id=$1",
+      [taggedMessage.id, rejected.id],
+    );
+    if (receipt.status !== rejected.status || receipt.outcome !== rejected.outcome || unchanged.rows[0]?.state !== "unknown" ||
+        unchanged.rows[0]?.provider_message_id !== null || unchanged.rows[0]?.accepted_events !== "0" || unchanged.rows[0]?.applications !== "0" ||
+        unchanged.rows[0]?.signed_message_id !== rejected.payload.data.tags.agency_followup_message_id ||
+        unchanged.rows[0]?.signed_enrollment_id !== rejected.payload.data.tags.agency_followup_enrollment_id || unchanged.rows[0]?.tags_recorded !== true) {
+      throw new Error(`The ${rejected.name} event mutated the tagged UNKNOWN follow-up message.`);
+    }
+  }
+
+  const taggedReplay = await postSyntheticResendEvent(taggedResendEventId, taggedEventBase);
+  const duplicateTaggedReplay = await postSyntheticResendEvent(taggedResendEventId, taggedEventBase);
+  const taggedPromotion = await pool.query<{ state: string; provider_message_id: string | null; provider_delivery_status: string | null; accepted_events: string; applications: string; applied_result: string | null }>(
+    "select message.state,message.provider_message_id,message.provider_delivery_status,(select count(*)::text from public.agency_followup_events event where event.message_id=message.id and event.event_type='provider_accepted') as accepted_events,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=$2 and application.message_id=message.id) as applications,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=$2 and application.message_id=message.id) as applied_result from public.agency_followup_messages message where message.id=$1",
+    [taggedMessage.id, taggedResendEventId],
+  );
+  if (taggedReplay.status !== 200 || taggedReplay.outcome !== "matched" || duplicateTaggedReplay.status !== 200 || duplicateTaggedReplay.outcome !== "duplicate" ||
+      taggedPromotion.rows[0]?.state !== "accepted" || taggedPromotion.rows[0]?.provider_message_id !== taggedProviderMessageId ||
+      taggedPromotion.rows[0]?.provider_delivery_status !== "accepted" || taggedPromotion.rows[0]?.accepted_events !== "1" ||
+      taggedPromotion.rows[0]?.applications !== "1" || taggedPromotion.rows[0]?.applied_result !== "matched") {
+    throw new Error("An exact signed email.sent replay did not promote UNKNOWN exactly once, or its duplicate was not idempotent.");
+  }
+  progress("signed tagged email.sent stayed unmatched while claimed, promoted the exact UNKNOWN message on replay once, rejected mismatched message/enrollment/recipient/non-sent events, and ignored duplicate replay");
+
   const retryProspect = fixtures.prospects.retry;
   await createDraft(pool, page, journeyName, retryProspect);
   await markEligibleAndRelease(page, retryProspect);
@@ -2588,8 +2983,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
       databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
     },
-    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB],
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520", "20261024171116", "20261024175302"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB, EXPECTED_SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_BLOB, EXPECTED_UNKNOWN_RESEND_RECONCILIATION_MIGRATION_BLOB],
     screenshots,
     consentPanelScreenshots,
     providerStatusScreenshots,
@@ -2872,6 +3267,8 @@ async function main(): Promise<void> {
   await verifyPushedMigration(LIVE_MESSAGE_CLAIM_MIGRATION_PATH, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB);
   await verifyPushedMigration(PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_PATH, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB);
   await verifyPushedMigration(RESEND_SUPPRESSED_STATUS_MIGRATION_PATH, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB);
+  await verifyPushedMigration(SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_PATH, EXPECTED_SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_BLOB);
+  await verifyPushedMigration(UNKNOWN_RESEND_RECONCILIATION_MIGRATION_PATH, EXPECTED_UNKNOWN_RESEND_RECONCILIATION_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");

@@ -2,7 +2,7 @@ name: Agency follow-up final-head walkthrough
 
 on:
   push:
-    branches: [codex/crm-live-followup-20261019]
+    branches: [codex/crm-live-followup-20261019, codex/crm-live-followup-final-gates-20261024]
 # Run acceptance at the exact head after every push to this release branch.
 
 permissions:

@@ -13,7 +13,7 @@ const env = {
   AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: "whsec_synthetic-never-used-for-network",
   AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST: "owner@example.test",
   AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST: JSON.stringify([
-    { enrollmentId: "enrollment-01", messageId: "message-01", recipientEmail: "owner@example.test" },
+    { enrollmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", messageId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", recipientEmail: "owner@example.test" },
   ]),
 };
 
@@ -26,7 +26,7 @@ function rejected(name: ErrorResponse["name"]): CreateEmailResponse {
 }
 
 const request = {
-  idempotencyKey: "agency-followup:enrollment-01:message-01",
+  idempotencyKey: "agency-followup:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   recipientEmail: "owner@example.test",
   subject: "Exact approved subject",
   body: "Exact approved plain text body.\nSecond line.",
@@ -55,6 +55,10 @@ describe("Agency follow-up Resend provider", () => {
       to: "owner@example.test",
       subject: "Exact approved subject",
       text: "Exact approved plain text body.\nSecond line.",
+      tags: [
+        { name: "agency_followup_message_id", value: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+        { name: "agency_followup_enrollment_id", value: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+      ],
     }, { idempotencyKey: request.idempotencyKey });
   });
 

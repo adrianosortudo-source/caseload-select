@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { FakeAgencyFollowupProvider } from "../agency-followup-provider";
 import {
   agencyFollowupContentHash,
+  agencyFollowupLogicalMessageKey,
   agencyFollowupRecipientHash,
   type AgencyFollowupSendContext,
 } from "../agency-followup-domain";
@@ -251,7 +252,15 @@ describe("Agency follow-up fake dispatcher", () => {
         leaseOwner: current.leaseOwner,
         leaseSeconds,
       });
-      return "ready";
+      return {
+        result: "ready",
+        request: {
+          idempotencyKey: agencyFollowupLogicalMessageKey(current.enrollmentId, current.id),
+          recipientEmail: validContext.recipient.contactEmail,
+          subject: validContext.content.subject,
+          body: validContext.content.body,
+        },
+      };
     };
     const provider = new FakeAgencyFollowupProvider([
       { kind: "definitive_retryable_failure", code: "resend_rate_limit_exceeded" },
@@ -277,13 +286,84 @@ describe("Agency follow-up fake dispatcher", () => {
     expect(provider.sendCalls).toBe(2);
   });
 
+  it("uses the authorized request returned by the final handoff gate", async () => {
+    const repository = new SyntheticRepository(validContext);
+    const authorizedRequest = {
+      idempotencyKey: agencyFollowupLogicalMessageKey(claim.enrollmentId, claim.id),
+      recipientEmail: "authorized@example.test",
+      subject: "Freshly approved subject",
+      body: "Freshly approved body.",
+    };
+    repository.prepareProviderAttempt = async () => ({ result: "ready", request: authorizedRequest });
+    const sentRequests: typeof authorizedRequest[] = [];
+    const provider = {
+      async send(request: typeof authorizedRequest) {
+        sentRequests.push(request);
+        return { kind: "accepted" as const, providerMessageId: "authorized-request-accepted", acceptedAt: validContext.now };
+      },
+    };
+
+    const result = await dispatchAgencyFollowupBatch({
+      repository, provider, workerId: "synthetic-worker", now: validContext.now,
+      requireProviderHandoffGuard: true,
+    });
+
+    expect(result).toMatchObject({ claimed: 1, accepted: 1, blocked: 0 });
+    expect(sentRequests).toEqual([authorizedRequest]);
+    expect(sentRequests[0]?.recipientEmail).not.toBe(validContext.recipient.contactEmail);
+    expect(sentRequests[0]?.subject).not.toBe(validContext.content.subject);
+    expect(sentRequests[0]?.body).not.toBe(validContext.content.body);
+  });
+
+  it("does not call the provider when the final handoff gate blocks", async () => {
+    const repository = new SyntheticRepository(validContext);
+    repository.prepareProviderAttempt = async () => ({
+      result: "blocked",
+      blockers: ["explicit_opt_in_withdrawn"],
+    });
+    const provider = new FakeAgencyFollowupProvider();
+
+    const result = await dispatchAgencyFollowupBatch({
+      repository, provider, workerId: "synthetic-worker", now: validContext.now,
+      requireProviderHandoffGuard: true,
+    });
+
+    expect(result).toMatchObject({ claimed: 1, blocked: 1, accepted: 0, retryScheduled: 0 });
+    expect(repository.dispositions[0]).toMatchObject({ state: "blocked", blockers: ["explicit_opt_in_withdrawn"] });
+    expect(provider.sendCalls).toBe(0);
+  });
+
+  it("does not call the provider for a deferred gate and persists its database retryAt", async () => {
+    const retryAt = "2026-10-12T15:10:00.000Z";
+    const repository = new SyntheticRepository(validContext);
+    repository.prepareProviderAttempt = async () => ({
+      result: "deferred",
+      blocker: "previous_step_pending",
+      retryAt,
+    });
+    const provider = new FakeAgencyFollowupProvider();
+
+    const result = await dispatchAgencyFollowupBatch({
+      repository, provider, workerId: "synthetic-worker", now: validContext.now,
+      requireProviderHandoffGuard: true,
+    });
+
+    expect(result).toMatchObject({ claimed: 1, retryScheduled: 1, blocked: 0, accepted: 0 });
+    expect(repository.dispositions[0]).toMatchObject({
+      state: "scheduled",
+      retryAt,
+      errorCode: "previous_step_pending_rescheduled",
+    });
+    expect(provider.sendCalls).toBe(0);
+  });
+
   it("does not call the provider after the durable idempotency window expires", async () => {
     const repository = new SyntheticRepository(validContext);
     repository.prepareProviderAttempt = async () => {
       repository.dispositions.push({
         state: "unknown", detail: "resend_idempotency_window_expired", at: validContext.now,
       });
-      return "expired";
+      return { result: "expired" };
     };
     const provider = new FakeAgencyFollowupProvider();
     const result = await dispatchAgencyFollowupBatch({
@@ -299,7 +379,7 @@ describe("Agency follow-up fake dispatcher", () => {
 
   it("skips a stale lease and fails closed when a required guard is absent", async () => {
     const staleRepository = new SyntheticRepository(validContext);
-    staleRepository.prepareProviderAttempt = async () => "stale";
+    staleRepository.prepareProviderAttempt = async () => ({ result: "stale" });
     const staleProvider = new FakeAgencyFollowupProvider();
     const stale = await dispatchAgencyFollowupBatch({
       repository: staleRepository, provider: staleProvider, workerId: "synthetic-worker", now: validContext.now,
@@ -320,7 +400,18 @@ describe("Agency follow-up fake dispatcher", () => {
   it("does not reserve provider key age when send-time blockers fail", async () => {
     const repository = new SyntheticRepository({ ...validContext, contactability: "unsubscribed" });
     let gateCalls = 0;
-    repository.prepareProviderAttempt = async () => { gateCalls += 1; return "ready"; };
+    repository.prepareProviderAttempt = async (current) => {
+      gateCalls += 1;
+      return {
+        result: "ready",
+        request: {
+          idempotencyKey: agencyFollowupLogicalMessageKey(current.enrollmentId, current.id),
+          recipientEmail: validContext.recipient.contactEmail,
+          subject: validContext.content.subject,
+          body: validContext.content.body,
+        },
+      };
+    };
     const provider = new FakeAgencyFollowupProvider();
     const result = await dispatchAgencyFollowupBatch({
       repository, provider, workerId: "synthetic-worker", now: validContext.now,

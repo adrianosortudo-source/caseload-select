@@ -2,6 +2,7 @@ import {
   AGENCY_FOLLOWUP_RESEND_IDEMPOTENCY_WINDOW_EXPIRED,
   runAgencyFollowupAttempt,
   type AgencyFollowupProvider,
+  type AgencyFollowupProviderHandoffGate,
 } from "./agency-followup-provider";
 import { agencyFollowupRecipientEmailHash, type AgencyFollowupSendContext } from "./agency-followup-domain";
 import {
@@ -27,8 +28,8 @@ export interface AgencyFollowupWorkerRepository {
   claimDueMessages(input: { workerId: string; now: string; leaseSeconds: number; limit: number }): Promise<AgencyFollowupClaim[]>;
   loadCurrentSendContext(claim: AgencyFollowupClaim, now: string): Promise<AgencyFollowupSendContext>;
   persistDisposition(claim: AgencyFollowupClaim, disposition: AgencyFollowupWorkerDisposition): Promise<void>;
-  /** Atomically reserves the stable provider key while the current lease is valid. */
-  prepareProviderAttempt?(claim: AgencyFollowupClaim, leaseSeconds: number): Promise<"ready" | "expired" | "stale">;
+  /** Rechecks current authorization and atomically reserves the stable provider key. */
+  prepareProviderAttempt?(claim: AgencyFollowupClaim, leaseSeconds: number): Promise<AgencyFollowupProviderHandoffGate>;
 }
 
 export interface AgencyFollowupDispatchResult {
@@ -107,11 +108,16 @@ export async function dispatchAgencyFollowupBatch(input: {
     if (attempt.state === "stale") continue;
 
     if (attempt.state === "blocked") {
-      const schedulingBlockers = new Set(["outside_send_window", "minimum_spacing_not_elapsed"]);
+      const schedulingBlockers = new Set(["outside_send_window", "minimum_spacing_not_elapsed", "previous_step_pending", "not_due"]);
       if (attempt.blockers.length > 0 && attempt.blockers.every((reason) => schedulingBlockers.has(reason))) {
         let earliestMs = Date.parse(input.now);
         if (attempt.blockers.includes("minimum_spacing_not_elapsed") && context.previousAcceptedAt) {
           earliestMs = Math.max(earliestMs, Date.parse(context.previousAcceptedAt) + context.minimumSpacingMs);
+        }
+        if (attempt.retryAt) {
+          const retryAtMs = Date.parse(attempt.retryAt);
+          if (!Number.isFinite(retryAtMs)) throw new Error("The database handoff gate returned an invalid retry time.");
+          earliestMs = Math.max(earliestMs, retryAtMs);
         }
         const earliestAt = new Date(earliestMs).toISOString();
         await input.repository.persistDisposition(claim, {
@@ -119,7 +125,11 @@ export async function dispatchAgencyFollowupBatch(input: {
           retryAt: scheduleNextAllowed(context, earliestAt),
           errorCode: attempt.blockers.includes("outside_send_window")
             ? "outside_send_window_rescheduled"
-            : "minimum_spacing_rescheduled",
+            : attempt.blockers.includes("minimum_spacing_not_elapsed")
+              ? "minimum_spacing_rescheduled"
+              : attempt.blockers.includes("previous_step_pending")
+                ? "previous_step_pending_rescheduled"
+                : "message_not_due_rescheduled",
           at,
         });
         result.retryScheduled += 1;
@@ -136,7 +146,7 @@ export async function dispatchAgencyFollowupBatch(input: {
       await input.repository.persistDisposition(claim, {
         state: "accepted",
         providerMessageId: outcome.providerMessageId,
-        recipientEmailHash: agencyFollowupRecipientEmailHash(context.recipient.contactEmail),
+        recipientEmailHash: attempt.recipientEmailHash ?? agencyFollowupRecipientEmailHash(context.recipient.contactEmail),
         acceptedAt: outcome.acceptedAt,
         at,
       });
