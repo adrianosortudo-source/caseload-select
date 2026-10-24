@@ -249,7 +249,7 @@ async function verifyPushedMigration(pathname: string, expectedBlob: string): Pr
 }
 
 function verifyPushedHead(sourceCommit: string): void {
-  const remoteRef = "refs/heads/codex/crm-live-followup-20261019";
+  const remoteRef = "refs/heads/codex/crm-live-followup-final-gates-20261024";
   const remoteCommit = execFileSync("git", ["ls-remote", "origin", remoteRef], { encoding: "utf8", timeout: 60_000 })
     .split(/\r?\n/).map((line) => line.trim()).find((line) => line.endsWith(`\t${remoteRef}`))?.split(/\s+/, 1)[0];
   if (remoteCommit !== sourceCommit) {

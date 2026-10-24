@@ -459,7 +459,7 @@ BEGIN
  IF prior_at IS NOT NULL THEN IF j.minimum_spacing_hours<0 THEN blockers:=pg_catalog.array_append(blockers,'invalid_schedule'); ELSIF now_at<prior_at+pg_catalog.make_interval(hours=>j.minimum_spacing_hours) THEN blockers:=pg_catalog.array_append(blockers,'minimum_spacing_not_elapsed'); END IF; END IF;
  IF prior_pending AND blockers <@ ARRAY['not_due','minimum_spacing_not_elapsed']::text[] THEN
   spacing_at:=CASE WHEN prior_at IS NOT NULL AND j.minimum_spacing_hours>=0 THEN prior_at+pg_catalog.make_interval(hours=>j.minimum_spacing_hours) END;
-  retry_at:=pg_catalog.greatest(coalesce(retry_at,now_at+interval '1 second'),coalesce(spacing_at,now_at),coalesce(m.scheduled_at,now_at));
+  retry_at:=greatest(coalesce(retry_at,now_at+interval '1 second'),coalesce(spacing_at,now_at),coalesce(m.scheduled_at,now_at));
 
   RETURN pg_catalog.jsonb_build_object('result','deferred','blocker','previous_step_pending','retryAt',retry_at);
  END IF;
@@ -483,7 +483,7 @@ BEGIN
   INSERT INTO public.agency_followup_events(enrollment_id,message_id,event_type,idempotency_key,event_payload,occurred_at) VALUES(p_enrollment_id,p_message_id,'provider_unknown','resend-window-expired:'||p_message_id::text,pg_catalog.jsonb_build_object('detail','resend_idempotency_window_expired','automaticRetry',false,'firstProviderUseAt',first_used),now_at) ON CONFLICT(idempotency_key) DO NOTHING;
   RETURN pg_catalog.jsonb_build_object('result','expired','code','resend_idempotency_window_expired');
  END IF;
- UPDATE public.agency_followup_messages SET provider_idempotency_first_used_at=coalesce(provider_idempotency_first_used_at,now_at),lease_until=pg_catalog.greatest(lease_until,now_at+pg_catalog.make_interval(secs=>p_lease_seconds)),updated_at=now_at WHERE id=p_message_id AND enrollment_id=p_enrollment_id AND state='claimed' AND lease_owner=btrim(p_lease_owner) AND attempt_count=p_attempt_count AND lease_until>now_at RETURNING provider_idempotency_first_used_at INTO first_used;
+ UPDATE public.agency_followup_messages SET provider_idempotency_first_used_at=coalesce(provider_idempotency_first_used_at,now_at),lease_until=greatest(lease_until,now_at+pg_catalog.make_interval(secs=>p_lease_seconds)),updated_at=now_at WHERE id=p_message_id AND enrollment_id=p_enrollment_id AND state='claimed' AND lease_owner=btrim(p_lease_owner) AND attempt_count=p_attempt_count AND lease_until>now_at RETURNING provider_idempotency_first_used_at INTO first_used;
  IF NOT FOUND THEN RETURN pg_catalog.jsonb_build_object('result','stale'); END IF;
  RETURN pg_catalog.jsonb_build_object('result','ready','request',pg_catalog.jsonb_build_object('idempotencyKey',m.provider_idempotency_key,'recipientEmail',p.contact_email,'subject',m.content_snapshot->>'subject','body',m.content_snapshot->>'body'),'messageId',m.id,'enrollmentId',e.id,'attemptCount',m.attempt_count,'recipientEmailHash',hash_email_now,'preparedAt',now_at,'firstProviderUseAt',first_used);
 END $$;

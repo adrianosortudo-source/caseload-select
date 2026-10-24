@@ -270,7 +270,16 @@ describe("Agency follow-up Resend migration contract", () => {
     for (const [writer, lockFunction] of writerLockCalls) {
       const body = serializedHandoffGateMigration.match(new RegExp(`CREATE OR REPLACE FUNCTION public\\.${writer}\\([\\s\\S]*?END \\$\\$;`, "i"))?.[0] ?? "";
       expect(body, `${writer} must use the shared identity lock`).toContain(`public.${lockFunction}`);
-      expect(body, `${writer} must acquire the mapping catalog lock first`).toContain("public.lock_agency_followup_mapping_catalog");
+      if (writer === "lock_agency_followup_opt_in_event_before_insert") {
+        const delegatedScope = serializedHandoffGateMigration.match(/CREATE OR REPLACE FUNCTION public\.lock_agency_followup_opt_in_scope\([\s\S]*?END \$\$;/i)?.[0] ?? "";
+        const delegatedCatalogLock = delegatedScope.indexOf("PERFORM public.lock_agency_followup_mapping_catalog()");
+        const delegatedIdentityLock = delegatedScope.indexOf("PERFORM public.lock_agency_followup_identity(pid)");
+        expect(delegatedScope).not.toBe("");
+        expect(delegatedCatalogLock, "opt-in scope must acquire catalog lock first").toBeGreaterThanOrEqual(0);
+        expect(delegatedIdentityLock, "opt-in scope must acquire identity lock second").toBeGreaterThan(delegatedCatalogLock);
+      } else {
+        expect(body, `${writer} must acquire the mapping catalog lock first`).toContain("public.lock_agency_followup_mapping_catalog");
+      }
     }
     const gateFunction = serializedHandoffGateMigration.match(/CREATE OR REPLACE FUNCTION public\.authorize_agency_followup_provider_handoff\([\s\S]*?END \$\$;/i)?.[0] ?? "";
     expect(gateFunction).not.toBe("");
