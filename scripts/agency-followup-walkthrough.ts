@@ -1233,7 +1233,7 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
           [conversationId],
         );
       }
-      if (["normal", "pause", "unknown", "window", "lease", "retry"].includes(key)) {
+      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown"].includes(key)) {
         const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
         const databaseClock = await pool.query<{ captured_at: Date }>("select clock_timestamp() - interval '1 minute' as captured_at");
         const capturedAt = databaseClock.rows[0]?.captured_at.toISOString();
