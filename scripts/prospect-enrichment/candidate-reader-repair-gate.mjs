@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CANDIDATE_READER_REPAIR_HELD_MIGRATION, CANDIDATE_READER_REPAIR_PATHS, PROJECT_REF, sha256, verifyLedgerStatements } from "./migration-gate.mjs";
+import { CANDIDATE_READER_REPAIR_HELD_MIGRATIONS, CANDIDATE_READER_REPAIR_PATHS, PROJECT_REF, sha256, verifyLedgerStatements } from "./migration-gate.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const receiptPath = "scripts/prospect-enrichment/candidate-reader-repair-review.json";
 const fail = code => { throw new Error(code); };
@@ -20,12 +20,14 @@ export const catalogExpectations = {
  candidate_chunk_service_role_execute:true,candidate_chunk_anon_execute:false,candidate_chunk_auth_execute:false,
  private_list_service_role_execute:true,private_list_anon_execute:false,private_list_auth_execute:false,
  private_identity_list_service_role_execute:true,private_identity_list_anon_execute:false,private_identity_list_auth_execute:false,
+ private_identity_state_list_service_role_execute:true,private_identity_state_list_anon_execute:false,private_identity_state_list_auth_execute:false,
  private_firm_list_service_role_execute:true,private_firm_list_anon_execute:false,private_firm_list_auth_execute:false,
  private_text_list_service_role_execute:true,private_text_list_anon_execute:false,private_text_list_auth_execute:false,
  firm_list_security_definer:true,firm_list_empty_search_path:true,
  identity_list_security_definer:true,identity_list_empty_search_path:true,
+ identity_state_list_security_definer:true,identity_state_list_empty_search_path:true,
  text_list_security_definer:true,text_list_empty_search_path:true,
- public_list_security_invoker:true,public_list_empty_search_path:true,public_list_firm_dispatch:true,public_list_text_dispatch:true,public_list_identity_dispatch:true,
+ public_list_security_invoker:true,public_list_empty_search_path:true,public_list_firm_dispatch:true,public_list_text_dispatch:true,public_list_identity_dispatch:true,public_list_identity_state_dispatch:true,
  private_firm_links_service_role_execute:false,private_firm_links_anon_execute:false,private_firm_links_auth_execute:false,
  history_metadata_search_index:true,identity_by_candidate_index:true,identity_by_firm_index:true,
  invalid_date_coverage_index:true,
@@ -52,7 +54,7 @@ export function verifyReaderRepairReceipt(receipt,sourceRoot=root) {
 export function verifyReaderRepairPlan(plan,ledgerCheck,phase) {
  if(!isRecord(plan)||!isRecord(ledgerCheck)||!["pre","post"].includes(phase)||
   ledgerCheck.phase!==(phase==="pre"?"candidate-reader-repair-held-pending":"candidate-reader-repair-held-complete")||!Array.isArray(ledgerCheck.pendingPaths)||
-  !same(ledgerCheck.heldMigrations,[{...CANDIDATE_READER_REPAIR_HELD_MIGRATION,status:"held-unapplied"}])) fail("invalid_reader_repair_plan");
+  !same(ledgerCheck.heldMigrations,CANDIDATE_READER_REPAIR_HELD_MIGRATIONS.map(migration=>({...migration,status:"held-unapplied"})))) fail("invalid_reader_repair_plan");
  const pendingPaths=ledgerCheck.pendingPaths;
  const permittedPending=phase==="pre"
   ? repairMigrations.map((_,index)=>repairMigrations.slice(index).map(item=>item.path))
@@ -63,7 +65,7 @@ export function verifyReaderRepairPlan(plan,ledgerCheck,phase) {
   plan.upToDate!==(phase==="post")||!same(plan.migrations,pending)||!same(plan.seeds,[])||!same(plan.roles,[])) fail("unexpected_reader_repair_plan");
  return {phase,migrations:pending,dryRun:true,upToDate:phase==="post",exactScope:true};
 }
-export const catalogQuery=[
+const catalogQueryParts=[
 "SELECT json_build_object(",
 " 'candidate_list_service_role_execute',has_function_privilege('service_role','public.list_prospect_research_candidates_v1(jsonb,integer,uuid,bigint)','EXECUTE'),",
 " 'candidate_list_anon_execute',has_function_privilege('anon','public.list_prospect_research_candidates_v1(jsonb,integer,uuid,bigint)','EXECUTE'),",
@@ -83,6 +85,9 @@ export const catalogQuery=[
 " 'private_identity_list_service_role_execute',has_function_privilege('service_role','prospect_candidate_private.list_candidates_for_identity(jsonb,integer,uuid,bigint)','EXECUTE'),",
 " 'private_identity_list_anon_execute',has_function_privilege('anon','prospect_candidate_private.list_candidates_for_identity(jsonb,integer,uuid,bigint)','EXECUTE'),",
 " 'private_identity_list_auth_execute',has_function_privilege('authenticated','prospect_candidate_private.list_candidates_for_identity(jsonb,integer,uuid,bigint)','EXECUTE'),",
+" 'private_identity_state_list_service_role_execute',has_function_privilege('service_role','prospect_candidate_private.list_candidates_for_identity_state(jsonb,integer,uuid,bigint)','EXECUTE'),",
+" 'private_identity_state_list_anon_execute',has_function_privilege('anon','prospect_candidate_private.list_candidates_for_identity_state(jsonb,integer,uuid,bigint)','EXECUTE'),",
+" 'private_identity_state_list_auth_execute',has_function_privilege('authenticated','prospect_candidate_private.list_candidates_for_identity_state(jsonb,integer,uuid,bigint)','EXECUTE'),",
 " 'private_firm_list_service_role_execute',has_function_privilege('service_role','prospect_candidate_private.list_candidates_for_firm(jsonb,integer,uuid,bigint)','EXECUTE'),",
 " 'private_firm_list_anon_execute',has_function_privilege('anon','prospect_candidate_private.list_candidates_for_firm(jsonb,integer,uuid,bigint)','EXECUTE'),",
 " 'private_firm_list_auth_execute',has_function_privilege('authenticated','prospect_candidate_private.list_candidates_for_firm(jsonb,integer,uuid,bigint)','EXECUTE'),",
@@ -93,6 +98,8 @@ export const catalogQuery=[
 " 'firm_list_empty_search_path',(SELECT coalesce(p.proconfig @> ARRAY['search_path=\"\"']::text[],false) FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.list_candidates_for_firm(jsonb,integer,uuid,bigint)'::regprocedure),",
 " 'identity_list_security_definer',(SELECT p.prosecdef FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.list_candidates_for_identity(jsonb,integer,uuid,bigint)'::regprocedure),",
 " 'identity_list_empty_search_path',(SELECT coalesce(p.proconfig @> ARRAY['search_path=\"\"']::text[],false) FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.list_candidates_for_identity(jsonb,integer,uuid,bigint)'::regprocedure),",
+" 'identity_state_list_security_definer',(SELECT p.prosecdef FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.list_candidates_for_identity_state(jsonb,integer,uuid,bigint)'::regprocedure),",
+" 'identity_state_list_empty_search_path',(SELECT coalesce(p.proconfig @> ARRAY['search_path=\"\"']::text[],false) FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.list_candidates_for_identity_state(jsonb,integer,uuid,bigint)'::regprocedure),",
 " 'text_list_security_definer',(SELECT p.prosecdef FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.list_candidates_for_text(jsonb,integer,uuid,bigint)'::regprocedure),",
 " 'text_list_empty_search_path',(SELECT coalesce(p.proconfig @> ARRAY['search_path=\"\"']::text[],false) FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.list_candidates_for_text(jsonb,integer,uuid,bigint)'::regprocedure),",
 " 'public_list_security_invoker',(SELECT NOT p.prosecdef FROM pg_catalog.pg_proc p WHERE p.oid='public.list_prospect_research_candidates_v1(jsonb,integer,uuid,bigint)'::regprocedure),",
@@ -100,6 +107,7 @@ export const catalogQuery=[
 " 'public_list_firm_dispatch',(SELECT position('list_candidates_for_firm' in p.prosrc)>0 AND position('list_candidates(' in p.prosrc)>0 AND position('''firmId''' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='public.list_prospect_research_candidates_v1(jsonb,integer,uuid,bigint)'::regprocedure),",
 " 'public_list_text_dispatch',(SELECT position('list_candidates_for_text' in p.prosrc)>0 AND position('''text''' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='public.list_prospect_research_candidates_v1(jsonb,integer,uuid,bigint)'::regprocedure),",
 " 'public_list_identity_dispatch',(SELECT position('list_candidates_for_identity' in p.prosrc)>0 AND position('''identityNamespace''' in p.prosrc)>0 AND position('''identityKey''' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='public.list_prospect_research_candidates_v1(jsonb,integer,uuid,bigint)'::regprocedure),",
+" 'public_list_identity_state_dispatch',(SELECT position('list_candidates_for_identity_state' in p.prosrc)>0 AND position('''identityState''' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='public.list_prospect_research_candidates_v1(jsonb,integer,uuid,bigint)'::regprocedure),",
 " 'private_firm_links_service_role_execute',has_function_privilege('service_role','prospect_candidate_private.identity_links_for_firms(bigint,uuid[])','EXECUTE'),",
 " 'private_firm_links_anon_execute',has_function_privilege('anon','prospect_candidate_private.identity_links_for_firms(bigint,uuid[])','EXECUTE'),",
 " 'private_firm_links_auth_execute',has_function_privilege('authenticated','prospect_candidate_private.identity_links_for_firms(bigint,uuid[])','EXECUTE'),",
@@ -115,6 +123,20 @@ export const catalogQuery=[
 " 'apply_refresh_current_identity_excluded',(SELECT position('h.package_id IS DISTINCT FROM NEW.id' in p.prosrc)>0 FROM pg_catalog.pg_proc p WHERE p.oid='prospect_candidate_private.enrichment_firm_refresh_trigger()'::regprocedure)",
 ") AS reader_contract;"
 ].join("\n");
+const catalogChecks=catalogQueryParts
+ .replace(/^SELECT json_build_object\(\n/,"")
+ .replace(/\n\) AS reader_contract;$/g,"")
+ .split(",\n")
+ .map(line=>{
+  const match=line.match(/^\s*'([^']+)',([\s\S]*)$/);
+  if(!match) fail("reader_catalog_query_invalid");
+  return `('${match[1].replace(/'/g,"''")}',${match[2].replace(/,$/,"")})`;
+ });
+if(catalogChecks.length!==Object.keys(catalogExpectations).length) fail("reader_catalog_query_invalid");
+export const catalogQuery=`SELECT json_build_object('reader_contract',jsonb_object_agg(key,value))
+FROM (VALUES
+${catalogChecks.join(",\n")}
+) AS reader_contract_checks(key,value);`;
 export function targetLedgerQuery() {
  return `SELECT version,name,statements FROM supabase_migrations.schema_migrations WHERE version IN (${repairMigrations.map(identity=>`'${identity.version}'`).join(",")}) ORDER BY version;\n`;
 }
