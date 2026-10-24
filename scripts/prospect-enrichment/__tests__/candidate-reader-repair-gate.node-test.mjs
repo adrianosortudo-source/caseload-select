@@ -134,6 +134,8 @@ test("reader catalog readback requires indexes, privileges and the refresh-trigg
   assert.doesNotMatch(catalogQuery, /json_build_object\(\s*'candidate_list_service_role_execute'/);
   assert.equal((catalogQuery.match(/\n\('(?:[^']|'')+'/g) ?? []).length, Object.keys(catalogExpectations).length);
   assert.equal(verifyReaderCatalog([{ reader_contract: { ...catalogExpectations } }]).verified, true);
+  assert.equal(verifyReaderCatalog([{ reader_contract: JSON.stringify({ ...catalogExpectations }) }]).verified, true);
+  assert.throws(() => verifyReaderCatalog([{ reader_contract: "not-json" }]), /reader_catalog_shape_invalid/);
   assert.throws(() => verifyReaderCatalog([{ reader_contract: { ...catalogExpectations, invalid_date_coverage_index: false } }]), /reader_catalog_contract_mismatch/);
   assert.throws(() => verifyReaderCatalog([{ reader_contract: { ...catalogExpectations, original_status_exact_index: false } }]), /reader_catalog_contract_mismatch/);
   for (const key of ["private_identity_state_list_service_role_execute", "identity_state_list_security_definer", "identity_state_list_empty_search_path", "public_list_identity_state_dispatch"]) {

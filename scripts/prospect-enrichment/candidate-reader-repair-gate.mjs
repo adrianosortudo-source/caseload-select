@@ -142,8 +142,12 @@ export function targetLedgerQuery() {
 }
 export function verifyReaderCatalog(payload) {
  const rows=Array.isArray(payload)?payload:isRecord(payload)&&Array.isArray(payload.data)?payload.data:isRecord(payload)&&Array.isArray(payload.rows)?payload.rows:null;
- if(!rows||rows.length!==1||!isRecord(rows[0])||!same(Object.keys(rows[0]),["reader_contract"])||!isRecord(rows[0].reader_contract)) fail("reader_catalog_shape_invalid");
- const actual=rows[0].reader_contract;
+ if(!rows||rows.length!==1||!isRecord(rows[0])||!same(Object.keys(rows[0]),["reader_contract"])) fail("reader_catalog_shape_invalid");
+ let actual=rows[0].reader_contract;
+ if(typeof actual==="string") {
+  try { actual=JSON.parse(actual); } catch { fail("reader_catalog_shape_invalid"); }
+ }
+ if(!isRecord(actual)) fail("reader_catalog_shape_invalid");
  if(!same(Object.keys(actual).sort(),Object.keys(catalogExpectations).sort())||Object.entries(catalogExpectations).some(([k,v])=>actual[k]!==v)) fail("reader_catalog_contract_mismatch");
  return {verified:true,catalogChecks:Object.keys(catalogExpectations).length,privilegesAndIndexes:"exact"};
 }
