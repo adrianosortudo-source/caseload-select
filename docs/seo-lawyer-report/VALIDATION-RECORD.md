@@ -1,40 +1,46 @@
 # SEO/AEO report validation record
 
-Date: 2026-10-23  
+Date: 2026-10-24  
 Branch: `codex/seo-lawyer-report-20261023`  
-Previous pushed head: `4fd4786c50d1b0373e7a39136d5513478cac13ae`  
+Validated pushed head: `4f17c9578fa785cc1b4a5a4e536651301de73269`  
 Review PR: [#420](https://github.com/adrianosortudo-source/caseload-select/pull/420)
 
-## Live firm matrix
+## Live firm checks
 
-Scans were run in the protected Vercel Preview through the public SEO check flow. No email or contact information was submitted. Scores are bounded observations from each scan, not firm rankings or acceptance targets.
+Scans ran through the protected Vercel Preview using the public SEO check flow. No email or contact information was submitted. Scores are bounded observations from each scan, not firm rankings or acceptance targets.
 
-| Domain | Result | Pages checked | Key observed behavior |
+| Domain | Result | Pages checked | Observed evidence |
 | --- | ---: | ---: | --- |
-| `sonilaw.ca` | 84/100 | 10 | Homepage correctly shown without an observed `noindex` instruction; four affected page URLs listed separately. |
-| `gosailaw.com` | 84/100 | 10 | Homepage separately shown without an observed `noindex` instruction; two checked pages had a `noindex` instruction. |
-| `drglaw.ca` | 94/100 | 10 | No observed `noindex`; seven pages prioritized for page-label review and uncertain browser behavior presented as verification. |
-| `sakurabalaw.ca` | 85/100 | 10 | Mixed-content observation exposed ambiguous generic HTTPS advice; report copy was corrected to distinguish HTTPS page loads from HTTP subresources. |
-| `marathonlaw.ca` | 79/100 | 9 | Nine checked pages stated explicitly; service information review limited to one affected page. |
+| `sonilaw.ca` | 84/100 | 10 | Homepage separately shown without an observed `noindex` instruction; four checked page URLs with page-level `noindex` are identified. |
+| `gosailaw.com` | 84/100 | 10 | Homepage separately shown without an observed `noindex`; two checked pages had a `noindex` instruction. |
+| `drglaw.ca` | 94/100 | 10 | No observed `noindex`; seven pages prioritized for page-label review and uncertain browser behavior is presented as something to verify. |
+| `sakurabalaw.ca` | 85/100 | 10 | All ten checked pages loaded over HTTPS; one or more HTTP resources were observed and described as mixed content with a resource-specific next step. |
+| `marathonlaw.ca` | 79/100 | 9 | The report states nine checked pages; service-information review is limited to the affected page. |
 | `themblawfirm.ca` | Not scored | 0 | HTTP 404 shown as an unavailable-site error; no quality score produced. |
 
-The Soni evidence disclosure listed these four observed page URLs: `/practice/employment-law/`, `/team/`, `/team/thanh-justin-pham/`, and `/team/ummuhani-khaleel/`. Its homepage message remained separate from those page-level instructions. These are scan observations, not confirmation of current search indexing.
+The Soni evidence disclosure listed four observed page URLs: `/practice/employment-law/`, `/team/`, `/team/thanh-justin-pham/`, and `/team/ummuhani-khaleel/`. Its homepage message remained separate from those page-level instructions. These observations do not confirm current search indexing.
 
-## Rendered report checks
+## Lawyer-facing report and page checks
 
-The Soni report was opened in the protected preview and checked at CSS widths 1440, 1024, 768, 640, 375 and 320 pixels. The report container remained inside the viewport at each width; document width did not exceed the viewport. The checked computed type roles were Manrope for report headings and DM Sans for report prose. The canonical CaseLoad Select logo appeared in the report header. No in-tool print or PDF controls appeared.
+The Soni report was reviewed in the protected preview and checked at CSS widths 1440, 1024, 768, 640, 375 and 320 pixels. At each emulated width, the document width stayed within the viewport. The report used the CaseLoad Select logo, Manrope headings and DM Sans prose. Evidence details were keyboard-accessible and stated that a `noindex` instruction is not confirmation of current indexing. The report labels its result as Website checks, explains the inspected-page basis and limits, and does not grade AI visibility or predict citations.
 
-Keyboard-accessible evidence disclosure was opened and read. The report showed the page URLs and the caveat that a `noindex` instruction does not confirm current indexing. The summary also identified the page-check score as a weighted summary for inspected pages, separated AI access observations from scoring, and stated limitations while disclosures were closed.
+## Tool-page copy
 
-## Automated validation
+The latest preview identifies the tool as Law Firm SEO Check. Its introduction says it checks public website signals across up to ten pages, identifies affected pages, explains why observations may matter and gives general next steps. It explicitly says AI observations are not a visibility grade or citation prediction. The supporting stat and check categories reflect ten weighted categories instead of the retired 70+ / nine-category claim.
 
-- `src/app/api/tools/seo-check/__tests__/report-model.test.ts`: 12/12 tests passed, including the new mixed-content distinction and combined HTTP/mixed-content cases.
-- Earlier on the pushed head, the SEO-check and diagnostic-comparison suite passed 323 tests across 22 files.
-- Re-running the full suite after the local correction failed before executing tests: 11 Vite worker/setup timeouts loading `tests/vitest.server-only.setup.ts` and `/@vite/env`. This is an environment failure; it is not recorded as a passing run. CI on the pushed head `4fd4786c` showed 14/14 checks successful; the correction still needs its own CI run.
-- Local ESLint did not return in a reasonable interval and was stopped. The pushed head had a prior changed-file lint pass; this correction still needs CI lint verification.
+Responsive measurements at CSS widths 1440, 1024, 768, 640, 375 and 320 pixels showed no horizontal document overflow. The hero and form copy fit their available content areas; the section’s internal side padding accounts for the difference between section width and text width.
 
-## Scope and remaining gates
+## Automated and preview validation
 
-The crawler and page-selection behavior were not changed. The mixed-content report copy now distinguishes a page fetched over HTTP from HTTP resources found on an HTTPS page, and gives the latter a resource-specific next step. The earlier scan results above reflect the deployed preview before this local wording correction.
+- Targeted report-model suite: 12/12 tests passed, including HTTPS-page/HTTP-resource distinctions and combined HTTP-page/mixed-content cases.
+- SEO-check and diagnostic-comparison suite: 323 tests passed across 22 files on the preceding implementation head.
+- On validated head `4f17c957`, full Vitest suite, TypeScript typecheck, ESLint, render-service tests/typecheck, rendered-copy gates, DR-039 language parity, engine sync, render parity and self-contained build-assets checks completed successfully.
+- Vercel Preview checks for both `caseload-select` and `caseload-render` passed on `4f17c957`.
+- A repository-wide real-Postgres/browser acceptance job was still in progress at the time of this record; it exercises unrelated publication/prospect-enrichment surfaces. Confirm its final result in GitHub before treating all repository checks as complete.
+- Two Vercel preview scans on the implementation head confirmed the Soni and Sakura report findings above. Live firm results are examples of observed behavior, not a full manual SEO audit.
 
-This record does not claim a fresh preview build of the correction. Push the correction to the existing review branch, wait for Vercel and CI on the new head, then re-run the Sakura Bala scan to verify the revised live copy. Keep the PR unmerged and do not deploy to production.
+## Scope
+
+Crawler behavior and page selection were preserved. The report corrects score interpretation and misleading findings, provides affected-URL evidence, plain-language context, priority and general next steps, and clarifies the limits of the scan. No in-tool print/PDF export controls were added; the user may print the on-screen report using the browser.
+
+The PR remains for review. Do not merge or deploy to production as part of this work.
