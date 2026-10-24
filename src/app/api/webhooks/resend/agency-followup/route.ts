@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 const MAX_BODY_BYTES = 1024 * 1024;
 const MESSAGE_EVENTS = new Set([
   "email.sent", "email.delivered", "email.delivery_delayed", "email.failed",
-  "email.bounced", "email.complained", "email.unsubscribed", "email.opened", "email.clicked",
+  "email.bounced", "email.complained", "email.unsubscribed", "email.suppressed", "email.opened", "email.clicked",
 ]);
 
 type JsonObject = Record<string, unknown>;

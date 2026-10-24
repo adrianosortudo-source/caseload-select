@@ -13,7 +13,7 @@ type TemplateVersion = { id: string; templateKey: string; version: number; state
 type QueueItem = {
   id: string; enrollmentId: string; prospectId: string; firmName: string; prospectStage: string;
   journeyName: string; stepNumber: number; state: string;
-  providerDeliveryStatus: "unknown" | "accepted" | "delivered" | "failed" | "bounced" | "complained" | "unsubscribed";
+  providerDeliveryStatus: "unknown" | "accepted" | "delivered" | "failed" | "bounced" | "complained" | "unsubscribed" | "suppressed";
   providerDeliveryStatusAt: string | null;
   optInState: 'granted' | 'withdrawn' | 'missing';
   eligibility: string;

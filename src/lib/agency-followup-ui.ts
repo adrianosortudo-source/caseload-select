@@ -13,7 +13,8 @@ type AgencyFollowupProviderDeliveryStatus =
   | "failed"
   | "bounced"
   | "complained"
-  | "unsubscribed";
+  | "unsubscribed"
+  | "suppressed";
 
 const DELIVERY_STATUS_LABELS: Record<AgencyFollowupProviderDeliveryStatus, string> = {
   unknown: "Outcome unknown",
@@ -23,6 +24,7 @@ const DELIVERY_STATUS_LABELS: Record<AgencyFollowupProviderDeliveryStatus, strin
   bounced: "Bounced by recipient mail server",
   complained: "Marked as spam",
   unsubscribed: "Recipient unsubscribed",
+  suppressed: "Blocked by provider",
 };
 
 export function agencyFollowupDeliveryStatusLabel(input: {

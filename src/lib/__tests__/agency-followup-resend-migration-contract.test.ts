@@ -17,6 +17,7 @@ const replayGuardMigration = readFileSync(resolve(process.cwd(), "supabase/migra
 const idempotencyFenceMigrationName = "20261023185615_agency_followup_provider_idempotency_fence.sql";
 const idempotencyFenceMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", idempotencyFenceMigrationName), "utf8");
 const service = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-service.ts"), "utf8");
+const suppressionMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20261024054520_agency_followup_resend_suppressed_status.sql"), "utf8");
 
 describe("Agency follow-up Resend migration contract", () => {
   it("keeps webhook evidence append-only, minimized, private, and replay-safe", () => {
@@ -87,6 +88,17 @@ describe("Agency follow-up Resend migration contract", () => {
     expect(replayGuardMigration).toContain("REVOKE ALL ON FUNCTION public.persist_agency_followup_resend_event");
     expect(replayGuardMigration).toContain("GRANT EXECUTE ON FUNCTION public.persist_agency_followup_resend_event");
     expect(replayGuardMigration).toContain("TO service_role");
+  });
+
+  it("records Resend suppression as a durable shared stop and preserves replay quarantine", () => {
+    expect(suppressionMigration).toContain("'email.suppressed'");
+    expect(suppressionMigration).toContain("'resend_email_suppressed'");
+    expect(suppressionMigration).toContain("'provider_suppressed'");
+    expect(suppressionMigration).toMatch(/WHEN 'email\.suppressed' THEN 'suppressed'/);
+    expect(suppressionMigration).toMatch(/WHEN 'suppressed' THEN 7 ELSE 0 END/);
+    expect(suppressionMigration).toContain("p_event_type IN ('email.bounced', 'email.complained', 'email.unsubscribed', 'email.suppressed', 'contact.updated')");
+    expect(suppressionMigration).toContain("IF v_existing_event.processing_result IS DISTINCT FROM 'unmatched_message' THEN");
+    expect(suppressionMigration).toContain("RETURN jsonb_build_object('result', 'duplicate');");
   });
 
   it("claims only the exact allowlisted enrollment/message pairs in test mode", () => {

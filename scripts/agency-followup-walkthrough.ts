@@ -59,6 +59,8 @@ const LIVE_MESSAGE_CLAIM_MIGRATION_PATH = "supabase/migrations/20261023185535_ag
 const EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB = "caf1aa2eb9ffe6a3a9ac9e1b3f500e870068f4c0";
 const PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_PATH = "supabase/migrations/20261023185615_agency_followup_provider_idempotency_fence.sql";
 const EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB = "65cdcf1d16a7f2c61af9ec3cbf38341e59b9d35e";
+const RESEND_SUPPRESSED_STATUS_MIGRATION_PATH = "supabase/migrations/20261024054520_agency_followup_resend_suppressed_status.sql";
+const EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB = "f1a15e90381d9df81c5e887e04c7ec0f880a0f73";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
@@ -261,11 +263,11 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615"]],
+      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "13") {
-    throw new Error("Disposable Postgres identity or exact thirteen-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "14") {
+    throw new Error("Disposable Postgres identity or exact fourteen-migration ledger check failed.");
   }
   const templateApprovalRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
     "select has_function_privilege('service_role', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as service_access, not has_function_privilege('anon', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.approve_agency_followup_template_version(uuid,uuid)'::regprocedure",
@@ -331,7 +333,7 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     || operatorRead.rows[0]?.public_access !== true) {
     throw new Error(`The opt-in operator identity fields must be available to service_role and unavailable to public roles; actual=${JSON.stringify(operatorRead.rows[0] ?? null)}`);
   }
-  progress("disposable identity, all thirteen acceptance migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and CRM RPC grants checked");
+  progress("disposable identity, all fourteen acceptance migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and CRM RPC grants checked");
 }
 
 async function verifyTemplateApprovalRollback(pool: Pool, actorId: string): Promise<Record<string, unknown>> {
@@ -2247,6 +2249,43 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw new Error("The signed provider event did not reconcile after acceptance exactly once with an authoritative application row.");
   }
 
+
+  const suppressionEventId = `evt_suppressed_${RUN_ID}`;
+  const suppressionTime = new Date(Date.parse(retryDueAt) + 2000).toISOString();
+  const signedSuppressionEvent = {
+    type: "email.suppressed",
+    created_at: suppressionTime,
+    data: { email_id: retryProviderMessageId, to: [retryProspect.email] },
+  };
+  const suppressionReceipt = await postSyntheticResendEvent(suppressionEventId, signedSuppressionEvent);
+  const duplicateSuppressionReceipt = await postSyntheticResendEvent(suppressionEventId, signedSuppressionEvent);
+  const suppressedState = await pool.query<{
+    delivery_status: string; suppression_reason: string | null; contact_state: string | null;
+    suppression_rows: string; applications: string; audit_events: string;
+  }>(
+    "select message.provider_delivery_status as delivery_status,contactability.reason as suppression_reason,contactability.state as contact_state,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.conversation_id=event.conversation_id and suppression.suppression_reason='resend_email_suppressed') as suppression_rows,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,(select count(*)::text from public.agency_followup_events audit where audit.message_id=message.id and audit.event_type='provider_suppressed') as audit_events from public.agency_followup_provider_events event join public.agency_followup_messages message on message.id=event.message_id left join public.prospect_contactability contactability on contactability.conversation_id=event.conversation_id where event.provider_event_id=$1",
+    [suppressionEventId],
+  );
+  const lateAcceptance = await postSyntheticResendEvent(`evt_late_sent_${RUN_ID}`, {
+    type: "email.sent",
+    created_at: retryDueAt,
+    data: { email_id: retryProviderMessageId, to: [retryProspect.email] },
+  });
+  const statusAfterLateAcceptance = await pool.query<{ provider_delivery_status: string; contact_state: string | null; suppression_rows: string }>(
+    "select message.provider_delivery_status,contactability.state as contact_state,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.conversation_id=contactability.conversation_id and suppression.suppression_reason='resend_email_suppressed') as suppression_rows from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id join public.prospect_source_links source_link on source_link.source_record_key=enrollment.prospect_id::text and source_link.source_system='agency_crm' join public.prospect_conversation_sources association on association.source_link_id=source_link.id join public.prospect_contactability contactability on contactability.conversation_id=association.conversation_id where message.id=$1",
+    [retryMessage.id],
+  );
+  if (suppressionReceipt.status !== 200 || suppressionReceipt.outcome !== "matched" ||
+    duplicateSuppressionReceipt.status !== 200 || duplicateSuppressionReceipt.outcome !== "duplicate" ||
+    suppressedState.rows[0]?.delivery_status !== "suppressed" || suppressedState.rows[0]?.contact_state !== "suppressed" ||
+    suppressedState.rows[0]?.suppression_reason !== "resend_email_suppressed" || suppressedState.rows[0]?.suppression_rows !== "1" ||
+    suppressedState.rows[0]?.applications !== "1" || suppressedState.rows[0]?.audit_events !== "1" ||
+    lateAcceptance.status !== 200 || lateAcceptance.outcome !== "matched" ||
+    statusAfterLateAcceptance.rows[0]?.provider_delivery_status !== "suppressed" ||
+    statusAfterLateAcceptance.rows[0]?.contact_state !== "suppressed" || statusAfterLateAcceptance.rows[0]?.suppression_rows !== "1") {
+    throw new Error("The signed provider suppression did not remain durable, exactly-once, shared, or terminal after an older acceptance event.");
+  }
+  progress("synthetic signed email.suppressed event created one shared stop and audit; duplicate was idempotent; older email.sent did not downgrade status");
   // Exercise actual schedule policy immediately before handoff with a delayed
   // weekend claim. The current weekday/window come from the persisted journey.
   const windowProspect = fixtures.prospects.window;
@@ -2463,11 +2502,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await stableLayout();
     await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
     if (width === 320) {
-      const providerStatus = page.locator('[data-ui-component-content="agency-follow-up-message"] dl').first();
+      const providerStatus = queueCard(page, retryProspect.firmName).locator('[data-ui-component-content="agency-follow-up-message"] dl').first();
       const providerStatusLabel = providerStatus.locator('dt[data-ui-copy="supporting"]');
       const providerStatusValue = providerStatus.locator('dd[data-ui-copy="supporting"]');
       if ((await providerStatusLabel.count()) !== 1 || (await providerStatusValue.count()) !== 1) throw new Error("The synthetic review queue did not render one provider delivery label/value pair.");
-      if ((await providerStatusLabel.innerText()).trim() !== "Provider delivery:" || !(await providerStatusValue.innerText()).trim()) throw new Error("The synthetic review queue rendered an invalid provider delivery label/value pair.");
+      if ((await providerStatusLabel.innerText()).trim() !== "Provider delivery:" || (await providerStatusValue.innerText()).trim() !== "Blocked by provider") throw new Error("The synthetic suppression event was not rendered as a provider-blocked delivery status.");
       await providerStatus.scrollIntoViewIfNeeded();
       await stableLayout();
       const statusGeometry = await providerStatus.evaluate((element) => {
@@ -2549,8 +2588,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
       databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
     },
-    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB],
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB],
     screenshots,
     consentPanelScreenshots,
     providerStatusScreenshots,
@@ -2832,6 +2871,7 @@ async function main(): Promise<void> {
   await verifyPushedMigration(TEMPLATE_APPROVAL_ATOMIC_MIGRATION_PATH, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB);
   await verifyPushedMigration(LIVE_MESSAGE_CLAIM_MIGRATION_PATH, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB);
   await verifyPushedMigration(PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_PATH, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB);
+  await verifyPushedMigration(RESEND_SUPPRESSED_STATUS_MIGRATION_PATH, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");

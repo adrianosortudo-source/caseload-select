@@ -51,5 +51,7 @@ describe("agency follow-up delivery status label", () => {
       .toBe("Accepted by provider");
     expect(agencyFollowupDeliveryStatusLabel({ messageState: "accepted", providerDeliveryStatus: "delivered" }))
       .toBe("Delivered per provider");
+    expect(agencyFollowupDeliveryStatusLabel({ messageState: "accepted", providerDeliveryStatus: "suppressed" }))
+      .toBe("Blocked by provider");
   });
 });

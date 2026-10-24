@@ -79,6 +79,22 @@ describe("Resend Agency follow-up webhook", () => {
     }));
   });
 
+  it("persists signed provider suppression events with the exact recipient fingerprint", async () => {
+    const response = await POST(request({
+      type: "email.suppressed",
+      created_at: "2026-10-24T05:00:00.000Z",
+      data: { email_id: "re_msg_suppressed", to: ["Owner@example.com"] },
+    }));
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("persist_agency_followup_resend_event", expect.objectContaining({
+      p_provider_message_id: "re_msg_suppressed",
+      p_event_type: "email.suppressed",
+      p_contact_status: null,
+      p_recipient_email: "Owner@example.com",
+      p_recipient_sha256: agencyFollowupRecipientEmailHash("Owner@example.com"),
+    }));
+  });
+
   it("accepts only unsubscribe contact updates and sends no contact email on other statuses", async () => {
     const response = await POST(request({
       type: "contact.updated",

@@ -49,7 +49,7 @@ export interface AgencyFollowupQueueItem {
   journeyName: string;
   stepNumber: number;
   state: string;
-  providerDeliveryStatus: "unknown" | "accepted" | "delivered" | "failed" | "bounced" | "complained" | "unsubscribed";
+  providerDeliveryStatus: "unknown" | "accepted" | "delivered" | "failed" | "bounced" | "complained" | "unsubscribed" | "suppressed";
   providerDeliveryStatusAt: string | null;
   optInState: AgencyFollowupOptInState;
   eligibility: string;
