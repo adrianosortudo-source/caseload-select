@@ -1,8 +1,9 @@
 import {
+  AGENCY_FOLLOWUP_RESEND_IDEMPOTENCY_WINDOW_EXPIRED,
   runAgencyFollowupAttempt,
   type AgencyFollowupProvider,
 } from "./agency-followup-provider";
-import type { AgencyFollowupSendContext } from "./agency-followup-domain";
+import { agencyFollowupRecipientEmailHash, type AgencyFollowupSendContext } from "./agency-followup-domain";
 import {
   isWithinAgencyFollowupWindow,
   scheduleAgencyFollowupStep,
@@ -17,7 +18,7 @@ export interface AgencyFollowupClaim {
 
 export type AgencyFollowupWorkerDisposition =
   | { state: "blocked"; blockers: string[]; at: string }
-  | { state: "accepted"; providerMessageId: string; acceptedAt: string; at: string }
+  | { state: "accepted"; providerMessageId: string; recipientEmailHash: string; acceptedAt: string; at: string }
   | { state: "scheduled"; retryAt: string; errorCode: string; at: string }
   | { state: "failed"; errorCode: string; at: string }
   | { state: "unknown"; detail: string; at: string };
@@ -26,6 +27,8 @@ export interface AgencyFollowupWorkerRepository {
   claimDueMessages(input: { workerId: string; now: string; leaseSeconds: number; limit: number }): Promise<AgencyFollowupClaim[]>;
   loadCurrentSendContext(claim: AgencyFollowupClaim, now: string): Promise<AgencyFollowupSendContext>;
   persistDisposition(claim: AgencyFollowupClaim, disposition: AgencyFollowupWorkerDisposition): Promise<void>;
+  /** Atomically reserves the stable provider key while the current lease is valid. */
+  prepareProviderAttempt?(claim: AgencyFollowupClaim, leaseSeconds: number): Promise<"ready" | "expired" | "stale">;
 }
 
 export interface AgencyFollowupDispatchResult {
@@ -67,7 +70,12 @@ export async function dispatchAgencyFollowupBatch(input: {
   leaseSeconds?: number;
   limit?: number;
   maxAttempts?: number;
+  /** Real provider callers must fail closed unless the durable handoff gate exists. */
+  requireProviderHandoffGuard?: boolean;
 }): Promise<AgencyFollowupDispatchResult> {
+  if (input.requireProviderHandoffGuard && !input.repository.prepareProviderAttempt) {
+    throw new Error("The real Agency follow-up provider requires a durable pre-handoff guard.");
+  }
   const claims = await input.repository.claimDueMessages({
     workerId: input.workerId,
     now: input.now,
@@ -90,8 +98,13 @@ export async function dispatchAgencyFollowupBatch(input: {
       messageId: claim.id,
       context,
       provider: input.provider,
+      beforeProviderHandoff: input.repository.prepareProviderAttempt
+        ? () => input.repository.prepareProviderAttempt!(claim, input.leaseSeconds ?? 120)
+        : undefined,
     });
     const at = input.now;
+
+    if (attempt.state === "stale") continue;
 
     if (attempt.state === "blocked") {
       const schedulingBlockers = new Set(["outside_send_window", "minimum_spacing_not_elapsed"]);
@@ -123,6 +136,7 @@ export async function dispatchAgencyFollowupBatch(input: {
       await input.repository.persistDisposition(claim, {
         state: "accepted",
         providerMessageId: outcome.providerMessageId,
+        recipientEmailHash: agencyFollowupRecipientEmailHash(context.recipient.contactEmail),
         acceptedAt: outcome.acceptedAt,
         at,
       });
@@ -144,6 +158,11 @@ export async function dispatchAgencyFollowupBatch(input: {
       await input.repository.persistDisposition(claim, { state: "failed", errorCode: outcome.code, at });
       result.failed += 1;
     } else if (attempt.state === "quarantine_unknown" && outcome.kind === "unknown") {
+      if (outcome.detail === AGENCY_FOLLOWUP_RESEND_IDEMPOTENCY_WINDOW_EXPIRED) {
+        // The gate atomically persisted UNKNOWN and its audit event before returning expired.
+        result.unknown += 1;
+        continue;
+      }
       await input.repository.persistDisposition(claim, { state: "unknown", detail: outcome.detail, at });
       result.unknown += 1;
     } else {

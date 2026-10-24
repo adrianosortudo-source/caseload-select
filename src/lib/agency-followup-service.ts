@@ -10,7 +10,9 @@ import {
   type AgencyFollowupSchedulePolicy,
   type AgencyFollowupStepDraft,
 } from "@/lib/agency-followup-authoring";
-import { FakeAgencyFollowupProvider } from "@/lib/agency-followup-provider";
+import { FakeAgencyFollowupProvider, type AgencyFollowupProvider } from "@/lib/agency-followup-provider";
+import { createAgencyFollowupResendProvider } from "@/lib/agency-followup-resend-provider";
+import { resolveAgencyFollowupSendConfig } from "@/lib/agency-followup-send-config";
 import {
   dispatchAgencyFollowupBatch,
   type AgencyFollowupClaim,
@@ -20,10 +22,12 @@ import {
   agencyFollowupContentHash,
   agencyFollowupLogicalMessageKey,
   agencyFollowupRecipientHash,
+  agencyFollowupRecipientEmailHash,
   agencyFollowupStepsHaveApprovedTemplates,
   evaluateAgencyFollowupSend,
   type AgencyContactability,
   type AgencyConversationStatus,
+  type AgencyFollowupOptInState,
   type AgencyFollowupMessageContent,
   type AgencyFollowupRecipientSnapshot,
   type AgencyFollowupSendContext,
@@ -45,6 +49,9 @@ export interface AgencyFollowupQueueItem {
   journeyName: string;
   stepNumber: number;
   state: string;
+  providerDeliveryStatus: "unknown" | "accepted" | "delivered" | "failed" | "bounced" | "complained" | "unsubscribed" | "suppressed";
+  providerDeliveryStatusAt: string | null;
+  optInState: AgencyFollowupOptInState;
   eligibility: string;
   contactability: AgencyContactability;
   conversationStatus: AgencyConversationStatus;
@@ -57,6 +64,7 @@ export interface AgencyFollowupQueueItem {
 }
 
 export interface AgencyFollowupConsoleData {
+  send: { mode: "off" | "test" | "live"; ready: boolean };
   journeys: Array<{
     id: string; name: string; journeyKey: string; version: number; state: string;
     timezone: string; businessDays: number[]; localWindowStart: string; localWindowEnd: string;
@@ -90,48 +98,174 @@ function toRecipient(prospect: DbRow, enrollment: DbRow): AgencyFollowupRecipien
   };
 }
 
-async function loadOperationsState(prospectId: string): Promise<{
+async function loadOperationsState(prospectId: string, contactEmail: string | null): Promise<{
   contactability: AgencyContactability;
   conversationStatus: AgencyConversationStatus;
   hasExactSource: boolean;
+  optInState: AgencyFollowupOptInState;
 }> {
-  const sourcesResult = await supabase
-    .from("prospect_source_links")
-    .select("id")
-    .in("source_system", ["agency_crm", "agency_crm_contact"])
-    .eq("source_record_key", prospectId);
-  const sourceRows = assertResult(sourcesResult, "Unable to verify Agency CRM source history") as DbRow[];
-  if (sourceRows.length === 0) {
-    return { contactability: "unknown", conversationStatus: "not_contacted", hasExactSource: false };
-  }
+  const result = await loadOperationsStates([{ id: prospectId, contact_email: contactEmail }]);
+  return result.get(prospectId) ?? {
+    contactability: "unknown", conversationStatus: "not_contacted", hasExactSource: false, optInState: "missing",
+  };
+}
 
-  const sourceIds = sourceRows.map((row) => String(row.id));
-  const associationsResult = await supabase
-    .from("prospect_conversation_sources")
-    .select("conversation_id")
-    .in("source_link_id", sourceIds);
-  const associations = assertResult(associationsResult, "Unable to read Agency CRM conversation links") as DbRow[];
-  const conversationIds = [...new Set(associations.map((row) => String(row.conversation_id)))];
-  if (conversationIds.length === 0) {
-    return { contactability: "unknown", conversationStatus: "not_contacted", hasExactSource: false };
+async function readOperationsPages(
+  queryAt: (from: number, to: number) => PromiseLike<{ data: DbRow[] | null; error: { message: string } | null }>,
+  label: string,
+): Promise<DbRow[]> {
+  const pageSize = 1000;
+  const hardCap = 20000;
+  const rows: DbRow[] = [];
+  for (let offset = 0; offset < hardCap; offset += pageSize) {
+    const page = assertResult(await queryAt(offset, offset + pageSize - 1), label);
+    rows.push(...page);
+    if (page.length < pageSize) return rows;
   }
+  throw new Error(`${label}: result exceeded the ${hardCap}-row safety limit`);
+}
 
-  const [conversationsResult, contactabilityResult, activitiesResult] = await Promise.all([
-    supabase.from("prospect_conversations").select("id,status").in("id", conversationIds),
-    supabase.from("prospect_contactability").select("conversation_id,state").in("conversation_id", conversationIds),
-    supabase.from("prospect_activities").select("conversation_id,kind").in("conversation_id", conversationIds)
-      .in("kind", ["human_reply", "meeting", "bounce"]),
+type OperationState = Awaited<ReturnType<typeof loadOperationsState>>;
+
+async function loadOperationsStates(prospects: Array<{ id: string; contact_email?: string | null }>): Promise<Map<string, OperationState>> {
+  const statesByProspect = new Map<string, Awaited<ReturnType<typeof loadOperationsState>>>();
+  const unknownState = (): Awaited<ReturnType<typeof loadOperationsState>> => ({
+    contactability: "unknown",
+    conversationStatus: "not_contacted",
+    hasExactSource: false,
+    optInState: "missing",
+  });
+  const prospectById = new Map(prospects.map((prospect) => [prospect.id, prospect]));
+  const prospectIds = [...prospectById.keys()];
+  for (const prospectId of prospectIds) statesByProspect.set(prospectId, unknownState());
+  if (prospectIds.length === 0) return statesByProspect;
+
+  const sourceRows = await readOperationsPages(
+    (from, to) => supabase.from("prospect_source_links").select("id,source_record_key,source_system,active,organization_id,person_id")
+      .in("source_system", ["agency_crm", "agency_crm_contact"]).in("source_record_key", prospectIds).range(from, to),
+    "Unable to verify Agency CRM source history",
+  );
+  const sourceRowsByProspect = new Map<string, DbRow[]>();
+  for (const prospectId of prospectIds) sourceRowsByProspect.set(prospectId, []);
+  for (const row of sourceRows) {
+    const prospectId = String(row.source_record_key);
+    if (statesByProspect.has(prospectId)) sourceRowsByProspect.get(prospectId)!.push(row);
+  }
+  const selectedSourceByProspect = new Map<string, DbRow>();
+  const sourceById = new Map<string, DbRow>();
+  for (const prospectId of prospectIds) {
+    const rows = sourceRowsByProspect.get(prospectId) ?? [];
+    const preferredSystem = rows.some((row) => row.source_system === "agency_crm_contact") ? "agency_crm_contact" : "agency_crm";
+    const activeRows = rows.filter((row) => row.source_system === preferredSystem && row.active === true &&
+      typeof row.organization_id === "string" && row.organization_id && typeof row.person_id === "string" && row.person_id);
+    if (activeRows.length !== 1) continue;
+    const source = activeRows[0];
+    selectedSourceByProspect.set(prospectId, source);
+    sourceById.set(String(source.id), source);
+  }
+  const sourceIds = [...sourceById.keys()];
+  if (sourceIds.length === 0) return statesByProspect;
+
+  const personIds = [...new Set([...sourceById.values()].map((row) => String(row.person_id)))];
+  const organizationIds = [...new Set([...sourceById.values()].map((row) => String(row.organization_id)))];
+  const [people, activeRoles] = await Promise.all([
+    readOperationsPages(
+      (from, to) => supabase.from("prospect_people").select("id,primary_email").in("id", personIds).range(from, to),
+      "Unable to verify the canonical prospect email",
+    ),
+    readOperationsPages(
+      (from, to) => supabase.from("prospect_person_firm_roles").select("organization_id,person_id,active")
+        .in("organization_id", organizationIds).in("person_id", personIds).eq("active", true).range(from, to),
+      "Unable to verify the active prospect contact role",
+    ),
   ]);
-  const conversations = assertResult(conversationsResult, "Unable to read prospect conversation state") as DbRow[];
-  const contactRows = assertResult(contactabilityResult, "Unable to read prospect contactability") as DbRow[];
-  const activityRows = assertResult(activitiesResult, "Unable to read prospect activity stops") as DbRow[];
+  const personById = new Map(people.map((row) => [String(row.id), row]));
+  const roleKeys = new Set(activeRoles.map((row) => `${row.organization_id}:${row.person_id}`));
+  const validSourceByProspect = new Map<string, DbRow>();
+  for (const [prospectId, source] of selectedSourceByProspect) {
+    const prospect = prospectById.get(prospectId)!;
+    const person = personById.get(String(source.person_id));
+    const currentEmail = typeof prospect.contact_email === "string" ? prospect.contact_email.trim().toLowerCase() : "";
+    const primaryEmail = typeof person?.primary_email === "string" ? person.primary_email.trim().toLowerCase() : "";
+    if (!currentEmail || primaryEmail !== currentEmail ||
+        !roleKeys.has(`${source.organization_id}:${source.person_id}`)) continue;
+    validSourceByProspect.set(prospectId, source);
+  }
+  const validSourceIds = [...new Set([...validSourceByProspect.values()].map((row) => String(row.id)))];
+  if (validSourceIds.length === 0) return statesByProspect;
 
-  const states = contactRows.map((row) => String(row.state));
-  const contactability: AgencyContactability = states.some((state) => state === "suppressed")
-    ? "hold"
-    : states.length === conversationIds.length && states.every((state) => state === "eligible")
-      ? "allowed"
-      : "unknown";
+  const associations = await readOperationsPages(
+    (from, to) => supabase.from("prospect_conversation_sources").select("source_link_id,conversation_id")
+      .in("source_link_id", validSourceIds).range(from, to),
+    "Unable to read Agency CRM conversation links",
+  );
+  const associationsBySource = new Map<string, string[]>();
+  for (const row of associations) {
+    const sourceId = String(row.source_link_id);
+    const conversationId = String(row.conversation_id);
+    const conversationIds = associationsBySource.get(sourceId) ?? [];
+    conversationIds.push(conversationId);
+    associationsBySource.set(sourceId, conversationIds);
+  }
+  const conversationIds = [...new Set([...associationsBySource.values()].flat())];
+  if (conversationIds.length === 0) return statesByProspect;
+
+  const conversations = await readOperationsPages(
+    (from, to) => supabase.from("prospect_conversations").select("id,status,organization_id,person_id")
+      .in("id", conversationIds).range(from, to),
+    "Unable to read prospect conversation identity and state",
+  );
+  const conversationById = new Map(conversations.map((row) => [String(row.id), row]));
+  const validatedConversationIdsByProspect = new Map<string, string[]>();
+  for (const [prospectId, source] of validSourceByProspect) {
+    const associatedIds = associationsBySource.get(String(source.id)) ?? [];
+    if (associatedIds.length === 0 || new Set(associatedIds).size !== associatedIds.length) continue;
+    const allBindingsValid = associatedIds.every((id) => {
+      const conversation = conversationById.get(id);
+      return Boolean(conversation && conversation.organization_id === source.organization_id && conversation.person_id === source.person_id);
+    });
+    if (allBindingsValid) validatedConversationIdsByProspect.set(prospectId, associatedIds);
+  }
+  const validatedSourceIds = [...new Set([...validatedConversationIdsByProspect.keys()].map((prospectId) =>
+    String(validSourceByProspect.get(prospectId)!.id)))];
+  const validatedIds = [...new Set([...validatedConversationIdsByProspect.values()].flat())];
+  if (validatedIds.length === 0) return statesByProspect;
+
+  const [contactRows, activityRows, providerSuppressionRows] = await Promise.all([
+    readOperationsPages(
+      (from, to) => supabase.from("prospect_contactability").select("conversation_id,state").in("conversation_id", validatedIds).range(from, to),
+      "Unable to read prospect contactability",
+    ),
+    readOperationsPages(
+      (from, to) => supabase.from("prospect_activities").select("conversation_id,kind").in("conversation_id", validatedIds)
+        .in("kind", ["human_reply", "meeting", "bounce"]).range(from, to),
+      "Unable to read prospect activity stops",
+    ),
+    readOperationsPages(
+      (from, to) => supabase.from("prospect_contactability_provider_suppressions").select("conversation_id")
+        .in("conversation_id", validatedIds).range(from, to),
+      "Unable to read provider-originated contactability stops",
+    ),
+  ]);
+
+  const validProspects = [...validatedConversationIdsByProspect.keys()];
+  const emailHashes = validProspects.map((prospectId) => agencyFollowupRecipientEmailHash(
+    String(prospectById.get(prospectId)!.contact_email).trim(),
+  ));
+  const optInEvents = await readOperationsPages(
+    (from, to) => supabase.from("agency_followup_opt_in_events")
+      .select("id,agency_prospect_id,source_link_id,conversation_id,recipient_email_sha256,purpose,event_type,recorded_at")
+      .in("agency_prospect_id", validProspects).in("source_link_id", validatedSourceIds)
+      .in("conversation_id", validatedIds).in("recipient_email_sha256", emailHashes)
+      .eq("purpose", "agency_followup_email")
+      .order("recorded_at", { ascending: false }).order("id", { ascending: false }).range(from, to),
+    "Unable to read exact Agency follow-up opt-in history",
+  );
+  const optInByIdentity = new Map<string, string>();
+  for (const row of optInEvents) {
+    const identity = [row.agency_prospect_id, row.source_link_id, row.conversation_id, row.recipient_email_sha256, row.purpose].join(":");
+    if (!optInByIdentity.has(identity)) optInByIdentity.set(identity, String(row.event_type));
+  }
 
   const statusRank: Record<string, number> = {
     not_contacted: 0,
@@ -142,19 +276,55 @@ async function loadOperationsState(prospectId: string): Promise<{
     meeting_scheduled: 5,
     completed: 6,
   };
-  let conversationStatus = conversations
-    .map((row) => String(row.status))
-    .sort((left, right) => (statusRank[right] ?? 0) - (statusRank[left] ?? 0))[0] as AgencyConversationStatus | undefined;
+  const conversationsById = new Map(conversations.map((row) => [String(row.id), String(row.status)]));
+  const contactById = new Map<string, string[]>();
+  for (const row of contactRows) {
+    const id = String(row.conversation_id);
+    const rows = contactById.get(id) ?? [];
+    rows.push(String(row.state));
+    contactById.set(id, rows);
+  }
+  const activitiesById = new Map<string, string[]>();
+  for (const row of activityRows) {
+    const id = String(row.conversation_id);
+    const rows = activitiesById.get(id) ?? [];
+    rows.push(String(row.kind));
+    activitiesById.set(id, rows);
+  }
+  const suppressedIds = new Set(providerSuppressionRows.map((row) => String(row.conversation_id)));
 
-  if (activityRows.some((row) => row.kind === "human_reply")) conversationStatus = "replied";
-  else if (activityRows.some((row) => row.kind === "meeting")) conversationStatus = "meeting_scheduled";
-  else if (activityRows.some((row) => row.kind === "bounce")) conversationStatus = "unreachable";
-
-  return {
-    contactability,
-    conversationStatus: conversationStatus ?? "not_contacted",
-    hasExactSource: true,
-  };
+  for (const [prospectId, ids] of validatedConversationIdsByProspect) {
+    const prospectConversationIds = ids;
+    if (prospectConversationIds.length === 0) continue;
+    const states = prospectConversationIds.flatMap((id) => contactById.get(id) ?? []);
+    const contactability: AgencyContactability = prospectConversationIds.some((id) => suppressedIds.has(id)) || states.some((state) => state === "suppressed")
+      ? "hold"
+      : states.length === prospectConversationIds.length && states.every((state) => state === "eligible")
+        ? "allowed"
+        : "unknown";
+    let conversationStatus = prospectConversationIds.map((id) => conversationsById.get(id)).filter((status): status is string => status !== undefined)
+      .sort((left, right) => (statusRank[right] ?? 0) - (statusRank[left] ?? 0))[0] as AgencyConversationStatus | undefined;
+    const activityKinds = prospectConversationIds.flatMap((id) => activitiesById.get(id) ?? []);
+    if (activityKinds.includes("human_reply")) conversationStatus = "replied";
+    else if (activityKinds.includes("meeting")) conversationStatus = "meeting_scheduled";
+    else if (activityKinds.includes("bounce")) conversationStatus = "unreachable";
+    const source = validSourceByProspect.get(prospectId)!;
+    const prospect = prospectById.get(prospectId)!;
+    const recipientHash = agencyFollowupRecipientEmailHash(String(prospect.contact_email).trim());
+    const latestOptIns = prospectConversationIds.map((conversationId) => optInByIdentity.get([
+      prospectId, source.id, conversationId, recipientHash, "agency_followup_email",
+    ].join(":")));
+    const optInState: AgencyFollowupOptInState = latestOptIns.every((eventType) => eventType === "opt_in_granted")
+      ? "granted"
+      : latestOptIns.some((eventType) => eventType === "opt_in_withdrawn") ? "withdrawn" : "missing";
+    statesByProspect.set(prospectId, {
+      contactability,
+      conversationStatus: conversationStatus ?? "not_contacted",
+      hasExactSource: true,
+      optInState,
+    });
+  }
+  return statesByProspect;
 }
 
 async function loadCurrentRecords(enrollmentId: string, messageId?: string) {
@@ -205,6 +375,7 @@ function makeSendContext(
     conversationStatus: operations.conversationStatus,
     eligibility: enrollment.eligibility_state,
     eligibilityEvidenceRef: enrollment.eligibility_evidence_ref,
+    optInState: operations.optInState,
     sequenceReleased: Boolean(enrollment.released_at) && enrollment.state === "active",
     messageApproved: ["approved", "scheduled", "claimed", "accepted"].includes(String(message.state)),
     approval: message.reviewed_by_operator_id && message.reviewed_at
@@ -259,7 +430,7 @@ async function assertClearForReview(enrollment: DbRow, prospect: DbRow): Promise
     throw new Error("Record eligibility and its evidence before releasing or approving messages.");
   }
   if (["won", "lost"].includes(String(prospect.stage))) throw new Error("This prospect's current pipeline stage stops follow-up.");
-  const operations = await loadOperationsState(String(prospect.id));
+  const operations = await loadOperationsState(String(prospect.id), String(prospect.contact_email ?? ""));
   if (!operations.hasExactSource || operations.contactability === "unknown") {
     throw new Error("The prospect has no complete, exact contactability history. Resolve it in Prospect Activity first.");
   }
@@ -271,6 +442,8 @@ async function assertClearForReview(enrollment: DbRow, prospect: DbRow): Promise
 }
 
 export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsoleData> {
+  const sendConfig = resolveAgencyFollowupSendConfig();
+  const send = { mode: sendConfig.mode, ready: sendConfig.ready } as const;
   const [journeysResult, enrollmentsResult, templatesResult, stepsResult] = await Promise.all([
     supabase.from("agency_followup_journeys").select("*").order("updated_at", { ascending: false }),
     supabase.from("agency_followup_enrollments").select("*").order("updated_at", { ascending: false }).limit(300),
@@ -294,7 +467,7 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
     subject: String(row.subject), body: String(row.body),
   }));
   if (enrollments.length === 0) {
-    return { journeys: journeyItems, templates: templateItems, items: [] };
+    return { send, journeys: journeyItems, templates: templateItems, items: [] };
   }
 
   const enrollmentIds = enrollments.map((row) => String(row.id));
@@ -309,7 +482,9 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
   const prospectById = new Map(prospects.map((row) => [String(row.id), row]));
   const enrollmentById = new Map(enrollments.map((row) => [String(row.id), row]));
 
-  const operationsByProspect = new Map<string, Promise<Awaited<ReturnType<typeof loadOperationsState>>>>();
+  const operationsByProspect = await loadOperationsStates(prospects.map((row) => ({
+    id: String(row.id), contact_email: typeof row.contact_email === "string" ? row.contact_email : null,
+  })));
   const messagesByEnrollment = new Map<string, DbRow[]>();
   for (const message of messages) {
     const enrollmentId = String(message.enrollment_id);
@@ -322,8 +497,12 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
     const prospect = enrollment ? prospectById.get(String(enrollment.prospect_id)) : undefined;
     if (!enrollment || !prospect) throw new Error("A follow-up message is missing its exact Agency CRM prospect link.");
     const prospectId = String(prospect.id);
-    if (!operationsByProspect.has(prospectId)) operationsByProspect.set(prospectId, loadOperationsState(prospectId));
-    const operations = await operationsByProspect.get(prospectId)!;
+    const operations = operationsByProspect.get(prospectId) ?? {
+      contactability: "unknown" as const,
+      conversationStatus: "not_contacted" as const,
+      hasExactSource: false,
+      optInState: "missing" as const,
+    };
     const enrollmentMessages = messagesByEnrollment.get(String(enrollment.id)) ?? [];
     const previousAcceptedAt = enrollmentMessages
       .filter((row) => Number(row.step_number) < Number(message.step_number) && row.provider_accepted_at)
@@ -343,6 +522,9 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
       journeyName: String(journey?.name ?? "Follow-up journey"),
       stepNumber: Number(message.step_number),
       state: String(message.state),
+      providerDeliveryStatus: String(message.provider_delivery_status ?? "unknown") as AgencyFollowupQueueItem["providerDeliveryStatus"],
+      providerDeliveryStatusAt: typeof message.provider_delivery_status_at === "string" ? message.provider_delivery_status_at : null,
+      optInState: operations.optInState,
       eligibility: String(enrollment.eligibility_state),
       contactability: operations.contactability,
       conversationStatus: operations.conversationStatus,
@@ -355,6 +537,7 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
     };
   }));
   return {
+    send,
     journeys: journeyItems,
     templates: templateItems,
     items,
@@ -400,21 +583,11 @@ export async function approveAgencyFollowupTemplateVersion(input: {
   templateVersionId: string;
   actorId: string;
 }): Promise<void> {
-  const reviewedAt = new Date().toISOString();
-  const updated = await supabase.from("agency_followup_template_versions").update({
-    state: "approved",
-    approved_by_operator_id: input.actorId,
-    approved_at: reviewedAt,
-  }).eq("id", input.templateVersionId).eq("state", "draft").select("id,template_key,version,content_sha256").single();
-  if (updated.error) throw new Error(`Unable to approve template version: ${updated.error.message}`);
-  const row = updated.data as DbRow;
-  await appendAuditEvent({
-    templateVersionId: input.templateVersionId,
-    eventType: "template_approved",
-    idempotencyKey: `template-approved:${input.templateVersionId}:${input.actorId}`,
-    payload: { templateKey: row.template_key, version: row.version, contentSha256: row.content_sha256, reviewerId: input.actorId, reviewedAt },
-    actorId: input.actorId,
+  const { error } = await supabase.rpc("approve_agency_followup_template_version", {
+    p_template_version_id: input.templateVersionId,
+    p_actor_operator_id: input.actorId,
   });
+  if (error) throw new Error(`Unable to approve template version: ${error.message}`);
 }
 
 export async function createAgencyFollowupJourneyVersion(input: {
@@ -729,33 +902,46 @@ export async function pauseAgencyFollowupEnrollment(input: {
   });
 }
 
-const defaultFakeFollowupProvider = new FakeAgencyFollowupProvider();
+/** Shared validated repository used by both deterministic tests and real delivery. */
+type AgencyFollowupClaimPolicy =
+  | { mode: "unrestricted" }
+  | { mode: "test"; targets: readonly { enrollmentId: string; messageId: string; recipientEmail: string }[] }
+  | { mode: "live"; enrollmentIds: readonly string[] };
 
-/** Local-only deterministic dispatcher. This adapter has no real provider path. */
-export async function runFakeAgencyFollowupDispatcher(input: {
+async function runAgencyFollowupDispatcherWithProvider(input: {
   workerId: string;
+  provider: AgencyFollowupProvider;
+  claimPolicy: AgencyFollowupClaimPolicy;
+  requireProviderHandoffGuard?: boolean;
   now?: string;
   leaseSeconds?: number;
   limit?: number;
-  outcomePlan?: AgencyProviderOutcome[];
 }): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
   if (!input.workerId.trim()) throw new Error("A worker id is required.");
-  if (input.outcomePlan && process.env.NODE_ENV === "production") {
-    throw new Error("Synthetic provider outcomes are available only outside production.");
-  }
   const now = input.now ?? new Date().toISOString();
-  const fakeFollowupProvider = input.outcomePlan
-    ? new FakeAgencyFollowupProvider(input.outcomePlan)
-    : defaultFakeFollowupProvider;
   const repository = {
     async claimDueMessages(claimInput: { workerId: string; now: string; leaseSeconds: number; limit: number }): Promise<AgencyFollowupClaim[]> {
-      const result = await supabase.rpc("claim_agency_followup_messages", {
+      const claimParameters = {
         p_worker_id: claimInput.workerId,
         p_now: claimInput.now,
         p_lease_seconds: claimInput.leaseSeconds,
         p_limit: claimInput.limit,
-      });
-      if (result.error) throw new Error(`Unable to claim due fake-provider messages: ${result.error.message}`);
+      };
+      const result = input.claimPolicy.mode === "test"
+        ? await supabase.rpc("claim_agency_followup_test_messages", {
+          p_worker_id: claimInput.workerId,
+          p_now: claimInput.now,
+          p_lease_seconds: claimInput.leaseSeconds,
+          p_limit: claimInput.limit,
+          p_allowed_targets: input.claimPolicy.targets,
+        })
+        : input.claimPolicy.mode === "live"
+          ? await supabase.rpc("claim_agency_followup_live_messages", {
+            ...claimParameters,
+            p_allowed_enrollment_ids: input.claimPolicy.enrollmentIds,
+          })
+          : await supabase.rpc("claim_agency_followup_messages", claimParameters);
+      if (result.error) throw new Error("Unable to claim due Agency follow-up messages.");
       return (result.data as DbRow[]).map((row) => ({
         id: String(row.id),
         enrollmentId: String(row.enrollment_id),
@@ -765,7 +951,7 @@ export async function runFakeAgencyFollowupDispatcher(input: {
     },
     async loadCurrentSendContext(claim: AgencyFollowupClaim, attemptAt: string): Promise<AgencyFollowupSendContext> {
       const records = await loadCurrentRecords(claim.enrollmentId, claim.id);
-      const operations = await loadOperationsState(String(records.prospect.id));
+      const operations = await loadOperationsState(String(records.prospect.id), String(records.prospect.contact_email ?? ""));
       const previousAcceptedAt = records.messages
         .filter((row) => Number(row.step_number) < Number(records.message!.step_number) && row.provider_accepted_at)
         .map((row) => String(row.provider_accepted_at))
@@ -779,50 +965,82 @@ export async function runFakeAgencyFollowupDispatcher(input: {
       return context;
     },
     async persistDisposition(claim: AgencyFollowupClaim, disposition: AgencyFollowupWorkerDisposition): Promise<void> {
-      const patch: DbRow = { lease_owner: null, lease_until: null, updated_at: disposition.at };
-      let eventType: string;
-      let payload: Record<string, unknown>;
-      if (disposition.state === "blocked") {
-        Object.assign(patch, { state: "blocked", scheduled_at: null, last_error_code: disposition.blockers.join(",").slice(0, 300), unknown_since: null });
-        eventType = "message_blocked";
-        payload = { blockers: disposition.blockers, checkedAt: disposition.at };
-      } else if (disposition.state === "accepted") {
-        Object.assign(patch, { state: "accepted", provider_message_id: disposition.providerMessageId, provider_accepted_at: disposition.acceptedAt, last_error_code: null, unknown_since: null });
-        eventType = "provider_accepted";
-        payload = { providerMessageId: disposition.providerMessageId, acceptedAt: disposition.acceptedAt };
-      } else if (disposition.state === "scheduled") {
-        Object.assign(patch, { state: "scheduled", scheduled_at: disposition.retryAt, last_error_code: disposition.errorCode.slice(0, 300), unknown_since: null });
-        eventType = "provider_attempted";
-        payload = { retryAt: disposition.retryAt, errorCode: disposition.errorCode, sameIdempotencyKey: true };
-      } else if (disposition.state === "failed") {
-        Object.assign(patch, { state: "failed", scheduled_at: null, last_error_code: disposition.errorCode.slice(0, 300), unknown_since: null });
-        eventType = "provider_failed";
-        payload = { errorCode: disposition.errorCode };
-      } else {
-        Object.assign(patch, { state: "unknown", scheduled_at: null, last_error_code: disposition.detail.slice(0, 300), unknown_since: disposition.at });
-        eventType = "provider_unknown";
-        payload = { detail: disposition.detail, automaticRetry: false };
-      }
-      const update = await supabase.from("agency_followup_messages").update(patch)
-        .eq("id", claim.id).eq("state", "claimed").eq("lease_owner", claim.leaseOwner).select("id").maybeSingle();
-      if (update.error) throw new Error(`Unable to persist fake-provider outcome: ${update.error.message}`);
-      if (!update.data) throw new Error("The worker lease expired or changed before outcome persistence.");
-      await appendAuditEvent({
-        enrollmentId: claim.enrollmentId,
-        messageId: claim.id,
-        eventType,
-        idempotencyKey: `worker:${claim.id}:${claim.attemptCount}:${eventType}`,
-        payload: { ...payload, attemptCount: claim.attemptCount, workerId: claim.leaseOwner },
+      const persisted = await supabase.rpc("persist_agency_followup_disposition", {
+        p_message_id: claim.id,
+        p_enrollment_id: claim.enrollmentId,
+        p_lease_owner: claim.leaseOwner,
+        p_attempt_count: claim.attemptCount,
+        p_disposition: disposition,
       });
+      if (persisted.error || persisted.data !== true) {
+        throw new Error("Unable to atomically persist the Agency follow-up result; the message remains quarantined from automatic retry.");
+      }
     },
+    ...(input.requireProviderHandoffGuard ? {
+      async prepareProviderAttempt(claim: AgencyFollowupClaim, leaseSeconds: number): Promise<"ready" | "expired" | "stale"> {
+        const prepared = await supabase.rpc("prepare_agency_followup_provider_attempt", {
+          p_message_id: claim.id,
+          p_enrollment_id: claim.enrollmentId,
+          p_lease_owner: claim.leaseOwner,
+          p_attempt_count: claim.attemptCount,
+          p_lease_seconds: leaseSeconds,
+          p_max_idempotency_age_seconds: 82_800,
+        });
+        if (prepared.error) throw new Error("Unable to reserve the durable Agency follow-up provider key; no email was sent.");
+        if (prepared.data !== "ready" && prepared.data !== "expired" && prepared.data !== "stale") {
+          throw new Error("The durable Agency follow-up provider guard returned an invalid state; no email was sent.");
+        }
+        return prepared.data;
+      },
+    } : {}),
   };
 
   return dispatchAgencyFollowupBatch({
     repository,
-    provider: fakeFollowupProvider,
+    provider: input.provider,
     workerId: input.workerId,
     now,
     leaseSeconds: input.leaseSeconds,
     limit: input.limit,
+    requireProviderHandoffGuard: input.requireProviderHandoffGuard,
+  });
+}
+
+const defaultFakeFollowupProvider = new FakeAgencyFollowupProvider();
+
+/** Local-only deterministic dispatcher. This adapter has no real provider path. */
+export async function runFakeAgencyFollowupDispatcher(input: {
+  workerId: string;
+  now?: string;
+  leaseSeconds?: number;
+  limit?: number;
+  outcomePlan?: AgencyProviderOutcome[];
+}): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
+  if (input.outcomePlan && process.env.NODE_ENV === "production") {
+    throw new Error("Synthetic provider outcomes are available only outside production.");
+  }
+  const provider = input.outcomePlan ? new FakeAgencyFollowupProvider(input.outcomePlan) : defaultFakeFollowupProvider;
+  return runAgencyFollowupDispatcherWithProvider({ ...input, provider, claimPolicy: { mode: "unrestricted" } });
+}
+
+/** Real dispatcher. Off or incomplete send configuration returns before any queue claim. */
+export async function runAgencyFollowupDispatcher(input: {
+  workerId: string;
+  now?: string;
+  leaseSeconds?: number;
+}): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
+  const config = resolveAgencyFollowupSendConfig();
+  if (config.mode === "off" || !config.ready) {
+    return { claimed: 0, accepted: 0, retryScheduled: 0, failed: 0, unknown: 0, blocked: 0 };
+  }
+  const provider = createAgencyFollowupResendProvider({ config });
+  return runAgencyFollowupDispatcherWithProvider({
+    ...input,
+    provider,
+    limit: config.maxBatchSize,
+    requireProviderHandoffGuard: true,
+    claimPolicy: config.mode === "test"
+      ? { mode: "test", targets: config.testClaimTargets }
+      : { mode: "live", enrollmentIds: config.liveClaimEnrollmentIds },
   });
 }

@@ -118,9 +118,30 @@ test("guarded historical source references preserve the exact reader-repair suff
   t.after(() => fs.rmSync(base, { recursive: true, force: true }));
   const stage = path.join(base, "stage");
   const stageProof = stageProductionWorkdir(root, stage);
+  assert.equal(path.dirname(fs.realpathSync(base)), fs.realpathSync(os.tmpdir()));
+  const stageStat = fs.lstatSync(stage);
+  assert.equal(stageStat.isDirectory(), true);
+  assert.equal(stageStat.isSymbolicLink(), false);
+  const stagedRoot = fs.realpathSync(stage);
+  assert.equal(stageProof.stagedRoot, stagedRoot);
+  assert.equal(path.dirname(stagedRoot), fs.realpathSync(base));
+  const relativeToSource = path.relative(fs.realpathSync(root), stagedRoot);
+  assert.ok(path.isAbsolute(relativeToSource) || relativeToSource === ".." || relativeToSource.startsWith(`..${path.sep}`));
+  const expectedPaths = expected.map(row => path.join(stagedRoot, "supabase", "migrations", `${row.version}_${row.name}.sql`));
+  const expectedBytes = [];
+  for (const filename of expectedPaths) {
+    const stat = fs.lstatSync(filename);
+    assert.equal(stat.isFile(), true);
+    assert.equal(stat.isSymbolicLink(), false);
+    const bytes = fs.readFileSync(filename);
+    assert.deepEqual(bytes, fs.readFileSync(path.join(root, "supabase", "migrations", path.basename(filename))));
+    expectedBytes.push(bytes);
+  }
+  for (const filename of expectedPaths) fs.rmSync(filename);
   const pendingVersions = new Set(CANDIDATE_READER_REPAIR_PATHS.map(item => path.basename(item).split("_")[0]));
+  const expectedVersions = new Set(expected.map(row => row.version));
   const activeRows = fs.readdirSync(path.join(stage, "supabase", "migrations")).sort()
-    .filter(filename => !pendingVersions.has(filename.split("_")[0]))
+    .filter(filename => !pendingVersions.has(filename.split("_")[0]) && !expectedVersions.has(filename.split("_")[0]))
     .map(filename => {
       const [version, ...tail] = filename.slice(0, -4).split("_");
       const name = tail.join("_");
@@ -138,6 +159,8 @@ test("guarded historical source references preserve the exact reader-repair suff
   assert.deepEqual(ledger.pendingPaths, CANDIDATE_READER_REPAIR_PATHS);
   const { compactLedger, ...historyEvidence } = historyProof;
   removeReaderHistoryReferences(root, stage, historyEvidence);
+  expectedPaths.forEach((filename, index) => fs.writeFileSync(filename, expectedBytes[index], { flag: "wx" }));
+  expectedPaths.forEach((filename, index) => assert.deepEqual(fs.readFileSync(filename), expectedBytes[index]));
   assert.equal(verifyProductionWorkdir(root, stage, stageProof).verified, true);
 });
 

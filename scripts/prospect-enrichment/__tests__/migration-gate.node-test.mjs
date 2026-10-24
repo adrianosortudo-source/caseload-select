@@ -454,9 +454,9 @@ test("candidate reader repair matches pinned history guards and checks held CRM 
   const heldWasApplied = [...applied, makeRow(CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)].sort((a, b) => a.version.localeCompare(b.version));
   assert.throws(() => verifyFullMigrationLedger(heldWasApplied, staged, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS, source),
     /reader_repair_held_migration_already_applied/);
-  const secondHeldWasApplied = [...applied, makeRow(CANDIDATE_READER_REPAIR_HELD_MIGRATIONS[1].path)].sort((a, b) => a.version.localeCompare(b.version));
-  assert.throws(() => verifyFullMigrationLedger(secondHeldWasApplied, staged, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS, source),
-    /reader_repair_held_migration_already_applied/);
+  const appliedJourney = applied.find(row => row.version === "20261013173327");
+  assert.deepEqual(appliedJourney, { version: "20261013173327", name: "agency_followup_journeys" });
+  assert.equal(CANDIDATE_READER_REPAIR_HELD_MIGRATIONS.some(item => item.version === "20261013173327"), false);
   const appliedAllReader = [...applied, ...CANDIDATE_READER_REPAIR_PATHS.map(makeRow)].sort((a, b) => a.version.localeCompare(b.version));
   const post = verifyFullMigrationLedger(appliedAllReader, staged, "candidate-reader-repair-held-complete", undefined, source);
   assert.deepEqual(post.pendingPaths, []);
@@ -481,6 +481,9 @@ test("reader-repair stage excludes each exact held migration and verifies the st
     assert.equal(heldExclusion.name, held.name);
     assert.equal(fs.existsSync(path.join(destination, held.path)), false);
   }
+  const appliedJourneyPath = "supabase/migrations/20261013173327_agency_followup_journeys.sql";
+  assert.equal(proof.exclusions.some(item => item.path === appliedJourneyPath), false);
+  assert.equal(fs.existsSync(path.join(destination, appliedJourneyPath)), true);
   assert.equal(fs.existsSync(path.join(destination, CANDIDATE_READER_REPAIR_PATHS.at(-1))), true);
   assert.equal(verifyProductionWorkdir(sourceRoot, destination, proof).stagedRoot, fs.realpathSync(destination));
   assert.deepEqual(proof.readerRepairHeldMigrations, CANDIDATE_READER_REPAIR_HELD_MIGRATIONS);

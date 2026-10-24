@@ -198,6 +198,9 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // Keep the development-only Next.js route badge out of acceptance screenshots;
+  // it can cover controls on narrow mobile viewports. Next still reports errors.
+  devIndicators: process.env.AGENCY_FOLLOWUP_WALKTHROUGH_CAPTURE === "1" ? false : undefined,
   async headers() {
     return [
       {

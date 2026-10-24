@@ -76,13 +76,6 @@ export const CANDIDATE_READER_REPAIR_HELD_MIGRATION = Object.freeze({
 });
 export const CANDIDATE_READER_REPAIR_HELD_MIGRATIONS = Object.freeze([
   CANDIDATE_READER_REPAIR_HELD_MIGRATION,
-  Object.freeze({
-    path: "supabase/migrations/20261013154000_agency_followup_journeys.sql",
-    version: "20261013154000",
-    name: "agency_followup_journeys",
-    bytes: 23863,
-    sha256: "7499b1cf07c3339f8fa603b48fab3f1308c136efa03d32ce6bfb2ffc26a3fef4",
-  }),
 ]);
 export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
@@ -365,8 +358,8 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
       if (pending.length !== 0) fail("unexpected_full_history_delta");
       pendingPaths = [];
     }
-    // The separately stamped Agency CRM journeys source is held even though the live
-    // ledger contains its prior pinned historical version at 20261013173327.
+    // The 20261013173327 journeys source is already present in the live ledger and remains in staged history.
+    // Only the unapplied 20261013230354 grants migration is held outside reader-repair staging.
     heldMigrations = heldMigrationSources.map(item => ({ ...item, status: "held-unapplied" }));
   }
   const expected = phase === "qualification-pending"
