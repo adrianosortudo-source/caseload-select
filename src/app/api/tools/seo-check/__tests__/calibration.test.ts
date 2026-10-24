@@ -93,7 +93,7 @@ describe("calibration: themblawfirm.ca (2-page Wix one-pager)", () => {
 
   it("still fires missing team page: no Person schema, no dedicated bio page", () => {
     const issues = buildSiteStructureIssues(THEMB.pages, true);
-    expect(titlesOf(issues)).toContain("No attorney / team page found");
+    expect(titlesOf(issues)).toContain("No attorney or team page found in checked pages");
   });
 
   it("suppresses the team-page absence when a team URL was discovered but not crawled (jsmlaw case)", () => {

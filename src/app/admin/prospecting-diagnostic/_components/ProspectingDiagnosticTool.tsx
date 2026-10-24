@@ -472,7 +472,7 @@ export default function ProspectingDiagnosticTool() {
                       <td className="py-2 pr-3 font-mono text-black/70">{run.primary_domain}</td>
                       <td className="py-2 pr-3 text-black/60">{run.target_keyword || run.practice_focus || run.market || "n/a"}</td>
                       <td className="py-2 pr-3 text-black/60">
-                        SEO {run.overall_score ?? "n/a"} · AI {run.ai_search_score ?? "n/a"} · Intent {run.intent_score ?? "n/a"}
+                        Website checks {run.overall_score ?? "n/a"} · AI {run.ai_search_score === null ? "Not scored" : run.ai_search_score ?? "Not scored"} · Intent {run.intent_score ?? "n/a"}
                       </td>
                       <td className="py-2 pr-3 text-black/50">
                         {new Date(run.created_at).toLocaleDateString("en-CA", { month: "short", day: "numeric", year: "numeric" })}
@@ -789,7 +789,7 @@ export default function ProspectingDiagnosticTool() {
                           </td>
                           <td className="py-2 pr-3 text-black/70">{r.reachable ? r.pagesScanned : "n/a"}</td>
                           <td className="py-2 pr-3 text-black/70">{r.overallScore ?? "n/a"}</td>
-                          <td className="py-2 pr-3 text-black/70">{r.aiSearchScore ?? "n/a"}</td>
+                          <td className="py-2 pr-3 text-black/70">{r.aiSearchScore === null ? "Not scored" : r.aiSearchScore ?? "Not scored"}</td>
                           <td className="py-2 pr-3 text-black/70">{r.intentScore ?? "n/a"}</td>
                           <td className="py-2 text-black/60">{r.note}</td>
                         </tr>
@@ -1115,9 +1115,9 @@ function InternalScoresPanel({ scans }: { scans: DomainScan[] }) {
                 <span>Overall</span>
                 <span className="text-right font-semibold text-navy">{r.overallScore}/100 ({r.grade})</span>
                 <span>AI search</span>
-                <span className="text-right font-semibold text-navy">{r.aiSearchScore}/100</span>
+                <span className="text-right font-semibold text-navy">{r.aiSearchScore === null ? "Not scored" : `${r.aiSearchScore}/100`}</span>
                 <span>AI policy</span>
-                <span className="text-right font-semibold text-navy">{r.aiPolicyScore}/100</span>
+                <span className="text-right font-semibold text-navy">{r.aiPolicyScore === null ? "Not scored" : `${r.aiPolicyScore}/100`}</span>
                 {r.intentAlignment && (
                   <>
                     <span>Intent alignment</span>

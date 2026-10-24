@@ -2,9 +2,8 @@
  * Phase A scoring recalibration (BUILD_PLAN_seo_check_scoring_recalibration_v2.md).
  *
  * Covers the three fixes (applicability exemptions, vacuous/duplicated schema
- * passes, and the rebalanced weights via eligibility caps) plus the new
- * hreflang check. See engine-core.ts (applyPageTypeApplicability,
- * applyEligibilityCaps, deriveEligibilityGates) and route.ts
+ * passes, and the exact weighted summary) plus the existing hreflang check.
+ * See engine-core.ts (applyPageTypeApplicability, computeWeightedScore) and route.ts
  * (checkSchemaMarkup, checkHreflang).
  */
 
@@ -19,17 +18,17 @@ vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: async () => null }));
 
 import {
   applyPageTypeApplicability,
-  applyEligibilityCaps,
-  describeEligibilityCaps,
-  deriveEligibilityGates,
+  CATEGORY_WEIGHTS,
+  computeWeightedScore,
+  parseRobotsTxt,
   scoreItems,
   type CategoryResult,
 } from "../engine-core";
-import { checkHreflang, checkSchemaMarkup, extractSchemaSummary, checkEntitySameAs } from "../page-checks";
+import { checkHreflang, checkSchemaMarkup, extractSchemaSummary, checkEntitySameAs, checkAiVisibility } from "../page-checks";
 import type { SchemaSummary } from "../analysis";
 
-describe("applyPageTypeApplicability: exempted items are scored:false, not free passes (A1)", () => {
-  it("marks an exempted item scored:false, and scoreItems on the result excludes it from maxScore", () => {
+describe("applyPageTypeApplicability excludes exemptions in both directions (A2)", () => {
+  it("labels an exempt observation not-applicable and excludes it from score and findings", () => {
     const categories: CategoryResult[] = [
       {
         name: "Legal Marketing",
@@ -44,55 +43,40 @@ describe("applyPageTypeApplicability: exempted items are scored:false, not free 
     const item = result.items.find((i) => i.label === "Word count");
     expect(item?.status).toBe("pass");
     expect(item?.scored).toBe(false);
+    expect(item?.applicability).toBe("not-applicable");
+    expect(item?.detail).toContain("Not required for this other page");
 
     const { maxScore } = scoreItems(result.items);
     expect(maxScore).toBe(0);
   });
-});
 
-describe("applyEligibilityCaps: HTTPS, indexability and rendering cap on failure only (A4)", () => {
-  it("not indexable caps at 35", () => {
-    expect(applyEligibilityCaps(90, { httpsOk: true, indexableOk: false, renderingOk: true })).toBe(35);
-  });
-
-  it("not HTTPS caps at 50", () => {
-    expect(applyEligibilityCaps(90, { httpsOk: false, indexableOk: true, renderingOk: true })).toBe(50);
-  });
-
-  it("high-risk rendering caps at 60", () => {
-    expect(applyEligibilityCaps(90, { httpsOk: true, indexableOk: true, renderingOk: false })).toBe(60);
-  });
-
-  it("a score already below every cap is left unchanged", () => {
-    expect(applyEligibilityCaps(30, { httpsOk: true, indexableOk: true, renderingOk: true })).toBe(30);
+  it("marks an exempted pass not-applicable too", () => {
+    const [result] = applyPageTypeApplicability([{
+      name: "Legal Marketing", score: 10, maxScore: 10,
+      items: [{ label: "Word count", status: "pass", detail: "Observed." }],
+    }], "other", "https://example.com/contact");
+    expect(result.items[0]).toMatchObject({ status: "pass", scored: false, applicability: "not-applicable" });
+    expect(scoreItems(result.items)).toEqual({ score: 0, maxScore: 0 });
   });
 });
 
-describe("describeEligibilityCaps: explains which caps applied and why (C2)", () => {
-  it("returns an empty array when every gate passes", () => {
-    expect(describeEligibilityCaps({ httpsOk: true, indexableOk: true, renderingOk: true })).toEqual([]);
+describe("computeWeightedScore (A5)", () => {
+  const category = (name: string, percent: number, maxScore = 100) => ({
+    name, score: percent * maxScore / 100, maxScore, items: [],
   });
 
-  it("returns one entry for a single failing gate", () => {
-    const result = describeEligibilityCaps({ httpsOk: true, indexableOk: false, renderingOk: true });
-    expect(result).toHaveLength(1);
-    expect(result[0].gate).toBe("indexable");
-    expect(result[0].cap).toBe(35);
+  it("uses the exact weighted mean without low-score multipliers", () => {
+    expect(computeWeightedScore([category("Custom A", 100), category("Custom B", 0)])).toBe(50);
+    expect(computeWeightedScore([category("Custom A", 30), category("Custom B", 100)])).toBe(65);
   });
 
-  it("returns three entries in indexable, https, rendering order when every gate fails", () => {
-    const result = describeEligibilityCaps({ httpsOk: false, indexableOk: false, renderingOk: false });
-    expect(result).toHaveLength(3);
-    expect(result.map((r) => r.cap)).toEqual([35, 50, 60]);
+  it("excludes AI observations and uses the locked non-AI weights", () => {
+    expect(CATEGORY_WEIGHTS["AI Visibility"]).toBe(0);
+    expect(computeWeightedScore([category("Custom A", 100), category("AI Visibility", 0)])).toBe(100);
   });
 
-  it("every entry for a fully failing gate set has non-empty headline, reason and fix", () => {
-    const result = describeEligibilityCaps({ httpsOk: false, indexableOk: false, renderingOk: false });
-    for (const entry of result) {
-      expect(entry.headline.length).toBeGreaterThan(0);
-      expect(entry.reason.length).toBeGreaterThan(0);
-      expect(entry.fix.length).toBeGreaterThan(0);
-    }
+  it("does not let an unscored category reduce a fully scored result", () => {
+    expect(computeWeightedScore([category("Custom A", 100), { name: "Unused", score: 0, maxScore: 0, items: [] }])).toBe(100);
   });
 });
 
@@ -225,21 +209,37 @@ describe("checkEntitySameAs (B2)", () => {
     expect(item.scored).toBe(false);
   });
 
-  it("a business entity with an empty sameAsUrls returns status: fail and is scored", () => {
+  it("a business entity with no sameAs URLs remains an unscored observation", () => {
     const item = checkEntitySameAs(schemaWith([]), true);
-    expect(item.status).toBe("fail");
-    expect(item.scored).not.toBe(false);
+    expect(item.status).toBe("pass");
+    expect(item.scored).toBe(false);
+    expect(item.detail).toContain("This scan cannot establish which profiles or listings the firm maintains");
+    expect(item.detail).not.toMatch(/search and AI systems cannot reconcile/i);
   });
 
-  it("only LinkedIn and Instagram returns status: fail (no directory surfaces)", () => {
+  it("reports AI-oriented page heuristics as unscored observations, not visibility findings", () => {
+    const html = "<html><head><title>Firm</title></head><body><h2>Our services</h2><p>We help clients.</p></body></html>";
+    const category = checkAiVisibility(html, parseRobotsTxt("User-agent: *\nAllow: /\n"), null, schemaWith([]));
+    for (const label of ["Question-format headings", "Direct-answer sentences"]) {
+      const item = category.items.find((entry) => entry.label === label);
+      expect(item).toMatchObject({ scored: false });
+      expect(item?.detail).toMatch(/does not measure AI visibility|not an assessment of answer quality or AI visibility/i);
+      expect(item?.status).not.toBe("fail");
+    }
+  });
+
+  it("records recognized profile surfaces without claiming local entity status", () => {
     const item = checkEntitySameAs(
       schemaWith(["https://www.linkedin.com/company/firm", "https://www.instagram.com/firm"]),
       true
     );
-    expect(item.status).toBe("fail");
+    expect(item.status).toBe("pass");
+    expect(item.scored).toBe(false);
+    expect(item.detail).toContain("recognized by this check");
+    expect(item.detail).not.toMatch(/do not establish the firm as a local entity/i);
   });
 
-  it("Google Maps, Bing Places and an LSO URL returns status: pass", () => {
+  it("Google Maps, Bing Places and an LSO URL remain unscored observations", () => {
     const item = checkEntitySameAs(
       schemaWith([
         "https://www.google.com/maps/place/firm",
@@ -249,39 +249,30 @@ describe("checkEntitySameAs (B2)", () => {
       true
     );
     expect(item.status).toBe("pass");
+    expect(item.scored).toBe(false);
   });
 
-  it("regression: the real drglaw.ca shape (Google Maps + Instagram + LinkedIn) is warn with directories.length === 1", () => {
+  it("records the real drglaw.ca profile shape without treating the count as a gap", () => {
     const schema = schemaWith([
       "https://www.google.com/maps/place/drglaw",
       "https://www.instagram.com/drglaw",
       "https://www.linkedin.com/company/drglaw",
     ]);
     const item = checkEntitySameAs(schema, true);
-    expect(item.status).toBe("warn");
+    expect(item.status).toBe("pass");
+    expect(item.scored).toBe(false);
     // Exactly one directory surface (Google Maps) among the three URLs;
     // Instagram and LinkedIn count as hygiene, not directory coverage.
     expect(item.detail).toContain("1 directory surface");
   });
 });
 
-describe("deriveEligibilityGates + applyEligibilityCaps: the http-fallback path end to end (D1)", () => {
-  const categoriesWithFailingHttps: CategoryResult[] = [
-    {
-      name: "Technical & Security",
-      score: 0,
-      maxScore: 10,
-      items: [{ label: "HTTPS", status: "fail", detail: "Site loads over HTTP. Google penalises non-HTTPS sites." }],
-    },
-  ];
-
-  it("deriveEligibilityGates returns httpsOk: false when Technical & Security's HTTPS item has status: fail", () => {
-    const gates = deriveEligibilityGates(categoriesWithFailingHttps, "low");
-    expect(gates.httpsOk).toBe(false);
-  });
-
-  it("applyEligibilityCaps caps a score of 88 to 50 using gates derived from a failing HTTPS item", () => {
-    const gates = deriveEligibilityGates(categoriesWithFailingHttps, "low");
-    expect(applyEligibilityCaps(88, gates)).toBe(50);
+describe("computeWeightedScore does not apply eligibility caps (A5)", () => {
+  it("keeps the weighted mean when HTTPS fails instead of imposing a second score ceiling", () => {
+    const categories: CategoryResult[] = [
+      { name: "Technical & Security", score: 0, maxScore: 10, items: [{ label: "HTTPS", status: "fail", detail: "" }] },
+      { name: "On-Page SEO", score: 10, maxScore: 10, items: [{ label: "Title", status: "pass", detail: "" }] },
+    ];
+    expect(computeWeightedScore(categories)).toBe(83);
   });
 });

@@ -107,4 +107,20 @@ describe("compareDiagnostics", () => {
 
     expect(compareDiagnostics(before, after).competitorChanges[0]).toContain("SEO 70 to 80");
   });
+
+  it("suppresses every score value and delta when the methodology changes", () => {
+    const before = run("old", 50, []);
+    const after = run("new", 88, []);
+    after.scans[0].result = result({ methodologyVersion: 3, overallScore: 88, aiSearchScore: null, aiSearchGrade: null, aiPolicyScore: null, aiPolicyGrade: null });
+
+    const comparison = compareDiagnostics(before, after);
+    expect(comparison.methodChanged).toBe(true);
+    expect(comparison.scoreDeltas.filter((score) => score.label !== "Pages Scanned")).toEqual([
+      { label: "SEO Health", before: null, after: null, delta: null, methodChanged: true },
+      { label: "AI Search", before: null, after: null, delta: null, methodChanged: true },
+      { label: "Intent Alignment", before: null, after: null, delta: null, methodChanged: true },
+      { label: "Prospect Fit", before: null, after: null, delta: null, methodChanged: true },
+    ]);
+    expect(comparison.recommendedNextAction).toContain("Method changed");
+  });
 });
