@@ -3605,6 +3605,17 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await expect(normalProspectCard).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
   const normalHistoryButton = normalProspectCard.getByRole("button", { name: "Contact history", exact: true });
   await expect(normalHistoryButton).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+  await page.waitForFunction((firmName) => {
+    const card = Array.from(document.querySelectorAll("li")).find((item) =>
+      item.textContent?.includes(firmName) &&
+      Array.from(item.querySelectorAll("button")).some((button) => button.textContent?.trim() === "Contact history")
+    );
+    const button = Array.from(card?.querySelectorAll("button") ?? []).find(
+      (candidate) => candidate.textContent?.trim() === "Contact history"
+    );
+    return Boolean(button && Object.keys(button).some((key) => key.startsWith("__reactProps$")));
+  }, normal.firmName, { polling: "raf", timeout: Math.min(180_000, remainingMs()) });
+  progress("Agency CRM Contact history button hydration confirmed");
   await normalHistoryButton.click();
   const activityPanel = page.locator('[data-ui-component-content="prospect-activity-panel"]');
   await expect(activityPanel).toBeVisible({ timeout: Math.min(30_000, remainingMs()) });
