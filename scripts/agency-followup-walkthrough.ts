@@ -734,7 +734,7 @@ async function authorizeProviderHandoff(
 
 async function verifyProviderIdempotencyFenceRpc(
   pool: Pool,
-  input: { firstUseMessageId: string; insideWindowMessageId: string; expiredWindowMessageId: string },
+  input: { firstUseMessageId: string },
 ): Promise<Record<string, unknown>> {
   const client = await pool.connect();
   const claims = new Map<string, { owner: string; attemptCount: number; enrollmentId: string; stepNumber: number }>();
@@ -800,9 +800,7 @@ async function verifyProviderIdempotencyFenceRpc(
     await client.query("begin");
     await client.query("set local role service_role");
     const firstClaim = await insertFixture(input.firstUseMessageId, `first-${RUN_ID}`, null);
-    const insideClaim = await insertFixture(input.insideWindowMessageId, `inside-${RUN_ID}`, "22 hours 59 minutes");
-    const expiredClaim = await insertFixture(input.expiredWindowMessageId, `expired-${RUN_ID}`, "23 hours");
-    for (const claim of [firstClaim, insideClaim, expiredClaim]) claims.set(claim.id, claim);
+    claims.set(firstClaim.id, firstClaim);
     const prepare = async (id: string) => {
       const claim = claims.get(id)!;
       return authorizeProviderHandoff(client, { messageId: id, enrollmentId: claim.enrollmentId, owner: claim.owner, attemptCount: claim.attemptCount });
@@ -875,6 +873,11 @@ async function verifyProviderIdempotencyFenceRpc(
     await client.query("rollback to savepoint immutable_first_use");
     if (!timestampMutationRejected) throw new Error("The provider first-use timestamp could be cleared after reservation.");
 
+    // Keep all boundary fixtures in this known-clear enrollment. Insert and
+    // exercise each step before adding the next so each preceding step can be
+    // deterministically reconciled as accepted by insertFixture.
+    const insideClaim = await insertFixture(input.firstUseMessageId, `inside-${RUN_ID}`, "22 hours 59 minutes");
+    claims.set(insideClaim.id, insideClaim);
     const insideState = await prepare(insideClaim.id);
     const insideTimestamp = await client.query<{ age_seconds: number; still_in_window: boolean }>(
       "select floor(extract(epoch from clock_timestamp()-provider_idempotency_first_used_at))::integer as age_seconds, " +
@@ -883,6 +886,9 @@ async function verifyProviderIdempotencyFenceRpc(
       [insideClaim.id],
     );
     const insideRetryAllowed = insideState.result === "ready" && insideTimestamp.rows[0]?.still_in_window === true;
+
+    const expiredClaim = await insertFixture(input.firstUseMessageId, `expired-${RUN_ID}`, "23 hours");
+    claims.set(expiredClaim.id, expiredClaim);
     const expiredState = await prepare(expiredClaim.id);
     const expired = await client.query<{ state: string; last_error_code: string | null; scheduled_at: Date | null; lease_owner: string | null; unknown_events: string }>(
       "select message.state,message.last_error_code,message.scheduled_at,message.lease_owner,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-window-expired:'||message.id::text) as unknown_events from public.agency_followup_messages message where message.id=$1",
@@ -966,6 +972,7 @@ async function verifyProviderIdempotencyFenceRpc(
       { name: "meeting-completed", kind: "meeting", channel: "video", direction: "internal", deliveryStatus: "unknown", responseKind: "none", replyDisposition: "unknown", meetingOutcome: "Completed synthetic meeting", expectedStatus: "completed" },
       { name: "bounce", kind: "bounce", channel: "email", direction: "inbound", deliveryStatus: "bounced", responseKind: "none", replyDisposition: "unknown", meetingOutcome: null, expectedStatus: "unreachable" },
     ] as const;
+    await client.query("savepoint stop_activity_cases");
     for (const stopCase of stopActivityCases) {
       const nextActivityTime = await client.query<{ occurred_at: Date }>(
         "select coalesce(last_activity_at + interval '1 second', clock_timestamp()) as occurred_at from public.prospect_conversations where id=$1",
@@ -994,6 +1001,7 @@ async function verifyProviderIdempotencyFenceRpc(
       const stopClaim = await insertFixture(input.firstUseMessageId, "stop-" + stopCase.name + "-" + RUN_ID, null);
       await assertPureGateResult(stopClaim, { result: "blocked", blocker: "conversation_stopped" });
     }
+    await client.query("rollback to savepoint stop_activity_cases");
     const futureReviewClaim = await insertFixture(input.firstUseMessageId, "future-review-" + RUN_ID, null);
     await client.query(
       "update public.agency_followup_messages set reviewed_at=clock_timestamp()+interval '1 minute' where id=$1",
@@ -1015,7 +1023,7 @@ async function verifyProviderIdempotencyFenceRpc(
 
     // A claimed predecessor defers the target and returns its retry time without
     // moving the target or creating an event; the caller owns that disposition.
-    const pendingClaim = await insertFixture(input.insideWindowMessageId, `pending-${RUN_ID}`, null);
+    const pendingClaim = await insertFixture(input.firstUseMessageId, `pending-${RUN_ID}`, null);
     await client.query(
       `update public.agency_followup_messages predecessor
        set state='claimed',unknown_since=null,provider_accepted_at=null,lease_owner='walkthrough-prior-${RUN_ID}',
@@ -1027,7 +1035,7 @@ async function verifyProviderIdempotencyFenceRpc(
     const checkedPending = await assertPureGateResult(pendingClaim, { result: "deferred", blocker: "previous_step_pending" });
     if (Date.parse(checkedPending.retryAt!) <= Date.now()) throw new Error("A claimed predecessor returned a non-future retryAt.");
 
-    const spacingClaim = await insertFixture(input.expiredWindowMessageId, `spacing-${RUN_ID}`, null);
+    const spacingClaim = await insertFixture(input.firstUseMessageId, `spacing-${RUN_ID}`, null);
     await client.query(
       `update public.agency_followup_messages predecessor
        set state='accepted',unknown_since=null,provider_accepted_at=clock_timestamp(),lease_owner=null,lease_until=null,
@@ -3356,8 +3364,6 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }, new Date().toISOString());
   const providerIdempotencyFenceEvidence = await verifyProviderIdempotencyFenceRpc(pool, {
     firstUseMessageId: firstNormalMessage.id,
-    insideWindowMessageId: retryMessage.id,
-    expiredWindowMessageId: leaseMessage.rows[0].id,
   });
   const providerIdempotencyLockWaitEvidence = await verifyProviderIdempotencyLockWaitBoundary(pool, firstNormalMessage.id);
 
