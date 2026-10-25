@@ -800,7 +800,7 @@ async function verifyProviderIdempotencyFenceRpc(
     await client.query("begin");
     await client.query("set local role service_role");
     const firstClaim = await insertFixture(input.firstUseMessageId, `first-${RUN_ID}`, null);
-    const insideClaim = await insertFixture(input.insideWindowMessageId, `inside-${RUN_ID}`, "22 hours 59 minutes 59 seconds");
+    const insideClaim = await insertFixture(input.insideWindowMessageId, `inside-${RUN_ID}`, "22 hours 59 minutes");
     const expiredClaim = await insertFixture(input.expiredWindowMessageId, `expired-${RUN_ID}`, "23 hours");
     for (const claim of [firstClaim, insideClaim, expiredClaim]) claims.set(claim.id, claim);
     const prepare = async (id: string) => {
@@ -876,11 +876,13 @@ async function verifyProviderIdempotencyFenceRpc(
     if (!timestampMutationRejected) throw new Error("The provider first-use timestamp could be cleared after reservation.");
 
     const insideState = await prepare(insideClaim.id);
-    const insideTimestamp = await client.query<{ age_seconds: number }>(
-      "select extract(epoch from clock_timestamp()-provider_idempotency_first_used_at)::integer as age_seconds from public.agency_followup_messages where id=$1",
+    const insideTimestamp = await client.query<{ age_seconds: number; still_in_window: boolean }>(
+      "select floor(extract(epoch from clock_timestamp()-provider_idempotency_first_used_at))::integer as age_seconds, " +
+        "clock_timestamp()<provider_idempotency_first_used_at+interval '23 hours' as still_in_window " +
+        "from public.agency_followup_messages where id=$1",
       [insideClaim.id],
     );
-    const insideRetryAllowed = insideState.result === "ready" && Number(insideTimestamp.rows[0]?.age_seconds) < 82_800;
+    const insideRetryAllowed = insideState.result === "ready" && insideTimestamp.rows[0]?.still_in_window === true;
     const expiredState = await prepare(expiredClaim.id);
     const expired = await client.query<{ state: string; last_error_code: string | null; scheduled_at: Date | null; lease_owner: string | null; unknown_events: string }>(
       "select message.state,message.last_error_code,message.scheduled_at,message.lease_owner,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-window-expired:'||message.id::text) as unknown_events from public.agency_followup_messages message where message.id=$1",
@@ -889,7 +891,22 @@ async function verifyProviderIdempotencyFenceRpc(
     if (!insideRetryAllowed || expiredState.result !== "expired" || expired.rows[0]?.state !== "unknown" ||
       expired.rows[0]?.last_error_code !== "resend_idempotency_window_expired" || expired.rows[0]?.scheduled_at !== null ||
       expired.rows[0]?.lease_owner !== null || expired.rows[0]?.unknown_events !== "1") {
-      throw new Error("The provider handoff RPC did not allow an in-window retry and atomically quarantine an expired key.");
+      throw new Error("The provider handoff RPC did not allow an in-window retry and atomically quarantine an expired key: " + JSON.stringify({
+        insideResult: insideState.result,
+        insideBlocker: "blocker" in insideState ? insideState.blocker : null,
+        insideBlockers: "blockers" in insideState ? insideState.blockers : null,
+        insideAgeSeconds: insideTimestamp.rows[0]?.age_seconds ?? null,
+        insideStillInWindow: insideTimestamp.rows[0]?.still_in_window ?? false,
+        expiredResult: expiredState.result,
+        expiredCode: "code" in expiredState ? expiredState.code : null,
+        expiredBlocker: "blocker" in expiredState ? expiredState.blocker : null,
+        expiredBlockers: "blockers" in expiredState ? expiredState.blockers : null,
+        expiredMessageState: expired.rows[0]?.state ?? null,
+        expiredErrorCode: expired.rows[0]?.last_error_code ?? null,
+        expiredScheduleCleared: expired.rows[0]?.scheduled_at === null,
+        expiredLeaseOwnerCleared: expired.rows[0]?.lease_owner === null,
+        expiredUnknownEvents: expired.rows[0]?.unknown_events ?? null,
+      }));
     }
 
     const dispositionSnapshot = async (messageId: string) => {
