@@ -779,12 +779,8 @@ async function verifyProviderIdempotencyFenceRpc(
     );
     const row = result.rows[0];
     if (!row) throw new Error("A dedicated provider-window message fixture could not be inserted.");
-    // This RPC contract checks immutable idempotency state, not business hours;
-    // use an all-day synthetic window. Separate walkthrough cases test scheduling blocks.
-    await client.query(
-      "update public.agency_followup_journeys set minimum_spacing_hours=0,timezone='UTC',business_days=ARRAY[1,2,3,4,5,6,7]::smallint[],local_window_start=TIME '00:00:00',local_window_end=TIME '24:00:00' where id=(select journey_id from public.agency_followup_enrollments where id=$1)",
-      [row.enrollment_id],
-    );
+    // The primary synthetic journey is authored with an all-days window and
+    // one-hour spacing; this RPC contract never mutates immutable journey policy.
     await client.query(
       `update public.agency_followup_messages predecessor
        set state='accepted', scheduled_at=coalesce(predecessor.scheduled_at,clock_timestamp()-interval '2 days'),
@@ -1015,7 +1011,6 @@ async function verifyProviderIdempotencyFenceRpc(
     if (Date.parse(checkedPending.retryAt!) <= Date.now()) throw new Error("A claimed predecessor returned a non-future retryAt.");
 
     const spacingClaim = await insertFixture(input.expiredWindowMessageId, `spacing-${RUN_ID}`, null);
-    await client.query("update public.agency_followup_journeys set minimum_spacing_hours=1 where id=(select journey_id from public.agency_followup_enrollments where id=$1)", [spacingClaim.enrollmentId]);
     await client.query(
       `update public.agency_followup_messages predecessor
        set state='accepted',unknown_since=null,provider_accepted_at=clock_timestamp(),lease_owner=null,lease_until=null,
@@ -1132,13 +1127,8 @@ async function verifyProviderIdempotencyLockWaitBoundary(
       );
       const fixture = inserted.rows[0];
       if (!fixture) throw new Error("The " + scenario + " boundary message fixture could not be inserted.");
-      await holder.query(
-        "update public.agency_followup_journeys" +
-          " set minimum_spacing_hours=0,timezone='UTC',business_days=ARRAY[1,2,3,4,5,6,7]::smallint[]," +
-          " local_window_start=TIME '00:00:00',local_window_end=TIME '23:59:59.999999'" +
-          " where id=(select journey_id from public.agency_followup_enrollments where id=$1)",
-        [enrollmentId],
-      );
+      // The primary synthetic journey already has a safe all-days policy;
+      // preserve its immutability while preparing rollback-only message state.
       await holder.query(
         "update public.agency_followup_messages predecessor" +
           " set state='accepted',scheduled_at=coalesce(predecessor.scheduled_at,clock_timestamp()-interval '2 days')," +
@@ -1146,7 +1136,7 @@ async function verifyProviderIdempotencyLockWaitBoundary(
           " reviewed_by_operator_id=coalesce(predecessor.reviewed_by_operator_id,target.reviewed_by_operator_id)," +
           " reviewed_at=coalesce(predecessor.reviewed_at,target.reviewed_at,clock_timestamp()-interval '2 days')," +
           " provider_message_id=coalesce(predecessor.provider_message_id,'walkthrough-predecessor-'||predecessor.id::text)," +
-          " provider_accepted_at=coalesce(predecessor.provider_accepted_at,clock_timestamp()-interval '2 days')," +
+          " provider_accepted_at=clock_timestamp()-interval '2 days'," +
           " lease_owner=null,lease_until=null,unknown_since=null,last_error_code=null,updated_at=clock_timestamp()" +
           " from public.agency_followup_messages target" +
           " where target.id=$1 and predecessor.enrollment_id=target.enrollment_id and predecessor.step_number<target.step_number",
@@ -2085,7 +2075,7 @@ function queueCard(page: Page, firmName: string) {
   return page.locator('section[aria-labelledby="queue-title"] article').filter({ hasText: firmName }).first();
 }
 
-async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: string) => Promise<void>): Promise<{ journeyName: string; taggedUnknownJourneyName: string }> {
+async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: string) => Promise<void>): Promise<{ journeyName: string; weekdayJourneyName: string; taggedUnknownJourneyName: string }> {
   const suffix = randomUUID().slice(0, 8);
   const templateKey = "walkthrough-" + suffix;
   const journeyKey = "walkthrough-" + suffix;
@@ -2104,10 +2094,13 @@ async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: s
 
   await page.getByLabel("Journey key").fill(journeyKey);
   await page.getByLabel("Journey name").fill(journeyName);
-  await page.getByLabel("IANA timezone").fill("America/Toronto");
+  await page.getByLabel("IANA timezone").fill(chooseWindowSafeTimezone(new Date()));
   await page.getByLabel("Local window start").fill("00:00");
   await page.getByLabel("Local window end").fill("23:59");
-  await page.getByLabel("Minimum spacing between scheduled messages, hours").fill("0");
+  await page.getByLabel("Minimum spacing between scheduled messages, hours").fill("1");
+  for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
+    await page.getByLabel(day, { exact: true }).check();
+  }
   const addStep = page.getByRole("button", { name: "Add step", exact: true });
   await addStep.click();
   const templateSelects = page.getByLabel("Template version");
@@ -2131,6 +2124,16 @@ async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: s
   const otherJourneyName = journeyName + " other";
   await page.getByLabel("Journey key").fill(otherJourneyKey);
   await page.getByLabel("Journey name").fill(otherJourneyName);
+  await page.getByLabel("IANA timezone").fill("America/Toronto");
+  await page.getByLabel("Local window start").fill("09:00");
+  await page.getByLabel("Local window end").fill("17:00");
+  await page.getByLabel("Minimum spacing between scheduled messages, hours").fill("1");
+  for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri"]) {
+    await page.getByLabel(day, { exact: true }).check();
+  }
+  for (const day of ["Sat", "Sun"]) {
+    await page.getByLabel(day, { exact: true }).uncheck();
+  }
   await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
   const otherJourneyDraft = page.getByText(otherJourneyName + " v1 · draft", { exact: false }).locator("..");
   await waitForAction(page, "journey_activate", otherJourneyDraft.getByRole("button", { name: "Activate version" }));
@@ -2143,6 +2146,13 @@ async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: s
   }
   await page.getByLabel("Journey key").fill(mixedCaseJourneyKey);
   await page.getByLabel("Journey name").fill(journeyName);
+  await page.getByLabel("IANA timezone").fill(chooseWindowSafeTimezone(new Date()));
+  await page.getByLabel("Local window start").fill("00:00");
+  await page.getByLabel("Local window end").fill("23:59");
+  await page.getByLabel("Minimum spacing between scheduled messages, hours").fill("1");
+  for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
+    await page.getByLabel(day, { exact: true }).check();
+  }
   await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
   const journeyV2Draft = page.getByText(journeyName + " v2 · draft", { exact: false }).locator("..");
   await waitForAction(page, "journey_activate", journeyV2Draft.getByRole("button", { name: "Activate version" }));
@@ -2175,7 +2185,11 @@ async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: s
   await waitForAction(page, "journey_activate", taggedUnknownDraft.getByRole("button", { name: "Activate version" }));
   const taggedUnknownOption = journeyOptions.filter({ hasText: taggedUnknownJourneyName + " v1" });
   await expect(taggedUnknownOption).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
-  return { journeyName: journeyName + " v2", taggedUnknownJourneyName: taggedUnknownJourneyName + " v1" };
+  return {
+    journeyName: journeyName + " v2",
+    weekdayJourneyName: otherJourneyName + " v1",
+    taggedUnknownJourneyName: taggedUnknownJourneyName + " v1",
+  };
 }
 
 async function createDraft(pool: Pool, page: Page, journeyVersionLabel: string, prospect: ProspectFixture): Promise<void> {
@@ -2610,7 +2624,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     }
   }
 
-  const { journeyName, taggedUnknownJourneyName } = await authorJourney(page, async (templateKey) => {
+  const { journeyName, weekdayJourneyName, taggedUnknownJourneyName } = await authorJourney(page, async (templateKey) => {
     templateApprovalAuditEvidence = await verifyTemplateApprovalAudit(pool, templateKey, fixtures.lawyerId);
   });
   const consentProspect = fixtures.prospects.consent;
@@ -3242,7 +3256,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   // Exercise actual schedule policy immediately before handoff with a delayed
   // weekend claim. The current weekday/window come from the persisted journey.
   const windowProspect = fixtures.prospects.window;
-  await createDraft(pool, page, journeyName, windowProspect);
+  await createDraft(pool, page, weekdayJourneyName, windowProspect);
   await markEligibleAndRelease(page, windowProspect);
   const windowMessage = await pool.query<{ id: string; timezone: string; business_days: number[]; local_window_start: string; local_window_end: string }>(
     "select m.id,j.timezone,j.business_days,j.local_window_start,j.local_window_end from agency_followup_messages m join agency_followup_enrollments e on e.id=m.enrollment_id join agency_followup_journeys j on j.id=e.journey_id where e.prospect_id=$1 and m.step_number=1",
