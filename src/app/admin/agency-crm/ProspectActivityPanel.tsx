@@ -287,7 +287,7 @@ export default function ProspectActivityPanel({
         <button type="button" onClick={onClose} className="border border-black/15 px-3 py-1.5 text-xs font-semibold text-navy hover:bg-parchment shrink-0">Close</button>
       </div>
 
-      <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
+      <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
         <div data-ui-component-content="prospect-activity-history">
           <div className="flex items-center justify-between gap-3 mb-3">
             <h3 className="text-xs uppercase tracking-[0.14em] font-semibold text-navy" data-ui-copy="heading">History</h3>
