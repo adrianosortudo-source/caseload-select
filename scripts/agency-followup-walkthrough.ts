@@ -1059,21 +1059,30 @@ async function verifyProviderIdempotencyFenceRpc(
     }
 
     const changedAssociationClaim = await insertFixture(input.firstUseMessageId, `association-change-${RUN_ID}`, null);
-    const identityMapping = await client.query<{ source_link_id: string; person_id: string; other_person_id: string | null }>(
-      `select source_link.id as source_link_id,source_link.person_id,
-              (select role.person_id from public.prospect_person_firm_roles role
-               where role.organization_id=source_link.organization_id and role.active
-                 and role.person_id<>source_link.person_id
-               order by role.person_id limit 1) as other_person_id
+    const identityMapping = await client.query<{ source_link_id: string; organization_id: string; person_id: string }>(
+      `select source_link.id as source_link_id,source_link.organization_id,source_link.person_id
        from public.agency_followup_enrollments enrollment
        join public.agency_followup_messages target on target.enrollment_id=enrollment.id
        join public.prospect_source_links source_link on source_link.source_record_key=enrollment.prospect_id::text
-         and source_link.source_system in ('agency_crm','agency_crm_contact') and source_link.active
-       where target.id=$1`, [changedAssociationClaim.id],
+         and source_link.source_system=case when exists (
+           select 1 from public.prospect_source_links exact_contact
+           where exact_contact.source_system='agency_crm_contact' and exact_contact.source_record_key=enrollment.prospect_id::text
+         ) then 'agency_crm_contact' else 'agency_crm' end and source_link.active
+       where target.id=$1 and source_link.person_id is not null`, [changedAssociationClaim.id],
     );
     const mapping = identityMapping.rows[0];
-    if (!mapping?.other_person_id) throw new Error("The disposable identity fixture has no alternate person for the association revalidation check.");
-    await client.query("update public.prospect_source_links set person_id=$2 where id=$1", [mapping.source_link_id, mapping.other_person_id]);
+    if (!mapping?.organization_id || !mapping.person_id) throw new Error("The disposable identity fixture has no mapped person for the association revalidation check.");
+    const alternatePerson = await client.query<{ id: string }>(
+      "insert into public.prospect_people(display_name,primary_email) values ($1,null) returning id",
+      [`Synthetic association-change ${RUN_ID}`],
+    );
+    const alternatePersonId = alternatePerson.rows[0]?.id;
+    if (!alternatePersonId) throw new Error("The disposable identity fixture could not create its alternate synthetic person.");
+    await client.query(
+      "insert into public.prospect_person_firm_roles(organization_id,person_id,is_primary,active) values ($1,$2,false,true)",
+      [mapping.organization_id, alternatePersonId],
+    );
+    await client.query("update public.prospect_source_links set person_id=$2 where id=$1", [mapping.source_link_id, alternatePersonId]);
     await assertPureGateResult(changedAssociationClaim, { result: "blocked", blocker: "contactability_unknown" });
 
     await client.query("rollback");
