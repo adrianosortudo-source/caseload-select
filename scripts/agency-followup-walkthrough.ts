@@ -1061,9 +1061,10 @@ async function verifyProviderIdempotencyFenceRpc(
     const changedAssociationClaim = await insertFixture(input.firstUseMessageId, `association-change-${RUN_ID}`, null);
     const identityMapping = await client.query<{ source_link_id: string; person_id: string; other_person_id: string | null }>(
       `select source_link.id as source_link_id,source_link.person_id,
-              (select person.id from public.prospect_people person
-               where person.organization_id=source_link.organization_id and person.id<>source_link.person_id
-               order by person.id limit 1) as other_person_id
+              (select role.person_id from public.prospect_person_firm_roles role
+               where role.organization_id=source_link.organization_id and role.active
+                 and role.person_id<>source_link.person_id
+               order by role.person_id limit 1) as other_person_id
        from public.agency_followup_enrollments enrollment
        join public.agency_followup_messages target on target.enrollment_id=enrollment.id
        join public.prospect_source_links source_link on source_link.source_record_key=enrollment.prospect_id::text
