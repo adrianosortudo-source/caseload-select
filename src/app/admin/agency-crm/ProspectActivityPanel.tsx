@@ -378,7 +378,7 @@ export default function ProspectActivityPanel({
       <form onSubmit={saveConversationSettings} className="border-t border-black/10 bg-white px-4 py-4 sm:px-5 grid gap-3" data-ui-component-content="prospect-contact-controls">
         <div>
           <h3 className="text-xs uppercase tracking-[0.14em] font-semibold text-navy" data-ui-copy="heading">Contact controls</h3>
-          <p className="text-xs text-black/50 mt-1" data-ui-copy="supporting">Record the next action and contactability. This does not send a message.</p>
+          <p className="text-xs text-black/50 mt-1 [text-wrap:pretty]" data-ui-copy="supporting">Record the next action and contactability. This does not send a message.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="grid gap-1 text-xs font-semibold text-black/65">Contactability
