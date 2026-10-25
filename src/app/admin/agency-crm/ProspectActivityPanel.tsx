@@ -327,7 +327,7 @@ export default function ProspectActivityPanel({
         <form onSubmit={saveActivity} className="border border-black/10 bg-parchment p-4 grid gap-3" data-ui-component-content="prospect-activity-form">
           <div>
             <h3 className="text-xs uppercase tracking-[0.14em] font-semibold text-navy" data-ui-copy="heading">Log confirmed activity</h3>
-            <p className="text-xs text-black/50 mt-1" data-ui-copy="supporting">Saving this record does not send a message.</p>
+            <p className="text-xs text-black/50 mt-1 [text-wrap:pretty]" data-ui-copy="supporting">Saving this record does not send a message.</p>
           </div>
           <label className="grid gap-1 text-xs font-semibold text-black/65">Activity type
             <select className="border border-black/15 bg-white px-3 py-2 text-sm font-normal" value={kind} onChange={(event) => setKind(event.target.value as ProspectActivityKind)} disabled={!conversation || saving}>
