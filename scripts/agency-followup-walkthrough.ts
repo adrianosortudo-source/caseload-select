@@ -690,6 +690,11 @@ function safeProviderAuthorizationDiagnostic(value: unknown): {
   return { authorizationResult, authorizationBlocker };
 }
 
+function safeProviderAuthorizationFields(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.keys(value).filter((key) => /^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(key)).sort();
+}
+
 function hasExactProviderRequest(actual: unknown, expected: ExactAgencyProviderRequest): boolean {
   if (!actual || typeof actual !== "object" || Array.isArray(actual)) return false;
   const value = actual as Record<string, unknown>;
@@ -1108,6 +1113,9 @@ async function verifyProviderIdempotencyLockWaitBoundary(
     let waiterTransaction = false;
     let rpcPromise: Promise<unknown> | null = null;
     let rpcSettled = false;
+    let rpcRejected = false;
+    let rpcErrorCode: string | null = null;
+    let rpcErrorName: string | null = null;
     try {
       const sourceIdentity = await holder.query<{ enrollment_id: string }>(
         "select enrollment_id from public.agency_followup_messages where id=$1",
@@ -1230,7 +1238,20 @@ async function verifyProviderIdempotencyLockWaitBoundary(
         values: [fixture.id, enrollmentId, owner, fixture.attempt_count],
       }).then((result) => result.rows[0]?.authorization);
       rpcPromise = pendingRpcPromise;
-      void pendingRpcPromise.then(() => { rpcSettled = true; }, () => { rpcSettled = true; });
+      void pendingRpcPromise.then(
+        () => { rpcSettled = true; },
+        (error: unknown) => {
+          rpcRejected = true;
+          if (error && typeof error === "object") {
+            const queryError = error as { code?: unknown };
+            rpcErrorCode = typeof queryError.code === "string" && /^[A-Z0-9]{5}$/.test(queryError.code)
+              ? queryError.code
+              : null;
+            rpcErrorName = error instanceof Error ? error.name : null;
+          }
+          rpcSettled = true;
+        },
+      );
 
       const observationDeadline = Date.now() + 5_000;
       let observedWait: { database_now: Date; state: string | null; wait_event_type: string | null } | undefined;
@@ -1264,6 +1285,10 @@ async function verifyProviderIdempotencyLockWaitBoundary(
             authorizationBlocker: rpcSettled ? safeProviderAuthorizationDiagnostic(settledAuthorization).authorizationBlocker : "none",
             observedWaitEventType: "not_observed",
             blockerMatched: false,
+            rpcRejected,
+            rpcErrorCode,
+            rpcErrorName,
+            authorizationFields: safeProviderAuthorizationFields(settledAuthorization),
           }));
       }
       if (targetBoundary.getTime() <= observedWait.database_now.getTime() + 5_000) {
@@ -1303,6 +1328,10 @@ async function verifyProviderIdempotencyLockWaitBoundary(
           authorizationResult: diagnostic.authorizationResult,
           authorizationBlocker: diagnostic.authorizationBlocker,
           blockerMatched: true,
+          rpcRejected,
+          rpcErrorCode,
+          rpcErrorName,
+          authorizationFields: safeProviderAuthorizationFields(settledAuthorization),
         }));
       }
 
