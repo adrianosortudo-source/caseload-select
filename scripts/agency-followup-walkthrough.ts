@@ -3594,15 +3594,16 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
   progress("opening synthetic Agency CRM contact history to verify the manual reconciliation controls");
   await page.goto(APP_ORIGIN + "/admin/agency-crm", { waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
-  const normalName = page.getByText(normal.firmName, { exact: true });
-  for (let reveal = 0; reveal < 30 && await normalName.count() === 0; reveal += 1) {
+  const normalProspectCard = page.getByRole("listitem")
+    .filter({ hasText: normal.firmName })
+    .filter({ has: page.getByRole("button", { name: "Contact history", exact: true }) });
+  for (let reveal = 0; reveal < 30 && await normalProspectCard.count() === 0; reveal += 1) {
     const showMore = page.getByRole("button", { name: /^Show \d+ more \(/ }).first();
     if (await showMore.count() === 0) break;
     await showMore.click();
   }
-  await expect(normalName).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
-  const normalHistoryButton = normalName.locator("xpath=ancestor::li[1]")
-    .getByRole("button", { name: "Contact history", exact: true });
+  await expect(normalProspectCard).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+  const normalHistoryButton = normalProspectCard.getByRole("button", { name: "Contact history", exact: true });
   await expect(normalHistoryButton).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
   await normalHistoryButton.click();
   const activityPanel = page.locator('[data-ui-component-content="prospect-activity-panel"]');
