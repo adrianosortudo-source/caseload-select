@@ -1226,8 +1226,7 @@ async function verifyProviderIdempotencyLockWaitBoundary(
       await waiter.query("set local role service_role");
       await waiter.query("select set_config('statement_timeout',$1,true)", [String(lockWaitQueryTimeoutMs) + "ms"]);
       const pendingRpcPromise = waiter.query<{ authorization: unknown }>({
-        text: "select public.authorize_agency_followup_provider_handoff($1::uuid," +
-          "(select enrollment_id from public.agency_followup_messages where id=$1::uuid),$2,$3,300,82800) as authorization",
+        text: "select public.authorize_agency_followup_provider_handoff($1::uuid,$2::uuid,$3,$4,300,82800) as authorization",
         values: [fixture.id, enrollmentId, owner, fixture.attempt_count],
       }).then((result) => result.rows[0]?.authorization);
       rpcPromise = pendingRpcPromise;
