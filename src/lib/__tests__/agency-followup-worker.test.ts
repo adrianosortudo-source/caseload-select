@@ -4,6 +4,7 @@ import {
   agencyFollowupContentHash,
   agencyFollowupLogicalMessageKey,
   agencyFollowupRecipientHash,
+  evaluateAgencyFollowupSend,
   type AgencyFollowupSendContext,
 } from "../agency-followup-domain";
 import {
@@ -102,6 +103,25 @@ describe("Agency follow-up fake dispatcher", () => {
     expect(result).toMatchObject({ claimed: 1, blocked: 1, accepted: 0 });
     expect(provider.uniqueIdempotencyKeysSeen).toBe(0);
     expect(repository.dispositions[0]).toMatchObject({ state: "blocked" });
+  });
+
+  it("blocks a missing recipient email before provider handoff", async () => {
+    const missingRecipientContext: AgencyFollowupSendContext = {
+      ...validContext,
+      recipient: { ...recipient, contactEmail: "" },
+    };
+    expect(evaluateAgencyFollowupSend(missingRecipientContext)).toContain("recipient_email_invalid");
+
+    const repository = new SyntheticRepository(missingRecipientContext);
+    const provider = new FakeAgencyFollowupProvider();
+    const result = await dispatchAgencyFollowupBatch({
+      repository, provider, workerId: "synthetic-worker", now: validContext.now,
+    });
+
+    expect(result).toMatchObject({ claimed: 1, blocked: 1, accepted: 0 });
+    expect(repository.dispositions[0]).toMatchObject({ state: "blocked" });
+    expect(provider.sendCalls).toBe(0);
+    expect(provider.uniqueIdempotencyKeysSeen).toBe(0);
   });
 
   it("uses an atomic repository claim so concurrent workers cannot process one row twice", async () => {

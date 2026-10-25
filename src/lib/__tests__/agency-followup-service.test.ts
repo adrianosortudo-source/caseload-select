@@ -282,6 +282,19 @@ describe("listAgencyFollowupConsole operations-state batching", () => {
     expect(sourceCall.in).toContainEqual(["source_record_key", [P1, P2, P3]]);
   });
 
+  it("keeps an enrolled message visible and blocked when its recipient email is missing", async () => {
+    (h.rows.agency_prospects[0] as Record<string, unknown>).contact_email = null;
+
+    const result = await listAgencyFollowupConsole();
+    const item = result.items.find((row) => row.prospectId === P1);
+
+    expect(item).toMatchObject({
+      prospectId: P1,
+      recipientEmail: "",
+      blockers: expect.arrayContaining(["recipient_email_invalid"]),
+    });
+  });
+
   it("fails closed when any batched operations read fails", async () => {
     const originalFrom = h.supabaseAdmin.from;
     h.supabaseAdmin.from = ((table: string) => {

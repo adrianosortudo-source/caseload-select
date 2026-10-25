@@ -972,8 +972,8 @@ async function verifyProviderIdempotencyFenceRpc(
       { name: "meeting-completed", kind: "meeting", channel: "video", direction: "internal", deliveryStatus: "unknown", responseKind: "none", replyDisposition: "unknown", meetingOutcome: "Completed synthetic meeting", expectedStatus: "completed" },
       { name: "bounce", kind: "bounce", channel: "email", direction: "inbound", deliveryStatus: "bounced", responseKind: "none", replyDisposition: "unknown", meetingOutcome: null, expectedStatus: "unreachable" },
     ] as const;
-    await client.query("savepoint stop_activity_cases");
     for (const stopCase of stopActivityCases) {
+      await client.query("savepoint stop_activity_case");
       const nextActivityTime = await client.query<{ occurred_at: Date }>(
         "select coalesce(last_activity_at + interval '1 second', clock_timestamp()) as occurred_at from public.prospect_conversations where id=$1",
         [conversation.conversation_id],
@@ -1000,8 +1000,9 @@ async function verifyProviderIdempotencyFenceRpc(
       }
       const stopClaim = await insertFixture(input.firstUseMessageId, "stop-" + stopCase.name + "-" + RUN_ID, null);
       await assertPureGateResult(stopClaim, { result: "blocked", blocker: "conversation_stopped" });
+      await client.query("rollback to savepoint stop_activity_case");
+      await client.query("release savepoint stop_activity_case");
     }
-    await client.query("rollback to savepoint stop_activity_cases");
     const futureReviewClaim = await insertFixture(input.firstUseMessageId, "future-review-" + RUN_ID, null);
     await client.query(
       "update public.agency_followup_messages set reviewed_at=clock_timestamp()+interval '1 minute' where id=$1",
