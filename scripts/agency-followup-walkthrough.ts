@@ -3970,7 +3970,7 @@ async function main(): Promise<void> {
   process.env.NEXT_PUBLIC_SUPABASE_URL = status.API_URL;
   process.env.SUPABASE_SERVICE_ROLE_KEY = status.SERVICE_ROLE_KEY;
   process.env.PORTAL_SECRET = portalSecret;
-  const pool = new Pool({ connectionString: status.DB_URL, max: 8, ssl: false, connectionTimeoutMillis: 5000, query_timeout: 20000 });
+  const pool = new Pool({ connectionString: status.DB_URL, max: 8, ssl: false, connectionTimeoutMillis: 5000, query_timeout: 60000 });
   runAbortController = new AbortController();
   const hardStop = MANUAL ? undefined : setTimeout(() => {
     interrupted = true;
