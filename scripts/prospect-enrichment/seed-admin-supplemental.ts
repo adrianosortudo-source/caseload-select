@@ -30,6 +30,7 @@ async function seed() {
   const firmName = `Synthetic Admin firm ${suffix}`;
   const observedOn = new Date().toISOString().slice(0, 10);
   const sourceUrl = `https://${suffix}.synthetic.test/profile`;
+  const websiteUrl = `https://${suffix}.synthetic.test`;
   const initial = {
     sourceRecordKey: manifest.sourceRecordKey,
     firmName,
@@ -38,13 +39,13 @@ async function seed() {
     practiceAreas: ["Family Law"],
     legacyCrosswalk: null,
     legacyClusterLawyerCount: null,
-    websiteUrl: `https://${suffix}.synthetic.test`,
+    websiteUrl,
     officeCities: ["Toronto"],
     roster: { sourceUrl, observedOn, lawyerCount: 3, qualifier: "exact", display: "3 lawyers" },
     reconciliation: { status: "update_existing", basis: "Synthetic existing-firm fixture for Admin acceptance only." },
     evidence: [
       { type: "roster", sourceUrl, observedOn, value: "3 lawyers" },
-      { type: "website", sourceUrl, observedOn, value: `https://${suffix}.synthetic.test` },
+      { type: "website", sourceUrl: websiteUrl, observedOn, value: websiteUrl },
     ],
   };
   let transactionStarted = false;
