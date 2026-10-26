@@ -399,6 +399,21 @@ test("candidate reader repair matches pinned history guards and checks held CRM 
   const staged = path.join(base, "staged");
   const sourceDir = path.join(source, "supabase", "migrations");
   const stagedDir = path.join(staged, "supabase", "migrations");
+  const reportedPendingCrmPaths = [
+    "supabase/migrations/20261020025251_agency_followup_resend_events_and_shared_suppression.sql",
+    "supabase/migrations/20261020141945_agency_followup_provider_event_row_lock_privilege.sql",
+    "supabase/migrations/20261021040000_agency_followup_opt_in_events.sql",
+    "supabase/migrations/20261021050000_agency_followup_opt_in_operator_read_grant.sql",
+    "supabase/migrations/20261021173939_agency_followup_test_message_claim.sql",
+    "supabase/migrations/20261022172352_agency_followup_webhook_replay_quarantine_guard.sql",
+    "supabase/migrations/20261022222611_agency_followup_provider_event_least_privilege.sql",
+    "supabase/migrations/20261023170628_agency_followup_template_approval_atomic.sql",
+    "supabase/migrations/20261023185535_agency_followup_live_message_claim.sql",
+    "supabase/migrations/20261023185615_agency_followup_provider_idempotency_fence.sql",
+    "supabase/migrations/20261024054520_agency_followup_resend_suppressed_status.sql"
+  ];
+  assert.deepEqual(CANDIDATE_READER_REPAIR_HELD_MIGRATIONS.slice(1).map(item => item.path), reportedPendingCrmPaths);
+
   fs.mkdirSync(sourceDir, { recursive: true });
   fs.mkdirSync(stagedDir, { recursive: true });
   const baseline = "20260413_legacy_numeric.sql";
@@ -451,9 +466,11 @@ test("candidate reader repair matches pinned history guards and checks held CRM 
   fs.copyFileSync(heldPath, path.join(stagedDir, path.basename(CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)));
   assert.throws(() => verify(applied), /reader_repair_held_migration_staged/);
   fs.rmSync(path.join(stagedDir, path.basename(CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)));
-  const heldWasApplied = [...applied, makeRow(CANDIDATE_READER_REPAIR_HELD_MIGRATION.path)].sort((a, b) => a.version.localeCompare(b.version));
-  assert.throws(() => verifyFullMigrationLedger(heldWasApplied, staged, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS, source),
-    /reader_repair_held_migration_already_applied/);
+  for (const held of CANDIDATE_READER_REPAIR_HELD_MIGRATIONS) {
+    const heldWasApplied = [...applied, makeRow(held.path)].sort((a, b) => a.version.localeCompare(b.version));
+    assert.throws(() => verifyFullMigrationLedger(heldWasApplied, staged, "candidate-reader-repair-held-pending", CANDIDATE_READER_REPAIR_PATHS, source),
+      /reader_repair_held_migration_already_applied/);
+  }
   const appliedJourney = applied.find(row => row.version === "20261013173327");
   assert.deepEqual(appliedJourney, { version: "20261013173327", name: "agency_followup_journeys" });
   assert.equal(CANDIDATE_READER_REPAIR_HELD_MIGRATIONS.some(item => item.version === "20261013173327"), false);

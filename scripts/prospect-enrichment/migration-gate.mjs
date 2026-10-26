@@ -76,6 +76,83 @@ export const CANDIDATE_READER_REPAIR_HELD_MIGRATION = Object.freeze({
 });
 export const CANDIDATE_READER_REPAIR_HELD_MIGRATIONS = Object.freeze([
   CANDIDATE_READER_REPAIR_HELD_MIGRATION,
+  Object.freeze({
+    path: "supabase/migrations/20261020025251_agency_followup_resend_events_and_shared_suppression.sql",
+    version: "20261020025251",
+    name: "agency_followup_resend_events_and_shared_suppression",
+    bytes: 39906,
+    sha256: "e0a7a24d5750b20c32e1fdec20abd8ce84237f3dc7eced8a2182e22b61681a3e",
+  }),
+  Object.freeze({
+    path: "supabase/migrations/20261020141945_agency_followup_provider_event_row_lock_privilege.sql",
+    version: "20261020141945",
+    name: "agency_followup_provider_event_row_lock_privilege",
+    bytes: 330,
+    sha256: "c7eb4e334bcac6751b89d43157c556dee38d7ebbb7d35529195e2c0ddca549eb",
+  }),
+  Object.freeze({
+    path: "supabase/migrations/20261021040000_agency_followup_opt_in_events.sql",
+    version: "20261021040000",
+    name: "agency_followup_opt_in_events",
+    bytes: 20426,
+    sha256: "be0c6bd951f85b1d98f8a4cbb85bf73b5f808e987003608db05d7992754b0f13",
+  }),
+  Object.freeze({
+    path: "supabase/migrations/20261021050000_agency_followup_opt_in_operator_read_grant.sql",
+    version: "20261021050000",
+    name: "agency_followup_opt_in_operator_read_grant",
+    bytes: 304,
+    sha256: "8b56817fbf20089c4048cc6d33f38622b1461ec86446ec00a4232647733655d9",
+  }),
+  Object.freeze({
+    path: "supabase/migrations/20261021173939_agency_followup_test_message_claim.sql",
+    version: "20261021173939",
+    name: "agency_followup_test_message_claim",
+    bytes: 4273,
+    sha256: "5b138039b1b18c5062c1396af3905d337d969598d1ac6481046f5b231f1ed3a5",
+  }),
+  Object.freeze({
+    path: "supabase/migrations/20261022172352_agency_followup_webhook_replay_quarantine_guard.sql",
+    version: "20261022172352",
+    name: "agency_followup_webhook_replay_quarantine_guard",
+    bytes: 18726,
+    sha256: "2e232ef63c0c946f12f1be27f8c0aef56ab67402d4ecb34aa6e52ada4bb9e8ed",
+  }),
+  Object.freeze({
+    path: "supabase/migrations/20261022222611_agency_followup_provider_event_least_privilege.sql",
+    version: "20261022222611",
+    name: "agency_followup_provider_event_least_privilege",
+    bytes: 476,
+    sha256: "c92bfdf08f351c3c35ece9a47bdec71810b9a16002f3f036d30b96b269c996c3",
+  }),
+  Object.freeze({
+    path: "supabase/migrations/20261023170628_agency_followup_template_approval_atomic.sql",
+    version: "20261023170628",
+    name: "agency_followup_template_approval_atomic",
+    bytes: 1936,
+    sha256: "dbe94ab0cf2611213d74070e73fb34faab0d5aff7df9c62a82e981b397c9a165",
+  }),
+  Object.freeze({
+    path: "supabase/migrations/20261023185535_agency_followup_live_message_claim.sql",
+    version: "20261023185535",
+    name: "agency_followup_live_message_claim",
+    bytes: 3033,
+    sha256: "080b1faae5c7fe0ca6cc9184a07e48135b12ba264571da1613b63322b39414e3",
+  }),
+  Object.freeze({
+    path: "supabase/migrations/20261023185615_agency_followup_provider_idempotency_fence.sql",
+    version: "20261023185615",
+    name: "agency_followup_provider_idempotency_fence",
+    bytes: 8784,
+    sha256: "c61b1e7ea13443e47f69b0a5524ba364bf82b1815a36f5423501ad2737ce909d",
+  }),
+  Object.freeze({
+    path: "supabase/migrations/20261024054520_agency_followup_resend_suppressed_status.sql",
+    version: "20261024054520",
+    name: "agency_followup_resend_suppressed_status",
+    bytes: 22063,
+    sha256: "83f2cde60d46efbc55326eba6fc7b331b652b29e3e6ca67df46c5725cf50ccc1",
+  }),
 ]);
 export const QUALIFICATION_HISTORY_CONFIRMATION = "RECONCILE-QUALIFICATION-HISTORY-V1";
 export const CONFIRMATION = "APPLY-PROSPECT-ENRICHMENT-V1";
@@ -369,8 +446,8 @@ export function verifyFullMigrationLedger(rows, sourceRoot, phase, candidatePend
       });
       pendingPaths = [];
     }
-    // The 20261013173327 journeys source is already present in the live ledger and remains in staged history.
-    // Only the unapplied 20261013230354 grants migration is held outside reader-repair staging.
+    // Exact hash-pinned Agency CRM migrations are held outside reader-repair staging.
+    // Any other pending migration remains a reconciliation failure.
     heldMigrations = heldMigrationSources.map(item => ({ ...item, status: "held-unapplied" }));
   }
   const expected = phase === "qualification-pending"
