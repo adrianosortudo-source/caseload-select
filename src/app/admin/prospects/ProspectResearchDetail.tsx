@@ -30,7 +30,7 @@ export function EvidenceCard({ item }: { item: ProspectEnrichmentEvidence }) {
   const payload = item.table === "prospect_enrichment_packages" && item.data.payload && typeof item.data.payload === "object" && !Array.isArray(item.data.payload) ? item.data.payload : null;
   const original = payload?.originalResearch && typeof payload.originalResearch === "object" && !Array.isArray(payload.originalResearch) ? payload.originalResearch : null;
   return <article className="min-w-0 rounded-md border border-border-brand p-3" data-ui-component-content="research-evidence-card">
-    <h3 className="w-full text-sm font-semibold text-navy" data-ui-copy="heading">{item.qualificationCategory ?? researchLabel(item.table.replace(/^(gta_)?prospect_/, ""))}</h3>
+    <h3 className="w-full text-sm font-semibold text-navy text-pretty" data-ui-copy="heading">{item.qualificationCategory ?? researchLabel(item.table.replace(/^(gta_)?prospect_/, ""))}</h3>
     <p className="mt-2 w-full text-xs text-black/60" data-ui-copy="supporting">{item.dateLabel}{item.freshness === "refresh_recommended" ? ". Refresh recommended." : ""}</p>
     <ObservationSummary item={item} />
     {researchEvidenceFields(item).map((fields, index) => <dl key={index} className="mt-3 space-y-3">{fields.map((field) => <div key={field.label} className="min-w-0"><dt className="text-xs font-semibold text-black/60">{field.label}</dt><dd className="mt-1 text-sm"><ResearchJson value={field.value} /></dd></div>)}</dl>)}

@@ -104,7 +104,7 @@ test("mounted supplemental evidence import updates and reads back one synthetic 
   await page.getByRole("link", { name: "Back to prospect list", exact: true }).click();
   await expect(search).toHaveValue(data.firmName);
   await expect(page.getByRole("combobox", { name: "City", exact: true })).toHaveValue("Toronto");
-  await expect(page.getByRole("combobox", { name: "Practice area", exact: true })).toHaveValue("Family Law");
+  await expect(page.getByRole("combobox", { name: "Practice area", exact: true })).toHaveValue("Family law");
 
   const databaseUrl = process.env.PROSPECT_ENRICHMENT_TEST_DATABASE_URL;
   if (!databaseUrl) throw new Error("The disposable Postgres URL is required for read-only acceptance receipts.");
