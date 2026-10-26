@@ -2176,7 +2176,7 @@ async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: s
   const journeyName = "Synthetic follow-up " + suffix;
   await page.getByLabel("Template key").fill(templateKey);
   await page.getByLabel("Email subject").fill("A synthetic follow-up question");
-  await page.getByLabel("Email body").fill("Hello. This message is a local synthetic review fixture and is never sent to a provider.\n\nUnsubscribe: {{agency_followup_unsubscribe_url}}");
+  await page.getByLabel("Email body").fill("Hello. This message is a local synthetic review fixture and is never sent to a provider. Unsubscribe: {{agency_followup_unsubscribe_url}}");
   await waitForAction(page, "template_create", page.getByRole("button", { name: "Create template draft" }));
   const templateCard = page.locator("article").filter({ hasText: templateKey }).first();
   const templateApprovalButton = templateCard.getByRole("button", { name: "Approve template v1" });
