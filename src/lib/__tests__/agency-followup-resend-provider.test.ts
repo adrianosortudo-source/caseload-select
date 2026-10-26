@@ -4,6 +4,12 @@ import {
   createAgencyFollowupResendProvider,
   type AgencyFollowupResendSend,
 } from "../agency-followup-resend-provider";
+import {
+  AGENCY_FOLLOWUP_UNSUBSCRIBE_ENDPOINT,
+  AGENCY_FOLLOWUP_UNSUBSCRIBE_PLACEHOLDER,
+  verifyAgencyFollowupUnsubscribeToken,
+} from "../agency-followup-unsubscribe";
+import { agencyFollowupRecipientEmailHash } from "../agency-followup-domain";
 
 const env = {
   AGENCY_FOLLOWUP_SEND_MODE: "test",
@@ -11,9 +17,10 @@ const env = {
   AGENCY_FOLLOWUP_REPLY_TO: "support@caseloadselect.ca",
   RESEND_API_KEY: "synthetic-api-key-never-used-for-network",
   AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: "whsec_synthetic-never-used-for-network",
+  AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET: "synthetic-unsubscribe-secret-with-at-least-32-bytes",
   AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST: "owner@example.test",
   AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST: JSON.stringify([
-    { enrollmentId: "enrollment-01", messageId: "message-01", recipientEmail: "owner@example.test" },
+    { enrollmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", messageId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", recipientEmail: "owner@example.test" },
   ]),
 };
 
@@ -26,10 +33,10 @@ function rejected(name: ErrorResponse["name"]): CreateEmailResponse {
 }
 
 const request = {
-  idempotencyKey: "agency-followup:enrollment-01:message-01",
+  idempotencyKey: "agency-followup:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   recipientEmail: "owner@example.test",
   subject: "Exact approved subject",
-  body: "Exact approved plain text body.\nSecond line.",
+  body: `Exact approved plain text body.\nSecond line.\n\nTo stop these messages, unsubscribe: ${AGENCY_FOLLOWUP_UNSUBSCRIBE_PLACEHOLDER}`,
 };
 
 describe("Agency follow-up Resend provider", () => {
@@ -54,8 +61,42 @@ describe("Agency follow-up Resend provider", () => {
       replyTo: "support@caseloadselect.ca",
       to: "owner@example.test",
       subject: "Exact approved subject",
-      text: "Exact approved plain text body.\nSecond line.",
+      text: expect.stringContaining("Exact approved plain text body.\nSecond line.\n\nTo stop these messages, unsubscribe: https://app.caseloadselect.ca/api/agency-followup/unsubscribe?token=v1."),
+      headers: {
+        "List-Unsubscribe": expect.stringMatching(/^<https:\/\/app\.caseloadselect\.ca\/api\/agency-followup\/unsubscribe\?token=v1\./),
+        "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+      },
+      tags: [
+        { name: "agency_followup_message_id", value: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb" },
+        { name: "agency_followup_enrollment_id", value: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" },
+      ],
     }, { idempotencyKey: request.idempotencyKey });
+    const payload = sendEmail.mock.calls[0]?.[0];
+    expect(payload).toBeDefined();
+    const link = payload?.text?.match(/https:\/\/app\.caseloadselect\.ca\/api\/agency-followup\/unsubscribe\?token=([^\s]+)/)?.[0];
+    expect(link).toBeDefined();
+    const unsubscribeUrl = new URL(link!);
+    expect(unsubscribeUrl.origin + unsubscribeUrl.pathname).toBe(AGENCY_FOLLOWUP_UNSUBSCRIBE_ENDPOINT);
+    expect(verifyAgencyFollowupUnsubscribeToken(unsubscribeUrl.searchParams.get("token"), env.AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET)).toEqual({
+      enrollmentId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      messageId: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      recipientEmailSha256: agencyFollowupRecipientEmailHash(request.recipientEmail),
+    });
+    expect(link).not.toContain(request.recipientEmail);
+  });
+
+  it("blocks content without exactly one approved unsubscribe placeholder", async () => {
+    const sendEmail = vi.fn<AgencyFollowupResendSend>().mockResolvedValue(accepted());
+    const provider = createAgencyFollowupResendProvider({ env, sendEmail });
+    await expect(provider.send({ ...request, body: "No unsubscribe link." })).resolves.toEqual({
+      kind: "blocked",
+      blockers: ["unsubscribe_placeholder_missing_or_repeated"],
+    });
+    await expect(provider.send({ ...request, body: `${request.body}\n${AGENCY_FOLLOWUP_UNSUBSCRIBE_PLACEHOLDER}` })).resolves.toEqual({
+      kind: "blocked",
+      blockers: ["unsubscribe_placeholder_missing_or_repeated"],
+    });
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it("returns a typed blocked result without handoff when mode is off, config is missing, or record/recipient mismatches", async () => {

@@ -287,7 +287,7 @@ export default function ProspectActivityPanel({
         <button type="button" onClick={onClose} className="border border-black/15 px-3 py-1.5 text-xs font-semibold text-navy hover:bg-parchment shrink-0">Close</button>
       </div>
 
-      <div className="grid gap-5 p-4 sm:p-5 lg:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
+      <div className="grid gap-5 p-4 sm:p-5 xl:grid-cols-[minmax(0,1.1fr)_minmax(18rem,0.9fr)]">
         <div data-ui-component-content="prospect-activity-history">
           <div className="flex items-center justify-between gap-3 mb-3">
             <h3 className="text-xs uppercase tracking-[0.14em] font-semibold text-navy" data-ui-copy="heading">History</h3>
@@ -327,7 +327,7 @@ export default function ProspectActivityPanel({
         <form onSubmit={saveActivity} className="border border-black/10 bg-parchment p-4 grid gap-3" data-ui-component-content="prospect-activity-form">
           <div>
             <h3 className="text-xs uppercase tracking-[0.14em] font-semibold text-navy" data-ui-copy="heading">Log confirmed activity</h3>
-            <p className="text-xs text-black/50 mt-1" data-ui-copy="supporting">Saving this record does not send a message.</p>
+            <p className="text-xs text-black/50 mt-1 [text-wrap:pretty]" data-ui-copy="supporting">Saving this record does not send a message.</p>
           </div>
           <label className="grid gap-1 text-xs font-semibold text-black/65">Activity type
             <select className="border border-black/15 bg-white px-3 py-2 text-sm font-normal" value={kind} onChange={(event) => setKind(event.target.value as ProspectActivityKind)} disabled={!conversation || saving}>
@@ -369,7 +369,7 @@ export default function ProspectActivityPanel({
             </label> : <div aria-hidden />}
           </div>
           {isMeeting && <label className="grid gap-1 text-xs font-semibold text-black/65">Meeting outcome
-            <input className="border border-black/15 bg-white px-3 py-2 text-sm font-normal" value={meetingOutcome} onChange={(event) => setMeetingOutcome(event.target.value)} placeholder="What happened or what comes next" disabled={!conversation || saving} />
+            <input className="border border-black/15 bg-white px-3 py-2 text-sm font-normal" value={meetingOutcome} onChange={(event) => setMeetingOutcome(event.target.value)} placeholder="What happened at the meeting" disabled={!conversation || saving} />
           </label>}
           {error && <p className="text-xs text-red-700" data-ui-copy="supporting">{error}</p>}
           <button type="submit" className="bg-navy text-white px-4 py-2 text-xs uppercase tracking-wider font-bold disabled:opacity-50" disabled={!conversation || saving || loading}>{saving ? 'Saving' : 'Save activity'}</button>
@@ -378,7 +378,7 @@ export default function ProspectActivityPanel({
       <form onSubmit={saveConversationSettings} className="border-t border-black/10 bg-white px-4 py-4 sm:px-5 grid gap-3" data-ui-component-content="prospect-contact-controls">
         <div>
           <h3 className="text-xs uppercase tracking-[0.14em] font-semibold text-navy" data-ui-copy="heading">Contact controls</h3>
-          <p className="text-xs text-black/50 mt-1" data-ui-copy="supporting">Record the next action and contactability. This does not send a message.</p>
+          <p className="text-xs text-black/50 mt-1 [text-wrap:pretty]" data-ui-copy="supporting">Record the next action and contactability. This does not send a message.</p>
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="grid gap-1 text-xs font-semibold text-black/65">Contactability

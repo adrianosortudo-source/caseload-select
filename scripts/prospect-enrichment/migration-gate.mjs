@@ -211,7 +211,7 @@ const isWithin = (parent, child) => {
   return relative === "" || (!relative.startsWith(".." + path.sep) && relative !== ".." && !path.isAbsolute(relative));
 };
 
-function sourceMigrationInventory(sourceRoot, { requirePreviewSources = true } = {}) {
+export function sourceMigrationInventory(sourceRoot, { requirePreviewSources = true } = {}) {
   const root = fs.realpathSync(sourceRoot);
   const supabaseDir = path.join(root, "supabase");
   const supabaseStat = fs.lstatSync(supabaseDir);

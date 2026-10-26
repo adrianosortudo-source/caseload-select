@@ -1,0 +1,264 @@
+name: Agency follow-up production migration release
+
+'on':
+  workflow_dispatch:
+    inputs:
+      reviewed_source_sha:
+        description: Exact reviewed 40-character current main commit SHA.
+        required: true
+        type: string
+      apply_confirmation:
+        description: For the protected apply job only, enter APPLY-AGENCY-FOLLOWUP-MIGRATIONS-V1 exactly.
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: gta-prospect-migrations-production
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select' && github.run_attempt == 1
+    name: Read-only Agency migration preflight
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment:
+      name: Production prospect migrations
+    outputs:
+      artifact_id: ${{ steps.preflight_artifact.outputs.artifact-id }}
+      artifact_digest: ${{ steps.preflight_artifact.outputs.artifact-digest }}
+      manifest_sha256: ${{ steps.preflight_manifest.outputs.manifest_sha256 }}
+    env:
+      REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+    steps:
+      - name: Check out reviewed current main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.117.0
+
+      - name: Initialize isolated preflight paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/agency-followup-preflight-evidence"
+          mkdir -p "$EVIDENCE_DIR"
+          printf 'AGENCY_PREFLIGHT_EVIDENCE_DIR=%s\n' "$EVIDENCE_DIR" >> "$GITHUB_ENV"
+          printf 'AGENCY_PREFLIGHT_STAGE_DIR=%s\n' "$RUNNER_TEMP/agency-followup-preflight-stage" >> "$GITHUB_ENV"
+
+      - name: Validate exact manual main source and pinned CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REPOSITORY" = adrianosortudo-source/caseload-select
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse origin/main)" = "$REVIEWED_SOURCE_SHA"
+          test "$(supabase --version)" = 2.117.0
+          supabase db push --help > "$RUNNER_TEMP/agency-db-push-help.txt"
+          supabase db query --help > "$RUNNER_TEMP/agency-db-query-help.txt"
+          grep -q -- '--db-url' "$RUNNER_TEMP/agency-db-push-help.txt"
+          grep -q -- '--include-all' "$RUNNER_TEMP/agency-db-push-help.txt"
+          grep -q -- '--db-url' "$RUNNER_TEMP/agency-db-query-help.txt"
+          node scripts/agency-followup-production-release-gate.mjs source-check > "$AGENCY_PREFLIGHT_EVIDENCE_DIR/source-check.json"
+
+      - name: Load the existing protected production database connection
+        env:
+          STATIC_MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$STATIC_MIGRATION_DATABASE_URL"
+          [[ "$STATIC_MIGRATION_DATABASE_URL" != *$'\n'* && "$STATIC_MIGRATION_DATABASE_URL" != *$'\r'* ]]
+          printf 'MIGRATION_DATABASE_URL=%s\n' "$STATIC_MIGRATION_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Configure the pinned Supabase database certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/configure-migration-tls.mjs
+          mv "$RUNNER_TEMP/database-tls-check.json" "$AGENCY_PREFLIGHT_EVIDENCE_DIR/database-tls-check.json"
+          node scripts/agency-followup-production-release-gate.mjs connection-check > "$AGENCY_PREFLIGHT_EVIDENCE_DIR/connection-check.json"
+
+      - name: Stage the full source history except the two preview-only migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/agency-followup-production-release-gate.mjs stage "$GITHUB_WORKSPACE" "$AGENCY_PREFLIGHT_STAGE_DIR" "$AGENCY_PREFLIGHT_EVIDENCE_DIR/staged-inventory.json" > "$RUNNER_TEMP/agency-stage-summary.json"
+
+      - name: Require exactly the 18 pinned Agency migrations and dry-run plan
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/agency-followup-production-release-gate.mjs full-ledger-query > "$RUNNER_TEMP/agency-full-ledger-readback.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/agency-full-ledger-readback.sql" --output-format json --agent no > "$AGENCY_PREFLIGHT_EVIDENCE_DIR/full-ledger-before.json"
+          node scripts/agency-followup-production-release-gate.mjs check-ledger preflight "$AGENCY_PREFLIGHT_EVIDENCE_DIR/full-ledger-before.json" "$AGENCY_PREFLIGHT_EVIDENCE_DIR/ledger-before-check.json"
+          (cd "$AGENCY_PREFLIGHT_STAGE_DIR" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$AGENCY_PREFLIGHT_EVIDENCE_DIR/plan.json"
+          node scripts/agency-followup-production-release-gate.mjs check-plan pre "$AGENCY_PREFLIGHT_EVIDENCE_DIR/plan.json" "$AGENCY_PREFLIGHT_EVIDENCE_DIR/plan-check.json"
+
+      - name: Bind exact preflight evidence and source into its immutable artifact
+        id: preflight_manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/agency-followup-production-release-gate.mjs preflight-manifest "$AGENCY_PREFLIGHT_EVIDENCE_DIR" > "$RUNNER_TEMP/agency-preflight-manifest-summary.json"
+
+      - name: Upload immutable read-only preflight evidence
+        id: preflight_artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: agency-followup-production-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/agency-followup-preflight-evidence/
+          if-no-files-found: error
+          retention-days: 7
+
+  apply:
+    needs: preflight
+    if: needs.preflight.result == 'success' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select' && github.run_attempt == 1
+    name: Environment-gated Agency migration apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment:
+      name: Production prospect migrations
+    env:
+      REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+      APPLY_CONFIRMATION: ${{ inputs.apply_confirmation }}
+      EXPECTED_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact_id }}
+      EXPECTED_ARTIFACT_DIGEST: ${{ needs.preflight.outputs.artifact_digest }}
+      EXPECTED_MANIFEST_SHA256: ${{ needs.preflight.outputs.manifest_sha256 }}
+      EXPECTED_ARTIFACT_NAME: agency-followup-production-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out reviewed current main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@46f7f98c7f948ad727d22c1e67fab04c223a0520 # v3
+        with:
+          version: 2.117.0
+
+      - name: Create result evidence directory for success or failure receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/agency-followup-production-release-evidence"
+          mkdir -p "$EVIDENCE_DIR"
+          printf 'AGENCY_RESULT_EVIDENCE_DIR=%s\n' "$EVIDENCE_DIR" >> "$GITHUB_ENV"
+          printf 'AGENCY_PREFLIGHT_DOWNLOAD_DIR=%s\n' "$RUNNER_TEMP/agency-followup-preflight-download" >> "$GITHUB_ENV"
+          printf 'AGENCY_APPLY_STAGE_DIR=%s\n' "$RUNNER_TEMP/agency-followup-apply-stage" >> "$GITHUB_ENV"
+          printf 'AGENCY_POST_STAGE_DIR=%s\n' "$RUNNER_TEMP/agency-followup-post-stage" >> "$GITHUB_ENV"
+
+      - name: Load the existing protected production database connection
+        env:
+          STATIC_MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$STATIC_MIGRATION_DATABASE_URL"
+          [[ "$STATIC_MIGRATION_DATABASE_URL" != *$'\n'* && "$STATIC_MIGRATION_DATABASE_URL" != *$'\r'* ]]
+          printf 'MIGRATION_DATABASE_URL=%s\n' "$STATIC_MIGRATION_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Configure the pinned Supabase database certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/configure-migration-tls.mjs
+          mv "$RUNNER_TEMP/database-tls-check.json" "$AGENCY_RESULT_EVIDENCE_DIR/database-tls-check-apply.json"
+          node scripts/agency-followup-production-release-gate.mjs connection-check > "$AGENCY_RESULT_EVIDENCE_DIR/connection-check-apply.json"
+
+      - name: Download this run’s immutable preflight artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: agency-followup-production-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/agency-followup-preflight-download
+
+      - name: Verify artifact identity, source, manifest and all read-only preflight checks
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          test "$(git rev-parse HEAD)" = "$REVIEWED_SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git rev-parse origin/main)" = "$REVIEWED_SOURCE_SHA"
+          node scripts/agency-followup-production-release-gate.mjs source-check > "$AGENCY_RESULT_EVIDENCE_DIR/source-check-apply.json"
+          gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${EXPECTED_ARTIFACT_ID}" > "$RUNNER_TEMP/agency-preflight-artifact-metadata.json"
+          node scripts/agency-followup-production-release-gate.mjs verify-preflight "$AGENCY_PREFLIGHT_DOWNLOAD_DIR" "$RUNNER_TEMP/agency-preflight-artifact-metadata.json" > "$RUNNER_TEMP/agency-preflight-artifact-check.json"
+          cp "$AGENCY_PREFLIGHT_DOWNLOAD_DIR"/* "$AGENCY_RESULT_EVIDENCE_DIR"/
+
+      - name: Recheck the full migration ledger, exact 18-file plan and source stage immediately before apply
+        id: apply
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REPOSITORY" = adrianosortudo-source/caseload-select
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          node scripts/agency-followup-production-release-gate.mjs stage "$GITHUB_WORKSPACE" "$AGENCY_APPLY_STAGE_DIR" "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory-apply.json" > "$RUNNER_TEMP/agency-stage-apply-summary.json"
+          node scripts/agency-followup-production-release-gate.mjs verify-stage-match "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory.json" "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory-apply.json" > "$AGENCY_RESULT_EVIDENCE_DIR/stage-match-check.json"
+          node scripts/agency-followup-production-release-gate.mjs full-ledger-query > "$RUNNER_TEMP/agency-full-ledger-readback.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/agency-full-ledger-readback.sql" --output-format json --agent no > "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-immediate.json"
+          node scripts/agency-followup-production-release-gate.mjs check-ledger immediate "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-immediate.json" "$AGENCY_RESULT_EVIDENCE_DIR/ledger-immediate-check.json"
+          node scripts/agency-followup-production-release-gate.mjs check-ledger-same "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-before.json" "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-immediate.json" "$AGENCY_RESULT_EVIDENCE_DIR/ledger-recheck-check.json"
+          (cd "$AGENCY_APPLY_STAGE_DIR" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$AGENCY_RESULT_EVIDENCE_DIR/plan-immediate.json"
+          node scripts/agency-followup-production-release-gate.mjs check-plan pre "$AGENCY_RESULT_EVIDENCE_DIR/plan-immediate.json" "$AGENCY_RESULT_EVIDENCE_DIR/plan-immediate-check.json"
+          node scripts/agency-followup-production-release-gate.mjs check-plan-same "$AGENCY_RESULT_EVIDENCE_DIR/plan.json" "$AGENCY_RESULT_EVIDENCE_DIR/plan-immediate.json" "$AGENCY_RESULT_EVIDENCE_DIR/plan-recheck-check.json"
+          node scripts/agency-followup-production-release-gate.mjs apply-authorization > "$AGENCY_RESULT_EVIDENCE_DIR/apply-authorization.json"
+          echo "APPLY_STARTED=true" >> "$GITHUB_ENV"
+          echo "apply_started=true" >> "$GITHUB_OUTPUT"
+          (cd "$AGENCY_APPLY_STAGE_DIR" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault --output-format json) > "$AGENCY_RESULT_EVIDENCE_DIR/apply.json"
+
+      - name: Verify exact 18-version ledger delta, all SQL statements and empty plan after apply
+        id: verification
+        if: always() && steps.apply.outputs.apply_started == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/agency-followup-production-release-gate.mjs stage "$GITHUB_WORKSPACE" "$AGENCY_POST_STAGE_DIR" "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory-post.json" > "$RUNNER_TEMP/agency-stage-post-summary.json"
+          node scripts/agency-followup-production-release-gate.mjs verify-stage-match "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory-apply.json" "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory-post.json" > "$AGENCY_RESULT_EVIDENCE_DIR/stage-post-match-check.json"
+          node scripts/agency-followup-production-release-gate.mjs full-ledger-query > "$RUNNER_TEMP/agency-full-ledger-readback.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/agency-full-ledger-readback.sql" --output-format json --agent no > "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-after.json"
+          node scripts/agency-followup-production-release-gate.mjs check-ledger post "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-after.json" "$AGENCY_RESULT_EVIDENCE_DIR/ledger-after-check.json"
+          node scripts/agency-followup-production-release-gate.mjs agency-ledger-query > "$RUNNER_TEMP/agency-target-ledger-readback.sql"
+          supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/agency-target-ledger-readback.sql" --output-format json --agent no > "$AGENCY_RESULT_EVIDENCE_DIR/agency-ledger-after.json"
+          node scripts/agency-followup-production-release-gate.mjs check-delta "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-before.json" "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-after.json" "$AGENCY_RESULT_EVIDENCE_DIR/agency-ledger-after.json" "$AGENCY_RESULT_EVIDENCE_DIR/ledger-delta-check.json"
+          (cd "$AGENCY_POST_STAGE_DIR" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$AGENCY_RESULT_EVIDENCE_DIR/plan-after.json"
+          node scripts/agency-followup-production-release-gate.mjs check-plan post "$AGENCY_RESULT_EVIDENCE_DIR/plan-after.json" "$AGENCY_RESULT_EVIDENCE_DIR/plan-after-check.json"
+
+      - name: Create a content-hashed result manifest, including partial failure evidence
+        if: always()
+        env:
+          APPLY_STARTED: ${{ steps.apply.outputs.apply_started }}
+          APPLY_STEP_OUTCOME: ${{ steps.apply.outcome }}
+          VERIFICATION_STEP_OUTCOME: ${{ steps.verification.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/agency-followup-production-release-evidence"
+          node scripts/agency-followup-production-release-gate.mjs result-manifest "$RUNNER_TEMP/agency-followup-production-release-evidence" > "$RUNNER_TEMP/agency-result-manifest-summary.json"
+
+      - name: Upload immutable Agency production release evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: agency-followup-production-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/agency-followup-production-release-evidence/
+          if-no-files-found: ignore
+          retention-days: 30

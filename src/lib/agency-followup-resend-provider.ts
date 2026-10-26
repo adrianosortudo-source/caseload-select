@@ -4,6 +4,11 @@ import { Resend, type CreateEmailOptions, type CreateEmailRequestOptions, type C
 import type { AgencyFollowupProviderRequest } from "./agency-followup-provider";
 import type { AgencyProviderOutcome } from "./agency-followup-domain";
 import {
+  AGENCY_FOLLOWUP_UNSUBSCRIBE_PLACEHOLDER,
+  createAgencyFollowupUnsubscribeUrl,
+  isAgencyFollowupUnsubscribeSecretStrong,
+} from "./agency-followup-unsubscribe";
+import {
   parseAgencyFollowupLogicalKey,
   resolveAgencyFollowupSendConfig,
   type AgencyFollowupSendConfig,
@@ -61,6 +66,10 @@ function isProviderMessageId(value: unknown): value is string {
   return typeof value === "string" && value.trim().length > 0 && value.length <= 500 && value === value.trim();
 }
 
+function isCanonicalUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
+}
+
 export function createAgencyFollowupResendProvider(input: {
   env?: Record<string, string | undefined>;
   config?: AgencyFollowupSendConfig;
@@ -87,7 +96,7 @@ export function createAgencyFollowupResendProvider(input: {
       }
 
       const logicalIdentity = parseAgencyFollowupLogicalKey(request.idempotencyKey);
-      if (!logicalIdentity) {
+      if (!logicalIdentity || !isCanonicalUuid(logicalIdentity.messageId) || !isCanonicalUuid(logicalIdentity.enrollmentId)) {
         return { kind: "blocked", blockers: ["logical_message_identity_invalid"] };
       }
       const targetBlockers = config.authorize({
@@ -99,13 +108,34 @@ export function createAgencyFollowupResendProvider(input: {
       const from = config.configuredFrom;
       const replyTo = config.configuredReplyTo;
       if (!from || !replyTo) return { kind: "blocked", blockers: ["followup_sender_or_reply_to_missing"] };
+      const unsubscribeSecret = env.AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET?.trim();
+      if (!isAgencyFollowupUnsubscribeSecretStrong(unsubscribeSecret)) {
+        return { kind: "blocked", blockers: ["unsubscribe_secret_missing_or_weak"] };
+      }
+      if (request.body.split(AGENCY_FOLLOWUP_UNSUBSCRIBE_PLACEHOLDER).length !== 2) {
+        return { kind: "blocked", blockers: ["unsubscribe_placeholder_missing_or_repeated"] };
+      }
+      const unsubscribeUrl = createAgencyFollowupUnsubscribeUrl({
+        enrollmentId: logicalIdentity.enrollmentId,
+        messageId: logicalIdentity.messageId,
+        recipientEmail: request.recipientEmail,
+        secret: unsubscribeSecret,
+      });
 
       const payload: CreateEmailOptions = {
         from,
         replyTo,
         to: request.recipientEmail,
         subject: request.subject,
-        text: request.body,
+        text: request.body.replace(AGENCY_FOLLOWUP_UNSUBSCRIBE_PLACEHOLDER, unsubscribeUrl),
+        headers: {
+          "List-Unsubscribe": `<${unsubscribeUrl}>`,
+          "List-Unsubscribe-Post": "List-Unsubscribe=One-Click",
+        },
+        tags: [
+          { name: "agency_followup_message_id", value: logicalIdentity.messageId },
+          { name: "agency_followup_enrollment_id", value: logicalIdentity.enrollmentId },
+        ],
       };
       const options: CreateEmailRequestOptions = { idempotencyKey: request.idempotencyKey };
 

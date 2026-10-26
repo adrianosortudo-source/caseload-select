@@ -9,6 +9,7 @@ import { createConnection } from "node:net";
 import { Pool, type PoolClient } from "pg";
 import { chromium, expect, type APIResponse, type Browser, type BrowserContext, type Page, type Response as PlaywrightResponse } from "@playwright/test";
 import { createSessionCookie } from "../src/lib/portal-session-cookie";
+import { agencyFollowupContentHash, agencyFollowupLogicalMessageKey, agencyFollowupRecipientHash } from "../src/lib/agency-followup-domain";
 import { scheduleAgencyFollowupStep } from "../src/lib/agency-followup-schedule";
 
 const DEFAULT_STACK_DIR = "test-results/crm-local-stack";
@@ -61,6 +62,18 @@ const PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_PATH = "supabase/migrations/202610231
 const EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB = "65cdcf1d16a7f2c61af9ec3cbf38341e59b9d35e";
 const RESEND_SUPPRESSED_STATUS_MIGRATION_PATH = "supabase/migrations/20261024054520_agency_followup_resend_suppressed_status.sql";
 const EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB = "5f257491d03b362c59a484c942be1f127f0996fb";
+const SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_PATH = "supabase/migrations/20261024171116_agency_followup_serialized_provider_handoff_gate.sql";
+const EXPECTED_SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_BLOB = "42d95e2b2dd06c06ef964ee100be5fcf82681b4c";
+const UNKNOWN_RESEND_RECONCILIATION_MIGRATION_PATH = "supabase/migrations/20261024175302_agency_followup_resend_unknown_reconciliation.sql";
+const EXPECTED_UNKNOWN_RESEND_RECONCILIATION_MIGRATION_BLOB = "bdb560a3d19bc0e382ad87935aad122bdedb4f42";
+const CONTACT_HANDOFF_MIGRATION_PATH = "supabase/migrations/20261024213806_agency_followup_handoff_clock_recheck_and_contact_suppression.sql";
+const EXPECTED_CONTACT_HANDOFF_MIGRATION_BLOB = "dd5b66599da36d382de74db2030e57e91ee5c50f";
+const ACTIVITY_LOCK_ORDER_FIX_MIGRATION_PATH = "supabase/migrations/20261024233611_agency_followup_activity_lock_order_fix.sql";
+const EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB = "d28a2677b14a490b0a5fb81b70c49aecca889b0f";
+const AMBIGUOUS_UNSUBSCRIBE_MIGRATION_PATH = "supabase/migrations/20261026124659_agency_followup_ambiguous_recipient_suppression.sql";
+const EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB = "d59bb8dc4eccc8955b7f09ef9d709cf93d05a8ac";
+const RECIPIENT_UNSUBSCRIBE_MIGRATION_PATH = "supabase/migrations/20261026180704_agency_followup_recipient_unsubscribe.sql";
+const EXPECTED_RECIPIENT_UNSUBSCRIBE_MIGRATION_BLOB = "d48116cd747b12a8fcf47cfe1568983680fb71e5";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
@@ -110,6 +123,31 @@ function parseDisposablePort(raw: string | undefined, fallback: number, label: s
     throw new Error(`${label} port must be an unused loopback-only test port from 55430 through 55499.`);
   }
   return port;
+}
+
+function chooseWindowSafeTimezone(now: Date): string {
+  const candidates = [
+    "UTC", "America/St_Johns", "America/Toronto", "America/Los_Angeles",
+    "Pacific/Honolulu", "Atlantic/Azores", "Europe/London", "Europe/Paris",
+    "Africa/Johannesburg", "Asia/Dubai", "Asia/Kolkata", "Asia/Kathmandu",
+    "Asia/Tokyo", "Australia/Adelaide", "Australia/Sydney", "Pacific/Kiritimati",
+  ];
+  const choices = candidates.map((timeZone) => {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone, hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+    }).formatToParts(now);
+    const hour = Number(parts.find((part) => part.type === "hour")?.value) % 24;
+    const minute = Number(parts.find((part) => part.type === "minute")?.value);
+    if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+      throw new Error("Could not read the synthetic journey timezone clock.");
+    }
+    return { timeZone, minutesUntilClose: 23 * 60 + 59 - (hour * 60 + minute) };
+  }).sort((left, right) => right.minutesUntilClose - left.minutesUntilClose);
+  const selected = choices[0];
+  if (!selected || selected.minutesUntilClose < 120) {
+    throw new Error("Could not select a synthetic journey timezone at least two hours before its 23:59 close.");
+  }
+  return selected.timeZone;
 }
 
 function safeDiagnosticAtom(value: unknown): string | number | null {
@@ -244,7 +282,7 @@ async function verifyPushedMigration(pathname: string, expectedBlob: string): Pr
 }
 
 function verifyPushedHead(sourceCommit: string): void {
-  const remoteRef = "refs/heads/codex/crm-live-followup-20261019";
+  const remoteRef = "refs/heads/codex/crm-live-followup-final-gates-20261024";
   const remoteCommit = execFileSync("git", ["ls-remote", "origin", remoteRef], { encoding: "utf8", timeout: 60_000 })
     .split(/\r?\n/).map((line) => line.trim()).find((line) => line.endsWith(`\t${remoteRef}`))?.split(/\s+/, 1)[0];
   if (remoteCommit !== sourceCommit) {
@@ -263,11 +301,11 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520"]],
+      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520", "20261024171116", "20261024175302", "20261024213806", "20261024233611", "20261026124659", "20261026180704"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "14") {
-    throw new Error("Disposable Postgres identity or exact fourteen-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "20") {
+    throw new Error("Disposable Postgres identity or exact twenty-migration ledger check failed.");
   }
   const templateApprovalRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
     "select has_function_privilege('service_role', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as service_access, not has_function_privilege('anon', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.approve_agency_followup_template_version(uuid,uuid)'::regprocedure",
@@ -292,25 +330,40 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
   }
   const providerHandoffRpc = await pool.query<{
     service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean;
-    first_use_column: boolean; immutable_trigger: boolean;
+    fixed_search_path: boolean; old_prepare_revoked: boolean; first_use_column: boolean; immutable_trigger: boolean;
   }>(
-    "select has_function_privilege('service_role', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as service_access, not has_function_privilege('anon', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)', 'execute') as authenticated_denied, not prosecdef as security_invoker, exists(select 1 from information_schema.columns where table_schema='public' and table_name='agency_followup_messages' and column_name='provider_idempotency_first_used_at') as first_use_column, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_messages'::regclass and tgname='agency_followup_provider_idempotency_first_use_immutable' and not tgisinternal and tgenabled in ('O','A')) as immutable_trigger from pg_proc where oid='public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)'::regprocedure",
+    "select has_function_privilege('service_role', proc.oid, 'execute') as service_access, not has_function_privilege('anon', proc.oid, 'execute') as anon_denied, not has_function_privilege('authenticated', proc.oid, 'execute') as authenticated_denied, not proc.prosecdef as security_invoker, coalesce(proc.proconfig @> ARRAY['search_path=\"\"']::text[], false) as fixed_search_path, not coalesce((select has_function_privilege('service_role', old.oid, 'execute') from pg_proc old where old.oid = to_regprocedure('public.prepare_agency_followup_provider_attempt(uuid,uuid,text,integer,integer,integer)')), false) as old_prepare_revoked, exists(select 1 from information_schema.columns where table_schema='public' and table_name='agency_followup_messages' and column_name='provider_idempotency_first_used_at') as first_use_column, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_messages'::regclass and tgname='agency_followup_provider_idempotency_first_use_immutable' and not tgisinternal and tgenabled in ('O','A')) as immutable_trigger from pg_proc proc where proc.oid='public.authorize_agency_followup_provider_handoff(uuid,uuid,text,integer,integer,integer)'::regprocedure",
   );
   if (providerHandoffRpc.rows[0]?.service_access !== true || providerHandoffRpc.rows[0]?.anon_denied !== true ||
     providerHandoffRpc.rows[0]?.authenticated_denied !== true || providerHandoffRpc.rows[0]?.security_invoker !== true ||
+    providerHandoffRpc.rows[0]?.fixed_search_path !== true || providerHandoffRpc.rows[0]?.old_prepare_revoked !== true ||
     providerHandoffRpc.rows[0]?.first_use_column !== true || providerHandoffRpc.rows[0]?.immutable_trigger !== true) {
-    throw new Error("The durable provider handoff RPC, timestamp, immutable trigger, or restricted grants are not in the expected state.");
+    throw new Error("The serialized provider authorization RPC, legacy bypass revocation, timestamp, immutable trigger, or restricted grants are not in the expected state.");
+  }
+  const contactEventRpc = await pool.query<{
+    service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean;
+    fixed_search_path: boolean; service_table_access: boolean; public_table_denied: boolean;
+    rls_forced: boolean; immutable_application_trigger: boolean;
+  }>(
+    "select has_function_privilege('service_role', proc.oid, 'execute') as service_access, not has_function_privilege('anon', proc.oid, 'execute') as anon_denied, not has_function_privilege('authenticated', proc.oid, 'execute') as authenticated_denied, not proc.prosecdef as security_invoker, coalesce(proc.proconfig @> ARRAY['search_path=\"\"']::text[], false) as fixed_search_path, has_table_privilege('service_role','public.agency_followup_provider_contact_applications','select') and has_table_privilege('service_role','public.agency_followup_provider_contact_applications','insert') as service_table_access, not has_table_privilege('anon','public.agency_followup_provider_contact_applications','select') and not has_table_privilege('anon','public.agency_followup_provider_contact_applications','insert') and not has_table_privilege('anon','public.agency_followup_provider_contact_applications','update') and not has_table_privilege('anon','public.agency_followup_provider_contact_applications','delete') and not has_table_privilege('authenticated','public.agency_followup_provider_contact_applications','select') and not has_table_privilege('authenticated','public.agency_followup_provider_contact_applications','insert') and not has_table_privilege('authenticated','public.agency_followup_provider_contact_applications','update') and not has_table_privilege('authenticated','public.agency_followup_provider_contact_applications','delete') as public_table_denied, relation.relrowsecurity and relation.relforcerowsecurity as rls_forced, exists(select 1 from pg_trigger where tgrelid=relation.oid and tgname='agency_followup_provider_contact_applications_no_mutation' and not tgisinternal and tgenabled in ('O','A')) as immutable_application_trigger from pg_proc proc join pg_class relation on relation.oid='public.agency_followup_provider_contact_applications'::regclass where proc.oid='public.persist_agency_followup_resend_contact_event(text,timestamptz,text,text)'::regprocedure",
+  );
+  if (contactEventRpc.rows[0]?.service_access !== true || contactEventRpc.rows[0]?.anon_denied !== true ||
+    contactEventRpc.rows[0]?.authenticated_denied !== true || contactEventRpc.rows[0]?.security_invoker !== true ||
+    contactEventRpc.rows[0]?.fixed_search_path !== true || contactEventRpc.rows[0]?.service_table_access !== true ||
+    contactEventRpc.rows[0]?.public_table_denied !== true ||
+    contactEventRpc.rows[0]?.rls_forced !== true || contactEventRpc.rows[0]?.immutable_application_trigger !== true) {
+    throw new Error("The hash-only contact-event RPC and append-only application table are not protected by the expected service-role boundary.");
   }
   const tables = await pool.query<{ count: string }>(
-    "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
+      "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
     [["agency_followup_template_versions", "agency_followup_journeys", "agency_followup_steps",
       "agency_followup_enrollments", "agency_followup_messages", "agency_followup_events",
-      "agency_followup_provider_events", "agency_followup_provider_event_applications",
-      "prospect_contactability_provider_suppressions"]],
+      "agency_followup_provider_events", "agency_followup_provider_event_applications", "agency_followup_provider_contact_applications",
+      "prospect_contactability_provider_suppressions", "agency_followup_recipient_unsubscribes"]],
   );
-  if (tables.rows[0]?.count !== "9") throw new Error("The verified disposable stack does not contain the six follow-up and three provider-event tables.");
+  if (tables.rows[0]?.count !== "11") throw new Error("The verified disposable stack does not contain the seven follow-up and four provider-event tables.");
   const providerGrants = await pool.query<{ service_access: boolean; public_access: boolean; public_update_access: boolean; service_event_column_update: boolean; service_event_table_update: boolean; service_event_other_column_update: boolean; immutable_event_trigger: boolean }>(
-    "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access, bool_or(has_table_privilege('anon', table_name, 'update') or has_table_privilege('authenticated', table_name, 'update')) as public_update_access, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'provider_event_id', 'update') as service_event_column_update, has_table_privilege('service_role', 'public.agency_followup_provider_events', 'update') as service_event_table_update, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'processing_result', 'update') as service_event_other_column_update, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_provider_events'::regclass and tgname='agency_followup_provider_events_no_mutation' and not tgisinternal and tgenabled in ('O','A') and (tgtype & 2) = 2 and (tgtype & 8) = 8 and (tgtype & 16) = 16) as immutable_event_trigger from unnest(array['public.agency_followup_provider_events','public.agency_followup_provider_event_applications','public.prospect_contactability_provider_suppressions']) as event_table(table_name)",
+    "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access, bool_or(has_table_privilege('anon', table_name, 'update') or has_table_privilege('authenticated', table_name, 'update')) as public_update_access, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'provider_event_id', 'update') as service_event_column_update, has_table_privilege('service_role', 'public.agency_followup_provider_events', 'update') as service_event_table_update, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'processing_result', 'update') as service_event_other_column_update, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_provider_events'::regclass and tgname='agency_followup_provider_events_no_mutation' and not tgisinternal and tgenabled in ('O','A') and (tgtype & 2) = 2 and (tgtype & 8) = 8 and (tgtype & 16) = 16) as immutable_event_trigger from unnest(array['public.agency_followup_provider_events','public.agency_followup_provider_event_applications','public.agency_followup_provider_contact_applications','public.prospect_contactability_provider_suppressions','public.agency_followup_recipient_unsubscribes']) as event_table(table_name)",
   );
   if (providerGrants.rows[0]?.service_access !== true || providerGrants.rows[0]?.public_access !== false
     || providerGrants.rows[0]?.public_update_access !== false
@@ -333,7 +386,7 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     || operatorRead.rows[0]?.public_access !== true) {
     throw new Error(`The opt-in operator identity fields must be available to service_role and unavailable to public roles; actual=${JSON.stringify(operatorRead.rows[0] ?? null)}`);
   }
-  progress("disposable identity, all fourteen acceptance migration ledger versions, nine follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and CRM RPC grants checked");
+  progress("disposable identity, all required acceptance migration ledger versions, ten follow-up/provider tables, append-only controls, restricted grants, public operator access denial, and CRM RPC grants checked");
 }
 
 async function verifyTemplateApprovalRollback(pool: Pool, actorId: string): Promise<Record<string, unknown>> {
@@ -603,14 +656,107 @@ async function verifyLiveClaimRpc(
   }
 }
 
+type AgencyProviderAuthorization = {
+  result: "ready" | "blocked" | "deferred" | "expired" | "stale";
+  request?: { idempotencyKey: string; recipientEmail: string; subject: string; body: string };
+  blockers?: string[];
+  blocker?: string;
+  retryAt?: string;
+};
+
+type ExactAgencyProviderRequest = NonNullable<AgencyProviderAuthorization["request"]>;
+const SAFE_PROVIDER_AUTHORIZATION_RESULTS = new Set<string>(["ready", "blocked", "deferred", "expired", "stale"]);
+const SAFE_PROVIDER_AUTHORIZATION_BLOCKERS = new Set<string>([
+  "contactability_unknown", "contactability_blocked", "conversation_stopped", "prospect_status_stopped",
+  "sequence_not_released", "eligibility_not_approved", "eligibility_evidence_missing", "recipient_email_invalid",
+  "recipient_identity_missing", "explicit_opt_in_withdrawn", "explicit_opt_in_missing", "approval_stale_recipient",
+  "approval_missing", "approval_invalid_reviewer_or_time", "approval_stale_content", "previous_step_unresolved",
+  "previous_step_pending", "minimum_spacing_not_elapsed", "not_due", "invalid_schedule", "outside_send_window",
+]);
+
+function safeProviderAuthorizationDiagnostic(value: unknown): {
+  authorizationResult: string;
+  authorizationBlocker: string;
+} {
+  const authorization = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const authorizationResult = typeof authorization.result === "string" &&
+      SAFE_PROVIDER_AUTHORIZATION_RESULTS.has(authorization.result)
+    ? authorization.result
+    : "unknown";
+  const rawBlockers = Array.isArray(authorization.blockers)
+    ? authorization.blockers
+    : authorization.blocker === undefined ? [] : [authorization.blocker];
+  const authorizationBlocker = [...new Set(rawBlockers.map((blocker) =>
+    typeof blocker === "string" && SAFE_PROVIDER_AUTHORIZATION_BLOCKERS.has(blocker) ? blocker : "other",
+  ))].sort().join(",") || "none";
+  return { authorizationResult, authorizationBlocker };
+}
+
+function safeProviderAuthorizationFields(value: unknown): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  return Object.keys(value).filter((key) => /^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(key)).sort();
+}
+
+function hasExactProviderRequest(actual: unknown, expected: ExactAgencyProviderRequest): boolean {
+  if (!actual || typeof actual !== "object" || Array.isArray(actual)) return false;
+  const value = actual as Record<string, unknown>;
+  const keys = ["body", "idempotencyKey", "recipientEmail", "subject"] as const;
+  return Object.keys(value).length === keys.length &&
+    keys.every((key) => Object.prototype.hasOwnProperty.call(value, key) && value[key] === expected[key]);
+}
+
+async function authorizeProviderHandoff(
+  client: PoolClient,
+  input: { messageId: string; enrollmentId: string; owner: string; attemptCount: number },
+): Promise<AgencyProviderAuthorization> {
+  const result = await client.query<{ authorization: unknown }>(
+    "select public.authorize_agency_followup_provider_handoff($1::uuid,$2::uuid,$3,$4,300,82800) as authorization",
+    [input.messageId, input.enrollmentId, input.owner, input.attemptCount],
+  );
+  const value = result.rows[0]?.authorization;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("The disposable provider authorization RPC returned no JSON object.");
+  }
+  const authorization = value as Record<string, unknown>;
+  if (!(["ready", "blocked", "deferred", "expired", "stale"] as unknown[]).includes(authorization.result)) {
+    throw new Error("The disposable provider authorization RPC returned an unknown result state.");
+  }
+  if (authorization.result === "ready") {
+    const request = authorization.request as Record<string, unknown> | undefined;
+    if (!request || typeof request.idempotencyKey !== "string" || typeof request.recipientEmail !== "string" ||
+        typeof request.subject !== "string" || typeof request.body !== "string") {
+      throw new Error("The ready provider authorization did not contain an exact request payload.");
+    }
+  } else if (authorization.request !== undefined) {
+    throw new Error("A non-ready provider authorization exposed a send request.");
+  }
+  if (authorization.result === "blocked" && (!Array.isArray(authorization.blockers) || authorization.blockers.length === 0)) {
+    throw new Error("The blocked provider authorization did not contain blocker reasons.");
+  }
+  if (authorization.result === "deferred" && (typeof authorization.blocker !== "string" || typeof authorization.retryAt !== "string")) {
+    throw new Error("The deferred provider authorization did not contain its blocker and retryAt.");
+  }
+  return authorization as AgencyProviderAuthorization;
+}
+
 async function verifyProviderIdempotencyFenceRpc(
   pool: Pool,
-  input: { firstUseMessageId: string; insideWindowMessageId: string; expiredWindowMessageId: string },
+  input: { firstUseMessageId: string },
 ): Promise<Record<string, unknown>> {
   const client = await pool.connect();
-  const claims = new Map<string, { owner: string; attemptCount: number }>();
+  const claims = new Map<string, { owner: string; attemptCount: number; enrollmentId: string; stepNumber: number }>();
   const insertFixture = async (sourceMessageId: string, owner: string, age: string | null) => {
-    const result = await client.query<{ id: string; attempt_count: number }>(
+    const sourceIdentity = await client.query<{ enrollment_id: string }>(
+      "select enrollment_id from public.agency_followup_messages where id=$1",
+      [sourceMessageId],
+    );
+    const enrollmentId = sourceIdentity.rows[0]?.enrollment_id;
+    if (!enrollmentId) throw new Error("A source enrollment was not found for the provider authorization fixture.");
+    const id = randomUUID();
+    const logicalKey = agencyFollowupLogicalMessageKey(enrollmentId, id);
+    const result = await client.query<{ id: string; enrollment_id: string; attempt_count: number; step_number: number }>(
       `with source as (
          select message.*, enrollment.journey_id
          from public.agency_followup_messages message
@@ -625,39 +771,48 @@ async function verifyProviderIdempotencyFenceRpc(
          returning id,journey_id,step_number
        )
        insert into public.agency_followup_messages (
-         enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256,
+         id,enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256,
          recipient_name_snapshot,recipient_email_snapshot,recipient_sha256,
          approved_content_sha256,approved_recipient_sha256,reviewed_by_operator_id,reviewed_at,
          scheduled_at,logical_message_key,provider_idempotency_key,attempt_count,lease_owner,lease_until,
          provider_idempotency_first_used_at
        )
-       select source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot,
+       select $2::uuid,source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot,
               source.content_sha256,source.recipient_name_snapshot,source.recipient_email_snapshot,source.recipient_sha256,
               source.content_sha256,source.recipient_sha256,source.reviewed_by_operator_id,coalesce(source.reviewed_at,clock_timestamp()),
-              clock_timestamp(),$2,$3,1,$4,clock_timestamp()+interval '5 minutes',
+              clock_timestamp(),$3,$3,1,$4,clock_timestamp()+interval '5 minutes',
               case when $5::text is null then null else clock_timestamp()-$5::interval end
        from source join step on step.journey_id=source.journey_id
-       returning id,attempt_count`,
-      [sourceMessageId, `walkthrough-provider-window-${RUN_ID}-${owner}`, `walkthrough-provider-key-${RUN_ID}-${owner}`, owner, age],
+       returning id,enrollment_id,attempt_count,step_number`,
+      [sourceMessageId, id, logicalKey, owner, age],
     );
     const row = result.rows[0];
     if (!row) throw new Error("A dedicated provider-window message fixture could not be inserted.");
-    return { id: row.id, owner, attemptCount: Number(row.attempt_count) };
+    // The primary synthetic journey is authored with an all-days window and
+    // one-hour spacing; this RPC contract never mutates immutable journey policy.
+    await client.query(
+      `update public.agency_followup_messages predecessor
+       set state='accepted', scheduled_at=coalesce(predecessor.scheduled_at,clock_timestamp()-interval '2 days'),
+           approved_content_sha256=predecessor.content_sha256, approved_recipient_sha256=predecessor.recipient_sha256,
+           reviewed_by_operator_id=coalesce(predecessor.reviewed_by_operator_id,target.reviewed_by_operator_id),
+           reviewed_at=coalesce(predecessor.reviewed_at,target.reviewed_at,clock_timestamp()-interval '2 days'),
+           provider_message_id=coalesce(predecessor.provider_message_id,'walkthrough-predecessor-'||predecessor.id::text),
+           provider_accepted_at=clock_timestamp()-interval '2 days',
+           lease_owner=null,lease_until=null,unknown_since=null,last_error_code=null,updated_at=clock_timestamp()
+       from public.agency_followup_messages target
+       where target.id=$1 and predecessor.enrollment_id=target.enrollment_id and predecessor.step_number<target.step_number`,
+      [row.id],
+    );
+    return { id: row.id, owner, attemptCount: Number(row.attempt_count), enrollmentId: row.enrollment_id, stepNumber: Number(row.step_number) };
   };
   try {
     await client.query("begin");
     await client.query("set local role service_role");
     const firstClaim = await insertFixture(input.firstUseMessageId, `first-${RUN_ID}`, null);
-    const insideClaim = await insertFixture(input.insideWindowMessageId, `inside-${RUN_ID}`, "22 hours 59 minutes 59 seconds");
-    const expiredClaim = await insertFixture(input.expiredWindowMessageId, `expired-${RUN_ID}`, "23 hours");
-    for (const claim of [firstClaim, insideClaim, expiredClaim]) claims.set(claim.id, claim);
+    claims.set(firstClaim.id, firstClaim);
     const prepare = async (id: string) => {
       const claim = claims.get(id)!;
-      const result = await client.query<{ state: string }>(
-        "select public.prepare_agency_followup_provider_attempt($1::uuid,(select enrollment_id from public.agency_followup_messages where id=$1::uuid),$2,$3,300,82800) as state",
-        [id, claim.owner, claim.attemptCount],
-      );
-      return result.rows[0]?.state;
+      return authorizeProviderHandoff(client, { messageId: id, enrollmentId: claim.enrollmentId, owner: claim.owner, attemptCount: claim.attemptCount });
     };
 
     const firstUseState = await prepare(firstClaim.id);
@@ -668,11 +823,55 @@ async function verifyProviderIdempotencyFenceRpc(
     const stableTimestamp = await client.query<{ first_used_at: Date }>(
       "select provider_idempotency_first_used_at as first_used_at from public.agency_followup_messages where id=$1", [firstClaim.id],
     );
-    if (firstUseState !== "ready" || firstUseAgain !== "ready" || !firstTimestamp.rows[0]?.first_used_at ||
-      firstTimestamp.rows[0].first_used_at.toISOString() !== stableTimestamp.rows[0]?.first_used_at.toISOString()) {
-      throw new Error("The provider handoff RPC did not reserve and preserve the first-use time for a new message.");
+    const expected = await client.query<{
+      message_id: string; enrollment_id: string; logical_message_key: string; recipient_email_snapshot: string;
+      content_snapshot: { channel: "email"; subject: string; body: string };
+      content_sha256: string; recipient_sha256: string; approved_content_sha256: string; approved_recipient_sha256: string;
+      prospect_id: string; firm_name: string; contact_name: string | null; contact_email: string;
+    }>(
+      `select message.id as message_id,message.enrollment_id,message.logical_message_key,message.recipient_email_snapshot,
+              message.content_snapshot,message.content_sha256,message.recipient_sha256,
+              message.approved_content_sha256,message.approved_recipient_sha256,
+              prospect.id as prospect_id,prospect.firm_name,prospect.contact_name,prospect.contact_email
+       from public.agency_followup_messages message
+       join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id
+       join public.agency_prospects prospect on prospect.id=enrollment.prospect_id
+       where message.id=$1`, [firstClaim.id],
+    );
+    const snapshot = expected.rows[0];
+    if (!snapshot) throw new Error("The final-gate request fixture could not be read back.");
+    const contentHash = agencyFollowupContentHash(snapshot.content_snapshot);
+    const recipientHash = agencyFollowupRecipientHash({
+      prospectId: snapshot.prospect_id,
+      firmName: snapshot.firm_name,
+      contactName: snapshot.contact_name,
+      contactEmail: snapshot.contact_email,
+    });
+    const expectedRequest = {
+      idempotencyKey: agencyFollowupLogicalMessageKey(snapshot.enrollment_id, snapshot.message_id),
+      recipientEmail: snapshot.recipient_email_snapshot,
+      subject: snapshot.content_snapshot.subject,
+      body: snapshot.content_snapshot.body,
+    };
+    const authorizationsReady = firstUseState.result === "ready" && firstUseAgain.result === "ready";
+    const firstRequestExact = hasExactProviderRequest(firstUseState.request, expectedRequest);
+    const repeatedRequestExact = hasExactProviderRequest(firstUseAgain.request, expectedRequest);
+    const approvedHashesMatch = snapshot.logical_message_key === expectedRequest.idempotencyKey &&
+      snapshot.content_sha256 === contentHash && snapshot.approved_content_sha256 === contentHash &&
+      snapshot.recipient_sha256 === recipientHash && snapshot.approved_recipient_sha256 === recipientHash;
+    const firstUsedAt = firstTimestamp.rows[0]?.first_used_at;
+    const firstUsedAgainAt = stableTimestamp.rows[0]?.first_used_at;
+    const firstUseReserved = firstUsedAt instanceof Date;
+    const firstUseStable = firstUseReserved && firstUsedAgainAt instanceof Date &&
+      firstUsedAt.toISOString() === firstUsedAgainAt.toISOString();
+    if (!authorizationsReady || !firstRequestExact || !repeatedRequestExact || !approvedHashesMatch ||
+      !firstUseReserved || !firstUseStable) {
+      throw new Error("The final authorization did not preserve its exact approved request/hash and first-use time: " + JSON.stringify({
+        authorizationsReady, firstRequestExact, repeatedRequestExact, approvedHashesMatch, firstUseReserved, firstUseStable,
+        firstUseAuthorization: safeProviderAuthorizationDiagnostic(firstUseState),
+        repeatedAuthorization: safeProviderAuthorizationDiagnostic(firstUseAgain),
+      }));
     }
-
     let timestampMutationRejected = false;
     await client.query("savepoint immutable_first_use");
     try {
@@ -683,25 +882,221 @@ async function verifyProviderIdempotencyFenceRpc(
     await client.query("rollback to savepoint immutable_first_use");
     if (!timestampMutationRejected) throw new Error("The provider first-use timestamp could be cleared after reservation.");
 
+    // Keep all boundary fixtures in this known-clear enrollment. Insert and
+    // exercise each step before adding the next so each preceding step can be
+    // deterministically reconciled as accepted by insertFixture.
+    const insideClaim = await insertFixture(input.firstUseMessageId, `inside-${RUN_ID}`, "22 hours 59 minutes");
+    claims.set(insideClaim.id, insideClaim);
     const insideState = await prepare(insideClaim.id);
-    const insideTimestamp = await client.query<{ age_seconds: number }>(
-      "select extract(epoch from clock_timestamp()-provider_idempotency_first_used_at)::integer as age_seconds from public.agency_followup_messages where id=$1",
+    const insideTimestamp = await client.query<{ age_seconds: number; still_in_window: boolean }>(
+      "select floor(extract(epoch from clock_timestamp()-provider_idempotency_first_used_at))::integer as age_seconds, " +
+        "clock_timestamp()<provider_idempotency_first_used_at+interval '23 hours' as still_in_window " +
+        "from public.agency_followup_messages where id=$1",
       [insideClaim.id],
     );
-    const insideRetryAllowed = insideState === "ready" && Number(insideTimestamp.rows[0]?.age_seconds) < 82_800;
+    const insideRetryAllowed = insideState.result === "ready" && insideTimestamp.rows[0]?.still_in_window === true;
+
+    const expiredClaim = await insertFixture(input.firstUseMessageId, `expired-${RUN_ID}`, "23 hours");
+    claims.set(expiredClaim.id, expiredClaim);
     const expiredState = await prepare(expiredClaim.id);
     const expired = await client.query<{ state: string; last_error_code: string | null; scheduled_at: Date | null; lease_owner: string | null; unknown_events: string }>(
       "select message.state,message.last_error_code,message.scheduled_at,message.lease_owner,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-window-expired:'||message.id::text) as unknown_events from public.agency_followup_messages message where message.id=$1",
       [expiredClaim.id],
     );
-    if (!insideRetryAllowed || expiredState !== "expired" || expired.rows[0]?.state !== "unknown" ||
+    if (!insideRetryAllowed || expiredState.result !== "expired" || expired.rows[0]?.state !== "unknown" ||
       expired.rows[0]?.last_error_code !== "resend_idempotency_window_expired" || expired.rows[0]?.scheduled_at !== null ||
       expired.rows[0]?.lease_owner !== null || expired.rows[0]?.unknown_events !== "1") {
-      throw new Error("The provider handoff RPC did not allow an in-window retry and atomically quarantine an expired key.");
+      throw new Error("The provider handoff RPC did not allow an in-window retry and atomically quarantine an expired key: " + JSON.stringify({
+        insideResult: insideState.result,
+        insideBlocker: "blocker" in insideState ? insideState.blocker : null,
+        insideBlockers: "blockers" in insideState ? insideState.blockers : null,
+        insideAgeSeconds: insideTimestamp.rows[0]?.age_seconds ?? null,
+        insideStillInWindow: insideTimestamp.rows[0]?.still_in_window ?? false,
+        expiredResult: expiredState.result,
+        expiredCode: "code" in expiredState ? expiredState.code : null,
+        expiredBlocker: "blocker" in expiredState ? expiredState.blocker : null,
+        expiredBlockers: "blockers" in expiredState ? expiredState.blockers : null,
+        expiredMessageState: expired.rows[0]?.state ?? null,
+        expiredErrorCode: expired.rows[0]?.last_error_code ?? null,
+        expiredScheduleCleared: expired.rows[0]?.scheduled_at === null,
+        expiredLeaseOwnerCleared: expired.rows[0]?.lease_owner === null,
+        expiredUnknownEvents: expired.rows[0]?.unknown_events ?? null,
+      }));
     }
+
+    const dispositionSnapshot = async (messageId: string) => {
+      const result = await client.query<{ state: string; lease_owner: string | null; event_count: number }>(
+        `select message.state,message.lease_owner,
+                (select count(*)::integer from public.agency_followup_events event where event.message_id=message.id) as event_count
+         from public.agency_followup_messages message where message.id=$1`, [messageId],
+      );
+      if (!result.rows[0]) throw new Error("The final-gate disposition fixture disappeared.");
+      return result.rows[0];
+    };
+    const assertPureGateResult = async (
+      claim: { id: string; owner: string; attemptCount: number; enrollmentId: string },
+      expected: { result: "blocked" | "deferred"; blocker: string },
+    ) => {
+      const before = await dispositionSnapshot(claim.id);
+      const checked = await authorizeProviderHandoff(client, {
+        messageId: claim.id, enrollmentId: claim.enrollmentId, owner: claim.owner, attemptCount: claim.attemptCount,
+      });
+      const after = await dispositionSnapshot(claim.id);
+      const hasBlocker = checked.result === "blocked"
+        ? checked.blockers?.includes(expected.blocker) === true
+        : checked.blocker === expected.blocker && typeof checked.retryAt === "string" && Number.isFinite(Date.parse(checked.retryAt));
+      if (checked.result !== expected.result || !hasBlocker || checked.request !== undefined ||
+        before.state !== "claimed" || before.lease_owner !== claim.owner || after.state !== before.state ||
+        after.lease_owner !== before.lease_owner || after.event_count !== before.event_count) {
+        throw new Error(`The ${expected.blocker} gate did not return a payload-free ${expected.result} result without persisting worker disposition.`);
+      }
+      return checked;
+    };
+
+    const conversationIdentity = await client.query<{
+      conversation_id: string; organization_id: string; person_id: string | null; source_link_id: string;
+    }>(
+      [
+        "select distinct conversation.id as conversation_id, conversation.organization_id, conversation.person_id, source_link.id as source_link_id",
+        "from public.agency_followup_messages target",
+        "join public.agency_followup_enrollments enrollment on enrollment.id=target.enrollment_id",
+        "join public.prospect_source_links source_link on source_link.source_record_key=enrollment.prospect_id::text",
+        "  and source_link.source_system=case when exists (select 1 from public.prospect_source_links exact_contact",
+        "    where exact_contact.source_system='agency_crm_contact' and exact_contact.source_record_key=enrollment.prospect_id::text)",
+        "    then 'agency_crm_contact' else 'agency_crm' end",
+        "join public.prospect_conversation_sources association on association.source_link_id=source_link.id",
+        "join public.prospect_conversations conversation on conversation.id=association.conversation_id",
+        "where target.id=$1 and source_link.active and source_link.person_id is not null",
+      ].join("\n"),
+      [firstClaim.id],
+    );
+    if (conversationIdentity.rows.length !== 1) {
+      throw new Error("The final-gate activity fixture does not resolve to exactly one mapped conversation.");
+    }
+    const conversation = conversationIdentity.rows[0]!;
+    const stopActivityCases = [
+      { name: "replied", kind: "human_reply", channel: "email", direction: "inbound", deliveryStatus: "unknown", responseKind: "human", replyDisposition: "neutral", meetingOutcome: null, expectedStatus: "replied" },
+      { name: "declined", kind: "human_reply", channel: "email", direction: "inbound", deliveryStatus: "unknown", responseKind: "human", replyDisposition: "declined", meetingOutcome: null, expectedStatus: "declined" },
+      { name: "meeting-scheduled", kind: "meeting", channel: "video", direction: "internal", deliveryStatus: "unknown", responseKind: "none", replyDisposition: "unknown", meetingOutcome: null, expectedStatus: "meeting_scheduled" },
+      { name: "meeting-completed", kind: "meeting", channel: "video", direction: "internal", deliveryStatus: "unknown", responseKind: "none", replyDisposition: "unknown", meetingOutcome: "Completed synthetic meeting", expectedStatus: "completed" },
+      { name: "bounce", kind: "bounce", channel: "email", direction: "inbound", deliveryStatus: "bounced", responseKind: "none", replyDisposition: "unknown", meetingOutcome: null, expectedStatus: "unreachable" },
+    ] as const;
+    for (const stopCase of stopActivityCases) {
+      await client.query("savepoint stop_activity_case");
+      const nextActivityTime = await client.query<{ occurred_at: Date }>(
+        "select coalesce(last_activity_at + interval '1 second', clock_timestamp()) as occurred_at from public.prospect_conversations where id=$1",
+        [conversation.conversation_id],
+      );
+      const occurredAt = nextActivityTime.rows[0]?.occurred_at;
+      if (!(occurredAt instanceof Date)) throw new Error("The synthetic conversation has no activity timestamp.");
+      await client.query(
+        [
+          "insert into public.prospect_activities (conversation_id,organization_id,person_id,source_link_id,kind,channel,direction,occurred_at,delivery_status,response_kind,reply_disposition,meeting_outcome,provenance_system,idempotency_key)",
+          "values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'walkthrough',$13)",
+        ].join("\n"),
+        [
+          conversation.conversation_id, conversation.organization_id, conversation.person_id, conversation.source_link_id,
+          stopCase.kind, stopCase.channel, stopCase.direction, occurredAt, stopCase.deliveryStatus, stopCase.responseKind,
+          stopCase.replyDisposition, stopCase.meetingOutcome, "agency-followup-stop:" + RUN_ID + ":" + stopCase.name,
+        ],
+      );
+      const mappedStatus = await client.query<{ status: string }>(
+        "select status from public.prospect_conversations where id=$1",
+        [conversation.conversation_id],
+      );
+      if (mappedStatus.rows[0]?.status !== stopCase.expectedStatus) {
+        throw new Error("The synthetic " + stopCase.name + " activity mapped to an unexpected conversation state.");
+      }
+      const stopClaim = await insertFixture(input.firstUseMessageId, "stop-" + stopCase.name + "-" + RUN_ID, null);
+      await assertPureGateResult(stopClaim, { result: "blocked", blocker: "conversation_stopped" });
+      await client.query("rollback to savepoint stop_activity_case");
+      await client.query("release savepoint stop_activity_case");
+    }
+    const futureReviewClaim = await insertFixture(input.firstUseMessageId, "future-review-" + RUN_ID, null);
+    await client.query(
+      "update public.agency_followup_messages set reviewed_at=clock_timestamp()+interval '1 minute' where id=$1",
+      [futureReviewClaim.id],
+    );
+    await assertPureGateResult(futureReviewClaim, { result: "blocked", blocker: "approval_invalid_reviewer_or_time" });
+    // A terminal UNKNOWN predecessor must stop the sequence. The gate is a pure
+    // authorization check; the worker persists the blocked disposition separately.
+    const unresolvedClaim = await insertFixture(input.firstUseMessageId, `unresolved-${RUN_ID}`, null);
+    await client.query(
+      `update public.agency_followup_messages predecessor
+       set state='unknown',unknown_since=clock_timestamp(),lease_owner=null,lease_until=null,provider_accepted_at=null,
+           last_error_code='walkthrough_unknown_predecessor',updated_at=clock_timestamp()
+       where predecessor.id=(select prior.id from public.agency_followup_messages target
+         join public.agency_followup_messages prior on prior.enrollment_id=target.enrollment_id and prior.step_number<target.step_number
+         where target.id=$1 order by prior.step_number desc limit 1)`, [unresolvedClaim.id],
+    );
+    await assertPureGateResult(unresolvedClaim, { result: "blocked", blocker: "previous_step_unresolved" });
+
+    // A claimed predecessor defers the target and returns its retry time without
+    // moving the target or creating an event; the caller owns that disposition.
+    const pendingClaim = await insertFixture(input.firstUseMessageId, `pending-${RUN_ID}`, null);
+    await client.query(
+      `update public.agency_followup_messages predecessor
+       set state='claimed',unknown_since=null,provider_accepted_at=null,lease_owner='walkthrough-prior-${RUN_ID}',
+           lease_until=clock_timestamp()+interval '4 minutes',last_error_code=null,updated_at=clock_timestamp()
+       where predecessor.id=(select prior.id from public.agency_followup_messages target
+         join public.agency_followup_messages prior on prior.enrollment_id=target.enrollment_id and prior.step_number<target.step_number
+         where target.id=$1 order by prior.step_number desc limit 1)`, [pendingClaim.id],
+    );
+    const checkedPending = await assertPureGateResult(pendingClaim, { result: "deferred", blocker: "previous_step_pending" });
+    if (Date.parse(checkedPending.retryAt!) <= Date.now()) throw new Error("A claimed predecessor returned a non-future retryAt.");
+
+    const spacingClaim = await insertFixture(input.firstUseMessageId, `spacing-${RUN_ID}`, null);
+    await client.query(
+      `update public.agency_followup_messages predecessor
+       set state='accepted',unknown_since=null,provider_accepted_at=clock_timestamp(),lease_owner=null,lease_until=null,
+           last_error_code=null,updated_at=clock_timestamp()
+       where predecessor.id=(select prior.id from public.agency_followup_messages target
+         join public.agency_followup_messages prior on prior.enrollment_id=target.enrollment_id and prior.step_number<target.step_number
+         where target.id=$1 order by prior.step_number desc limit 1)`, [spacingClaim.id],
+    );
+    const checkedSpacing = await assertPureGateResult(spacingClaim, { result: "deferred", blocker: "minimum_spacing_not_elapsed" });
+    if (Date.parse(checkedSpacing.retryAt!) <= Date.now()) throw new Error("A recent accepted predecessor returned a non-future spacing retryAt.");
+
+    const notDueClaim = await insertFixture(input.firstUseMessageId, `not-due-${RUN_ID}`, null);
+    const scheduledRetryAt = await client.query<{ retry_at: Date }>(
+      "update public.agency_followup_messages set scheduled_at=clock_timestamp()+interval '5 minutes' where id=$1 returning scheduled_at as retry_at",
+      [notDueClaim.id],
+    );
+    const checkedNotDue = await assertPureGateResult(notDueClaim, { result: "deferred", blocker: "not_due" });
+    if (Math.abs(Date.parse(checkedNotDue.retryAt!) - scheduledRetryAt.rows[0]!.retry_at.getTime()) > 1_000) {
+      throw new Error("The standalone not-due result did not return the target's exact scheduled retryAt.");
+    }
+
+    const changedAssociationClaim = await insertFixture(input.firstUseMessageId, `association-change-${RUN_ID}`, null);
+    const identityMapping = await client.query<{ source_link_id: string; organization_id: string; person_id: string }>(
+      `select source_link.id as source_link_id,source_link.organization_id,source_link.person_id
+       from public.agency_followup_enrollments enrollment
+       join public.agency_followup_messages target on target.enrollment_id=enrollment.id
+       join public.prospect_source_links source_link on source_link.source_record_key=enrollment.prospect_id::text
+         and source_link.source_system=case when exists (
+           select 1 from public.prospect_source_links exact_contact
+           where exact_contact.source_system='agency_crm_contact' and exact_contact.source_record_key=enrollment.prospect_id::text
+         ) then 'agency_crm_contact' else 'agency_crm' end and source_link.active
+       where target.id=$1 and source_link.person_id is not null`, [changedAssociationClaim.id],
+    );
+    const mapping = identityMapping.rows[0];
+    if (!mapping?.organization_id || !mapping.person_id) throw new Error("The disposable identity fixture has no mapped person for the association revalidation check.");
+    const alternatePerson = await client.query<{ id: string }>(
+      "insert into public.prospect_people(display_name,primary_email) values ($1,null) returning id",
+      [`Synthetic association-change ${RUN_ID}`],
+    );
+    const alternatePersonId = alternatePerson.rows[0]?.id;
+    if (!alternatePersonId) throw new Error("The disposable identity fixture could not create its alternate synthetic person.");
+    await client.query(
+      "insert into public.prospect_person_firm_roles(organization_id,person_id,is_primary,active) values ($1,$2,false,true)",
+      [mapping.organization_id, alternatePersonId],
+    );
+    await client.query("update public.prospect_source_links set person_id=$2 where id=$1", [mapping.source_link_id, alternatePersonId]);
+    await assertPureGateResult(changedAssociationClaim, { result: "blocked", blocker: "contactability_unknown" });
+
     await client.query("rollback");
-    progress("runtime provider handoff RPC persisted an immutable first-use time, allowed a retry under 23 hours, and atomically quarantined a 23-hour-old key; historical test timestamps were supplied at INSERT");
-    return { firstUseReservedOnce: true, timestampImmutable: true, retryUnder23HoursAllowed: true, retryAt23HoursQuarantined: true, historicalTimestampsSeededAtInsert: true, networkHandoff: "none", transactionRolledBack: true };
+    progress("runtime serialized authorization returned the exact approved request/hash, preserved immutable first-use time, allowed an in-window retry, quarantined an expired key, mapped synthetic reply/decline/meeting/completion/bounce activities to stopped conversation states, blocked each stopped state and future-dated review, unknown predecessors and changed identity mappings, deferred claimed/recently-accepted predecessors and not-due messages, exposed no send payload on non-ready results, and left disposition to the worker");
+    return { firstUseReservedOnce: true, timestampImmutable: true, retryUnder23HoursAllowed: true, retryAt23HoursQuarantined: true, unknownPredecessorBlocked: true, changedIdentityBlocked: true, claimedPredecessorDeferred: true, minimumSpacingDeferred: true, standaloneNotDueDeferred: true, futureReviewBlocked: true, conversationActivityStatusMappingVerified: true, stopStatusesBlockHandoff: stopActivityCases.map((stopCase) => stopCase.expectedStatus), nonReadyHasNoRequest: true, gateDoesNotPersistDisposition: true, historicalTimestampsSeededAtInsert: true, networkHandoff: "none", transactionRolledBack: true };
   } catch (error) {
     await client.query("rollback").catch(() => undefined);
     throw error;
@@ -714,128 +1109,366 @@ async function verifyProviderIdempotencyLockWaitBoundary(
   pool: Pool,
   sourceMessageId: string,
 ): Promise<Record<string, unknown>> {
-  const holder = await pool.connect();
-  const waiter = await pool.connect();
-  let holderTransaction = false;
-  let waiterTransaction = false;
-  let rpcPromise: Promise<{ state: string | undefined }> | null = null;
-  let rpcSettled = false;
-  let fixture: { id: string; owner: string; attemptCount: number } | null = null;
-  try {
-    await holder.query("begin");
-    holderTransaction = true;
-    await holder.query("set local role service_role");
-    const inserted = await holder.query<{ id: string; attempt_count: number }>(
-      `with source as (
-         select message.*, enrollment.journey_id
-         from public.agency_followup_messages message
-         join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id
-         where message.id=$1
-       ), step as (
-         insert into public.agency_followup_steps (journey_id,step_number,template_version_id,delay_business_days)
-         select source.journey_id,
-                (select coalesce(max(existing.step_number),0)+1 from public.agency_followup_steps existing where existing.journey_id=source.journey_id),
-                source.template_version_id,0
-         from source
-         returning id,journey_id,step_number
-       )
-       insert into public.agency_followup_messages (
-         enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256,
-         recipient_name_snapshot,recipient_email_snapshot,recipient_sha256,
-         approved_content_sha256,approved_recipient_sha256,reviewed_by_operator_id,reviewed_at,
-         scheduled_at,logical_message_key,provider_idempotency_key,attempt_count,lease_owner,lease_until,
-         provider_idempotency_first_used_at
-       )
-       select source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot,
-              source.content_sha256,source.recipient_name_snapshot,source.recipient_email_snapshot,source.recipient_sha256,
-              source.content_sha256,source.recipient_sha256,source.reviewed_by_operator_id,coalesce(source.reviewed_at,clock_timestamp()),
-              clock_timestamp(),$2,$3,1,$4,clock_timestamp()+interval '5 minutes',
-              clock_timestamp()-interval '22 hours 59 minutes 56 seconds'
-       from source join step on step.journey_id=source.journey_id
-       returning id,attempt_count`,
-      [sourceMessageId, `walkthrough-provider-boundary-${RUN_ID}`, `walkthrough-provider-boundary-key-${RUN_ID}`, `boundary-${RUN_ID}`],
-    );
-    if (!inserted.rows[0]) throw new Error("The retry-boundary message fixture could not be inserted.");
-    fixture = { id: inserted.rows[0].id, owner: `boundary-${RUN_ID}`, attemptCount: Number(inserted.rows[0].attempt_count) };
-    await holder.query("commit");
-    holderTransaction = false;
-
-    const locked = await holder.query<{ pid: number }>("select pg_backend_pid() as pid");
-    const waiting = await waiter.query<{ pid: number }>("select pg_backend_pid() as pid");
-    const holderPid = Number(locked.rows[0]?.pid);
-    const waiterPid = Number(waiting.rows[0]?.pid);
-    await holder.query("begin");
-    holderTransaction = true;
-    await holder.query("set local role service_role");
-    await holder.query("select id from public.agency_followup_messages where id=$1 for update", [fixture.id]);
-    const cutoff = await pool.query<{ cutoff: Date; database_now: Date }>(
-      "select provider_idempotency_first_used_at+interval '23 hours' as cutoff,clock_timestamp() as database_now from public.agency_followup_messages where id=$1",
-      [fixture.id],
-    );
-    const secondsRemaining = (cutoff.rows[0]!.cutoff.getTime() - cutoff.rows[0]!.database_now.getTime()) / 1000;
-    if (secondsRemaining <= 0.5 || secondsRemaining > 5) {
-      throw new Error(`The lock-wait boundary fixture did not start inside the 23-hour window with a bounded margin (${secondsRemaining.toFixed(3)} seconds).`);
-    }
-    const before = await pool.query<{ database_now: Date }>("select clock_timestamp() as database_now");
-    if (cutoff.rows[0]!.cutoff.getTime() <= before.rows[0]!.database_now.getTime()) {
-      throw new Error("The guarded RPC could not be proven to start before the 23-hour cutoff.");
-    }
-    await waiter.query("begin");
-    waiterTransaction = true;
-    await waiter.query("set local role service_role");
-    rpcPromise = waiter.query<{ state: string }>(
-      "select public.prepare_agency_followup_provider_attempt($1::uuid,(select enrollment_id from public.agency_followup_messages where id=$1::uuid),$2,$3,300,82800) as state",
-      [fixture.id, fixture.owner, fixture.attemptCount],
-    ).then((result) => ({ state: result.rows[0]?.state }));
-    rpcPromise.then(() => { rpcSettled = true; }, () => { rpcSettled = true; });
-
-    const lockDeadline = Date.now() + 1500;
-    let blocked = false;
-    while (Date.now() < lockDeadline) {
-      const activity = await pool.query<{ blocked: boolean }>(
-        "select array_position(pg_blocking_pids($1::integer),$2::integer) is not null as blocked",
-        [waiterPid, holderPid],
+  const lockWaitQueryTimeoutMs = 45_000;
+  const runBoundaryCase = async (scenario: "lease" | "idempotency_window"): Promise<Record<string, unknown>> => {
+    const holder = await pool.connect();
+    const waiter = await pool.connect();
+    let holderTransaction = false;
+    let waiterTransaction = false;
+    let rpcPromise: Promise<unknown> | null = null;
+    let rpcSettled = false;
+    let rpcRejected = false;
+    let rpcErrorCode: string | null = null;
+    let rpcErrorName: string | null = null;
+    try {
+      const sourceIdentity = await holder.query<{ enrollment_id: string }>(
+        "select enrollment_id from public.agency_followup_messages where id=$1",
+        [sourceMessageId],
       );
-      if (activity.rows[0]?.blocked) { blocked = true; break; }
-      if (rpcSettled) break;
-      await new Promise((resolve) => setTimeout(resolve, 50));
-    }
-    if (!blocked || rpcSettled) {
-      throw new Error("The provider handoff RPC did not block behind the held message row before the 23-hour cutoff.");
-    }
+      const enrollmentId = sourceIdentity.rows[0]?.enrollment_id;
+      if (!enrollmentId) throw new Error("The provider boundary source enrollment was not found.");
+      const messageId = randomUUID();
+      const logicalKey = agencyFollowupLogicalMessageKey(enrollmentId, messageId);
+      const owner = "boundary-" + scenario + "-" + RUN_ID;
+      const firstUseExpression = scenario === "idempotency_window"
+        ? "clock_timestamp()-interval '22 hours 59 minutes 30 seconds'"
+        : "null";
+      const leaseExpression = scenario === "lease"
+        ? "clock_timestamp()+interval '30 seconds'"
+        : "clock_timestamp()+interval '5 minutes'";
 
-    const afterBlocked = await pool.query<{ database_now: Date }>("select clock_timestamp() as database_now");
-    if (cutoff.rows[0]!.cutoff.getTime() <= afterBlocked.rows[0]!.database_now.getTime()) {
-      throw new Error("The waiter was not observed blocked until after the 23-hour cutoff.");
+      await holder.query("begin");
+      holderTransaction = true;
+      await holder.query("set local role service_role");
+      const inserted = await holder.query<{
+        id: string;
+        attempt_count: number;
+        template_version_id: string;
+      }>(
+        "with source as (" +
+          " select message.*, enrollment.journey_id" +
+          " from public.agency_followup_messages message" +
+          " join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id" +
+          " where message.id=$1" +
+          "), step as (" +
+          " insert into public.agency_followup_steps (journey_id,step_number,template_version_id,delay_business_days)" +
+          " select source.journey_id," +
+          "        (select coalesce(max(existing.step_number),0)+1 from public.agency_followup_steps existing where existing.journey_id=source.journey_id)," +
+          "        source.template_version_id,0" +
+          " from source" +
+          " returning id,journey_id,step_number" +
+          ")" +
+          " insert into public.agency_followup_messages (" +
+          " id,enrollment_id,step_id,step_number,template_version_id,state,content_snapshot,content_sha256," +
+          " recipient_name_snapshot,recipient_email_snapshot,recipient_sha256," +
+          " approved_content_sha256,approved_recipient_sha256,reviewed_by_operator_id,reviewed_at," +
+          " scheduled_at,logical_message_key,provider_idempotency_key,attempt_count,lease_owner,lease_until," +
+          " provider_idempotency_first_used_at" +
+          " )" +
+          " select $2::uuid,source.enrollment_id,step.id,step.step_number,source.template_version_id,'claimed',source.content_snapshot," +
+          "        source.content_sha256,source.recipient_name_snapshot,source.recipient_email_snapshot,source.recipient_sha256," +
+          "        source.content_sha256,source.recipient_sha256,source.reviewed_by_operator_id,coalesce(source.reviewed_at,clock_timestamp())," +
+          "        clock_timestamp(),$3,$3,1,$4," + leaseExpression + "," + firstUseExpression +
+          " from source join step on step.journey_id=source.journey_id" +
+          " returning id,attempt_count,template_version_id",
+        [sourceMessageId, messageId, logicalKey, owner],
+      );
+      const fixture = inserted.rows[0];
+      if (!fixture) throw new Error("The " + scenario + " boundary message fixture could not be inserted.");
+      // The primary synthetic journey already has a safe all-days policy;
+      // preserve its immutability while preparing rollback-only message state.
+      await holder.query(
+        "update public.agency_followup_messages predecessor" +
+          " set state='accepted',scheduled_at=coalesce(predecessor.scheduled_at,clock_timestamp()-interval '2 days')," +
+          " approved_content_sha256=predecessor.content_sha256,approved_recipient_sha256=predecessor.recipient_sha256," +
+          " reviewed_by_operator_id=coalesce(predecessor.reviewed_by_operator_id,target.reviewed_by_operator_id)," +
+          " reviewed_at=coalesce(predecessor.reviewed_at,target.reviewed_at,clock_timestamp()-interval '2 days')," +
+          " provider_message_id=coalesce(predecessor.provider_message_id,'walkthrough-predecessor-'||predecessor.id::text)," +
+          " provider_accepted_at=clock_timestamp()-interval '2 days'," +
+          " lease_owner=null,lease_until=null,unknown_since=null,last_error_code=null,updated_at=clock_timestamp()" +
+          " from public.agency_followup_messages target" +
+          " where target.id=$1 and predecessor.enrollment_id=target.enrollment_id and predecessor.step_number<target.step_number",
+        [fixture.id],
+      );
+      await holder.query("commit");
+      holderTransaction = false;
+
+      const holderPid = Number((await holder.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]?.pid);
+      const waiterPid = Number((await waiter.query<{ pid: number }>("select pg_backend_pid() as pid")).rows[0]?.pid);
+      if (!Number.isInteger(holderPid) || !Number.isInteger(waiterPid)) {
+        throw new Error("The lock-wait regression could not identify both disposable Postgres backends.");
+      }
+      await holder.query("begin");
+      holderTransaction = true;
+      await holder.query("set local role service_role");
+      await holder.query(
+        "select id from public.agency_followup_template_versions where id=$1 for no key update",
+        [fixture.template_version_id],
+      );
+
+      const boundaryRow = (await pool.query<{
+        state: string;
+        lease_owner: string | null;
+        attempt_count: number;
+        lease_until: Date;
+        lease_until_exact: string;
+        first_used_at: Date | null;
+        first_used_at_exact: string | null;
+        key_cutoff: Date | null;
+        database_now: Date;
+      }>(
+        "select message.state,message.lease_owner,message.attempt_count,message.lease_until," +
+          "to_char(message.lease_until,'YYYY-MM-DD HH24:MI:SS.US') as lease_until_exact," +
+          "message.provider_idempotency_first_used_at as first_used_at," +
+          "to_char(message.provider_idempotency_first_used_at,'YYYY-MM-DD HH24:MI:SS.US') as first_used_at_exact," +
+          "message.provider_idempotency_first_used_at+interval '23 hours' as key_cutoff,clock_timestamp() as database_now" +
+          " from public.agency_followup_messages message where message.id=$1",
+        [fixture.id],
+      )).rows[0];
+      if (!boundaryRow) throw new Error("The " + scenario + " boundary fixture disappeared before the RPC wait.");
+      const targetBoundary = scenario === "lease" ? boundaryRow.lease_until : boundaryRow.key_cutoff;
+      if (!targetBoundary) throw new Error("The " + scenario + " boundary did not have its expected database timestamp.");
+      const marginSeconds = (targetBoundary.getTime() - boundaryRow.database_now.getTime()) / 1000;
+      if (marginSeconds <= 15 || marginSeconds > 32) {
+        throw new Error("The " + scenario + " fixture did not leave a bounded pre-boundary margin (" + marginSeconds.toFixed(3) + " seconds).");
+      }
+
+      await waiter.query("begin");
+      waiterTransaction = true;
+      await waiter.query("set local role service_role");
+      await waiter.query("select set_config('statement_timeout',$1,true)", [String(lockWaitQueryTimeoutMs) + "ms"]);
+      const pendingRpcPromise = waiter.query<{ authorization: unknown }>({
+        text: "select public.authorize_agency_followup_provider_handoff($1::uuid,$2::uuid,$3,$4,300,82800) as authorization",
+        values: [fixture.id, enrollmentId, owner, fixture.attempt_count],
+      }).then((result) => result.rows[0]?.authorization);
+      rpcPromise = pendingRpcPromise;
+      void pendingRpcPromise.then(
+        () => { rpcSettled = true; },
+        (error: unknown) => {
+          rpcRejected = true;
+          if (error && typeof error === "object") {
+            const queryError = error as { code?: unknown };
+            rpcErrorCode = typeof queryError.code === "string" && /^[A-Z0-9]{5}$/.test(queryError.code)
+              ? queryError.code
+              : null;
+            rpcErrorName = error instanceof Error ? error.name : null;
+          }
+          rpcSettled = true;
+        },
+      );
+
+      const observationDeadline = Date.now() + 5_000;
+      let observedWait: { database_now: Date; state: string | null; wait_event_type: string | null } | undefined;
+      while (Date.now() < observationDeadline) {
+        const activity = await pool.query<{
+          database_now: Date;
+          state: string | null;
+          wait_event_type: string | null;
+          blocked_by_holder: boolean;
+        }>(
+          "select clock_timestamp() as database_now,activity.state,activity.wait_event_type," +
+            "array_position(pg_blocking_pids(activity.pid),$2::integer) is not null as blocked_by_holder" +
+            " from pg_stat_activity activity where activity.pid=$1::integer",
+          [waiterPid, holderPid],
+        );
+        const row = activity.rows[0];
+        if (row?.state === "active" && row.wait_event_type === "Lock" && row.blocked_by_holder === true) {
+          observedWait = row;
+          break;
+        }
+        if (rpcSettled) break;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      if (!observedWait) {
+        const settledAuthorization = rpcSettled && rpcPromise
+          ? await rpcPromise.catch(() => undefined)
+          : undefined;
+        throw new Error("The " + scenario + " authorization did not appear active on a lock wait blocked by the held template row: " +
+          JSON.stringify({
+            authorizationResult: rpcSettled ? safeProviderAuthorizationDiagnostic(settledAuthorization).authorizationResult : "pending",
+            authorizationBlocker: rpcSettled ? safeProviderAuthorizationDiagnostic(settledAuthorization).authorizationBlocker : "none",
+            observedWaitEventType: "not_observed",
+            blockerMatched: false,
+            rpcRejected,
+            rpcErrorCode,
+            rpcErrorName,
+            authorizationFields: safeProviderAuthorizationFields(settledAuthorization),
+          }));
+      }
+      if (targetBoundary.getTime() <= observedWait.database_now.getTime() + 5_000) {
+        const settledAuthorization = rpcSettled && rpcPromise
+          ? await rpcPromise.catch(() => undefined)
+          : undefined;
+        throw new Error("The " + scenario + " authorization was not proven blocked with time remaining before its boundary: " +
+          JSON.stringify({
+            authorizationResult: rpcSettled ? safeProviderAuthorizationDiagnostic(settledAuthorization).authorizationResult : "pending",
+            authorizationBlocker: rpcSettled ? safeProviderAuthorizationDiagnostic(settledAuthorization).authorizationBlocker : "none",
+            observedWaitEventType: observedWait.wait_event_type,
+            blockerMatched: true,
+          }));
+      }
+
+      const crossBoundaryAt = new Date(targetBoundary.getTime() + 1_000);
+      const crossingDeadline = Date.now() + crossBoundaryAt.getTime() - observedWait.database_now.getTime() + 5_000;
+      let crossedWhileBlocked = false;
+      while (Date.now() < crossingDeadline) {
+        const clock = await pool.query<{ crossed: boolean }>(
+          "select clock_timestamp() >= $1::timestamptz as crossed",
+          [crossBoundaryAt.toISOString()],
+        );
+        if (clock.rows[0]?.crossed === true) {
+          crossedWhileBlocked = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      if (!crossedWhileBlocked) {
+        throw new Error("The " + scenario + " boundary was not crossed on the database clock while the RPC remained blocked.");
+      }
+      if (rpcSettled) {
+        const settledAuthorization = rpcPromise ? await rpcPromise.catch(() => undefined) : undefined;
+        const diagnostic = safeProviderAuthorizationDiagnostic(settledAuthorization);
+        throw new Error("The " + scenario + " RPC stopped waiting before the database boundary: " + JSON.stringify({
+          authorizationResult: diagnostic.authorizationResult,
+          authorizationBlocker: diagnostic.authorizationBlocker,
+          blockerMatched: true,
+          rpcRejected,
+          rpcErrorCode,
+          rpcErrorName,
+          authorizationFields: safeProviderAuthorizationFields(settledAuthorization),
+        }));
+      }
+
+      await holder.query("commit");
+      holderTransaction = false;
+      const authorization = await Promise.race([
+        rpcPromise,
+        new Promise<never>((_, reject) => setTimeout(
+          () => reject(new Error("The " + scenario + " authorization did not resume within five seconds after releasing the template lock.")),
+          5_000,
+        )),
+      ]);
+      const authorizationDiagnostic = safeProviderAuthorizationDiagnostic(authorization);
+      const authorizationObject = authorization && typeof authorization === "object" && !Array.isArray(authorization)
+        ? authorization as Record<string, unknown>
+        : {};
+      const sendRequestPresent = authorizationObject.request !== undefined;
+      const expectedResult = scenario === "lease" ? "stale" : "expired";
+      if (authorizationDiagnostic.authorizationResult !== expectedResult || sendRequestPresent) {
+        throw new Error("The " + scenario + " authorization returned an unexpected result after crossing its boundary: " +
+          JSON.stringify({
+            authorizationResult: authorizationDiagnostic.authorizationResult,
+            authorizationBlocker: authorizationDiagnostic.authorizationBlocker,
+            sendRequestPresent,
+            expectedResult,
+          }));
+      }
+
+      await waiter.query("commit");
+      waiterTransaction = false;
+      const persisted = await pool.query<{
+        state: string;
+        lease_owner: string | null;
+        attempt_count: number;
+        lease_until_exact: string | null;
+        first_used_at_exact: string | null;
+        last_error_code: string | null;
+        scheduled_at: Date | null;
+        unknown_since: Date | null;
+        window_events: string;
+        provider_unknown_events: string;
+      }>(
+        "select message.state,message.lease_owner,message.attempt_count," +
+          "to_char(message.lease_until,'YYYY-MM-DD HH24:MI:SS.US') as lease_until_exact," +
+          "to_char(message.provider_idempotency_first_used_at,'YYYY-MM-DD HH24:MI:SS.US') as first_used_at_exact," +
+          "message.last_error_code,message.scheduled_at,message.unknown_since," +
+          "(select count(*)::text from public.agency_followup_events event where event.message_id=message.id" +
+          " and event.idempotency_key='resend-window-expired:'||message.id::text) as window_events," +
+          "(select count(*)::text from public.agency_followup_events event where event.message_id=message.id" +
+          " and event.idempotency_key='resend-window-expired:'||message.id::text and event.event_type='provider_unknown') as provider_unknown_events" +
+          " from public.agency_followup_messages message where message.id=$1",
+        [fixture.id],
+      );
+      const saved = persisted.rows[0];
+      if (!saved) throw new Error("The " + scenario + " fixture could not be read after the authorization RPC.");
+      if (scenario === "lease") {
+        if (saved.state !== boundaryRow.state || saved.lease_owner !== boundaryRow.lease_owner ||
+            saved.attempt_count !== boundaryRow.attempt_count || saved.lease_until_exact !== boundaryRow.lease_until_exact ||
+            saved.first_used_at_exact !== null) {
+          throw new Error("The stale lease result mutated the claimed message or reserved a first-use timestamp: " +
+            JSON.stringify({
+              authorizationResult: authorizationDiagnostic.authorizationResult,
+              authorizationBlocker: authorizationDiagnostic.authorizationBlocker,
+              stateUnchanged: saved.state === boundaryRow.state,
+              ownerUnchanged: saved.lease_owner === boundaryRow.lease_owner,
+              attemptsUnchanged: saved.attempt_count === boundaryRow.attempt_count,
+              leaseUnchanged: saved.lease_until_exact === boundaryRow.lease_until_exact,
+              firstUseStillNull: saved.first_used_at_exact === null,
+            }));
+        }
+        progress("the lease-boundary RPC waited on its template row lock, crossed lease expiry on the database clock, returned stale, and left first-use and claim state unchanged");
+        return {
+          templateLockWaitObserved: true,
+          leaseExpiryCrossedWhileBlocked: true,
+          returnedStaleWithoutRequest: true,
+          firstUseRemainedNull: true,
+          claimStateUnchanged: true,
+          providerHandoff: "none",
+        };
+      }
+
+      if (saved.state !== "unknown" || saved.last_error_code !== "resend_idempotency_window_expired" ||
+          saved.scheduled_at !== null || saved.lease_owner !== null || saved.lease_until_exact !== null ||
+          saved.unknown_since === null || saved.window_events !== "1" || saved.provider_unknown_events !== "1" ||
+          saved.first_used_at_exact !== boundaryRow.first_used_at_exact) {
+        throw new Error("The expired-key result did not atomically persist UNKNOWN, one provider_unknown event, and its original first-use time: " +
+          JSON.stringify({
+            authorizationResult: authorizationDiagnostic.authorizationResult,
+            authorizationBlocker: authorizationDiagnostic.authorizationBlocker,
+            unknownPersisted: saved.state === "unknown",
+            errorCodePersisted: saved.last_error_code === "resend_idempotency_window_expired",
+            scheduleCleared: saved.scheduled_at === null,
+            leaseCleared: saved.lease_owner === null && saved.lease_until_exact === null,
+            unknownTimestampPersisted: saved.unknown_since !== null,
+            oneWindowEvent: saved.window_events === "1",
+            oneProviderUnknownEvent: saved.provider_unknown_events === "1",
+            firstUseTimestampPreserved: saved.first_used_at_exact === boundaryRow.first_used_at_exact,
+          }));
+      }
+      progress("the 23-hour RPC waited on its template row lock, crossed the key-age cutoff on the database clock, returned expired, and atomically persisted UNKNOWN with one provider_unknown event");
+      return {
+        templateLockWaitObserved: true,
+        keyAgeCutoffCrossedWhileBlocked: true,
+        returnedExpiredWithoutRequest: true,
+        unknownPersisted: true,
+        oneProviderUnknownEvent: true,
+        firstUseTimestampPreserved: true,
+        providerHandoff: "none",
+      };
+    } finally {
+      if (holderTransaction) await holder.query("rollback").catch(() => undefined);
+      if (waiterTransaction) await waiter.query("rollback").catch(() => undefined);
+      if (rpcPromise && !rpcSettled) {
+        await Promise.race([
+          rpcPromise.then(() => undefined, () => undefined),
+          new Promise((resolve) => setTimeout(resolve, 3_000)),
+        ]);
+      }
+      holder.release();
+      waiter.release();
     }
-    const waitRemaining = cutoff.rows[0]!.cutoff.getTime() - afterBlocked.rows[0]!.database_now.getTime();
-    if (waitRemaining > 5000) throw new Error("The lock-wait boundary exceeded its bounded hold time.");
-    await new Promise((resolve) => setTimeout(resolve, waitRemaining + 100));
-    await holder.query("commit");
-    holderTransaction = false;
-    const outcome = await Promise.race([
-      rpcPromise,
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("The blocked provider handoff RPC did not resume within 3 seconds after lock release.")), 3000)),
-    ]);
-    if (outcome.state !== "expired") throw new Error(`The lock-waiting RPC returned ${String(outcome.state)} after crossing the provider retention cutoff.`);
-    await waiter.query("commit");
-    waiterTransaction = false;
-    const persisted = await pool.query<{ state: string; last_error_code: string | null; events: string }>(
-      "select message.state,message.last_error_code,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-window-expired:'||message.id::text) as events from public.agency_followup_messages message where message.id=$1",
-      [fixture.id],
-    );
-    if (persisted.rows[0]?.state !== "unknown" || persisted.rows[0]?.last_error_code !== "resend_idempotency_window_expired" || persisted.rows[0]?.events !== "1") {
-      throw new Error("The lock-waiting RPC did not atomically quarantine the message and add one UNKNOWN event.");
-    }
-    progress("provider handoff call was observed waiting on a row lock before the 23-hour cutoff, then returned expired and persisted one UNKNOWN event after the cutoff; no provider adapter was called");
-    return { rpcBlockedBeforeCutoff: true, cutoffCrossedWhileBlocked: true, returnedExpiredAfterLock: true, unknownPersisted: true, oneUnknownEvent: true, providerHandoff: "none", boundedLockHold: true };
-  } finally {
-    if (holderTransaction) await holder.query("rollback").catch(() => undefined);
-    if (waiterTransaction) await waiter.query("rollback").catch(() => undefined);
-    if (rpcPromise && rpcSettled === false) await Promise.race([rpcPromise.catch(() => undefined), new Promise((resolve) => setTimeout(resolve, 3000))]);
-    holder.release();
-    waiter.release();
-  }
+  };
+
+  const leaseBoundary = await runBoundaryCase("lease");
+  const keyAgeBoundary = await runBoundaryCase("idempotency_window");
+  return {
+    leaseBoundary,
+    keyAgeBoundary,
+    boundedDbClockWait: true,
+    templateLockMode: "FOR NO KEY UPDATE",
+    observer: "pg_stat_activity + pg_blocking_pids",
+    providerHandoff: "none",
+  };
 }
 async function verifyQuarantinedSourceEventReplay(
   pool: Pool,
@@ -864,6 +1497,14 @@ async function verifyQuarantinedSourceEventReplay(
       [prospect.id, providerMessageId, recipientHash],
     );
     if (message.rows.length !== 1) throw new Error("The source-quarantine replay requires one accepted synthetic message with no existing provider-event application.");
+    const globalProviderMatches = await client.query<{ count: string }>(
+      "select count(*)::text as count from public.agency_followup_messages where provider_message_id=$1 and provider_recipient_email_sha256=$2 and state='accepted' and provider_accepted_at is not null",
+      [providerMessageId, recipientHash],
+    );
+    if (globalProviderMatches.rows[0]?.count !== "1") {
+      throw new Error("The source-quarantine replay requires a globally unique accepted provider identity; matching synthetic rows="
+        + (globalProviderMatches.rows[0]?.count ?? "unknown"));
+    }
     await client.query("begin");
     const contactSource = await client.query<{ id: string; organization_id: string; person_id: string | null; associations: string }>(
       "select source_link.id,source_link.organization_id,source_link.person_id,(select count(*)::text from public.prospect_conversation_sources association where association.source_link_id=source_link.id) as associations from public.prospect_source_links source_link where source_link.source_system='agency_crm_contact' and source_link.source_record_key=$1",
@@ -889,9 +1530,9 @@ async function verifyQuarantinedSourceEventReplay(
     if (orphanReferences.rows[0]?.events !== "0" || orphanReferences.rows[0]?.applications !== "0") {
       throw new Error("The orphan contact-source fixture already has provider-event evidence.");
     }
-    const parameters = [eventId, providerMessageId, "email.bounced", null, occurredAt, prospect.email, recipientHash];
+    const parameters = [eventId, providerMessageId, "email.bounced", null, occurredAt, prospect.email, recipientHash, null, null];
     const persist = () => client.query<{ result: { result?: string } }>(
-      "select public.persist_agency_followup_resend_event($1,$2,$3,$4,$5::timestamptz,$6,$7) as result",
+      "select public.persist_agency_followup_resend_event($1,$2,$3,$4,$5::timestamptz,$6,$7,$8::uuid,$9::uuid) as result",
       parameters,
     );
     const firstReceipt = await persist();
@@ -971,10 +1612,20 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["lease", "Synthetic Walkthrough Lease " + suffix, "Quinn Example", "eligible"],
     ["retry", "Synthetic Walkthrough Retry " + suffix, "Devon Example", "eligible"],
     ["consent", "Synthetic Walkthrough Consent " + suffix, "Taylor Example", "eligible"],
+    ["tagged_unknown", "Synthetic Walkthrough Tagged UNKNOWN " + suffix, "Sam Example", "eligible"],
+    ["contact_unsubscribe", "Synthetic Walkthrough Contact Unsubscribe " + suffix, "Lee Example", "eligible"],
+    ["contact_unsubscribe_ambiguous_a", "Synthetic Walkthrough Ambiguous Unsubscribe A " + suffix, "Drew Example", "eligible"],
+    ["contact_unsubscribe_ambiguous_b", "Synthetic Walkthrough Ambiguous Unsubscribe B " + suffix, "Alex Example", "eligible"],
+    ["message_unsubscribe_duplicate", "Synthetic Walkthrough Message Unsubscribe Duplicate " + suffix, "Chris Example", "eligible"],
+    ["message_unsubscribe_early_a", "Synthetic Walkthrough Early Message Unsubscribe A " + suffix, "Morgan Example", "eligible"],
+    ["message_unsubscribe_early_b", "Synthetic Walkthrough Early Message Unsubscribe B " + suffix, "Jamie Example", "eligible"],
+    ["message_unsubscribe_source", "Synthetic Walkthrough Source Unsubscribe Source " + suffix, "Casey Example", "eligible"],
+    ["message_unsubscribe_source_duplicate", "Synthetic Walkthrough Source Unsubscribe Duplicate " + suffix, "Taylor Example", "eligible"],
+    ["message_unsubscribe_mismatch_duplicate", "Synthetic Walkthrough Mismatched Recipient Unsubscribe Duplicate " + suffix, "Jordan Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and eight Agency prospects");
+    progress("seeding synthetic operator and eighteen Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -982,7 +1633,19 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     );
     for (const [key, firmName, contactName, contactability] of names) {
       const prospectId = randomUUID();
-      const email = `${key}-${suffix}@example.test`;
+      // Disposable fixtures intentionally share addresses to exercise ambiguous,
+      // unmatched, source-failure and matched recipient unsubscribe gates.
+      const email = key.startsWith("contact_unsubscribe_ambiguous_")
+        ? `contact-unsubscribe-ambiguous-${suffix}@example.test`
+        : key.startsWith("message_unsubscribe_early_")
+          ? `message-unsubscribe-early-${suffix}@example.test`
+        : key === "message_unsubscribe_source" || key === "message_unsubscribe_source_duplicate"
+          ? `message-unsubscribe-source-${suffix}@example.test`
+        : key === "message_unsubscribe_mismatch_duplicate"
+          ? `message-unsubscribe-mismatch-${suffix}@example.test`
+        : key === "message_unsubscribe_duplicate"
+          ? `retry-${suffix}@example.test`
+          : `${key}-${suffix}@example.test`;
       await pool.query(
         "insert into public.agency_prospects (id,firm_name,contact_name,contact_email,stage,source,notes) values ($1,$2,$3,$4,'researching','synthetic_walkthrough','Synthetic local-only CRM walkthrough fixture')",
         [prospectId, firmName, contactName, email],
@@ -1010,7 +1673,7 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
           [conversationId],
         );
       }
-      if (["normal", "pause", "unknown", "window", "lease", "retry"].includes(key)) {
+      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b", "message_unsubscribe_duplicate", "message_unsubscribe_early_a", "message_unsubscribe_early_b", "message_unsubscribe_source", "message_unsubscribe_source_duplicate", "message_unsubscribe_mismatch_duplicate"].includes(key)) {
         const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
         const databaseClock = await pool.query<{ captured_at: Date }>("select clock_timestamp() - interval '1 minute' as captured_at");
         const capturedAt = databaseClock.rows[0]?.captured_at.toISOString();
@@ -1077,12 +1740,18 @@ export async function POST(request: NextRequest) {
       !item || !["accepted", "unknown", "definitive_retryable_failure", "definitive_permanent_failure"].includes(item.kind)))) {
     return NextResponse.json({ error: "Unsupported fake provider outcome." }, { status: 400 });
   }
+  const providerDelayMs = body.providerDelayMs;
+  if (providerDelayMs !== undefined &&
+      (typeof providerDelayMs !== "number" || !Number.isSafeInteger(providerDelayMs) || providerDelayMs < 0 || providerDelayMs > 30000)) {
+    return NextResponse.json({ error: "Unsupported synthetic provider delay." }, { status: 400 });
+  }
   try {
     return NextResponse.json(await runFakeAgencyFollowupDispatcher({
       workerId: String(body.workerId ?? ""),
       now: typeof body.now === "string" ? body.now : undefined,
       limit: typeof body.limit === "number" ? body.limit : undefined,
       outcomePlan,
+      providerDelayMs: typeof providerDelayMs === "number" ? providerDelayMs : undefined,
     }));
   } catch (error) {
     return NextResponse.json({ error: "Fake dispatch failed." }, { status: 409 });
@@ -1500,14 +2169,14 @@ function queueCard(page: Page, firmName: string) {
   return page.locator('section[aria-labelledby="queue-title"] article').filter({ hasText: firmName }).first();
 }
 
-async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: string) => Promise<void>): Promise<string> {
+async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: string) => Promise<void>): Promise<{ journeyName: string; weekdayJourneyName: string; taggedUnknownJourneyName: string }> {
   const suffix = randomUUID().slice(0, 8);
   const templateKey = "walkthrough-" + suffix;
   const journeyKey = "walkthrough-" + suffix;
   const journeyName = "Synthetic follow-up " + suffix;
   await page.getByLabel("Template key").fill(templateKey);
   await page.getByLabel("Email subject").fill("A synthetic follow-up question");
-  await page.getByLabel("Email body").fill("Hello. This message is a local synthetic review fixture and is never sent to a provider.");
+  await page.getByLabel("Email body").fill("Hello. This message is a local synthetic review fixture and is never sent to a provider. Unsubscribe: {{agency_followup_unsubscribe_url}}");
   await waitForAction(page, "template_create", page.getByRole("button", { name: "Create template draft" }));
   const templateCard = page.locator("article").filter({ hasText: templateKey }).first();
   const templateApprovalButton = templateCard.getByRole("button", { name: "Approve template v1" });
@@ -1519,10 +2188,13 @@ async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: s
 
   await page.getByLabel("Journey key").fill(journeyKey);
   await page.getByLabel("Journey name").fill(journeyName);
-  await page.getByLabel("IANA timezone").fill("America/Toronto");
+  await page.getByLabel("IANA timezone").fill(chooseWindowSafeTimezone(new Date()));
   await page.getByLabel("Local window start").fill("00:00");
   await page.getByLabel("Local window end").fill("23:59");
-  await page.getByLabel("Minimum spacing between scheduled messages, hours").fill("0");
+  await page.getByLabel("Minimum spacing between scheduled messages, hours").fill("1");
+  for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
+    await page.getByLabel(day, { exact: true }).check();
+  }
   const addStep = page.getByRole("button", { name: "Add step", exact: true });
   await addStep.click();
   const templateSelects = page.getByLabel("Template version");
@@ -1546,6 +2218,16 @@ async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: s
   const otherJourneyName = journeyName + " other";
   await page.getByLabel("Journey key").fill(otherJourneyKey);
   await page.getByLabel("Journey name").fill(otherJourneyName);
+  await page.getByLabel("IANA timezone").fill("America/Toronto");
+  await page.getByLabel("Local window start").fill("09:00");
+  await page.getByLabel("Local window end").fill("17:00");
+  await page.getByLabel("Minimum spacing between scheduled messages, hours").fill("1");
+  for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri"]) {
+    await page.getByLabel(day, { exact: true }).check();
+  }
+  for (const day of ["Sat", "Sun"]) {
+    await page.getByLabel(day, { exact: true }).uncheck();
+  }
   await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
   const otherJourneyDraft = page.getByText(otherJourneyName + " v1 · draft", { exact: false }).locator("..");
   await waitForAction(page, "journey_activate", otherJourneyDraft.getByRole("button", { name: "Activate version" }));
@@ -1558,6 +2240,13 @@ async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: s
   }
   await page.getByLabel("Journey key").fill(mixedCaseJourneyKey);
   await page.getByLabel("Journey name").fill(journeyName);
+  await page.getByLabel("IANA timezone").fill(chooseWindowSafeTimezone(new Date()));
+  await page.getByLabel("Local window start").fill("00:00");
+  await page.getByLabel("Local window end").fill("23:59");
+  await page.getByLabel("Minimum spacing between scheduled messages, hours").fill("1");
+  for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
+    await page.getByLabel(day, { exact: true }).check();
+  }
   await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
   const journeyV2Draft = page.getByText(journeyName + " v2 · draft", { exact: false }).locator("..");
   await waitForAction(page, "journey_activate", journeyV2Draft.getByRole("button", { name: "Activate version" }));
@@ -1574,7 +2263,27 @@ async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: s
     otherKeyV1RemainsAvailable: true,
   };
   await page.getByLabel("Journey version").selectOption({ label: journeyName + " v2" });
-  return journeyName + " v2";
+
+  const taggedUnknownJourneyKey = "walkthrough-unknown-" + suffix;
+  const taggedUnknownJourneyName = "Synthetic tagged UNKNOWN " + suffix;
+  await page.getByLabel("Journey key").fill(taggedUnknownJourneyKey);
+  await page.getByLabel("Journey name").fill(taggedUnknownJourneyName);
+  await page.getByLabel("IANA timezone").fill(chooseWindowSafeTimezone(new Date()));
+  await page.getByLabel("Local window start").fill("00:00");
+  await page.getByLabel("Local window end").fill("23:59");
+  for (const day of ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]) {
+    await page.getByLabel(day, { exact: true }).check();
+  }
+  await waitForAction(page, "journey_create", page.getByRole("button", { name: "Save draft journey version" }));
+  const taggedUnknownDraft = page.getByText(taggedUnknownJourneyName + " v1 · draft", { exact: false }).locator("..");
+  await waitForAction(page, "journey_activate", taggedUnknownDraft.getByRole("button", { name: "Activate version" }));
+  const taggedUnknownOption = journeyOptions.filter({ hasText: taggedUnknownJourneyName + " v1" });
+  await expect(taggedUnknownOption).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+  return {
+    journeyName: journeyName + " v2",
+    weekdayJourneyName: otherJourneyName + " v1",
+    taggedUnknownJourneyName: taggedUnknownJourneyName + " v1",
+  };
 }
 
 async function createDraft(pool: Pool, page: Page, journeyVersionLabel: string, prospect: ProspectFixture): Promise<void> {
@@ -1637,7 +2346,7 @@ async function postAction(context: BrowserContext, data: Record<string, unknown>
 async function dispatchFake(
   context: BrowserContext,
   token: string,
-  input: { workerId: string; limit?: number; now?: string; outcomePlan?: Array<Record<string, unknown>> },
+  input: { workerId: string; limit?: number; now?: string; outcomePlan?: Array<Record<string, unknown>>; providerDelayMs?: number },
 ): Promise<Record<string, number>> {
   setDiagnosticStage("fake_dispatch");
   const response = await context.request.post(APP_ORIGIN + TEST_DISPATCH_PATH, {
@@ -1653,6 +2362,70 @@ async function dispatchFake(
     throw new Error("Local fake dispatcher endpoint returned HTTP " + response.status() + ": " + detail);
   }
   return await response.json() as Record<string, number>;
+}
+
+async function diagnoseBouncedResendFailureInRollback(
+  pool: Pool,
+  providerEventId: string,
+  providerMessageId: string,
+  occurredAt: string,
+  recipientEmail: string,
+): Promise<string> {
+  const client = await pool.connect();
+  let transactionStarted = false;
+  let discardClient = false;
+  try {
+    await client.query("BEGIN");
+    transactionStarted = true;
+    await client.query("SET LOCAL ROLE service_role");
+    const recipientHash = createHash("sha256")
+      .update(recipientEmail.trim().toLowerCase(), "utf8")
+      .digest("hex");
+    const result = await client.query<{ result: { result?: unknown } }>(
+      "select public.persist_agency_followup_resend_event($1,$2,$3,$4,$5::timestamptz,$6,$7,$8::uuid,$9::uuid) as result",
+      [providerEventId, providerMessageId, "email.bounced", null, occurredAt, recipientEmail, recipientHash, null, null],
+    );
+    const outcome = typeof result.rows[0]?.result?.result === "string"
+      ? result.rows[0].result.result
+      : "unknown";
+    return JSON.stringify({ mode: "rollback_only", rpc: "returned", outcome });
+  } catch (cause) {
+    const failure = cause as { code?: unknown; where?: unknown; schema?: unknown; table?: unknown; constraint?: unknown };
+    const code = typeof failure.code === "string" && /^[A-Z0-9]{5}$/.test(failure.code)
+      ? failure.code
+      : "unknown";
+    const context = typeof failure.where === "string"
+      ? failure.where.split(/\r?\n/)
+          .filter((line) => line.startsWith("PL/pgSQL function "))
+          .map((line) => line.replace(/[^A-Za-z0-9_.,() ]/g, "").replace(/\s+/g, " "))
+          .slice(-5)
+      : [];
+    const safeName = (value: unknown) => typeof value === "string" && /^[A-Za-z0-9_.]+$/.test(value)
+      ? value
+      : undefined;
+    const classification = code === "42P10"
+      ? "no_unique_or_exclusion_constraint_for_on_conflict"
+      : "database_error_redacted";
+    return JSON.stringify({
+      mode: "rollback_only",
+      rpc: "failed",
+      code,
+      classification,
+      context,
+      schema: safeName(failure.schema),
+      table: safeName(failure.table),
+      constraint: safeName(failure.constraint),
+    });
+  } finally {
+    if (transactionStarted) {
+      try {
+        await client.query("ROLLBACK");
+      } catch {
+        discardClient = true;
+      }
+    }
+    client.release(discardClient);
+  }
 }
 
 async function postSyntheticResendEvent(providerEventId: string, payload: Record<string, unknown>): Promise<{ status: number; outcome: string; error: string }> {
@@ -1714,15 +2487,39 @@ async function withFixtureClaim<T>(pool: Pool, messageId: string, operation: () 
   }
 }
 
+async function waitForClaimedMessage(
+  pool: Pool,
+  messageId: string,
+  owner: string,
+  timeoutMs = 15_000,
+): Promise<{ attempt_count: number; lease_until: string }> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await pool.query<{
+      state: string; lease_owner: string | null; attempt_count: number; lease_until: string | null;
+    }>(
+      "select state,lease_owner,attempt_count,lease_until::text as lease_until from public.agency_followup_messages where id=$1",
+      [messageId],
+    );
+    const row = result.rows[0];
+    if (row?.state === "claimed" && row.lease_owner === owner && row.lease_until &&
+        Date.parse(row.lease_until) > Date.now()) {
+      return { attempt_count: Number(row.attempt_count), lease_until: row.lease_until };
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Synthetic provider request did not reach the expected live message claim before the bounded wait expired.");
+}
+
 async function countRows(pool: Pool, query: string, values: unknown[] = []): Promise<number> {
   const result = await pool.query<{ count: string }>(query, values);
   return Number(result.rows[0]?.count ?? 0);
 }
 
-async function auditRenderedCopy(page: Page): Promise<string[]> {
-  return page.evaluate(() => {
+async function auditRenderedCopy(page: Page, componentSelector = '[data-ui-component-content^="agency-follow-up-"]'): Promise<string[]> {
+  return page.evaluate((selector) => {
     const failures: string[] = [];
-    const components = document.querySelectorAll<HTMLElement>('[data-ui-component-content^="agency-follow-up-"]');
+    const components = document.querySelectorAll<HTMLElement>(selector);
     for (const component of components) {
       const bounds = component.getBoundingClientRect();
       const style = getComputedStyle(component);
@@ -1754,7 +2551,15 @@ async function auditRenderedCopy(page: Page): Promise<string[]> {
           if (line) line.push(word); else lines.push([word]);
         }
         lines.sort((a, b) => a[0].top - b[0].top);
-        if (lines.length > 1 && lines.at(-1)!.length === 1) failures.push(tag + `: single-word final line "${lines.at(-1)![0].text}" after "${lines.at(-2)!.map((word) => word.text).join(" ")}"`);
+        const finalLine = lines.at(-1);
+        // The required unsubscribe URL is an indivisible substitution token in this plain-text preview.
+        const isRequiredFinalUnsubscribeToken =
+          tag === "agency-follow-up-message/body" &&
+          finalLine?.length === 1 &&
+          finalLine[0].text === "{{agency_followup_unsubscribe_url}}";
+        if (lines.length > 1 && finalLine?.length === 1 && !isRequiredFinalUnsubscribeToken) {
+          failures.push(tag + `: single-word final line "${finalLine[0].text}" after "${lines.at(-2)!.map((word) => word.text).join(" ")}"`);
+        }
         for (let index = 0; index < lines.length - 1; index += 1) {
           const line = lines[index];
           const width = Math.max(...line.map((word) => word.right)) - Math.min(...line.map((word) => word.left));
@@ -1767,7 +2572,7 @@ async function auditRenderedCopy(page: Page): Promise<string[]> {
     }
     if (document.documentElement.scrollWidth > window.innerWidth + 1) failures.push("page: horizontal overflow");
     return failures;
-  });
+  }, componentSelector);
 }
 
 async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecret: string, walkthroughToken: string, templateApprovalRollbackEvidence: Record<string, unknown>): Promise<Record<string, unknown>> {
@@ -1945,7 +2750,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     }
   }
 
-  const journeyName = await authorJourney(page, async (templateKey) => {
+  const { journeyName, weekdayJourneyName, taggedUnknownJourneyName } = await authorJourney(page, async (templateKey) => {
     templateApprovalAuditEvidence = await verifyTemplateApprovalAudit(pool, templateKey, fixtures.lawyerId);
   });
   const consentProspect = fixtures.prospects.consent;
@@ -2068,7 +2873,13 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await page.reload({ waitUntil: "networkidle" });
   await expect(queueCard(page, normal.firmName).getByText("awaiting review", { exact: true })).toBeVisible();
 
-  const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, { workerId: "synthetic-walkthrough-accepted", now: acceptedNow, limit: 1 }));
+  const acceptedProviderMessageId = `fake-provider-normal-${RUN_ID}`;
+  const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-accepted",
+    now: acceptedNow,
+    limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: acceptedProviderMessageId, acceptedAt: acceptedNow }],
+  }));
   const accepted = await pool.query<{ state: string; provider_message_id: string | null }>(
     "select state,provider_message_id from agency_followup_messages where id=$1",
     [firstNormalMessage.id],
@@ -2140,12 +2951,228 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   if (unknownResult.unknown !== 1 || unknownRow.rows[0]?.state !== "unknown" || !unknownRow.rows[0]?.unknown_since || unknownWasReclaimed) {
     throw new Error("UNKNOWN provider outcome was not quarantined or was automatically reclaimed.");
   }
+
+  const taggedUnknownProspect = fixtures.prospects.tagged_unknown;
+  await createDraft(pool, page, taggedUnknownJourneyName, taggedUnknownProspect);
+  await markEligibleAndRelease(page, taggedUnknownProspect);
+  await waitForAction(page, "approve", queueCard(page, taggedUnknownProspect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const taggedUnknownRow = await pool.query<{ id: string; enrollment_id: string; recipient_email_snapshot: string }>(
+    "select message.id,message.enrollment_id,message.recipient_email_snapshot from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.step_number=1",
+    [taggedUnknownProspect.id],
+  );
+  const taggedMessage = taggedUnknownRow.rows[0];
+  if (!taggedMessage) throw new Error("Tagged UNKNOWN reconciliation message was not created.");
+  // The all-days policy was authored as a new immutable journey version through the UI.
+  // Make only this disposable message due against the same database clock used for its claim.
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=clock_timestamp()-interval '10 minutes' where id=$1",
+    [taggedMessage.id],
+  );
+  const taggedDbNowResult = await pool.query<{ now: Date }>("select clock_timestamp() as now");
+  const taggedDbNow = taggedDbNowResult.rows[0]?.now;
+  if (!(taggedDbNow instanceof Date) || !Number.isFinite(taggedDbNow.getTime())) {
+    throw new Error("The database clock for the tagged UNKNOWN synthetic claim could not be read.");
+  }
+  const taggedOwner = `synthetic-tagged-unknown-${RUN_ID}`;
+  const taggedClaimed = await withFixtureClaim(pool, taggedMessage.id, async () => pool.query<{
+    id: string; enrollment_id: string; attempt_count: number; lease_owner: string; state: string;
+  }>(
+    "select id,enrollment_id,attempt_count,lease_owner,state from public.claim_agency_followup_messages($1,$2,120,1)",
+    [taggedOwner, taggedDbNow.toISOString()],
+  ));
+  const taggedLease = taggedClaimed.rows[0];
+  if (!taggedLease || taggedLease.id !== taggedMessage.id || taggedLease.state !== "claimed" || taggedLease.lease_owner !== taggedOwner) {
+    throw new Error("The signed UNKNOWN-tag fixture could not be claimed by the real database claim RPC.");
+  }
+  const taggedGateClient = await pool.connect();
+  try {
+    await taggedGateClient.query("begin");
+    await taggedGateClient.query("set local role service_role");
+    const gate = await authorizeProviderHandoff(taggedGateClient, {
+      messageId: taggedMessage.id, enrollmentId: taggedMessage.enrollment_id,
+      owner: taggedOwner, attemptCount: Number(taggedLease.attempt_count),
+    });
+    const recipientMatches = gate.request?.recipientEmail === taggedMessage.recipient_email_snapshot;
+    if (gate.result !== "ready" || !recipientMatches) {
+      const gateBlockers = gate.blockers ?? [];
+      const safeGateDetails = {
+        ready: gate.result === "ready",
+        blocked: gate.result === "blocked",
+        deferred: gate.result === "deferred",
+        expired: gate.result === "expired",
+        stale: gate.result === "stale",
+        blockerCount: gateBlockers.length,
+        contactabilityUnknown: gateBlockers.includes("contactability_unknown"),
+        contactabilityBlocked: gateBlockers.includes("contactability_blocked"),
+        conversationStopped: gateBlockers.includes("conversation_stopped"),
+        prospectStatusStopped: gateBlockers.includes("prospect_status_stopped"),
+        sequenceNotReleased: gateBlockers.includes("sequence_not_released"),
+        eligibilityNotApproved: gateBlockers.includes("eligibility_not_approved"),
+        eligibilityEvidenceMissing: gateBlockers.includes("eligibility_evidence_missing"),
+        recipientEmailInvalid: gateBlockers.includes("recipient_email_invalid"),
+        recipientIdentityMissing: gateBlockers.includes("recipient_identity_missing"),
+        explicitOptInWithdrawn: gateBlockers.includes("explicit_opt_in_withdrawn"),
+        explicitOptInMissing: gateBlockers.includes("explicit_opt_in_missing"),
+        approvalStaleRecipient: gateBlockers.includes("approval_stale_recipient"),
+        approvalMissing: gateBlockers.includes("approval_missing"),
+        approvalReviewerInvalid: gateBlockers.includes("approval_invalid_reviewer_or_time"),
+        approvalStaleContent: gateBlockers.includes("approval_stale_content"),
+        previousStepUnresolved: gateBlockers.includes("previous_step_unresolved"),
+        notDue: gateBlockers.includes("not_due"),
+        invalidSchedule: gateBlockers.includes("invalid_schedule"),
+        outsideSendWindow: gateBlockers.includes("outside_send_window"),
+        spacingNotElapsed: gateBlockers.includes("minimum_spacing_not_elapsed"),
+        previousStepPending: gate.blocker === "previous_step_pending",
+        requestPresent: Boolean(gate.request),
+        recipientMatches,
+      };
+      progress("tagged UNKNOWN handoff gate flags: " + Object.entries(safeGateDetails).map(([key, value]) => key + "=" + String(value)).join(","));
+      throw new Error("The tagged UNKNOWN fixture failed final handoff authorization; see the safe gate flags above.");
+    }
+    await taggedGateClient.query("commit");
+  } catch (error) {
+    await taggedGateClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    taggedGateClient.release();
+  }
+
+  const taggedProviderMessageId = `fake-provider-tagged-unknown-${RUN_ID}`;
+  const taggedResendEventId = `evt_tagged_unknown_${RUN_ID}`;
+  const taggedEventBase = {
+    type: "email.sent",
+    created_at: acceptedNow,
+    data: {
+      email_id: taggedProviderMessageId,
+      to: [taggedMessage.recipient_email_snapshot.toUpperCase()],
+      tags: {
+        agency_followup_message_id: taggedMessage.id,
+        agency_followup_enrollment_id: taggedMessage.enrollment_id,
+      },
+    },
+  };
+  const claimedTaggedReceipt = await postSyntheticResendEvent(taggedResendEventId, taggedEventBase);
+  const claimedTaggedEvidence = await pool.query<{ processing_result: string; message_id: string | null; enrollment_id: string | null; signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean; applications: string }>(
+    "select event.processing_result,event.message_id,event.enrollment_id,event.signed_agency_followup_message_id as signed_message_id,event.signed_agency_followup_enrollment_id as signed_enrollment_id,event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    [taggedResendEventId],
+  );
+  if (claimedTaggedReceipt.status !== 503 || claimedTaggedReceipt.outcome !== "unmatched_message" ||
+      claimedTaggedEvidence.rows[0]?.processing_result !== "unmatched_message" || claimedTaggedEvidence.rows[0]?.message_id !== taggedMessage.id ||
+      claimedTaggedEvidence.rows[0]?.enrollment_id !== taggedMessage.enrollment_id ||
+      claimedTaggedEvidence.rows[0]?.signed_message_id !== taggedMessage.id || claimedTaggedEvidence.rows[0]?.signed_enrollment_id !== taggedMessage.enrollment_id ||
+      claimedTaggedEvidence.rows[0]?.tags_recorded !== true ||
+      claimedTaggedEvidence.rows[0]?.applications !== "0") {
+    throw new Error("A signed tagged email.sent arriving while claimed was not stored unmatched for safe replay.");
+  }
+  const changedTaggedReplay = await postSyntheticResendEvent(taggedResendEventId, {
+    ...taggedEventBase,
+    data: { ...taggedEventBase.data, tags: { ...taggedEventBase.data.tags, agency_followup_message_id: randomUUID() } },
+  });
+  const immutableTaggedInbox = await pool.query<{ processing_result: string; signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean }>(
+    "select processing_result,signed_agency_followup_message_id as signed_message_id,signed_agency_followup_enrollment_id as signed_enrollment_id,signed_agency_followup_tags_recorded as tags_recorded from public.agency_followup_provider_events where provider_event_id=$1",
+    [taggedResendEventId],
+  );
+  if (changedTaggedReplay.status !== 500 || changedTaggedReplay.error !== "event_persistence_failed" ||
+      immutableTaggedInbox.rows[0]?.processing_result !== "unmatched_message" || immutableTaggedInbox.rows[0]?.signed_message_id !== taggedMessage.id ||
+      immutableTaggedInbox.rows[0]?.signed_enrollment_id !== taggedMessage.enrollment_id || immutableTaggedInbox.rows[0]?.tags_recorded !== true) {
+    throw new Error("A repeated signed event ID with a changed tag pair altered its immutable inbox binding.");
+  }
+
+  const unknownDispositionClient = await pool.connect();
+  try {
+    await unknownDispositionClient.query("begin");
+    await unknownDispositionClient.query("set local role service_role");
+    await unknownDispositionClient.query(
+      "select public.persist_agency_followup_disposition($1::uuid,$2::uuid,$3,$4,$5::jsonb)",
+      [taggedMessage.id, taggedMessage.enrollment_id, taggedOwner, Number(taggedLease.attempt_count),
+        JSON.stringify({ state: "unknown", detail: "synthetic_tagged_email_sent_interruption", at: taggedDbNow.toISOString() })],
+    );
+    await unknownDispositionClient.query("commit");
+  } catch (error) {
+    await unknownDispositionClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    unknownDispositionClient.release();
+  }
+  const exactTaggedMessageBeforeReplay = await pool.query<{ state: string; provider_message_id: string | null; accepted_events: string }>(
+    "select message.state,message.provider_message_id,(select count(*)::text from public.agency_followup_events event where event.message_id=message.id and event.event_type='provider_accepted') as accepted_events from public.agency_followup_messages message where message.id=$1",
+    [taggedMessage.id],
+  );
+  if (exactTaggedMessageBeforeReplay.rows[0]?.state !== "unknown" || exactTaggedMessageBeforeReplay.rows[0]?.provider_message_id !== null ||
+      exactTaggedMessageBeforeReplay.rows[0]?.accepted_events !== "0") {
+    throw new Error("The synthetic worker did not leave the tagged message quarantined UNKNOWN before replay.");
+  }
+
+  const rejectedTaggedEvents = [
+    {
+      id: `evt_wrong_message_tag_${RUN_ID}`,
+      payload: { ...taggedEventBase, data: { ...taggedEventBase.data, tags: {
+        agency_followup_message_id: randomUUID(),
+        agency_followup_enrollment_id: taggedMessage.enrollment_id,
+      } } },
+      name: "wrong message tag",
+      outcome: "unmatched_message",
+      status: 503,
+    },
+    {
+      id: `evt_wrong_enrollment_tag_${RUN_ID}`,
+      payload: { ...taggedEventBase, data: { ...taggedEventBase.data, tags: {
+        agency_followup_message_id: taggedMessage.id,
+        agency_followup_enrollment_id: randomUUID(),
+      } } },
+      name: "wrong enrollment tag",
+      outcome: "unmatched_message",
+      status: 503,
+    },
+    {
+      id: `evt_wrong_tagged_recipient_${RUN_ID}`,
+      payload: { ...taggedEventBase, data: { ...taggedEventBase.data, to: ["different-recipient@example.test"] } },
+      name: "wrong normalized recipient",
+      outcome: "unmatched_recipient",
+      status: 200,
+    },
+    {
+      id: `evt_tagged_not_sent_${RUN_ID}`,
+      payload: { ...taggedEventBase, type: "email.delivered" },
+      name: "non-email.sent event",
+      outcome: "unmatched_message",
+      status: 503,
+    },
+  ];
+  for (const rejected of rejectedTaggedEvents) {
+    const receipt = await postSyntheticResendEvent(rejected.id, rejected.payload);
+    const unchanged = await pool.query<{ state: string; provider_message_id: string | null; accepted_events: string; applications: string; signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean }>(
+      "select message.state,message.provider_message_id,(select count(*)::text from public.agency_followup_events event where event.message_id=message.id and event.event_type='provider_accepted') as accepted_events,(select count(*)::text from public.agency_followup_provider_event_applications application join public.agency_followup_provider_events provider_event on provider_event.provider_event_id=application.provider_event_id where application.message_id=message.id and provider_event.provider_event_id=$2) as applications,(select provider_event.signed_agency_followup_message_id from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$2) as signed_message_id,(select provider_event.signed_agency_followup_enrollment_id from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$2) as signed_enrollment_id,(select provider_event.signed_agency_followup_tags_recorded from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$2) as tags_recorded from public.agency_followup_messages message where message.id=$1",
+      [taggedMessage.id, rejected.id],
+    );
+    if (receipt.status !== rejected.status || receipt.outcome !== rejected.outcome || unchanged.rows[0]?.state !== "unknown" ||
+        unchanged.rows[0]?.provider_message_id !== null || unchanged.rows[0]?.accepted_events !== "0" || unchanged.rows[0]?.applications !== "0" ||
+        unchanged.rows[0]?.signed_message_id !== rejected.payload.data.tags.agency_followup_message_id ||
+        unchanged.rows[0]?.signed_enrollment_id !== rejected.payload.data.tags.agency_followup_enrollment_id || unchanged.rows[0]?.tags_recorded !== true) {
+      throw new Error(`The ${rejected.name} event mutated the tagged UNKNOWN follow-up message.`);
+    }
+  }
+
+  const taggedReplay = await postSyntheticResendEvent(taggedResendEventId, taggedEventBase);
+  const duplicateTaggedReplay = await postSyntheticResendEvent(taggedResendEventId, taggedEventBase);
+  const taggedPromotion = await pool.query<{ state: string; provider_message_id: string | null; provider_delivery_status: string | null; accepted_events: string; applications: string; applied_result: string | null }>(
+    "select message.state,message.provider_message_id,message.provider_delivery_status,(select count(*)::text from public.agency_followup_events event where event.message_id=message.id and event.event_type='provider_accepted') as accepted_events,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=$2 and application.message_id=message.id) as applications,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=$2 and application.message_id=message.id) as applied_result from public.agency_followup_messages message where message.id=$1",
+    [taggedMessage.id, taggedResendEventId],
+  );
+  if (taggedReplay.status !== 200 || taggedReplay.outcome !== "matched" || duplicateTaggedReplay.status !== 200 || duplicateTaggedReplay.outcome !== "duplicate" ||
+      taggedPromotion.rows[0]?.state !== "accepted" || taggedPromotion.rows[0]?.provider_message_id !== taggedProviderMessageId ||
+      taggedPromotion.rows[0]?.provider_delivery_status !== "accepted" || taggedPromotion.rows[0]?.accepted_events !== "1" ||
+      taggedPromotion.rows[0]?.applications !== "1" || taggedPromotion.rows[0]?.applied_result !== "matched") {
+    throw new Error("An exact signed email.sent replay did not promote UNKNOWN exactly once, or its duplicate was not idempotent.");
+  }
+  progress("signed tagged email.sent stayed unmatched while claimed, promoted the exact UNKNOWN message on replay once, rejected mismatched message/enrollment/recipient/non-sent events, and ignored duplicate replay");
+
   const retryProspect = fixtures.prospects.retry;
   await createDraft(pool, page, journeyName, retryProspect);
   await markEligibleAndRelease(page, retryProspect);
   await waitForAction(page, "approve", queueCard(page, retryProspect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
-  const retryMessageResult = await pool.query<{ id: string; provider_idempotency_key: string }>(
-    "select id,provider_idempotency_key from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) and step_number=1",
+  const retryMessageResult = await pool.query<{ id: string; enrollment_id: string; provider_idempotency_key: string }>(
+    "select id,enrollment_id,provider_idempotency_key from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) and step_number=1",
     [retryProspect.id],
   );
   const retryMessage = retryMessageResult.rows[0];
@@ -2197,21 +3224,63 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     retryClient.release();
   }
 
-  const resendEventId = `evt_walkthrough_${RUN_ID}`;
+  const resendEventId = "evt_walkthrough_" + RUN_ID;
   const retryProviderMessageId = "fake-provider-retry-" + RUN_ID;
   const signedDeliveryEvent = {
     type: "email.delivered",
-    created_at: retryDueAt,
-    data: { email_id: retryProviderMessageId, to: [retryProspect.email] },
+    created_at: new Date(Date.parse(retryDueAt) + 1000).toISOString(),
+    data: {
+      email_id: retryProviderMessageId,
+      to: [retryProspect.email],
+      tags: {
+        agency_followup_message_id: retryMessage.id,
+        agency_followup_enrollment_id: retryMessage.enrollment_id,
+      },
+    },
   };
-  const earlyProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
-  if (earlyProviderEvent.status !== 503 || earlyProviderEvent.outcome !== "unmatched_message") {
-    throw new Error("An early signed provider event was not durably quarantined and returned for retry.");
-  }
-  const retryAcceptance = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
-    workerId: "synthetic-walkthrough-retry-accepted", now: retryDueAt, limit: 1,
+  const retryWorkerId = "synthetic-walkthrough-retry-accepted";
+  const retryAcceptancePending = withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: retryWorkerId,
+    now: retryDueAt,
+    limit: 1,
+    providerDelayMs: 20_000,
     outcomePlan: [{ kind: "accepted", providerMessageId: retryProviderMessageId, acceptedAt: retryDueAt }],
-  }));
+  })).then(
+    (value) => ({ value }),
+    (error) => ({ error }),
+  );
+  let retryLease: Awaited<ReturnType<typeof waitForClaimedMessage>>;
+  try {
+    retryLease = await waitForClaimedMessage(pool, retryMessage.id, retryWorkerId);
+  } catch (error) {
+    const pending = await retryAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw error;
+  }
+  if (retryLease.attempt_count !== 2) {
+    const pending = await retryAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw new Error("The due retry did not enter its second live claim before the provider accepted it.");
+  }
+  const earlyProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
+  const retryPreAcceptance = await pool.query<{
+    state: string; lease_owner: string | null; attempt_count: number;
+    provider_message_id: string | null; provider_accepted_at: string | null;
+  }>(
+    "select state,lease_owner,attempt_count,provider_message_id,provider_accepted_at from public.agency_followup_messages where id=$1",
+    [retryMessage.id],
+  );
+  if (earlyProviderEvent.status !== 503 || earlyProviderEvent.outcome !== "unmatched_message" ||
+      retryPreAcceptance.rows[0]?.state !== "claimed" || retryPreAcceptance.rows[0]?.lease_owner !== retryWorkerId ||
+      Number(retryPreAcceptance.rows[0]?.attempt_count) !== 2 || retryPreAcceptance.rows[0]?.provider_message_id !== null ||
+      retryPreAcceptance.rows[0]?.provider_accepted_at !== null) {
+    const pending = await retryAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw new Error("A signed event during the live retry claim was not durably quarantined before provider acceptance.");
+  }
+  const retryAcceptanceResult = await retryAcceptancePending;
+  if ("error" in retryAcceptanceResult) throw retryAcceptanceResult.error;
+  const retryAcceptance = retryAcceptanceResult.value;
   const retryReplay = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-retry-replay", now: new Date(Date.parse(retryDueAt) + 1000).toISOString(), limit: 1,
   }));
@@ -2227,8 +3296,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const reconciledProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
   const duplicateProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
   progress(`synthetic provider event replay: first=${JSON.stringify(reconciledProviderEvent)}; duplicate=${JSON.stringify(duplicateProviderEvent)}`);
-  const providerEventState = await pool.query<{ processing_result: string; message_id: string | null; applications: string; applied_message_id: string | null; applied_result: string | null; durable_events: string }>(
-    "select provider_event.processing_result,provider_event.message_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id and application.message_id=$2) as applications,(select application.message_id from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_message_id,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_result,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-event:'||provider_event.provider_event_id) as durable_events from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$1",
+  const providerEventState = await pool.query<{ processing_result: string; message_id: string | null; enrollment_id: string | null; signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean; applications: string; applied_message_id: string | null; applied_result: string | null; durable_events: string }>(
+    "select provider_event.processing_result,provider_event.message_id,provider_event.enrollment_id,provider_event.signed_agency_followup_message_id as signed_message_id,provider_event.signed_agency_followup_enrollment_id as signed_enrollment_id,provider_event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id and application.message_id=$2) as applications,(select application.message_id from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_message_id,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_result,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-event:'||provider_event.provider_event_id) as durable_events from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$1",
     [resendEventId, retryMessage.id],
   );
   const reconciledMessage = await pool.query<{ provider_delivery_status: string }>(
@@ -2242,7 +3311,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   );
   if (reconciledProviderEvent.status !== 200 || reconciledProviderEvent.outcome !== "matched" ||
     duplicateProviderEvent.status !== 200 || duplicateProviderEvent.outcome !== "duplicate" ||
-    providerEventState.rows[0]?.processing_result !== "unmatched_message" || providerEventState.rows[0]?.message_id !== null ||
+    providerEventState.rows[0]?.processing_result !== "unmatched_message" || providerEventState.rows[0]?.message_id !== retryMessage.id ||
+    providerEventState.rows[0]?.enrollment_id !== retryMessage.enrollment_id ||
+    providerEventState.rows[0]?.signed_message_id !== retryMessage.id ||
+    providerEventState.rows[0]?.signed_enrollment_id !== retryMessage.enrollment_id ||
+    providerEventState.rows[0]?.tags_recorded !== true ||
     providerEventState.rows[0]?.applications !== "1" || providerEventState.rows[0]?.applied_message_id !== retryMessage.id ||
     providerEventState.rows[0]?.applied_result !== "matched" || providerEventState.rows[0]?.durable_events !== "1" ||
     reconciledMessage.rows[0]?.provider_delivery_status !== "delivered") {
@@ -2250,46 +3323,776 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }
 
 
-  const suppressionEventId = `evt_suppressed_${RUN_ID}`;
-  const suppressionTime = new Date(Date.parse(retryDueAt) + 2000).toISOString();
-  const signedSuppressionEvent = {
-    type: "email.suppressed",
-    created_at: suppressionTime,
-    data: { email_id: retryProviderMessageId, to: [retryProspect.email] },
-  };
-  const suppressionReceipt = await postSyntheticResendEvent(suppressionEventId, signedSuppressionEvent);
-  const duplicateSuppressionReceipt = await postSyntheticResendEvent(suppressionEventId, signedSuppressionEvent);
-  const suppressedState = await pool.query<{
-    delivery_status: string; suppression_reason: string | null; contact_state: string | null;
-    suppression_rows: string; applications: string; audit_events: string;
-  }>(
-    "select message.provider_delivery_status as delivery_status,contactability.reason as suppression_reason,contactability.state as contact_state,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.conversation_id=event.conversation_id and suppression.suppression_reason='resend_email_suppressed') as suppression_rows,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,(select count(*)::text from public.agency_followup_events audit where audit.message_id=message.id and audit.event_type='provider_suppressed') as audit_events from public.agency_followup_provider_events event join public.agency_followup_messages message on message.id=event.message_id left join public.prospect_contactability contactability on contactability.conversation_id=event.conversation_id where event.provider_event_id=$1",
-    [suppressionEventId],
-  );
-  const lateAcceptance = await postSyntheticResendEvent(`evt_late_sent_${RUN_ID}`, {
+  const stopEventCases = [
+    { type: "email.bounced", suffix: "bounced", reason: "resend_email_bounced", deliveryStatus: "bounced", auditType: "bounce_observed" },
+    { type: "email.complained", suffix: "complained", reason: "resend_email_complaint", deliveryStatus: "complained", auditType: "complaint_observed" },
+    { type: "email.unsubscribed", suffix: "unsubscribed", reason: "resend_email_unsubscribed", deliveryStatus: "unsubscribed", auditType: "unsubscribe_observed" },
+    { type: "email.suppressed", suffix: "suppressed", reason: "resend_email_suppressed", deliveryStatus: "suppressed", auditType: "provider_suppressed" },
+  ] as const;
+  let latestStopEventTime = "";
+  for (let index = 0; index < stopEventCases.length; index += 1) {
+    const eventCase = stopEventCases[index]!;
+    const eventId = "evt_" + eventCase.suffix + "_" + RUN_ID;
+    const eventTime = new Date(Date.parse(retryDueAt) + 2000 + index * 1000).toISOString();
+    const payload = {
+      type: eventCase.type,
+      created_at: eventTime,
+      data: { email_id: retryProviderMessageId, to: [retryProspect.email] },
+    };
+    const receipt = await postSyntheticResendEvent(eventId, payload);
+    const duplicateReceipt = await postSyntheticResendEvent(eventId, payload);
+    if (eventCase.type === "email.bounced" && (receipt.status === 500 || duplicateReceipt.status === 500)) {
+      const diagnostic = await diagnoseBouncedResendFailureInRollback(pool, eventId, retryProviderMessageId, eventTime, retryProspect.email);
+      progress("rollback-only sanitized database diagnosis for email.bounced: " + diagnostic);
+    }
+    const appliedState = await pool.query<{
+      processing_result: string; message_id: string | null; applications: string; applied_result: string | null;
+      suppression_rows: string; audit_events: string; delivery_status: string | null; contact_state: string | null;
+    }>(
+      "select event.processing_result,event.message_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id and application.message_id=$2) as applications,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id and application.message_id=$2) as applied_result,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.provider_event_id=event.provider_event_id and suppression.suppression_reason=$3) as suppression_rows,(select count(*)::text from public.agency_followup_events audit where audit.idempotency_key='resend-event:'||event.provider_event_id and audit.event_type=$4) as audit_events,(select message.provider_delivery_status from public.agency_followup_messages message where message.id=$2) as delivery_status,(select contactability.state from public.prospect_contactability contactability where contactability.conversation_id=$5) as contact_state from public.agency_followup_provider_events event where event.provider_event_id=$1",
+      [eventId, retryMessage.id, eventCase.reason, eventCase.auditType, retryProspect.conversationId],
+    );
+    if (receipt.status !== 200 || receipt.outcome !== "matched" ||
+      duplicateReceipt.status !== 200 || duplicateReceipt.outcome !== "duplicate" ||
+      appliedState.rows[0]?.processing_result !== "matched" || appliedState.rows[0]?.message_id !== retryMessage.id ||
+      appliedState.rows[0]?.applications !== "1" || appliedState.rows[0]?.applied_result !== "matched" ||
+      appliedState.rows[0]?.suppression_rows !== "1" || appliedState.rows[0]?.audit_events !== "1" ||
+      appliedState.rows[0]?.delivery_status !== eventCase.deliveryStatus || appliedState.rows[0]?.contact_state !== "suppressed") {
+      throw new Error("The signed " + eventCase.type + " did not apply exactly once, create its shared stop, retain the expected status, or deduplicate its replay.");
+    }
+    latestStopEventTime = eventTime;
+  }
+
+  const lateAcceptanceId = "evt_late_sent_" + RUN_ID;
+  const lateAcceptance = await postSyntheticResendEvent(lateAcceptanceId, {
     type: "email.sent",
     created_at: retryDueAt,
     data: { email_id: retryProviderMessageId, to: [retryProspect.email] },
   });
-  const statusAfterLateAcceptance = await pool.query<{ provider_delivery_status: string; contact_state: string | null; suppression_rows: string }>(
-    "select message.provider_delivery_status,contactability.state as contact_state,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.conversation_id=contactability.conversation_id and suppression.suppression_reason='resend_email_suppressed') as suppression_rows from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id join public.prospect_source_links source_link on source_link.source_record_key=enrollment.prospect_id::text and source_link.source_system='agency_crm' join public.prospect_conversation_sources association on association.source_link_id=source_link.id join public.prospect_contactability contactability on contactability.conversation_id=association.conversation_id where message.id=$1",
-    [retryMessage.id],
+  const statusAfterLateAcceptance = await pool.query<{
+    provider_delivery_status: string | null; provider_delivery_status_at: Date | string | null;
+    contact_state: string | null; suppression_rows: string; late_applications: string; late_acceptance_audit: string;
+  }>(
+    "select message.provider_delivery_status,message.provider_delivery_status_at,contactability.state as contact_state,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.conversation_id=contactability.conversation_id and suppression.suppression_reason=any($2::text[])) as suppression_rows,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=$3 and application.message_id=message.id) as late_applications,(select count(*)::text from public.agency_followup_events audit where audit.idempotency_key='resend-event:'||$3 and audit.event_type='provider_accepted') as late_acceptance_audit from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id join public.prospect_source_links source_link on source_link.source_record_key=enrollment.prospect_id::text and source_link.source_system='agency_crm' join public.prospect_conversation_sources association on association.source_link_id=source_link.id join public.prospect_contactability contactability on contactability.conversation_id=association.conversation_id where message.id=$1",
+    [retryMessage.id, stopEventCases.map((eventCase) => eventCase.reason), lateAcceptanceId],
   );
-  if (suppressionReceipt.status !== 200 || suppressionReceipt.outcome !== "matched" ||
-    duplicateSuppressionReceipt.status !== 200 || duplicateSuppressionReceipt.outcome !== "duplicate" ||
-    suppressedState.rows[0]?.delivery_status !== "suppressed" || suppressedState.rows[0]?.contact_state !== "suppressed" ||
-    suppressedState.rows[0]?.suppression_reason !== "resend_email_suppressed" || suppressedState.rows[0]?.suppression_rows !== "1" ||
-    suppressedState.rows[0]?.applications !== "1" || suppressedState.rows[0]?.audit_events !== "1" ||
-    lateAcceptance.status !== 200 || lateAcceptance.outcome !== "matched" ||
+  if (lateAcceptance.status !== 200 || lateAcceptance.outcome !== "matched" ||
     statusAfterLateAcceptance.rows[0]?.provider_delivery_status !== "suppressed" ||
-    statusAfterLateAcceptance.rows[0]?.contact_state !== "suppressed" || statusAfterLateAcceptance.rows[0]?.suppression_rows !== "1") {
-    throw new Error("The signed provider suppression did not remain durable, exactly-once, shared, or terminal after an older acceptance event.");
+    !statusAfterLateAcceptance.rows[0]?.provider_delivery_status_at ||
+    new Date(statusAfterLateAcceptance.rows[0].provider_delivery_status_at).toISOString() !== latestStopEventTime ||
+    statusAfterLateAcceptance.rows[0]?.contact_state !== "suppressed" ||
+    statusAfterLateAcceptance.rows[0]?.suppression_rows !== String(stopEventCases.length) ||
+    statusAfterLateAcceptance.rows[0]?.late_applications !== "1" ||
+    statusAfterLateAcceptance.rows[0]?.late_acceptance_audit !== "1") {
+    throw new Error("A late signed email.sent event downgraded provider stop status or removed shared suppression evidence.");
   }
-  progress("synthetic signed email.suppressed event created one shared stop and audit; duplicate was idempotent; older email.sent did not downgrade status");
+  progress("signed bounce, complaint, unsubscribe, and provider-suppressed events each created one shared stop and audit; exact duplicates were idempotent; older email.sent did not downgrade the final status");
+
+  const contactProspect = fixtures.prospects.contact_unsubscribe;
+  const contactEventId = "evt_contact_unsubscribe_" + RUN_ID;
+  const contactOccurredAt = new Date().toISOString();
+  const contactRecipientHash = createHash("sha256").update(contactProspect.email.trim().toLowerCase(), "utf8").digest("hex");
+  const contactEventPayload = {
+    type: "contact.updated",
+    created_at: contactOccurredAt,
+    data: { email: contactProspect.email, unsubscribed: true },
+  };
+  const contactReceipt = await postSyntheticResendEvent(contactEventId, contactEventPayload);
+  const duplicateContactReceipt = await postSyntheticResendEvent(contactEventId, contactEventPayload);
+  const contactEventState = await pool.query<{
+    processing_result: string; recipient_sha256: string | null; provider_message_id: string | null;
+    message_id: string | null; enrollment_id: string | null; conversation_id: string | null; source_link_id: string | null;
+    contact_applications: string; message_applications: string; suppression_rows: string; message_rows: string;
+    audit_events: string; contact_state: string | null; contact_reason: string | null;
+    suppressed_by_provider_event_id: string | null; raw_email_absent: boolean;
+  }>(
+    "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.message_id,event.enrollment_id,event.conversation_id,event.source_link_id,(select count(*)::text from public.agency_followup_provider_contact_applications application where application.provider_event_id=event.provider_event_id and application.conversation_id=event.conversation_id and application.source_link_id=event.source_link_id) as contact_applications,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as message_applications,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.provider_event_id=event.provider_event_id and suppression.suppression_reason='resend_email_unsubscribed') as suppression_rows,(select count(*)::text from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$2) as message_rows,(select count(*)::text from public.agency_followup_events audit where audit.idempotency_key='resend-event:'||event.provider_event_id) as audit_events,contactability.state as contact_state,contactability.reason as contact_reason,contactability.suppressed_by_provider_event_id,not (to_jsonb(event)::text ilike '%'||$3||'%') as raw_email_absent from public.agency_followup_provider_events event left join public.prospect_contactability contactability on contactability.conversation_id=event.conversation_id where event.provider_event_id=$1",
+    [contactEventId, contactProspect.id, contactProspect.email],
+  );
+  if (contactReceipt.status !== 200 || contactReceipt.outcome !== "matched_contact" ||
+    duplicateContactReceipt.status !== 200 || duplicateContactReceipt.outcome !== "duplicate" ||
+    contactEventState.rows[0]?.processing_result !== "matched_contact" ||
+    contactEventState.rows[0]?.recipient_sha256 !== contactRecipientHash ||
+    contactEventState.rows[0]?.provider_message_id !== null ||
+    contactEventState.rows[0]?.message_id !== null || contactEventState.rows[0]?.enrollment_id !== null ||
+    !contactEventState.rows[0]?.conversation_id || !contactEventState.rows[0]?.source_link_id ||
+    contactEventState.rows[0]?.contact_applications !== "1" || contactEventState.rows[0]?.message_applications !== "0" ||
+    contactEventState.rows[0]?.suppression_rows !== "1" || contactEventState.rows[0]?.message_rows !== "0" ||
+    contactEventState.rows[0]?.audit_events !== "0" || contactEventState.rows[0]?.contact_state !== "suppressed" ||
+    contactEventState.rows[0]?.contact_reason !== "resend_email_unsubscribed" ||
+    contactEventState.rows[0]?.suppressed_by_provider_event_id !== contactEventId ||
+    contactEventState.rows[0]?.raw_email_absent !== true) {
+    throw new Error("The contact.updated unsubscribe did not create a hash-only contact match and shared suppression without a message application or email audit.");
+  }
+  progress("signed contact.updated unsubscribe matched by normalized hash without any accepted message; raw email was not persisted; contact application and shared suppression were created once; no message application or message audit exists");
+
+  const ambiguousUnsubscribeProspects = [
+    fixtures.prospects.contact_unsubscribe_ambiguous_a,
+    fixtures.prospects.contact_unsubscribe_ambiguous_b,
+  ];
+  if (ambiguousUnsubscribeProspects[0].email !== ambiguousUnsubscribeProspects[1].email) {
+    throw new Error("The ambiguous unsubscribe fixtures did not share the same synthetic address.");
+  }
+  for (const prospect of ambiguousUnsubscribeProspects) {
+    await createDraft(pool, page, journeyName, prospect);
+    await markEligibleAndRelease(page, prospect);
+    await waitForAction(page, "approve", queueCard(page, prospect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  }
+  const ambiguousUnsubscribeMessages = await pool.query<{
+    id: string; enrollment_id: string; prospect_id: string;
+  }>(
+    "select message.id,message.enrollment_id,enrollment.prospect_id from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=any($1::uuid[]) and message.step_number=1 order by enrollment.prospect_id",
+    [ambiguousUnsubscribeProspects.map((prospect) => prospect.id)],
+  );
+  if (ambiguousUnsubscribeMessages.rows.length !== 2) {
+    throw new Error("The duplicate-address synthetic prospects did not each have one approved message.");
+  }
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=$2 where id=any($1::uuid[])",
+    [ambiguousUnsubscribeMessages.rows.map((message) => message.id), acceptedDueAt],
+  );
+
+  const ambiguousContactEventId = "evt_ambiguous_contact_unsubscribe_" + RUN_ID;
+  const ambiguousContactEmail = ambiguousUnsubscribeProspects[0].email;
+  const ambiguousContactHash = createHash("sha256")
+    .update(ambiguousContactEmail.trim().toLowerCase(), "utf8")
+    .digest("hex");
+  const oneClickSourceMessage = ambiguousUnsubscribeMessages.rows[0]!;
+  const oneClickDuplicateMessage = ambiguousUnsubscribeMessages.rows[1]!;
+  const oneClickSourceOwner = "synthetic-walkthrough-one-click-source-" + RUN_ID.slice(0, 8);
+  const oneClickDuplicateOwner = "synthetic-walkthrough-one-click-duplicate-" + RUN_ID.slice(0, 8);
+  const oneClickTokenSha256 = createHash("sha256")
+    .update(`synthetic-first-party-unsubscribe:${RUN_ID}:${oneClickSourceMessage.id}`, "utf8")
+    .digest("hex");
+  const oneClickRaceClient = await pool.connect();
+  try {
+    await oneClickRaceClient.query("begin");
+    await oneClickRaceClient.query("set local role service_role");
+    const claimSource = await oneClickRaceClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_live_messages($1,$2::timestamptz,120,1,$3::uuid[])",
+      [oneClickSourceOwner, acceptedNow, [oneClickSourceMessage.enrollment_id]],
+    );
+    const claimedSource = await oneClickRaceClient.query<{
+      state: string; lease_owner: string | null; attempt_count: number; enrollment_id: string;
+    }>(
+      "select state,lease_owner,attempt_count,enrollment_id from public.agency_followup_messages where id=$1",
+      [oneClickSourceMessage.id],
+    );
+    const sourceClaim = claimedSource.rows[0];
+    const claimDuplicate = await oneClickRaceClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_live_messages($1,$2::timestamptz,120,1,$3::uuid[])",
+      [oneClickDuplicateOwner, acceptedNow, [oneClickDuplicateMessage.enrollment_id]],
+    );
+    const claimedDuplicate = await oneClickRaceClient.query<{
+      state: string; lease_owner: string | null; attempt_count: number; enrollment_id: string;
+    }>(
+      "select state,lease_owner,attempt_count,enrollment_id from public.agency_followup_messages where id=$1",
+      [oneClickDuplicateMessage.id],
+    );
+    const duplicateClaim = claimedDuplicate.rows[0];
+    if (claimSource.rows[0]?.id !== oneClickSourceMessage.id || sourceClaim?.state !== "claimed" ||
+        sourceClaim.lease_owner !== oneClickSourceOwner || sourceClaim.enrollment_id !== oneClickSourceMessage.enrollment_id ||
+        claimDuplicate.rows[0]?.id !== oneClickDuplicateMessage.id || duplicateClaim?.state !== "claimed" ||
+        duplicateClaim.lease_owner !== oneClickDuplicateOwner || duplicateClaim.enrollment_id !== oneClickDuplicateMessage.enrollment_id) {
+      throw new Error("The synthetic source and same-address duplicate were not both claimed before the one-click opt-out race check.");
+    }
+    const recordOneClick = async () => oneClickRaceClient.query<{ event_id: string; replayed: boolean }>(
+      "select * from public.record_agency_followup_recipient_unsubscribe($1::uuid,$2::uuid,$3,$4)",
+      [oneClickSourceMessage.id, oneClickSourceMessage.enrollment_id, ambiguousContactHash, oneClickTokenSha256],
+    );
+    const oneClickReceipt = await recordOneClick();
+    const oneClickReplay = await recordOneClick();
+    if (!oneClickReceipt.rows[0]?.event_id || oneClickReceipt.rows[0].replayed !== false ||
+        oneClickReplay.rows[0]?.event_id !== oneClickReceipt.rows[0].event_id || oneClickReplay.rows[0].replayed !== true) {
+      throw new Error("The first-party one-click opt-out did not persist and replay idempotently.");
+    }
+    const sourceGate = await authorizeProviderHandoff(oneClickRaceClient, {
+      messageId: oneClickSourceMessage.id,
+      enrollmentId: oneClickSourceMessage.enrollment_id,
+      owner: oneClickSourceOwner,
+      attemptCount: Number(sourceClaim.attempt_count),
+    });
+    const duplicateGate = await authorizeProviderHandoff(oneClickRaceClient, {
+      messageId: oneClickDuplicateMessage.id,
+      enrollmentId: oneClickDuplicateMessage.enrollment_id,
+      owner: oneClickDuplicateOwner,
+      attemptCount: Number(duplicateClaim.attempt_count),
+    });
+    const oneClickStored = await oneClickRaceClient.query<{
+      event_count: string; recipient_count: string; raw_email_absent: boolean;
+    }>(
+      "select (select count(*)::text from public.agency_followup_events event where event.idempotency_key='agency-followup-unsubscribe:'||$1 and event.event_type='unsubscribe_observed') as event_count,(select count(*)::text from public.agency_followup_recipient_unsubscribes unsubscribe_event where unsubscribe_event.token_sha256=$1 and unsubscribe_event.recipient_email_sha256=$2) as recipient_count,not (to_jsonb(unsubscribe_event)::text ilike '%'||$3||'%') as raw_email_absent from public.agency_followup_recipient_unsubscribes unsubscribe_event where unsubscribe_event.token_sha256=$1",
+      [oneClickTokenSha256, ambiguousContactHash, ambiguousContactEmail],
+    );
+    if (sourceGate.result !== "blocked" || !Array.isArray(sourceGate.blockers) ||
+        !sourceGate.blockers.includes("contactability_blocked") ||
+        duplicateGate.result !== "blocked" || !Array.isArray(duplicateGate.blockers) ||
+        !duplicateGate.blockers.includes("contactability_blocked") ||
+        oneClickStored.rows[0]?.event_count !== "1" || oneClickStored.rows[0]?.recipient_count !== "1" ||
+        oneClickStored.rows[0]?.raw_email_absent !== true) {
+      throw new Error("A committed first-party one-click opt-out failed to block an already-claimed message and the same address on another prospect.");
+    }
+    await oneClickRaceClient.query("rollback");
+  } catch (error) {
+    await oneClickRaceClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    oneClickRaceClient.release();
+  }
+  progress("first-party one-click unsubscribe replayed idempotently and the final gate blocked both the pre-claimed message and a second prospect sharing the address; the race fixture rolled back without persistence");
+
+  const ambiguousContactPayload = {
+    type: "contact.updated",
+    created_at: new Date().toISOString(),
+    data: { email: ambiguousContactEmail, unsubscribed: true },
+  };
+  const ambiguousContactReceipt = await postSyntheticResendEvent(ambiguousContactEventId, ambiguousContactPayload);
+  const duplicateAmbiguousContactReceipt = await postSyntheticResendEvent(ambiguousContactEventId, ambiguousContactPayload);
+  const ambiguousContactState = await pool.query<{
+    processing_result: string; recipient_sha256: string | null; provider_message_id: string | null;
+    message_id: string | null; enrollment_id: string | null; conversation_id: string | null; source_link_id: string | null;
+    contact_applications: string; message_applications: string; suppression_rows: string; message_rows: string;
+    audit_events: string; raw_email_absent: boolean;
+  }>(
+    "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.message_id,event.enrollment_id,event.conversation_id,event.source_link_id,(select count(*)::text from public.agency_followup_provider_contact_applications application where application.provider_event_id=event.provider_event_id) as contact_applications,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as message_applications,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.provider_event_id=event.provider_event_id) as suppression_rows,(select count(*)::text from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=any($2::uuid[]) and message.step_number=1) as message_rows,(select count(*)::text from public.agency_followup_events audit where audit.idempotency_key='resend-event:'||event.provider_event_id) as audit_events,not (to_jsonb(event)::text ilike '%'||$3||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    [ambiguousContactEventId, ambiguousUnsubscribeProspects.map((prospect) => prospect.id), ambiguousContactEmail],
+  );
+  const ambiguousContact = ambiguousContactState.rows[0];
+  if (ambiguousContactReceipt.status !== 200 || ambiguousContactReceipt.outcome !== "ambiguous_source" ||
+    duplicateAmbiguousContactReceipt.status !== 200 || duplicateAmbiguousContactReceipt.outcome !== "duplicate" ||
+    ambiguousContact?.processing_result !== "ambiguous_source" || ambiguousContact.recipient_sha256 !== ambiguousContactHash ||
+    ambiguousContact.provider_message_id !== null || ambiguousContact.message_id !== null || ambiguousContact.enrollment_id !== null ||
+    ambiguousContact.conversation_id !== null || ambiguousContact.source_link_id !== null ||
+    ambiguousContact.contact_applications !== "0" || ambiguousContact.message_applications !== "0" ||
+    ambiguousContact.suppression_rows !== "0" || ambiguousContact.message_rows !== "2" ||
+    ambiguousContact.audit_events !== "0" || ambiguousContact.raw_email_absent !== true) {
+    throw new Error("The ambiguous contact.updated unsubscribe did not persist one hash-only ambiguous event without inventing a single source application.");
+  }
+
+  const assertRecipientUnsubscribeBlocksMessage = async (
+    message: { id: string; enrollment_id: string; prospect_id: string },
+    label: string,
+    existingClaim?: { owner: string; attemptCount: number },
+  ) => {
+    const inspectClaim = async () => {
+      const client = await pool.connect();
+      const owner = existingClaim?.owner ?? "synthetic-walkthrough-unsubscribe-" + message.prospect_id;
+      try {
+        await client.query("begin");
+        await client.query("set local role service_role");
+        let attemptCount: number;
+        if (existingClaim) {
+          const claimed = await client.query<{
+            state: string; lease_owner: string | null; attempt_count: number; enrollment_id: string;
+          }>(
+            "select state,lease_owner,attempt_count,enrollment_id from public.agency_followup_messages where id=$1",
+            [message.id],
+          );
+          const claim = claimed.rows[0];
+          if (claim?.state !== "claimed" || claim.lease_owner !== owner ||
+              Number(claim.attempt_count) !== existingClaim.attemptCount || claim.enrollment_id !== message.enrollment_id) {
+            throw new Error("The " + label + " fixture no longer has its expected live provider claim.");
+          }
+          attemptCount = existingClaim.attemptCount;
+        } else {
+          await client.query(
+            "select id from public.claim_agency_followup_messages($1,$2::timestamptz,120,1)",
+            [owner, acceptedNow],
+          );
+          const claimed = await client.query<{
+            state: string; lease_owner: string | null; attempt_count: number; enrollment_id: string;
+          }>(
+            "select state,lease_owner,attempt_count,enrollment_id from public.agency_followup_messages where id=$1",
+            [message.id],
+          );
+          const claim = claimed.rows[0];
+          if (claim?.state !== "claimed" || claim.lease_owner !== owner || claim.enrollment_id !== message.enrollment_id) {
+            throw new Error("The " + label + " fixture could not be claimed for a rollback-only handoff check.");
+          }
+          attemptCount = Number(claim.attempt_count);
+        }
+        const result = await authorizeProviderHandoff(client, {
+          messageId: message.id,
+          enrollmentId: message.enrollment_id,
+          owner,
+          attemptCount,
+        });
+        await client.query("rollback");
+        return result;
+      } catch (error) {
+        await client.query("rollback").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    };
+    const authorization = existingClaim
+      ? await inspectClaim()
+      : await withFixtureClaim(pool, message.id, inspectClaim);
+    if (authorization.result !== "blocked" || !Array.isArray(authorization.blockers) ||
+      !authorization.blockers.includes("contactability_blocked")) {
+      throw new Error("A matching prospect remained dispatchable after the " + label + ".");
+    }
+  };
+  for (const message of ambiguousUnsubscribeMessages.rows) {
+    await assertRecipientUnsubscribeBlocksMessage(message, "ambiguous recipient unsubscribe");
+  }
+  progress("one signed ambiguous recipient unsubscribe remained hash-only and blocked the handoff gate for both matching approved prospects");
+
+  const earlyUnsubscribeSource = fixtures.prospects.message_unsubscribe_early_a;
+  const earlyUnsubscribeDuplicate = fixtures.prospects.message_unsubscribe_early_b;
+  if (earlyUnsubscribeSource.email !== earlyUnsubscribeDuplicate.email) {
+    throw new Error("The early message-level unsubscribe fixtures did not share one recipient address.");
+  }
+  for (const prospect of [earlyUnsubscribeSource, earlyUnsubscribeDuplicate]) {
+    await createDraft(pool, page, journeyName, prospect);
+    await markEligibleAndRelease(page, prospect);
+    await waitForAction(page, "approve", queueCard(page, prospect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  }
+  const earlyUnsubscribeMessages = await pool.query<{
+    id: string; enrollment_id: string; prospect_id: string;
+  }>(
+    "select message.id,message.enrollment_id,enrollment.prospect_id from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=any($1::uuid[]) and message.step_number=1",
+    [[earlyUnsubscribeSource.id, earlyUnsubscribeDuplicate.id]],
+  );
+  const earlySourceMessage = earlyUnsubscribeMessages.rows.find((message) => message.prospect_id === earlyUnsubscribeSource.id);
+  const earlyDuplicateMessage = earlyUnsubscribeMessages.rows.find((message) => message.prospect_id === earlyUnsubscribeDuplicate.id);
+  if (earlyUnsubscribeMessages.rows.length !== 2 || !earlySourceMessage || !earlyDuplicateMessage) {
+    throw new Error("The early message-level unsubscribe fixtures did not each have one first-step message.");
+  }
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=$2 where id=any($1::uuid[])",
+    [[earlySourceMessage.id, earlyDuplicateMessage.id], acceptedDueAt],
+  );
+  const earlyDuplicateWorkerId = "synthetic-walkthrough-early-unsubscribe-duplicate";
+  const earlyDuplicateLease = await withFixtureClaim(pool, earlyDuplicateMessage.id, async () => {
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role service_role");
+      const claimed = await client.query<{ id: string }>(
+        "select id from public.claim_agency_followup_messages($1,$2::timestamptz,120,1)",
+        [earlyDuplicateWorkerId, acceptedNow],
+      );
+      const state = await client.query<{
+        state: string; lease_owner: string | null; attempt_count: number; lease_until: string | null;
+      }>(
+        "select state,lease_owner,attempt_count,lease_until::text as lease_until from public.agency_followup_messages where id=$1",
+        [earlyDuplicateMessage.id],
+      );
+      const row = state.rows[0];
+      if (claimed.rows[0]?.id !== earlyDuplicateMessage.id || row?.state !== "claimed" ||
+          row.lease_owner !== earlyDuplicateWorkerId || Number(row.attempt_count) !== 1 ||
+          !row.lease_until || Date.parse(row.lease_until) <= Date.now()) {
+        throw new Error("The shared-recipient duplicate did not enter its isolated live claim before the delayed source send.");
+      }
+      await client.query("commit");
+      return { owner: earlyDuplicateWorkerId, attemptCount: Number(row.attempt_count) };
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
+  const earlyUnsubscribeEventId = "evt_early_message_unsubscribe_" + RUN_ID;
+  const earlyUnsubscribeProviderMessageId = "fake-provider-before-acceptance-" + RUN_ID;
+  const earlyUnsubscribePayload = {
+    type: "email.unsubscribed",
+    created_at: new Date(Date.parse(acceptedNow) + 1000).toISOString(),
+    data: {
+      email_id: earlyUnsubscribeProviderMessageId,
+      to: [earlyUnsubscribeSource.email],
+      tags: {
+        agency_followup_message_id: earlySourceMessage.id,
+        agency_followup_enrollment_id: earlySourceMessage.enrollment_id,
+      },
+    },
+  };
+  const earlyUnsubscribeWorkerId = "synthetic-walkthrough-early-unsubscribe";
+  const earlyUnsubscribeAcceptancePending = withFixtureClaim(pool, earlySourceMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: earlyUnsubscribeWorkerId,
+    now: acceptedNow,
+    limit: 1,
+    providerDelayMs: 20_000,
+    outcomePlan: [{ kind: "accepted", providerMessageId: earlyUnsubscribeProviderMessageId, acceptedAt: acceptedNow }],
+  })).then(
+    (value) => ({ value }),
+    (error) => ({ error }),
+  );
+  let earlyUnsubscribeLease: Awaited<ReturnType<typeof waitForClaimedMessage>>;
+  try {
+    earlyUnsubscribeLease = await waitForClaimedMessage(pool, earlySourceMessage.id, earlyUnsubscribeWorkerId);
+  } catch (error) {
+    const pending = await earlyUnsubscribeAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw error;
+  }
+  if (earlyUnsubscribeLease.attempt_count !== 1) {
+    const pending = await earlyUnsubscribeAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw new Error("The early unsubscribe fixture did not enter its first live provider claim.");
+  }
+  const earlyUnsubscribeReceipt = await postSyntheticResendEvent(earlyUnsubscribeEventId, earlyUnsubscribePayload);
+  const earlyUnsubscribeEvidence = await pool.query<{
+    processing_result: string; recipient_sha256: string | null; message_id: string | null; enrollment_id: string | null;
+    signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean;
+    applications: string; raw_email_absent: boolean; message_state: string; provider_message_id: string | null;
+    provider_accepted_at: string | null;
+  }>(
+    "select event.processing_result,event.recipient_sha256,event.message_id,event.enrollment_id,event.signed_agency_followup_message_id as signed_message_id,event.signed_agency_followup_enrollment_id as signed_enrollment_id,event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,not (to_jsonb(event)::text ilike '%'||$2||'%') as raw_email_absent,(select message.state from public.agency_followup_messages message where message.id=$3) as message_state,(select message.provider_message_id from public.agency_followup_messages message where message.id=$3) as provider_message_id,(select message.provider_accepted_at::text from public.agency_followup_messages message where message.id=$3) as provider_accepted_at from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    [earlyUnsubscribeEventId, earlyUnsubscribeSource.email, earlySourceMessage.id],
+  );
+  const earlyUnsubscribeRow = earlyUnsubscribeEvidence.rows[0];
+  const expectedEarlyRecipientHash = createHash("sha256").update(earlyUnsubscribeSource.email.trim().toLowerCase(), "utf8").digest("hex");
+  if (earlyUnsubscribeReceipt.status !== 503 || earlyUnsubscribeReceipt.outcome !== "unmatched_message" ||
+    earlyUnsubscribeRow?.processing_result !== "unmatched_message" || earlyUnsubscribeRow.recipient_sha256 !== expectedEarlyRecipientHash ||
+    earlyUnsubscribeRow.message_id !== earlySourceMessage.id || earlyUnsubscribeRow.enrollment_id !== earlySourceMessage.enrollment_id ||
+    earlyUnsubscribeRow.signed_message_id !== earlySourceMessage.id || earlyUnsubscribeRow.signed_enrollment_id !== earlySourceMessage.enrollment_id ||
+    earlyUnsubscribeRow.tags_recorded !== true || earlyUnsubscribeRow.applications !== "0" || earlyUnsubscribeRow.raw_email_absent !== true ||
+    earlyUnsubscribeRow.message_state !== "claimed" || earlyUnsubscribeRow.provider_message_id !== null ||
+    earlyUnsubscribeRow.provider_accepted_at !== null) {
+    const pending = await earlyUnsubscribeAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw new Error("The tagged unsubscribe was not held as hash-only retryable evidence during the live provider claim.");
+  }
+  await assertRecipientUnsubscribeBlocksMessage(earlySourceMessage, "tagged unmatched unsubscribe during provider acceptance", {
+    owner: earlyUnsubscribeWorkerId,
+    attemptCount: earlyUnsubscribeLease.attempt_count,
+  });
+  await assertRecipientUnsubscribeBlocksMessage(
+    earlyDuplicateMessage,
+    "unmatched message-level unsubscribe shared recipient before provider acceptance",
+    earlyDuplicateLease,
+  );
+  const earlyUnsubscribeAcceptanceResult = await earlyUnsubscribeAcceptancePending;
+  if ("error" in earlyUnsubscribeAcceptanceResult) throw earlyUnsubscribeAcceptanceResult.error;
+  const earlyUnsubscribeAcceptance = earlyUnsubscribeAcceptanceResult.value;
+  const acceptedEarlyMessage = await pool.query<{ state: string; provider_message_id: string | null; provider_accepted_at: string | null }>(
+    "select state,provider_message_id,provider_accepted_at::text as provider_accepted_at from public.agency_followup_messages where id=$1",
+    [earlySourceMessage.id],
+  );
+  if (earlyUnsubscribeAcceptance.accepted !== 1 || acceptedEarlyMessage.rows[0]?.state !== "accepted" ||
+    acceptedEarlyMessage.rows[0]?.provider_message_id !== earlyUnsubscribeProviderMessageId ||
+    !acceptedEarlyMessage.rows[0]?.provider_accepted_at) {
+    throw new Error("The worker did not persist the delayed provider acceptance for the early unsubscribe claim.");
+  }
+  const earlyUnsubscribeReplay = await postSyntheticResendEvent(earlyUnsubscribeEventId, earlyUnsubscribePayload);
+  const duplicateEarlyUnsubscribeReplay = await postSyntheticResendEvent(earlyUnsubscribeEventId, earlyUnsubscribePayload);
+  const reconciledEarlyUnsubscribe = await pool.query<{
+    processing_result: string; recipient_sha256: string | null; message_id: string | null; enrollment_id: string | null;
+    applications: string; applied_result: string | null; suppression_rows: string; delivery_status: string | null;
+    raw_email_absent: boolean;
+  }>(
+    "select event.processing_result,event.recipient_sha256,event.message_id,event.enrollment_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id limit 1) as applied_result,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.provider_event_id=event.provider_event_id and suppression.suppression_reason='resend_email_unsubscribed') as suppression_rows,(select message.provider_delivery_status from public.agency_followup_messages message where message.id=$2) as delivery_status,not (to_jsonb(event)::text ilike '%'||$3||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    [earlyUnsubscribeEventId, earlySourceMessage.id, earlyUnsubscribeSource.email],
+  );
+  const earlyReconciledRow = reconciledEarlyUnsubscribe.rows[0];
+  if (earlyUnsubscribeReplay.status !== 200 || earlyUnsubscribeReplay.outcome !== "matched" ||
+    duplicateEarlyUnsubscribeReplay.status !== 200 || duplicateEarlyUnsubscribeReplay.outcome !== "duplicate" ||
+    earlyReconciledRow?.processing_result !== "unmatched_message" || earlyReconciledRow.recipient_sha256 !== expectedEarlyRecipientHash ||
+    earlyReconciledRow.message_id !== earlySourceMessage.id || earlyReconciledRow.enrollment_id !== earlySourceMessage.enrollment_id ||
+    earlyReconciledRow.applications !== "1" || earlyReconciledRow.applied_result !== "matched" ||
+    earlyReconciledRow.suppression_rows !== "1" || earlyReconciledRow.delivery_status !== "unsubscribed" ||
+    earlyReconciledRow.raw_email_absent !== true) {
+    throw new Error("The delayed message unsubscribe did not reconcile once after provider acceptance with durable shared suppression.");
+  }
+  await assertRecipientUnsubscribeBlocksMessage(earlyDuplicateMessage, "matched message-level unsubscribe", earlyDuplicateLease);
+  progress("a signed email.unsubscribed arrived during a live provider claim, stayed hash-only and retryable, blocked its shared recipient before acceptance, matched exactly once after acceptance, and deduplicated its replay");
+
+  const messageUnsubscribeDuplicate = fixtures.prospects.message_unsubscribe_duplicate;
+  if (messageUnsubscribeDuplicate.email !== retryProspect.email) {
+    throw new Error("The message-level unsubscribe duplicate fixture did not share the retry mailbox.");
+  }
+  const exactMessageUnsubscribe = await pool.query<{
+    processing_result: string; recipient_sha256: string | null; conversation_id: string | null; suppression_rows: string;
+  }>(
+    "select event.processing_result,event.recipient_sha256,event.conversation_id,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.provider_event_id=event.provider_event_id and suppression.suppression_reason='resend_email_unsubscribed') as suppression_rows from public.agency_followup_provider_events event where event.event_type='email.unsubscribed' and event.provider_message_id=$1 and event.recipient_sha256=$2",
+    [retryProviderMessageId, createHash("sha256").update(retryProspect.email.trim().toLowerCase(), "utf8").digest("hex")],
+  );
+  if (exactMessageUnsubscribe.rows.length !== 1 || exactMessageUnsubscribe.rows[0]?.processing_result !== "matched" ||
+    exactMessageUnsubscribe.rows[0]?.conversation_id !== retryProspect.conversationId ||
+    exactMessageUnsubscribe.rows[0]?.suppression_rows !== "1") {
+    throw new Error("The message-level unsubscribe fixture lacks its exact matched provider suppression evidence.");
+  }
+  await createDraft(pool, page, journeyName, messageUnsubscribeDuplicate);
+  await markEligibleAndRelease(page, messageUnsubscribeDuplicate);
+  await waitForAction(page, "approve", queueCard(page, messageUnsubscribeDuplicate.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const messageUnsubscribeDuplicateRow = await pool.query<{
+    id: string; enrollment_id: string; prospect_id: string;
+  }>(
+    "select message.id,message.enrollment_id,enrollment.prospect_id from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.step_number=1",
+    [messageUnsubscribeDuplicate.id],
+  );
+  if (messageUnsubscribeDuplicateRow.rows.length !== 1) {
+    throw new Error("The message-level duplicate fixture did not have exactly one first-step message.");
+  }
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=$2 where id=$1",
+    [messageUnsubscribeDuplicateRow.rows[0].id, acceptedDueAt],
+  );
+  await assertRecipientUnsubscribeBlocksMessage(
+    messageUnsubscribeDuplicateRow.rows[0],
+    "matched message-level unsubscribe",
+  );
+  progress("a signed matched email.unsubscribed event blocked a second approved prospect sharing that recipient address");
+
+  const mismatchUnsubscribeDuplicate = fixtures.prospects.message_unsubscribe_mismatch_duplicate;
+  await createDraft(pool, page, journeyName, mismatchUnsubscribeDuplicate);
+  await markEligibleAndRelease(page, mismatchUnsubscribeDuplicate);
+  await waitForAction(page, "approve", queueCard(page, mismatchUnsubscribeDuplicate.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const mismatchUnsubscribeDuplicateRow = await pool.query<{
+    id: string; enrollment_id: string; prospect_id: string;
+  }>(
+    "select message.id,message.enrollment_id,enrollment.prospect_id from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.step_number=1",
+    [mismatchUnsubscribeDuplicate.id],
+  );
+  if (mismatchUnsubscribeDuplicateRow.rows.length !== 1) {
+    throw new Error("The mismatched-recipient duplicate fixture did not have exactly one first-step message.");
+  }
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=$2 where id=$1",
+    [mismatchUnsubscribeDuplicateRow.rows[0].id, acceptedDueAt],
+  );
+  const mismatchUnsubscribeEventId = "evt_mismatched_recipient_unsubscribe_" + RUN_ID;
+  const mismatchUnsubscribeReceipt = await postSyntheticResendEvent(mismatchUnsubscribeEventId, {
+    type: "email.unsubscribed",
+    created_at: new Date().toISOString(),
+    data: {
+      email_id: retryProviderMessageId,
+      to: [mismatchUnsubscribeDuplicate.email],
+      tags: {
+        agency_followup_message_id: retryMessage.id,
+        agency_followup_enrollment_id: retryMessage.enrollment_id,
+      },
+    },
+  });
+  const mismatchUnsubscribeEvidence = await pool.query<{
+    processing_result: string; recipient_sha256: string | null; provider_message_id: string | null;
+    signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean;
+    applications: string; raw_email_absent: boolean;
+  }>(
+    "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.signed_agency_followup_message_id as signed_message_id,event.signed_agency_followup_enrollment_id as signed_enrollment_id,event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,not (to_jsonb(event)::text ilike '%'||$2||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    [mismatchUnsubscribeEventId, mismatchUnsubscribeDuplicate.email],
+  );
+  const mismatchUnsubscribeRow = mismatchUnsubscribeEvidence.rows[0];
+  const expectedMismatchRecipientHash = createHash("sha256").update(mismatchUnsubscribeDuplicate.email.trim().toLowerCase(), "utf8").digest("hex");
+  if (mismatchUnsubscribeReceipt.status !== 200 || mismatchUnsubscribeReceipt.outcome !== "unmatched_recipient" ||
+    !mismatchUnsubscribeRow || mismatchUnsubscribeRow.processing_result !== "unmatched_recipient" ||
+    mismatchUnsubscribeRow.recipient_sha256 !== expectedMismatchRecipientHash || mismatchUnsubscribeRow.provider_message_id !== retryProviderMessageId ||
+    mismatchUnsubscribeRow.signed_message_id !== retryMessage.id || mismatchUnsubscribeRow.signed_enrollment_id !== retryMessage.enrollment_id ||
+    mismatchUnsubscribeRow.tags_recorded !== true || mismatchUnsubscribeRow.applications !== "0" || mismatchUnsubscribeRow.raw_email_absent !== true) {
+    throw new Error("The signed tagged email.unsubscribed recipient mismatch was not retained as hash-only unmatched Agency evidence.");
+  }
+  await assertRecipientUnsubscribeBlocksMessage(
+    mismatchUnsubscribeDuplicateRow.rows[0],
+    "signed tagged unmatched-recipient unsubscribe",
+  );
+  progress("a signed tagged email.unsubscribed recipient mismatch remained hash-only and blocked the same-recipient handoff");
+
+  const sourceUnsubscribeSource = fixtures.prospects.message_unsubscribe_source;
+  const sourceUnsubscribeDuplicate = fixtures.prospects.message_unsubscribe_source_duplicate;
+  if (sourceUnsubscribeDuplicate.email !== sourceUnsubscribeSource.email) {
+    throw new Error("The fresh source-unresolved fixtures did not share one recipient address.");
+  }
+  await createDraft(pool, page, journeyName, sourceUnsubscribeSource);
+  await markEligibleAndRelease(page, sourceUnsubscribeSource);
+  await waitForAction(page, "approve", queueCard(page, sourceUnsubscribeSource.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const sourceUnsubscribeSourceRow = await pool.query<{
+    id: string; enrollment_id: string; prospect_id: string; recipient_email_snapshot: string;
+  }>(
+    "select message.id,message.enrollment_id,enrollment.prospect_id,message.recipient_email_snapshot from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.step_number=1",
+    [sourceUnsubscribeSource.id],
+  );
+  const sourceUnsubscribeMessage = sourceUnsubscribeSourceRow.rows[0];
+  if (!sourceUnsubscribeMessage) {
+    throw new Error("The fresh source-unresolved fixture did not have exactly one first-step message.");
+  }
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=$2 where id=$1",
+    [sourceUnsubscribeMessage.id, acceptedDueAt],
+  );
+  const sourceUnsubscribeProviderMessageId = "fake-provider-source-unsubscribe-" + RUN_ID;
+  const sourceUnsubscribeAcceptance = await withFixtureClaim(pool, sourceUnsubscribeMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-source-unsubscribe-accepted",
+    now: acceptedNow,
+    limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: sourceUnsubscribeProviderMessageId, acceptedAt: acceptedNow }],
+  }));
+  const acceptedSourceUnsubscribeMessage = await pool.query<{
+    state: string; provider_message_id: string | null; provider_accepted_at: string | null;
+  }>(
+    "select state,provider_message_id,provider_accepted_at::text as provider_accepted_at from public.agency_followup_messages where id=$1",
+    [sourceUnsubscribeMessage.id],
+  );
+  if (sourceUnsubscribeAcceptance.accepted !== 1 || acceptedSourceUnsubscribeMessage.rows[0]?.state !== "accepted" ||
+      acceptedSourceUnsubscribeMessage.rows[0]?.provider_message_id !== sourceUnsubscribeProviderMessageId ||
+      !acceptedSourceUnsubscribeMessage.rows[0]?.provider_accepted_at) {
+    throw new Error("The fresh source-unresolved provider message was not accepted before its mapping test.");
+  }
+  await createDraft(pool, page, journeyName, sourceUnsubscribeDuplicate);
+  await markEligibleAndRelease(page, sourceUnsubscribeDuplicate);
+  await waitForAction(page, "approve", queueCard(page, sourceUnsubscribeDuplicate.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const sourceUnsubscribeDuplicateRow = await pool.query<{
+    id: string; enrollment_id: string; prospect_id: string;
+  }>(
+    "select message.id,message.enrollment_id,enrollment.prospect_id from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.step_number=1",
+    [sourceUnsubscribeDuplicate.id],
+  );
+  if (sourceUnsubscribeDuplicateRow.rows.length !== 1) {
+    throw new Error("The source-resolution duplicate fixture did not have exactly one first-step message.");
+  }
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=$2 where id=$1",
+    [sourceUnsubscribeDuplicateRow.rows[0].id, acceptedDueAt],
+  );
+  const sourceUnsubscribeMappings = await pool.query<{
+    conversation_id: string; source_link_id: string; source_system: string; person_id: string | null;
+  }>(
+    "select association.conversation_id,association.source_link_id,source_link.source_system,source_link.person_id from public.prospect_source_links source_link join public.prospect_conversation_sources association on association.source_link_id=source_link.id where source_link.source_record_key=$1 and source_link.source_system in ('agency_crm','agency_crm_contact')",
+    [sourceUnsubscribeSource.id],
+  );
+  const sourceLinkIds = [...new Set(sourceUnsubscribeMappings.rows.map((row) => row.source_link_id))];
+  const conversationIds = [...new Set(sourceUnsubscribeMappings.rows.map((row) => row.conversation_id))];
+  const sourceApplications = sourceLinkIds.length === 0 ? 0 : await countRows(
+    pool,
+    "select count(*)::text as count from public.agency_followup_provider_event_applications application where application.source_link_id=any($1::uuid[])",
+    [sourceLinkIds],
+  );
+  const sourceActivities = conversationIds.length === 0 ? 0 : await countRows(
+    pool,
+    "select count(*)::text as count from public.prospect_activities activity where activity.conversation_id=any($1::uuid[])",
+    [conversationIds],
+  );
+  const sourceOptInEvents = await countRows(
+    pool,
+    "select count(*)::text as count from public.agency_followup_opt_in_events event where event.agency_prospect_id=$1",
+    [sourceUnsubscribeSource.id],
+  );
+  const resolverSourceSystem = await pool.query<{ source_system: string }>(
+    "select case when exists (select 1 from public.prospect_source_links where source_system='agency_crm_contact' and source_record_key=$1) then 'agency_crm_contact' else 'agency_crm' end as source_system",
+    [sourceUnsubscribeSource.id],
+  );
+  const resolverMappings = sourceUnsubscribeMappings.rows.filter(
+    (row) => row.source_system === resolverSourceSystem.rows[0]?.source_system,
+  );
+  const resolverMapping = resolverMappings[0];
+  if (sourceUnsubscribeMappings.rows.length === 0 || sourceApplications !== 0 || sourceActivities !== 0 ||
+      sourceOptInEvents === 0 || resolverMappings.length !== 1 || !resolverMapping || !resolverMapping.person_id) {
+    throw new Error("The fresh source-unresolved fixture lacks one consent-protected resolver mapping or already has immutable event/activity history.");
+  }
+  const resolverSourceLinkId = resolverMapping.source_link_id;
+  const resolverPersonId = resolverMapping.person_id;
+  let sourceResolutionQuarantined = false;
+  try {
+    const quarantinedSourceLink = await pool.query<{ id: string }>(
+      "update public.prospect_source_links set person_id=null where id=$1 and person_id=$2 returning id",
+      [resolverSourceLinkId, resolverPersonId],
+    );
+    if (quarantinedSourceLink.rows.length !== 1) {
+      throw new Error("The disposable source identity could not be moved into its reversible unresolved state.");
+    }
+    sourceResolutionQuarantined = true;
+    const unresolvedSourceCandidateCount = await countRows(
+      pool,
+      "select count(*)::text as count from public.prospect_source_links source_link join public.prospect_conversation_sources association on association.source_link_id=source_link.id join public.prospect_conversations conversation on conversation.id=association.conversation_id and conversation.organization_id=source_link.organization_id and conversation.person_id is not distinct from source_link.person_id where source_link.id=$1",
+      [resolverSourceLinkId],
+    );
+    if (unresolvedSourceCandidateCount !== 0) {
+      throw new Error("The reversible source identity change did not remove the resolver's matching conversation candidate.");
+    }
+    const sourceUnsubscribeEventId = "evt_source_message_unsubscribe_" + RUN_ID;
+    const sourceUnsubscribePayload = {
+      type: "email.unsubscribed",
+      created_at: new Date(Date.parse(acceptedNow) + 1000).toISOString(),
+      data: {
+        email_id: sourceUnsubscribeProviderMessageId,
+        to: [sourceUnsubscribeSource.email],
+        tags: {
+          agency_followup_message_id: sourceUnsubscribeMessage.id,
+          agency_followup_enrollment_id: sourceUnsubscribeMessage.enrollment_id,
+        },
+      },
+    };
+    const sourceUnsubscribeReceipt = await postSyntheticResendEvent(sourceUnsubscribeEventId, sourceUnsubscribePayload);
+    const sourceUnsubscribeEvidence = await pool.query<{
+      processing_result: string; recipient_sha256: string | null; provider_message_id: string | null;
+      message_id: string | null; enrollment_id: string | null; conversation_id: string | null; source_link_id: string | null;
+      signed_message_id: string | null; signed_enrollment_id: string | null;
+      tags_recorded: boolean; applications: string; raw_email_absent: boolean;
+    }>(
+      "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.message_id,event.enrollment_id,event.conversation_id,event.source_link_id,event.signed_agency_followup_message_id as signed_message_id,event.signed_agency_followup_enrollment_id as signed_enrollment_id,event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,not (to_jsonb(event)::text ilike '%'||$2||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
+      [sourceUnsubscribeEventId, sourceUnsubscribeSource.email],
+    );
+    const sourceUnsubscribeRow = sourceUnsubscribeEvidence.rows[0];
+    const expectedSourceRecipientHash = createHash("sha256").update(sourceUnsubscribeSource.email.trim().toLowerCase(), "utf8").digest("hex");
+    if (sourceUnsubscribeReceipt.status !== 200 || sourceUnsubscribeReceipt.outcome !== "unmatched_source" ||
+      !sourceUnsubscribeRow || sourceUnsubscribeRow.processing_result !== "unmatched_source" ||
+      sourceUnsubscribeRow.recipient_sha256 !== expectedSourceRecipientHash || sourceUnsubscribeRow.provider_message_id !== sourceUnsubscribeProviderMessageId ||
+      sourceUnsubscribeRow.message_id !== sourceUnsubscribeMessage.id || sourceUnsubscribeRow.enrollment_id !== sourceUnsubscribeMessage.enrollment_id ||
+      sourceUnsubscribeRow.conversation_id !== null || sourceUnsubscribeRow.source_link_id !== null ||
+      sourceUnsubscribeRow.signed_message_id !== sourceUnsubscribeMessage.id || sourceUnsubscribeRow.signed_enrollment_id !== sourceUnsubscribeMessage.enrollment_id ||
+      sourceUnsubscribeRow.tags_recorded !== true || sourceUnsubscribeRow.applications !== "0" || sourceUnsubscribeRow.raw_email_absent !== true) {
+      throw new Error("The first signed unsubscribe for the accepted fresh source did not stay hash-only with no source mapping or application.");
+    }
+    const restoredSourceLink = await pool.query<{ id: string }>(
+      "update public.prospect_source_links set person_id=$2 where id=$1 and person_id is null returning id",
+      [resolverSourceLinkId, resolverPersonId],
+    );
+    if (restoredSourceLink.rows.length !== 1) {
+      throw new Error("The disposable source identity did not restore to its original person after the quarantine assertion.");
+    }
+    sourceResolutionQuarantined = false;
+    const sourceUnsubscribeReplay = await postSyntheticResendEvent(sourceUnsubscribeEventId, sourceUnsubscribePayload);
+    const sourceUnsubscribeReplayEvidence = await pool.query<{
+      processing_result: string; recipient_sha256: string | null; provider_message_id: string | null;
+      message_id: string | null; enrollment_id: string | null; conversation_id: string | null; source_link_id: string | null;
+      applications: string;
+    }>(
+      "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.message_id,event.enrollment_id,event.conversation_id,event.source_link_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications from public.agency_followup_provider_events event where event.provider_event_id=$1",
+      [sourceUnsubscribeEventId],
+    );
+    const sourceUnsubscribeReplayRow = sourceUnsubscribeReplayEvidence.rows[0];
+    const retainedSourceAssociations = await countRows(
+      pool,
+      "select count(*)::text as count from public.prospect_conversation_sources association where association.source_link_id=any($1::uuid[])",
+      [sourceLinkIds],
+    );
+    const retainedOptInEvents = await countRows(
+      pool,
+      "select count(*)::text as count from public.agency_followup_opt_in_events event where event.agency_prospect_id=$1",
+      [sourceUnsubscribeSource.id],
+    );
+    if (sourceUnsubscribeReplay.status !== 200 || sourceUnsubscribeReplay.outcome !== "duplicate" ||
+      !sourceUnsubscribeReplayRow || sourceUnsubscribeReplayRow.processing_result !== "unmatched_source" ||
+      sourceUnsubscribeReplayRow.recipient_sha256 !== expectedSourceRecipientHash || sourceUnsubscribeReplayRow.provider_message_id !== sourceUnsubscribeProviderMessageId ||
+      sourceUnsubscribeReplayRow.message_id !== sourceUnsubscribeMessage.id || sourceUnsubscribeReplayRow.enrollment_id !== sourceUnsubscribeMessage.enrollment_id ||
+      sourceUnsubscribeReplayRow.conversation_id !== null || sourceUnsubscribeReplayRow.source_link_id !== null ||
+      sourceUnsubscribeReplayRow.applications !== "0" || retainedSourceAssociations !== sourceUnsubscribeMappings.rows.length ||
+      retainedOptInEvents !== sourceOptInEvents) {
+      throw new Error("Restoring the protected source identity changed the quarantined unsubscribe or its consent/source history.");
+    }
+    await assertRecipientUnsubscribeBlocksMessage(
+      sourceUnsubscribeDuplicateRow.rows[0],
+      "source-unresolved accepted message-level unsubscribe",
+    );
+  } finally {
+    if (sourceResolutionQuarantined) {
+      const restoredSourceLink = await pool.query<{ id: string }>(
+        "update public.prospect_source_links set person_id=$2 where id=$1 and person_id is null returning id",
+        [resolverSourceLinkId, resolverPersonId],
+      );
+      if (restoredSourceLink.rows.length !== 1) {
+        throw new Error("The test could not restore the disposable source identity after an interrupted quarantine check.");
+      }
+    }
+  }
+  progress("the signed unsubscribe for an accepted message stayed hash-only while its consent-protected source identity was unresolved; restoring identity did not reapply it and the duplicate recipient handoff stayed blocked");
+
   // Exercise actual schedule policy immediately before handoff with a delayed
   // weekend claim. The current weekday/window come from the persisted journey.
   const windowProspect = fixtures.prospects.window;
-  await createDraft(pool, page, journeyName, windowProspect);
+  await createDraft(pool, page, weekdayJourneyName, windowProspect);
   await markEligibleAndRelease(page, windowProspect);
   const windowMessage = await pool.query<{ id: string; timezone: string; business_days: number[]; local_window_start: string; local_window_end: string }>(
     "select m.id,j.timezone,j.business_days,j.local_window_start,j.local_window_end from agency_followup_messages m join agency_followup_enrollments e on e.id=m.enrollment_id join agency_followup_journeys j on j.id=e.journey_id where e.prospect_id=$1 and m.step_number=1",
@@ -2372,8 +4175,6 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   }, new Date().toISOString());
   const providerIdempotencyFenceEvidence = await verifyProviderIdempotencyFenceRpc(pool, {
     firstUseMessageId: firstNormalMessage.id,
-    insideWindowMessageId: retryMessage.id,
-    expiredWindowMessageId: leaseMessage.rows[0].id,
   });
   const providerIdempotencyLockWaitEvidence = await verifyProviderIdempotencyLockWaitBoundary(pool, firstNormalMessage.id);
 
@@ -2382,6 +4183,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const renderedWidths: number[] = [];
   const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
   const consentPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string }> = [];
+  const activityPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string }> = [];
   const providerStatusScreenshots: Array<{ path: string; sha256: string; viewport: number; contentWidth: number; scrollWidth: number; text: string }> = [];
   const stableLayout = async () => page.evaluate(async () => {
     await document.fonts.ready;
@@ -2562,9 +4364,69 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     }
     renderedWidths.push(width);
   }
+  progress("opening synthetic Agency CRM contact history to verify the manual reconciliation controls");
+  await page.goto(APP_ORIGIN + "/admin/agency-crm", { waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
+  const normalProspectCard = page.getByRole("listitem")
+    .filter({ hasText: normal.firmName })
+    .filter({ has: page.getByRole("button", { name: "Contact history", exact: true }) });
+  for (let reveal = 0; reveal < 30 && await normalProspectCard.count() === 0; reveal += 1) {
+    const showMore = page.getByRole("button", { name: /^Show \d+ more \(/ }).first();
+    if (await showMore.count() === 0) break;
+    await showMore.click();
+  }
+  await expect(normalProspectCard).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+  const normalHistoryButton = normalProspectCard.getByRole("button", { name: "Contact history", exact: true });
+  await expect(normalHistoryButton).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+  await page.waitForFunction((firmName) => {
+    const card = Array.from(document.querySelectorAll("li")).find((item) =>
+      item.textContent?.includes(firmName) &&
+      Array.from(item.querySelectorAll("button")).some((button) => button.textContent?.trim() === "Contact history")
+    );
+    const button = Array.from(card?.querySelectorAll("button") ?? []).find(
+      (candidate) => candidate.textContent?.trim() === "Contact history"
+    );
+    return Boolean(button && Object.keys(button).some((key) => key.startsWith("__reactProps$")));
+  }, normal.firmName, { polling: "raf", timeout: Math.min(180_000, remainingMs()) });
+  progress("Agency CRM Contact history button hydration confirmed");
+  await normalHistoryButton.click();
+  const activityPanel = page.locator('[data-ui-component-content="prospect-activity-panel"]');
+  await expect(activityPanel).toBeVisible({ timeout: Math.min(30_000, remainingMs()) });
+  const activityType = page.getByLabel("Activity type");
+  await expect(activityType).toBeVisible();
+  await activityType.selectOption("meeting");
+  const meetingOutcome = page.getByPlaceholder("What happened at the meeting", { exact: true });
+  await expect(meetingOutcome).toBeVisible();
+  await expect(meetingOutcome).toHaveAttribute("placeholder", "What happened at the meeting");
+  await expect(page.getByLabel("Next action")).toBeVisible();
+  const activityPanelWidths = [1440, 1024, 768, 640, 375, 320] as const;
+  const activityCopySelector = '[data-ui-component-content="prospect-activity-form"],[data-ui-component-content="prospect-contact-controls"]';
+  for (const width of activityPanelWidths) {
+    await page.setViewportSize({ width, height: 1000 });
+    await activityPanel.scrollIntoViewIfNeeded();
+    await stableLayout();
+    const activityCopyFailures = await auditRenderedCopy(page, activityCopySelector);
+    if (activityCopyFailures.length) {
+      const failureFile = path.join(screenshotDir, RUN_ID + "-failure-prospect-activity-" + width + ".png");
+      await activityPanel.screenshot({ path: failureFile });
+      throw new Error("Rendered prospect activity UI gate failed at " + width + "px: " + activityCopyFailures.join("; "));
+    }
+    await assertUnoccluded(activityType, "Activity type control", true);
+    await assertUnoccluded(meetingOutcome, "Meeting outcome control", true);
+    await activityPanel.scrollIntoViewIfNeeded();
+    await stableLayout();
+    const file = path.join(screenshotDir, RUN_ID + "-prospect-activity-" + width + ".png");
+    await activityPanel.screenshot({ path: file });
+    activityPanelScreenshots.push({
+      path: path.relative(process.cwd(), file).replaceAll("\\", "/"),
+      sha256: createHash("sha256").update(await readFile(file)).digest("hex"),
+      viewport: width,
+      panel: "synthetic operator contact history and meeting reconciliation form",
+    });
+  }
+  progress("synthetic Agency prospect history showed the meeting outcome and next action as separate controls; tagged copy, keyboard focus, point-hit behavior and screenshots passed at six supported widths");
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
   if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
-  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, authoring approval, or required-control evidence.");
+  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || activityPanelScreenshots.length !== 6 || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, activity-panel, authoring approval, or required-control evidence.");
   const summary = {
     runId: RUN_ID,
     ...sourceAtStart,
@@ -2588,11 +4450,12 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
       databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
     },
-    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB],
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520", "20261024171116", "20261024175302", "20261024213806", "20261024233611", "20261026124659", "20261026180704"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB, EXPECTED_SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_BLOB, EXPECTED_UNKNOWN_RESEND_RECONCILIATION_MIGRATION_BLOB, EXPECTED_CONTACT_HANDOFF_MIGRATION_BLOB, EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB, EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB, EXPECTED_RECIPIENT_UNSUBSCRIBE_MIGRATION_BLOB],
     screenshots,
     consentPanelScreenshots,
     providerStatusScreenshots,
+    activityPanelScreenshots,
     syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
     templateApprovalAuditAtomicityFailureRollback: templateApprovalRollbackEvidence,
     synthetic: true,
@@ -2605,6 +4468,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       approvalInvalidation: "content change cleared reviewer and reopened review",
       fakeAccepted: "persisted",
       unknown: "quarantined and not reclaimed",
+      ambiguousRecipientUnsubscribe: "one signed hash-only contact unsubscribe blocked both matching prospect handoffs",
       businessDayWindow: "weekend claim rescheduled before fake provider",
       retry: "temporary failure and backoff persisted; early claim excluded; due retry accepted exactly once with stable key and two attempts",
       providerEventReplay: "signed event was quarantined before acceptance, reconciled on retry after acceptance, and deduplicated with one durable application",
@@ -2619,7 +4483,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     syntheticProspects: Object.keys(fixtures.prospects).length,
     screenshotViewports: renderedWidths,
     screenshotCount: screenshots.length,
-    consentPanelScreenshotCount: consentPanelScreenshots.length
+    consentPanelScreenshotCount: consentPanelScreenshots.length,
+    activityPanelScreenshotCount: activityPanelScreenshots.length
   };
   return summary;
   } finally {
@@ -2872,6 +4737,12 @@ async function main(): Promise<void> {
   await verifyPushedMigration(LIVE_MESSAGE_CLAIM_MIGRATION_PATH, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB);
   await verifyPushedMigration(PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_PATH, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB);
   await verifyPushedMigration(RESEND_SUPPRESSED_STATUS_MIGRATION_PATH, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB);
+  await verifyPushedMigration(SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_PATH, EXPECTED_SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_BLOB);
+  await verifyPushedMigration(UNKNOWN_RESEND_RECONCILIATION_MIGRATION_PATH, EXPECTED_UNKNOWN_RESEND_RECONCILIATION_MIGRATION_BLOB);
+  await verifyPushedMigration(CONTACT_HANDOFF_MIGRATION_PATH, EXPECTED_CONTACT_HANDOFF_MIGRATION_BLOB);
+  await verifyPushedMigration(ACTIVITY_LOCK_ORDER_FIX_MIGRATION_PATH, EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB);
+  await verifyPushedMigration(AMBIGUOUS_UNSUBSCRIBE_MIGRATION_PATH, EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB);
+  await verifyPushedMigration(RECIPIENT_UNSUBSCRIBE_MIGRATION_PATH, EXPECTED_RECIPIENT_UNSUBSCRIBE_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");
@@ -2886,7 +4757,7 @@ async function main(): Promise<void> {
   process.env.NEXT_PUBLIC_SUPABASE_URL = status.API_URL;
   process.env.SUPABASE_SERVICE_ROLE_KEY = status.SERVICE_ROLE_KEY;
   process.env.PORTAL_SECRET = portalSecret;
-  const pool = new Pool({ connectionString: status.DB_URL, max: 8, ssl: false, connectionTimeoutMillis: 5000, query_timeout: 20000 });
+  const pool = new Pool({ connectionString: status.DB_URL, max: 8, ssl: false, connectionTimeoutMillis: 5000, query_timeout: 60000 });
   runAbortController = new AbortController();
   const hardStop = MANUAL ? undefined : setTimeout(() => {
     interrupted = true;

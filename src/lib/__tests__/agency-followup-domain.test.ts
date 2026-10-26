@@ -66,6 +66,13 @@ describe("Agency follow-up domain", () => {
     expect(evaluateAgencyFollowupSend(readyContext())).toEqual([]);
   });
 
+  const stoppedConversationStatuses = ["replied", "unreachable", "declined", "meeting_scheduled", "completed"] as const;
+  for (const status of stoppedConversationStatuses) {
+    it("blocks follow-up for the " + status + " conversation status", () => {
+      expect(evaluateAgencyFollowupSend(readyContext({ conversationStatus: status })))
+        .toContain("conversation_stopped");
+    });
+  }
   it("invalidates message approval when content or recipient details change", () => {
     const approval = approvedSnapshot();
     expect(agencyFollowupApprovalIsCurrent(approval, content, recipient)).toBe(true);

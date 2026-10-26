@@ -10,7 +10,11 @@ import {
   type AgencyFollowupSchedulePolicy,
   type AgencyFollowupStepDraft,
 } from "@/lib/agency-followup-authoring";
-import { FakeAgencyFollowupProvider, type AgencyFollowupProvider } from "@/lib/agency-followup-provider";
+import {
+  FakeAgencyFollowupProvider,
+  type AgencyFollowupProvider,
+  type AgencyFollowupProviderHandoffGate,
+} from "@/lib/agency-followup-provider";
 import { createAgencyFollowupResendProvider } from "@/lib/agency-followup-resend-provider";
 import { resolveAgencyFollowupSendConfig } from "@/lib/agency-followup-send-config";
 import {
@@ -252,6 +256,13 @@ async function loadOperationsStates(prospects: Array<{ id: string; contact_email
   const emailHashes = validProspects.map((prospectId) => agencyFollowupRecipientEmailHash(
     String(prospectById.get(prospectId)!.contact_email).trim(),
   ));
+  const recipientUnsubscribes = await readOperationsPages(
+    (from, to) => supabase.from("agency_followup_recipient_unsubscribes")
+      .select("recipient_email_sha256")
+      .in("recipient_email_sha256", emailHashes).range(from, to),
+    "Unable to read Agency follow-up recipient unsubscribe history",
+  );
+  const unsubscribedRecipients = new Set(recipientUnsubscribes.map((row) => String(row.recipient_email_sha256)));
   const optInEvents = await readOperationsPages(
     (from, to) => supabase.from("agency_followup_opt_in_events")
       .select("id,agency_prospect_id,source_link_id,conversation_id,recipient_email_sha256,purpose,event_type,recorded_at")
@@ -314,9 +325,11 @@ async function loadOperationsStates(prospects: Array<{ id: string; contact_email
     const latestOptIns = prospectConversationIds.map((conversationId) => optInByIdentity.get([
       prospectId, source.id, conversationId, recipientHash, "agency_followup_email",
     ].join(":")));
-    const optInState: AgencyFollowupOptInState = latestOptIns.every((eventType) => eventType === "opt_in_granted")
-      ? "granted"
-      : latestOptIns.some((eventType) => eventType === "opt_in_withdrawn") ? "withdrawn" : "missing";
+    const optedOut = unsubscribedRecipients.has(recipientHash);
+    const optInState: AgencyFollowupOptInState = optedOut ? "withdrawn"
+      : latestOptIns.every((eventType) => eventType === "opt_in_granted")
+        ? "granted"
+        : latestOptIns.some((eventType) => eventType === "opt_in_withdrawn") ? "withdrawn" : "missing";
     statesByProspect.set(prospectId, {
       contactability,
       conversationStatus: conversationStatus ?? "not_contacted",
@@ -977,8 +990,8 @@ async function runAgencyFollowupDispatcherWithProvider(input: {
       }
     },
     ...(input.requireProviderHandoffGuard ? {
-      async prepareProviderAttempt(claim: AgencyFollowupClaim, leaseSeconds: number): Promise<"ready" | "expired" | "stale"> {
-        const prepared = await supabase.rpc("prepare_agency_followup_provider_attempt", {
+      async prepareProviderAttempt(claim: AgencyFollowupClaim, leaseSeconds: number): Promise<AgencyFollowupProviderHandoffGate> {
+        const prepared = await supabase.rpc("authorize_agency_followup_provider_handoff", {
           p_message_id: claim.id,
           p_enrollment_id: claim.enrollmentId,
           p_lease_owner: claim.leaseOwner,
@@ -986,11 +999,51 @@ async function runAgencyFollowupDispatcherWithProvider(input: {
           p_lease_seconds: leaseSeconds,
           p_max_idempotency_age_seconds: 82_800,
         });
-        if (prepared.error) throw new Error("Unable to reserve the durable Agency follow-up provider key; no email was sent.");
-        if (prepared.data !== "ready" && prepared.data !== "expired" && prepared.data !== "stale") {
-          throw new Error("The durable Agency follow-up provider guard returned an invalid state; no email was sent.");
+        if (prepared.error) throw new Error("Unable to authorize the current Agency follow-up provider handoff; no email was sent.");
+        const value = prepared.data;
+        if (!value || typeof value !== "object" || Array.isArray(value)) {
+          throw new Error("The Agency follow-up handoff authorization returned an invalid state; no email was sent.");
         }
-        return prepared.data;
+        const response = value as Record<string, unknown>;
+        if (response.result === "expired" || response.result === "stale") return { result: response.result };
+        if (response.result === "blocked") {
+          if (!Array.isArray(response.blockers) || response.blockers.length < 1 || response.blockers.length > 30 ||
+              response.blockers.some((blocker) => typeof blocker !== "string" || blocker.length > 120)) {
+            throw new Error("The Agency follow-up handoff authorization returned invalid blockers; no email was sent.");
+          }
+          return { result: "blocked", blockers: response.blockers as string[] };
+        }
+        if (response.result === "deferred") {
+          if (typeof response.blocker !== "string" ||
+              !["not_due", "outside_send_window", "minimum_spacing_not_elapsed", "previous_step_pending"].includes(response.blocker) ||
+              typeof response.retryAt !== "string" || !Number.isFinite(Date.parse(response.retryAt))) {
+            throw new Error("The Agency follow-up handoff authorization returned an invalid deferral; no email was sent.");
+          }
+          return { result: "deferred", blocker: response.blocker, retryAt: response.retryAt };
+        }
+        if (response.result === "ready") {
+          const request = response.request;
+          if (!request || typeof request !== "object" || Array.isArray(request)) {
+            throw new Error("The Agency follow-up handoff authorization returned no approved message; no email was sent.");
+          }
+          const authorizedRequest = request as Record<string, unknown>;
+          const expectedKey = agencyFollowupLogicalMessageKey(claim.enrollmentId, claim.id);
+          if (authorizedRequest.idempotencyKey !== expectedKey ||
+              typeof authorizedRequest.recipientEmail !== "string" || !authorizedRequest.recipientEmail.trim() ||
+              typeof authorizedRequest.subject !== "string" || typeof authorizedRequest.body !== "string") {
+            throw new Error("The Agency follow-up handoff authorization returned an invalid approved message; no email was sent.");
+          }
+          return {
+            result: "ready",
+            request: {
+              idempotencyKey: expectedKey,
+              recipientEmail: authorizedRequest.recipientEmail,
+              subject: authorizedRequest.subject,
+              body: authorizedRequest.body,
+            },
+          };
+        }
+        throw new Error("The Agency follow-up handoff authorization returned an unknown state; no email was sent.");
       },
     } : {}),
   };
@@ -1015,12 +1068,26 @@ export async function runFakeAgencyFollowupDispatcher(input: {
   leaseSeconds?: number;
   limit?: number;
   outcomePlan?: AgencyProviderOutcome[];
+  providerDelayMs?: number;
 }): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
-  if (input.outcomePlan && process.env.NODE_ENV === "production") {
+  if ((input.outcomePlan !== undefined || input.providerDelayMs !== undefined) && process.env.NODE_ENV === "production") {
     throw new Error("Synthetic provider outcomes are available only outside production.");
   }
-  const provider = input.outcomePlan ? new FakeAgencyFollowupProvider(input.outcomePlan) : defaultFakeFollowupProvider;
-  return runAgencyFollowupDispatcherWithProvider({ ...input, provider, claimPolicy: { mode: "unrestricted" } });
+  if (input.providerDelayMs !== undefined &&
+      (!Number.isSafeInteger(input.providerDelayMs) || input.providerDelayMs < 0 || input.providerDelayMs > 30_000)) {
+    throw new Error("Synthetic provider delay must be an integer between zero and 30000 milliseconds.");
+  }
+  const provider = input.outcomePlan !== undefined || input.providerDelayMs !== undefined
+    ? new FakeAgencyFollowupProvider(input.outcomePlan ?? [], input.providerDelayMs ?? 0)
+    : defaultFakeFollowupProvider;
+  return runAgencyFollowupDispatcherWithProvider({
+    workerId: input.workerId,
+    now: input.now,
+    leaseSeconds: input.leaseSeconds,
+    limit: input.limit,
+    provider,
+    claimPolicy: { mode: "unrestricted" },
+  });
 }
 
 /** Real dispatcher. Off or incomplete send configuration returns before any queue claim. */

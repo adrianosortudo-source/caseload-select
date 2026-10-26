@@ -102,11 +102,11 @@ describe("Resend Agency follow-up webhook", () => {
       data: { email: "owner@example.com", unsubscribed: true },
     }));
     expect(response.status).toBe(200);
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("persist_agency_followup_resend_event", expect.objectContaining({
-      p_provider_message_id: null,
-      p_contact_status: "unsubscribed",
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("persist_agency_followup_resend_contact_event", expect.objectContaining({
+      p_provider_event_id: "evt_123",
+      p_occurred_at: "2026-10-19T12:00:00.000Z",
       p_recipient_email: "owner@example.com",
-      p_recipient_sha256: null,
+      p_recipient_sha256: agencyFollowupRecipientEmailHash("owner@example.com"),
     }));
   });
 
@@ -117,9 +117,11 @@ describe("Resend Agency follow-up webhook", () => {
       data: { email: "owner@example.com", status: "unsubscribed" },
     }));
     expect(response.status).toBe(200);
-    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("persist_agency_followup_resend_event", expect.objectContaining({
-      p_contact_status: "unsubscribed",
+    expect(supabaseAdmin.rpc).toHaveBeenCalledWith("persist_agency_followup_resend_contact_event", expect.objectContaining({
+      p_provider_event_id: "evt_123",
+      p_occurred_at: "2026-10-19T12:00:00.000Z",
       p_recipient_email: "owner@example.com",
+      p_recipient_sha256: agencyFollowupRecipientEmailHash("owner@example.com"),
     }));
   });
 
@@ -128,9 +130,27 @@ describe("Resend Agency follow-up webhook", () => {
     const response = await POST(request({
       type: "email.delivered",
       created_at: "2026-10-19T12:00:00.000Z",
-      data: { email_id: "re_msg_123", to: ["owner@example.com"] },
+      data: {
+        email_id: "re_msg_123",
+        to: ["owner@example.com"],
+        tags: {
+          agency_followup_message_id: "11111111-1111-1111-1111-111111111111",
+          agency_followup_enrollment_id: "22222222-2222-2222-2222-222222222222",
+        },
+      },
     }));
     expect(response.status).toBe(503);
+  });
+
+  it("acknowledges unmatched shared Resend events without Agency identity tags", async () => {
+    mocks.rpc.mockResolvedValue({ data: { result: "unmatched_message" }, error: null });
+    const response = await POST(request({
+      type: "email.delivered",
+      created_at: "2026-10-19T12:00:00.000Z",
+      data: { email_id: "re_transactional_123", to: ["owner@example.com"] },
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, outcome: "unmatched_message" });
   });
 
   it("rejects multi-recipient messages without persisting them", async () => {

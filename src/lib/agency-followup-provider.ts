@@ -1,4 +1,5 @@
 import {
+  agencyFollowupRecipientEmailHash,
   agencyFollowupLogicalMessageKey,
   evaluateAgencyFollowupSend,
   resolveAgencyProviderOutcome,
@@ -28,10 +29,12 @@ export class FakeAgencyFollowupProvider implements AgencyFollowupProvider {
   private readonly seenKeys = new Set<string>();
   private sendCallCount = 0;
   private readonly plan: AgencyProviderOutcome[];
+  private readonly providerDelayMs: number;
   private nextAcceptedId = 1;
 
-  constructor(outcomePlan: AgencyProviderOutcome[] = []) {
+  constructor(outcomePlan: AgencyProviderOutcome[] = [], providerDelayMs = 0) {
     this.plan = [...outcomePlan];
+    this.providerDelayMs = providerDelayMs;
   }
 
   async send(request: AgencyFollowupProviderRequest): Promise<AgencyProviderOutcome> {
@@ -39,6 +42,9 @@ export class FakeAgencyFollowupProvider implements AgencyFollowupProvider {
     this.seenKeys.add(request.idempotencyKey);
     const prior = this.outcomes.get(request.idempotencyKey);
     if (prior) return prior;
+    if (this.providerDelayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, this.providerDelayMs));
+    }
     const outcome = this.plan.shift() ?? {
       kind: "accepted" as const,
       providerMessageId: `fake-provider-${this.nextAcceptedId++}`,
@@ -63,12 +69,19 @@ export interface AgencyFollowupAttemptResult {
   state: AgencyOutboxResolution | "blocked" | "stale";
   blockers: string[];
   logicalMessageKey: string;
+  retryAt?: string;
+  recipientEmailHash?: string;
   providerOutcome?: AgencyProviderOutcome;
 }
 
 export const AGENCY_FOLLOWUP_RESEND_IDEMPOTENCY_WINDOW_EXPIRED = "resend_idempotency_window_expired";
 
-export type AgencyFollowupProviderHandoffGate = "ready" | "expired" | "stale";
+export type AgencyFollowupProviderHandoffGate =
+  | { result: "ready"; request: AgencyFollowupProviderRequest }
+  | { result: "blocked"; blockers: string[] }
+  | { result: "deferred"; blocker: string; retryAt: string }
+  | { result: "expired" }
+  | { result: "stale" };
 
 export async function runAgencyFollowupAttempt(
   input: {
@@ -83,10 +96,16 @@ export async function runAgencyFollowupAttempt(
   const blockers = evaluateAgencyFollowupSend(input.context);
   if (blockers.length > 0) return { state: "blocked", blockers, logicalMessageKey };
 
+  let request: AgencyFollowupProviderRequest = {
+    idempotencyKey: logicalMessageKey,
+    recipientEmail: input.context.recipient.contactEmail,
+    subject: input.context.content.subject,
+    body: input.context.content.body,
+  };
   if (input.beforeProviderHandoff) {
     const gate = await input.beforeProviderHandoff();
-    if (gate === "stale") return { state: "stale", blockers: [], logicalMessageKey };
-    if (gate === "expired") {
+    if (gate.result === "stale") return { state: "stale", blockers: [], logicalMessageKey };
+    if (gate.result === "expired") {
       return {
         state: "quarantine_unknown",
         blockers: [],
@@ -94,18 +113,25 @@ export async function runAgencyFollowupAttempt(
         providerOutcome: { kind: "unknown", detail: AGENCY_FOLLOWUP_RESEND_IDEMPOTENCY_WINDOW_EXPIRED },
       };
     }
+    if (gate.result === "blocked") {
+      return { state: "blocked", blockers: [...gate.blockers], logicalMessageKey };
+    }
+    if (gate.result === "deferred") {
+      return { state: "blocked", blockers: [gate.blocker], retryAt: gate.retryAt, logicalMessageKey };
+    }
+    if (gate.request.idempotencyKey !== logicalMessageKey || !gate.request.recipientEmail.trim() ||
+        typeof gate.request.subject !== "string" || typeof gate.request.body !== "string") {
+      throw new Error("The Agency follow-up handoff authorization returned an invalid message payload.");
+    }
+    request = gate.request;
   }
 
-  const outcome = await input.provider.send({
-    idempotencyKey: logicalMessageKey,
-    recipientEmail: input.context.recipient.contactEmail,
-    subject: input.context.content.subject,
-    body: input.context.content.body,
-  });
+  const outcome = await input.provider.send(request);
   return {
     state: resolveAgencyProviderOutcome(outcome),
     blockers: outcome.kind === "blocked" ? outcome.blockers : [],
     logicalMessageKey,
+    recipientEmailHash: agencyFollowupRecipientEmailHash(request.recipientEmail),
     providerOutcome: outcome,
   };
 }

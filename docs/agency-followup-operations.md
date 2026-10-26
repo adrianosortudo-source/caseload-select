@@ -2,19 +2,45 @@
 
 ## Current delivery boundary
 
-**Current state, 2026-10-23 13:01 America/Toronto:** PR #414 is open and unmerged at c0a5af198eb103ac349c72f1e19ede7c89b0f8ef. The final-head Agency disposable database/browser walkthrough #20 (39885658708) passed with exit code 0 using a fresh loopback-only scratch project and a network-free fake provider. It verified all ten pushed migration blobs, synthetic authoring, approval, dispatch-state, suppression, retry, signed-event replay, allowlist, concurrency and stale-lease behavior; cleanup completed and all 19 viewport/state screenshots were visually inspected with hashes recorded in the artifact manifest. This proves synthetic behavior only.
+**Status, 2026-10-26:** PR #426 is open, non-draft, and unmerged on branch `codex/crm-live-followup-final-gates-20261024`. Exact source heads, CI runs, evidence digests, production inventory, and approval state belong in the private release ledger and must be rechecked before any release action.
 
-Exact-head CI #1968 (39885665794) completed all 11 jobs successfully on the same head; Full Vitest reported 9,376 passed, 98 skipped and 0 failed. The exact-head checks include the CRM walkthrough, typecheck, lint, build, rendered-copy checks and fresh real-Postgres integration. The caseload-select and caseload-render preview deployments are READY. These checks do not prove production delivery.
+The Agency synthetic acceptance workflow runs against a fresh disposable Supabase stack with a network-free fake provider and real browser interactions. A pass proves only the exercised synthetic behavior; it does not prove production schema, provider acceptance, an inbox receipt, or live delivery.
 
-The separate headed npm run agency-followup:manual has not run. Docker Desktop is not responding in the execution session: its backend exited during startup, docker desktop status cannot retrieve status, and this session cannot access WSL or the Service Control Manager. No Docker data, containers, volumes or WSL distributions were reset or deleted. The manual walkthrough remains pending.
+No Agency production migration may run yet: PR #426 adds the Agency-specific protected route, but it is not available in production until that PR merges and its environment approval gate is verified. Once available, it must stage the complete migration history, exclude exactly the two preview-only QA migrations, and fail closed unless the exact approved pending set matches. Do not run a broad `supabase db push --include-all`, `supabase migration repair`, or raw production SQL from an operator shell.
 
-An independent code review of the Resend adapter/dispatch path found no concrete defect at this head. No formal GitHub review submission is recorded for PR #414, and no specific PR #414 merge/release approval is recorded. The production follow-up page last read back with no live provider configured, zero prospects/messages and no drafts. No production migration, provider configuration, send, deployment or cohort activation has occurred. Owner-inbox delivery and the first prospect cohort remain unproven and unauthorized.
+Static review of the pending Agency migration chain found a data-changing idempotency fence that can backfill provider-use timestamps and move unsafe scheduled retries to UNKNOWN with audit rows. Operational rollback is forward-only: disable dispatch, retire active journey versions, pause active enrollments, and preserve message/event history. Use a forward repair if a schema correction is needed after rows exist.
 
-The Resend adapter sends only the approved subject, text body, exact stored recipient, and stable Agency message idempotency key. Enabled modes require the API key, signed-webhook secret, feature-specific sender and reply-to addresses on the existing CaseLoad domain, and the mode-specific allowlists. Test mode requires both exact recipient and exact enrollment/message/recipient allowlists. Live mode requires an exact enrollment allowlist. The worker is capped at one message per invocation and returns before claiming anything when mode is off or configuration is incomplete.
+Feature mode defaults to off. Test mode requires exact recipient and record/enrollment/message allowlists; live mode requires an exact approved enrollment allowlist. Resend delivery requires recorded, verified explicit opt-in. No production migration, provider configuration, email send, merge, deployment, or cohort activation has occurred for this release.
 
-The webhook verifies the raw request signature before parsing, stores normalized event metadata without raw body or recipient address, requires one exact recipient plus its hash for message events, and reconciles against the accepted Agency message and its exact shared source. Provider suppressions are append-only, source-scoped and consumed by the send-time stop check even if no contactability row exists. The final-head synthetic run exercised signed-event replay and deduplication with a fake provider; it did not send through Resend.
+The database handoff gate checks current eligibility, consent, contactability, source mapping, message approval, schedule, and predecessor state in one transaction, then returns an authorized payload for the Resend request. That transaction ends before the external request; authorization is point-in-time and does not serialize a later stop or consent change with provider delivery.
 
-The deterministic fake provider remains local test support only and is not delivery evidence. The Resend adapter and operational controls have not been enabled in production. Every handoff must recheck final eligibility, shared contactability history, conversation stop signals, exact recipient hash, content hash, reviewer identity, approval timestamp, due time, and minimum spacing immediately before the configured provider adapter is called.
+## Recipient unsubscribe
+
+The live Resend adapter requires AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET: a server-only signing key with at least 32 UTF-8 bytes. Keep it in the deployment secret store and do not expose it to a browser or log. A missing or weak key blocks live dispatch. Production configuration is not set by this change.
+
+Each approved email body must contain {{agency_followup_unsubscribe_url}} exactly once. The adapter replaces it with a signed, message-specific URL and sends the corresponding List-Unsubscribe and RFC 8058 List-Unsubscribe-Post headers. Do not copy a signed recipient URL into another message or template.
+
+A GET displays a confirmation page and does not unsubscribe; link-preview scanners therefore cannot opt a person out by fetching the URL. The RFC 8058 POST records an idempotent, append-only opt-out using only the normalized recipient hash and message/enrollment identifiers. The final database handoff gate checks that record for the address, including a worker that claimed a message earlier and any other prospect with the same normalized email. The service-role-only table and RPC are not granted to anon or authenticated.
+
+The handoff decision is point-in-time. If the opt-out commits before the final gate authorizes an attempt, that attempt is blocked. If the gate authorizes first, its transaction ends before the separate Resend request; that already-authorized message may still be accepted or delivered while the opt-out is being recorded. Every later handoff is blocked. Do not claim that the in-flight message was cancelled; if its provider result is ambiguous, keep it `unknown` and do not retry.
+
+The current signing format uses one active key. Rotating AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET invalidates every outstanding unsubscribe URL. Do not rotate it after messages have been sent until a versioned-key transition or another safe plan for outstanding links is in place.
+## Manual reply and booking reconciliation
+
+No automatic mailbox or calendar ingestion is verified for this workflow. Before approving or releasing a message, and again immediately before every dispatch, check the prospect's actual inbox and calendar history. Do not treat an empty CRM activity list as proof that no reply or booking exists.
+
+In the Agency prospect's activity panel, choose **Activity type** and record only confirmed events:
+
+- For an inbound reply, choose **Human reply**, select the recorded **Reply disposition**, then choose **Save activity**. A declined reply sets the conversation to declined; other human replies set it to replied.
+- For a booked meeting that has not happened yet, choose **Meeting** and leave **Meeting outcome** blank. This sets meeting_scheduled. After the meeting, record the verified outcome; a non-empty outcome sets completed.
+- For a confirmed delivery failure, choose **Bounce**. This sets unreachable.
+- Use the separate **Contact controls** section for a verified future next action. Do not put a future action in **Meeting outcome**.
+
+After saving, refresh the prospect activity history and confirm the expected conversation status is visible. The database handoff gate blocks all five statuses (replied, unreachable, declined, meeting_scheduled, and completed) immediately before provider handoff. If a status, identity, reply, booking, suppression, or inbox/calendar check is uncertain, do not approve or dispatch; resolve it through the authorized operator workflow first.
+
+Saving an activity records CRM evidence. It does not send a message, inspect external mailboxes/calendars automatically, or prove that an operator completed those external checks.
+
+
 ## Authoring and versioning
 
 - Template content is immutable. Create a new `template_key` version for changed copy, then record an operator approval on that version.
@@ -104,7 +130,10 @@ Each fake dispatch uses temporary row locks to exclude retained scheduled fixtur
 
 This was the pending checkpoint as of 2026-10-15 and is superseded by the 2026-10-16 evidence section below. The locked offline installation later completed successfully, and a full synthetic database/browser walkthrough produced 12 screenshots. Exact-final-head verification, commit/push, PR creation and CI are still outstanding.
 
-## PR status
+## Historical PR status (superseded by PR #426)
+
+This subsection records earlier PR #414 state and is retained only as historical context. It does not describe PR #426 or satisfy its review, checks, or approval. Consult the private execution ledger for the current release state.
+
 
 PR #402 and PR #407 are merged; PR #407 merge commit is 8bf661e2aea255f26071aea326381ce14de3bda7. The additive live-follow-up work is PR #414 on codex/crm-live-followup-20261019, currently open, unmerged and mergeable at head c0a5af198eb103ac349c72f1e19ede7c89b0f8ef. Historical runs #8–19 contain earlier runner, migration and viewport failures; they are not evidence against or for the current head. Current Agency walkthrough #20 (39885658708) and CI #1968 (39885665794) passed on the exact current head. Artifact 12472583616 has digest sha256:9ad1891886099c29540158f6dedecc354a4831ff01b52e29c169c79036de3aaf; its manifest records the screenshot hashes.
 
