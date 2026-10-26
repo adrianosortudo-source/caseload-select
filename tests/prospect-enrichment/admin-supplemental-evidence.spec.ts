@@ -85,6 +85,9 @@ test("mounted supplemental evidence import updates and reads back one synthetic 
   expect(firstReadback.ok()).toBeTruthy();
   const firstRecord = (await firstReadback.json()).records.find((candidate: { id: string }) => candidate.id === data.sourceRecordKey);
   expect(firstRecord.supplementalEvidence.websiteIntake).toMatchObject({ observedOn: data.observedOn, channels: ["contact_form"] });
+  await search.fill(data.firmName);
+  await page.getByRole("combobox", { name: "City", exact: true }).selectOption("Toronto");
+  await page.getByRole("combobox", { name: "Practice area", exact: true }).selectOption("Family law");
   const updatedRow = page.getByRole("row").filter({ hasText: data.firmName });
   await expect(updatedRow).toHaveCount(1);
   await updatedRow.getByText("Research profile", { exact: true }).click();
