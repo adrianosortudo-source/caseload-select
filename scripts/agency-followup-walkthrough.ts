@@ -2551,7 +2551,15 @@ async function auditRenderedCopy(page: Page, componentSelector = '[data-ui-compo
           if (line) line.push(word); else lines.push([word]);
         }
         lines.sort((a, b) => a[0].top - b[0].top);
-        if (lines.length > 1 && lines.at(-1)!.length === 1) failures.push(tag + `: single-word final line "${lines.at(-1)![0].text}" after "${lines.at(-2)!.map((word) => word.text).join(" ")}"`);
+        const finalLine = lines.at(-1);
+        // The required unsubscribe URL is an indivisible substitution token in this plain-text preview.
+        const isRequiredFinalUnsubscribeToken =
+          tag === "agency-follow-up-message/body" &&
+          finalLine?.length === 1 &&
+          finalLine[0].text === "{{agency_followup_unsubscribe_url}}";
+        if (lines.length > 1 && finalLine?.length === 1 && !isRequiredFinalUnsubscribeToken) {
+          failures.push(tag + `: single-word final line "${finalLine[0].text}" after "${lines.at(-2)!.map((word) => word.text).join(" ")}"`);
+        }
         for (let index = 0; index < lines.length - 1; index += 1) {
           const line = lines[index];
           const width = Math.max(...line.map((word) => word.right)) - Math.min(...line.map((word) => word.left));
