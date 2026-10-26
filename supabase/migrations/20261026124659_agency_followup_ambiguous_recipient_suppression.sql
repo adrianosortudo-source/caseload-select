@@ -1,6 +1,6 @@
 -- Resend contact unsubscribes and Agency-tagged message unsubscribes apply to
--- the mailbox even when its identity is ambiguous or acceptance is still in
--- flight. Keep the digest-only event and fail closed for every matching lead.
+-- the mailbox even when identity is ambiguous, acceptance is in flight, or a
+-- signed event recipient mismatches its tagged message. Store recipients as hashes.
 CREATE INDEX agency_followup_provider_recipient_unsubscribe_hash_idx
   ON public.agency_followup_provider_events (recipient_sha256)
   WHERE recipient_sha256 IS NOT NULL
@@ -20,6 +20,12 @@ CREATE INDEX agency_followup_provider_recipient_unsubscribe_hash_idx
                 AND signed_agency_followup_enrollment_id IS NOT NULL
               )
             )
+          )
+          OR (
+            processing_result='unmatched_recipient'
+            AND signed_agency_followup_tags_recorded IS TRUE
+            AND signed_agency_followup_message_id IS NOT NULL
+            AND signed_agency_followup_enrollment_id IS NOT NULL
           )
         )
       )
@@ -51,6 +57,12 @@ DECLARE
                 AND recipient_unsubscribe_event.signed_agency_followup_enrollment_id IS NOT NULL
               )
             )
+          )
+          OR (
+            recipient_unsubscribe_event.processing_result='unmatched_recipient'
+            AND recipient_unsubscribe_event.signed_agency_followup_tags_recorded IS TRUE
+            AND recipient_unsubscribe_event.signed_agency_followup_message_id IS NOT NULL
+            AND recipient_unsubscribe_event.signed_agency_followup_enrollment_id IS NOT NULL
           )
         )
       )

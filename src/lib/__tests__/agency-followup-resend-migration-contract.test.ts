@@ -30,11 +30,15 @@ const activityLockOrderFixMigrationName = "20261024233611_agency_followup_activi
 const activityLockOrderFixMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", activityLockOrderFixMigrationName), "utf8");
 
 describe("Agency follow-up Resend migration contract", () => {
-  it("blocks recipient-level unsubscribes when message resolution is unmatched or source mapping fails", () => {
+  it("blocks hash-only unsubscribes for signed message, recipient, and source mismatches", () => {
     expect(recipientUnsubscribeGateMigration).toContain("CREATE INDEX agency_followup_provider_recipient_unsubscribe_hash_idx");
     expect(recipientUnsubscribeGateMigration).toContain("event_type='contact.updated' AND contact_status='unsubscribed'");
     expect(recipientUnsubscribeGateMigration).toContain("event_type='email.unsubscribed'");
     expect(recipientUnsubscribeGateMigration).toContain("processing_result IN ('unmatched_message','unmatched_source','ambiguous_source')");
+    expect(recipientUnsubscribeGateMigration).toContain("processing_result='unmatched_recipient'");
+    expect(recipientUnsubscribeGateMigration).toContain("recipient_unsubscribe_event.processing_result='unmatched_recipient'");
+    expect(recipientUnsubscribeGateMigration).toMatch(/processing_result='unmatched_recipient'\s+AND\s+signed_agency_followup_tags_recorded IS TRUE\s+AND\s+signed_agency_followup_message_id IS NOT NULL\s+AND\s+signed_agency_followup_enrollment_id IS NOT NULL/);
+    expect(recipientUnsubscribeGateMigration).toMatch(/recipient_unsubscribe_event\.processing_result='unmatched_recipient'\s+AND\s+recipient_unsubscribe_event\.signed_agency_followup_tags_recorded IS TRUE\s+AND\s+recipient_unsubscribe_event\.signed_agency_followup_message_id IS NOT NULL\s+AND\s+recipient_unsubscribe_event\.signed_agency_followup_enrollment_id IS NOT NULL/);
     expect(recipientUnsubscribeGateMigration).toContain("signed_agency_followup_tags_recorded IS TRUE");
     expect(recipientUnsubscribeGateMigration).toContain("message_id IS NOT NULL AND enrollment_id IS NOT NULL");
     expect(recipientUnsubscribeGateMigration).toContain("recipient_unsubscribe_event.recipient_sha256=hash_email_now");
