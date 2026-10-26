@@ -29,10 +29,12 @@ export class FakeAgencyFollowupProvider implements AgencyFollowupProvider {
   private readonly seenKeys = new Set<string>();
   private sendCallCount = 0;
   private readonly plan: AgencyProviderOutcome[];
+  private readonly providerDelayMs: number;
   private nextAcceptedId = 1;
 
-  constructor(outcomePlan: AgencyProviderOutcome[] = []) {
+  constructor(outcomePlan: AgencyProviderOutcome[] = [], providerDelayMs = 0) {
     this.plan = [...outcomePlan];
+    this.providerDelayMs = providerDelayMs;
   }
 
   async send(request: AgencyFollowupProviderRequest): Promise<AgencyProviderOutcome> {
@@ -40,6 +42,9 @@ export class FakeAgencyFollowupProvider implements AgencyFollowupProvider {
     this.seenKeys.add(request.idempotencyKey);
     const prior = this.outcomes.get(request.idempotencyKey);
     if (prior) return prior;
+    if (this.providerDelayMs > 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, this.providerDelayMs));
+    }
     const outcome = this.plan.shift() ?? {
       kind: "accepted" as const,
       providerMessageId: `fake-provider-${this.nextAcceptedId++}`,

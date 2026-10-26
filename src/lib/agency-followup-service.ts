@@ -1059,12 +1059,26 @@ export async function runFakeAgencyFollowupDispatcher(input: {
   leaseSeconds?: number;
   limit?: number;
   outcomePlan?: AgencyProviderOutcome[];
+  providerDelayMs?: number;
 }): Promise<Awaited<ReturnType<typeof dispatchAgencyFollowupBatch>>> {
-  if (input.outcomePlan && process.env.NODE_ENV === "production") {
+  if ((input.outcomePlan !== undefined || input.providerDelayMs !== undefined) && process.env.NODE_ENV === "production") {
     throw new Error("Synthetic provider outcomes are available only outside production.");
   }
-  const provider = input.outcomePlan ? new FakeAgencyFollowupProvider(input.outcomePlan) : defaultFakeFollowupProvider;
-  return runAgencyFollowupDispatcherWithProvider({ ...input, provider, claimPolicy: { mode: "unrestricted" } });
+  if (input.providerDelayMs !== undefined &&
+      (!Number.isSafeInteger(input.providerDelayMs) || input.providerDelayMs < 0 || input.providerDelayMs > 30_000)) {
+    throw new Error("Synthetic provider delay must be an integer between zero and 30000 milliseconds.");
+  }
+  const provider = input.outcomePlan !== undefined || input.providerDelayMs !== undefined
+    ? new FakeAgencyFollowupProvider(input.outcomePlan ?? [], input.providerDelayMs ?? 0)
+    : defaultFakeFollowupProvider;
+  return runAgencyFollowupDispatcherWithProvider({
+    workerId: input.workerId,
+    now: input.now,
+    leaseSeconds: input.leaseSeconds,
+    limit: input.limit,
+    provider,
+    claimPolicy: { mode: "unrestricted" },
+  });
 }
 
 /** Real dispatcher. Off or incomplete send configuration returns before any queue claim. */

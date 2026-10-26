@@ -1737,12 +1737,18 @@ export async function POST(request: NextRequest) {
       !item || !["accepted", "unknown", "definitive_retryable_failure", "definitive_permanent_failure"].includes(item.kind)))) {
     return NextResponse.json({ error: "Unsupported fake provider outcome." }, { status: 400 });
   }
+  const providerDelayMs = body.providerDelayMs;
+  if (providerDelayMs !== undefined &&
+      (typeof providerDelayMs !== "number" || !Number.isSafeInteger(providerDelayMs) || providerDelayMs < 0 || providerDelayMs > 30000)) {
+    return NextResponse.json({ error: "Unsupported synthetic provider delay." }, { status: 400 });
+  }
   try {
     return NextResponse.json(await runFakeAgencyFollowupDispatcher({
       workerId: String(body.workerId ?? ""),
       now: typeof body.now === "string" ? body.now : undefined,
       limit: typeof body.limit === "number" ? body.limit : undefined,
       outcomePlan,
+      providerDelayMs: typeof providerDelayMs === "number" ? providerDelayMs : undefined,
     }));
   } catch (error) {
     return NextResponse.json({ error: "Fake dispatch failed." }, { status: 409 });
@@ -2337,7 +2343,7 @@ async function postAction(context: BrowserContext, data: Record<string, unknown>
 async function dispatchFake(
   context: BrowserContext,
   token: string,
-  input: { workerId: string; limit?: number; now?: string; outcomePlan?: Array<Record<string, unknown>> },
+  input: { workerId: string; limit?: number; now?: string; outcomePlan?: Array<Record<string, unknown>>; providerDelayMs?: number },
 ): Promise<Record<string, number>> {
   setDiagnosticStage("fake_dispatch");
   const response = await context.request.post(APP_ORIGIN + TEST_DISPATCH_PATH, {
@@ -2476,6 +2482,30 @@ async function withFixtureClaim<T>(pool: Pool, messageId: string, operation: () 
   } finally {
     try { await guard.query("rollback"); } finally { guard.release(); }
   }
+}
+
+async function waitForClaimedMessage(
+  pool: Pool,
+  messageId: string,
+  owner: string,
+  timeoutMs = 15_000,
+): Promise<{ attempt_count: number; lease_until: string }> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await pool.query<{
+      state: string; lease_owner: string | null; attempt_count: number; lease_until: string | null;
+    }>(
+      "select state,lease_owner,attempt_count,lease_until::text as lease_until from public.agency_followup_messages where id=$1",
+      [messageId],
+    );
+    const row = result.rows[0];
+    if (row?.state === "claimed" && row.lease_owner === owner && row.lease_until &&
+        Date.parse(row.lease_until) > Date.now()) {
+      return { attempt_count: Number(row.attempt_count), lease_until: row.lease_until };
+    }
+    await new Promise<void>((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error("Synthetic provider request did not reach the expected live message claim before the bounded wait expired.");
 }
 
 async function countRows(pool: Pool, query: string, values: unknown[] = []): Promise<number> {
@@ -3183,11 +3213,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     retryClient.release();
   }
 
-  const resendEventId = `evt_walkthrough_${RUN_ID}`;
+  const resendEventId = "evt_walkthrough_" + RUN_ID;
   const retryProviderMessageId = "fake-provider-retry-" + RUN_ID;
   const signedDeliveryEvent = {
     type: "email.delivered",
-    created_at: retryDueAt,
+    created_at: new Date(Date.parse(retryDueAt) + 1000).toISOString(),
     data: {
       email_id: retryProviderMessageId,
       to: [retryProspect.email],
@@ -3197,14 +3227,49 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       },
     },
   };
-  const earlyProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
-  if (earlyProviderEvent.status !== 503 || earlyProviderEvent.outcome !== "unmatched_message") {
-    throw new Error("An early signed provider event was not durably quarantined and returned for retry.");
-  }
-  const retryAcceptance = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
-    workerId: "synthetic-walkthrough-retry-accepted", now: retryDueAt, limit: 1,
+  const retryWorkerId = "synthetic-walkthrough-retry-accepted";
+  const retryAcceptancePending = withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: retryWorkerId,
+    now: retryDueAt,
+    limit: 1,
+    providerDelayMs: 20_000,
     outcomePlan: [{ kind: "accepted", providerMessageId: retryProviderMessageId, acceptedAt: retryDueAt }],
-  }));
+  })).then(
+    (value) => ({ value }),
+    (error) => ({ error }),
+  );
+  let retryLease: Awaited<ReturnType<typeof waitForClaimedMessage>>;
+  try {
+    retryLease = await waitForClaimedMessage(pool, retryMessage.id, retryWorkerId);
+  } catch (error) {
+    const pending = await retryAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw error;
+  }
+  if (retryLease.attempt_count !== 2) {
+    const pending = await retryAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw new Error("The due retry did not enter its second live claim before the provider accepted it.");
+  }
+  const earlyProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
+  const retryPreAcceptance = await pool.query<{
+    state: string; lease_owner: string | null; attempt_count: number;
+    provider_message_id: string | null; provider_accepted_at: string | null;
+  }>(
+    "select state,lease_owner,attempt_count,provider_message_id,provider_accepted_at from public.agency_followup_messages where id=$1",
+    [retryMessage.id],
+  );
+  if (earlyProviderEvent.status !== 503 || earlyProviderEvent.outcome !== "unmatched_message" ||
+      retryPreAcceptance.rows[0]?.state !== "claimed" || retryPreAcceptance.rows[0]?.lease_owner !== retryWorkerId ||
+      Number(retryPreAcceptance.rows[0]?.attempt_count) !== 2 || retryPreAcceptance.rows[0]?.provider_message_id !== null ||
+      retryPreAcceptance.rows[0]?.provider_accepted_at !== null) {
+    const pending = await retryAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw new Error("A signed event during the live retry claim was not durably quarantined before provider acceptance.");
+  }
+  const retryAcceptanceResult = await retryAcceptancePending;
+  if ("error" in retryAcceptanceResult) throw retryAcceptanceResult.error;
+  const retryAcceptance = retryAcceptanceResult.value;
   const retryReplay = await withFixtureClaim(pool, retryMessage.id, () => dispatchFake(context, walkthroughToken, {
     workerId: "synthetic-walkthrough-retry-replay", now: new Date(Date.parse(retryDueAt) + 1000).toISOString(), limit: 1,
   }));
@@ -3409,34 +3474,53 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw new Error("The ambiguous contact.updated unsubscribe did not persist one hash-only ambiguous event without inventing a single source application.");
   }
 
-  const assertRecipientUnsubscribeBlocksMessage = async (message: {
-    id: string; enrollment_id: string; prospect_id: string;
-  }, label: string) => {
-    const authorization = await withFixtureClaim(pool, message.id, async () => {
+  const assertRecipientUnsubscribeBlocksMessage = async (
+    message: { id: string; enrollment_id: string; prospect_id: string },
+    label: string,
+    existingClaim?: { owner: string; attemptCount: number },
+  ) => {
+    const inspectClaim = async () => {
       const client = await pool.connect();
-      const owner = "synthetic-walkthrough-unsubscribe-" + message.prospect_id;
+      const owner = existingClaim?.owner ?? "synthetic-walkthrough-unsubscribe-" + message.prospect_id;
       try {
         await client.query("begin");
         await client.query("set local role service_role");
-        await client.query(
-          "select id from public.claim_agency_followup_messages($1,$2::timestamptz,120,1)",
-          [owner, acceptedNow],
-        );
-        const claimed = await client.query<{
-          state: string; lease_owner: string | null; attempt_count: number; enrollment_id: string;
-        }>(
-          "select state,lease_owner,attempt_count,enrollment_id from public.agency_followup_messages where id=$1",
-          [message.id],
-        );
-        const claim = claimed.rows[0];
-        if (claim?.state !== "claimed" || claim.lease_owner !== owner || claim.enrollment_id !== message.enrollment_id) {
-          throw new Error(`The ${label} fixture could not be claimed for a rollback-only handoff check.`);
+        let attemptCount: number;
+        if (existingClaim) {
+          const claimed = await client.query<{
+            state: string; lease_owner: string | null; attempt_count: number; enrollment_id: string;
+          }>(
+            "select state,lease_owner,attempt_count,enrollment_id from public.agency_followup_messages where id=$1",
+            [message.id],
+          );
+          const claim = claimed.rows[0];
+          if (claim?.state !== "claimed" || claim.lease_owner !== owner ||
+              Number(claim.attempt_count) !== existingClaim.attemptCount || claim.enrollment_id !== message.enrollment_id) {
+            throw new Error("The " + label + " fixture no longer has its expected live provider claim.");
+          }
+          attemptCount = existingClaim.attemptCount;
+        } else {
+          await client.query(
+            "select id from public.claim_agency_followup_messages($1,$2::timestamptz,120,1)",
+            [owner, acceptedNow],
+          );
+          const claimed = await client.query<{
+            state: string; lease_owner: string | null; attempt_count: number; enrollment_id: string;
+          }>(
+            "select state,lease_owner,attempt_count,enrollment_id from public.agency_followup_messages where id=$1",
+            [message.id],
+          );
+          const claim = claimed.rows[0];
+          if (claim?.state !== "claimed" || claim.lease_owner !== owner || claim.enrollment_id !== message.enrollment_id) {
+            throw new Error("The " + label + " fixture could not be claimed for a rollback-only handoff check.");
+          }
+          attemptCount = Number(claim.attempt_count);
         }
         const result = await authorizeProviderHandoff(client, {
           messageId: message.id,
-          enrollmentId: claim.enrollment_id,
+          enrollmentId: message.enrollment_id,
           owner,
-          attemptCount: claim.attempt_count,
+          attemptCount,
         });
         await client.query("rollback");
         return result;
@@ -3446,10 +3530,13 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       } finally {
         client.release();
       }
-    });
+    };
+    const authorization = existingClaim
+      ? await inspectClaim()
+      : await withFixtureClaim(pool, message.id, inspectClaim);
     if (authorization.result !== "blocked" || !Array.isArray(authorization.blockers) ||
       !authorization.blockers.includes("contactability_blocked")) {
-      throw new Error(`A matching prospect remained dispatchable after the ${label}.`);
+      throw new Error("A matching prospect remained dispatchable after the " + label + ".");
     }
   };
   for (const message of ambiguousUnsubscribeMessages.rows) {
@@ -3482,11 +3569,42 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     "update public.agency_followup_messages set scheduled_at=$2 where id=any($1::uuid[])",
     [[earlySourceMessage.id, earlyDuplicateMessage.id], acceptedDueAt],
   );
+  const earlyDuplicateWorkerId = "synthetic-walkthrough-early-unsubscribe-duplicate";
+  const earlyDuplicateLease = await withFixtureClaim(pool, earlyDuplicateMessage.id, async () => {
+    const client = await pool.connect();
+    try {
+      await client.query("begin");
+      await client.query("set local role service_role");
+      const claimed = await client.query<{ id: string }>(
+        "select id from public.claim_agency_followup_messages($1,$2::timestamptz,120,1)",
+        [earlyDuplicateWorkerId, acceptedNow],
+      );
+      const state = await client.query<{
+        state: string; lease_owner: string | null; attempt_count: number; lease_until: string | null;
+      }>(
+        "select state,lease_owner,attempt_count,lease_until::text as lease_until from public.agency_followup_messages where id=$1",
+        [earlyDuplicateMessage.id],
+      );
+      const row = state.rows[0];
+      if (claimed.rows[0]?.id !== earlyDuplicateMessage.id || row?.state !== "claimed" ||
+          row.lease_owner !== earlyDuplicateWorkerId || Number(row.attempt_count) !== 1 ||
+          !row.lease_until || Date.parse(row.lease_until) <= Date.now()) {
+        throw new Error("The shared-recipient duplicate did not enter its isolated live claim before the delayed source send.");
+      }
+      await client.query("commit");
+      return { owner: earlyDuplicateWorkerId, attemptCount: Number(row.attempt_count) };
+    } catch (error) {
+      await client.query("rollback").catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  });
   const earlyUnsubscribeEventId = "evt_early_message_unsubscribe_" + RUN_ID;
   const earlyUnsubscribeProviderMessageId = "fake-provider-before-acceptance-" + RUN_ID;
-  const earlyUnsubscribeReceipt = await postSyntheticResendEvent(earlyUnsubscribeEventId, {
+  const earlyUnsubscribePayload = {
     type: "email.unsubscribed",
-    created_at: new Date().toISOString(),
+    created_at: new Date(Date.parse(acceptedNow) + 1000).toISOString(),
     data: {
       email_id: earlyUnsubscribeProviderMessageId,
       to: [earlyUnsubscribeSource.email],
@@ -3495,14 +3613,40 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
         agency_followup_enrollment_id: earlySourceMessage.enrollment_id,
       },
     },
-  });
+  };
+  const earlyUnsubscribeWorkerId = "synthetic-walkthrough-early-unsubscribe";
+  const earlyUnsubscribeAcceptancePending = withFixtureClaim(pool, earlySourceMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: earlyUnsubscribeWorkerId,
+    now: acceptedNow,
+    limit: 1,
+    providerDelayMs: 20_000,
+    outcomePlan: [{ kind: "accepted", providerMessageId: earlyUnsubscribeProviderMessageId, acceptedAt: acceptedNow }],
+  })).then(
+    (value) => ({ value }),
+    (error) => ({ error }),
+  );
+  let earlyUnsubscribeLease: Awaited<ReturnType<typeof waitForClaimedMessage>>;
+  try {
+    earlyUnsubscribeLease = await waitForClaimedMessage(pool, earlySourceMessage.id, earlyUnsubscribeWorkerId);
+  } catch (error) {
+    const pending = await earlyUnsubscribeAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw error;
+  }
+  if (earlyUnsubscribeLease.attempt_count !== 1) {
+    const pending = await earlyUnsubscribeAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw new Error("The early unsubscribe fixture did not enter its first live provider claim.");
+  }
+  const earlyUnsubscribeReceipt = await postSyntheticResendEvent(earlyUnsubscribeEventId, earlyUnsubscribePayload);
   const earlyUnsubscribeEvidence = await pool.query<{
     processing_result: string; recipient_sha256: string | null; message_id: string | null; enrollment_id: string | null;
     signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean;
-    applications: string; raw_email_absent: boolean;
+    applications: string; raw_email_absent: boolean; message_state: string; provider_message_id: string | null;
+    provider_accepted_at: string | null;
   }>(
-    "select event.processing_result,event.recipient_sha256,event.message_id,event.enrollment_id,event.signed_agency_followup_message_id as signed_message_id,event.signed_agency_followup_enrollment_id as signed_enrollment_id,event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,not (to_jsonb(event)::text ilike '%'||$2||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
-    [earlyUnsubscribeEventId, earlyUnsubscribeSource.email],
+    "select event.processing_result,event.recipient_sha256,event.message_id,event.enrollment_id,event.signed_agency_followup_message_id as signed_message_id,event.signed_agency_followup_enrollment_id as signed_enrollment_id,event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,not (to_jsonb(event)::text ilike '%'||$2||'%') as raw_email_absent,(select message.state from public.agency_followup_messages message where message.id=$3) as message_state,(select message.provider_message_id from public.agency_followup_messages message where message.id=$3) as provider_message_id,(select message.provider_accepted_at::text from public.agency_followup_messages message where message.id=$3) as provider_accepted_at from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    [earlyUnsubscribeEventId, earlyUnsubscribeSource.email, earlySourceMessage.id],
   );
   const earlyUnsubscribeRow = earlyUnsubscribeEvidence.rows[0];
   const expectedEarlyRecipientHash = createHash("sha256").update(earlyUnsubscribeSource.email.trim().toLowerCase(), "utf8").digest("hex");
@@ -3510,12 +3654,56 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     earlyUnsubscribeRow?.processing_result !== "unmatched_message" || earlyUnsubscribeRow.recipient_sha256 !== expectedEarlyRecipientHash ||
     earlyUnsubscribeRow.message_id !== earlySourceMessage.id || earlyUnsubscribeRow.enrollment_id !== earlySourceMessage.enrollment_id ||
     earlyUnsubscribeRow.signed_message_id !== earlySourceMessage.id || earlyUnsubscribeRow.signed_enrollment_id !== earlySourceMessage.enrollment_id ||
-    earlyUnsubscribeRow.tags_recorded !== true || earlyUnsubscribeRow.applications !== "0" || earlyUnsubscribeRow.raw_email_absent !== true) {
-    throw new Error("The tagged early email.unsubscribed event was not durably held as hash-only unmatched Agency evidence for retry.");
+    earlyUnsubscribeRow.tags_recorded !== true || earlyUnsubscribeRow.applications !== "0" || earlyUnsubscribeRow.raw_email_absent !== true ||
+    earlyUnsubscribeRow.message_state !== "claimed" || earlyUnsubscribeRow.provider_message_id !== null ||
+    earlyUnsubscribeRow.provider_accepted_at !== null) {
+    const pending = await earlyUnsubscribeAcceptancePending;
+    if ("error" in pending) throw pending.error;
+    throw new Error("The tagged unsubscribe was not held as hash-only retryable evidence during the live provider claim.");
   }
-  await assertRecipientUnsubscribeBlocksMessage(earlySourceMessage, "tagged unmatched message-level unsubscribe before acceptance");
-  await assertRecipientUnsubscribeBlocksMessage(earlyDuplicateMessage, "tagged unmatched message-level unsubscribe before acceptance");
-  progress("a signed tagged email.unsubscribed event arriving before provider acceptance remained unmatched, hash-only, retryable, and blocked both shared-recipient handoffs");
+  await assertRecipientUnsubscribeBlocksMessage(earlySourceMessage, "tagged unmatched unsubscribe during provider acceptance", {
+    owner: earlyUnsubscribeWorkerId,
+    attemptCount: earlyUnsubscribeLease.attempt_count,
+  });
+  await assertRecipientUnsubscribeBlocksMessage(
+    earlyDuplicateMessage,
+    "unmatched message-level unsubscribe shared recipient before provider acceptance",
+    earlyDuplicateLease,
+  );
+  const earlyUnsubscribeAcceptanceResult = await earlyUnsubscribeAcceptancePending;
+  if ("error" in earlyUnsubscribeAcceptanceResult) throw earlyUnsubscribeAcceptanceResult.error;
+  const earlyUnsubscribeAcceptance = earlyUnsubscribeAcceptanceResult.value;
+  const acceptedEarlyMessage = await pool.query<{ state: string; provider_message_id: string | null; provider_accepted_at: string | null }>(
+    "select state,provider_message_id,provider_accepted_at::text as provider_accepted_at from public.agency_followup_messages where id=$1",
+    [earlySourceMessage.id],
+  );
+  if (earlyUnsubscribeAcceptance.accepted !== 1 || acceptedEarlyMessage.rows[0]?.state !== "accepted" ||
+    acceptedEarlyMessage.rows[0]?.provider_message_id !== earlyUnsubscribeProviderMessageId ||
+    !acceptedEarlyMessage.rows[0]?.provider_accepted_at) {
+    throw new Error("The worker did not persist the delayed provider acceptance for the early unsubscribe claim.");
+  }
+  const earlyUnsubscribeReplay = await postSyntheticResendEvent(earlyUnsubscribeEventId, earlyUnsubscribePayload);
+  const duplicateEarlyUnsubscribeReplay = await postSyntheticResendEvent(earlyUnsubscribeEventId, earlyUnsubscribePayload);
+  const reconciledEarlyUnsubscribe = await pool.query<{
+    processing_result: string; recipient_sha256: string | null; message_id: string | null; enrollment_id: string | null;
+    applications: string; applied_result: string | null; suppression_rows: string; delivery_status: string | null;
+    raw_email_absent: boolean;
+  }>(
+    "select event.processing_result,event.recipient_sha256,event.message_id,event.enrollment_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id limit 1) as applied_result,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.provider_event_id=event.provider_event_id and suppression.suppression_reason='resend_email_unsubscribed') as suppression_rows,(select message.provider_delivery_status from public.agency_followup_messages message where message.id=$2) as delivery_status,not (to_jsonb(event)::text ilike '%'||$3||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    [earlyUnsubscribeEventId, earlySourceMessage.id, earlyUnsubscribeSource.email],
+  );
+  const earlyReconciledRow = reconciledEarlyUnsubscribe.rows[0];
+  if (earlyUnsubscribeReplay.status !== 200 || earlyUnsubscribeReplay.outcome !== "matched" ||
+    duplicateEarlyUnsubscribeReplay.status !== 200 || duplicateEarlyUnsubscribeReplay.outcome !== "duplicate" ||
+    earlyReconciledRow?.processing_result !== "unmatched_message" || earlyReconciledRow.recipient_sha256 !== expectedEarlyRecipientHash ||
+    earlyReconciledRow.message_id !== earlySourceMessage.id || earlyReconciledRow.enrollment_id !== earlySourceMessage.enrollment_id ||
+    earlyReconciledRow.applications !== "1" || earlyReconciledRow.applied_result !== "matched" ||
+    earlyReconciledRow.suppression_rows !== "1" || earlyReconciledRow.delivery_status !== "unsubscribed" ||
+    earlyReconciledRow.raw_email_absent !== true) {
+    throw new Error("The delayed message unsubscribe did not reconcile once after provider acceptance with durable shared suppression.");
+  }
+  await assertRecipientUnsubscribeBlocksMessage(earlyDuplicateMessage, "matched message-level unsubscribe", earlyDuplicateLease);
+  progress("a signed email.unsubscribed arrived during a live provider claim, stayed hash-only and retryable, blocked its shared recipient before acceptance, matched exactly once after acceptance, and deduplicated its replay");
 
   const messageUnsubscribeDuplicate = fixtures.prospects.message_unsubscribe_duplicate;
   if (messageUnsubscribeDuplicate.email !== retryProspect.email) {
