@@ -71,7 +71,7 @@ const EXPECTED_CONTACT_HANDOFF_MIGRATION_BLOB = "dd5b66599da36d382de74db2030e57e
 const ACTIVITY_LOCK_ORDER_FIX_MIGRATION_PATH = "supabase/migrations/20261024233611_agency_followup_activity_lock_order_fix.sql";
 const EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB = "d28a2677b14a490b0a5fb81b70c49aecca889b0f";
 const AMBIGUOUS_UNSUBSCRIBE_MIGRATION_PATH = "supabase/migrations/20261026124659_agency_followup_ambiguous_recipient_suppression.sql";
-const EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB = "c1a28d8204b0aa10839bd5df4ac4f4ea3a41857b";
+const EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB = "1f599d7f88ded9afb67e38c1468d9acb88b19ad4";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
@@ -1614,10 +1614,14 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["contact_unsubscribe", "Synthetic Walkthrough Contact Unsubscribe " + suffix, "Lee Example", "eligible"],
     ["contact_unsubscribe_ambiguous_a", "Synthetic Walkthrough Ambiguous Unsubscribe A " + suffix, "Drew Example", "eligible"],
     ["contact_unsubscribe_ambiguous_b", "Synthetic Walkthrough Ambiguous Unsubscribe B " + suffix, "Alex Example", "eligible"],
+    ["message_unsubscribe_duplicate", "Synthetic Walkthrough Message Unsubscribe Duplicate " + suffix, "Chris Example", "eligible"],
+    ["message_unsubscribe_early_a", "Synthetic Walkthrough Early Message Unsubscribe A " + suffix, "Morgan Example", "eligible"],
+    ["message_unsubscribe_early_b", "Synthetic Walkthrough Early Message Unsubscribe B " + suffix, "Jamie Example", "eligible"],
+    ["message_unsubscribe_source_duplicate", "Synthetic Walkthrough Source Unsubscribe Duplicate " + suffix, "Taylor Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and twelve Agency prospects");
+    progress("seeding synthetic operator and sixteen Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -1625,11 +1629,17 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     );
     for (const [key, firmName, contactName, contactability] of names) {
       const prospectId = randomUUID();
-      // These two disposable fixtures intentionally share one address so the
-      // signed contact.updated path must fail closed across ambiguous records.
+      // Disposable fixtures intentionally share addresses to exercise ambiguous,
+      // unmatched, source-failure and matched recipient unsubscribe gates.
       const email = key.startsWith("contact_unsubscribe_ambiguous_")
         ? `contact-unsubscribe-ambiguous-${suffix}@example.test`
-        : `${key}-${suffix}@example.test`;
+        : key.startsWith("message_unsubscribe_early_")
+          ? `message-unsubscribe-early-${suffix}@example.test`
+        : key === "message_unsubscribe_source_duplicate"
+          ? `tagged_unknown-${suffix}@example.test`
+        : key === "message_unsubscribe_duplicate"
+          ? `retry-${suffix}@example.test`
+          : `${key}-${suffix}@example.test`;
       await pool.query(
         "insert into public.agency_prospects (id,firm_name,contact_name,contact_email,stage,source,notes) values ($1,$2,$3,$4,'researching','synthetic_walkthrough','Synthetic local-only CRM walkthrough fixture')",
         [prospectId, firmName, contactName, email],
@@ -1657,7 +1667,7 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
           [conversationId],
         );
       }
-      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b"].includes(key)) {
+      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b", "message_unsubscribe_duplicate", "message_unsubscribe_early_a", "message_unsubscribe_early_b", "message_unsubscribe_source_duplicate"].includes(key)) {
         const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
         const databaseClock = await pool.query<{ captured_at: Date }>("select clock_timestamp() - interval '1 minute' as captured_at");
         const capturedAt = databaseClock.rows[0]?.captured_at.toISOString();
@@ -3117,8 +3127,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await createDraft(pool, page, journeyName, retryProspect);
   await markEligibleAndRelease(page, retryProspect);
   await waitForAction(page, "approve", queueCard(page, retryProspect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
-  const retryMessageResult = await pool.query<{ id: string; provider_idempotency_key: string }>(
-    "select id,provider_idempotency_key from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) and step_number=1",
+  const retryMessageResult = await pool.query<{ id: string; enrollment_id: string; provider_idempotency_key: string }>(
+    "select id,enrollment_id,provider_idempotency_key from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) and step_number=1",
     [retryProspect.id],
   );
   const retryMessage = retryMessageResult.rows[0];
@@ -3175,7 +3185,14 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const signedDeliveryEvent = {
     type: "email.delivered",
     created_at: retryDueAt,
-    data: { email_id: retryProviderMessageId, to: [retryProspect.email] },
+    data: {
+      email_id: retryProviderMessageId,
+      to: [retryProspect.email],
+      tags: {
+        agency_followup_message_id: retryMessage.id,
+        agency_followup_enrollment_id: retryMessage.enrollment_id,
+      },
+    },
   };
   const earlyProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
   if (earlyProviderEvent.status !== 503 || earlyProviderEvent.outcome !== "unmatched_message") {
@@ -3200,8 +3217,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const reconciledProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
   const duplicateProviderEvent = await postSyntheticResendEvent(resendEventId, signedDeliveryEvent);
   progress(`synthetic provider event replay: first=${JSON.stringify(reconciledProviderEvent)}; duplicate=${JSON.stringify(duplicateProviderEvent)}`);
-  const providerEventState = await pool.query<{ processing_result: string; message_id: string | null; applications: string; applied_message_id: string | null; applied_result: string | null; durable_events: string }>(
-    "select provider_event.processing_result,provider_event.message_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id and application.message_id=$2) as applications,(select application.message_id from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_message_id,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_result,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-event:'||provider_event.provider_event_id) as durable_events from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$1",
+  const providerEventState = await pool.query<{ processing_result: string; message_id: string | null; enrollment_id: string | null; signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean; applications: string; applied_message_id: string | null; applied_result: string | null; durable_events: string }>(
+    "select provider_event.processing_result,provider_event.message_id,provider_event.enrollment_id,provider_event.signed_agency_followup_message_id as signed_message_id,provider_event.signed_agency_followup_enrollment_id as signed_enrollment_id,provider_event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id and application.message_id=$2) as applications,(select application.message_id from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_message_id,(select application.applied_result from public.agency_followup_provider_event_applications application where application.provider_event_id=provider_event.provider_event_id) as applied_result,(select count(*)::text from public.agency_followup_events event where event.idempotency_key='resend-event:'||provider_event.provider_event_id) as durable_events from public.agency_followup_provider_events provider_event where provider_event.provider_event_id=$1",
     [resendEventId, retryMessage.id],
   );
   const reconciledMessage = await pool.query<{ provider_delivery_status: string }>(
@@ -3215,7 +3232,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   );
   if (reconciledProviderEvent.status !== 200 || reconciledProviderEvent.outcome !== "matched" ||
     duplicateProviderEvent.status !== 200 || duplicateProviderEvent.outcome !== "duplicate" ||
-    providerEventState.rows[0]?.processing_result !== "unmatched_message" || providerEventState.rows[0]?.message_id !== null ||
+    providerEventState.rows[0]?.processing_result !== "unmatched_message" || providerEventState.rows[0]?.message_id !== retryMessage.id ||
+    providerEventState.rows[0]?.enrollment_id !== retryMessage.enrollment_id ||
+    providerEventState.rows[0]?.signed_message_id !== retryMessage.id ||
+    providerEventState.rows[0]?.signed_enrollment_id !== retryMessage.enrollment_id ||
+    providerEventState.rows[0]?.tags_recorded !== true ||
     providerEventState.rows[0]?.applications !== "1" || providerEventState.rows[0]?.applied_message_id !== retryMessage.id ||
     providerEventState.rows[0]?.applied_result !== "matched" || providerEventState.rows[0]?.durable_events !== "1" ||
     reconciledMessage.rows[0]?.provider_delivery_status !== "delivered") {
@@ -3370,7 +3391,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     contact_applications: string; message_applications: string; suppression_rows: string; message_rows: string;
     audit_events: string; raw_email_absent: boolean;
   }>(
-    "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.message_id,event.enrollment_id,event.conversation_id,event.source_link_id,(select count(*)::text from public.agency_followup_provider_contact_applications application where application.provider_event_id=event.provider_event_id) as contact_applications,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as message_applications,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.provider_event_id=event.provider_event_id) as suppression_rows,(select count(*)::text from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=any($2::uuid[])) as message_rows,(select count(*)::text from public.agency_followup_events audit where audit.idempotency_key='resend-event:'||event.provider_event_id) as audit_events,not (to_jsonb(event)::text ilike '%'||$3||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.message_id,event.enrollment_id,event.conversation_id,event.source_link_id,(select count(*)::text from public.agency_followup_provider_contact_applications application where application.provider_event_id=event.provider_event_id) as contact_applications,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as message_applications,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.provider_event_id=event.provider_event_id) as suppression_rows,(select count(*)::text from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=any($2::uuid[]) and message.step_number=1) as message_rows,(select count(*)::text from public.agency_followup_events audit where audit.idempotency_key='resend-event:'||event.provider_event_id) as audit_events,not (to_jsonb(event)::text ilike '%'||$3||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
     [ambiguousContactEventId, ambiguousUnsubscribeProspects.map((prospect) => prospect.id), ambiguousContactEmail],
   );
   const ambiguousContact = ambiguousContactState.rows[0];
@@ -3385,10 +3406,12 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw new Error("The ambiguous contact.updated unsubscribe did not persist one hash-only ambiguous event without inventing a single source application.");
   }
 
-  for (const message of ambiguousUnsubscribeMessages.rows) {
+  const assertRecipientUnsubscribeBlocksMessage = async (message: {
+    id: string; enrollment_id: string; prospect_id: string;
+  }, label: string) => {
     const authorization = await withFixtureClaim(pool, message.id, async () => {
       const client = await pool.connect();
-      const owner = "synthetic-walkthrough-ambiguous-unsubscribe-" + message.prospect_id;
+      const owner = "synthetic-walkthrough-unsubscribe-" + message.prospect_id;
       try {
         await client.query("begin");
         await client.query("set local role service_role");
@@ -3404,7 +3427,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
         );
         const claim = claimed.rows[0];
         if (claim?.state !== "claimed" || claim.lease_owner !== owner || claim.enrollment_id !== message.enrollment_id) {
-          throw new Error("The ambiguous unsubscribe fixture could not be claimed for a rollback-only handoff check.");
+          throw new Error(`The ${label} fixture could not be claimed for a rollback-only handoff check.`);
         }
         const result = await authorizeProviderHandoff(client, {
           messageId: message.id,
@@ -3423,10 +3446,176 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     });
     if (authorization.result !== "blocked" || !Array.isArray(authorization.blockers) ||
       !authorization.blockers.includes("contactability_blocked")) {
-      throw new Error("A matching prospect remained dispatchable after the ambiguous recipient unsubscribe.");
+      throw new Error(`A matching prospect remained dispatchable after the ${label}.`);
     }
+  };
+  for (const message of ambiguousUnsubscribeMessages.rows) {
+    await assertRecipientUnsubscribeBlocksMessage(message, "ambiguous recipient unsubscribe");
   }
   progress("one signed ambiguous recipient unsubscribe remained hash-only and blocked the handoff gate for both matching approved prospects");
+
+  const earlyUnsubscribeSource = fixtures.prospects.message_unsubscribe_early_a;
+  const earlyUnsubscribeDuplicate = fixtures.prospects.message_unsubscribe_early_b;
+  if (earlyUnsubscribeSource.email !== earlyUnsubscribeDuplicate.email) {
+    throw new Error("The early message-level unsubscribe fixtures did not share one recipient address.");
+  }
+  for (const prospect of [earlyUnsubscribeSource, earlyUnsubscribeDuplicate]) {
+    await createDraft(pool, page, journeyName, prospect);
+    await markEligibleAndRelease(page, prospect);
+    await waitForAction(page, "approve", queueCard(page, prospect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  }
+  const earlyUnsubscribeMessages = await pool.query<{
+    id: string; enrollment_id: string; prospect_id: string;
+  }>(
+    "select message.id,message.enrollment_id,enrollment.prospect_id from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=any($1::uuid[]) and message.step_number=1",
+    [[earlyUnsubscribeSource.id, earlyUnsubscribeDuplicate.id]],
+  );
+  const earlySourceMessage = earlyUnsubscribeMessages.rows.find((message) => message.prospect_id === earlyUnsubscribeSource.id);
+  const earlyDuplicateMessage = earlyUnsubscribeMessages.rows.find((message) => message.prospect_id === earlyUnsubscribeDuplicate.id);
+  if (earlyUnsubscribeMessages.rows.length !== 2 || !earlySourceMessage || !earlyDuplicateMessage) {
+    throw new Error("The early message-level unsubscribe fixtures did not each have one first-step message.");
+  }
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=$2 where id=any($1::uuid[])",
+    [[earlySourceMessage.id, earlyDuplicateMessage.id], acceptedDueAt],
+  );
+  const earlyUnsubscribeEventId = "evt_early_message_unsubscribe_" + RUN_ID;
+  const earlyUnsubscribeProviderMessageId = "fake-provider-before-acceptance-" + RUN_ID;
+  const earlyUnsubscribeReceipt = await postSyntheticResendEvent(earlyUnsubscribeEventId, {
+    type: "email.unsubscribed",
+    created_at: new Date().toISOString(),
+    data: {
+      email_id: earlyUnsubscribeProviderMessageId,
+      to: [earlyUnsubscribeSource.email],
+      tags: {
+        agency_followup_message_id: earlySourceMessage.id,
+        agency_followup_enrollment_id: earlySourceMessage.enrollment_id,
+      },
+    },
+  });
+  const earlyUnsubscribeEvidence = await pool.query<{
+    processing_result: string; recipient_sha256: string | null; message_id: string | null; enrollment_id: string | null;
+    signed_message_id: string | null; signed_enrollment_id: string | null; tags_recorded: boolean;
+    applications: string; raw_email_absent: boolean;
+  }>(
+    "select event.processing_result,event.recipient_sha256,event.message_id,event.enrollment_id,event.signed_agency_followup_message_id as signed_message_id,event.signed_agency_followup_enrollment_id as signed_enrollment_id,event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,not (to_jsonb(event)::text ilike '%'||$2||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    [earlyUnsubscribeEventId, earlyUnsubscribeSource.email],
+  );
+  const earlyUnsubscribeRow = earlyUnsubscribeEvidence.rows[0];
+  const expectedEarlyRecipientHash = createHash("sha256").update(earlyUnsubscribeSource.email.trim().toLowerCase(), "utf8").digest("hex");
+  if (earlyUnsubscribeReceipt.status !== 503 || earlyUnsubscribeReceipt.outcome !== "unmatched_message" ||
+    earlyUnsubscribeRow?.processing_result !== "unmatched_message" || earlyUnsubscribeRow.recipient_sha256 !== expectedEarlyRecipientHash ||
+    earlyUnsubscribeRow.message_id !== earlySourceMessage.id || earlyUnsubscribeRow.enrollment_id !== earlySourceMessage.enrollment_id ||
+    earlyUnsubscribeRow.signed_message_id !== earlySourceMessage.id || earlyUnsubscribeRow.signed_enrollment_id !== earlySourceMessage.enrollment_id ||
+    earlyUnsubscribeRow.tags_recorded !== true || earlyUnsubscribeRow.applications !== "0" || earlyUnsubscribeRow.raw_email_absent !== true) {
+    throw new Error("The tagged early email.unsubscribed event was not durably held as hash-only unmatched Agency evidence for retry.");
+  }
+  await assertRecipientUnsubscribeBlocksMessage(earlySourceMessage, "tagged unmatched message-level unsubscribe before acceptance");
+  await assertRecipientUnsubscribeBlocksMessage(earlyDuplicateMessage, "tagged unmatched message-level unsubscribe before acceptance");
+  progress("a signed tagged email.unsubscribed event arriving before provider acceptance remained unmatched, hash-only, retryable, and blocked both shared-recipient handoffs");
+
+  const messageUnsubscribeDuplicate = fixtures.prospects.message_unsubscribe_duplicate;
+  if (messageUnsubscribeDuplicate.email !== retryProspect.email) {
+    throw new Error("The message-level unsubscribe duplicate fixture did not share the retry mailbox.");
+  }
+  const exactMessageUnsubscribe = await pool.query<{
+    processing_result: string; recipient_sha256: string | null; conversation_id: string | null; suppression_rows: string;
+  }>(
+    "select event.processing_result,event.recipient_sha256,event.conversation_id,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.provider_event_id=event.provider_event_id and suppression.suppression_reason='resend_email_unsubscribed') as suppression_rows from public.agency_followup_provider_events event where event.event_type='email.unsubscribed' and event.provider_message_id=$1 and event.recipient_sha256=$2",
+    [retryProviderMessageId, createHash("sha256").update(retryProspect.email.trim().toLowerCase(), "utf8").digest("hex")],
+  );
+  if (exactMessageUnsubscribe.rows.length !== 1 || exactMessageUnsubscribe.rows[0]?.processing_result !== "matched" ||
+    exactMessageUnsubscribe.rows[0]?.conversation_id !== retryProspect.conversationId ||
+    exactMessageUnsubscribe.rows[0]?.suppression_rows !== "1") {
+    throw new Error("The message-level unsubscribe fixture lacks its exact matched provider suppression evidence.");
+  }
+  await createDraft(pool, page, journeyName, messageUnsubscribeDuplicate);
+  await markEligibleAndRelease(page, messageUnsubscribeDuplicate);
+  await waitForAction(page, "approve", queueCard(page, messageUnsubscribeDuplicate.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const messageUnsubscribeDuplicateRow = await pool.query<{
+    id: string; enrollment_id: string; prospect_id: string;
+  }>(
+    "select message.id,message.enrollment_id,enrollment.prospect_id from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.step_number=1",
+    [messageUnsubscribeDuplicate.id],
+  );
+  if (messageUnsubscribeDuplicateRow.rows.length !== 1) {
+    throw new Error("The message-level duplicate fixture did not have exactly one first-step message.");
+  }
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=$2 where id=$1",
+    [messageUnsubscribeDuplicateRow.rows[0].id, acceptedDueAt],
+  );
+  await assertRecipientUnsubscribeBlocksMessage(
+    messageUnsubscribeDuplicateRow.rows[0],
+    "matched message-level unsubscribe",
+  );
+  progress("a signed matched email.unsubscribed event blocked a second approved prospect sharing that recipient address");
+
+  const sourceUnsubscribeDuplicate = fixtures.prospects.message_unsubscribe_source_duplicate;
+  if (sourceUnsubscribeDuplicate.email !== taggedUnknownProspect.email) {
+    throw new Error("The source-resolution duplicate fixture did not share the tagged accepted message recipient.");
+  }
+  await createDraft(pool, page, journeyName, sourceUnsubscribeDuplicate);
+  await markEligibleAndRelease(page, sourceUnsubscribeDuplicate);
+  await waitForAction(page, "approve", queueCard(page, sourceUnsubscribeDuplicate.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const sourceUnsubscribeDuplicateRow = await pool.query<{
+    id: string; enrollment_id: string; prospect_id: string;
+  }>(
+    "select message.id,message.enrollment_id,enrollment.prospect_id from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.step_number=1",
+    [sourceUnsubscribeDuplicate.id],
+  );
+  if (sourceUnsubscribeDuplicateRow.rows.length !== 1) {
+    throw new Error("The source-resolution duplicate fixture did not have exactly one first-step message.");
+  }
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=$2 where id=$1",
+    [sourceUnsubscribeDuplicateRow.rows[0].id, acceptedDueAt],
+  );
+  // Only the disposable walkthrough fixture is altered: removing its source
+  // association deterministically exercises the accepted-but-unmapped path.
+  const removedTaggedSourceAssociations = await pool.query<{ source_link_id: string }>(
+    "delete from public.prospect_conversation_sources association using public.prospect_source_links source_link where association.source_link_id=source_link.id and source_link.source_record_key=$1 and source_link.source_system in ('agency_crm','agency_crm_contact') returning association.source_link_id",
+    [taggedUnknownProspect.id],
+  );
+  if (removedTaggedSourceAssociations.rows.length === 0) {
+    throw new Error("The accepted tagged source fixture had no Agency source association to make source resolution fail.");
+  }
+  const sourceUnsubscribeEventId = "evt_source_message_unsubscribe_" + RUN_ID;
+  const sourceUnsubscribeReceipt = await postSyntheticResendEvent(sourceUnsubscribeEventId, {
+    type: "email.unsubscribed",
+    created_at: new Date().toISOString(),
+    data: {
+      email_id: taggedProviderMessageId,
+      to: [taggedUnknownProspect.email],
+      tags: {
+        agency_followup_message_id: taggedMessage.id,
+        agency_followup_enrollment_id: taggedMessage.enrollment_id,
+      },
+    },
+  });
+  const sourceUnsubscribeEvidence = await pool.query<{
+    processing_result: string; recipient_sha256: string | null; provider_message_id: string | null;
+    message_id: string | null; enrollment_id: string | null; signed_message_id: string | null; signed_enrollment_id: string | null;
+    tags_recorded: boolean; applications: string; raw_email_absent: boolean;
+  }>(
+    "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.message_id,event.enrollment_id,event.signed_agency_followup_message_id as signed_message_id,event.signed_agency_followup_enrollment_id as signed_enrollment_id,event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,not (to_jsonb(event)::text ilike '%'||$2||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    [sourceUnsubscribeEventId, taggedUnknownProspect.email],
+  );
+  const sourceUnsubscribeRow = sourceUnsubscribeEvidence.rows[0];
+  const expectedSourceRecipientHash = createHash("sha256").update(taggedUnknownProspect.email.trim().toLowerCase(), "utf8").digest("hex");
+  if (sourceUnsubscribeReceipt.status !== 200 || sourceUnsubscribeReceipt.outcome !== "unmatched_source" ||
+    !sourceUnsubscribeRow || sourceUnsubscribeRow.processing_result !== "unmatched_source" ||
+    sourceUnsubscribeRow.recipient_sha256 !== expectedSourceRecipientHash || sourceUnsubscribeRow.provider_message_id !== taggedProviderMessageId ||
+    sourceUnsubscribeRow.message_id !== taggedMessage.id || sourceUnsubscribeRow.enrollment_id !== taggedMessage.enrollment_id ||
+    sourceUnsubscribeRow.signed_message_id !== taggedMessage.id || sourceUnsubscribeRow.signed_enrollment_id !== taggedMessage.enrollment_id ||
+    sourceUnsubscribeRow.tags_recorded !== true || sourceUnsubscribeRow.applications !== "0" || sourceUnsubscribeRow.raw_email_absent !== true) {
+    throw new Error("The accepted tagged email.unsubscribed event did not remain hash-only and source-unresolved after its Agency mapping was removed.");
+  }
+  await assertRecipientUnsubscribeBlocksMessage(
+    sourceUnsubscribeDuplicateRow.rows[0],
+    "source-unresolved accepted message-level unsubscribe",
+  );
+  progress("a signed unsubscribe for an accepted Agency message with missing source resolution stayed hash-only and blocked the duplicate recipient handoff");
 
   // Exercise actual schedule policy immediately before handoff with a delayed
   // weekend claim. The current weekday/window come from the persisted journey.

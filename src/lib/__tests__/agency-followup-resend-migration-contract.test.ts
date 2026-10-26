@@ -25,10 +25,23 @@ const walkthrough = readFileSync(resolve(process.cwd(), "scripts/agency-followup
 const service = readFileSync(resolve(process.cwd(), "src/lib/agency-followup-service.ts"), "utf8");
 const suppressionMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20261024054520_agency_followup_resend_suppressed_status.sql"), "utf8");
 const handoffClockContactMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20261024213806_agency_followup_handoff_clock_recheck_and_contact_suppression.sql"), "utf8");
+const recipientUnsubscribeGateMigration = readFileSync(resolve(process.cwd(), "supabase/migrations/20261026124659_agency_followup_ambiguous_recipient_suppression.sql"), "utf8");
 const activityLockOrderFixMigrationName = "20261024233611_agency_followup_activity_lock_order_fix.sql";
 const activityLockOrderFixMigration = readFileSync(resolve(process.cwd(), "supabase/migrations", activityLockOrderFixMigrationName), "utf8");
 
 describe("Agency follow-up Resend migration contract", () => {
+  it("blocks recipient-level unsubscribes when message resolution is unmatched or source mapping fails", () => {
+    expect(recipientUnsubscribeGateMigration).toContain("CREATE INDEX agency_followup_provider_recipient_unsubscribe_hash_idx");
+    expect(recipientUnsubscribeGateMigration).toContain("event_type='contact.updated' AND contact_status='unsubscribed'");
+    expect(recipientUnsubscribeGateMigration).toContain("event_type='email.unsubscribed'");
+    expect(recipientUnsubscribeGateMigration).toContain("processing_result IN ('unmatched_message','unmatched_source','ambiguous_source')");
+    expect(recipientUnsubscribeGateMigration).toContain("signed_agency_followup_tags_recorded IS TRUE");
+    expect(recipientUnsubscribeGateMigration).toContain("message_id IS NOT NULL AND enrollment_id IS NOT NULL");
+    expect(recipientUnsubscribeGateMigration).toContain("recipient_unsubscribe_event.recipient_sha256=hash_email_now");
+    expect(recipientUnsubscribeGateMigration).not.toContain("recipient_email");
+    expect(recipientUnsubscribeGateMigration).toMatch(/v_anchor_count <> 1/);
+  });
+
   it("orders the activity identity lock by its distinct key", () => {
     expect(activityLockOrderFixMigration).toContain("CREATE OR REPLACE FUNCTION public.lock_agency_followup_activity_before_insert()");
     expect(activityLockOrderFixMigration).toMatch(/SELECT DISTINCT prospect\.id AS prospect_id[\s\S]*?ORDER BY prospect\.id\s+LOOP/i);
@@ -398,7 +411,9 @@ describe("Agency follow-up Resend migration contract", () => {
     ];
     expect(signedPayloadValidationOrder.every((position) => position >= 0)).toBe(true);
     expect(signedPayloadValidationOrder).toEqual([...signedPayloadValidationOrder].sort((left, right) => left - right));
-    expect(resendWebhookRoute).toContain('if (outcome === "unmatched_message") return noStore({ ok: false, outcome }, 503)');
+    expect(resendWebhookRoute).toContain("const hasAgencyFollowupIdentity = parsedTags.messageId !== null && parsedTags.enrollmentId !== null;");
+    expect(resendWebhookRoute).toContain('if (outcome === "unmatched_message" && hasAgencyFollowupIdentity) {');
+    expect(resendWebhookRoute).toContain('return noStore({ ok: false, outcome }, 503)');
     expect(resendWebhookRoute).toContain("p_agency_followup_message_id");
     expect(resendWebhookRoute).toContain("p_agency_followup_enrollment_id");
     expect(resendWebhookRoute).toContain('supabaseAdmin.rpc("persist_agency_followup_resend_event"');

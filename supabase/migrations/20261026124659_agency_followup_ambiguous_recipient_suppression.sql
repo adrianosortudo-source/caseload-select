@@ -1,23 +1,60 @@
--- Resend contact unsubscribes apply to the mailbox, even when its Agency CRM
--- identity is ambiguous. Keep the digest-only event as durable evidence and
--- fail closed for every Agency prospect that currently or later uses it.
-CREATE INDEX agency_followup_provider_contact_unsubscribe_hash_idx
+-- Resend contact unsubscribes and Agency-tagged message unsubscribes apply to
+-- the mailbox even when its identity is ambiguous or acceptance is still in
+-- flight. Keep the digest-only event and fail closed for every matching lead.
+CREATE INDEX agency_followup_provider_recipient_unsubscribe_hash_idx
   ON public.agency_followup_provider_events (recipient_sha256)
-  WHERE event_type='contact.updated'
-    AND contact_status='unsubscribed'
-    AND recipient_sha256 IS NOT NULL;
+  WHERE recipient_sha256 IS NOT NULL
+    AND (
+      (event_type='contact.updated' AND contact_status='unsubscribed')
+      OR (
+        event_type='email.unsubscribed'
+        AND (
+          processing_result='matched'
+          OR (
+            processing_result IN ('unmatched_message','unmatched_source','ambiguous_source')
+            AND (
+              (message_id IS NOT NULL AND enrollment_id IS NOT NULL)
+              OR (
+                signed_agency_followup_tags_recorded IS TRUE
+                AND signed_agency_followup_message_id IS NOT NULL
+                AND signed_agency_followup_enrollment_id IS NOT NULL
+              )
+            )
+          )
+        )
+      )
+    );
 
 DO $agency_followup_ambiguous_unsubscribe_gate$
 DECLARE
   v_function_definition text;
   v_anchor text := $anchor$IF cv.id IS NOT NULL AND EXISTS(SELECT 1 FROM public.prospect_contactability_provider_suppressions x WHERE x.conversation_id=cv.id) THEN blockers:=pg_catalog.array_append(blockers,'contactability_blocked'); END IF;$anchor$;
-  v_marker text := 'contact_unsubscribe_event.recipient_sha256=hash_email_now';
+  v_marker text := 'recipient_unsubscribe_event.recipient_sha256=hash_email_now';
   v_insertion text := $insertion$IF hash_email_now IS NOT NULL AND EXISTS(
   SELECT 1
-  FROM public.agency_followup_provider_events AS contact_unsubscribe_event
-  WHERE contact_unsubscribe_event.event_type='contact.updated'
-    AND contact_unsubscribe_event.contact_status='unsubscribed'
-    AND contact_unsubscribe_event.recipient_sha256=hash_email_now
+  FROM public.agency_followup_provider_events AS recipient_unsubscribe_event
+  WHERE recipient_unsubscribe_event.recipient_sha256=hash_email_now
+    AND (
+      (recipient_unsubscribe_event.event_type='contact.updated'
+       AND recipient_unsubscribe_event.contact_status='unsubscribed')
+      OR (
+        recipient_unsubscribe_event.event_type='email.unsubscribed'
+        AND (
+          recipient_unsubscribe_event.processing_result='matched'
+          OR (
+            recipient_unsubscribe_event.processing_result IN ('unmatched_message','unmatched_source','ambiguous_source')
+            AND (
+              (recipient_unsubscribe_event.message_id IS NOT NULL AND recipient_unsubscribe_event.enrollment_id IS NOT NULL)
+              OR (
+                recipient_unsubscribe_event.signed_agency_followup_tags_recorded IS TRUE
+                AND recipient_unsubscribe_event.signed_agency_followup_message_id IS NOT NULL
+                AND recipient_unsubscribe_event.signed_agency_followup_enrollment_id IS NOT NULL
+              )
+            )
+          )
+        )
+      )
+    )
 ) THEN blockers:=pg_catalog.array_append(blockers,'contactability_blocked'); END IF;$insertion$;
   v_anchor_count integer;
 BEGIN
