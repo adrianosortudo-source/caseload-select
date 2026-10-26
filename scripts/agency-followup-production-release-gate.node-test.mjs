@@ -8,6 +8,9 @@ import { test } from "node:test";
 import {
   AGENCY_MIGRATIONS,
   APPLY_CONFIRMATION,
+  TEMPORARY_CREDENTIAL_CONFIRMATION,
+  verifyAgencyTemporaryCredentialAuthorization,
+  verifyAgencyConnectionEvidence,
   APPLY_EVIDENCE_FILES,
   PREFLIGHT_EVIDENCE_FILES,
   createPreflightManifest,
@@ -25,6 +28,7 @@ import {
   HISTORICAL_LEDGER_NAME_ALIASES,
   PREVIEW_MIGRATION_PATHS,
   PROJECT_REF,
+  TEMPORARY_DATABASE_HOST,
   sourceMigrationInventory,
 } from "./prospect-enrichment/migration-gate.mjs";
 import { DATABASE_CA_SHA256 } from "./prospect-enrichment/database-ca.mjs";
@@ -71,7 +75,7 @@ function makePlan(phase = "pre") {
   };
 }
 
-function makePreflightEvidence(directory, stagedEvidence, rows) {
+function makePreflightEvidence(directory, stagedEvidence, rows, temporary = false) {
   const migrations = verifyAgencyMigrationSources(ROOT);
   const ledgerCheck = verifyAgencyFullLedger(rows, ROOT, "preflight");
   const plan = makePlan();
@@ -85,6 +89,9 @@ function makePreflightEvidence(directory, stagedEvidence, rows) {
     connectionMode: "explicit-db-url",
     certificateTrust: "pinned-supabase-root-2021",
   };
+  if (temporary) Object.assign(connection, {
+    host: TEMPORARY_DATABASE_HOST, user: `cli_login_synthetic.${PROJECT_REF}`, credentialMode: "temporary-write-capable",
+  });
   const values = {
     "source-check.json": {
       schemaVersion: "agency-followup-source-check/v1",
@@ -260,7 +267,7 @@ test("workflow has separate manual read-only preflight and environment-gated app
   assert.equal(workflow.permissions.contents, "read");
   assert.equal(workflow.permissions.actions, "read");
   assert.match(workflowText, /CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL/);
-  assert.doesNotMatch(workflowText, /CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN|supabase migration repair|\bpsql\b/i);
+  assert.doesNotMatch(workflowText, /supabase migration repair|\bpsql\b/i);
 
   const preflightText = workflow.jobs.preflight.steps.map(step => step.run ?? "").join("\n");
   const applyText = workflow.jobs.apply.steps.map(step => step.run ?? "").join("\n");
@@ -276,4 +283,96 @@ test("workflow has separate manual read-only preflight and environment-gated app
   for (const file of writtenEvidence) assert.ok(resultManifestFiles.has(file), `${file} must be covered by result manifest`);
   assert.ok(PREFLIGHT_EVIDENCE_FILES.every(file => file.endsWith(".json")));
   assert.ok(APPLY_EVIDENCE_FILES.includes("staged-inventory-post.json"));
+});
+
+
+test("temporary access requires an exact confirmation, current main and clean source before acquisition", () => {
+  const env = {
+    ...WORKFLOW_ENV, USE_TEMPORARY_DATABASE_CREDENTIAL: "true", CREDENTIAL_GATE: "agency-followup",
+    TEMPORARY_CREDENTIAL_CONFIRMATION, GITHUB_JOB: "preflight", GITHUB_EVENT_NAME: "workflow_dispatch",
+    GITHUB_REF: "refs/heads/main", GITHUB_REPOSITORY: "adrianosortudo-source/caseload-select", GITHUB_SHA: SOURCE_SHA,
+  };
+  const context = { checkoutSha: SOURCE_SHA, originMainSha: SOURCE_SHA, worktreeStatus: "", projectEnvFiles: [] };
+  assert.equal(verifyAgencyTemporaryCredentialAuthorization(env, context).temporaryAccessConfirmed, true);
+  for (const change of [
+    { USE_TEMPORARY_DATABASE_CREDENTIAL: "false" }, { TEMPORARY_CREDENTIAL_CONFIRMATION: "" },
+    { CREDENTIAL_GATE: "enrichment" }, { GITHUB_JOB: "other" }, { GITHUB_REF: "refs/heads/other" },
+    { GITHUB_RUN_ATTEMPT: "2" }, { GITHUB_EVENT_NAME: "push" }, { PGPASSWORD: "synthetic" },
+    { GITHUB_JOB: "apply", APPLY_CONFIRMATION: "" },
+  ]) assert.throws(() => verifyAgencyTemporaryCredentialAuthorization({ ...env, ...change }, context));
+  for (const change of [{ originMainSha: "b".repeat(40) }, { checkoutSha: "b".repeat(40) },
+    { worktreeStatus: " M package.json" }, { projectEnvFiles: [".env"] }]) {
+    assert.throws(() => verifyAgencyTemporaryCredentialAuthorization(env, { ...context, ...change }));
+  }
+  assert.equal(verifyAgencyTemporaryCredentialAuthorization({ ...env, GITHUB_JOB: "apply", APPLY_CONFIRMATION }, context).job, "apply");
+});
+
+test("temporary connection evidence accepts only the pinned pooler, project, role and TLS", () => {
+  const connection = {
+    host: TEMPORARY_DATABASE_HOST, port: 5432, database: "postgres", user: `cli_login_synthetic.${PROJECT_REF}`,
+    sslmode: "verify-full", connectionMode: "explicit-db-url", certificateTrust: "pinned-supabase-root-2021",
+    credentialMode: "temporary-write-capable",
+  };
+  assert.deepEqual(verifyAgencyConnectionEvidence(connection, "temporary-write-capable"), connection);
+  assert.throws(() => verifyAgencyConnectionEvidence(connection, "saved-password"));
+  for (const change of [
+    { host: `db.${PROJECT_REF}.supabase.co` }, { host: "other.pooler.supabase.com" }, { port: 6543 },
+    { database: "template1" }, { user: "postgres" }, { user: "cli_login_x.otherproject" },
+    { user: `cli_login_.${PROJECT_REF}` }, { sslmode: "require" }, { credentialMode: "saved-password" },
+    { password: "must-not-be-in-evidence" }, { certificateTrust: "system" },
+  ]) assert.throws(() => verifyAgencyConnectionEvidence({ ...connection, ...change }, "temporary-write-capable"));
+});
+
+test("temporary preflight artifact binds credential mode and cannot be reused as saved-password evidence", () => {
+  const parent = fs.mkdtempSync(path.join(os.tmpdir(), "agency-temporary-evidence-"));
+  const directory = path.join(parent, "evidence");
+  fs.mkdirSync(directory);
+  try {
+    const { evidence } = stageAgencyProductionWorkdir(ROOT, path.join(parent, "stage"), SOURCE_SHA);
+    makePreflightEvidence(directory, evidence, agencyPreflightRows(), true);
+    assert.throws(() => createPreflightManifest(directory, { sourceRoot: ROOT, env: WORKFLOW_ENV }));
+    const env = { ...WORKFLOW_ENV, USE_TEMPORARY_DATABASE_CREDENTIAL: "true" };
+    const { manifestSha256, manifest } = createPreflightManifest(directory, { sourceRoot: ROOT, env });
+    assert.equal(manifest.binding.credentialMode, "temporary-write-capable");
+    const metadata = { id: 99, name: `agency-followup-production-preflight-${env.GITHUB_RUN_ID}-1`,
+      digest: "sha256:" + "b".repeat(64), expired: false,
+      workflow_run: { id: Number(env.GITHUB_RUN_ID), head_sha: SOURCE_SHA, head_branch: "main" } };
+    const artifactEnv = { ...env, EXPECTED_ARTIFACT_ID: "99", EXPECTED_ARTIFACT_DIGEST: metadata.digest,
+      EXPECTED_ARTIFACT_NAME: metadata.name, EXPECTED_MANIFEST_SHA256: manifestSha256 };
+    assert.equal(verifyPreflightArtifact(directory, metadata, { sourceRoot: ROOT, env: artifactEnv }).verified, true);
+    assert.throws(() => verifyPreflightArtifact(directory, metadata, {
+      sourceRoot: ROOT, env: { ...artifactEnv, USE_TEMPORARY_DATABASE_CREDENTIAL: "false" },
+    }), /agency_followup_preflight_manifest_invalid/);
+  } finally { fs.rmSync(parent, { recursive: true, force: true }); }
+});
+
+test("workflow keeps temporary token isolated, authenticates only after source/evidence approval and rechecks expiry", () => {
+  const workflow = yaml.load(fs.readFileSync(path.join(ROOT, ".github/workflows/agency-followup-production-release.yml"), "utf8"));
+  assert.equal(workflow.on.workflow_dispatch.inputs.use_temporary_database_credential.default, false);
+  assert.match(workflow.jobs.apply.if, /inputs\.apply_confirmation == 'APPLY-AGENCY-FOLLOWUP-MIGRATIONS-V1'/);
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    const mint = job.steps.findIndex(step => (step.run ?? "").includes("node scripts/prospect-enrichment/temporary-credential.mjs"));
+    const authorization = job.steps.findIndex(step => (step.run ?? "").includes("credential-authorization"));
+    const staticLoader = job.steps.find(step => step.env?.STATIC_MIGRATION_DATABASE_URL);
+    assert.ok(authorization >= 0 && mint > authorization);
+    assert.equal(staticLoader.if, "${{ !inputs.use_temporary_database_credential }}");
+    assert.equal(job.steps[mint].if, "inputs.use_temporary_database_credential");
+    assert.equal(job.steps[mint].run, "node scripts/prospect-enrichment/temporary-credential.mjs");
+    assert.equal(job.steps[mint].env.MIGRATION_ACCESS_TOKEN, "${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}");
+    if (name === "apply") {
+      const verify = job.steps.findIndex(step => (step.run ?? "").includes(" verify-preflight "));
+      assert.ok(verify >= 0 && verify < authorization);
+    }
+    for (const [index, step] of job.steps.entries()) {
+      if (index !== mint) assert.equal(step.env?.MIGRATION_ACCESS_TOKEN, undefined);
+      assert.equal(step.env?.MIGRATION_DATABASE_URL, undefined);
+      if (!step.run) continue;
+      const lines = step.run.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        if (!lines[i].includes("supabase db ") || lines[i].includes("--help")) continue;
+        const preceding = lines.slice(Math.max(0, i - 3), i).join("\n");
+        assert.match(preceding, /agency-followup-production-release-gate\.mjs connection-check/);
+      }
+    }
+  }
 });

@@ -7,6 +7,15 @@ name: Agency follow-up production migration release
         description: Exact reviewed 40-character current main commit SHA.
         required: true
         type: string
+      use_temporary_database_credential:
+        description: Create a temporary WRITE-CAPABLE login for each approved job instead of using a saved password.
+        required: false
+        default: false
+        type: boolean
+      temporary_credential_confirmation:
+        description: For temporary mode, enter CREATE-TEMPORARY-AGENCY-DATABASE-ACCESS exactly; preflight still creates write-capable authentication.
+        required: false
+        type: string
       apply_confirmation:
         description: For the protected apply job only, enter APPLY-AGENCY-FOLLOWUP-MIGRATIONS-V1 exactly.
         required: false
@@ -23,7 +32,7 @@ concurrency:
 jobs:
   preflight:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select' && github.run_attempt == 1
-    name: Read-only Agency migration preflight
+    name: Agency migration preflight
     runs-on: ubuntu-latest
     timeout-minutes: 25
     environment:
@@ -34,6 +43,9 @@ jobs:
       manifest_sha256: ${{ steps.preflight_manifest.outputs.manifest_sha256 }}
     env:
       REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+      USE_TEMPORARY_DATABASE_CREDENTIAL: ${{ inputs.use_temporary_database_credential && 'true' || 'false' }}
+      TEMPORARY_CREDENTIAL_CONFIRMATION: ${{ inputs.temporary_credential_confirmation }}
+      CREDENTIAL_GATE: agency-followup
     steps:
       - name: Check out reviewed current main
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -76,6 +88,7 @@ jobs:
           node scripts/agency-followup-production-release-gate.mjs source-check > "$AGENCY_PREFLIGHT_EVIDENCE_DIR/source-check.json"
 
       - name: Load the existing protected production database connection
+        if: ${{ !inputs.use_temporary_database_credential }}
         env:
           STATIC_MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
         shell: bash
@@ -84,6 +97,21 @@ jobs:
           test -n "$STATIC_MIGRATION_DATABASE_URL"
           [[ "$STATIC_MIGRATION_DATABASE_URL" != *$'\n'* && "$STATIC_MIGRATION_DATABASE_URL" != *$'\r'* ]]
           printf 'MIGRATION_DATABASE_URL=%s\n' "$STATIC_MIGRATION_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Authorize optional temporary write-capable database access
+        if: inputs.use_temporary_database_credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          node scripts/agency-followup-production-release-gate.mjs credential-authorization > "$RUNNER_TEMP/agency-temporary-access-authorization.json"
+
+      - name: Obtain approved temporary write-capable database access
+        if: inputs.use_temporary_database_credential
+        env:
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        shell: bash
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
 
       - name: Configure the pinned Supabase database certificate
         shell: bash
@@ -104,8 +132,10 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/agency-followup-production-release-gate.mjs full-ledger-query > "$RUNNER_TEMP/agency-full-ledger-readback.sql"
+          node scripts/agency-followup-production-release-gate.mjs connection-check > "$RUNNER_TEMP/agency-live-connection-check.json"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/agency-full-ledger-readback.sql" --output-format json --agent no > "$AGENCY_PREFLIGHT_EVIDENCE_DIR/full-ledger-before.json"
           node scripts/agency-followup-production-release-gate.mjs check-ledger preflight "$AGENCY_PREFLIGHT_EVIDENCE_DIR/full-ledger-before.json" "$AGENCY_PREFLIGHT_EVIDENCE_DIR/ledger-before-check.json"
+          node scripts/agency-followup-production-release-gate.mjs connection-check > "$RUNNER_TEMP/agency-live-connection-check.json"
           (cd "$AGENCY_PREFLIGHT_STAGE_DIR" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$AGENCY_PREFLIGHT_EVIDENCE_DIR/plan.json"
           node scripts/agency-followup-production-release-gate.mjs check-plan pre "$AGENCY_PREFLIGHT_EVIDENCE_DIR/plan.json" "$AGENCY_PREFLIGHT_EVIDENCE_DIR/plan-check.json"
 
@@ -127,7 +157,7 @@ jobs:
 
   apply:
     needs: preflight
-    if: needs.preflight.result == 'success' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select' && github.run_attempt == 1
+    if: needs.preflight.result == 'success' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'adrianosortudo-source/caseload-select' && github.run_attempt == 1 && inputs.apply_confirmation == 'APPLY-AGENCY-FOLLOWUP-MIGRATIONS-V1'
     name: Environment-gated Agency migration apply
     runs-on: ubuntu-latest
     timeout-minutes: 35
@@ -135,6 +165,9 @@ jobs:
       name: Production prospect migrations
     env:
       REVIEWED_SOURCE_SHA: ${{ inputs.reviewed_source_sha }}
+      USE_TEMPORARY_DATABASE_CREDENTIAL: ${{ inputs.use_temporary_database_credential && 'true' || 'false' }}
+      TEMPORARY_CREDENTIAL_CONFIRMATION: ${{ inputs.temporary_credential_confirmation }}
+      CREDENTIAL_GATE: agency-followup
       APPLY_CONFIRMATION: ${{ inputs.apply_confirmation }}
       EXPECTED_ARTIFACT_ID: ${{ needs.preflight.outputs.artifact_id }}
       EXPECTED_ARTIFACT_DIGEST: ${{ needs.preflight.outputs.artifact_digest }}
@@ -163,24 +196,6 @@ jobs:
           printf 'AGENCY_APPLY_STAGE_DIR=%s\n' "$RUNNER_TEMP/agency-followup-apply-stage" >> "$GITHUB_ENV"
           printf 'AGENCY_POST_STAGE_DIR=%s\n' "$RUNNER_TEMP/agency-followup-post-stage" >> "$GITHUB_ENV"
 
-      - name: Load the existing protected production database connection
-        env:
-          STATIC_MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -n "$STATIC_MIGRATION_DATABASE_URL"
-          [[ "$STATIC_MIGRATION_DATABASE_URL" != *$'\n'* && "$STATIC_MIGRATION_DATABASE_URL" != *$'\r'* ]]
-          printf 'MIGRATION_DATABASE_URL=%s\n' "$STATIC_MIGRATION_DATABASE_URL" >> "$GITHUB_ENV"
-
-      - name: Configure the pinned Supabase database certificate
-        shell: bash
-        run: |
-          set -euo pipefail
-          node scripts/prospect-enrichment/configure-migration-tls.mjs
-          mv "$RUNNER_TEMP/database-tls-check.json" "$AGENCY_RESULT_EVIDENCE_DIR/database-tls-check-apply.json"
-          node scripts/agency-followup-production-release-gate.mjs connection-check > "$AGENCY_RESULT_EVIDENCE_DIR/connection-check-apply.json"
-
       - name: Download this run’s immutable preflight artifact
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
@@ -202,6 +217,40 @@ jobs:
           node scripts/agency-followup-production-release-gate.mjs verify-preflight "$AGENCY_PREFLIGHT_DOWNLOAD_DIR" "$RUNNER_TEMP/agency-preflight-artifact-metadata.json" > "$RUNNER_TEMP/agency-preflight-artifact-check.json"
           cp "$AGENCY_PREFLIGHT_DOWNLOAD_DIR"/* "$AGENCY_RESULT_EVIDENCE_DIR"/
 
+      - name: Load the existing protected production database connection
+        if: ${{ !inputs.use_temporary_database_credential }}
+        env:
+          STATIC_MIGRATION_DATABASE_URL: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_DB_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$STATIC_MIGRATION_DATABASE_URL"
+          [[ "$STATIC_MIGRATION_DATABASE_URL" != *$'\n'* && "$STATIC_MIGRATION_DATABASE_URL" != *$'\r'* ]]
+          printf 'MIGRATION_DATABASE_URL=%s\n' "$STATIC_MIGRATION_DATABASE_URL" >> "$GITHUB_ENV"
+
+      - name: Authorize optional temporary write-capable database access
+        if: inputs.use_temporary_database_credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin main
+          node scripts/agency-followup-production-release-gate.mjs credential-authorization > "$RUNNER_TEMP/agency-temporary-access-authorization.json"
+
+      - name: Obtain approved temporary write-capable database access
+        if: inputs.use_temporary_database_credential
+        env:
+          MIGRATION_ACCESS_TOKEN: ${{ secrets.CASELOAD_PRODUCTION_SUPABASE_MIGRATOR_TOKEN }}
+        shell: bash
+        run: node scripts/prospect-enrichment/temporary-credential.mjs
+
+      - name: Configure the pinned Supabase database certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/prospect-enrichment/configure-migration-tls.mjs
+          mv "$RUNNER_TEMP/database-tls-check.json" "$AGENCY_RESULT_EVIDENCE_DIR/database-tls-check-apply.json"
+          node scripts/agency-followup-production-release-gate.mjs connection-check > "$AGENCY_RESULT_EVIDENCE_DIR/connection-check-apply.json"
+
       - name: Recheck the full migration ledger, exact 18-file plan and source stage immediately before apply
         id: apply
         shell: bash
@@ -214,13 +263,16 @@ jobs:
           node scripts/agency-followup-production-release-gate.mjs stage "$GITHUB_WORKSPACE" "$AGENCY_APPLY_STAGE_DIR" "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory-apply.json" > "$RUNNER_TEMP/agency-stage-apply-summary.json"
           node scripts/agency-followup-production-release-gate.mjs verify-stage-match "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory.json" "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory-apply.json" > "$AGENCY_RESULT_EVIDENCE_DIR/stage-match-check.json"
           node scripts/agency-followup-production-release-gate.mjs full-ledger-query > "$RUNNER_TEMP/agency-full-ledger-readback.sql"
+          node scripts/agency-followup-production-release-gate.mjs connection-check > "$RUNNER_TEMP/agency-live-connection-check.json"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/agency-full-ledger-readback.sql" --output-format json --agent no > "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-immediate.json"
           node scripts/agency-followup-production-release-gate.mjs check-ledger immediate "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-immediate.json" "$AGENCY_RESULT_EVIDENCE_DIR/ledger-immediate-check.json"
           node scripts/agency-followup-production-release-gate.mjs check-ledger-same "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-before.json" "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-immediate.json" "$AGENCY_RESULT_EVIDENCE_DIR/ledger-recheck-check.json"
+          node scripts/agency-followup-production-release-gate.mjs connection-check > "$RUNNER_TEMP/agency-live-connection-check.json"
           (cd "$AGENCY_APPLY_STAGE_DIR" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$AGENCY_RESULT_EVIDENCE_DIR/plan-immediate.json"
           node scripts/agency-followup-production-release-gate.mjs check-plan pre "$AGENCY_RESULT_EVIDENCE_DIR/plan-immediate.json" "$AGENCY_RESULT_EVIDENCE_DIR/plan-immediate-check.json"
           node scripts/agency-followup-production-release-gate.mjs check-plan-same "$AGENCY_RESULT_EVIDENCE_DIR/plan.json" "$AGENCY_RESULT_EVIDENCE_DIR/plan-immediate.json" "$AGENCY_RESULT_EVIDENCE_DIR/plan-recheck-check.json"
           node scripts/agency-followup-production-release-gate.mjs apply-authorization > "$AGENCY_RESULT_EVIDENCE_DIR/apply-authorization.json"
+          node scripts/agency-followup-production-release-gate.mjs connection-check > "$RUNNER_TEMP/agency-live-connection-check.json"
           echo "APPLY_STARTED=true" >> "$GITHUB_ENV"
           echo "apply_started=true" >> "$GITHUB_OUTPUT"
           (cd "$AGENCY_APPLY_STAGE_DIR" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault --output-format json) > "$AGENCY_RESULT_EVIDENCE_DIR/apply.json"
@@ -234,11 +286,14 @@ jobs:
           node scripts/agency-followup-production-release-gate.mjs stage "$GITHUB_WORKSPACE" "$AGENCY_POST_STAGE_DIR" "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory-post.json" > "$RUNNER_TEMP/agency-stage-post-summary.json"
           node scripts/agency-followup-production-release-gate.mjs verify-stage-match "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory-apply.json" "$AGENCY_RESULT_EVIDENCE_DIR/staged-inventory-post.json" > "$AGENCY_RESULT_EVIDENCE_DIR/stage-post-match-check.json"
           node scripts/agency-followup-production-release-gate.mjs full-ledger-query > "$RUNNER_TEMP/agency-full-ledger-readback.sql"
+          node scripts/agency-followup-production-release-gate.mjs connection-check > "$RUNNER_TEMP/agency-live-connection-check.json"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/agency-full-ledger-readback.sql" --output-format json --agent no > "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-after.json"
           node scripts/agency-followup-production-release-gate.mjs check-ledger post "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-after.json" "$AGENCY_RESULT_EVIDENCE_DIR/ledger-after-check.json"
           node scripts/agency-followup-production-release-gate.mjs agency-ledger-query > "$RUNNER_TEMP/agency-target-ledger-readback.sql"
+          node scripts/agency-followup-production-release-gate.mjs connection-check > "$RUNNER_TEMP/agency-live-connection-check.json"
           supabase db query --db-url "$MIGRATION_DATABASE_URL" --file "$RUNNER_TEMP/agency-target-ledger-readback.sql" --output-format json --agent no > "$AGENCY_RESULT_EVIDENCE_DIR/agency-ledger-after.json"
           node scripts/agency-followup-production-release-gate.mjs check-delta "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-before.json" "$AGENCY_RESULT_EVIDENCE_DIR/full-ledger-after.json" "$AGENCY_RESULT_EVIDENCE_DIR/agency-ledger-after.json" "$AGENCY_RESULT_EVIDENCE_DIR/ledger-delta-check.json"
+          node scripts/agency-followup-production-release-gate.mjs connection-check > "$RUNNER_TEMP/agency-live-connection-check.json"
           (cd "$AGENCY_POST_STAGE_DIR" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --dry-run --include-all --skip-vault --output-format json) > "$AGENCY_RESULT_EVIDENCE_DIR/plan-after.json"
           node scripts/agency-followup-production-release-gate.mjs check-plan post "$AGENCY_RESULT_EVIDENCE_DIR/plan-after.json" "$AGENCY_RESULT_EVIDENCE_DIR/plan-after-check.json"
 
