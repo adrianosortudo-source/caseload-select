@@ -76,17 +76,6 @@ test("mounted supplemental evidence import updates and reads back one synthetic 
   await page.getByRole("combobox", { name: "Practice area", exact: true }).selectOption("Family law");
   const row = page.getByRole("row").filter({ hasText: data.firmName });
   await expect(row).toHaveCount(1);
-  await row.getByText("Research profile", { exact: true }).click();
-  await row.getByRole("link", { name: /^Open this firm’s research profile$/ }).click();
-  await expect(page).toHaveURL(new RegExp("/admin/prospects/firms/" + data.firmId));
-  await expect(page.getByTestId("prospect-research-detail")).toBeVisible();
-  const returnTo = new URL(page.url()).searchParams.get("returnTo");
-  expect(returnTo).toContain("up_city=Toronto");
-  expect(returnTo).toContain("up_practiceArea=Family+law");
-  await page.getByRole("link", { name: "Back to prospect list", exact: true }).click();
-  await expect(search).toHaveValue(data.firmName);
-  await expect(page.getByRole("combobox", { name: "City", exact: true })).toHaveValue("Toronto");
-  await expect(page.getByRole("combobox", { name: "Practice area", exact: true })).toHaveValue("Family law");
 
   const packageSuffix = data.sourceRecordKey.slice(-12);
   const first = evidencePackage({ fixture: data, packageId: "admin-first-" + packageSuffix, observedOn: data.observedOn, channel: "contact_form" });
@@ -103,6 +92,12 @@ test("mounted supplemental evidence import updates and reads back one synthetic 
   await expect(updatedRow).toContainText("contact_form");
   await updatedRow.getByRole("link", { name: /^Open this firm’s research profile$/ }).click();
   await expect(page).toHaveURL(new RegExp("/admin/prospects/firms/" + data.firmId));
+  await expect(page.getByTestId("prospect-research-detail")).toBeVisible();
+  const returnTo = new URL(page.url()).searchParams.get("returnTo");
+  expect(returnTo).not.toBeNull();
+  const returnParams = new URL(returnTo!, page.url()).searchParams;
+  expect(returnParams.get("up_city")).toBe("Toronto");
+  expect(returnParams.get("up_practiceArea")).toBe("Family law");
   await page.getByRole("link", { name: "Back to prospect list", exact: true }).click();
   await expect(search).toHaveValue(data.firmName);
   await expect(page.getByRole("combobox", { name: "City", exact: true })).toHaveValue("Toronto");
