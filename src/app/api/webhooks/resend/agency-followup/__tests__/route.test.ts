@@ -130,9 +130,27 @@ describe("Resend Agency follow-up webhook", () => {
     const response = await POST(request({
       type: "email.delivered",
       created_at: "2026-10-19T12:00:00.000Z",
-      data: { email_id: "re_msg_123", to: ["owner@example.com"] },
+      data: {
+        email_id: "re_msg_123",
+        to: ["owner@example.com"],
+        tags: {
+          agency_followup_message_id: "11111111-1111-1111-1111-111111111111",
+          agency_followup_enrollment_id: "22222222-2222-2222-2222-222222222222",
+        },
+      },
     }));
     expect(response.status).toBe(503);
+  });
+
+  it("acknowledges unmatched shared Resend events without Agency identity tags", async () => {
+    mocks.rpc.mockResolvedValue({ data: { result: "unmatched_message" }, error: null });
+    const response = await POST(request({
+      type: "email.delivered",
+      created_at: "2026-10-19T12:00:00.000Z",
+      data: { email_id: "re_transactional_123", to: ["owner@example.com"] },
+    }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ ok: true, outcome: "unmatched_message" });
   });
 
   it("rejects multi-recipient messages without persisting them", async () => {

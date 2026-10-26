@@ -276,8 +276,13 @@ export async function POST(req: NextRequest) {
   }
   const outcome = isObject(result.data) && typeof result.data.result === "string" ? result.data.result : "recorded";
   // Resend retries non-2xx responses. An event can arrive before the sender
-  // persists provider acceptance; allow the same signed event to be replayed
-  // after acceptance is recorded instead of permanently deduping it as lost.
-  if (outcome === "unmatched_message") return noStore({ ok: false, outcome }, 503);
+  // persists provider acceptance; allow a signed Agency event to be replayed
+  // after acceptance is recorded. The webhook also receives shared Resend
+  // traffic, so unmatched messages without the Agency identity pair must be
+  // acknowledged instead of retried indefinitely.
+  const hasAgencyFollowupIdentity = parsedTags.messageId !== null && parsedTags.enrollmentId !== null;
+  if (outcome === "unmatched_message" && hasAgencyFollowupIdentity) {
+    return noStore({ ok: false, outcome }, 503);
+  }
   return noStore({ ok: true, outcome }, 200);
 }

@@ -70,6 +70,8 @@ const CONTACT_HANDOFF_MIGRATION_PATH = "supabase/migrations/20261024213806_agenc
 const EXPECTED_CONTACT_HANDOFF_MIGRATION_BLOB = "dd5b66599da36d382de74db2030e57e91ee5c50f";
 const ACTIVITY_LOCK_ORDER_FIX_MIGRATION_PATH = "supabase/migrations/20261024233611_agency_followup_activity_lock_order_fix.sql";
 const EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB = "d28a2677b14a490b0a5fb81b70c49aecca889b0f";
+const AMBIGUOUS_UNSUBSCRIBE_MIGRATION_PATH = "supabase/migrations/20261026124659_agency_followup_ambiguous_recipient_suppression.sql";
+const EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB = "c1a28d8204b0aa10839bd5df4ac4f4ea3a41857b";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
@@ -1610,10 +1612,12 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["consent", "Synthetic Walkthrough Consent " + suffix, "Taylor Example", "eligible"],
     ["tagged_unknown", "Synthetic Walkthrough Tagged UNKNOWN " + suffix, "Sam Example", "eligible"],
     ["contact_unsubscribe", "Synthetic Walkthrough Contact Unsubscribe " + suffix, "Lee Example", "eligible"],
+    ["contact_unsubscribe_ambiguous_a", "Synthetic Walkthrough Ambiguous Unsubscribe A " + suffix, "Drew Example", "eligible"],
+    ["contact_unsubscribe_ambiguous_b", "Synthetic Walkthrough Ambiguous Unsubscribe B " + suffix, "Alex Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and ten Agency prospects");
+    progress("seeding synthetic operator and twelve Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -1621,7 +1625,11 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     );
     for (const [key, firmName, contactName, contactability] of names) {
       const prospectId = randomUUID();
-      const email = `${key}-${suffix}@example.test`;
+      // These two disposable fixtures intentionally share one address so the
+      // signed contact.updated path must fail closed across ambiguous records.
+      const email = key.startsWith("contact_unsubscribe_ambiguous_")
+        ? `contact-unsubscribe-ambiguous-${suffix}@example.test`
+        : `${key}-${suffix}@example.test`;
       await pool.query(
         "insert into public.agency_prospects (id,firm_name,contact_name,contact_email,stage,source,notes) values ($1,$2,$3,$4,'researching','synthetic_walkthrough','Synthetic local-only CRM walkthrough fixture')",
         [prospectId, firmName, contactName, email],
@@ -1649,7 +1657,7 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
           [conversationId],
         );
       }
-      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown"].includes(key)) {
+      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b"].includes(key)) {
         const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
         const databaseClock = await pool.query<{ captured_at: Date }>("select clock_timestamp() - interval '1 minute' as captured_at");
         const capturedAt = databaseClock.rows[0]?.captured_at.toISOString();
@@ -3317,6 +3325,109 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw new Error("The contact.updated unsubscribe did not create a hash-only contact match and shared suppression without a message application or email audit.");
   }
   progress("signed contact.updated unsubscribe matched by normalized hash without any accepted message; raw email was not persisted; contact application and shared suppression were created once; no message application or message audit exists");
+
+  const ambiguousUnsubscribeProspects = [
+    fixtures.prospects.contact_unsubscribe_ambiguous_a,
+    fixtures.prospects.contact_unsubscribe_ambiguous_b,
+  ];
+  if (ambiguousUnsubscribeProspects[0].email !== ambiguousUnsubscribeProspects[1].email) {
+    throw new Error("The ambiguous unsubscribe fixtures did not share the same synthetic address.");
+  }
+  for (const prospect of ambiguousUnsubscribeProspects) {
+    await createDraft(pool, page, journeyName, prospect);
+    await markEligibleAndRelease(page, prospect);
+    await waitForAction(page, "approve", queueCard(page, prospect.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  }
+  const ambiguousUnsubscribeMessages = await pool.query<{
+    id: string; enrollment_id: string; prospect_id: string;
+  }>(
+    "select message.id,message.enrollment_id,enrollment.prospect_id from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=any($1::uuid[]) and message.step_number=1 order by enrollment.prospect_id",
+    [ambiguousUnsubscribeProspects.map((prospect) => prospect.id)],
+  );
+  if (ambiguousUnsubscribeMessages.rows.length !== 2) {
+    throw new Error("The duplicate-address synthetic prospects did not each have one approved message.");
+  }
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=$2 where id=any($1::uuid[])",
+    [ambiguousUnsubscribeMessages.rows.map((message) => message.id), acceptedDueAt],
+  );
+
+  const ambiguousContactEventId = "evt_ambiguous_contact_unsubscribe_" + RUN_ID;
+  const ambiguousContactEmail = ambiguousUnsubscribeProspects[0].email;
+  const ambiguousContactHash = createHash("sha256")
+    .update(ambiguousContactEmail.trim().toLowerCase(), "utf8")
+    .digest("hex");
+  const ambiguousContactPayload = {
+    type: "contact.updated",
+    created_at: new Date().toISOString(),
+    data: { email: ambiguousContactEmail, unsubscribed: true },
+  };
+  const ambiguousContactReceipt = await postSyntheticResendEvent(ambiguousContactEventId, ambiguousContactPayload);
+  const duplicateAmbiguousContactReceipt = await postSyntheticResendEvent(ambiguousContactEventId, ambiguousContactPayload);
+  const ambiguousContactState = await pool.query<{
+    processing_result: string; recipient_sha256: string | null; provider_message_id: string | null;
+    message_id: string | null; enrollment_id: string | null; conversation_id: string | null; source_link_id: string | null;
+    contact_applications: string; message_applications: string; suppression_rows: string; message_rows: string;
+    audit_events: string; raw_email_absent: boolean;
+  }>(
+    "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.message_id,event.enrollment_id,event.conversation_id,event.source_link_id,(select count(*)::text from public.agency_followup_provider_contact_applications application where application.provider_event_id=event.provider_event_id) as contact_applications,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as message_applications,(select count(*)::text from public.prospect_contactability_provider_suppressions suppression where suppression.provider_event_id=event.provider_event_id) as suppression_rows,(select count(*)::text from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=any($2::uuid[])) as message_rows,(select count(*)::text from public.agency_followup_events audit where audit.idempotency_key='resend-event:'||event.provider_event_id) as audit_events,not (to_jsonb(event)::text ilike '%'||$3||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
+    [ambiguousContactEventId, ambiguousUnsubscribeProspects.map((prospect) => prospect.id), ambiguousContactEmail],
+  );
+  const ambiguousContact = ambiguousContactState.rows[0];
+  if (ambiguousContactReceipt.status !== 200 || ambiguousContactReceipt.outcome !== "ambiguous_source" ||
+    duplicateAmbiguousContactReceipt.status !== 200 || duplicateAmbiguousContactReceipt.outcome !== "duplicate" ||
+    ambiguousContact?.processing_result !== "ambiguous_source" || ambiguousContact.recipient_sha256 !== ambiguousContactHash ||
+    ambiguousContact.provider_message_id !== null || ambiguousContact.message_id !== null || ambiguousContact.enrollment_id !== null ||
+    ambiguousContact.conversation_id !== null || ambiguousContact.source_link_id !== null ||
+    ambiguousContact.contact_applications !== "0" || ambiguousContact.message_applications !== "0" ||
+    ambiguousContact.suppression_rows !== "0" || ambiguousContact.message_rows !== "2" ||
+    ambiguousContact.audit_events !== "0" || ambiguousContact.raw_email_absent !== true) {
+    throw new Error("The ambiguous contact.updated unsubscribe did not persist one hash-only ambiguous event without inventing a single source application.");
+  }
+
+  for (const message of ambiguousUnsubscribeMessages.rows) {
+    const authorization = await withFixtureClaim(pool, message.id, async () => {
+      const client = await pool.connect();
+      const owner = "synthetic-walkthrough-ambiguous-unsubscribe-" + message.prospect_id;
+      try {
+        await client.query("begin");
+        await client.query("set local role service_role");
+        await client.query(
+          "select id from public.claim_agency_followup_messages($1,$2::timestamptz,120,1)",
+          [owner, acceptedNow],
+        );
+        const claimed = await client.query<{
+          state: string; lease_owner: string | null; attempt_count: number; enrollment_id: string;
+        }>(
+          "select state,lease_owner,attempt_count,enrollment_id from public.agency_followup_messages where id=$1",
+          [message.id],
+        );
+        const claim = claimed.rows[0];
+        if (claim?.state !== "claimed" || claim.lease_owner !== owner || claim.enrollment_id !== message.enrollment_id) {
+          throw new Error("The ambiguous unsubscribe fixture could not be claimed for a rollback-only handoff check.");
+        }
+        const result = await authorizeProviderHandoff(client, {
+          messageId: message.id,
+          enrollmentId: claim.enrollment_id,
+          owner,
+          attemptCount: claim.attempt_count,
+        });
+        await client.query("rollback");
+        return result;
+      } catch (error) {
+        await client.query("rollback").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
+    });
+    if (authorization.result !== "blocked" || !Array.isArray(authorization.blockers) ||
+      !authorization.blockers.includes("contactability_blocked")) {
+      throw new Error("A matching prospect remained dispatchable after the ambiguous recipient unsubscribe.");
+    }
+  }
+  progress("one signed ambiguous recipient unsubscribe remained hash-only and blocked the handoff gate for both matching approved prospects");
+
   // Exercise actual schedule policy immediately before handoff with a delayed
   // weekend claim. The current weekday/window come from the persisted journey.
   const windowProspect = fixtures.prospects.window;
@@ -3678,8 +3789,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
       databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
     },
-    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520", "20261024171116", "20261024175302", "20261024213806", "20261024233611"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB, EXPECTED_SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_BLOB, EXPECTED_UNKNOWN_RESEND_RECONCILIATION_MIGRATION_BLOB, EXPECTED_CONTACT_HANDOFF_MIGRATION_BLOB, EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB],
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520", "20261024171116", "20261024175302", "20261024213806", "20261024233611", "20261026124659"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB, EXPECTED_SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_BLOB, EXPECTED_UNKNOWN_RESEND_RECONCILIATION_MIGRATION_BLOB, EXPECTED_CONTACT_HANDOFF_MIGRATION_BLOB, EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB, EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB],
     screenshots,
     consentPanelScreenshots,
     providerStatusScreenshots,
@@ -3696,6 +3807,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       approvalInvalidation: "content change cleared reviewer and reopened review",
       fakeAccepted: "persisted",
       unknown: "quarantined and not reclaimed",
+      ambiguousRecipientUnsubscribe: "one signed hash-only contact unsubscribe blocked both matching prospect handoffs",
       businessDayWindow: "weekend claim rescheduled before fake provider",
       retry: "temporary failure and backoff persisted; early claim excluded; due retry accepted exactly once with stable key and two attempts",
       providerEventReplay: "signed event was quarantined before acceptance, reconciled on retry after acceptance, and deduplicated with one durable application",
@@ -3968,6 +4080,7 @@ async function main(): Promise<void> {
   await verifyPushedMigration(UNKNOWN_RESEND_RECONCILIATION_MIGRATION_PATH, EXPECTED_UNKNOWN_RESEND_RECONCILIATION_MIGRATION_BLOB);
   await verifyPushedMigration(CONTACT_HANDOFF_MIGRATION_PATH, EXPECTED_CONTACT_HANDOFF_MIGRATION_BLOB);
   await verifyPushedMigration(ACTIVITY_LOCK_ORDER_FIX_MIGRATION_PATH, EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB);
+  await verifyPushedMigration(AMBIGUOUS_UNSUBSCRIBE_MIGRATION_PATH, EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");
