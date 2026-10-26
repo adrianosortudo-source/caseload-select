@@ -2,27 +2,17 @@
 
 ## Current delivery boundary
 
-**Status snapshot, 2026-10-24 23:11 America/Toronto:** The additive release is PR #426, open, draft, and unmerged on remote branch `codex/crm-live-followup-final-gates-20261024`, based on `main` at `1941cf69539b2914d7762d9146c4f50bb0b721df`. The application-code head `ad2810273542650556e3a4a74709d4224ab20383` passed required CI run 40155104689 (all 11 jobs) and Agency walkthrough run 40155101807.
+**Status, 2026-10-26:** PR #426 is open, non-draft, and unmerged on branch `codex/crm-live-followup-final-gates-20261024`. Exact source heads, CI runs, evidence digests, production inventory, and approval state belong in the private release ledger and must be rechecked before any release action.
 
-The walkthrough used a fresh isolated Supabase stack, network-free fake provider, exact pushed migrations, and real browser interactions. Its artifact 12583828909 has digest `sha256:8a56a08fb12c2b21bcb192cc8b49a644aa574c701ff1226eb7710d2c1b31a565`; all 26 recorded image hashes match. This is synthetic acceptance only; it proves no real provider handoff, live delivery, or inbox receipt.
+The Agency synthetic acceptance workflow runs against a fresh disposable Supabase stack with a network-free fake provider and real browser interactions. A pass proves only the exercised synthetic behavior; it does not prove production schema, provider acceptance, an inbox receipt, or live delivery.
 
-Read-only production Supabase metadata identifies active project `caseload-select-ca` (ref `ssxryjxifwiivghglqer`, region `ca-central-1`). Its latest ledger version is `20261023214500`; only Agency migrations `20261013173327` and `20261013174258` are recorded. Fifteen source migrations are missing remotely: eleven already on pushed `main` (`20261020025251`, `20261020141945`, `20261021040000`, `20261021050000`, `20261021173939`, `20261022172352`, `20261022222611`, `20261023170628`, `20261023185535`, `20261023185615`, `20261024054520`) and four in PR #426 (`20261024171116`, `20261024175302`, `20261024213806`, `20261024233611`). The exact migration file SHA-256 manifest is in the internal execution ledger. Do not mark these versions applied by repair or apply only a subset; the approved migration route must apply the pushed files in order and verify the resulting ledger.
+No Agency production migration may run yet: PR #426 adds the Agency-specific protected route, but it is not available in production until that PR merges and its environment approval gate is verified. Once available, it must stage the complete migration history, exclude exactly the two preview-only QA migrations, and fail closed unless the exact approved pending set matches. Do not run a broad `supabase db push --include-all`, `supabase migration repair`, or raw production SQL from an operator shell.
 
-The reviewed migration set adds provider-event, opt-in, suppression, durable-claim, authorization, and reconciliation schema/functions. Static inspection found no table/column drops, deletes, or truncates. Operational rollback is forward-only: disable dispatch, retire active journey versions, pause active enrollments, and preserve message/event history. If a schema correction is needed after rows exist, ship a forward repair migration; do not drop tables or erase audit rows.
+Static review of the pending Agency migration chain found a data-changing idempotency fence that can backfill provider-use timestamps and move unsafe scheduled retries to UNKNOWN with audit rows. Operational rollback is forward-only: disable dispatch, retire active journey versions, pause active enrollments, and preserve message/event history. Use a forward repair if a schema correction is needed after rows exist.
 
-Read-only Vercel production environment listing found `RESEND_API_KEY` and `CRON_SECRET`; these seven Agency settings are absent: `AGENCY_FOLLOWUP_SEND_MODE`, `AGENCY_FOLLOWUP_FROM`, `AGENCY_FOLLOWUP_REPLY_TO`, `AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET`, `AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST`, `AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST`, and `AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST`. Secret values were not read. The last verified production operator-page readback (2026-10-24 14:38 America/Toronto) showed sending off, zero prospects, zero messages, and no drafts; provider configuration was not exposed and the page was not freshly re-read for this snapshot.
+Feature mode defaults to off. Test mode requires exact recipient and record/enrollment/message allowlists; live mode requires an exact approved enrollment allowlist. Resend delivery requires recorded, verified explicit opt-in. No production migration, provider configuration, email send, merge, deployment, or cohort activation has occurred for this release.
 
-Docker Desktop still reports Engine running, but `docker info --format "{{.ServerVersion}}"` from this session fails with permission denied on `npipe:////./pipe/dockerDesktopLinuxEngine`. The available Desktop Commander device is offline; the visible Toolkit catalog contains Docker Hub/docs helpers, not an engine-control MCP connected to this chat. No local Docker settings or data were changed. The hosted exact-head walkthrough supplied the isolated disposable stack.
-
-No production migration, provider configuration, email send, merge, deployment, or cohort activation has occurred. Independent review and PR-specific merge authority, exact production migration/configuration approval, one owner-controlled inbox test with receipt/deduplication, and one explicitly opted-in pilot recipient (or explicit owner deferral) remain separate gates.
-
-The database handoff gate rechecks current eligibility, consent, contactability, source mapping, message approval, schedule, and predecessor state in one transaction, then returns an authorized payload for the Resend call. The transaction ends before the external HTTP request, so a later stop or consent change can occur in that gap; this is point-in-time authorization, not atomic serialization with provider delivery.
-
-Resend message sends carry the Agency message and enrollment UUID tags. The signed webhook verifies these tags against the exact message, enrollment, and recipient. Only an exact email.sent event can reconcile a matching UNKNOWN send; conflicting events remain quarantined. Historical inbox rows did not store tags, so only the narrowly defined legacy unmatched_message replay may acquire an application binding, without rewriting the original inbox row.
-
-Enabled Resend modes still require the API key, signed-webhook secret, feature-specific sender and reply-to addresses on the existing CaseLoad domain, and exact mode-specific allowlists. Test mode requires both exact recipient and exact enrollment/message/recipient allowlists. Live mode requires an exact enrollment allowlist. Mode remains off by default. The deterministic fake provider is test support only, not delivery evidence.
-
-Replies and bookings are still operator-reconciled through the Agency prospect activity workflow unless a verified automatic integration is added. A saved operator activity is not mailbox or calendar reconciliation. The follow-up gate must recheck stop signals before each dispatch.
+The database handoff gate checks current eligibility, consent, contactability, source mapping, message approval, schedule, and predecessor state in one transaction, then returns an authorized payload for the Resend request. That transaction ends before the external request; authorization is point-in-time and does not serialize a later stop or consent change with provider delivery.
 
 ## Manual reply and booking reconciliation
 
@@ -129,7 +119,10 @@ Each fake dispatch uses temporary row locks to exclude retained scheduled fixtur
 
 This was the pending checkpoint as of 2026-10-15 and is superseded by the 2026-10-16 evidence section below. The locked offline installation later completed successfully, and a full synthetic database/browser walkthrough produced 12 screenshots. Exact-final-head verification, commit/push, PR creation and CI are still outstanding.
 
-## PR status
+## Historical PR status (superseded by PR #426)
+
+This subsection records earlier PR #414 state and is retained only as historical context. It does not describe PR #426 or satisfy its review, checks, or approval. Consult the private execution ledger for the current release state.
+
 
 PR #402 and PR #407 are merged; PR #407 merge commit is 8bf661e2aea255f26071aea326381ce14de3bda7. The additive live-follow-up work is PR #414 on codex/crm-live-followup-20261019, currently open, unmerged and mergeable at head c0a5af198eb103ac349c72f1e19ede7c89b0f8ef. Historical runs #8–19 contain earlier runner, migration and viewport failures; they are not evidence against or for the current head. Current Agency walkthrough #20 (39885658708) and CI #1968 (39885665794) passed on the exact current head. Artifact 12472583616 has digest sha256:9ad1891886099c29540158f6dedecc354a4831ff01b52e29c169c79036de3aaf; its manifest records the screenshot hashes.
 
