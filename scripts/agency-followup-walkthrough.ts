@@ -1617,12 +1617,13 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["message_unsubscribe_duplicate", "Synthetic Walkthrough Message Unsubscribe Duplicate " + suffix, "Chris Example", "eligible"],
     ["message_unsubscribe_early_a", "Synthetic Walkthrough Early Message Unsubscribe A " + suffix, "Morgan Example", "eligible"],
     ["message_unsubscribe_early_b", "Synthetic Walkthrough Early Message Unsubscribe B " + suffix, "Jamie Example", "eligible"],
+    ["message_unsubscribe_source", "Synthetic Walkthrough Source Unsubscribe Source " + suffix, "Casey Example", "eligible"],
     ["message_unsubscribe_source_duplicate", "Synthetic Walkthrough Source Unsubscribe Duplicate " + suffix, "Taylor Example", "eligible"],
     ["message_unsubscribe_mismatch_duplicate", "Synthetic Walkthrough Mismatched Recipient Unsubscribe Duplicate " + suffix, "Jordan Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and seventeen Agency prospects");
+    progress("seeding synthetic operator and eighteen Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -1636,8 +1637,8 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
         ? `contact-unsubscribe-ambiguous-${suffix}@example.test`
         : key.startsWith("message_unsubscribe_early_")
           ? `message-unsubscribe-early-${suffix}@example.test`
-        : key === "message_unsubscribe_source_duplicate"
-          ? `tagged_unknown-${suffix}@example.test`
+        : key === "message_unsubscribe_source" || key === "message_unsubscribe_source_duplicate"
+          ? `message-unsubscribe-source-${suffix}@example.test`
         : key === "message_unsubscribe_mismatch_duplicate"
           ? `message-unsubscribe-mismatch-${suffix}@example.test`
         : key === "message_unsubscribe_duplicate"
@@ -1670,7 +1671,7 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
           [conversationId],
         );
       }
-      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b", "message_unsubscribe_duplicate", "message_unsubscribe_early_a", "message_unsubscribe_early_b", "message_unsubscribe_source_duplicate", "message_unsubscribe_mismatch_duplicate"].includes(key)) {
+      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b", "message_unsubscribe_duplicate", "message_unsubscribe_early_a", "message_unsubscribe_early_b", "message_unsubscribe_source", "message_unsubscribe_source_duplicate", "message_unsubscribe_mismatch_duplicate"].includes(key)) {
         const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
         const databaseClock = await pool.query<{ captured_at: Date }>("select clock_timestamp() - interval '1 minute' as captured_at");
         const capturedAt = databaseClock.rows[0]?.captured_at.toISOString();
@@ -3795,9 +3796,45 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   );
   progress("a signed tagged email.unsubscribed recipient mismatch remained hash-only and blocked the same-recipient handoff");
 
+  const sourceUnsubscribeSource = fixtures.prospects.message_unsubscribe_source;
   const sourceUnsubscribeDuplicate = fixtures.prospects.message_unsubscribe_source_duplicate;
-  if (sourceUnsubscribeDuplicate.email !== taggedUnknownProspect.email) {
-    throw new Error("The source-resolution duplicate fixture did not share the tagged accepted message recipient.");
+  if (sourceUnsubscribeDuplicate.email !== sourceUnsubscribeSource.email) {
+    throw new Error("The fresh source-unresolved fixtures did not share one recipient address.");
+  }
+  await createDraft(pool, page, journeyName, sourceUnsubscribeSource);
+  await markEligibleAndRelease(page, sourceUnsubscribeSource);
+  await waitForAction(page, "approve", queueCard(page, sourceUnsubscribeSource.firmName).getByRole("button", { name: "Approve this message" }).nth(0));
+  const sourceUnsubscribeSourceRow = await pool.query<{
+    id: string; enrollment_id: string; prospect_id: string; recipient_email_snapshot: string;
+  }>(
+    "select message.id,message.enrollment_id,enrollment.prospect_id,message.recipient_email_snapshot from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.step_number=1",
+    [sourceUnsubscribeSource.id],
+  );
+  const sourceUnsubscribeMessage = sourceUnsubscribeSourceRow.rows[0];
+  if (!sourceUnsubscribeMessage) {
+    throw new Error("The fresh source-unresolved fixture did not have exactly one first-step message.");
+  }
+  await pool.query(
+    "update public.agency_followup_messages set scheduled_at=$2 where id=$1",
+    [sourceUnsubscribeMessage.id, acceptedDueAt],
+  );
+  const sourceUnsubscribeProviderMessageId = "fake-provider-source-unsubscribe-" + RUN_ID;
+  const sourceUnsubscribeAcceptance = await withFixtureClaim(pool, sourceUnsubscribeMessage.id, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-walkthrough-source-unsubscribe-accepted",
+    now: acceptedNow,
+    limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: sourceUnsubscribeProviderMessageId, acceptedAt: acceptedNow }],
+  }));
+  const acceptedSourceUnsubscribeMessage = await pool.query<{
+    state: string; provider_message_id: string | null; provider_accepted_at: string | null;
+  }>(
+    "select state,provider_message_id,provider_accepted_at::text as provider_accepted_at from public.agency_followup_messages where id=$1",
+    [sourceUnsubscribeMessage.id],
+  );
+  if (sourceUnsubscribeAcceptance.accepted !== 1 || acceptedSourceUnsubscribeMessage.rows[0]?.state !== "accepted" ||
+      acceptedSourceUnsubscribeMessage.rows[0]?.provider_message_id !== sourceUnsubscribeProviderMessageId ||
+      !acceptedSourceUnsubscribeMessage.rows[0]?.provider_accepted_at) {
+    throw new Error("The fresh source-unresolved provider message was not accepted before its mapping test.");
   }
   await createDraft(pool, page, journeyName, sourceUnsubscribeDuplicate);
   await markEligibleAndRelease(page, sourceUnsubscribeDuplicate);
@@ -3815,51 +3852,148 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     "update public.agency_followup_messages set scheduled_at=$2 where id=$1",
     [sourceUnsubscribeDuplicateRow.rows[0].id, acceptedDueAt],
   );
-  // Only the disposable walkthrough fixture is altered: removing its source
-  // association deterministically exercises the accepted-but-unmapped path.
-  const removedTaggedSourceAssociations = await pool.query<{ source_link_id: string }>(
-    "delete from public.prospect_conversation_sources association using public.prospect_source_links source_link where association.source_link_id=source_link.id and source_link.source_record_key=$1 and source_link.source_system in ('agency_crm','agency_crm_contact') returning association.source_link_id",
-    [taggedUnknownProspect.id],
-  );
-  if (removedTaggedSourceAssociations.rows.length === 0) {
-    throw new Error("The accepted tagged source fixture had no Agency source association to make source resolution fail.");
-  }
-  const sourceUnsubscribeEventId = "evt_source_message_unsubscribe_" + RUN_ID;
-  const sourceUnsubscribeReceipt = await postSyntheticResendEvent(sourceUnsubscribeEventId, {
-    type: "email.unsubscribed",
-    created_at: new Date().toISOString(),
-    data: {
-      email_id: taggedProviderMessageId,
-      to: [taggedUnknownProspect.email],
-      tags: {
-        agency_followup_message_id: taggedMessage.id,
-        agency_followup_enrollment_id: taggedMessage.enrollment_id,
-      },
-    },
-  });
-  const sourceUnsubscribeEvidence = await pool.query<{
-    processing_result: string; recipient_sha256: string | null; provider_message_id: string | null;
-    message_id: string | null; enrollment_id: string | null; signed_message_id: string | null; signed_enrollment_id: string | null;
-    tags_recorded: boolean; applications: string; raw_email_absent: boolean;
+  const sourceUnsubscribeMappings = await pool.query<{
+    conversation_id: string; source_link_id: string; source_system: string; person_id: string | null;
   }>(
-    "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.message_id,event.enrollment_id,event.signed_agency_followup_message_id as signed_message_id,event.signed_agency_followup_enrollment_id as signed_enrollment_id,event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,not (to_jsonb(event)::text ilike '%'||$2||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
-    [sourceUnsubscribeEventId, taggedUnknownProspect.email],
+    "select association.conversation_id,association.source_link_id,source_link.source_system,source_link.person_id from public.prospect_source_links source_link join public.prospect_conversation_sources association on association.source_link_id=source_link.id where source_link.source_record_key=$1 and source_link.source_system in ('agency_crm','agency_crm_contact')",
+    [sourceUnsubscribeSource.id],
   );
-  const sourceUnsubscribeRow = sourceUnsubscribeEvidence.rows[0];
-  const expectedSourceRecipientHash = createHash("sha256").update(taggedUnknownProspect.email.trim().toLowerCase(), "utf8").digest("hex");
-  if (sourceUnsubscribeReceipt.status !== 200 || sourceUnsubscribeReceipt.outcome !== "unmatched_source" ||
-    !sourceUnsubscribeRow || sourceUnsubscribeRow.processing_result !== "unmatched_source" ||
-    sourceUnsubscribeRow.recipient_sha256 !== expectedSourceRecipientHash || sourceUnsubscribeRow.provider_message_id !== taggedProviderMessageId ||
-    sourceUnsubscribeRow.message_id !== taggedMessage.id || sourceUnsubscribeRow.enrollment_id !== taggedMessage.enrollment_id ||
-    sourceUnsubscribeRow.signed_message_id !== taggedMessage.id || sourceUnsubscribeRow.signed_enrollment_id !== taggedMessage.enrollment_id ||
-    sourceUnsubscribeRow.tags_recorded !== true || sourceUnsubscribeRow.applications !== "0" || sourceUnsubscribeRow.raw_email_absent !== true) {
-    throw new Error("The accepted tagged email.unsubscribed event did not remain hash-only and source-unresolved after its Agency mapping was removed.");
+  const sourceLinkIds = [...new Set(sourceUnsubscribeMappings.rows.map((row) => row.source_link_id))];
+  const conversationIds = [...new Set(sourceUnsubscribeMappings.rows.map((row) => row.conversation_id))];
+  const sourceApplications = sourceLinkIds.length === 0 ? 0 : await countRows(
+    pool,
+    "select count(*)::text as count from public.agency_followup_provider_event_applications application where application.source_link_id=any($1::uuid[])",
+    [sourceLinkIds],
+  );
+  const sourceActivities = conversationIds.length === 0 ? 0 : await countRows(
+    pool,
+    "select count(*)::text as count from public.prospect_activities activity where activity.conversation_id=any($1::uuid[])",
+    [conversationIds],
+  );
+  const sourceOptInEvents = await countRows(
+    pool,
+    "select count(*)::text as count from public.agency_followup_opt_in_events event where event.agency_prospect_id=$1",
+    [sourceUnsubscribeSource.id],
+  );
+  const resolverSourceSystem = await pool.query<{ source_system: string }>(
+    "select case when exists (select 1 from public.prospect_source_links where source_system='agency_crm_contact' and source_record_key=$1) then 'agency_crm_contact' else 'agency_crm' end as source_system",
+    [sourceUnsubscribeSource.id],
+  );
+  const resolverMappings = sourceUnsubscribeMappings.rows.filter(
+    (row) => row.source_system === resolverSourceSystem.rows[0]?.source_system,
+  );
+  const resolverMapping = resolverMappings[0];
+  if (sourceUnsubscribeMappings.rows.length === 0 || sourceApplications !== 0 || sourceActivities !== 0 ||
+      sourceOptInEvents === 0 || resolverMappings.length !== 1 || !resolverMapping || !resolverMapping.person_id) {
+    throw new Error("The fresh source-unresolved fixture lacks one consent-protected resolver mapping or already has immutable event/activity history.");
   }
-  await assertRecipientUnsubscribeBlocksMessage(
-    sourceUnsubscribeDuplicateRow.rows[0],
-    "source-unresolved accepted message-level unsubscribe",
-  );
-  progress("a signed unsubscribe for an accepted Agency message with missing source resolution stayed hash-only and blocked the duplicate recipient handoff");
+  const resolverSourceLinkId = resolverMapping.source_link_id;
+  const resolverPersonId = resolverMapping.person_id;
+  let sourceResolutionQuarantined = false;
+  try {
+    const quarantinedSourceLink = await pool.query<{ id: string }>(
+      "update public.prospect_source_links set person_id=null where id=$1 and person_id=$2 returning id",
+      [resolverSourceLinkId, resolverPersonId],
+    );
+    if (quarantinedSourceLink.rows.length !== 1) {
+      throw new Error("The disposable source identity could not be moved into its reversible unresolved state.");
+    }
+    sourceResolutionQuarantined = true;
+    const unresolvedSourceCandidateCount = await countRows(
+      pool,
+      "select count(*)::text as count from public.prospect_source_links source_link join public.prospect_conversation_sources association on association.source_link_id=source_link.id join public.prospect_conversations conversation on conversation.id=association.conversation_id and conversation.organization_id=source_link.organization_id and conversation.person_id is not distinct from source_link.person_id where source_link.id=$1",
+      [resolverSourceLinkId],
+    );
+    if (unresolvedSourceCandidateCount !== 0) {
+      throw new Error("The reversible source identity change did not remove the resolver's matching conversation candidate.");
+    }
+    const sourceUnsubscribeEventId = "evt_source_message_unsubscribe_" + RUN_ID;
+    const sourceUnsubscribePayload = {
+      type: "email.unsubscribed",
+      created_at: new Date(Date.parse(acceptedNow) + 1000).toISOString(),
+      data: {
+        email_id: sourceUnsubscribeProviderMessageId,
+        to: [sourceUnsubscribeSource.email],
+        tags: {
+          agency_followup_message_id: sourceUnsubscribeMessage.id,
+          agency_followup_enrollment_id: sourceUnsubscribeMessage.enrollment_id,
+        },
+      },
+    };
+    const sourceUnsubscribeReceipt = await postSyntheticResendEvent(sourceUnsubscribeEventId, sourceUnsubscribePayload);
+    const sourceUnsubscribeEvidence = await pool.query<{
+      processing_result: string; recipient_sha256: string | null; provider_message_id: string | null;
+      message_id: string | null; enrollment_id: string | null; conversation_id: string | null; source_link_id: string | null;
+      signed_message_id: string | null; signed_enrollment_id: string | null;
+      tags_recorded: boolean; applications: string; raw_email_absent: boolean;
+    }>(
+      "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.message_id,event.enrollment_id,event.conversation_id,event.source_link_id,event.signed_agency_followup_message_id as signed_message_id,event.signed_agency_followup_enrollment_id as signed_enrollment_id,event.signed_agency_followup_tags_recorded as tags_recorded,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications,not (to_jsonb(event)::text ilike '%'||$2||'%') as raw_email_absent from public.agency_followup_provider_events event where event.provider_event_id=$1",
+      [sourceUnsubscribeEventId, sourceUnsubscribeSource.email],
+    );
+    const sourceUnsubscribeRow = sourceUnsubscribeEvidence.rows[0];
+    const expectedSourceRecipientHash = createHash("sha256").update(sourceUnsubscribeSource.email.trim().toLowerCase(), "utf8").digest("hex");
+    if (sourceUnsubscribeReceipt.status !== 200 || sourceUnsubscribeReceipt.outcome !== "unmatched_source" ||
+      !sourceUnsubscribeRow || sourceUnsubscribeRow.processing_result !== "unmatched_source" ||
+      sourceUnsubscribeRow.recipient_sha256 !== expectedSourceRecipientHash || sourceUnsubscribeRow.provider_message_id !== sourceUnsubscribeProviderMessageId ||
+      sourceUnsubscribeRow.message_id !== sourceUnsubscribeMessage.id || sourceUnsubscribeRow.enrollment_id !== sourceUnsubscribeMessage.enrollment_id ||
+      sourceUnsubscribeRow.conversation_id !== null || sourceUnsubscribeRow.source_link_id !== null ||
+      sourceUnsubscribeRow.signed_message_id !== sourceUnsubscribeMessage.id || sourceUnsubscribeRow.signed_enrollment_id !== sourceUnsubscribeMessage.enrollment_id ||
+      sourceUnsubscribeRow.tags_recorded !== true || sourceUnsubscribeRow.applications !== "0" || sourceUnsubscribeRow.raw_email_absent !== true) {
+      throw new Error("The first signed unsubscribe for the accepted fresh source did not stay hash-only with no source mapping or application.");
+    }
+    const restoredSourceLink = await pool.query<{ id: string }>(
+      "update public.prospect_source_links set person_id=$2 where id=$1 and person_id is null returning id",
+      [resolverSourceLinkId, resolverPersonId],
+    );
+    if (restoredSourceLink.rows.length !== 1) {
+      throw new Error("The disposable source identity did not restore to its original person after the quarantine assertion.");
+    }
+    sourceResolutionQuarantined = false;
+    const sourceUnsubscribeReplay = await postSyntheticResendEvent(sourceUnsubscribeEventId, sourceUnsubscribePayload);
+    const sourceUnsubscribeReplayEvidence = await pool.query<{
+      processing_result: string; recipient_sha256: string | null; provider_message_id: string | null;
+      message_id: string | null; enrollment_id: string | null; conversation_id: string | null; source_link_id: string | null;
+      applications: string;
+    }>(
+      "select event.processing_result,event.recipient_sha256,event.provider_message_id,event.message_id,event.enrollment_id,event.conversation_id,event.source_link_id,(select count(*)::text from public.agency_followup_provider_event_applications application where application.provider_event_id=event.provider_event_id) as applications from public.agency_followup_provider_events event where event.provider_event_id=$1",
+      [sourceUnsubscribeEventId],
+    );
+    const sourceUnsubscribeReplayRow = sourceUnsubscribeReplayEvidence.rows[0];
+    const retainedSourceAssociations = await countRows(
+      pool,
+      "select count(*)::text as count from public.prospect_conversation_sources association where association.source_link_id=any($1::uuid[])",
+      [sourceLinkIds],
+    );
+    const retainedOptInEvents = await countRows(
+      pool,
+      "select count(*)::text as count from public.agency_followup_opt_in_events event where event.agency_prospect_id=$1",
+      [sourceUnsubscribeSource.id],
+    );
+    if (sourceUnsubscribeReplay.status !== 200 || sourceUnsubscribeReplay.outcome !== "duplicate" ||
+      !sourceUnsubscribeReplayRow || sourceUnsubscribeReplayRow.processing_result !== "unmatched_source" ||
+      sourceUnsubscribeReplayRow.recipient_sha256 !== expectedSourceRecipientHash || sourceUnsubscribeReplayRow.provider_message_id !== sourceUnsubscribeProviderMessageId ||
+      sourceUnsubscribeReplayRow.message_id !== sourceUnsubscribeMessage.id || sourceUnsubscribeReplayRow.enrollment_id !== sourceUnsubscribeMessage.enrollment_id ||
+      sourceUnsubscribeReplayRow.conversation_id !== null || sourceUnsubscribeReplayRow.source_link_id !== null ||
+      sourceUnsubscribeReplayRow.applications !== "0" || retainedSourceAssociations !== sourceUnsubscribeMappings.rows.length ||
+      retainedOptInEvents !== sourceOptInEvents) {
+      throw new Error("Restoring the protected source identity changed the quarantined unsubscribe or its consent/source history.");
+    }
+    await assertRecipientUnsubscribeBlocksMessage(
+      sourceUnsubscribeDuplicateRow.rows[0],
+      "source-unresolved accepted message-level unsubscribe",
+    );
+  } finally {
+    if (sourceResolutionQuarantined) {
+      const restoredSourceLink = await pool.query<{ id: string }>(
+        "update public.prospect_source_links set person_id=$2 where id=$1 and person_id is null returning id",
+        [resolverSourceLinkId, resolverPersonId],
+      );
+      if (restoredSourceLink.rows.length !== 1) {
+        throw new Error("The test could not restore the disposable source identity after an interrupted quarantine check.");
+      }
+    }
+  }
+  progress("the signed unsubscribe for an accepted message stayed hash-only while its consent-protected source identity was unresolved; restoring identity did not reapply it and the duplicate recipient handoff stayed blocked");
 
   // Exercise actual schedule policy immediately before handoff with a delayed
   // weekend claim. The current weekday/window come from the persisted journey.
