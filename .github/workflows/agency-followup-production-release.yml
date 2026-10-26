@@ -99,7 +99,7 @@ jobs:
           set -euo pipefail
           node scripts/agency-followup-production-release-gate.mjs stage "$GITHUB_WORKSPACE" "$AGENCY_PREFLIGHT_STAGE_DIR" "$AGENCY_PREFLIGHT_EVIDENCE_DIR/staged-inventory.json" > "$RUNNER_TEMP/agency-stage-summary.json"
 
-      - name: Require exactly the 17 pinned Agency migrations and dry-run plan
+      - name: Require exactly the 18 pinned Agency migrations and dry-run plan
         shell: bash
         run: |
           set -euo pipefail
@@ -202,7 +202,7 @@ jobs:
           node scripts/agency-followup-production-release-gate.mjs verify-preflight "$AGENCY_PREFLIGHT_DOWNLOAD_DIR" "$RUNNER_TEMP/agency-preflight-artifact-metadata.json" > "$RUNNER_TEMP/agency-preflight-artifact-check.json"
           cp "$AGENCY_PREFLIGHT_DOWNLOAD_DIR"/* "$AGENCY_RESULT_EVIDENCE_DIR"/
 
-      - name: Recheck the full migration ledger, exact 17-file plan and source stage immediately before apply
+      - name: Recheck the full migration ledger, exact 18-file plan and source stage immediately before apply
         id: apply
         shell: bash
         run: |
@@ -225,7 +225,7 @@ jobs:
           echo "apply_started=true" >> "$GITHUB_OUTPUT"
           (cd "$AGENCY_APPLY_STAGE_DIR" && supabase db push --db-url "$MIGRATION_DATABASE_URL" --yes --include-all --skip-vault --output-format json) > "$AGENCY_RESULT_EVIDENCE_DIR/apply.json"
 
-      - name: Verify exact 17-version ledger delta, all SQL statements and empty plan after apply
+      - name: Verify exact 18-version ledger delta, all SQL statements and empty plan after apply
         id: verification
         if: always() && steps.apply.outputs.apply_started == 'true'
         shell: bash

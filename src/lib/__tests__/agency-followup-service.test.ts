@@ -108,6 +108,7 @@ function setRows() {
     { id: "opt-3", agency_prospect_id: P3, source_link_id: "source-3", conversation_id: CONV3,
       recipient_email_sha256: agencyFollowupRecipientEmailHash(`${P3}@example.test`), purpose: "agency_followup_email", event_type: "opt_in_withdrawn", recorded_at: "2026-10-20T11:00:00.000Z" },
   ];
+  h.rows.agency_followup_recipient_unsubscribes = [];
   h.rows.prospect_contactability = [{ conversation_id: CONV1, state: "eligible" }, { conversation_id: CONV3, state: "eligible" }];
   h.rows.prospect_activities = [
     { conversation_id: CONV3, kind: "meeting" },
@@ -154,6 +155,7 @@ describe("runAgencyFollowupDispatcher test-mode claim scope", () => {
       "AGENCY_FOLLOWUP_REPLY_TO",
       "RESEND_API_KEY",
       "AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET",
+      "AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET",
       "AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST",
       "AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST",
     ];
@@ -164,6 +166,7 @@ describe("runAgencyFollowupDispatcher test-mode claim scope", () => {
       AGENCY_FOLLOWUP_REPLY_TO: "support@caseloadselect.ca",
       RESEND_API_KEY: "synthetic-api-key",
       AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: "synthetic-webhook-secret",
+      AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET: "synthetic-unsubscribe-secret-with-at-least-32-bytes",
       AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST: "owner@example.test",
       AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST: JSON.stringify([
         { enrollmentId: "enrollment-allowed", messageId: "message-allowed", recipientEmail: "owner@example.test" },
@@ -200,6 +203,7 @@ describe("Agency follow-up dispatcher claim policy", () => {
     "AGENCY_FOLLOWUP_REPLY_TO",
     "RESEND_API_KEY",
     "AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET",
+    "AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET",
     "AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST",
   ];
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]));
@@ -211,6 +215,7 @@ describe("Agency follow-up dispatcher claim policy", () => {
       AGENCY_FOLLOWUP_REPLY_TO: "support@caseloadselect.ca",
       RESEND_API_KEY: "synthetic-api-key",
       AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: "synthetic-webhook-secret",
+      AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET: "synthetic-unsubscribe-secret-with-at-least-32-bytes",
       AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST: liveEnrollmentId,
     });
   });
@@ -275,7 +280,7 @@ describe("listAgencyFollowupConsole operations-state batching", () => {
     for (const table of [
       "prospect_source_links", "prospect_conversation_sources", "prospect_conversations", "prospect_contactability",
       "prospect_activities", "prospect_contactability_provider_suppressions", "prospect_people",
-      "prospect_person_firm_roles", "agency_followup_opt_in_events",
+      "prospect_person_firm_roles", "agency_followup_opt_in_events", "agency_followup_recipient_unsubscribes",
     ]) expect(h.calls.filter((call) => call.table === table)).toHaveLength(1);
     const sourceCall = h.calls.find((call) => call.table === "prospect_source_links")!;
     expect(sourceCall.in).toContainEqual(["source_system", ["agency_crm", "agency_crm_contact"]]);
@@ -323,6 +328,45 @@ describe("listAgencyFollowupConsole operations-state batching", () => {
     });
   });
 
+  it("treats a signed recipient unsubscribe as a durable explicit opt-out for the exact email hash", async () => {
+    h.rows.agency_followup_recipient_unsubscribes.push({
+      agency_prospect_id: P1,
+      recipient_email_sha256: agencyFollowupRecipientEmailHash(`${P1}@example.test`),
+    });
+    const result = await listAgencyFollowupConsole();
+    expect(result.items.find((item) => item.prospectId === P1)).toMatchObject({
+      optInState: "withdrawn", blockers: expect.arrayContaining(["explicit_opt_in_withdrawn"]),
+    });
+  });
+
+  it("applies a recipient unsubscribe across Agency prospect records sharing the same email hash", async () => {
+    const p2Email = P1 + "@example.test";
+    const p2Prospect = (h.rows.agency_prospects as Array<Record<string, unknown>>).find((prospect) => prospect.id === P2);
+    if (!p2Prospect) throw new Error("Synthetic second prospect is missing.");
+    p2Prospect.contact_email = p2Email;
+    h.rows.prospect_source_links.push({
+      id: "source-2", source_record_key: P2, source_system: "agency_crm", active: true,
+      organization_id: "org-2", person_id: "person-2",
+    });
+    h.rows.prospect_conversation_sources.push({ source_link_id: "source-2", conversation_id: "conversation-2" });
+    h.rows.prospect_conversations.push({
+      id: "conversation-2", status: "not_contacted", organization_id: "org-2", person_id: "person-2",
+    });
+    h.rows.prospect_people.push({ id: "person-2", primary_email: p2Email });
+    h.rows.prospect_person_firm_roles.push({ organization_id: "org-2", person_id: "person-2", active: true });
+    h.rows.prospect_contactability.push({ conversation_id: "conversation-2", state: "eligible" });
+    h.rows.agency_followup_recipient_unsubscribes.push({
+      agency_prospect_id: P1,
+      recipient_email_sha256: agencyFollowupRecipientEmailHash(p2Email),
+    });
+
+    const result = await listAgencyFollowupConsole();
+
+    expect(result.items.find((item) => item.prospectId === P2)).toMatchObject({
+      optInState: "withdrawn", blockers: expect.arrayContaining(["explicit_opt_in_withdrawn"]),
+    });
+  });
+
   it.each([
     ["missing opt-in history", () => { h.rows.agency_followup_opt_in_events = []; }, "allowed"],
     ["wrong canonical email", () => { (h.rows.prospect_people[0] as Record<string, unknown>).primary_email = "other@example.test"; }, "unknown"],
@@ -352,6 +396,38 @@ describe("listAgencyFollowupConsole operations-state batching", () => {
     }) as typeof h.supabaseAdmin.from;
     try {
       await expect(listAgencyFollowupConsole()).rejects.toThrow("Unable to read exact Agency follow-up opt-in history: read denied");
+    } finally {
+      h.supabaseAdmin.from = originalFrom;
+    }
+  });
+
+  it("fails closed when recipient unsubscribe history cannot be read", async () => {
+    const originalFrom = h.supabaseAdmin.from;
+    h.supabaseAdmin.from = ((table: string) => {
+      const query = originalFrom(table) as Record<string, unknown>;
+      if (table === "agency_followup_recipient_unsubscribes") {
+        query.then = (resolve: (result: Result) => unknown) => Promise.resolve({ data: null, error: { message: "read denied" } }).then(resolve);
+      }
+      return query;
+    }) as typeof h.supabaseAdmin.from;
+    try {
+      await expect(listAgencyFollowupConsole()).rejects.toThrow("Unable to read Agency follow-up recipient unsubscribe history: read denied");
+    } finally {
+      h.supabaseAdmin.from = originalFrom;
+    }
+  });
+
+  it("fails closed when recipient unsubscribe history cannot be read", async () => {
+    const originalFrom = h.supabaseAdmin.from;
+    h.supabaseAdmin.from = ((table: string) => {
+      const query = originalFrom(table) as Record<string, unknown>;
+      if (table === "agency_followup_recipient_unsubscribes") {
+        query.then = (resolve: (result: Result) => unknown) => Promise.resolve({ data: null, error: { message: "read denied" } }).then(resolve);
+      }
+      return query;
+    }) as typeof h.supabaseAdmin.from;
+    try {
+      await expect(listAgencyFollowupConsole()).rejects.toThrow("Unable to read Agency follow-up recipient unsubscribe history: read denied");
     } finally {
       h.supabaseAdmin.from = originalFrom;
     }

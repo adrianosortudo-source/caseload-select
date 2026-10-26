@@ -72,6 +72,8 @@ const ACTIVITY_LOCK_ORDER_FIX_MIGRATION_PATH = "supabase/migrations/202610242336
 const EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB = "d28a2677b14a490b0a5fb81b70c49aecca889b0f";
 const AMBIGUOUS_UNSUBSCRIBE_MIGRATION_PATH = "supabase/migrations/20261026124659_agency_followup_ambiguous_recipient_suppression.sql";
 const EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB = "d59bb8dc4eccc8955b7f09ef9d709cf93d05a8ac";
+const RECIPIENT_UNSUBSCRIBE_MIGRATION_PATH = "supabase/migrations/20261026180704_agency_followup_recipient_unsubscribe.sql";
+const EXPECTED_RECIPIENT_UNSUBSCRIBE_MIGRATION_BLOB = "d48116cd747b12a8fcf47cfe1568983680fb71e5";
 const WIDTHS = [1440, 1024, 769, 768, 767, 640, 375, 320];
 const CONSENT_PANEL_WIDTHS = [1440, 1024, 768, 640, 375, 320];
 const RUN_ID = process.env.AGENCY_FOLLOWUP_RUN_ID || randomUUID();
@@ -299,11 +301,11 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     ),
     pool.query<{ count: string }>(
       "select count(*)::text as count from supabase_migrations.schema_migrations where version = any($1::text[])",
-      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520", "20261024171116", "20261024175302", "20261024213806", "20261024233611"]],
+      [["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520", "20261024171116", "20261024175302", "20261024213806", "20261024233611", "20261026124659", "20261026180704"]],
     ),
   ]);
-  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "18") {
-    throw new Error("Disposable Postgres identity or exact eighteen-migration ledger check failed.");
+  if (identity.rows[0]?.database !== "postgres" || !identity.rows[0]?.address || migration.rows[0]?.count !== "20") {
+    throw new Error("Disposable Postgres identity or exact twenty-migration ledger check failed.");
   }
   const templateApprovalRpc = await pool.query<{ service_access: boolean; anon_denied: boolean; authenticated_denied: boolean; security_invoker: boolean }>(
     "select has_function_privilege('service_role', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as service_access, not has_function_privilege('anon', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as anon_denied, not has_function_privilege('authenticated', 'public.approve_agency_followup_template_version(uuid,uuid)', 'execute') as authenticated_denied, not prosecdef as security_invoker from pg_proc where oid='public.approve_agency_followup_template_version(uuid,uuid)'::regprocedure",
@@ -353,15 +355,15 @@ async function verifyDisposableTarget(pool: Pool): Promise<void> {
     throw new Error("The hash-only contact-event RPC and append-only application table are not protected by the expected service-role boundary.");
   }
   const tables = await pool.query<{ count: string }>(
-    "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
+      "select count(*)::text as count from information_schema.tables where table_schema='public' and table_name = any($1::text[])",
     [["agency_followup_template_versions", "agency_followup_journeys", "agency_followup_steps",
       "agency_followup_enrollments", "agency_followup_messages", "agency_followup_events",
       "agency_followup_provider_events", "agency_followup_provider_event_applications", "agency_followup_provider_contact_applications",
-      "prospect_contactability_provider_suppressions"]],
+      "prospect_contactability_provider_suppressions", "agency_followup_recipient_unsubscribes"]],
   );
-  if (tables.rows[0]?.count !== "10") throw new Error("The verified disposable stack does not contain the six follow-up and four provider-event tables.");
+  if (tables.rows[0]?.count !== "11") throw new Error("The verified disposable stack does not contain the seven follow-up and four provider-event tables.");
   const providerGrants = await pool.query<{ service_access: boolean; public_access: boolean; public_update_access: boolean; service_event_column_update: boolean; service_event_table_update: boolean; service_event_other_column_update: boolean; immutable_event_trigger: boolean }>(
-    "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access, bool_or(has_table_privilege('anon', table_name, 'update') or has_table_privilege('authenticated', table_name, 'update')) as public_update_access, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'provider_event_id', 'update') as service_event_column_update, has_table_privilege('service_role', 'public.agency_followup_provider_events', 'update') as service_event_table_update, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'processing_result', 'update') as service_event_other_column_update, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_provider_events'::regclass and tgname='agency_followup_provider_events_no_mutation' and not tgisinternal and tgenabled in ('O','A') and (tgtype & 2) = 2 and (tgtype & 8) = 8 and (tgtype & 16) = 16) as immutable_event_trigger from unnest(array['public.agency_followup_provider_events','public.agency_followup_provider_event_applications','public.agency_followup_provider_contact_applications','public.prospect_contactability_provider_suppressions']) as event_table(table_name)",
+    "select bool_and(has_table_privilege('service_role', table_name, 'select') and has_table_privilege('service_role', table_name, 'insert')) as service_access, bool_or(has_table_privilege('anon', table_name, 'select') or has_table_privilege('authenticated', table_name, 'select')) as public_access, bool_or(has_table_privilege('anon', table_name, 'update') or has_table_privilege('authenticated', table_name, 'update')) as public_update_access, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'provider_event_id', 'update') as service_event_column_update, has_table_privilege('service_role', 'public.agency_followup_provider_events', 'update') as service_event_table_update, has_column_privilege('service_role', 'public.agency_followup_provider_events', 'processing_result', 'update') as service_event_other_column_update, exists(select 1 from pg_trigger where tgrelid='public.agency_followup_provider_events'::regclass and tgname='agency_followup_provider_events_no_mutation' and not tgisinternal and tgenabled in ('O','A') and (tgtype & 2) = 2 and (tgtype & 8) = 8 and (tgtype & 16) = 16) as immutable_event_trigger from unnest(array['public.agency_followup_provider_events','public.agency_followup_provider_event_applications','public.agency_followup_provider_contact_applications','public.prospect_contactability_provider_suppressions','public.agency_followup_recipient_unsubscribes']) as event_table(table_name)",
   );
   if (providerGrants.rows[0]?.service_access !== true || providerGrants.rows[0]?.public_access !== false
     || providerGrants.rows[0]?.public_update_access !== false
@@ -2174,7 +2176,7 @@ async function authorJourney(page: Page, afterTemplateApproval?: (templateKey: s
   const journeyName = "Synthetic follow-up " + suffix;
   await page.getByLabel("Template key").fill(templateKey);
   await page.getByLabel("Email subject").fill("A synthetic follow-up question");
-  await page.getByLabel("Email body").fill("Hello. This message is a local synthetic review fixture and is never sent to a provider.");
+  await page.getByLabel("Email body").fill("Hello. This message is a local synthetic review fixture and is never sent to a provider.\n\nUnsubscribe: {{agency_followup_unsubscribe_url}}");
   await waitForAction(page, "template_create", page.getByRole("button", { name: "Create template draft" }));
   const templateCard = page.locator("article").filter({ hasText: templateKey }).first();
   const templateApprovalButton = templateCard.getByRole("button", { name: "Approve template v1" });
@@ -3447,6 +3449,90 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const ambiguousContactHash = createHash("sha256")
     .update(ambiguousContactEmail.trim().toLowerCase(), "utf8")
     .digest("hex");
+  const oneClickSourceMessage = ambiguousUnsubscribeMessages.rows[0]!;
+  const oneClickDuplicateMessage = ambiguousUnsubscribeMessages.rows[1]!;
+  const oneClickSourceOwner = "synthetic-walkthrough-one-click-source-" + RUN_ID.slice(0, 8);
+  const oneClickDuplicateOwner = "synthetic-walkthrough-one-click-duplicate-" + RUN_ID.slice(0, 8);
+  const oneClickTokenSha256 = createHash("sha256")
+    .update(`synthetic-first-party-unsubscribe:${RUN_ID}:${oneClickSourceMessage.id}`, "utf8")
+    .digest("hex");
+  const oneClickRaceClient = await pool.connect();
+  try {
+    await oneClickRaceClient.query("begin");
+    await oneClickRaceClient.query("set local role service_role");
+    const claimSource = await oneClickRaceClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_live_messages($1,$2::timestamptz,120,1,$3::uuid[])",
+      [oneClickSourceOwner, acceptedNow, [oneClickSourceMessage.enrollment_id]],
+    );
+    const claimedSource = await oneClickRaceClient.query<{
+      state: string; lease_owner: string | null; attempt_count: number; enrollment_id: string;
+    }>(
+      "select state,lease_owner,attempt_count,enrollment_id from public.agency_followup_messages where id=$1",
+      [oneClickSourceMessage.id],
+    );
+    const sourceClaim = claimedSource.rows[0];
+    const claimDuplicate = await oneClickRaceClient.query<{ id: string }>(
+      "select id from public.claim_agency_followup_live_messages($1,$2::timestamptz,120,1,$3::uuid[])",
+      [oneClickDuplicateOwner, acceptedNow, [oneClickDuplicateMessage.enrollment_id]],
+    );
+    const claimedDuplicate = await oneClickRaceClient.query<{
+      state: string; lease_owner: string | null; attempt_count: number; enrollment_id: string;
+    }>(
+      "select state,lease_owner,attempt_count,enrollment_id from public.agency_followup_messages where id=$1",
+      [oneClickDuplicateMessage.id],
+    );
+    const duplicateClaim = claimedDuplicate.rows[0];
+    if (claimSource.rows[0]?.id !== oneClickSourceMessage.id || sourceClaim?.state !== "claimed" ||
+        sourceClaim.lease_owner !== oneClickSourceOwner || sourceClaim.enrollment_id !== oneClickSourceMessage.enrollment_id ||
+        claimDuplicate.rows[0]?.id !== oneClickDuplicateMessage.id || duplicateClaim?.state !== "claimed" ||
+        duplicateClaim.lease_owner !== oneClickDuplicateOwner || duplicateClaim.enrollment_id !== oneClickDuplicateMessage.enrollment_id) {
+      throw new Error("The synthetic source and same-address duplicate were not both claimed before the one-click opt-out race check.");
+    }
+    const recordOneClick = async () => oneClickRaceClient.query<{ event_id: string; replayed: boolean }>(
+      "select * from public.record_agency_followup_recipient_unsubscribe($1::uuid,$2::uuid,$3,$4)",
+      [oneClickSourceMessage.id, oneClickSourceMessage.enrollment_id, ambiguousContactHash, oneClickTokenSha256],
+    );
+    const oneClickReceipt = await recordOneClick();
+    const oneClickReplay = await recordOneClick();
+    if (!oneClickReceipt.rows[0]?.event_id || oneClickReceipt.rows[0].replayed !== false ||
+        oneClickReplay.rows[0]?.event_id !== oneClickReceipt.rows[0].event_id || oneClickReplay.rows[0].replayed !== true) {
+      throw new Error("The first-party one-click opt-out did not persist and replay idempotently.");
+    }
+    const sourceGate = await authorizeProviderHandoff(oneClickRaceClient, {
+      messageId: oneClickSourceMessage.id,
+      enrollmentId: oneClickSourceMessage.enrollment_id,
+      owner: oneClickSourceOwner,
+      attemptCount: Number(sourceClaim.attempt_count),
+    });
+    const duplicateGate = await authorizeProviderHandoff(oneClickRaceClient, {
+      messageId: oneClickDuplicateMessage.id,
+      enrollmentId: oneClickDuplicateMessage.enrollment_id,
+      owner: oneClickDuplicateOwner,
+      attemptCount: Number(duplicateClaim.attempt_count),
+    });
+    const oneClickStored = await oneClickRaceClient.query<{
+      event_count: string; recipient_count: string; raw_email_absent: boolean;
+    }>(
+      "select (select count(*)::text from public.agency_followup_events event where event.idempotency_key='agency-followup-unsubscribe:'||$1 and event.event_type='unsubscribe_observed') as event_count,(select count(*)::text from public.agency_followup_recipient_unsubscribes unsubscribe_event where unsubscribe_event.token_sha256=$1 and unsubscribe_event.recipient_email_sha256=$2) as recipient_count,not (to_jsonb(unsubscribe_event)::text ilike '%'||$3||'%') as raw_email_absent from public.agency_followup_recipient_unsubscribes unsubscribe_event where unsubscribe_event.token_sha256=$1",
+      [oneClickTokenSha256, ambiguousContactHash, ambiguousContactEmail],
+    );
+    if (sourceGate.result !== "blocked" || !Array.isArray(sourceGate.blockers) ||
+        !sourceGate.blockers.includes("contactability_blocked") ||
+        duplicateGate.result !== "blocked" || !Array.isArray(duplicateGate.blockers) ||
+        !duplicateGate.blockers.includes("contactability_blocked") ||
+        oneClickStored.rows[0]?.event_count !== "1" || oneClickStored.rows[0]?.recipient_count !== "1" ||
+        oneClickStored.rows[0]?.raw_email_absent !== true) {
+      throw new Error("A committed first-party one-click opt-out failed to block an already-claimed message and the same address on another prospect.");
+    }
+    await oneClickRaceClient.query("rollback");
+  } catch (error) {
+    await oneClickRaceClient.query("rollback").catch(() => undefined);
+    throw error;
+  } finally {
+    oneClickRaceClient.release();
+  }
+  progress("first-party one-click unsubscribe replayed idempotently and the final gate blocked both the pre-claimed message and a second prospect sharing the address; the race fixture rolled back without persistence");
+
   const ambiguousContactPayload = {
     type: "contact.updated",
     created_at: new Date().toISOString(),
@@ -4356,8 +4442,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       databaseReusedWithoutReset: STACK_PROJECT_ID === DEFAULT_STACK_PROJECT_ID,
       databaseFreshScratchProject: STACK_PROJECT_ID !== DEFAULT_STACK_PROJECT_ID,
     },
-    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520", "20261024171116", "20261024175302", "20261024213806", "20261024233611", "20261026124659"],
-    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB, EXPECTED_SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_BLOB, EXPECTED_UNKNOWN_RESEND_RECONCILIATION_MIGRATION_BLOB, EXPECTED_CONTACT_HANDOFF_MIGRATION_BLOB, EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB, EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB],
+    migrationVersions: ["20261013173327", "20261013174258", "20261013230354", "20261020025251", "20261020141945", "20261021040000", "20261021050000", "20261021173939", "20261022172352", "20261022222611", "20261023170628", "20261023185535", "20261023185615", "20261024054520", "20261024171116", "20261024175302", "20261024213806", "20261024233611", "20261026124659", "20261026180704"],
+    verifiedMigrationBlobs: [EXPECTED_MIGRATION_BLOB, EXPECTED_FOLLOWUP_EVENT_PRIVILEGES_BLOB, EXPECTED_CRM_GRANTS_MIGRATION_BLOB, EXPECTED_EVENT_MIGRATION_BLOB, EXPECTED_EVENT_ROW_LOCK_GRANT_MIGRATION_BLOB, EXPECTED_OPT_IN_EVENT_MIGRATION_BLOB, EXPECTED_OPT_IN_OPERATOR_READ_MIGRATION_BLOB, EXPECTED_TEST_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_WEBHOOK_REPLAY_GUARD_MIGRATION_BLOB, EXPECTED_PROVIDER_EVENT_LEAST_PRIVILEGE_MIGRATION_BLOB, EXPECTED_TEMPLATE_APPROVAL_ATOMIC_MIGRATION_BLOB, EXPECTED_LIVE_MESSAGE_CLAIM_MIGRATION_BLOB, EXPECTED_PROVIDER_IDEMPOTENCY_FENCE_MIGRATION_BLOB, EXPECTED_RESEND_SUPPRESSED_STATUS_MIGRATION_BLOB, EXPECTED_SERIALIZED_PROVIDER_HANDOFF_GATE_MIGRATION_BLOB, EXPECTED_UNKNOWN_RESEND_RECONCILIATION_MIGRATION_BLOB, EXPECTED_CONTACT_HANDOFF_MIGRATION_BLOB, EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB, EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB, EXPECTED_RECIPIENT_UNSUBSCRIBE_MIGRATION_BLOB],
     screenshots,
     consentPanelScreenshots,
     providerStatusScreenshots,
@@ -4648,6 +4734,7 @@ async function main(): Promise<void> {
   await verifyPushedMigration(CONTACT_HANDOFF_MIGRATION_PATH, EXPECTED_CONTACT_HANDOFF_MIGRATION_BLOB);
   await verifyPushedMigration(ACTIVITY_LOCK_ORDER_FIX_MIGRATION_PATH, EXPECTED_ACTIVITY_LOCK_ORDER_FIX_MIGRATION_BLOB);
   await verifyPushedMigration(AMBIGUOUS_UNSUBSCRIBE_MIGRATION_PATH, EXPECTED_AMBIGUOUS_UNSUBSCRIBE_MIGRATION_BLOB);
+  await verifyPushedMigration(RECIPIENT_UNSUBSCRIBE_MIGRATION_PATH, EXPECTED_RECIPIENT_UNSUBSCRIBE_MIGRATION_BLOB);
   progress("loading the pinned loopback endpoint and local key in process memory");
   const status = getSupabaseStatus();
   progress("local key loaded from the isolated auth container without logging its value");

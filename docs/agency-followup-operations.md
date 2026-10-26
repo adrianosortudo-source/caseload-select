@@ -14,6 +14,17 @@ Feature mode defaults to off. Test mode requires exact recipient and record/enro
 
 The database handoff gate checks current eligibility, consent, contactability, source mapping, message approval, schedule, and predecessor state in one transaction, then returns an authorized payload for the Resend request. That transaction ends before the external request; authorization is point-in-time and does not serialize a later stop or consent change with provider delivery.
 
+## Recipient unsubscribe
+
+The live Resend adapter requires AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET: a server-only signing key with at least 32 UTF-8 bytes. Keep it in the deployment secret store and do not expose it to a browser or log. A missing or weak key blocks live dispatch. Production configuration is not set by this change.
+
+Each approved email body must contain {{agency_followup_unsubscribe_url}} exactly once. The adapter replaces it with a signed, message-specific URL and sends the corresponding List-Unsubscribe and RFC 8058 List-Unsubscribe-Post headers. Do not copy a signed recipient URL into another message or template.
+
+A GET displays a confirmation page and does not unsubscribe; link-preview scanners therefore cannot opt a person out by fetching the URL. The RFC 8058 POST records an idempotent, append-only opt-out using only the normalized recipient hash and message/enrollment identifiers. The final database handoff gate checks that record for the address, including a worker that claimed a message earlier and any other prospect with the same normalized email. The service-role-only table and RPC are not granted to anon or authenticated.
+
+The handoff decision is point-in-time. If the opt-out commits before the final gate authorizes an attempt, that attempt is blocked. If the gate authorizes first, its transaction ends before the separate Resend request; that already-authorized message may still be accepted or delivered while the opt-out is being recorded. Every later handoff is blocked. Do not claim that the in-flight message was cancelled; if its provider result is ambiguous, keep it `unknown` and do not retry.
+
+The current signing format uses one active key. Rotating AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET invalidates every outstanding unsubscribe URL. Do not rotate it after messages have been sent until a versioned-key transition or another safe plan for outstanding links is in place.
 ## Manual reply and booking reconciliation
 
 No automatic mailbox or calendar ingestion is verified for this workflow. Before approving or releasing a message, and again immediately before every dispatch, check the prospect's actual inbox and calendar history. Do not treat an empty CRM activity list as proof that no reply or booking exists.

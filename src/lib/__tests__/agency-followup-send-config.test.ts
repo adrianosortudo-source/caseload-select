@@ -10,6 +10,7 @@ const configured = {
   AGENCY_FOLLOWUP_REPLY_TO: "support@caseloadselect.ca",
   RESEND_API_KEY: "synthetic-api-key",
   AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: "synthetic-webhook-secret",
+  AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET: "synthetic-unsubscribe-secret-with-at-least-32-bytes",
   AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST: "owner@example.test",
   AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST: JSON.stringify([
     { enrollmentId: "enrollment-01", messageId: "message-01", recipientEmail: "owner@example.test" },
@@ -50,6 +51,7 @@ describe("Agency follow-up send configuration", () => {
     const variants = [
       { RESEND_API_KEY: "" },
       { AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: "" },
+      { AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET: "too-short" },
       { AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST: "" },
       { AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST: "not-json" },
       { AGENCY_FOLLOWUP_FROM: "CaseLoad Select <noreply@unverified.example>" },
@@ -85,6 +87,7 @@ describe("Agency follow-up send configuration", () => {
       AGENCY_FOLLOWUP_REPLY_TO: configured.AGENCY_FOLLOWUP_REPLY_TO,
       RESEND_API_KEY: configured.RESEND_API_KEY,
       AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: configured.AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET,
+      AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET: configured.AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET,
       AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST: allowedEnrollmentId.toUpperCase(),
     };
     const config = resolveAgencyFollowupSendConfig(live);
@@ -105,6 +108,7 @@ describe("Agency follow-up send configuration", () => {
       AGENCY_FOLLOWUP_REPLY_TO: configured.AGENCY_FOLLOWUP_REPLY_TO,
       RESEND_API_KEY: configured.RESEND_API_KEY,
       AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: configured.AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET,
+      AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET: configured.AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET,
     };
     const malformed = resolveAgencyFollowupSendConfig({
       ...live,

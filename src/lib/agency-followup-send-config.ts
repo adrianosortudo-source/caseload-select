@@ -18,6 +18,7 @@ export interface AgencyFollowupSendConfig {
   configuredReplyTo: string | null;
   apiKeyConfigured: boolean;
   webhookSecretConfigured: boolean;
+  unsubscribeSecretConfigured: boolean;
   /** One message maximum is enforced in every enabled mode. */
   maxBatchSize: 1;
   /** Exact message/enrollment/recipient targets that test-mode SQL may touch. */
@@ -93,6 +94,8 @@ export function resolveAgencyFollowupSendConfig(env: Environment = process.env):
   const configuredReplyTo = env.AGENCY_FOLLOWUP_REPLY_TO?.trim() || null;
   const apiKeyConfigured = Boolean(env.RESEND_API_KEY?.trim());
   const webhookSecretConfigured = Boolean(env.AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET?.trim());
+  const unsubscribeSecretConfigured = Boolean(env.AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET?.trim()) &&
+    Buffer.byteLength(env.AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET?.trim() ?? "", "utf8") >= 32;
   const testRecipients = parseEmailList(env.AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST);
   const testTargets = parseTestAllowlist(env.AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST);
   const liveEnrollments = parseEmailList(env.AGENCY_FOLLOWUP_LIVE_ENROLLMENT_ALLOWLIST);
@@ -102,6 +105,7 @@ export function resolveAgencyFollowupSendConfig(env: Environment = process.env):
   if (mode !== "off") {
     if (!apiKeyConfigured) blockers.push("resend_api_key_missing");
     if (!webhookSecretConfigured) blockers.push("resend_webhook_secret_missing");
+    if (!unsubscribeSecretConfigured) blockers.push("unsubscribe_secret_missing_or_weak");
     if (!configuredFrom || !emailAddress(configuredFrom)) blockers.push("followup_sender_missing_or_unverified");
     if (!configuredReplyTo || !emailAddress(configuredReplyTo)) blockers.push("followup_reply_to_missing_or_unverified");
     if (mode === "test") {
@@ -122,6 +126,7 @@ export function resolveAgencyFollowupSendConfig(env: Environment = process.env):
     configuredReplyTo,
     apiKeyConfigured,
     webhookSecretConfigured,
+    unsubscribeSecretConfigured,
     maxBatchSize: 1,
     testClaimTargets: mode === "test"
       ? testTargets.map(({ enrollmentId, messageId, recipientEmail }) => ({ enrollmentId, messageId, recipientEmail }))

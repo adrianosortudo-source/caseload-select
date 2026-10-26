@@ -256,6 +256,13 @@ async function loadOperationsStates(prospects: Array<{ id: string; contact_email
   const emailHashes = validProspects.map((prospectId) => agencyFollowupRecipientEmailHash(
     String(prospectById.get(prospectId)!.contact_email).trim(),
   ));
+  const recipientUnsubscribes = await readOperationsPages(
+    (from, to) => supabase.from("agency_followup_recipient_unsubscribes")
+      .select("recipient_email_sha256")
+      .in("recipient_email_sha256", emailHashes).range(from, to),
+    "Unable to read Agency follow-up recipient unsubscribe history",
+  );
+  const unsubscribedRecipients = new Set(recipientUnsubscribes.map((row) => String(row.recipient_email_sha256)));
   const optInEvents = await readOperationsPages(
     (from, to) => supabase.from("agency_followup_opt_in_events")
       .select("id,agency_prospect_id,source_link_id,conversation_id,recipient_email_sha256,purpose,event_type,recorded_at")
@@ -318,9 +325,11 @@ async function loadOperationsStates(prospects: Array<{ id: string; contact_email
     const latestOptIns = prospectConversationIds.map((conversationId) => optInByIdentity.get([
       prospectId, source.id, conversationId, recipientHash, "agency_followup_email",
     ].join(":")));
-    const optInState: AgencyFollowupOptInState = latestOptIns.every((eventType) => eventType === "opt_in_granted")
-      ? "granted"
-      : latestOptIns.some((eventType) => eventType === "opt_in_withdrawn") ? "withdrawn" : "missing";
+    const optedOut = unsubscribedRecipients.has(recipientHash);
+    const optInState: AgencyFollowupOptInState = optedOut ? "withdrawn"
+      : latestOptIns.every((eventType) => eventType === "opt_in_granted")
+        ? "granted"
+        : latestOptIns.some((eventType) => eventType === "opt_in_withdrawn") ? "withdrawn" : "missing";
     statesByProspect.set(prospectId, {
       contactability,
       conversationStatus: conversationStatus ?? "not_contacted",

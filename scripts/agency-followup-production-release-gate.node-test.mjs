@@ -110,8 +110,8 @@ function makePreflightEvidence(directory, stagedEvidence, rows) {
   for (const name of PREFLIGHT_EVIDENCE_FILES) writeJson(directory, name, values[name]);
 }
 
-test("pins exactly 17 Agency migrations to the current source bytes in order", () => {
-  assert.equal(AGENCY_MIGRATIONS.length, 17);
+test("pins exactly 18 Agency migrations to the current source bytes in order", () => {
+  assert.equal(AGENCY_MIGRATIONS.length, 18);
   assert.deepEqual(AGENCY_MIGRATIONS.map(item => item.version), [...AGENCY_MIGRATIONS.map(item => item.version)].sort());
   assert.ok(AGENCY_MIGRATIONS.every(item => /^[a-f0-9]{64}$/.test(item.sha256)));
   const actual = verifyAgencyMigrationSources(ROOT);
@@ -141,7 +141,7 @@ test("stages full production history and excludes exactly both preview-only migr
   }
 });
 
-test("full ledger accepts only the 17 exact Agency follow-up migrations as pending", () => {
+test("full ledger accepts only the 18 exact Agency follow-up migrations as pending", () => {
   const before = agencyPreflightRows();
   const preflight = verifyAgencyFullLedger(before, ROOT, "preflight");
   assert.deepEqual(preflight.pendingPaths, AGENCY_MIGRATIONS.map(item => item.path));
@@ -165,7 +165,7 @@ test("full ledger accepts only the 17 exact Agency follow-up migrations as pendi
 
 test("dry-run plans must contain exactly the pinned filenames with no seeds or roles", () => {
   const pre = verifyAgencyPlan(makePlan("pre"), "pre");
-  assert.equal(pre.migrations.length, 17);
+  assert.equal(pre.migrations.length, 18);
   assert.deepEqual(verifyAgencyPlan(makePlan("post"), "post").migrations, []);
   assert.throws(() => verifyAgencyPlan({ ...makePlan(), migrations: [...makePlan().migrations, PREVIEW_MIGRATION_PATHS[0].split("/").at(-1)] }, "pre"),
     /agency_followup_migration_plan_mismatch/);
@@ -220,7 +220,7 @@ test("preflight artifact binds the exact source, plan, stage, metadata and hashe
       now: Date.parse("2026-10-25T12:01:00.000Z"),
     });
     assert.equal(result.verified, true);
-    assert.equal(result.migrations.length, 17);
+    assert.equal(result.migrations.length, 18);
     assert.throws(() => verifyPreflightArtifact(evidenceRoot, { ...metadata, expired: true }, {
       sourceRoot: ROOT,
       env: artifactEnv,

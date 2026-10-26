@@ -41,6 +41,7 @@ export const AGENCY_MIGRATIONS = Object.freeze([
   Object.freeze({ path: "supabase/migrations/20261024213806_agency_followup_handoff_clock_recheck_and_contact_suppression.sql", filename: "20261024213806_agency_followup_handoff_clock_recheck_and_contact_suppression.sql", version: "20261024213806", name: "agency_followup_handoff_clock_recheck_and_contact_suppression", sha256: "9b7e1fbdade7a72b44053a426dc23b65f38b9ad78476cf6de58c1e3c45aae58f" }),
   Object.freeze({ path: "supabase/migrations/20261024233611_agency_followup_activity_lock_order_fix.sql", filename: "20261024233611_agency_followup_activity_lock_order_fix.sql", version: "20261024233611", name: "agency_followup_activity_lock_order_fix", sha256: "8d6917c174f2943e1370f65a31a98768899188c31f19d98acc411232210a8754" }),
   Object.freeze({ path: "supabase/migrations/20261026124659_agency_followup_ambiguous_recipient_suppression.sql", filename: "20261026124659_agency_followup_ambiguous_recipient_suppression.sql", version: "20261026124659", name: "agency_followup_ambiguous_recipient_suppression", sha256: "0b0bdb0e51efb3536026f83d0f5f5af22fb418c6bc5c7fd6a81de1a622ab315d" }),
+  Object.freeze({ path: "supabase/migrations/20261026180704_agency_followup_recipient_unsubscribe.sql", filename: "20261026180704_agency_followup_recipient_unsubscribe.sql", version: "20261026180704", name: "agency_followup_recipient_unsubscribe", sha256: "76fb95399d57ad53e2ff3ae78e62ee61aa7bd49a6ab4aaffb839ed7b9f9323c5" }),
 ]);
 export const PREFLIGHT_EVIDENCE_FILES = Object.freeze([
   "source-check.json",

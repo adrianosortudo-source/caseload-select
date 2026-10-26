@@ -11,7 +11,7 @@ const request = {
   idempotencyKey: `agency-followup:${enrollmentId}:${messageId}`,
   recipientEmail: "owner@example.test",
   subject: "Approved subject",
-  body: "Approved body",
+  body: "Approved body\nUnsubscribe: {{agency_followup_unsubscribe_url}}",
 };
 const env = {
   AGENCY_FOLLOWUP_SEND_MODE: "test",
@@ -19,6 +19,7 @@ const env = {
   AGENCY_FOLLOWUP_REPLY_TO: "support@caseloadselect.ca",
   RESEND_API_KEY: "synthetic-api-key-never-used-for-network",
   AGENCY_FOLLOWUP_RESEND_WEBHOOK_SECRET: "whsec_synthetic-never-used-for-network",
+  AGENCY_FOLLOWUP_UNSUBSCRIBE_SECRET: "synthetic-unsubscribe-secret-with-at-least-32-bytes",
   AGENCY_FOLLOWUP_TEST_RECIPIENT_ALLOWLIST: "owner@example.test",
   AGENCY_FOLLOWUP_TEST_RECORD_ALLOWLIST: JSON.stringify([
     { enrollmentId, messageId, recipientEmail: "owner@example.test" },

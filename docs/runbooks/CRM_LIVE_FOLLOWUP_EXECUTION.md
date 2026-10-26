@@ -23,7 +23,7 @@ Status: application work is on PR #426. The private execution ledger holds the e
 
 ## Remaining release gates
 
-1. Review the Agency-specific protected migration workflow and exact pending-set tests; verify the `Production prospect migrations` environment requires reviewer approval before apply. It must stage full migration history, exclude exactly the two preview-only QA files, require the pinned 17-file Agency set with no unexpected pending versions, recheck immediately before `supabase db push`, and verify the ledger delta plus empty pending plan.
+1. Review the Agency-specific protected migration workflow and exact pending-set tests; verify the `Production prospect migrations` environment requires reviewer approval before apply. It must stage full migration history, exclude exactly the two preview-only QA files, require the pinned 18-file Agency set with no unexpected pending versions, recheck immediately before `supabase db push`, and verify the ledger delta plus empty pending plan.
 2. Refresh the PR description without publishing private production inventory. Run fresh required CI and the dedicated database/browser walkthrough after all final code and documentation changes; inspect the final artifact and keep PR #426 open for review.
 3. Obtain an independent review and explicit owner approval to merge PR #426. Preserve actual GitHub-required review rules; do not reuse approval or waiver from an earlier PR.
 4. Prepare the exact migration, sender/reply-to, test recipient, copy, window, test record/enrollment, allowlists, side effects, and first business journey/cohort packet. Obtain separate action-specific approval before production migration, configuration, record creation, or send.
