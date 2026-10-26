@@ -119,6 +119,11 @@ jobs:
           set -euo pipefail
           node scripts/prospect-enrichment/configure-migration-tls.mjs
           mv "$RUNNER_TEMP/database-tls-check.json" "$AGENCY_PREFLIGHT_EVIDENCE_DIR/database-tls-check.json"
+
+      - name: Verify the propagated pinned TLS database connection
+        shell: bash
+        run: |
+          set -euo pipefail
           node scripts/agency-followup-production-release-gate.mjs connection-check > "$AGENCY_PREFLIGHT_EVIDENCE_DIR/connection-check.json"
 
       - name: Stage the full source history except the two preview-only migrations
@@ -153,6 +158,15 @@ jobs:
           name: agency-followup-production-preflight-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/agency-followup-preflight-evidence/
           if-no-files-found: error
+          retention-days: 7
+
+      - name: Preserve untrusted preflight diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: agency-followup-preflight-failure-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/agency-followup-preflight-evidence/
+          if-no-files-found: ignore
           retention-days: 7
 
   apply:
@@ -249,6 +263,11 @@ jobs:
           set -euo pipefail
           node scripts/prospect-enrichment/configure-migration-tls.mjs
           mv "$RUNNER_TEMP/database-tls-check.json" "$AGENCY_RESULT_EVIDENCE_DIR/database-tls-check-apply.json"
+
+      - name: Verify the propagated pinned TLS database connection
+        shell: bash
+        run: |
+          set -euo pipefail
           node scripts/agency-followup-production-release-gate.mjs connection-check > "$AGENCY_RESULT_EVIDENCE_DIR/connection-check-apply.json"
 
       - name: Recheck the full migration ledger, exact 18-file plan and source stage immediately before apply

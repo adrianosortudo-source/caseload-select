@@ -19,3 +19,9 @@ The helper accepts the returned lifetime only between 60 and 86400 seconds. Each
 The standard saved-password mode remains available, off by default for temporary access, and preserves its existing direct-endpoint restrictions. Do not select a pooler manually in saved-password mode. No application, migration bytes, provider settings, approval rules, production records or email sends are changed by this source patch.
 
 Official API: https://supabase.com/docs/reference/api/v1-create-login-role (experimental/beta, requires database_write). Shared pinned helper: scripts/prospect-enrichment/temporary-credential.mjs. Source authority and immutable evidence: scripts/agency-followup-production-release-gate.mjs.
+
+## GitHub environment propagation and diagnostic evidence
+
+The TLS helper persists its secured connection through GITHUB_ENV. GitHub exposes that value only to subsequent steps, so connection-evidence capture must be a separate following step in both jobs. Capturing it inside the configuration step reads the old URL and correctly fails the strict pinned-certificate evidence check. Never weaken certificate validation to accept that stale proof.
+
+When preflight fails, its fixed evidence directory is retained under a distinct agency-followup-preflight-failure artifact name. This diagnostic artifact provides no trusted preflight outputs and cannot authorize apply. Successful manifests and artifact IDs remain success-only; a failure requires diagnosis and a separately approved new run, not an automatic credential refresh or replay.

@@ -30,8 +30,10 @@ import {
   PROJECT_REF,
   TEMPORARY_DATABASE_HOST,
   sourceMigrationInventory,
+  verifyDirectDatabaseUrl,
 } from "./prospect-enrichment/migration-gate.mjs";
 import { DATABASE_CA_SHA256 } from "./prospect-enrichment/database-ca.mjs";
+import { configureMigrationTls } from "./prospect-enrichment/configure-migration-tls.mjs";
 
 const require = createRequire(import.meta.url);
 const yaml = require("js-yaml");
@@ -375,4 +377,58 @@ test("workflow keeps temporary token isolated, authenticates only after source/e
       }
     }
   }
+});
+
+
+test("TLS evidence requires GitHub environment propagation for both credential modes", () => {
+  for (const temporary of [false, true]) {
+    const issuedAt = Date.now();
+    const env = temporary ? {
+      USE_TEMPORARY_DATABASE_CREDENTIAL: "true", TEMPORARY_DATABASE_ROLE: "cli_login_synthetic",
+      TEMPORARY_DATABASE_ISSUED_AT: String(issuedAt), TEMPORARY_DATABASE_EXPIRES_AT: String(issuedAt + 300000),
+      MIGRATION_DATABASE_URL: `postgresql://cli_login_synthetic.${PROJECT_REF}:synthetic-password@${TEMPORARY_DATABASE_HOST}:5432/postgres?sslmode=verify-full`,
+    } : { MIGRATION_DATABASE_URL: `postgresql://postgres:synthetic-password@db.${PROJECT_REF}.supabase.co:5432/postgres?sslmode=verify-full` };
+    const mode = temporary ? "temporary-write-capable" : "saved-password";
+    let propagatedUrl;
+    const tlsProof = configureMigrationTls({ environment: env, mask: () => {}, persist: value => { propagatedUrl = value; } });
+    // GitHub does not update the current step's process environment after GITHUB_ENV writes.
+    assert.equal(new URL(env.MIGRATION_DATABASE_URL).searchParams.get("sslrootcert"), null);
+    const staleProof = verifyDirectDatabaseUrl(env.MIGRATION_DATABASE_URL, env, []);
+    assert.equal(staleProof.certificateTrust, undefined);
+    assert.throws(() => verifyAgencyConnectionEvidence(staleProof, mode), /agency_followup_database_connection_evidence_invalid/);
+    const nextStepEnv = { ...env, MIGRATION_DATABASE_URL: propagatedUrl };
+    const currentProof = verifyDirectDatabaseUrl(propagatedUrl, nextStepEnv, []);
+    assert.equal(currentProof.certificateTrust, "pinned-supabase-root-2021");
+    assert.deepEqual(verifyAgencyConnectionEvidence(currentProof, mode), currentProof);
+    const { certificateSha256, validTo, ...tlsConnection } = tlsProof;
+    assert.equal(certificateSha256, DATABASE_CA_SHA256);
+    assert.ok(Date.parse(validTo) > Date.now());
+    assert.deepEqual(tlsConnection, currentProof);
+  }
+});
+
+test("workflow separates TLS setup from propagated proof and preserves untrusted failure diagnostics", () => {
+  const workflow = yaml.load(fs.readFileSync(path.join(ROOT, ".github/workflows/agency-followup-production-release.yml"), "utf8"));
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    const tlsIndex = job.steps.findIndex(step => (step.run ?? "").includes("node scripts/prospect-enrichment/configure-migration-tls.mjs"));
+    assert.ok(tlsIndex >= 0);
+    assert.doesNotMatch(job.steps[tlsIndex].run, /agency-followup-production-release-gate\.mjs connection-check/);
+    const evidenceStep = job.steps[tlsIndex + 1];
+    assert.equal(evidenceStep.name, "Verify the propagated pinned TLS database connection");
+    assert.equal(evidenceStep.env?.MIGRATION_DATABASE_URL, undefined);
+    const filename = name === "preflight" ? "connection-check.json" : "connection-check-apply.json";
+    assert.ok(evidenceStep.run.includes("connection-check > ") && evidenceStep.run.includes(filename));
+    const firstDatabaseOperation = job.steps.findIndex(step => /supabase db (query|push)/.test(step.run ?? "") && !/--help/.test(step.run ?? ""));
+    assert.ok(firstDatabaseOperation > tlsIndex + 1);
+  }
+  const healthy = workflow.jobs.preflight.steps.find(step => step.id === "preflight_artifact");
+  const diagnostic = workflow.jobs.preflight.steps.find(step => step.name === "Preserve untrusted preflight diagnostics on failure");
+  assert.equal(healthy.if, undefined);
+  assert.equal(diagnostic.if, "failure()");
+  assert.equal(diagnostic.id, undefined);
+  assert.notEqual(diagnostic.with.name, healthy.with.name);
+  assert.match(diagnostic.with.name, /^agency-followup-preflight-failure-/);
+  assert.equal(diagnostic.with.path, "${{ runner.temp }}/agency-followup-preflight-evidence/");
+  assert.equal(diagnostic.with["if-no-files-found"], "ignore");
+  assert.equal(workflow.jobs.apply.needs, "preflight");
 });
