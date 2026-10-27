@@ -475,11 +475,13 @@ export function createPreflightManifest(evidenceDirectory, { sourceRoot = ROOT, 
 }
 
 function verifyArtifactMetadata(metadata, expected, workflowRunId, sourceSha) {
+  const expectedDigest = String(expected.digest ?? "").replace(/^sha256:/, "");
+  const metadataDigest = String(metadata?.digest ?? "");
   if (!IS_RECORD(metadata) || Number(metadata.id) !== Number(expected.artifactId) || metadata.name !== expected.name ||
-      metadata.digest !== expected.digest || metadata.expired !== false ||
+      metadataDigest !== `sha256:${expectedDigest}` || metadata.expired !== false ||
       !IS_RECORD(metadata.workflow_run) || String(metadata.workflow_run.id) !== workflowRunId ||
       metadata.workflow_run.head_sha !== sourceSha || metadata.workflow_run.head_branch !== "main" ||
-      !/^sha256:[a-f0-9]{64}$/.test(expected.digest ?? "")) FAIL("agency_followup_preflight_artifact_metadata_mismatch");
+      !/^[a-f0-9]{64}$/.test(expectedDigest)) FAIL("agency_followup_preflight_artifact_metadata_mismatch");
 }
 
 export function verifyPreflightArtifact(artifactDirectory, metadataInput, {
