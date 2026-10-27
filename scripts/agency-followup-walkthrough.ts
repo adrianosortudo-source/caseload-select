@@ -4183,7 +4183,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const renderedWidths: number[] = [];
   const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
   const consentPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string }> = [];
-  const activityPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string }> = [];
+  const activityPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string; capture: "panel" | "viewport" }> = [];
   const providerStatusScreenshots: Array<{ path: string; sha256: string; viewport: number; contentWidth: number; scrollWidth: number; text: string }> = [];
   const stableLayout = async () => page.evaluate(async () => {
     await document.fonts.ready;
@@ -4398,8 +4398,12 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await expect(meetingOutcome).toBeVisible();
   await expect(meetingOutcome).toHaveAttribute("placeholder", "What happened at the meeting");
   await expect(page.getByLabel("Next action")).toBeVisible();
-  const activityPanelWidths = [1440, 1024, 768, 640, 375, 320] as const;
+  const activityPanelWidths = [1440, 1024, 769, 768, 767, 640, 375, 320] as const;
   const activityCopySelector = '[data-ui-component-content="prospect-activity-form"],[data-ui-component-content="prospect-contact-controls"]';
+  const activityForm = page.locator('[data-ui-component-content="prospect-activity-form"]');
+  const contactControls = page.locator('[data-ui-component-content="prospect-contact-controls"]');
+  const activityHeading = activityForm.getByRole("heading", { name: "Log confirmed activity", exact: true });
+  const contactControlsHeading = contactControls.getByRole("heading", { name: "Contact controls", exact: true });
   for (const width of activityPanelWidths) {
     await page.setViewportSize({ width, height: 1000 });
     await activityPanel.scrollIntoViewIfNeeded();
@@ -4412,21 +4416,74 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     }
     await assertUnoccluded(activityType, "Activity type control", true);
     await assertUnoccluded(meetingOutcome, "Meeting outcome control", true);
-    await activityPanel.scrollIntoViewIfNeeded();
-    await stableLayout();
-    const file = path.join(screenshotDir, RUN_ID + "-prospect-activity-" + width + ".png");
-    await activityPanel.screenshot({ path: file });
-    activityPanelScreenshots.push({
-      path: path.relative(process.cwd(), file).replaceAll("\\", "/"),
-      sha256: createHash("sha256").update(await readFile(file)).digest("hex"),
-      viewport: width,
-      panel: "synthetic operator contact history and meeting reconciliation form",
-    });
+    await assertUnoccluded(page.getByLabel("Next action"), "Next action control", true);
+    await assertUnoccluded(page.getByRole("button", { name: "Save activity", exact: true }), "Save activity control", true);
+    const openMenu = page.getByRole("button", { name: "Open menu" });
+    if (width < 768) {
+      await expect(openMenu).toBeVisible();
+      const mobileTargets = [
+        { locator: activityForm, heading: activityHeading, label: "activity-form" },
+        { locator: contactControls, heading: contactControlsHeading, label: "contact-controls" },
+      ];
+      for (const target of mobileTargets) {
+        await target.locator.evaluate((element) => element.scrollIntoView({ block: "start", behavior: "instant" }));
+        await stableLayout();
+        const geometry = await target.locator.evaluate((element) => {
+          const topbarButton = document.querySelector('button[aria-label="Open menu"]');
+          const topbar = topbarButton?.parentElement;
+          const heading = element.querySelector("h3");
+          if (!topbar || !heading) return null;
+          const barRect = topbar.getBoundingClientRect();
+          const formRect = element.getBoundingClientRect();
+          const headingRect = heading.getBoundingClientRect();
+          const x = headingRect.left + headingRect.width / 2;
+          const y = headingRect.top + headingRect.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          return {
+            barTop: barRect.top,
+            barBottom: barRect.bottom,
+            formTop: formRect.top,
+            headingTop: headingRect.top,
+            headingBottom: headingRect.bottom,
+            viewportHeight: innerHeight,
+            headingHit: Boolean(hit && (hit === heading || heading.contains(hit))),
+          };
+        });
+        if (!geometry || geometry.barTop > 1 || geometry.barBottom <= geometry.barTop ||
+          geometry.formTop < geometry.barBottom + 8 || geometry.headingTop < geometry.barBottom + 8 ||
+          geometry.headingBottom > geometry.viewportHeight || !geometry.headingHit) {
+          throw new Error("Mobile " + target.label + " is missing or obscured by the operator top bar at " + width + "px: " + JSON.stringify(geometry));
+        }
+        await expect(target.heading).toBeVisible();
+        const file = path.join(screenshotDir, RUN_ID + "-prospect-activity-" + target.label + "-" + width + "-viewport.png");
+        await page.screenshot({ path: file, fullPage: false });
+        activityPanelScreenshots.push({
+          path: path.relative(process.cwd(), file).replaceAll("\\", "/"),
+          sha256: createHash("sha256").update(await readFile(file)).digest("hex"),
+          viewport: width,
+          panel: target.label + " below the fixed mobile navigation bar",
+          capture: "viewport",
+        });
+      }
+    } else {
+      await expect(openMenu).toBeHidden();
+      await activityPanel.scrollIntoViewIfNeeded();
+      await stableLayout();
+      const file = path.join(screenshotDir, RUN_ID + "-prospect-activity-" + width + "-panel.png");
+      await activityPanel.screenshot({ path: file });
+      activityPanelScreenshots.push({
+        path: path.relative(process.cwd(), file).replaceAll("\\", "/"),
+        sha256: createHash("sha256").update(await readFile(file)).digest("hex"),
+        viewport: width,
+        panel: "synthetic operator contact history and meeting reconciliation form",
+        capture: "panel",
+      });
+    }
   }
-  progress("synthetic Agency prospect history showed the meeting outcome and next action as separate controls; tagged copy, keyboard focus, point-hit behavior and screenshots passed at six supported widths");
+  progress("synthetic Agency contact-history forms stayed clear of the fixed mobile bar with viewport evidence at four small widths; copy, keyboard focus, and point-hit checks passed across eight breakpoint widths");
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
   if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
-  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || activityPanelScreenshots.length !== 6 || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, activity-panel, authoring approval, or required-control evidence.");
+  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || activityPanelScreenshots.length !== 12 || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, activity-panel, authoring approval, or required-control evidence.");
   const summary = {
     runId: RUN_ID,
     ...sourceAtStart,

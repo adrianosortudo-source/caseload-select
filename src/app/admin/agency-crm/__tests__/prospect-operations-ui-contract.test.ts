@@ -18,6 +18,11 @@ describe('prospect operations UI contract', () => {
     expect(source).toContain('limit=${HISTORY_PAGE_SIZE}&offset=0');
   });
 
+  it('keeps contact-history scroll targets below the fixed mobile top bar', () => {
+    const source = read('ProspectActivityPanel.tsx');
+    expect(source).toContain('className="scroll-mt-16 md:scroll-mt-0 border border-black/10 bg-parchment p-4 grid gap-3" data-ui-component-content="prospect-activity-form"');
+    expect(source).toContain('className="scroll-mt-16 md:scroll-mt-0 border-t border-black/10 bg-white px-4 py-4 sm:px-5 grid gap-3" data-ui-component-content="prospect-contact-controls"');
+  });
   it('logs confirmed activity through the append-only operator endpoint', () => {
     const source = read('ProspectActivityPanel.tsx');
     expect(source).toContain("fetch('/api/admin/prospect-operations/activities'");

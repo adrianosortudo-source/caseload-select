@@ -324,7 +324,7 @@ export default function ProspectActivityPanel({
           )}
         </div>
 
-        <form onSubmit={saveActivity} className="border border-black/10 bg-parchment p-4 grid gap-3" data-ui-component-content="prospect-activity-form">
+        <form onSubmit={saveActivity} className="scroll-mt-16 md:scroll-mt-0 border border-black/10 bg-parchment p-4 grid gap-3" data-ui-component-content="prospect-activity-form">
           <div>
             <h3 className="text-xs uppercase tracking-[0.14em] font-semibold text-navy" data-ui-copy="heading">Log confirmed activity</h3>
             <p className="text-xs text-black/50 mt-1 [text-wrap:pretty]" data-ui-copy="supporting">Saving this record does not send a message.</p>
@@ -375,7 +375,7 @@ export default function ProspectActivityPanel({
           <button type="submit" className="bg-navy text-white px-4 py-2 text-xs uppercase tracking-wider font-bold disabled:opacity-50" disabled={!conversation || saving || loading}>{saving ? 'Saving' : 'Save activity'}</button>
         </form>
       </div>
-      <form onSubmit={saveConversationSettings} className="border-t border-black/10 bg-white px-4 py-4 sm:px-5 grid gap-3" data-ui-component-content="prospect-contact-controls">
+      <form onSubmit={saveConversationSettings} className="scroll-mt-16 md:scroll-mt-0 border-t border-black/10 bg-white px-4 py-4 sm:px-5 grid gap-3" data-ui-component-content="prospect-contact-controls">
         <div>
           <h3 className="text-xs uppercase tracking-[0.14em] font-semibold text-navy" data-ui-copy="heading">Contact controls</h3>
           <p className="text-xs text-black/50 mt-1 [text-wrap:pretty]" data-ui-copy="supporting">Record the next action and contactability. This does not send a message.</p>
