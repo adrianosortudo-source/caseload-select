@@ -26,6 +26,7 @@ export function redactedFailureCode(error) {
   return "temporary_credential_unexpected_failure";
 }
 const GATES = Object.freeze({
+  "agency-followup": ["../agency-followup-production-release-gate.mjs", "credential-authorization"],
   "bounded-original-release": ["bounded-original-release-gate.mjs", "source"],
   "field-filter-release": ["field-filter-release-gate.mjs", "source"],
   "complete-release": ["complete-release-gate.mjs", "credential-authorization"],
