@@ -61,7 +61,7 @@ async function evidenceCounts(pool: Pool, data: Fixture, packageIds: string[]) {
        (SELECT count(*)::text FROM public.gta_prospect_website_intake_observations WHERE firm_id=$1::uuid) AS "intakeRows",
        (SELECT count(*)::text FROM public.gta_prospect_website_intake_observations WHERE firm_id=$1::uuid AND source_url=$4 AND observed_on=$5::date) AS "sourceRows",
        (SELECT count(*)::text FROM public.gta_prospect_stable_identity_registry WHERE firm_id=$1::uuid) AS "stableIdentityRows"`,
-    [data.firmId, data.sourceRecordKey, packageIds, data.sourceUrl, data.observedOn],
+    [data.firmId, data.sourceRecordKey, packageIds, "https://" + new URL(data.sourceUrl).hostname, data.observedOn],
   );
   return result.rows[0];
 }
