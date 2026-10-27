@@ -212,14 +212,14 @@ test("preflight artifact binds the exact source, plan, stage, metadata and hashe
     const artifactEnv = {
       ...WORKFLOW_ENV,
       EXPECTED_ARTIFACT_ID: "987654",
-      EXPECTED_ARTIFACT_DIGEST: `sha256:${"b".repeat(64)}`,
+      EXPECTED_ARTIFACT_DIGEST: "b".repeat(64),
       EXPECTED_ARTIFACT_NAME: "agency-followup-production-preflight-123456-1",
       EXPECTED_MANIFEST_SHA256: manifestSha256,
     };
     const metadata = {
       id: 987654,
       name: artifactEnv.EXPECTED_ARTIFACT_NAME,
-      digest: artifactEnv.EXPECTED_ARTIFACT_DIGEST,
+      digest: `sha256:${"b".repeat(64)}`,
       expired: false,
       workflow_run: { id: 123456, head_sha: SOURCE_SHA, head_branch: "main" },
     };
@@ -230,6 +230,16 @@ test("preflight artifact binds the exact source, plan, stage, metadata and hashe
     });
     assert.equal(result.verified, true);
     assert.equal(result.migrations.length, 18);
+    assert.throws(() => verifyPreflightArtifact(evidenceRoot, { ...metadata, digest: `sha256:${"c".repeat(64)}` }, {
+      sourceRoot: ROOT,
+      env: artifactEnv,
+      now: Date.parse("2026-10-25T12:01:00.000Z"),
+    }), /agency_followup_preflight_artifact_metadata_mismatch/);
+    assert.equal(verifyPreflightArtifact(evidenceRoot, metadata, {
+      sourceRoot: ROOT,
+      env: { ...artifactEnv, EXPECTED_ARTIFACT_DIGEST: `sha256:${"b".repeat(64)}` },
+      now: Date.parse("2026-10-25T12:01:00.000Z"),
+    }).verified, true);
     assert.throws(() => verifyPreflightArtifact(evidenceRoot, { ...metadata, expired: true }, {
       sourceRoot: ROOT,
       env: artifactEnv,
