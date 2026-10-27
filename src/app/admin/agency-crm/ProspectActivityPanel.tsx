@@ -380,7 +380,7 @@ export default function ProspectActivityPanel({
           <h3 className="text-xs uppercase tracking-[0.14em] font-semibold text-navy" data-ui-copy="heading">Contact controls</h3>
           <p className="text-xs text-black/50 mt-1 [text-wrap:pretty]" data-ui-copy="supporting">Record the next action and contactability. This does not send a message.</p>
         </div>
-        <div className="grid gap-3 xl:grid-cols-3">
+        <div className="grid gap-3 2xl:grid-cols-3">
           <label className="grid gap-1 text-xs font-semibold text-black/65">Contactability
             <select className="border border-black/15 bg-white px-3 py-2 text-sm font-normal" value={contactability} onChange={(event) => setContactability(event.target.value as typeof contactability)} disabled={!conversation || settingsSaving}>
               <option value="unknown">Unknown</option><option value="eligible">Eligible</option><option value="suppressed">Suppressed</option>

@@ -40,10 +40,17 @@ describe('prospect operations UI contract', () => {
   });
   it('keeps contact controls stacked until the form has room for three columns', () => {
     const source = read('ProspectActivityPanel.tsx');
-    expect(source).toContain('className="grid gap-3 xl:grid-cols-3"');
+    expect(source).toContain('className="grid gap-3 2xl:grid-cols-3"');
+    expect(source).not.toContain('className="grid gap-3 xl:grid-cols-3"');
     expect(source).not.toContain('className="grid gap-3 sm:grid-cols-3"');
   });
 
+  it('covers both sides of the contact-control layout breakpoints', () => {
+    const walkthrough = readFileSync(resolve(process.cwd(), 'scripts/agency-followup-walkthrough.ts'), 'utf8');
+    expect(walkthrough).toContain('const activityPanelWidths = [1536, 1535, 1440, 1280, 1279, 1024, 769, 768, 767, 640, 375, 320] as const;');
+    expect(walkthrough).toContain('control.left < contentLeft - 1 || control.right > contentRight + 1');
+    expect(walkthrough).toContain('activityPanelScreenshots.length !== activityPanelWidths.length + activityPanelWidths.filter((width) => width < 768).length');
+  });
   it('provides operator controls for contactability and next action tracking', () => {
     const source = read('ProspectActivityPanel.tsx');
     expect(source).toContain('data-ui-component-content="prospect-contact-controls"');

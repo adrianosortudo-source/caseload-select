@@ -4398,7 +4398,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await expect(meetingOutcome).toBeVisible();
   await expect(meetingOutcome).toHaveAttribute("placeholder", "What happened at the meeting");
   await expect(page.getByLabel("Next action")).toBeVisible();
-  const activityPanelWidths = [1440, 1024, 769, 768, 767, 640, 375, 320] as const;
+  const activityPanelWidths = [1536, 1535, 1440, 1280, 1279, 1024, 769, 768, 767, 640, 375, 320] as const;
   const activityCopySelector = '[data-ui-component-content="prospect-activity-form"],[data-ui-component-content="prospect-contact-controls"]';
   const activityForm = page.locator('[data-ui-component-content="prospect-activity-form"]');
   const contactControls = page.locator('[data-ui-component-content="prospect-contact-controls"]');
@@ -4435,6 +4435,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       const failureFile = path.join(screenshotDir, RUN_ID + "-failure-prospect-contact-controls-width-" + width + ".png");
       await activityPanel.screenshot({ path: failureFile });
       throw new Error("Contact controls exceed the usable card width at " + width + "px: " + JSON.stringify(contactControlGeometry));
+    }
+    if (width < 768) {
+      await activityForm.evaluate((element) => element.scrollIntoView({ block: "start", behavior: "instant" }));
+      await stableLayout();
     }
     await assertUnoccluded(activityType, "Activity type control", true);
     await assertUnoccluded(meetingOutcome, "Meeting outcome control", true);
@@ -4502,10 +4506,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       });
     }
   }
-  progress("synthetic Agency contact-history forms stayed clear of the fixed mobile bar with viewport evidence at four small widths; copy, keyboard focus, and point-hit checks passed across eight breakpoint widths");
+  progress("synthetic Agency contact-history forms stayed clear of the fixed mobile bar with viewport evidence at four small widths; copy, keyboard focus, and point-hit checks passed across twelve viewport widths");
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
   if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
-  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || activityPanelScreenshots.length !== 12 || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, activity-panel, authoring approval, or required-control evidence.");
+  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || activityPanelScreenshots.length !== activityPanelWidths.length + activityPanelWidths.filter((width) => width < 768).length || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, activity-panel, authoring approval, or required-control evidence.");
   const summary = {
     runId: RUN_ID,
     ...sourceAtStart,
