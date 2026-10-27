@@ -38,6 +38,12 @@ describe('prospect operations UI contract', () => {
     expect(source).not.toContain('What happened or what comes next');
     expect(source).toContain('Next action');
   });
+  it('keeps contact controls stacked until the form has room for three columns', () => {
+    const source = read('ProspectActivityPanel.tsx');
+    expect(source).toContain('className="grid gap-3 xl:grid-cols-3"');
+    expect(source).not.toContain('className="grid gap-3 sm:grid-cols-3"');
+  });
+
   it('provides operator controls for contactability and next action tracking', () => {
     const source = read('ProspectActivityPanel.tsx');
     expect(source).toContain('data-ui-component-content="prospect-contact-controls"');

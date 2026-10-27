@@ -4414,6 +4414,28 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       await activityPanel.screenshot({ path: failureFile });
       throw new Error("Rendered prospect activity UI gate failed at " + width + "px: " + activityCopyFailures.join("; "));
     }
+    const contactControlGeometry = await contactControls.evaluate((element) => {
+      const formRect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const contentLeft = formRect.left + Number.parseFloat(style.borderLeftWidth) + Number.parseFloat(style.paddingLeft);
+      const contentRight = formRect.right - Number.parseFloat(style.borderRightWidth) - Number.parseFloat(style.paddingRight);
+      const overflowingControls = Array.from(element.querySelectorAll<HTMLElement>("input, select, textarea, button"))
+        .map((control) => {
+          const rect = control.getBoundingClientRect();
+          return {
+            label: control.closest("label")?.textContent?.trim().replace(/\s+/g, " ").slice(0, 48) ?? control.tagName.toLowerCase(),
+            left: rect.left,
+            right: rect.right,
+          };
+        })
+        .filter((control) => control.left < contentLeft - 1 || control.right > contentRight + 1);
+      return { contentLeft, contentRight, overflowingControls };
+    });
+    if (contactControlGeometry.overflowingControls.length) {
+      const failureFile = path.join(screenshotDir, RUN_ID + "-failure-prospect-contact-controls-width-" + width + ".png");
+      await activityPanel.screenshot({ path: failureFile });
+      throw new Error("Contact controls exceed the usable card width at " + width + "px: " + JSON.stringify(contactControlGeometry));
+    }
     await assertUnoccluded(activityType, "Activity type control", true);
     await assertUnoccluded(meetingOutcome, "Meeting outcome control", true);
     await assertUnoccluded(page.getByLabel("Next action"), "Next action control", true);
