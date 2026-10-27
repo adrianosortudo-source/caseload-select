@@ -14,8 +14,8 @@ export function researchUrl(value: unknown): string | null {
   if (typeof value !== "string") return null;
   try { const parsed = new URL(value); return ["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password ? value : null; } catch { return null; }
 }
-export function ResearchPanel({ title, children, name, description }: { title: string; children: ReactNode; name: string; description?: string }) {
-  return <section className="min-w-0 rounded-lg border border-border-brand bg-white p-4 sm:p-5" data-ui-component-content={name}>
+export function ResearchPanel({ title, children, name, description, className }: { title: string; children: ReactNode; name: string; description?: string; className?: string }) {
+  return <section className={`min-w-0 rounded-lg border border-border-brand bg-white ${className ?? "p-4 sm:p-5"}`} data-ui-component-content={name}>
     <h2 className="w-full text-pretty text-base font-semibold text-navy sm:text-lg" data-ui-copy="heading">{title}</h2>
     {description && <p className="mt-2 w-full text-pretty text-sm text-black/60" data-ui-copy="supporting">{description}</p>}
     <div className="mt-4 min-w-0 space-y-4">{children}</div>
