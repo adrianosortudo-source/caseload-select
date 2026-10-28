@@ -139,8 +139,8 @@ describe("buildSeoReportModel", () => {
     expect(model.crawlerPolicies.find((bot) => bot.token === 'Perplexity-User')).toMatchObject({ robotsSemantics: 'generally-ignores', policyObservation: 'blocking-rule-observed', actualFetchAccess: 'not-verified' });
     expect(model.crawlerPolicies.find((bot) => bot.token === "CCBot")?.purposes).toEqual(["open-dataset"]);
     expect(model.crawlerPolicies.find((bot) => bot.token === "Google-Extended")).toMatchObject({ isControlToken: true, actualFetchAccess: "not-verified" });
-    expect(model.aiObservations.join(" ")).toContain("robots.txt blocking rules were observed");
-    expect(model.aiObservations.join(" ")).toContain("does not verify actual fetching");
+    expect(model.aiObservations.join(" ")).toContain("documented robots behavior are listed per token below");
+    expect(model.aiObservations.join(" ")).toContain("does not verify actual access or downstream use");
     expect(model.aiObservations.join(" ")).not.toContain("listed training crawlers");
     expect(model.priorityActions).toEqual([]);
   });

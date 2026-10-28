@@ -17,6 +17,7 @@ import {
   type CategoryResult,
   type ParsedRobots,
   SCANNER_TOKEN,
+  checkBotBlockedParsed,
   GENERIC_ANCHORS,
   isSameOrigin,
   isWpDefaultContent,

@@ -30,7 +30,7 @@ describe("methodology check registry", () => {
     const result = buildPageResult(
       "<html><head></head><body>Law firm</body></html>", url, url, new Headers(),
       { ms: 100, sampleCount: 1 }, 0, "example.com", parseRobotsTxt(""), null,
-      new Set(), null, null
+      new Set(), null
     );
     for (const category of result.categories) {
       for (const item of category.items) {
@@ -65,7 +65,7 @@ describe("methodology check registry", () => {
     const result = buildPageResult(
       "<html><head><meta name=\"robots\" content=\"nofollow\"></head><body>Law firm</body></html>", url, url, new Headers(),
       { ms: 100, sampleCount: 1 }, 2, "example.com", parseRobotsTxt(""), null,
-      new Set(), null, null
+      new Set(), null
     );
     const checks = result.categories.find((category) => category.name === "Indexability")!.items;
     for (const label of ["Redirect chain", "Followable links", "Canonical tag", "Mixed indexability signals", "Sitemap membership"]) {

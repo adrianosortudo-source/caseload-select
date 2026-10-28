@@ -378,7 +378,7 @@ describe("buildIssues", () => {
   });
 });
 
-describe("buildIssues: placeholder-class severity gate (trust-fix pass WI-7)", () => {
+describe("buildIssues: placeholder-class unscored observations", () => {
   const aiFindingsCat = cat("AI Visibility", [
     { label: "Question-format headings", status: "fail", detail: "No question-format headings.", fix: "Add some." },
     { label: "Direct-answer sentences", status: "fail", detail: "No direct-answer patterns detected.", fix: "Add some." },
@@ -445,23 +445,24 @@ describe("buildIssues: placeholder-class severity gate (trust-fix pass WI-7)", (
     mkPage({ url: "https://x.com/contact", pageType: "contact", categories, wordCount: 50 }),
   ];
 
-  it("caps CSP and X-Content-Type-Options severity at low on a placeholder-class site, but not on a content-rich one", () => {
+  it("omits unscored CSP and X-Content-Type-Options observations from issue actions", () => {
     const placeholderIssues = buildIssues(twoRealPagesOneThin([secCat]), 1);
     const richIssues = buildIssues(twoRealPagesOneThin([secCat]).map((p) => ({ ...p, wordCount: 300 })), 2);
     const placeholderCsp = placeholderIssues.find((i) => i.title === "Content-Security-Policy");
     const richCsp = richIssues.find((i) => i.title === "Content-Security-Policy");
-    expect(placeholderCsp?.severity).toBe("low");
-    expect(richCsp?.severity).not.toBe("low");
+    expect(placeholderCsp).toBeUndefined();
+    expect(richCsp).toBeUndefined();
   });
 
-  it("does NOT cap HSTS severity on a placeholder-class site (calibrated severity holds regardless of site maturity)", () => {
+  it("omits the unscored HSTS observation regardless of site maturity", () => {
     const hstsCat = cat("Technical & Security", [
       { label: "HSTS header", status: "warn", detail: "Missing. HSTS tells browsers to always use HTTPS.", fix: "Add it.", scored: false },
     ]);
     const notPlaceholder = buildIssues(twoRealPagesOneThin([hstsCat]).map((p) => ({ ...p, wordCount: 300 })), 2).find((i) => i.title === "HSTS header");
     const placeholder = buildIssues(twoRealPagesOneThin([hstsCat]), 1).find((i) => i.title === "HSTS header");
-    // Same calibrated severity in both cases: WI-7 only caps CSP/XCTO, never HSTS.
-    expect(placeholder?.severity).toBe(notPlaceholder?.severity);
+
+    expect(placeholder).toBeUndefined();
+    expect(notPlaceholder).toBeUndefined();
   });
 });
 
@@ -557,25 +558,14 @@ describe("buildV4Issues", () => {
       ])],
     });
     expect(buildV4Issues([page], 0).map((issue) => issue.title)).not.toContain("No informational content published yet");
-    expect(buildIssues([page], 0).map((issue) => issue.title)).toContain("No informational content published yet");
+    const legacyPage = { ...page, categories: [cat("AI Visibility", [
+      { label: "Question-format headings", status: "fail" as const, detail: "No question headings were observed." },
+      { label: "Direct-answer sentences", status: "fail" as const, detail: "No answer pattern was observed." },
+      { label: "Authoritative citations", status: "fail" as const, detail: "No citation was observed." },
+    ])] };
+    expect(buildIssues([legacyPage], 0).map((issue) => issue.title)).toContain("No informational content published yet");
   });
 
-  it("does not expose bounded-crawl site-absence heuristics in the current report", () => {
-    const pages = [mkPage({
-      url: "https://x.com/", pageType: "homepage", phone: false, practiceAreaIntent: false,
-      categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "A title exists." }])],
-    })];
-    const titles = buildV4Issues(pages).map((issue) => issue.title);
-    expect(titles).not.toContain("No practice-area pages found");
-    expect(titles).not.toContain("No attorney or team page found in checked pages");
-    expect(titles).not.toContain("No clear contact path");
-    expect(titles).not.toContain("No XML sitemap found");
-    expect(titles).not.toContain("WordPress starter content still published");
-    expect(buildSiteStructureIssues(pages, false).map((issue) => issue.title)).toContain("No practice-area pages found");
-  });
-});
-
-describe("buildV4Issues", () => {
   it("does not expose bounded-crawl site-absence heuristics in the current report", () => {
     const pages = [mkPage({
       url: "https://x.com/", pageType: "homepage", phone: false, practiceAreaIntent: false,

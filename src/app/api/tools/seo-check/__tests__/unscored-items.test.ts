@@ -275,10 +275,10 @@ describe("aggregateCategories: the scored flag and maxScore survive the per-page
   });
 
   it("preserves methodology explanation fields through site category aggregation", () => {
-    const page = mkPage("https://x.com/", "homepage", [category([
+    const page = mkPage("https://x.com/", "homepage", [{ name: "SEO methodology", score: 0, maxScore: 0, items: [
       { label: "Known exclusion", status: "fail", detail: "Observed only.", scored: false, disposition: "unscored", basis: "Known v4 exclusion." },
       { label: "Pending mapping", status: "warn", detail: "Unmapped.", scored: false, disposition: "pending-review", basis: "Source mapping pending." },
-    ])]);
+    ] }]);
     const [aggregate] = aggregateCategories([page]);
     expect(aggregate.items).toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Known exclusion", disposition: "unscored", basis: "Known v4 exclusion." }),

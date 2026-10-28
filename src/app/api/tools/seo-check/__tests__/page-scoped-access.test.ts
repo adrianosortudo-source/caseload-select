@@ -82,7 +82,7 @@ describe("page-scoped search access evidence", () => {
     );
     const trust = item(result, "Legal Marketing", "Trust signals");
     expect(trust).toMatchObject({ status: "pass", scored: false });
-    expect(trust?.detail).toContain("accuracy and quality were not assessed");
+    expect(trust?.detail).toContain("does not assess credibility or professional status");
     expect(trust?.detail).not.toMatch(/of 5|trust cues lift|add client testimonials/i);
     expect(trust?.fix).toBeUndefined();
   });
