@@ -27,6 +27,92 @@ function item(result: ReturnType<typeof page>, category: string, label: string) 
 }
 
 describe("page-scoped search access evidence", () => {
+  it("keeps a schema-only address separate from visible address evidence", () => {
+    const html = `<html><head><title>Firm</title><script type="application/ld+json">${JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "LegalService",
+      name: "Example Firm",
+      address: {
+        "@type": "PostalAddress",
+        streetAddress: "100 King Street West",
+        addressLocality: "Toronto",
+        addressRegion: "ON",
+        postalCode: "M5X 1A9",
+      },
+      areaServed: "Ontario",
+    })}</script></head><body>Remote consultations by video. Legal services.</body></html>`;
+    const result = page("https://example.com/", html);
+    const legalAddress = item(result, "Legal Marketing", "Address / NAP");
+    const localAddress = item(result, "Local SEO", "Street address (NAP)");
+
+    expect(result.schema.fields.address).toBe(true);
+    expect(result.lawFirm.addressTextPresent).toBe(false);
+    expect(result.lawFirm.serviceAreaLikely).toBe(false);
+    expect(legalAddress).toMatchObject({ status: "pass", scored: false });
+    expect(legalAddress?.detail).toContain("does not assess rendered visibility");
+    expect(localAddress).toMatchObject({ status: "pass", scored: false });
+  });
+
+  it("credits an address in visible page text", () => {
+    const result = page(
+      "https://example.com/",
+      "<html><head><title>Firm</title></head><body>100 King Street West, Toronto. Legal services.</body></html>"
+    );
+    expect(result.lawFirm.addressTextPresent).toBe(true);
+    expect(item(result, "Legal Marketing", "Address / NAP")?.status).toBe("pass");
+    expect(item(result, "Legal Marketing", "Address / NAP")?.scored).toBe(false);
+    expect(item(result, "Local SEO", "Street address (NAP)")?.scored).toBe(false);
+  });
+
+  it("does not treat hidden, template, or absent initial-HTML address text as rendered evidence", () => {
+    const result = page(
+      "https://example.com/",
+      `<html><head><title>Firm</title></head><body><div hidden>100 King Street West</div><template>100 Queen Street West</template><div id="root"></div></body></html>`
+    );
+    expect(result.schema.fields.address).toBe(false);
+    expect(result.lawFirm.addressTextPresent).toBe(false);
+    expect(item(result, "Legal Marketing", "Address / NAP")).toMatchObject({ status: "pass", scored: false });
+    expect(item(result, "Local SEO", "Street address (NAP)")).toMatchObject({ status: "pass", scored: false });
+  });
+
+  it("keeps detected credibility cues as neutral, unscored observations", () => {
+    const result = page(
+      "https://example.com/",
+      "<html><head><title>Firm</title></head><body>Our clients say: thoughtful service. Legal services.</body></html>"
+    );
+    const trust = item(result, "Legal Marketing", "Trust signals");
+    expect(trust).toMatchObject({ status: "pass", scored: false });
+    expect(trust?.detail).toContain("accuracy and quality were not assessed");
+    expect(trust?.detail).not.toMatch(/of 5|trust cues lift|add client testimonials/i);
+    expect(trust?.fix).toBeUndefined();
+  });
+
+  it("records title and content quantities without scoring length or fixed link counts", () => {
+    const result = page(
+      "https://example.com/",
+      '<html><head><title>X</title><meta name="description" content="Short summary."></head><body><p>Brief content.</p></body></html>'
+    );
+    expect(item(result, "On-Page SEO", "Page title")).toMatchObject({ status: "pass" });
+    expect(item(result, "On-Page SEO", "Page title")?.scored).not.toBe(false);
+    for (const [category, label] of [
+      ["On-Page SEO", "Page title length"],
+      ["On-Page SEO", "Meta description"],
+      ["Links & Content", "Word count"],
+      ["Links & Content", "Content-to-HTML ratio"],
+      ["Links & Content", "Internal links"],
+      ["Links & Content", "External links"],
+    ]) {
+      expect(item(result, category, label), `${category} / ${label}`).toMatchObject({ scored: false });
+      expect(item(result, category, label)?.fix).toBeUndefined();
+    }
+  });
+
+  it("keeps a missing page title as a direct observation", () => {
+    const result = page("https://example.com/", "<html><head></head><body>Firm</body></html>");
+    expect(item(result, "On-Page SEO", "Page title")).toMatchObject({ status: "fail" });
+    expect(item(result, "On-Page SEO", "Page title")?.scored).not.toBe(false);
+  });
+
   it("does not call a noindex page's self-canonical a conflict or claim actual indexing state", () => {
     const url = "https://example.com/services/";
     const result = page(url, `<html><head><title>Services</title><meta name="robots" content="noindex,follow"><link rel="canonical" href="${url}"></head><body>Services</body></html>`);

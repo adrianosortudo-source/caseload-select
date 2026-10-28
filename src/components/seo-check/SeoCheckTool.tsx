@@ -364,7 +364,9 @@ export default function SeoCheckTool({
                   className="seo-email-grade-letter"
                   style={{
                     color:
-                      result.overallScore >= 70
+                      result.overallScore === null
+                        ? "var(--stone-on-light)"
+                        : result.overallScore >= 70
                         ? "var(--navy)"
                         : result.overallScore >= 40
                           ? "var(--stone-on-light)"
@@ -373,7 +375,7 @@ export default function SeoCheckTool({
                 >
                   {result.grade}
                 </span>
-                <span className="seo-email-grade-score">{result.overallScore}/100</span>
+                <span className="seo-email-grade-score">{result.overallScore === null ? "Not assessed" : `${result.overallScore}/100`}</span>
               </div>
               <p className="seo-email-preview-text">
                 Your report for <strong>{result.domain}</strong> is ready.

@@ -351,6 +351,7 @@ function pickFindings(issues: SeoCheckIssue[], pillar: ActsPillar, limit = 4): D
 function maturityFor(result: SeoCheckResult): string {
   if (result.internalSummary?.websiteMaturity) return result.internalSummary.websiteMaturity;
   const s = result.overallScore;
+  if (s === null) return "unassessed";
   if (s < 35) return "poor";
   if (s < 55) return "basic";
   if (s < 75) return "decent";
@@ -683,7 +684,7 @@ export function formatReportText(diag: ProspectingDiagnostic): string {
   if (diag.domainComparison) {
     lines.push("DOMAIN COMPARISON");
     diag.domainComparison.rows.forEach((r) => {
-      const score = r.overallScore === null ? "not reachable" : `internal score ${r.overallScore}/100`;
+      const score = r.overallScore === null ? "score not assessed" : `internal score ${r.overallScore}/100`;
       lines.push(`- ${r.domain} (${r.role}): ${r.note} ${r.reachable ? score : ""}`.trim());
     });
     lines.push(`Canonical recommendation: ${diag.domainComparison.canonicalRecommendation}`);

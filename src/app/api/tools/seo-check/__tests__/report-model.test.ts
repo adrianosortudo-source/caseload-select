@@ -3,7 +3,7 @@ import { buildSeoReportModel, type ReportInput } from "../report-model";
 
 const base: ReportInput = {
   domain: "example.com",
-  methodologyVersion: 3,
+  methodologyVersion: 4,
   pagesScanned: 2,
   overallScore: 74,
   categories: [{ name: "On-Page SEO", score: 7, maxScore: 10, items: [] }],
@@ -32,7 +32,7 @@ const base: ReportInput = {
 describe("buildSeoReportModel", () => {
   it("labels the current weighted score clearly and always includes bounded-scope limitations and one CTA", () => {
     const model = buildSeoReportModel(base);
-    expect(model.methodology).toMatchObject({ version: 3, label: "Website checks", notice: null });
+    expect(model.methodology).toMatchObject({ version: 4, label: "Website checks", notice: null });
     expect(model.scoreExplanation).toMatchObject({ assessed: true, score: 74, label: "Website checks" });
     expect(model.scoreExplanation.note).toBe("A weighted summary of applicable checks on the pages inspected. It is not a measurement of rankings, enquiries, legal content quality, or AI citations.");
     expect(model.limitations).toEqual(["This scan inspected the initial HTML of 2 pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm."]);
@@ -44,6 +44,30 @@ describe("buildSeoReportModel", () => {
     expect(model.methodology).toMatchObject({ version: 2, label: "Historical score" });
     expect(model.methodology.notice).toBe("This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.");
     expect(model.scoreExplanation).toMatchObject({ score: 88, label: "Historical score" });
+  });
+
+  it("preserves saved v3 scores as historical under the v4 report method", () => {
+    const model = buildSeoReportModel({ ...base, methodologyVersion: 3, overallScore: 88 });
+    expect(model.methodology).toMatchObject({ version: 3, label: "Historical score" });
+    expect(model.scoreExplanation).toMatchObject({ score: 88, label: "Historical score" });
+    expect(model.methodology.notice).toContain("Scores from different methods should not be compared");
+  });
+
+  it("treats unversioned saved scores as historical and preserves their stored value", () => {
+    const unversioned: ReportInput = { ...base };
+    delete unversioned.methodologyVersion;
+    const model = buildSeoReportModel({ ...unversioned, overallScore: 81 });
+    expect(model.methodology).toMatchObject({ version: 2, label: "Historical score" });
+    expect(model.scoreExplanation).toMatchObject({ score: 81, label: "Historical score" });
+  });
+
+  it("renders a v4 report as Not scored when no eligible denominator exists", () => {
+    const model = buildSeoReportModel({
+      ...base,
+      overallScore: null,
+      categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [] }],
+    });
+    expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not assessed" });
   });
 
   it("creates page-scoped noindex action copy and excludes utility pages from priority selection", () => {
@@ -180,9 +204,9 @@ describe("buildSeoReportModel", () => {
     expect(model.findingGroups.some((finding) => finding.title.includes("AI search"))).toBe(false);
     expect(model.priorityActions[0].family).toBe("search-exclusion");
   });
-  it("uses the exact partial-scan limitation and reports not assessed when no category applies", () => {
+  it("uses the exact partial-scan limitation and reports Not assessed when no category applies", () => {
     const model = buildSeoReportModel({ ...base, partial: true, categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [] }] });
-    expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not scored" });
+    expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not assessed" });
     expect(model.limitations[1]).toBe("The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.");
   });
 });

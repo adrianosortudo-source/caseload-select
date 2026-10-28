@@ -11,7 +11,6 @@ export interface PageRenderingSnapshot {
   emptyAppRoot: boolean;
   hasNoscriptFallback: boolean;
   evidence: string[];
-  recommendation?: string;
 }
 
 export interface SiteRenderingSummary {
@@ -85,63 +84,33 @@ export function analyzeRenderingSnapshot(html: string, wordCountOverride?: numbe
     emptyAppRoot,
     hasNoscriptFallback,
     evidence,
-    recommendation: risk === "low"
-      ? undefined
-      : "Verify the page in a rendered browser and ensure key headings, service copy, phone numbers, and CTAs are present in the initial HTML or otherwise reliably crawlable.",
   };
 }
 
 export function buildRenderingCategory(snapshot: PageRenderingSnapshot): CategoryResult {
   const items = [
-    snapshot.risk === "high"
-      ? {
-          label: "Server-rendered content",
-          status: "fail" as const,
-          detail: `Thin server HTML detected: ${snapshot.evidence.join("; ")}.`,
-          fix: snapshot.recommendation,
-        }
-      : snapshot.risk === "medium"
-        ? {
-            label: "Server-rendered content",
-            status: "warn" as const,
-            detail: `Some important content may depend on JavaScript: ${snapshot.evidence.join("; ")}.`,
-            fix: snapshot.recommendation,
-          }
-        : {
-            label: "Server-rendered content",
-            status: "pass" as const,
-            detail: `Server HTML contains enough visible content for crawler analysis (${snapshot.wordCount} words).`,
-          },
-    snapshot.appShellLikely
-      ? {
-          label: "JavaScript app-shell dependency",
-          status: snapshot.risk === "high" ? "warn" as const : "pass" as const,
-          detail: snapshot.emptyAppRoot
-            ? snapshot.risk === "high"
-              ? "The page looks like a thin app shell, so raw HTML checks may undercount CTAs or content."
-              : "Framework markers found, but the server HTML still contains enough visible content for this scan."
-            : "Framework markers found, but the server HTML still contains meaningful content.",
-          fix: snapshot.risk === "high" ? "Server-render or statically render critical legal-service copy and conversion elements." : undefined,
-        }
-      : {
-          label: "JavaScript app-shell dependency",
-          status: "pass" as const,
-          detail: "No thin app-shell pattern detected.",
-        },
-    snapshot.hasNoscriptFallback
-      ? {
-          label: "Noscript fallback",
-          status: "pass" as const,
-          detail: "Fallback content is available when JavaScript is not executed.",
-        }
-      : {
-          label: "Noscript fallback",
-          status: snapshot.risk === "high" ? "warn" as const : "pass" as const,
-          detail: snapshot.risk === "high"
-            ? "No substantial noscript fallback was found for a JavaScript-dependent page."
-            : "No noscript fallback needed for the detected server-rendered content level.",
-          fix: snapshot.risk === "high" ? "Add server-rendered fallback content for core page messaging." : undefined,
-        },
+    {
+      label: "Server-rendered content",
+      status: "pass" as const,
+      scored: false,
+      detail: `Initial HTML collection note: ${snapshot.evidence.join("; ")}. This scan did not run a browser and cannot assess rendered content or crawler rendering behavior.`,
+    },
+    {
+      label: "JavaScript app-shell dependency",
+      status: "pass" as const,
+      scored: false,
+      detail: snapshot.appShellLikely
+        ? `Framework or app-shell markers were observed in initial HTML (empty-root marker: ${snapshot.emptyAppRoot ? "yes" : "no"}). This does not establish missing rendered content.`
+        : "No listed framework or app-shell markers were observed in initial HTML. Rendered content was not assessed.",
+    },
+    {
+      label: "Noscript fallback",
+      status: "pass" as const,
+      scored: false,
+      detail: snapshot.hasNoscriptFallback
+        ? "A noscript block was observed in initial HTML; its user or crawler behavior was not tested."
+        : "No noscript block was observed in initial HTML. Its absence is not scored.",
+    },
   ];
   const { score, maxScore } = scoreItems(items);
   return { name: "Rendering & Crawlability", score, maxScore, items };

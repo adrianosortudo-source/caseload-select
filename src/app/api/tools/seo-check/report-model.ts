@@ -8,6 +8,16 @@ export interface ReportCheckItem {
   status: "pass" | "warn" | "fail";
   detail: string;
   scored?: boolean;
+  checkId?: string;
+  sourceIds?: string[];
+  disposition?: "scored" | "unscored" | "pending-review";
+  basis?: string;
+  evidence?: {
+    kind: string; assessedUrl?: string;
+    applicability: "applicable" | "not-applicable" | "unknown";
+    coverage: "observed" | "not-observed" | "not-assessed";
+    detail: string;
+  };
   applicability?: "applicable" | "not-applicable" | "unknown";
 }
 
@@ -51,6 +61,8 @@ export interface ReportIssue {
   confidence?: "high" | "medium" | "low";
 }
 
+export type ReportCoverageStopReason = "page-limit" | "time-budget" | "discovery-exhausted" | "fetch-failure" | "blocked" | "other";
+
 export interface ReportInput {
   domain: string;
   methodologyVersion?: number | null;
@@ -62,6 +74,21 @@ export interface ReportInput {
   aiBots?: Array<{ name: string; blocked: boolean | null; category: "search" | "training" | "user-initiated" }>;
   partial?: boolean;
   checkedAt?: string;
+  coverage?: {
+    requestedLimit: number;
+    attemptedPages: number;
+    successfulPages: number;
+    failedPages: number;
+    skippedPages: number;
+    discoveredCandidateUrls: number;
+    totalSitePages: number | null;
+    stopReason: ReportCoverageStopReason;
+    skippedReasons: Record<string, number>;
+    sitemapIncomplete: boolean;
+    partial: boolean;
+    pageSetHash?: string;
+    pageSetHashBasis: "normalized-url-identities";
+  };
 }
 
 export interface ReportAction {
@@ -82,7 +109,14 @@ export interface ReportAction {
 
 export interface SeoReportModel {
   methodology: { version: number; label: "Website checks" | "Historical score"; notice: string | null };
-  coverage: { pagesScanned: number; partial: boolean; checkedAt: string | null };
+  coverage: {
+    pagesScanned: number; partial: boolean; checkedAt: string | null;
+    requestedLimit: number | null; attemptedPages: number | null; successfulPages: number;
+    failedPages: number | null; skippedPages: number | null; discoveredCandidateUrls: number | null;
+    totalSitePages: number | null; stopReason: ReportCoverageStopReason | null;
+    skippedReasons: Record<string, number>; sitemapIncomplete: boolean; pageSetHash: string | null;
+    pageSetHashBasis: "normalized-url-identities" | null;
+  };
   headline: { domain: string; interpretation: string };
   accessSummary: {
     checkedPageCount: number;
@@ -98,7 +132,7 @@ export interface SeoReportModel {
   aiObservations: string[];
   limitations: string[];
   findingGroups: Array<{ category: string; title: string; detail: string; affectedUrls: string[]; status: "pass" | "warn" | "fail" }>;
-  scoreExplanation: { assessed: boolean; score: number | null; label: "Website checks" | "Historical score" | "Not scored"; note: string };
+  scoreExplanation: { assessed: boolean; score: number | null; label: "Website checks" | "Historical score" | "Not assessed"; note: string };
   cta: { heading: string; body: string; linkLabel: string; href: string };
 }
 
@@ -255,7 +289,9 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const issues = input.issues ?? [];
   const reportIssues = issues.filter((issue) => !isLegacyAiOnlyIssue(issue));
   const version = typeof input.methodologyVersion === "number" ? input.methodologyVersion : 2;
-  const current = version >= 3;
+  // v3 and earlier keep their stored score meaning and are never silently
+  // reinterpreted through the v4 report copy or denominator.
+  const current = version === 4;
   const noindexPages = pages.filter((p) => p.indexability?.metaNoindex || p.indexability?.headerNoindex);
   const googleBlocked = checkItems(pages, "robots.txt crawl access").filter(({ item }) => item.status === "fail" && /Googlebot/.test(item.detail));
   const bingBlocked = checkItems(pages, "robots.txt crawl access").filter(({ item }) => item.status === "fail" && /Bingbot/.test(item.detail));
@@ -318,7 +354,23 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const limitations = [LIMITATION(pages.length || input.pagesScanned), ...(input.partial ? [PARTIAL_LIMITATION] : [])];
   return {
     methodology: { version, label: current ? "Website checks" : "Historical score", notice: current ? null : METHOD_NOTE },
-    coverage: { pagesScanned: input.pagesScanned, partial: Boolean(input.partial), checkedAt: input.checkedAt ?? null },
+    coverage: {
+      pagesScanned: input.pagesScanned,
+      partial: input.coverage?.partial ?? Boolean(input.partial),
+      checkedAt: input.checkedAt ?? null,
+      requestedLimit: input.coverage?.requestedLimit ?? null,
+      attemptedPages: input.coverage?.attemptedPages ?? null,
+      successfulPages: input.coverage?.successfulPages ?? pages.length,
+      failedPages: input.coverage?.failedPages ?? null,
+      skippedPages: input.coverage?.skippedPages ?? null,
+      discoveredCandidateUrls: input.coverage?.discoveredCandidateUrls ?? null,
+      totalSitePages: input.coverage?.totalSitePages ?? null,
+      stopReason: input.coverage?.stopReason ?? null,
+      skippedReasons: input.coverage?.skippedReasons ?? {},
+      sitemapIncomplete: input.coverage?.sitemapIncomplete ?? false,
+      pageSetHash: input.coverage?.pageSetHash ?? null,
+      pageSetHashBasis: input.coverage?.pageSetHashBasis ?? null,
+    },
     headline: {
       domain: input.domain,
       interpretation: priorityActions[0]?.title ?? "No priority action was identified by these checks. This limited scan does not confirm that the whole website is free of problems.",
@@ -337,7 +389,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     aiObservations,
     limitations,
     findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: issue.detail, affectedUrls: issue.affectedUrls, status: issue.status })),
-    scoreExplanation: { assessed: current ? assessed : Number.isFinite(input.overallScore), score: Number.isFinite(input.overallScore) && (!current || assessed) ? input.overallScore! : null, label: current ? (assessed ? "Website checks" : "Not scored") : "Historical score", note },
+    scoreExplanation: { assessed: current ? assessed : Number.isFinite(input.overallScore), score: Number.isFinite(input.overallScore) && (!current || assessed) ? input.overallScore! : null, label: current ? (assessed ? "Website checks" : "Not assessed") : "Historical score", note },
     cta: { heading: "Discuss these findings", body: "We can help confirm which findings matter for the cases you want, separate intentional choices from genuine gaps, and decide what to address first.", linkLabel: "Book a conversation", href: CTA_HREF },
   };
 }

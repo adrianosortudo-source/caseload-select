@@ -76,7 +76,7 @@ function mkPage(opts: {
     },
     lawFirm: {
       phoneVisible: opts.phone ?? true, contactFormPresent: opts.contactForm ?? true,
-      addressVisible: true, consultationCta: opts.cta ?? true, policyPagePresent: true, practiceAreaIntent: opts.practiceAreaIntent ?? true,
+      addressTextPresent: true, consultationCta: opts.cta ?? true, policyPagePresent: true, practiceAreaIntent: opts.practiceAreaIntent ?? true,
       serviceAreaLikely: opts.serviceAreaLikely ?? false,
       trust: { testimonials: opts.testimonials ?? true, reviews: false, caseResults: false, awards: false, credentials: opts.credentials ?? true },
     },

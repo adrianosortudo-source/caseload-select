@@ -1113,7 +1113,7 @@ function InternalScoresPanel({ scans }: { scans: DomainScan[] }) {
               <div className="font-mono text-navy mb-1">{s.domain}</div>
               <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-black/60">
                 <span>Overall</span>
-                <span className="text-right font-semibold text-navy">{r.overallScore}/100 ({r.grade})</span>
+                <span className="text-right font-semibold text-navy">{r.overallScore === null ? "Not assessed" : `${r.overallScore}/100`} ({r.grade})</span>
                 <span>AI search</span>
                 <span className="text-right font-semibold text-navy">{r.aiSearchScore === null ? "Not scored" : `${r.aiSearchScore}/100`}</span>
                 <span>AI policy</span>

@@ -24,12 +24,23 @@ export interface CheckItem {
   status: "pass" | "warn" | "fail";
   detail: string;
   fix?: string;
-  // false means the item is displayed and still generates an issues-list
-  // finding, but contributes nothing to any score (scoreItems / aiScoresFromItems
-  // skip it entirely). Used for signals with no established search benefit
-  // (llms.txt, FAQPage/Review schema) and for security-hygiene headers that
-  // should never imply a search-visibility gain. Absent/undefined means scored.
+  /** false means the observation contributes neither to scores nor automatic issue/action lists. */
   scored?: boolean;
+  /** Stable methodology identifier, assigned from the v4 check registry. */
+  checkId?: string;
+  /** Exact source-register identifiers reviewed for this check. */
+  sourceIds?: string[];
+  /** Why a check is scored, unscored, or awaiting source/evidence review. */
+  disposition?: "scored" | "unscored" | "pending-review";
+  basis?: string;
+  /** Evidence origin and limits for this page-level observation. */
+  evidence?: {
+    kind: "initial-html-text" | "structured-data" | "response-header" | "robots-policy" | "measured-fetch" | "product-heuristic" | "account-review";
+    assessedUrl?: string;
+    applicability: "applicable" | "not-applicable" | "unknown";
+    coverage: "observed" | "not-observed" | "not-assessed";
+    detail: string;
+  };
   /** Whether the check applies to this page, or whether its status is unknown. */
   applicability?: "applicable" | "not-applicable" | "unknown";
   failCount?: number;

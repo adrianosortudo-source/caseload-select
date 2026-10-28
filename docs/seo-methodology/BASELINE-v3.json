@@ -1,0 +1,560 @@
+{
+  "capturedAt": "2026-10-28",
+  "baselineKind": "partial-historical-only",
+  "sourceHead": "7e8e072c18745a204608b62a2aa4c5068cbde8f2",
+  "sourceMethodologyVersion": 3,
+  "branch": "codex/seo-methodology-v4-main-20261028",
+  "currentPublicLimitOnBase": 10,
+  "publicLimitChange": "PR #437, head d60e198aee4d344fe38dfdecc458f85f8ecba69d, separate and unmerged",
+  "sourceFiles": [
+    {
+      "path": "src/app/api/tools/seo-check/engine-core.ts",
+      "blob": "69fbffa3909a0d1c4e6c73ebd60fe9ccbcdd89d8"
+    },
+    {
+      "path": "src/app/api/tools/seo-check/page-checks.ts",
+      "blob": "4b5c5e2c5bcd014a0411aa79a812dba5216e6121"
+    },
+    {
+      "path": "src/app/api/tools/seo-check/analysis.ts",
+      "blob": "8d85ef3a860230999df56d2919e15989b391459c"
+    },
+    {
+      "path": "src/app/api/tools/seo-check/content-signals.ts",
+      "blob": "6cfd97b96baa2942d6a73bd3a347af2e32400c2e"
+    },
+    {
+      "path": "src/app/api/tools/seo-check/rendering-analysis.ts",
+      "blob": "71e31e836b2cbd0b59225dff5d5a568e3b701be5"
+    },
+    {
+      "path": "src/app/api/tools/seo-check/intent-analysis.ts",
+      "blob": "d4b279601151a45b957f215f07e2769010690314"
+    },
+    {
+      "path": "src/app/api/tools/seo-check/report-model.ts",
+      "blob": "337850402ac0125eb00e6e7ad8be1dbd9377aa07"
+    },
+    {
+      "path": "src/app/api/tools/seo-check/route.ts",
+      "blob": "17406f7a0e71f31b20659e6c759b43c49cad4638"
+    },
+    {
+      "path": "src/app/api/tools/seo-check/audit-notes.ts",
+      "blob": "d9bc7c246ad0fc44e24a61782ca049ab2075f616"
+    },
+    {
+      "path": "src/components/seo-check/SeoReport.tsx",
+      "blob": "f89e08496eb73d174add81a92714c99e12d213df"
+    },
+    {
+      "path": "src/components/seo-check/SeoCheckTool.tsx",
+      "blob": "f5206166f80ea148e46e442bdc4fae116ec64a0b"
+    },
+    {
+      "path": "src/app/admin/seo-check/page.tsx",
+      "blob": "7daac2a3baef65de0c6996f94f9b955f81d598f0"
+    }
+  ],
+  "scoring": {
+    "itemPoints": {
+      "warn": 5,
+      "fail": 0,
+      "pass": 10
+    },
+    "excludedFromItemDenominator": [
+      "scored=false",
+      "applicability=not-applicable",
+      "applicability=unknown"
+    ],
+    "pageCategory": "sum eligible item points / sum eligible item maximum points",
+    "siteCategory": "arithmetic mean of page score/maxScore ratios over pages with maxScore>0; multiplied by the merged unique-label category maxScore",
+    "weightedHeadline": "round(sum(siteCategoryRatioPercent * relative category weight) / sum(relative weights for categories with maxScore>0 and weight>0))",
+    "weights": {
+      "On-Page SEO": 20,
+      "Indexability": 8,
+      "Schema & Structured Data": 16,
+      "AI Visibility": 0,
+      "Legal Marketing": 16,
+      "Local SEO": 12,
+      "Technical & Security": 4,
+      "Rendering & Crawlability": 2,
+      "Performance": 6,
+      "Links & Content": 6,
+      "Intent Alignment": 8
+    },
+    "fullConfiguredWeightSum": 98,
+    "publicActiveWeightSumWithoutIntent": 90,
+    "intentWeight": 8,
+    "gradeBands": {
+      "A": "90-100",
+      "A-": "80-89",
+      "B+": "70-79",
+      "B": "60-69",
+      "C+": "50-59",
+      "C": "40-49",
+      "D": "30-39",
+      "F": "<30"
+    },
+    "gradeCaps": {
+      "notIndexable": 35,
+      "notHttps": 50,
+      "renderingHighRisk": 60,
+      "appliedByServingRoute": false,
+      "note": "Utility functions and calibration-lock test use these caps, but route.ts does not call applyEligibilityCaps; not part of current served-score formula."
+    },
+    "unknownCategoryFallbackWeight": 6
+  },
+  "budgets": {
+    "quick": 10,
+    "standard": 25,
+    "deep": 50,
+    "hardCap": 75,
+    "crawlWallClockMs": 230000,
+    "serverMaxDurationSeconds": 300,
+    "htmlBytes": 5242880,
+    "resourceBytes": 2097152,
+    "perSafeFetchTimeoutMs": [
+      5000,
+      6000,
+      12000,
+      15000
+    ]
+  },
+  "benchmarkSites": [
+    {
+      "domain": "sakurabalaw.ca",
+      "fixturePath": "src/app/api/tools/seo-check/__tests__/__fixtures__/sakurabalaw.json",
+      "fixtureBlob": "a743a30b553a9b34f6af69b99e617555a327c4af",
+      "storedMethodologyVersion": null,
+      "scanMode": "quick",
+      "pagesScanned": 10,
+      "pageRecords": 10,
+      "uniquePageUrls": 9,
+      "duplicatePageRecords": 1,
+      "storedOverallScore": 82,
+      "storedGrade": "A-",
+      "checkedAt": "2026-07-05T18:18:59.423Z",
+      "buildSha": null,
+      "storedCategorySummary": [
+        {
+          "name": "On-Page SEO",
+          "score": 60,
+          "maxScore": 70,
+          "storedCheckSlots": 7,
+          "weight": null
+        },
+        {
+          "name": "Indexability",
+          "score": 80,
+          "maxScore": 80,
+          "storedCheckSlots": 8,
+          "weight": null
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 58,
+          "maxScore": 80,
+          "storedCheckSlots": 8,
+          "weight": null
+        },
+        {
+          "name": "AI Visibility",
+          "score": 69,
+          "maxScore": 100,
+          "storedCheckSlots": 10,
+          "weight": null
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 58,
+          "maxScore": 70,
+          "storedCheckSlots": 7,
+          "weight": null
+        },
+        {
+          "name": "Local SEO",
+          "score": 35,
+          "maxScore": 50,
+          "storedCheckSlots": 5,
+          "weight": null
+        },
+        {
+          "name": "Technical & Security",
+          "score": 55,
+          "maxScore": 70,
+          "storedCheckSlots": 7,
+          "weight": null
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 28,
+          "maxScore": 30,
+          "storedCheckSlots": 3,
+          "weight": null
+        },
+        {
+          "name": "Performance",
+          "score": 25,
+          "maxScore": 40,
+          "storedCheckSlots": 4,
+          "weight": null
+        },
+        {
+          "name": "Links & Content",
+          "score": 43,
+          "maxScore": 60,
+          "storedCheckSlots": 6,
+          "weight": null
+        }
+      ],
+      "pageItemInstances": 650,
+      "explicitScoredFlags": 0,
+      "explicitlyUnscored": 0,
+      "explicitApplicabilityFlags": 0,
+      "unknownApplicability": 0,
+      "notApplicable": 0,
+      "rawHtmlHeadersRobotsAvailable": false
+    },
+    {
+      "domain": "gosailaw.com",
+      "fixturePath": "src/app/api/tools/seo-check/__tests__/__fixtures__/gosailaw.json",
+      "fixtureBlob": "d034245c430b5eb69a026fb19054a6625aaf2760",
+      "storedMethodologyVersion": null,
+      "scanMode": "quick",
+      "pagesScanned": 10,
+      "pageRecords": 10,
+      "uniquePageUrls": 10,
+      "duplicatePageRecords": 0,
+      "storedOverallScore": 80,
+      "storedGrade": "A-",
+      "checkedAt": "2026-07-05T18:18:46.579Z",
+      "buildSha": null,
+      "storedCategorySummary": [
+        {
+          "name": "On-Page SEO",
+          "score": 49,
+          "maxScore": 70,
+          "storedCheckSlots": 7,
+          "weight": null
+        },
+        {
+          "name": "Indexability",
+          "score": 74,
+          "maxScore": 80,
+          "storedCheckSlots": 8,
+          "weight": null
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 60,
+          "maxScore": 80,
+          "storedCheckSlots": 8,
+          "weight": null
+        },
+        {
+          "name": "AI Visibility",
+          "score": 67,
+          "maxScore": 100,
+          "storedCheckSlots": 10,
+          "weight": null
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 62,
+          "maxScore": 70,
+          "storedCheckSlots": 7,
+          "weight": null
+        },
+        {
+          "name": "Local SEO",
+          "score": 40,
+          "maxScore": 50,
+          "storedCheckSlots": 5,
+          "weight": null
+        },
+        {
+          "name": "Technical & Security",
+          "score": 58,
+          "maxScore": 70,
+          "storedCheckSlots": 7,
+          "weight": null
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 30,
+          "maxScore": 30,
+          "storedCheckSlots": 3,
+          "weight": null
+        },
+        {
+          "name": "Performance",
+          "score": 30,
+          "maxScore": 40,
+          "storedCheckSlots": 4,
+          "weight": null
+        },
+        {
+          "name": "Links & Content",
+          "score": 50,
+          "maxScore": 60,
+          "storedCheckSlots": 6,
+          "weight": null
+        }
+      ],
+      "pageItemInstances": 650,
+      "explicitScoredFlags": 0,
+      "explicitlyUnscored": 0,
+      "explicitApplicabilityFlags": 0,
+      "unknownApplicability": 0,
+      "notApplicable": 0,
+      "rawHtmlHeadersRobotsAvailable": false
+    },
+    {
+      "domain": "drglaw.ca",
+      "fixturePath": "src/app/api/tools/seo-check/__tests__/__fixtures__/drglaw.json",
+      "fixtureBlob": "41d735452b40e70d9fe30eddea388229bee3437a",
+      "storedMethodologyVersion": null,
+      "scanMode": null,
+      "pagesScanned": 10,
+      "pageRecords": 10,
+      "uniquePageUrls": 10,
+      "duplicatePageRecords": 0,
+      "storedOverallScore": null,
+      "storedGrade": null,
+      "checkedAt": null,
+      "buildSha": null,
+      "storedCategorySummary": [
+        {
+          "name": null,
+          "score": null,
+          "maxScore": null,
+          "storedCheckSlots": 0,
+          "weight": null
+        }
+      ],
+      "pageItemInstances": 650,
+      "explicitScoredFlags": 0,
+      "explicitlyUnscored": 0,
+      "explicitApplicabilityFlags": 0,
+      "unknownApplicability": 0,
+      "notApplicable": 0,
+      "rawHtmlHeadersRobotsAvailable": false
+    },
+    {
+      "domain": "marathonlaw.ca",
+      "fixturePath": "src/app/api/tools/seo-check/__tests__/__fixtures__/marathonlaw.json",
+      "fixtureBlob": "3b800e8b9efb37a97546a9b2f25215f3d6985042",
+      "storedMethodologyVersion": null,
+      "scanMode": "quick",
+      "pagesScanned": 9,
+      "pageRecords": 9,
+      "uniquePageUrls": 9,
+      "duplicatePageRecords": 0,
+      "storedOverallScore": 75,
+      "storedGrade": "B+",
+      "checkedAt": "2026-07-06T00:28:34.734Z",
+      "buildSha": "9eb2bd7",
+      "storedCategorySummary": [
+        {
+          "name": "On-Page SEO",
+          "score": 46,
+          "maxScore": 70,
+          "storedCheckSlots": 7,
+          "weight": null
+        },
+        {
+          "name": "Indexability",
+          "score": 79,
+          "maxScore": 80,
+          "storedCheckSlots": 8,
+          "weight": null
+        },
+        {
+          "name": "Schema & Structured Data",
+          "score": 45,
+          "maxScore": 80,
+          "storedCheckSlots": 8,
+          "weight": null
+        },
+        {
+          "name": "AI Visibility",
+          "score": 53,
+          "maxScore": 100,
+          "storedCheckSlots": 10,
+          "weight": null
+        },
+        {
+          "name": "Legal Marketing",
+          "score": 59,
+          "maxScore": 70,
+          "storedCheckSlots": 7,
+          "weight": null
+        },
+        {
+          "name": "Local SEO",
+          "score": 40,
+          "maxScore": 50,
+          "storedCheckSlots": 5,
+          "weight": null
+        },
+        {
+          "name": "Technical & Security",
+          "score": 59,
+          "maxScore": 70,
+          "storedCheckSlots": 7,
+          "weight": null
+        },
+        {
+          "name": "Rendering & Crawlability",
+          "score": 28,
+          "maxScore": 30,
+          "storedCheckSlots": 3,
+          "weight": null
+        },
+        {
+          "name": "Performance",
+          "score": 23,
+          "maxScore": 40,
+          "storedCheckSlots": 4,
+          "weight": null
+        },
+        {
+          "name": "Links & Content",
+          "score": 41,
+          "maxScore": 60,
+          "storedCheckSlots": 6,
+          "weight": null
+        }
+      ],
+      "pageItemInstances": 585,
+      "explicitScoredFlags": 0,
+      "explicitlyUnscored": 0,
+      "explicitApplicabilityFlags": 0,
+      "unknownApplicability": 0,
+      "notApplicable": 0,
+      "rawHtmlHeadersRobotsAvailable": false
+    }
+  ],
+  "legacyCalibrationPanel": {
+    "fixturePath": "src/app/api/tools/seo-check/__tests__/__fixtures__/calibration-panel.json",
+    "fixtureBlob": "1e571e66adb8908d2c100a822dd0be8a9bf61cab",
+    "methodologyVersion": 3,
+    "recordedCount": 27,
+    "drgEntry": [
+      {
+        "domain": "drglaw.ca",
+        "score": 96,
+        "grade": "A",
+        "categories": [
+          {
+            "name": "On-Page SEO",
+            "score": 80,
+            "maxScore": 80
+          },
+          {
+            "name": "Indexability",
+            "score": 80,
+            "maxScore": 80
+          },
+          {
+            "name": "Schema & Structured Data",
+            "score": 50,
+            "maxScore": 60
+          },
+          {
+            "name": "AI Visibility",
+            "score": 75,
+            "maxScore": 80
+          },
+          {
+            "name": "Legal Marketing",
+            "score": 70,
+            "maxScore": 70
+          },
+          {
+            "name": "Local SEO",
+            "score": 50,
+            "maxScore": 50
+          },
+          {
+            "name": "Technical & Security",
+            "score": 40,
+            "maxScore": 40
+          },
+          {
+            "name": "Rendering & Crawlability",
+            "score": 30,
+            "maxScore": 30
+          },
+          {
+            "name": "Performance",
+            "score": 35,
+            "maxScore": 40
+          },
+          {
+            "name": "Links & Content",
+            "score": 55,
+            "maxScore": 60
+          }
+        ],
+        "gates": {
+          "httpsStatus": "pass",
+          "indexableStatus": "pass",
+          "robotsStatus": "pass",
+          "renderingRisk": "low"
+        }
+      }
+    ],
+    "consistency": "Historical panel says method 3 and contains DRG AI Visibility 75/80; current route source marks AI checks unscored and sets AI weight 0. Do not treat panel as a current-code baseline."
+  },
+  "targetManifest": {
+    "Soni": {
+      "domain": "sonilaw.ca",
+      "domainSource": "approved execution plan",
+      "repoFixture": null,
+      "rawHtmlHeadersRobots": "not found",
+      "state": "domain recorded, no corpus"
+    },
+    "SakuraBala": {
+      "domain": "sakurabalaw.ca",
+      "repoFixture": "sakurabalaw.json",
+      "rawHtmlHeadersRobots": "not found",
+      "state": "historical result JSON only"
+    },
+    "Gosai": {
+      "domain": "gosailaw.com",
+      "repoFixture": "gosailaw.json",
+      "rawHtmlHeadersRobots": "not found",
+      "state": "historical result JSON only"
+    },
+    "DRG": {
+      "domain": "drglaw.ca",
+      "repoFixture": "drglaw.json",
+      "rawHtmlHeadersRobots": "not found",
+      "state": "historical result JSON without aggregate score"
+    },
+    "Marathon": {
+      "domain": "marathonlaw.ca",
+      "repoFixture": "marathonlaw.json",
+      "rawHtmlHeadersRobots": "not found",
+      "state": "historical result JSON only"
+    }
+  },
+  "corpus": {
+    "rawHtmlHeadersRobotsAvailable": false,
+    "rawCorpusHash": null,
+    "captureStarted": false,
+    "recordedRawHtmlPages": 0,
+    "limitation": "Tracked fixtures are report outputs, not source HTML/headers/robots. No raw corpus is frozen yet."
+  },
+  "sourceMapping": {
+    "perCheckSourceIdsInCurrentCheckItemContract": false,
+    "fullMappingStatus": "pending",
+    "evidence": "Current CheckItem uses label/status/scored/applicability fields; no source IDs or stable check IDs are attached. Source register exists in marketing worktree only."
+  },
+  "validation": {
+    "baselineTestsRun": false,
+    "reason": "No node_modules in this clean worktree at capture time; locked npm ci is in progress."
+  }
+}

@@ -57,6 +57,7 @@ import {
   normalizeIntentInput,
 } from "./intent-analysis";
 import { aggregateRenderingSummary } from "./rendering-analysis";
+import { countSkippedPages, hashPageUrlIdentities } from "./coverage";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
@@ -523,6 +524,13 @@ export async function POST(req: NextRequest) {
 
     const pages: PageResult[] = [homePage];
     let partial = false;
+    let attemptedChildPages = 0;
+    let failedChildPages = 0;
+    let remainingFrontierCount = 0;
+    let hitTimeBudget = false;
+    const discoveredCandidateKeys = new Set<string>();
+    const skippedReasons: Record<string, number> = {};
+    const countSkipped = (reason: string) => { skippedReasons[reason] = (skippedReasons[reason] ?? 0) + 1; };
 
     // Count of same-origin links the homepage's OWN server HTML links to.
     // Feeds discoveryConfidence: a site with near-zero on-page links and no
@@ -542,13 +550,15 @@ export async function POST(req: NextRequest) {
       // Frontier of candidate URLs with crawl depth.
       const frontier: Array<{ url: string; depth: number; score: number }> = [];
       const enqueue = (url: string, depth: number) => {
-        if (frontier.length >= FRONTIER_CAP) return;
         const key = crawlUrlKey(url);
+        if (discoveredCandidateKeys.has(key)) return;
+        discoveredCandidateKeys.add(key);
+        if (frontier.length >= FRONTIER_CAP) { countSkipped("frontier-cap"); return; }
         if (visited.has(key)) return;
-        if (!isSameOrigin(url, domain) || shouldSkipUrl(url)) return;
+        if (!isSameOrigin(url, domain) || shouldSkipUrl(url)) { countSkipped("out-of-scope-or-unsupported-url"); return; }
         // Respect robots for our own scanner on discovered pages.
         if (parsedRobots) {
-          try { if (checkBotBlockedParsed(parsedRobots, SCANNER_TOKEN, new URL(url).pathname)) return; } catch { return; }
+          try { if (checkBotBlockedParsed(parsedRobots, SCANNER_TOKEN, new URL(url).pathname)) { countSkipped("robots-disallowed"); return; } } catch { countSkipped("invalid-url"); return; }
         }
         if (frontier.some((f) => crawlUrlKey(f.url) === key)) return;
         frontier.push({ url, depth, score: scoreUrlPriority(url) });
@@ -561,7 +571,7 @@ export async function POST(req: NextRequest) {
 
       while (pages.length < maxPages && frontier.length > 0) {
         // Stop early (with partial results) if the wall-clock budget is spent.
-        if (Date.now() - startedAt > CRAWL_BUDGET_MS) { partial = true; break; }
+        if (Date.now() - startedAt > CRAWL_BUDGET_MS) { partial = true; hitTimeBudget = true; break; }
         // Pick the highest-priority candidate.
         let bestIdx = 0;
         for (let i = 1; i < frontier.length; i++) if (frontier[i].score > frontier[bestIdx].score) bestIdx = i;
@@ -570,8 +580,9 @@ export async function POST(req: NextRequest) {
         if (visited.has(key)) continue;
         visited.add(key);
 
+        attemptedChildPages++;
         const scanned = await scanPage(next.url, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
-        if (!scanned) continue;
+        if (!scanned) { failedChildPages++; continue; }
         visited.add(crawlUrlKey(scanned.page.url));
         pages.push(scanned.page);
 
@@ -581,6 +592,10 @@ export async function POST(req: NextRequest) {
         }
       }
       uncrawledUrls = frontier.map((f) => f.url);
+      remainingFrontierCount = frontier.length;
+      skippedReasons["page-limit"] = remainingFrontierCount > 0 && pages.length >= maxPages
+        ? remainingFrontierCount
+        : skippedReasons["page-limit"] ?? 0;
     }
 
     // Untouched WordPress starter pages (Hello world! / Sample Page) are not the
@@ -605,8 +620,9 @@ export async function POST(req: NextRequest) {
     // Rendering evidence remains part of the report, while the v3 headline
     // score comes only from the weighted, applicable check categories below.
     const renderingSummary = aggregateRenderingSummary(forFindings);
-    const overallScore = computeWeightedScore(aggregatedCategories);
-    const grade = computeGrade(overallScore);
+    const scoreAssessed = aggregatedCategories.some((category) => category.maxScore > 0);
+    const overallScore = scoreAssessed ? computeWeightedScore(aggregatedCategories) : null;
+    const grade = overallScore === null ? "Not assessed" : computeGrade(overallScore);
     const aiSearchScore = null;
     const aiPolicyScore = null;
 
@@ -635,9 +651,37 @@ export async function POST(req: NextRequest) {
       ? issues
       : issues.map(({ internalNote, prospectingAngle, ...rest }) => rest);
 
+    const coverageStopReason = hitTimeBudget
+      ? "time-budget" as const
+      : remainingFrontierCount > 0 && pages.length >= maxPages
+        ? "page-limit" as const
+        : failedChildPages > 0 && pages.length === 1
+          ? "fetch-failure" as const
+          : (skippedReasons["robots-disallowed"] ?? 0) > 0 && attemptedChildPages === 0
+            ? "blocked" as const
+            : (skippedReasons["frontier-cap"] ?? 0) > 0 || sitemapTruncated
+              ? "other" as const
+              : "discovery-exhausted" as const;
+    partial = partial || (remainingFrontierCount > 0 && pages.length >= maxPages) || (skippedReasons["robots-disallowed"] ?? 0) > 0 || sitemapTruncated;
+    const coverage = {
+      requestedLimit: maxPages,
+      attemptedPages: 1 + attemptedChildPages,
+      successfulPages: pages.length,
+      failedPages: failedChildPages,
+      skippedPages: countSkippedPages(skippedReasons),
+      discoveredCandidateUrls: discoveredCandidateKeys.size,
+      totalSitePages: null,
+      stopReason: coverageStopReason,
+      skippedReasons,
+      sitemapIncomplete: sitemapTruncated,
+      partial,
+      pageSetHash: hashPageUrlIdentities(pages.map((page) => page.url)),
+      pageSetHashBasis: "normalized-url-identities",
+    };
+
     const result: SeoCheckResult = {
       domain,
-      methodologyVersion: 3,
+      methodologyVersion: 4,
       scanMode,
       pagesScanned: pages.length,
       pages,
@@ -655,6 +699,7 @@ export async function POST(req: NextRequest) {
       issues: responseIssues,
       ...(isOperator ? { internalSummary } : {}),
       severityBreakdown: breakdown,
+      coverage,
       partial,
       discoveryConfidence,
       buildSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
@@ -663,7 +708,7 @@ export async function POST(req: NextRequest) {
       // checks contribute to no grade, built from the actual scored:false
       // flags set this scan (not a hand-maintained list that can drift).
       scoring: {
-        methodologyVersion: 3,
+        methodologyVersion: 4,
         label: "Website checks",
         assessed: aggregatedCategories.some((category) => (CATEGORY_WEIGHTS[category.name] ?? 6) > 0 && category.maxScore > 0),
         categoryWeights: CATEGORY_WEIGHTS,
