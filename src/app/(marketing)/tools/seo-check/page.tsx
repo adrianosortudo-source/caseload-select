@@ -60,8 +60,8 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
               <div className="seo-hero-stat-label">Pages checked</div>
             </div>
             <div className="seo-hero-stat">
-              <div className="seo-hero-stat-num">10</div>
-              <div className="seo-hero-stat-label">Check categories</div>
+              <div className="seo-hero-stat-num">5</div>
+              <div className="seo-hero-stat-label">Score check types</div>
             </div>
             <div className="seo-hero-stat">
               <div className="seo-hero-stat-num">0</div>
@@ -76,65 +76,62 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
 
         <section className="seo-categories-preview">
           <div className="seo-categories-header">
-            <span className="seo-cat-eyebrow">What we check</span>
+            <span className="seo-cat-eyebrow">What the scan may observe</span>
             <h2 className="seo-categories-title">
-              Scan checks<span className="ts" />
+              Areas for review<span className="ts" />
             </h2>
+            <p className="seo-categories-intro">
+              The v4 score uses five directly observed check types across three of the report’s ten categories: page title, HTTP status, indexability, robots.txt crawl access and HTTPS. Other observations are shown for context and do not add points.
+            </p>
           </div>
           <div className="seo-categories-grid">
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">1</div>
               <h3 className="seo-cat-preview-name">On-Page SEO</h3>
               <p className="seo-cat-preview-desc">
-                Title tags, meta descriptions, heading structure, canonical URLs, Open Graph
-                tags, image alt text. The basics that most firms get wrong.
+                The limited score checks whether an inspected page has a non-empty title. Other on-page observations may help frame a review but do not all add points.
               </p>
             </div>
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">2</div>
               <h3 className="seo-cat-preview-name">Schema &amp; Structured Data</h3>
               <p className="seo-cat-preview-desc">
-                LocalBusiness, Attorney, FAQPage, Review, and Breadcrumb structured data.
-                The machine-readable layer Google uses for rich results.
+                The scan may note structured data it observes. Optional markup is not a score requirement and does not guarantee a search result feature.
               </p>
             </div>
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">3</div>
-              <h3 className="seo-cat-preview-name">AI access observations</h3>
+              <h3 className="seo-cat-preview-name">AI crawler policy</h3>
               <p className="seo-cat-preview-desc">
-                The scan records AI crawler settings and content patterns. It cannot show whether an AI service accesses or cites the firm.
+                A matching robots.txt rule describes a site setting. It does not prove an AI service accessed the site or will cite a page.
               </p>
             </div>
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">4</div>
               <h3 className="seo-cat-preview-name">Local SEO</h3>
               <p className="seo-cat-preview-desc">
-                NAP visibility, Google Maps, GBP cross-linking, structured location data.
-                The signals that put your firm on the map for local searches.
+                The scan may observe public business and contact details on checked pages. It does not inspect firm accounts or measure local search positions.
               </p>
             </div>
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">5</div>
               <h3 className="seo-cat-preview-name">Technical &amp; Security</h3>
               <p className="seo-cat-preview-desc">
-                HTTPS, HSTS, CSP, mixed content, viewport, compression, robots directives.
-                The foundation that determines whether search engines can crawl and trust your site.
+                HTTPS is one of the five scored check types. Other security observations may be shown separately and do not add points.
               </p>
             </div>
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">6</div>
               <h3 className="seo-cat-preview-name">Performance</h3>
               <p className="seo-cat-preview-desc">
-                Time to first byte, document size, render-blocking resources, image dimensions,
-                resource hints, third-party script load. Speed signals that affect ranking and experience.
+                Performance observations, when available, come from this scan’s own retrieval. They are not real-user Core Web Vitals and do not affect the v4 score.
               </p>
             </div>
             <div className="seo-cat-preview">
               <div className="seo-cat-icon">7</div>
               <h3 className="seo-cat-preview-name">Links &amp; Content</h3>
               <p className="seo-cat-preview-desc">
-                Word count, heading hierarchy, internal links, content-to-HTML ratio,
-                anchor text quality, external links. The content structure that search engines evaluate.
+                Counts and page patterns are observations for context. They do not measure content quality or establish search rankings.
               </p>
             </div>
           </div>
@@ -257,6 +254,13 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           color: var(--navy);
           line-height: 1.1;
           margin: 0;
+        }
+        .seo-categories-intro {
+          color: var(--text-muted);
+          font-size: 14px;
+          line-height: 1.6;
+          margin: var(--sp-3) 0 0;
+          text-wrap: pretty;
         }
         .seo-categories-grid {
           display: grid;

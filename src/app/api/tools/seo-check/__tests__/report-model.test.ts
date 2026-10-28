@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSeoReportModel, checkObservationDisplayText, type ReportInput } from "../report-model";
+import { buildSeoReportModel, checkObservationDisplayText, getDisplayedCategoryWeights, type ReportInput } from "../report-model";
 
 const base: ReportInput = {
   domain: "example.com",
@@ -265,5 +265,47 @@ describe("buildSeoReportModel", () => {
     const model = buildSeoReportModel({ ...base, partial: true, categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [] }] });
     expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not assessed" });
     expect(model.limitations[1]).toBe("The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.");
+  });
+});
+
+describe("getDisplayedCategoryWeights", () => {
+  const weights = {
+    "On-Page SEO": 20,
+    Indexability: 8,
+    "Schema & Structured Data": 16,
+    "AI Visibility": 0,
+    "Legal Marketing": 16,
+    "Local SEO": 12,
+    "Technical & Security": 4,
+    "Rendering & Crawlability": 2,
+    Performance: 6,
+    "Links & Content": 6,
+    Intent: 8,
+  };
+
+  it("shows only contributing positive-weight categories for v4", () => {
+    const categories: NonNullable<ReportInput["categories"]> = [
+      { name: "On-Page SEO", score: 9, maxScore: 10, items: [{ label: "Page title", status: "pass", detail: "Observed." }] },
+      { name: "Indexability", score: 28, maxScore: 30, items: [{ label: "Indexable", status: "pass", detail: "Observed." }] },
+      { name: "Technical & Security", score: 10, maxScore: 10, items: [{ label: "HTTPS", status: "pass", detail: "Observed." }] },
+      { name: "Schema & Structured Data", score: 0, maxScore: 0, items: [{ label: "Optional schema", status: "warn", detail: "Context only.", scored: false }] },
+    ];
+
+    expect(getDisplayedCategoryWeights(categories, weights, 4)).toEqual([
+      ["On-Page SEO", 20],
+      ["Indexability", 8],
+      ["Technical & Security", 4],
+    ]);
+  });
+
+  it("preserves recorded weights for historical methods", () => {
+    expect(getDisplayedCategoryWeights([], weights, 3)).toEqual(Object.entries(weights));
+  });
+
+  it("returns no category weights when no v4 category contributed", () => {
+    const categories: NonNullable<ReportInput["categories"]> = [
+      { name: "Schema & Structured Data", score: 0, maxScore: 0, items: [{ label: "Optional schema", status: "warn", detail: "Context only.", scored: false }] },
+    ];
+    expect(getDisplayedCategoryWeights(categories, weights, 4)).toEqual([]);
   });
 });
