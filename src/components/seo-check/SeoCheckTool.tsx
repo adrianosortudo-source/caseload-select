@@ -162,7 +162,7 @@ export default function SeoCheckTool({
       const res = await fetch("/api/tools/seo-check", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(isOperator ? { domain: trimmed, scanMode, ...intentPayload } : { domain: trimmed }),
+        body: JSON.stringify(isOperator ? { domain: trimmed, scanMode, ...intentPayload } : { domain: trimmed, scanMode: "standard" }),
       });
 
       if (phaseInterval.current) clearInterval(phaseInterval.current);

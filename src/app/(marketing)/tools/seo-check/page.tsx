@@ -11,11 +11,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
   title: "Free Law Firm SEO Check · CaseLoad Select",
   description:
-    "Review public website signals across up to 10 pages. See affected-page evidence and prioritized next steps. AI-related observations do not grade visibility or predict citations.",
+    "Review public website signals across up to 25 pages. See affected-page evidence and prioritized next steps. AI-related observations do not grade visibility or predict citations.",
   openGraph: {
     title: "Free Law Firm SEO Check · CaseLoad Select",
     description:
-      "Review public website signals across up to 10 pages, with affected-page evidence and prioritized next steps. AI observations do not predict citations.",
+      "Review public website signals across up to 25 pages, with affected-page evidence and prioritized next steps. AI observations do not predict citations.",
     type: "website",
     locale: "en_CA",
   },
@@ -51,17 +51,17 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
             Law Firm SEO Check<span className="ts" />
           </h1>
           <p className="seo-hero-sub">
-            Review public website signals across up to 10 pages. Findings show affected pages, why they may matter, and general next steps. AI observations are not a visibility grade or citation prediction.
+            Review public website signals across up to 25 pages. Findings show affected pages, why they may matter, and general next steps. AI observations are not a visibility grade or citation prediction.
           </p>
 
           <div className="seo-hero-stats">
             <div className="seo-hero-stat">
-              <div className="seo-hero-stat-num">Up to 10</div>
+              <div className="seo-hero-stat-num">Up to 25</div>
               <div className="seo-hero-stat-label">Pages checked</div>
             </div>
             <div className="seo-hero-stat">
               <div className="seo-hero-stat-num">10</div>
-              <div className="seo-hero-stat-label">Weighted categories</div>
+              <div className="seo-hero-stat-label">Check categories</div>
             </div>
             <div className="seo-hero-stat">
               <div className="seo-hero-stat-num">0</div>
@@ -144,9 +144,14 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
           <p>
             <strong>Free diagnostic tool.</strong> This report checks publicly visible signals
             on your website. It does not access analytics, Search Console, or any private data.
-            Results are based on a multi-page diagnostic crawl (up to 10 pages) and may not capture every signal on larger sites.
+            Results are based on a multi-page diagnostic crawl (up to 25 pages) and may not capture every signal on larger sites.
             Built by CaseLoad Select.
           </p>
+          {!isEmbedded && (
+            <p className="seo-methodology-link-row">
+              <a href="https://caseloadselect.ca/tools/seo-check.html#seo-methodology">Read the methodology and limits</a>
+            </p>
+          )}
         </section>
       </main>
 
@@ -309,6 +314,14 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
         .seo-disclaimer strong {
           color: var(--navy);
           font-weight: 700;
+        }
+        .seo-disclaimer .seo-methodology-link-row {
+          margin-top: var(--sp-3);
+        }
+        .seo-disclaimer .seo-methodology-link-row a {
+          color: var(--navy);
+          font-weight: 700;
+          text-underline-offset: 3px;
         }
 
         @media print {

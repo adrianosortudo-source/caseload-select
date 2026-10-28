@@ -33,11 +33,10 @@ import {
   shouldSkipUrl,
   crawlUrlKey,
   scoreUrlPriority,
-  resolveScan,
+  resolveEffectiveScan,
   computeGrade,
   computeWeightedScore,
   CATEGORY_WEIGHTS,
-  SCAN_MODE_DEFAULTS,
 } from "./engine-core";
 import { type TtfbMeasurement } from "./content-signals";
 import { buildPageResult, aggregateCategories, computeTopFixes } from "./page-checks";
@@ -337,9 +336,8 @@ export async function POST(req: NextRequest) {
     const body = await req.json();
     const rawDomain = body?.domain;
 
-    // Only operators may request standard/deep scans or large page budgets.
-    // Unauthenticated (public lead-magnet) callers are capped to quick mode and
-    // rate-limited, since each scan is an expensive arbitrary-domain crawl.
+    // Public callers use the standard 25-page budget, while explicit smaller
+    // budgets remain available. Operator scan modes and budgets stay unchanged.
     const operatorSession = await getOperatorSession();
     const isOperator = !!operatorSession;
     if (!isOperator) {
@@ -352,11 +350,10 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let { scanMode, maxPages } = resolveScan({ maxPages: body?.maxPages, scanMode: body?.scanMode });
-    if (!isOperator) {
-      scanMode = "quick";
-      maxPages = Math.min(maxPages, SCAN_MODE_DEFAULTS.quick);
-    }
+    const { scanMode, maxPages } = resolveEffectiveScan(
+      { maxPages: body?.maxPages, scanMode: body?.scanMode },
+      isOperator
+    );
 
     if (!rawDomain || typeof rawDomain !== "string") {
       return NextResponse.json({ error: "Domain is required." }, { status: 400 });

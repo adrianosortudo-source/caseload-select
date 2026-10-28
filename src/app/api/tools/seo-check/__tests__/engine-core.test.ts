@@ -3,6 +3,7 @@ import {
   ipInBlockedRange,
   isSsrfBlocked,
   resolveScan,
+  resolveEffectiveScan,
   parseRobotsTxt,
   checkBotBlockedParsed,
   robotsPathMatchLength,
@@ -78,6 +79,33 @@ describe("resolveScan", () => {
   it("rejects NaN / non-finite maxPages and falls back to mode default", () => {
     expect(resolveScan({ maxPages: NaN, scanMode: "standard" }).maxPages).toBe(25);
     expect(resolveScan({ maxPages: "12" as unknown as number }).maxPages).toBe(10);
+  });
+});
+
+describe("resolveEffectiveScan", () => {
+  it("defaults every public request to standard 25, regardless of requested mode", () => {
+    expect(resolveEffectiveScan({}, false)).toEqual({ scanMode: "standard", maxPages: 25 });
+    expect(resolveEffectiveScan({ scanMode: "quick" }, false)).toEqual({ scanMode: "standard", maxPages: 25 });
+    expect(resolveEffectiveScan({ scanMode: "deep" }, false)).toEqual({ scanMode: "standard", maxPages: 25 });
+    expect(resolveEffectiveScan({ scanMode: "deep", maxPages: NaN }, false)).toEqual({ scanMode: "standard", maxPages: 25 });
+    expect(resolveEffectiveScan({ scanMode: "deep", maxPages: Infinity }, false)).toEqual({ scanMode: "standard", maxPages: 25 });
+    expect(resolveEffectiveScan({ scanMode: "deep", maxPages: "75" }, false)).toEqual({ scanMode: "standard", maxPages: 25 });
+  });
+
+  it("preserves explicit finite public budgets within the 1..25 range", () => {
+    expect(resolveEffectiveScan({ maxPages: 1 }, false)).toEqual({ scanMode: "standard", maxPages: 1 });
+    expect(resolveEffectiveScan({ maxPages: 7.9 }, false)).toEqual({ scanMode: "standard", maxPages: 7 });
+    expect(resolveEffectiveScan({ maxPages: 25 }, false)).toEqual({ scanMode: "standard", maxPages: 25 });
+    expect(resolveEffectiveScan({ maxPages: 0 }, false)).toEqual({ scanMode: "standard", maxPages: 1 });
+    expect(resolveEffectiveScan({ maxPages: -5 }, false)).toEqual({ scanMode: "standard", maxPages: 1 });
+    expect(resolveEffectiveScan({ maxPages: 75 }, false)).toEqual({ scanMode: "standard", maxPages: 25 });
+  });
+
+  it("keeps operator scan modes and hard-cap semantics unchanged", () => {
+    expect(resolveEffectiveScan({ scanMode: "quick" }, true)).toEqual({ scanMode: "quick", maxPages: 10 });
+    expect(resolveEffectiveScan({ scanMode: "standard" }, true)).toEqual({ scanMode: "standard", maxPages: 25 });
+    expect(resolveEffectiveScan({ scanMode: "deep" }, true)).toEqual({ scanMode: "deep", maxPages: 50 });
+    expect(resolveEffectiveScan({ scanMode: "deep", maxPages: 75 }, true)).toEqual({ scanMode: "deep", maxPages: MAX_PAGES_HARD_CAP });
   });
 });
 
