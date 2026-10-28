@@ -132,15 +132,9 @@ describe("checkSchemaMarkup: vacuous and duplicated passes on zero JSON-LD are u
     expect(businessFields?.scored).toBe(false);
     expect(conflicts?.scored).toBe(false);
 
-    // Measured actual result on this input: the real scored defects are
-    // "JSON-LD structured data" (fail), "Business / LegalService schema"
-    // (fail), and "Breadcrumb schema" (warn, unaffected by this plan): three
-    // scored items at weight 10 each, none of them full-credit passes.
-    // maxScore therefore does not reach the 8-item x 10 = 80 an unfixed
-    // vacuous-pass engine would have produced.
-    expect(result.maxScore).toBe(30);
-    expect(result.maxScore).toBeLessThan(result.items.length * 10);
-    expect(result.score).toBeLessThanOrEqual(result.maxScore);
+    // The current v4 methodology does not score schema presence or validity.
+    expect(result.maxScore).toBe(0);
+    expect(result.score).toBe(0);
   });
 });
 
@@ -223,7 +217,7 @@ describe("checkEntitySameAs (B2)", () => {
     for (const label of ["Question-format headings", "Direct-answer sentences"]) {
       const item = category.items.find((entry) => entry.label === label);
       expect(item).toMatchObject({ scored: false });
-      expect(item?.detail).toMatch(/does not measure AI visibility|not an assessment of answer quality or AI visibility/i);
+      expect(item?.detail).toMatch(/formatting observation; no question format is required|not an assessment of answer quality or AI visibility/i);
       expect(item?.status).not.toBe("fail");
     }
   });

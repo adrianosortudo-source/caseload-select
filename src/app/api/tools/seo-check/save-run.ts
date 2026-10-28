@@ -73,7 +73,7 @@ export function buildSeoCheckRunRow(result: JsonRecord, lawyerId: string | null)
     overall_score: int01(result.overallScore),
     ai_search_score: int01(result.aiSearchScore),
     ai_policy_score: int01(result.aiPolicyScore),
-    grade: str(result.grade, 10),
+    grade: str(result.grade, 32),
     rendering_risk: renderingRisk(renderingSummary?.risk),
     issue_count: issues.length,
     result,

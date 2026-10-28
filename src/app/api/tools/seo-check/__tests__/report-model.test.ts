@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildSeoReportModel, type ReportInput } from "../report-model";
+import { buildSeoReportModel, checkObservationDisplayText, type ReportInput } from "../report-model";
 
 const base: ReportInput = {
   domain: "example.com",
-  methodologyVersion: 3,
+  methodologyVersion: 4,
   pagesScanned: 2,
   overallScore: 74,
-  categories: [{ name: "On-Page SEO", score: 7, maxScore: 10, items: [] }],
+  categories: [{ name: "On-Page SEO", score: 7, maxScore: 10, items: [{ label: "Page title", status: "pass", detail: "A title is present." }] }],
   pages: [
     {
       url: "https://example.com/",
@@ -32,11 +32,33 @@ const base: ReportInput = {
 describe("buildSeoReportModel", () => {
   it("labels the current weighted score clearly and always includes bounded-scope limitations and one CTA", () => {
     const model = buildSeoReportModel(base);
-    expect(model.methodology).toMatchObject({ version: 3, label: "Website checks", notice: null });
-    expect(model.scoreExplanation).toMatchObject({ assessed: true, score: 74, label: "Website checks" });
-    expect(model.scoreExplanation.note).toBe("A weighted summary of applicable checks on the pages inspected. It is not a measurement of rankings, enquiries, legal content quality, or AI citations.");
+    expect(model.methodology).toMatchObject({ version: 4, label: "Website checks", notice: null });
+    expect(model.scoreExplanation).toMatchObject({ assessed: true, score: 74, label: "Limited checks: 1 check type across 1 of 1 category", scoredCheckTypeCount: 1, assessedCategoryCount: 1, totalCategoryCount: 1 });
+    expect(model.scoreExplanation.note).toBe("This limited summary reflects 1 scored check type across 1 of 1 category, applied to the inspected pages. Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.");
     expect(model.limitations).toEqual(["This scan inspected the initial HTML of 2 pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm."]);
     expect(model.cta).toMatchObject({ heading: "Discuss these findings", linkLabel: "Book a conversation", href: "https://cal.com/adriano-caseloadselect/conversation" });
+  });
+
+  it("shows the dynamic scored-check and contributing-category denominator", () => {
+    const scored = (label: string) => ({ label, status: "pass" as const, detail: "Observed.", scored: true });
+    const categories: NonNullable<ReportInput["categories"]> = [
+      { name: "On-Page SEO", score: 10, maxScore: 10, items: [scored("Page title")] },
+      { name: "Indexability", score: 25, maxScore: 30, items: [scored("HTTP status"), scored("Indexable"), scored("robots.txt crawl access")] },
+      { name: "Technical & Security", score: 10, maxScore: 10, items: [scored("HTTPS")] },
+      ...["Schema & Structured Data", "AI Visibility", "Legal Marketing", "Local SEO", "Rendering & Crawlability", "Performance", "Links & Content"].map((name) => ({
+        name, score: 0, maxScore: 0, items: [{ label: "Context observation", status: "warn" as const, detail: "Observed only.", scored: false }],
+      })),
+    ];
+    const model = buildSeoReportModel({ ...base, overallScore: 98, categories });
+
+    expect(model.scoreExplanation).toMatchObject({
+      score: 98,
+      label: "Limited checks: 5 check types across 3 of 10 categories",
+      scoredCheckTypeCount: 5,
+      assessedCategoryCount: 3,
+      totalCategoryCount: 10,
+    });
+    expect(model.scoreExplanation.note).toBe("This limited summary reflects 5 scored check types across 3 of 10 categories, applied to the inspected pages. Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.");
   });
 
   it("marks saved pre-v3 scores as historical and supplies the no-cross-method notice", () => {
@@ -44,6 +66,39 @@ describe("buildSeoReportModel", () => {
     expect(model.methodology).toMatchObject({ version: 2, label: "Historical score" });
     expect(model.methodology.notice).toBe("This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.");
     expect(model.scoreExplanation).toMatchObject({ score: 88, label: "Historical score" });
+  });
+
+  it("preserves saved v3 scores as historical under the v4 report method", () => {
+    const model = buildSeoReportModel({ ...base, methodologyVersion: 3, overallScore: 88 });
+    expect(model.methodology).toMatchObject({ version: 3, label: "Historical score" });
+    expect(model.scoreExplanation).toMatchObject({ score: 88, label: "Historical score" });
+    expect(model.methodology.notice).toContain("Scores from different methods should not be compared");
+  });
+
+  it("treats unversioned saved scores as historical and preserves their stored value", () => {
+    const unversioned: ReportInput = { ...base };
+    delete unversioned.methodologyVersion;
+    const model = buildSeoReportModel({ ...unversioned, overallScore: 81 });
+    expect(model.methodology).toMatchObject({ version: 2, label: "Historical score" });
+    expect(model.scoreExplanation).toMatchObject({ score: 81, label: "Historical score" });
+  });
+
+  it("renders a v4 report as Not scored when no eligible denominator exists", () => {
+    const model = buildSeoReportModel({
+      ...base,
+      overallScore: null,
+      categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [] }],
+    });
+    expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not assessed" });
+  });
+
+  it("qualifies unscored v4 observations and preserves historical v3 detail", () => {
+    const detail = "3 redirect hops were observed.";
+    expect(checkObservationDisplayText({ detail, scored: false, disposition: "unscored" }, 4))
+      .toContain("3 redirect hops were observed. This is an observation for context, not a validated search defect.");
+    expect(checkObservationDisplayText({ detail, scored: false, disposition: "pending-review" }, 4))
+      .toContain("excluded until its source and meaning are verified");
+    expect(checkObservationDisplayText({ detail, scored: false, disposition: "unscored" }, 3)).toBe(detail);
   });
 
   it("creates page-scoped noindex action copy and excludes utility pages from priority selection", () => {
@@ -89,17 +144,43 @@ describe("buildSeoReportModel", () => {
     expect(both.priorityActions[0].nextStep).toContain("replace HTTP resource addresses on the other affected pages with HTTPS");
   });
 
-  it("keeps search-crawler restrictions separate from training-bot policy and does not infer blocked access when unknown", () => {
+  it("reports provider-specific purposes and keeps policy separate from actual access", () => {
     const model = buildSeoReportModel({
       ...base,
+      aiBots: [
+        { token: "ClaudeBot", name: "ClaudeBot", purposes: ["training"], isControlToken: false, blocked: true, policyObservation: "blocking-rule-observed", actualFetchAccess: "not-verified", sourceUrl: "https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler", reviewedAt: "2026-10-28", sourceVerification: "verified" },
+        { token: "Claude-SearchBot", name: "Claude Search", purposes: ["search"], isControlToken: false, blocked: null, policyObservation: "not-assessed", actualFetchAccess: "not-verified", sourceUrl: "https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler", reviewedAt: "2026-10-28", sourceVerification: "verified" },
+        { token: "ChatGPT-User", name: "ChatGPT-User", purposes: ["user-initiated"], isControlToken: false, robotsSemantics: "may-not-apply", blocked: true, policyObservation: "blocking-rule-observed", actualFetchAccess: "not-verified", sourceUrl: "https://developers.openai.com/api/docs/bots", reviewedAt: "2026-10-28", sourceVerification: "verified" },
+        { token: 'Perplexity-User', name: 'Perplexity-User', purposes: ['user-initiated'], isControlToken: false, robotsSemantics: 'generally-ignores', blocked: true, policyObservation: 'blocking-rule-observed', actualFetchAccess: 'not-verified', sourceUrl: 'https://docs.perplexity.ai/docs/resources/perplexity-crawlers', reviewedAt: '2026-10-28', sourceVerification: 'verified' },
+        { token: "CCBot", name: "CCBot", purposes: ["open-dataset"], isControlToken: false, blocked: false, policyObservation: "no-blocking-rule-observed", actualFetchAccess: "not-verified", sourceUrl: "https://www.commoncrawl.org/ccbot", reviewedAt: "2026-10-28", sourceVerification: "verified" },
+        { token: "Google-Extended", name: "Google-Extended", purposes: ["training", "grounding"], isControlToken: true, blocked: null, policyObservation: "not-assessed", actualFetchAccess: "not-verified", sourceUrl: "https://developers.google.com/crawling/docs/crawlers-fetchers/google-common-crawlers#google-extended", reviewedAt: "2026-10-28", sourceVerification: "verified" },
+      ],
+    });
+    expect(model.crawlerPolicies.find((bot) => bot.token === "ClaudeBot")?.purposes).toEqual(["training"]);
+    expect(model.crawlerPolicies.find((bot) => bot.token === "ChatGPT-User")).toMatchObject({ robotsSemantics: "may-not-apply", policyObservation: "blocking-rule-observed", actualFetchAccess: "not-verified" });
+    expect(model.crawlerPolicies.find((bot) => bot.token === 'Perplexity-User')).toMatchObject({ robotsSemantics: 'generally-ignores', policyObservation: 'blocking-rule-observed', actualFetchAccess: 'not-verified' });
+    expect(model.crawlerPolicies.find((bot) => bot.token === "CCBot")?.purposes).toEqual(["open-dataset"]);
+    expect(model.crawlerPolicies.find((bot) => bot.token === "Google-Extended")).toMatchObject({ isControlToken: true, actualFetchAccess: "not-verified" });
+    expect(model.aiObservations.join(" ")).toContain("documented robots behavior are listed per token below");
+    expect(model.aiObservations.join(" ")).toContain("does not verify actual access or downstream use");
+    expect(model.aiObservations.join(" ")).not.toContain("listed training crawlers");
+    expect(model.priorityActions).toEqual([]);
+  });
+
+  it("normalizes legacy bot categories without inventing purposes or sources", () => {
+    const model = buildSeoReportModel({
+      ...base,
+      methodologyVersion: 3,
       aiBots: [
         { name: "ClaudeBot", category: "training", blocked: true },
         { name: "Claude-SearchBot", category: "search", blocked: null },
       ],
     });
-    expect(model.aiObservations[0]).toContain("not assessed");
-    expect(model.aiObservations.join(" ")).toContain("content-use instructions");
-    expect(model.priorityActions).toEqual([]);
+    expect(model.crawlerPolicies.find((bot) => bot.name === "ClaudeBot")).toMatchObject({
+      purposes: ["unknown"], sourceUrl: null, sourceVerification: "unavailable", actualFetchAccess: "not-verified",
+    });
+    expect(model.crawlerPolicies.find((bot) => bot.name === "Claude-SearchBot")?.purposes).toEqual(["search"]);
+    expect(model.aiObservations.join(" ")).not.toContain("listed training crawlers");
   });
 
   it("limits ranked actions to three and omits unsupported generic findings", () => {
@@ -180,9 +261,9 @@ describe("buildSeoReportModel", () => {
     expect(model.findingGroups.some((finding) => finding.title.includes("AI search"))).toBe(false);
     expect(model.priorityActions[0].family).toBe("search-exclusion");
   });
-  it("uses the exact partial-scan limitation and reports not assessed when no category applies", () => {
+  it("uses the exact partial-scan limitation and reports Not assessed when no category applies", () => {
     const model = buildSeoReportModel({ ...base, partial: true, categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [] }] });
-    expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not scored" });
+    expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not assessed" });
     expect(model.limitations[1]).toBe("The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.");
   });
 });

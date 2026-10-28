@@ -16,11 +16,9 @@ import {
   type CheckItem,
   type CategoryResult,
   type ParsedRobots,
-  AI_SEARCH_BOTS,
-  AI_TRAINING_BOTS,
   SCANNER_TOKEN,
-  GENERIC_ANCHORS,
   checkBotBlockedParsed,
+  GENERIC_ANCHORS,
   isSameOrigin,
   isWpDefaultContent,
   crawlUrlKey,
@@ -38,8 +36,6 @@ import {
   likelyServiceAreaBusiness,
   classifyCsp,
   classifyTtfb,
-  classifyWordCount,
-  classifyContentRatio,
   type TtfbMeasurement,
 } from "./content-signals";
 import {
@@ -59,6 +55,7 @@ import {
   analyzeRenderingSnapshot,
   buildRenderingCategory,
 } from "./rendering-analysis";
+import { attachMethodologyEvidence } from "./methodology-sources";
 
 /* ────────────────────────────────────────────────────────
    HTML utilities
@@ -92,6 +89,15 @@ function extractBodyText(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, "")
     .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function extractInitialAddressText(html: string): string {
+  return html
+    .replace(/<(script|style|template|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
+    .replace(/<([a-z][\w:-]*)\b(?=[^>]*(?:\shidden(?:\s|=|\/?>)|\saria-hidden\s*=\s*["']true["']|\sstyle\s*=\s*["'][^"']*(?:display\s*:\s*none|visibility\s*:\s*hidden)))[^>]*>[\s\S]*?<\/\1\s*>/gi, " ")
     .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -280,16 +286,19 @@ function extractLawFirmSignals(html: string, schema: SchemaSummary): LawFirmSign
     hasIntakeIframe ||
     /(free consultation|book a consultation|schedule a consultation|request a consultation|book a call|schedule a call|get started|request a quote|contact us|talk to (a|an) (lawyer|attorney)|speak (to|with) (a|an) (lawyer|attorney))/i.test(cta);
 
-  const addressVisible = ADDRESS_RE.test(bodyText) || schema.fields.address;
+  const addressTextPresent = ADDRESS_RE.test(extractInitialAddressText(html));
+  // Structured address markup is useful evidence that an address is declared,
+  // but neither source establishes what a browser displays to a visitor.
+  const hasAddressSignal = addressTextPresent || schema.fields.address;
 
   return {
     phoneVisible: PHONE_RE.test(bodyText),
     contactFormPresent: hasForm,
-    addressVisible,
+    addressTextPresent,
     consultationCta,
     policyPagePresent: /href=["'][^"']*(privacy|terms|disclaimer)/i.test(html),
     practiceAreaIntent: /\b(lawyer|attorney|law firm|legal|solicitor|barrister|counsel|litigation|real estate|immigration|criminal|family law|corporate|employment|estate|wills|probate|personal injury)\b/i.test(bodyText),
-    serviceAreaLikely: likelyServiceAreaBusiness(bodyText, schema.fields.areaServed, addressVisible),
+    serviceAreaLikely: likelyServiceAreaBusiness(bodyText, schema.fields.areaServed, hasAddressSignal),
     trust: {
       // Trust signals must be VISIBLE to a person, so they scan the extracted
       // body text, not the raw HTML. Field bug (marathonlaw.ca): scanning the
@@ -399,27 +408,18 @@ function checkOnPageSeo(html: string, pageUrl: string): CategoryResult {
   const rawTitle = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim();
   const title = rawTitle ? decodeHtmlEntities(rawTitle) : rawTitle;
   if (!title) {
-    items.push({ label: "Page title", status: "fail", detail: "Missing. Every page needs a unique <title> tag.", fix: "Add a <title> tag inside your <head>. Aim for 50-60 characters with your main keyword near the front." });
-  } else if (title.length < 30) {
-    items.push({ label: "Page title", status: "warn", detail: `Too short (${title.length} chars). As a guideline, 50-60 characters gives search engines more to work with; this is not a hard limit.`, fix: "Expand the title to include your main keyword and a brief value proposition." });
-  } else if (title.length > 65) {
-    // Google's truncation is pixel-width based, not a fixed character count,
-    // so "~60 characters" is a practical guideline (most titles under that
-    // length are not visibly truncated), not a rule Google enforces.
-    items.push({ label: "Page title", status: "warn", detail: `Too long (${title.length} chars). As a guideline, titles past roughly 60 characters are more likely to be truncated or rewritten in search results; the actual cutoff is pixel-width based, not a fixed character count.`, fix: "Consider trimming to under 60 characters, with the most important keyword first." });
+    items.push({ label: "Page title", status: "fail", detail: "No non-empty <title> text was found in the inspected HTML.", fix: "Add an accurate page title in the document head." });
+    items.push({ label: "Page title length", status: "pass", scored: false, detail: "No title text was available for a length observation." });
   } else {
-    items.push({ label: "Page title", status: "pass", detail: `Good length (${title.length} chars).` });
+    items.push({ label: "Page title", status: "pass", detail: "A non-empty <title> was found in the inspected HTML." });
+    items.push({ label: "Page title length", status: "pass", scored: false, detail: `The title contains ${title.length} characters. Length is recorded but not scored.` });
   }
 
   const desc = extractMetaContent(html, "description");
   if (!desc) {
-    items.push({ label: "Meta description", status: "fail", detail: "Missing. This is the snippet Google shows in search results.", fix: "Add <meta name=\"description\" content=\"...\"> in your <head>. Write 120-160 characters describing what this page offers." });
-  } else if (desc.length < 70) {
-    items.push({ label: "Meta description", status: "warn", detail: `Short (${desc.length} chars). As a guideline, 120-160 characters uses more of the search-result snippet; this is not a hard limit.`, fix: "Expand to 120-160 characters. Lead with your most compelling value proposition." });
-  } else if (desc.length > 170) {
-    items.push({ label: "Meta description", status: "warn", detail: `Long (${desc.length} chars). May be truncated in search results, since Google's snippet length is pixel-width based rather than a fixed character count; this is a recommendation, not a hard limit.`, fix: "Consider trimming to under 160 characters so more of the description shows in search results." });
+    items.push({ label: "Meta description", status: "fail", detail: "No meta description was found in the inspected HTML. Search engines may generate a snippet from page content instead.", fix: "Consider adding an accurate summary of this page in the document head." });
   } else {
-    items.push({ label: "Meta description", status: "pass", detail: `Good length (${desc.length} chars).` });
+    items.push({ label: "Meta description", status: "pass", scored: false, detail: `Description present (${desc.length} characters). Length is recorded but not scored.` });
   }
 
   const h1s = extractAllTags(html, "h1");
@@ -484,18 +484,20 @@ function checkOnPageSeo(html: string, pageUrl: string): CategoryResult {
 }
 
 /* 2. Indexability */
-function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean | null; google: boolean | null; bing: boolean | null }): CategoryResult {
+function checkIndexability(idx: Indexability, robotsAllowed: { google: boolean | null }): CategoryResult {
   const items: CheckItem[] = [];
 
-  items.push({ label: "HTTP status", status: "pass", detail: `Returned HTTP ${idx.httpStatus}.` });
+  const successfulResponse = idx.httpStatus >= 200 && idx.httpStatus < 300;
+  items.push({ label: "HTTP status", status: successfulResponse ? "pass" : "fail", detail: `Returned HTTP ${idx.httpStatus}${successfulResponse ? "." : "; a 2xx response was not observed."}` });
 
-  if (idx.redirectHops === 0) {
-    items.push({ label: "Redirect chain", status: "pass", detail: "Served directly with no redirect." });
-  } else if (idx.redirectHops <= 2) {
-    items.push({ label: "Redirect chain", status: "warn", detail: `${idx.redirectHops} redirect hop${idx.redirectHops > 1 ? "s" : ""} before the final page.`, fix: "Point internal links at the final URL so visitors and crawlers skip the redirects." });
-  } else {
-    items.push({ label: "Redirect chain", status: "fail", detail: `${idx.redirectHops} redirect hops. Long chains waste crawl budget and slow the page.`, fix: "Collapse the redirect chain to a single hop and update internal links to the final URL." });
-  }
+  items.push({
+    label: "Redirect chain",
+    status: idx.redirectHops > 0 ? "warn" : "pass",
+    scored: false,
+    detail: idx.redirectHops > 0
+      ? `${idx.redirectHops} redirect hop${idx.redirectHops > 1 ? "s" : ""} were observed before this page. Redirects are normal URL behavior; this count alone does not establish a search defect.`
+      : "No redirect hop was observed before this page.",
+  });
 
   if (idx.metaNoindex || idx.headerNoindex) {
     items.push({ label: "Indexable", status: "fail", detail: `Page contains a noindex instruction (${idx.metaNoindex ? "meta robots" : "X-Robots-Tag"}) asking search engines to leave it out of results. This does not confirm its current indexing status.`, fix: "Confirm whether this page should appear in search before changing its noindex setting." });
@@ -503,53 +505,49 @@ function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean 
     items.push({ label: "Indexable", status: "pass", detail: "No noindex instruction was observed. This does not confirm the page is indexed." });
   }
 
-  if (idx.metaNofollow || idx.headerNofollow) {
-    items.push({ label: "Followable links", status: "warn", detail: "Page carries a nofollow directive, so link equity does not pass from it.", fix: "Remove the nofollow directive unless you intentionally seal off this page." });
+  items.push({
+    label: "Followable links",
+    status: idx.metaNofollow || idx.headerNofollow ? "warn" : "pass",
+    scored: false,
+    detail: idx.metaNofollow || idx.headerNofollow
+      ? `A page-level nofollow directive was observed${idx.metaNofollow ? " in meta robots" : " in X-Robots-Tag"}. This records policy only; it does not establish how every link will be treated.`
+      : "No page-level nofollow directive was observed in the inspected response and HTML.",
+  });
+
+  items.push({
+    label: "Canonical tag",
+    status: !idx.canonical || idx.canonicalSelf === false || idx.canonicalSameOrigin === false ? "warn" : "pass",
+    scored: false,
+    detail: !idx.canonical
+      ? "No canonical annotation was observed. Canonicals are optional signals; their absence alone does not establish a search defect."
+      : `Canonical annotation observed: ${idx.canonical}. Google may select a different canonical; this scan does not verify that selection.`,
+  });
+
+  items.push({
+    label: "Mixed indexability signals",
+    status: idx.mixedSignals ? "warn" : "pass",
+    scored: false,
+    detail: idx.mixedSignals
+      ? "A noindex instruction and a different same-origin canonical annotation were observed. This records configuration only; the intended URL and actual indexing outcome were not assessed."
+      : "No noindex and different-canonical combination was observed in the inspected signals. This does not confirm indexing status.",
+  });
+
+  if (robotsAllowed.google === false) {
+    items.push({ label: "robots.txt crawl access", status: "fail", detail: "A matching robots.txt rule restricts Googlebot on this page path. This records crawl policy only; it does not establish whether the URL is indexed.", fix: "Confirm whether this Googlebot restriction is intentional before changing it." });
+  } else if (robotsAllowed.google === null) {
+    items.push({ label: "robots.txt crawl access", status: "warn", scored: false, applicability: "unknown", detail: "Could not assess Googlebot access for this page because no accessible robots.txt was observed." });
   } else {
-    items.push({ label: "Followable links", status: "pass", detail: "Links on this page are followable." });
+    items.push({ label: "robots.txt crawl access", status: "pass", detail: "No matching robots.txt rule for Googlebot was observed on this page path. This does not establish whether the URL is indexed." });
   }
 
-  if (!idx.canonical) {
-    items.push({ label: "Canonical tag", status: "warn", detail: "No canonical tag. Duplicate URL variations can split ranking signals.", fix: "Add <link rel=\"canonical\"> pointing to the preferred URL for this page." });
-  } else if (idx.canonicalSameOrigin === false) {
-    items.push({ label: "Canonical tag", status: "fail", detail: "The canonical points to a different domain. Confirm that this cross-domain canonical is intentional.", fix: "Ask your web provider to verify the intended canonical URL before changing it." });
-  } else if (idx.canonicalSelf === false) {
-    items.push({ label: "Canonical tag", status: "warn", detail: "Canonical points to a different page. Confirm that is intentional consolidation, not an error.", fix: "Set a self-referencing canonical unless this page is a deliberate duplicate of another." });
-  } else {
-    items.push({ label: "Canonical tag", status: "pass", detail: "Self-referencing canonical present." });
-  }
-
-  if (idx.mixedSignals) {
-    items.push({ label: "Mixed indexability signals", status: "fail", detail: "This page has a noindex instruction and a different same-origin canonical URL. Review whether this combination is intentional.", fix: "Confirm the intended page version before changing the canonical or noindex instruction." });
-  } else {
-    items.push({ label: "Mixed indexability signals", status: "pass", detail: "Indexability signals are consistent." });
-  }
-
-  const blockedSearchEngines = [robotsAllowed.google === false && "Googlebot", robotsAllowed.bing === false && "Bingbot"].filter(Boolean).join(", ");
-  if (blockedSearchEngines) {
-    items.push({ label: "robots.txt crawl access", status: "fail", detail: `Blocked for ${blockedSearchEngines} on this page path in robots.txt. This does not establish whether the URL is indexed.`, fix: "Confirm whether this restriction is intentional before changing it." });
-  } else if (robotsAllowed.google === null || robotsAllowed.bing === null) {
-    items.push({ label: "robots.txt crawl access", status: "warn", scored: false, applicability: "unknown", detail: "Could not assess Googlebot and Bingbot access for this page because no accessible robots.txt was observed." });
-  } else {
-    items.push({ label: "robots.txt crawl access", status: "pass", detail: "No blocking rule for Googlebot or Bingbot was observed on this page path in robots.txt. This does not establish whether the URL is indexed." });
-  }
-
-  // A noindex page is deliberately excluded from search, and Google's own
-  // guidance is to leave noindexed URLs out of the sitemap: recommending one
-  // be added contradicts the noindex directive the page already carries.
-  // Field case drglaw.ca: an intentional intake/conversion page absent from
-  // the sitemap read as a discoverability gap to fix rather than a page the
-  // firm may not want indexed in the first place.
-  if (idx.metaNoindex || idx.headerNoindex) {
-    items.push({ label: "Sitemap membership", status: "pass", detail: "Page is noindexed, so its absence from the XML sitemap is expected, not a gap." });
-  } else if (idx.inSitemap === null && !idx.sitemapComplete) {
-    items.push({ label: "Sitemap membership", status: "warn", scored: false, applicability: "unknown", detail: "Could not verify whether this page is listed because the sitemap data was incomplete." });
+  if (idx.inSitemap === null && !idx.sitemapComplete) {
+    items.push({ label: "Sitemap membership", status: "warn", scored: false, applicability: "unknown", detail: "Could not verify whether this page was listed in the sitemap locations inspected. A bounded check does not establish a site-wide sitemap inventory." });
   } else if (idx.inSitemap === null) {
-    items.push({ label: "Sitemap membership", status: "warn", detail: "No sitemap was found. Search engines may still discover pages through links.", fix: "Consider providing a sitemap to help search engines discover important pages." });
+    items.push({ label: "Sitemap membership", status: "warn", scored: false, detail: "No sitemap was observed at the checked locations. Some sites do not need a sitemap; search engines may discover pages through links." });
   } else if (idx.inSitemap) {
-    items.push({ label: "Sitemap membership", status: "pass", detail: "Page is listed in the XML sitemap." });
+    items.push({ label: "Sitemap membership", status: "pass", scored: false, detail: "This page URL was observed in the sitemap data inspected. Sitemap membership is an optional discovery signal." });
   } else {
-    items.push({ label: "Sitemap membership", status: "warn", detail: "This page was not found in the sitemap data inspected. Search engines may still discover it through links.", fix: "Confirm whether this page should be listed in the sitemap." });
+    items.push({ label: "Sitemap membership", status: "warn", scored: false, detail: "This page URL was not found in the sitemap data inspected. Sitemap membership is optional for some sites; this observation alone is not a search defect." });
   }
 
   const { score, maxScore } = scoreItems(items);
@@ -654,85 +652,59 @@ export function checkEntitySameAs(schema: SchemaSummary, hasBusiness: boolean): 
 // serviceAreaLikely defaults to false so the direct-call tests (e.g.
 // acceptance-trust-pass.test.ts, schema-recs.test.ts) that predate the
 // service-area detection keep working without threading it through.
-export function checkSchemaMarkup(schema: SchemaSummary, serviceAreaLikely: boolean = false): CategoryResult {
+export function checkSchemaMarkup(schema: SchemaSummary): CategoryResult {
   const items: CheckItem[] = [];
 
   if (schema.blocks === 0) {
-    items.push({ label: "JSON-LD structured data", status: "fail", detail: "No JSON-LD structured data was observed in the inspected HTML.", fix: "Ask your web provider whether structured data is appropriate for the firm's business and services." });
+    items.push({ label: "JSON-LD structured data", status: "pass", scored: false, detail: "No JSON-LD block was observed in the inspected HTML. Other structured-data formats and rendered markup were not assessed." });
   } else {
     items.push({ label: "JSON-LD structured data", status: "pass", detail: `${schema.blocks} JSON-LD block${schema.blocks > 1 ? "s" : ""} found.` });
   }
 
   if (schema.blocks === 0) {
-    // Unscored: "no blocks to validate" restates the JSON-LD structured data
-    // failure. One missing feature, one charge.
-    items.push({ label: "JSON-LD validity", status: "fail", scored: false, detail: "No blocks to validate.", fix: "Add valid JSON-LD structured data to your page." });
+    items.push({ label: "JSON-LD validity", status: "pass", scored: false, detail: "No JSON-LD blocks were observed to validate." });
   } else if (schema.invalidBlocks > 0) {
-    items.push({ label: "JSON-LD validity", status: "fail", detail: `${schema.invalidBlocks} of ${schema.blocks} blocks have JSON parse errors.`, fix: "Fix the malformed JSON in your structured data blocks. Validate with Google's Rich Results Test." });
+    items.push({ label: "JSON-LD validity", status: "pass", scored: false, detail: `${schema.invalidBlocks} of ${schema.blocks} inspected blocks could not be parsed as JSON. Rich-result eligibility and effects were not assessed.` });
   } else {
-    items.push({ label: "JSON-LD validity", status: "pass", detail: `All ${schema.blocks} block${schema.blocks > 1 ? "s" : ""} parse correctly.` });
+    items.push({ label: "JSON-LD validity", status: "pass", scored: false, detail: `${schema.blocks} inspected JSON-LD block${schema.blocks > 1 ? "s" : ""} parsed as JSON. This does not establish eligibility or search display.` });
   }
 
   const hasBusiness = schema.hasLocalBusiness || schema.hasLegalService || schema.hasAttorney || schema.hasOrganization;
   if (hasBusiness) {
-    items.push({ label: "Business / LegalService schema", status: "pass", detail: "Business entity structured data found." });
+    items.push({ label: "Business / LegalService schema", status: "pass", scored: false, detail: "A business-related JSON-LD type was observed. Presence alone does not establish eligibility, accuracy, or rich-result display." });
   } else {
-    items.push({ label: "Business / LegalService schema", status: "fail", detail: "No Organization, LocalBusiness, LegalService, or Attorney type found.", fix: "Add a LegalService or LocalBusiness JSON-LD block with name, address, phone, and area served." });
+    items.push({ label: "Business / LegalService schema", status: "pass", scored: false, detail: "No Organization, LocalBusiness, LegalService, or Attorney JSON-LD type was observed. Other structured-data formats and rendered markup were not assessed." });
   }
 
   if (hasBusiness) {
-    const want: Array<[boolean, string]> = [
-      [schema.fields.name, "name"], [schema.fields.url, "url"], [schema.fields.telephone, "telephone"],
-      [schema.fields.address, "address"], [schema.fields.areaServed, "areaServed"], [schema.fields.sameAs, "sameAs"],
-    ];
-    const missing = want.filter(([has]) => !has).map(([, k]) => k);
-    if (missing.length === 0) {
-      items.push({ label: "Business schema fields", status: "pass", detail: "Core fields present: name, url, telephone, address, areaServed, sameAs." });
-    } else if (missing.length === 1 && missing[0] === "address" && serviceAreaLikely) {
-      // Same root cause as the Address / NAP finding in Legal Marketing and
-      // Local SEO: a service-area/remote practice with no street address to
-      // put in schema either. Not a defect to fix by inventing one.
-      items.push({ label: "Business schema fields", status: "pass", detail: "Only the address field is unset, and the site reads as a service-area or remote practice with no street address to publish. See Address / NAP for the same finding." });
-    } else if (missing.length <= 2) {
-      items.push({ label: "Business schema fields", status: "warn", detail: `Missing field${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}.`, fix: `Add the missing JSON-LD field${missing.length > 1 ? "s" : ""}: ${missing.join(", ")}.` });
-    } else {
-      items.push({ label: "Business schema fields", status: "fail", detail: `Several core fields missing: ${missing.join(", ")}.`, fix: `Complete the business schema with: ${missing.join(", ")}.` });
-    }
+    const observed = Object.entries(schema.fields).filter(([, present]) => present).map(([name]) => name);
+    items.push({ label: "Business schema fields", status: "pass", scored: false, detail: observed.length
+      ? `Observed fields: ${observed.join(", ")}. Field presence is recorded; this check does not assess completeness or requirements.`
+      : "No listed business fields were observed in the inspected JSON-LD. Completeness and requirements were not assessed." });
   } else {
-    // Unscored, not failed: "no business entity to evaluate fields on" is a
-    // restatement of the Business / LegalService schema failure directly
-    // above, and charging both bills one defect twice. The finding stays
-    // visible so the fix path is obvious.
-    items.push({ label: "Business schema fields", status: "fail", scored: false, detail: "No business entity to evaluate fields on.", fix: "Add a LegalService or LocalBusiness block first, then populate name, address, telephone, and areaServed." });
+    items.push({ label: "Business schema fields", status: "pass", scored: false, detail: "No business-related JSON-LD entity was observed for field review." });
   }
 
-  // Unscored both directions (trust-fix pass WI-3): Google limited FAQ rich
-  // results to government and health sites in August 2023, so the markup
-  // itself has no established benefit for a law firm and its absence is not a
-  // defect. Visible question-and-answer quality is already scored separately
-  // via Question-format headings and Direct-answer sentences.
+  // FAQPage is an optional markup observation. Google retired FAQ rich
+  // results and removed the corresponding Search documentation in 2026.
   if (schema.hasFaq) {
-    items.push({ label: "FAQPage schema", status: "pass", scored: false, detail: "Present. Informational only: Google limits FAQ rich results to government and health sites, so the markup itself is not scored. Visible question-and-answer content is what the audit scores." });
+    items.push({ label: "FAQPage schema", status: "pass", scored: false, detail: "FAQPage markup was observed. Its presence is optional and does not establish search display." });
   } else {
-    items.push({ label: "FAQPage schema", status: "pass", scored: false, detail: "Not present. Optional markup with no established rich-result benefit for law firms. Visible question-and-answer content is what the audit scores (see Question-format headings and Direct-answer sentences)." });
+    items.push({ label: "FAQPage schema", status: "pass", scored: false, detail: "No FAQPage markup was observed. Its absence is not scored; visible question-and-answer content is a separate observation." });
   }
 
-  // Trust-fix pass WI-2: presence is the flag, not absence. Google rules
-  // self-serving reviews on a LocalBusiness or Organization ineligible for
-  // review stars, so this markup cannot earn the snippet on a firm's own site
-  // and reads as misleading when it does not match reviews visible on the
-  // page. Absence is neutral and never a recommendation. Unscored both
-  // directions.
+  // Presence/absence is an observation only. This scan does not establish
+  // review accuracy, eligibility, or how search systems display it.
   if (schema.hasReview) {
-    items.push({ label: "Review / Rating schema", status: "warn", scored: false, detail: "Present. Self-serving review markup on a firm's own site is ineligible for Google review stars, and can read as misleading if it does not match reviews visible on the page.", fix: "Verify the markup mirrors real, visible client reviews. Do not expect star snippets from it; Google excludes self-serving reviews for LocalBusiness and Organization entities." });
+    items.push({ label: "Review / Rating schema", status: "pass", scored: false, detail: "Review or rating markup was observed. Accuracy, eligibility, and search display were not assessed." });
   } else {
-    items.push({ label: "Review / Rating schema", status: "pass", scored: false, detail: "Not present. Not recommended for a firm's own site: self-serving review markup is ineligible for Google review stars. Visible client testimonials and Google Business Profile reviews are what count." });
+    items.push({ label: "Review / Rating schema", status: "pass", scored: false, detail: "No review or rating markup was observed. Its absence is not scored." });
   }
 
   if (schema.hasBreadcrumb) {
-    items.push({ label: "Breadcrumb schema", status: "pass", detail: "Present. Helps search engines read site hierarchy." });
+    items.push({ label: "Breadcrumb schema", status: "pass", scored: false, detail: "Breadcrumb markup was observed. This scan does not assess eligibility or search display." });
   } else {
-    items.push({ label: "Breadcrumb schema", status: "warn", detail: "Not found. Breadcrumb markup improves site hierarchy signals.", fix: "Add BreadcrumbList JSON-LD showing the page's position in your site structure." });
+    items.push({ label: "Breadcrumb schema", status: "pass", scored: false, detail: "No breadcrumb markup was observed. Its absence is not scored." });
   }
 
   if (schema.conflictingEntity) {
@@ -754,46 +726,32 @@ export function checkSchemaMarkup(schema: SchemaSummary, serviceAreaLikely: bool
 }
 
 /* 4. AI Visibility */
-export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llmsTxt: string | null, schema: SchemaSummary): CategoryResult {
+export function checkAiVisibility(html: string, _parsedRobots: ParsedRobots | null, llmsTxt: string | null, schema: SchemaSummary): CategoryResult {
   const items: CheckItem[] = [];
   const bodyText = extractBodyText(html);
 
-  if (!parsedRobots) {
-    items.push({ label: "AI search bot access", status: "warn", scored: false, applicability: "unknown", detail: "No accessible robots.txt was observed. Rules for AI search crawlers could not be assessed." });
-  } else {
-    const blockedSearch = AI_SEARCH_BOTS.filter((b) => checkBotBlockedParsed(parsedRobots, b.token));
-    if (blockedSearch.length === 0) {
-      items.push({ label: "AI search bot access", status: "pass", detail: "No blocking rule for the listed autonomous AI search crawlers was observed in robots.txt. This does not establish whether a service reads or cites the page." });
-    } else if (blockedSearch.length <= 2) {
-      items.push({ label: "AI search bot access", status: "warn", detail: `robots.txt contains rules that restrict ${blockedSearch.length} listed autonomous AI search crawler${blockedSearch.length > 1 ? "s" : ""}: ${blockedSearch.map((b) => b.label).join(", ")}. This does not establish whether a service reads or cites the page.`, fix: "Confirm whether these crawler instructions reflect the firm's intended policy." });
-    } else {
-      items.push({ label: "AI search bot access", status: "fail", detail: `robots.txt contains rules that restrict ${blockedSearch.length} of ${AI_SEARCH_BOTS.length} listed autonomous AI search crawlers. This does not establish whether a service reads or cites the page.`, fix: "Confirm whether these crawler instructions reflect the firm's intended policy." });
-    }
-  }
-
-  if (!parsedRobots) {
-    items.push({ label: "AI training bot control", status: "warn", scored: false, applicability: "unknown", detail: "No accessible robots.txt was observed. Rules for AI training crawlers could not be assessed." });
-  } else {
-    const blockedTraining = AI_TRAINING_BOTS.filter((b) => checkBotBlockedParsed(parsedRobots, b.token));
-    const listed = blockedTraining.map((b) => b.label);
-    items.push({ label: "AI training bot control", status: "warn", scored: false, detail: blockedTraining.length > 0
-      ? `robots.txt contains restrictions for ${blockedTraining.length} listed training/content-use crawler${blockedTraining.length > 1 ? "s" : ""}: ${listed.join(", ")}. This records instructions, not crawler behavior.`
-      : "No restriction for the listed training/content-use crawlers was observed in robots.txt. This records instructions, not crawler behavior." });
-  }
+  items.push({
+    label: "AI search bot access", status: "pass", scored: false,
+    detail: "Provider-specific robots.txt policy observations are listed separately. This check does not establish crawler access, search visibility, or citations.",
+  });
+  items.push({
+    label: "AI training bot control", status: "pass", scored: false,
+    detail: "Provider crawler purposes differ and may include search, grounding, training, product indexing, or dataset collection. A robots.txt rule records policy only; actual fetching and downstream use were not verified.",
+  });
 
   const orgDesc = extractMetaContent(html, "description");
   if ((schema.hasOrganization || schema.hasLocalBusiness || schema.hasLegalService) && schema.fields.name) {
-    items.push({ label: "Entity description", status: "pass", detail: "Structured data includes a named business entity." });
-  } else if (orgDesc) {
-    items.push({ label: "Entity description", status: "warn", detail: "A meta description exists, but no named business entity is described in structured data.", fix: "Add a LegalService or Organization schema block with a clear name and description." });
+    items.push({ label: "Entity description", status: "pass", detail: "A named business entity was observed in structured data." });
   } else {
-    items.push({ label: "Entity description", status: "fail", detail: "No clear, machine-readable entity description on the page.", fix: "Add a structured-data entity with a name and description, and a strong meta description." });
+    items.push({ label: "Entity description", status: "pass", detail: orgDesc
+      ? "A meta description was observed; no named entity was found in the inspected JSON-LD. Other formats and rendered markup were not assessed."
+      : "No named entity was found in the inspected JSON-LD. Other formats and rendered markup were not assessed." });
   }
 
   if (schema.hasAttorney || schema.hasPerson) {
     items.push({ label: "Attorney / person schema", status: "pass", detail: "Attorney or Person schema was observed in the inspected HTML." });
   } else {
-    items.push({ label: "Attorney / person schema", status: "warn", detail: "No Attorney or Person schema was observed in the inspected HTML. This does not establish whether lawyer details appear elsewhere on the site.", fix: "Ask your web provider whether lawyer profile structured data would accurately describe the firm's pages." });
+    items.push({ label: "Attorney / person schema", status: "pass", detail: "No Attorney or Person JSON-LD type was observed. Its absence is optional and does not establish whether lawyer details appear elsewhere." });
   }
 
   const h2s = extractAllTags(html, "h2");
@@ -801,17 +759,7 @@ export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | nul
   const questionHeadings = [...h2s, ...h3s].filter(
     (h) => h.endsWith("?") || /^(what|how|when|where|why|who|can|do|does|is|are|should|will)\b/i.test(h)
   );
-  // Worded as an optimization opportunity, not a citation guarantee: a
-  // question-shaped heading may help an AI system extract an answer, but its
-  // presence or absence says nothing about whether any AI assistant actually
-  // cites the page.
-  if (questionHeadings.length >= 3) {
-    items.push({ label: "Question-format headings", status: "pass", scored: false, detail: `${questionHeadings.length} headings ending in a question mark or starting with a question word were observed. This describes formatting only; it does not measure AI visibility.` });
-  } else if (questionHeadings.length > 0) {
-    items.push({ label: "Question-format headings", status: "warn", scored: false, detail: `${questionHeadings.length} headings ending in a question mark or starting with a question word were observed. This describes formatting only; it does not measure AI visibility.` });
-  } else {
-    items.push({ label: "Question-format headings", status: "pass", scored: false, detail: "No headings ending in a question mark or starting with a question word were observed. This describes formatting only; it does not measure AI visibility." });
-  }
+  items.push({ label: "Question-format headings", status: "pass", scored: false, detail: `${questionHeadings.length} headings matched this question-format pattern in initial HTML. This is a formatting observation; no question format is required by this check.` });
 
   // Boundary note: this is a coarse, general-purpose structural heuristic for
   // ANY external site scanned by this public/operator tool, with no access to
@@ -825,46 +773,26 @@ export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | nul
   // pass/fail as a proxy for that doctrine's compliance.
   const sentences = bodyText.split(/[.!?]+/).filter((s) => s.trim().length > 20);
   const directAnswers = sentences.filter((s) => /\b(is|are|means|refers to|defined as|consists of|requires|involves)\b/i.test(s));
-  if (directAnswers.length >= 5) {
-    items.push({ label: "Direct-answer sentences", status: "pass", scored: false, detail: `${directAnswers.length} sentences matched a broad definition-wording pattern. This is not an assessment of answer quality or AI visibility.` });
-  } else if (directAnswers.length > 0) {
-    items.push({ label: "Direct-answer sentences", status: "pass", scored: false, detail: `${directAnswers.length} sentences matched a broad definition-wording pattern. This is not an assessment of answer quality or AI visibility.` });
-  } else {
-    items.push({ label: "Direct-answer sentences", status: "pass", scored: false, detail: "No sentences matched the broad definition-wording pattern. This is not an assessment of answer quality or AI visibility." });
-  }
+  items.push({ label: "Direct-answer sentences", status: "pass", scored: false, detail: `${directAnswers.length} sentences matched a broad wording pattern in initial HTML. This is not an assessment of answer quality or AI visibility.` });
 
   const anchorTags = html.match(/<a[^>]+href=["']https?:\/\/([^"']+)["']/gi) || [];
   const authoritative = anchorTags.filter((a) => /\.(gov|edu)|canlii|justice|courts?|lawsociety|cba\.org|ontario\.ca|canada\.ca/i.test(a));
-  if (authoritative.length >= 1) {
-    items.push({ label: "Authoritative citations", status: "pass", detail: `${authoritative.length} external link${authoritative.length > 1 ? "s" : ""} matched the check's list of government, court, or legal organization domains.` });
-  } else {
-    items.push({ label: "Authoritative citations", status: "warn", detail: "No external links matching the check's list of government, court, or legal organization domains were observed. This does not assess whether other sources are reliable.", fix: "Review whether linking to official legal resources would help readers verify information on this page." });
-  }
+  items.push({ label: "Authoritative citations", status: "pass", scored: false, detail: `${authoritative.length} external links matched this check's list of government, court, or legal organization domains. This list does not assess source quality or completeness.` });
 
   const hasAuthorMeta = extractMetaContent(html, "author") !== null;
-  if (hasAuthorMeta || schema.hasPerson || schema.hasAttorney) {
-    items.push({ label: "Author / reviewer signals", status: "pass", detail: "An author meta tag or Person/Attorney structured data was observed in the inspected HTML." });
-  } else {
-    items.push({ label: "Author / reviewer signals", status: "warn", detail: "No author meta tag or Person/Attorney structured data was observed in the inspected HTML. This does not establish whether an author or reviewer is named elsewhere on the page.", fix: "Review whether the page should identify its author or legal reviewer for readers." });
-  }
+  items.push({ label: "Author / reviewer signals", status: "pass", scored: false, detail: hasAuthorMeta || schema.hasPerson || schema.hasAttorney
+    ? "An author meta tag or Person/Attorney JSON-LD was observed. Identity, qualifications, and other page content were not assessed."
+    : "No author meta tag or Person/Attorney JSON-LD was observed. Other formats and content were not assessed." });
 
-  // Trust-fix pass WI-4: unscored both directions, framed experimental. No
-  // major search or AI-visibility benefit has been established for this file.
   if (llmsTxt && llmsTxt.length > 50) {
-    items.push({ label: "llms.txt file", status: "pass", scored: false, detail: "Present. Experimental: no major search or AI-visibility benefit has been established for this file. Harmless to keep." });
+    items.push({ label: "llms.txt file", status: "pass", scored: false, detail: "An llms.txt file was fetched. Its content and effects were not assessed; this file is optional and is not required by this check." });
   } else {
-    items.push({ label: "llms.txt file", status: "pass", scored: false, detail: "Not present. Experimental, optional file. No established visibility benefit; not scored and not a recommendation." });
+    items.push({ label: "llms.txt file", status: "pass", scored: false, detail: "No llms.txt file was observed. It is optional and its absence is not scored." });
   }
 
   const semanticTags = ["<header", "<nav", "<main", "<article", "<section", "<footer"];
   const foundSemantic = semanticTags.filter((tag) => html.toLowerCase().includes(tag));
-  if (foundSemantic.length >= 4) {
-    items.push({ label: "Semantic HTML structure", status: "pass", detail: `${foundSemantic.length} semantic elements found. Helps AI parse page structure.` });
-  } else if (foundSemantic.length >= 2) {
-    items.push({ label: "Semantic HTML structure", status: "warn", detail: `Only ${foundSemantic.length} semantic elements. More helps AI parse content structure.`, fix: "Use semantic tags: <header>, <nav>, <main>, <article>, <section>, <footer>." });
-  } else {
-    items.push({ label: "Semantic HTML structure", status: "fail", detail: "Minimal semantic HTML. Semantic elements make structure machine-readable; div-only markup gives parsers less to work with.", fix: "Use semantic HTML elements instead of generic containers." });
-  }
+  items.push({ label: "Semantic HTML structure", status: "pass", scored: false, detail: `${foundSemantic.length} of this check's listed semantic element types were observed in initial HTML. This structural observation is not a measure of AI visibility.` });
 
   const unscoredItems = items.map((item) => ({ ...item, scored: false }));
   const { score, maxScore } = scoreItems(unscoredItems);
@@ -887,27 +815,25 @@ function checkLegalMarketing(signals: LawFirmSignals): CategoryResult {
     ? { label: "Consultation call to action", status: "pass", detail: "A consultation or contact call to action is present." }
     : { label: "Consultation call to action", status: "fail", detail: "No clear consultation call to action. Ready-to-act visitors have no obvious next step.", fix: "Add a prominent call to action such as \"Book a consultation\" near the top of the page." });
 
-  if (signals.addressVisible) {
-    items.push({ label: "Address / NAP", status: "pass", detail: "A street address is visible." });
-  } else if (signals.serviceAreaLikely) {
-    // A service-area / remote practice legitimately has no walk-in office.
-    // Recommending one either invents an address or pressures the firm into
-    // publishing a private home/mailing address. Field case drglaw.ca:
-    // areaServed schema + "closes ... by video" copy, no address anywhere.
-    items.push({ label: "Address / NAP", status: "pass", detail: "No street address published, but the site reads as a service-area or remote practice (areaServed schema and remote/virtual language). A published street address is optional for this business model." });
-  } else {
-    items.push({ label: "Address / NAP", status: "warn", detail: "No street address detected. NAP consistency supports local trust and search.", fix: "Show the firm's full address in the footer and on the contact page." });
-  }
+  items.push({
+    label: "Address / NAP",
+    status: "pass",
+    scored: false,
+    detail: signals.addressTextPresent
+      ? "A street-address pattern was found in initial HTML text outside explicit hidden/template markup. This does not confirm what a browser displays."
+      : "No street-address pattern was found in initial HTML text. This does not assess rendered visibility or whether the firm needs a published office address.",
+  });
 
   const trust = signals.trust;
-  const trustCount = [trust.testimonials, trust.reviews, trust.caseResults, trust.awards, trust.credentials].filter(Boolean).length;
-  if (trustCount >= 3) {
-    items.push({ label: "Trust signals", status: "pass", detail: `${trustCount} of 5 trust signal types present (testimonials, reviews, results, awards, credentials).` });
-  } else if (trustCount >= 1) {
-    items.push({ label: "Trust signals", status: "warn", detail: `Only ${trustCount} of 5 trust signal types found. Trust cues lift intake conversion.`, fix: "Surface testimonials, reviews, notable results, awards, and bar credentials where visitors can see them." });
-  } else {
-    items.push({ label: "Trust signals", status: "fail", detail: "No trust signals found (testimonials, reviews, results, awards, credentials).", fix: "Add client testimonials, review counts, and bar credentials. These cues carry intake decisions." });
-  }
+  const hasTrustCues = [trust.testimonials, trust.reviews, trust.caseResults, trust.awards, trust.credentials].some(Boolean);
+  items.push({
+    label: "Trust signals",
+    status: "pass",
+    scored: false,
+    detail: hasTrustCues
+      ? "Some review, experience, award, or credential references were detected in the initial page text. Their accuracy and quality were not assessed."
+      : "No review, experience, award, or credential references were detected in the initial page text. This observation does not assess credibility or professional status.",
+  });
 
   items.push(signals.practiceAreaIntent
     ? { label: "Practice-area intent", status: "pass", detail: "Content clearly signals legal practice areas." }
@@ -930,13 +856,14 @@ function checkLocalSeo(html: string, schema: SchemaSummary, serviceAreaLikely: b
     ? { label: "Phone number (NAP)", status: "pass", detail: "Phone number found on page." }
     : { label: "Phone number (NAP)", status: "fail", detail: "No phone number found. Local SEO depends on visible NAP.", fix: "Add the firm's phone number to the header or footer." });
 
-  if (ADDRESS_RE.test(bodyText)) {
-    items.push({ label: "Street address (NAP)", status: "pass", detail: "Physical address found on page." });
-  } else if (serviceAreaLikely) {
-    items.push({ label: "Street address (NAP)", status: "pass", detail: "No street address published, but the site reads as a service-area or remote practice. See Address / NAP in Legal Marketing for the same finding." });
-  } else {
-    items.push({ label: "Street address (NAP)", status: "warn", detail: "No street address detected. A physical address strengthens local ranking.", fix: "Add the full street address to the footer or contact page." });
-  }
+  items.push({
+    label: "Street address (NAP)",
+    status: "pass",
+    scored: false,
+    detail: serviceAreaLikely
+      ? "No address text was found in the initial HTML; separate area-served and remote-practice signals were detected. Neither establishes what a browser displays or whether an office address is required."
+      : "Address text in initial HTML is recorded in Address / NAP above. This check does not assess rendered visibility or whether the firm needs a published office address.",
+  });
 
   items.push(/google\.com\/maps|maps\.googleapis\.com|gmp-map/i.test(html)
     ? { label: "Google Maps embed", status: "pass", detail: "Maps integration found." }
@@ -995,8 +922,8 @@ export function checkTechnicalSecurity(html: string, url: string, headers: Heade
   const items: CheckItem[] = [];
 
   items.push(url.startsWith("https://")
-    ? { label: "HTTPS", status: "pass", detail: "Site loads over HTTPS." }
-    : { label: "HTTPS", status: "fail", detail: "Site loads over HTTP. Google penalises non-HTTPS sites.", fix: "Install an SSL certificate and redirect all HTTP traffic to HTTPS." });
+    ? { label: "HTTPS", status: "pass", detail: "The inspected page response used HTTPS." }
+    : { label: "HTTPS", status: "fail", detail: "The inspected page response used HTTP, so transport was not encrypted.", fix: "Ask your provider to enable HTTPS for this page and verify the final URL." });
 
   const mixedCount = countMixedContentResources(html);
   items.push(mixedCount === 0
@@ -1101,11 +1028,7 @@ function checkLinksContent(html: string, pageHostname: string): CategoryResult {
   const bodyText = extractBodyText(html);
   const words = countWords(bodyText);
 
-  // This check only counts as a requirement on content pages in the first
-  // place (see applyPageTypeApplicability, which exempts homepage/contact/
-  // intake/tool pages from Word count entirely). See classifyWordCount for
-  // why the wording stays a guideline, not a hard minimum.
-  items.push({ label: "Word count", ...classifyWordCount(words) });
+  items.push({ label: "Word count", status: "pass", scored: false, detail: `${words.toLocaleString()} words in the extracted initial HTML text. Quantity is recorded but not scored.` });
 
   const headingPattern = /<h([1-6])[^>]*>/gi;
   const headingLevels: number[] = [];
@@ -1138,22 +1061,16 @@ function checkLinksContent(html: string, pageHostname: string): CategoryResult {
     if (text && GENERIC_ANCHORS.has(text)) genericAnchors.push(text);
   }
 
-  if (internalCount >= 3) items.push({ label: "Internal links", status: "pass", detail: `${internalCount} internal links found.` });
-  else if (internalCount > 0) items.push({ label: "Internal links", status: "warn", detail: `Only ${internalCount} internal link${internalCount > 1 ? "s" : ""}.`, fix: "Link to related pages: practice areas, about, contact." });
-  else items.push({ label: "Internal links", status: "fail", detail: "No internal links detected.", fix: "Add links to your other pages." });
+  items.push({ label: "Internal links", status: "pass", scored: false, detail: `${internalCount} internal links found in the initial HTML. Link count is recorded but not scored.` });
 
-  // See classifyContentRatio for why this only fires "add substantive text"
-  // when the page ALSO has thin content by word count, not on ratio alone.
   const ratio = html.length > 0 ? Math.round((bodyText.length / html.length) * 100) : 0;
-  items.push({ label: "Content-to-HTML ratio", ...classifyContentRatio(ratio, words) });
+  items.push({ label: "Content-to-HTML ratio", status: "pass", scored: false, detail: `${ratio}% extracted text relative to the initial HTML size. This rough ratio is recorded but not scored.` });
 
   if (genericAnchors.length === 0) items.push({ label: "Anchor text quality", status: "pass", detail: "Links use descriptive text." });
   else if (genericAnchors.length <= 2) items.push({ label: "Anchor text quality", status: "warn", detail: `${genericAnchors.length} link${genericAnchors.length > 1 ? "s" : ""} with generic text.`, fix: "Replace \"click here\" and \"learn more\" with descriptive text." });
   else items.push({ label: "Anchor text quality", status: "fail", detail: `${genericAnchors.length} links with generic text.`, fix: "Replace generic links with descriptive anchor text." });
 
-  items.push(externalCount >= 1
-    ? { label: "External links", status: "pass", detail: `${externalCount} outbound link${externalCount > 1 ? "s" : ""} found.` }
-    : { label: "External links", status: "warn", detail: "No outbound links. Links to authoritative sources add credibility.", fix: "Link to relevant external resources: government, law society, courts." });
+  items.push({ label: "External links", status: "pass", scored: false, detail: `${externalCount} external links found in the initial HTML. Link count is recorded but not scored.` });
 
   const { score, maxScore } = scoreItems(items);
   return { name: "Links & Content", score, maxScore, items };
@@ -1276,7 +1193,7 @@ export function buildPageResult(
   const rawCategories: CategoryResult[] = [
     checkOnPageSeo(html, finalUrl),
     checkIndexability(idx, robotsAllowed),
-    checkSchemaMarkup(schema, lawFirm.serviceAreaLikely),
+    checkSchemaMarkup(schema),
     checkAiVisibility(html, parsedRobots, llmsTxt, schema),
     checkLegalMarketing(lawFirm),
     checkLocalSeo(html, schema, lawFirm.serviceAreaLikely),
@@ -1293,9 +1210,14 @@ export function buildPageResult(
   // homepage/language root) BEFORE scoring, page-level aggregation, and
   // issue-building all run off this same categories array. See
   // engine-core.ts's applyPageTypeApplicability.
-  const categories = applyPageTypeApplicability(rawCategories, pageType, finalUrl);
-  const pageScore = computeWeightedScore(categories);
-  const pageGrade = computeGrade(pageScore);
+  const applicableCategories = applyPageTypeApplicability(rawCategories, pageType, finalUrl);
+  const categories = attachMethodologyEvidence(applicableCategories, finalUrl).map((category) => {
+    const { score, maxScore } = scoreItems(category.items);
+    return { ...category, score, maxScore };
+  });
+  const pageAssessed = categories.some((category) => category.maxScore > 0);
+  const pageScore = pageAssessed ? computeWeightedScore(categories) : null;
+  const pageGrade = pageScore === null ? "Not assessed" : computeGrade(pageScore);
 
   const aiCat = categories.find((c) => c.name === "AI Visibility");
   const aiVisibilityScore = aiCat && aiCat.maxScore > 0 ? Math.round((aiCat.score / aiCat.maxScore) * 100) : null;
@@ -1340,7 +1262,7 @@ export function computeTopFixes(pages: PageResult[], limit: number): TopFix[] {
   for (const page of pages) {
     for (const cat of page.categories) {
       for (const item of cat.items) {
-        if (item.status === "pass" || item.applicability === "not-applicable" || item.applicability === "unknown" || cat.name === "AI Visibility") continue;
+        if (item.status === "pass" || item.scored === false || item.applicability === "not-applicable" || item.applicability === "unknown" || cat.name === "AI Visibility") continue;
         const key = `${cat.name}::${item.label}`;
         const existing = fixMap.get(key);
         if (!existing) fixMap.set(key, { status: item.status, category: cat.name, fix: item.fix, pagesAffected: new Set([page.url]) });
@@ -1380,11 +1302,7 @@ export function aggregateCategories(pages: PageResult[]): CategoryResult[] {
         const affected = failCount + warnCount;
         if (affected > 0) detail += ` (${failCount} fail, ${warnCount} warn across ${applicable.length} applicable page checks)`;
       }
-      // Carry the trust-fix `scored` flag through the merge, or the aggregated
-      // report loses every "excluded from the SEO score" treatment the per-page
-      // checks set (security headers, llms.txt, FAQPage / Review schema). An
-      // item counts as unscored only when it is unscored on every page it
-      // appears on, so a label that is scored anywhere still grades.
+      // An item is unscored only when it is unscored on every applicable page.
       const unscored = applicable.length === 0 || applicable.every((i) => i.scored === false);
       const allNotApplicable = instances.every((i) => i.applicability === "not-applicable");
       const hasUnknown = instances.some((i) => i.applicability === "unknown");
@@ -1392,6 +1310,13 @@ export function aggregateCategories(pages: PageResult[]): CategoryResult[] {
       const applicableScored = applicable.filter((i) => i.scored !== false);
       return {
         label, status, detail, fix: representative.fix,
+        ...(representative.checkId ? { checkId: representative.checkId } : {}),
+        ...(representative.sourceIds ? { sourceIds: representative.sourceIds } : {}),
+        ...(representative.disposition ? { disposition: representative.disposition } : {}),
+        ...(representative.basis ? { basis: representative.basis } : {}),
+        ...(representative.predicate ? { predicate: representative.predicate } : {}),
+        ...(representative.scoringRationale ? { scoringRationale: representative.scoringRationale } : {}),
+        ...(representative.evidence ? { evidence: representative.evidence } : {}),
         ...(unscored ? { scored: false } : {}),
         ...(applicability ? { applicability } : {}),
         failCount,

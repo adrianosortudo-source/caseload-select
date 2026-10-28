@@ -60,7 +60,7 @@ describe("security header items are excluded from the category score", () => {
   });
 });
 
-describe("issues-list findings still fire for missing security headers", () => {
+describe("unscored security observations are not actionable issues", () => {
   const mkPage = (categories: CategoryResult[]): PageResult => ({
     url: "https://x.com/",
     title: "Home",
@@ -84,12 +84,12 @@ describe("issues-list findings still fire for missing security headers", () => {
     keyWarnings: [],
   });
 
-  it("missing CSP/HSTS/XCTO still produce findings in buildIssues despite being unscored", () => {
+  it("unscored CSP/HSTS/XCTO observations do not produce issue actions", () => {
     const cat = checkTechnicalSecurity(HTML_HTTPS_ONLY, "https://x.com/", headersWith({}));
     const issues = buildIssues([mkPage([cat])]);
     const titles = issues.map((i) => i.title);
-    expect(titles).toContain("Content-Security-Policy");
-    expect(titles).toContain("HSTS header");
-    expect(titles).toContain("X-Content-Type-Options");
+    expect(titles).not.toContain("Content-Security-Policy");
+    expect(titles).not.toContain("HSTS header");
+    expect(titles).not.toContain("X-Content-Type-Options");
   });
 });

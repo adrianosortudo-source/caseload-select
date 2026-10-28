@@ -3,7 +3,7 @@
  *
  * WI-2: presence of Review/Rating schema is the flag (self-serving markup on
  * a firm's own site is ineligible for Google review stars), never absence.
- * Neither direction moves any score.
+ * Neither direction is scored or used to recommend adding markup.
  *
  * WI-3: FAQPage schema is unscored and neutral in both directions. Google
  * limited FAQ rich results to government and health sites in 2023, so
@@ -42,14 +42,14 @@ function baseSchema(overrides: Partial<SchemaSummary> = {}): SchemaSummary {
 }
 
 describe("Review / Rating schema recommendation", () => {
-  it("presence yields a warn(unscored) item; detail says ineligible, fix does not say 'add review schema'", () => {
+  it("presence yields a neutral pass(unscored) observation with no recommendation to add schema", () => {
     const cat = checkSchemaMarkup(baseSchema({ hasReview: true }));
     const item = cat.items.find((i) => i.label === "Review / Rating schema");
     expect(item).toBeTruthy();
-    expect(item?.status).toBe("warn");
+    expect(item?.status).toBe("pass");
     expect(item?.scored).toBe(false);
-    expect(item?.detail).toMatch(/ineligible/i);
-    expect(item?.fix).not.toMatch(/add aggregaterating or review schema/i);
+    expect(item?.detail).toMatch(/accuracy, eligibility, and search display were not assessed/i);
+    expect(item?.fix).toBeUndefined();
   });
 
   it("absence yields a neutral pass(unscored) item with no recommendation to add markup", () => {

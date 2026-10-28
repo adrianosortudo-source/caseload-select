@@ -1,3 +1,6 @@
+import { normalizeLegacyPurposes } from "./crawler-policy";
+import { CATEGORY_WEIGHTS, type AiBotPurpose } from "./engine-core";
+
 /**
  * Deterministic public report model for the in-tool SEO check.
  * Internal prospecting fields stay out of this boundary.
@@ -8,7 +11,27 @@ export interface ReportCheckItem {
   status: "pass" | "warn" | "fail";
   detail: string;
   scored?: boolean;
+  checkId?: string;
+  sourceIds?: string[];
+  disposition?: "scored" | "unscored" | "pending-review";
+  basis?: string;
+  predicate?: string;
+  scoringRationale?: string;
+  evidence?: {
+    kind: string; assessedUrl?: string;
+    applicability: "applicable" | "not-applicable" | "unknown";
+    coverage: "observed" | "not-observed" | "not-assessed";
+    detail: string;
+  };
   applicability?: "applicable" | "not-applicable" | "unknown";
+}
+
+export function checkObservationDisplayText(item: Pick<ReportCheckItem, "detail" | "scored" | "disposition">, methodologyVersion?: number): string {
+  if (methodologyVersion !== 4 || item.scored !== false) return item.detail;
+  const explanation = item.disposition === "pending-review"
+    ? "This check is excluded until its source and meaning are verified; it does not establish a search defect. No fix is recommended from this check."
+    : "This is an observation for context, not a validated search defect. No fix is recommended from this check.";
+  return `${item.detail} ${explanation}`;
 }
 
 export interface ReportCategory {
@@ -51,6 +74,23 @@ export interface ReportIssue {
   confidence?: "high" | "medium" | "low";
 }
 
+export type ReportCoverageStopReason = "page-limit" | "time-budget" | "discovery-exhausted" | "fetch-failure" | "blocked" | "other";
+
+export interface ReportAiBot {
+  token?: string;
+  name: string;
+  blocked: boolean | null;
+  category?: "search" | "training" | "user-initiated";
+  purposes?: AiBotPurpose[];
+  isControlToken?: boolean;
+  robotsSemantics?: "respects" | "may-not-apply" | "generally-ignores" | "controls-specified-uses" | "unknown";
+  policyObservation?: "blocking-rule-observed" | "no-blocking-rule-observed" | "not-assessed";
+  actualFetchAccess?: "not-verified";
+  sourceUrl?: string | null;
+  reviewedAt?: string | null;
+  sourceVerification?: "verified" | "unavailable";
+}
+
 export interface ReportInput {
   domain: string;
   methodologyVersion?: number | null;
@@ -59,9 +99,24 @@ export interface ReportInput {
   pages?: ReportPage[];
   categories?: ReportCategory[];
   issues?: ReportIssue[];
-  aiBots?: Array<{ name: string; blocked: boolean | null; category: "search" | "training" | "user-initiated" }>;
+  aiBots?: ReportAiBot[];
   partial?: boolean;
   checkedAt?: string;
+  coverage?: {
+    requestedLimit: number;
+    attemptedPages: number;
+    successfulPages: number;
+    failedPages: number;
+    skippedPages: number;
+    discoveredCandidateUrls: number;
+    totalSitePages: number | null;
+    stopReason: ReportCoverageStopReason;
+    skippedReasons: Record<string, number>;
+    sitemapIncomplete: boolean;
+    partial: boolean;
+    pageSetHash?: string;
+    pageSetHashBasis: "normalized-url-identities";
+  };
 }
 
 export interface ReportAction {
@@ -82,7 +137,14 @@ export interface ReportAction {
 
 export interface SeoReportModel {
   methodology: { version: number; label: "Website checks" | "Historical score"; notice: string | null };
-  coverage: { pagesScanned: number; partial: boolean; checkedAt: string | null };
+  coverage: {
+    pagesScanned: number; partial: boolean; checkedAt: string | null;
+    requestedLimit: number | null; attemptedPages: number | null; successfulPages: number;
+    failedPages: number | null; skippedPages: number | null; discoveredCandidateUrls: number | null;
+    totalSitePages: number | null; stopReason: ReportCoverageStopReason | null;
+    skippedReasons: Record<string, number>; sitemapIncomplete: boolean; pageSetHash: string | null;
+    pageSetHashBasis: "normalized-url-identities" | null;
+  };
   headline: { domain: string; interpretation: string };
   accessSummary: {
     checkedPageCount: number;
@@ -96,14 +158,34 @@ export interface SeoReportModel {
   priorityActions: ReportAction[];
   strengths: string[];
   aiObservations: string[];
+  crawlerPolicies: Array<{
+    token: string;
+    name: string;
+    purposes: AiBotPurpose[];
+    isControlToken: boolean;
+    robotsSemantics: "respects" | "may-not-apply" | "generally-ignores" | "controls-specified-uses" | "unknown";
+    policyObservation: "blocking-rule-observed" | "no-blocking-rule-observed" | "not-assessed";
+    actualFetchAccess: "not-verified";
+    sourceUrl: string | null;
+    reviewedAt: string | null;
+    sourceVerification: "verified" | "unavailable";
+  }>;
   limitations: string[];
   findingGroups: Array<{ category: string; title: string; detail: string; affectedUrls: string[]; status: "pass" | "warn" | "fail" }>;
-  scoreExplanation: { assessed: boolean; score: number | null; label: "Website checks" | "Historical score" | "Not scored"; note: string };
+  scoreExplanation: {
+    assessed: boolean;
+    score: number | null;
+    label: string;
+    note: string;
+    scoredCheckTypeCount: number;
+    assessedCategoryCount: number;
+    totalCategoryCount: number;
+  };
   cta: { heading: string; body: string; linkLabel: string; href: string };
 }
 
 const METHOD_NOTE = "This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.";
-const SCORE_NOTE = "A weighted summary of applicable checks on the pages inspected. It is not a measurement of rankings, enquiries, legal content quality, or AI citations.";
+const SCORE_NOTE = "Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.";
 const LIMITATION = (n: number) => `This scan inspected the initial HTML of ${n} pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm.`;
 const PARTIAL_LIMITATION = "The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.";
 const CTA_HREF = "https://cal.com/adriano-caseloadselect/conversation";
@@ -255,7 +337,9 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const issues = input.issues ?? [];
   const reportIssues = issues.filter((issue) => !isLegacyAiOnlyIssue(issue));
   const version = typeof input.methodologyVersion === "number" ? input.methodologyVersion : 2;
-  const current = version >= 3;
+  // v3 and earlier keep their stored score meaning and are never silently
+  // reinterpreted through the v4 report copy or denominator.
+  const current = version === 4;
   const noindexPages = pages.filter((p) => p.indexability?.metaNoindex || p.indexability?.headerNoindex);
   const googleBlocked = checkItems(pages, "robots.txt crawl access").filter(({ item }) => item.status === "fail" && /Googlebot/.test(item.detail));
   const bingBlocked = checkItems(pages, "robots.txt crawl access").filter(({ item }) => item.status === "fail" && /Bingbot/.test(item.detail));
@@ -303,22 +387,60 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   if (pages.some((p) => p.lawFirm?.practiceAreaIntent)) strengths.push("Service information was found in the inspected page content.");
   if (pages.length && pages.every((p) => p.indexability?.indexable)) strengths.push("No noindex instruction was observed on the checked pages.");
 
-  const aiObservations: string[] = [];
-  const searchBots = (input.aiBots ?? []).filter((bot) => bot.category === "search");
-  const knownBlocked = searchBots.filter((bot) => bot.blocked === true).map((bot) => bot.name);
-  const unknownSearch = searchBots.some((bot) => bot.blocked === null);
-  if (knownBlocked.length) aiObservations.push(`The scan recorded robots.txt restrictions for these listed autonomous AI search crawlers: ${unique(knownBlocked).join(", ")}. This describes crawl instructions, not whether a service reads or cites a page.`);
-  else if (searchBots.length && !unknownSearch) aiObservations.push("No blocking robots.txt rule was observed for the listed autonomous AI search crawlers. This does not establish whether a service reads or cites a page.");
-  else aiObservations.push("AI service access and citation outcomes were not assessed by this scan.");
-  const trainingBots = (input.aiBots ?? []).filter((bot) => bot.category === "training");
-  if (trainingBots.some((bot) => bot.blocked !== null)) aiObservations.push("Robots.txt records content-use instructions for listed training crawlers; it does not establish crawler behavior or search visibility.");
+  const crawlerPolicies = (input.aiBots ?? []).map((bot) => ({
+    token: bot.token ?? bot.name,
+    name: bot.name,
+    purposes: normalizeLegacyPurposes(bot.purposes, bot.category),
+    isControlToken: bot.isControlToken ?? false,
+    robotsSemantics: bot.robotsSemantics ?? "unknown",
+    policyObservation: bot.policyObservation ?? (bot.blocked === null ? "not-assessed" : bot.blocked ? "blocking-rule-observed" : "no-blocking-rule-observed"),
+    actualFetchAccess: "not-verified" as const,
+    sourceUrl: bot.sourceUrl ?? null,
+    reviewedAt: bot.reviewedAt ?? null,
+    sourceVerification: bot.sourceVerification ?? "unavailable",
+  }));
+  const aiObservations: string[] = crawlerPolicies.length
+    ? ["Provider-specific purposes, robots.txt rule observations, and documented robots behavior are listed per token below. An observed rule does not verify actual access or downstream use."]
+    : ["This scan did not assess provider-specific crawler policy or actual AI service access."];
 
-  const assessed = (input.categories ?? []).some((category) => category.maxScore > 0);
-  const note = current ? SCORE_NOTE : METHOD_NOTE;
+  const scoreCategories = input.categories ?? [];
+  const contributingCategories = scoreCategories.filter((category) =>
+    category.maxScore > 0 && (CATEGORY_WEIGHTS[category.name] ?? 6) > 0
+  );
+  const scoredCheckTypeCount = new Set(contributingCategories.flatMap((category) =>
+    category.items
+      .filter((item) => item.scored !== false && item.applicability !== "not-applicable" && item.applicability !== "unknown")
+      .map((item) => `${category.name}::${item.label}`)
+  )).size;
+  const assessedCategoryCount = contributingCategories.length;
+  const totalCategoryCount = scoreCategories.length;
+  const assessed = assessedCategoryCount > 0;
+  const scopedLabel = `Limited checks: ${scoredCheckTypeCount} ${scoredCheckTypeCount === 1 ? "check type" : "check types"} across ${assessedCategoryCount} of ${totalCategoryCount} ${totalCategoryCount === 1 ? "category" : "categories"}`;
+  const note = current
+    ? assessed
+      ? `This limited summary reflects ${scoredCheckTypeCount} scored ${scoredCheckTypeCount === 1 ? "check type" : "check types"} across ${assessedCategoryCount} of ${totalCategoryCount} ${totalCategoryCount === 1 ? "category" : "categories"}, applied to the inspected pages. ${SCORE_NOTE}`
+      : "No scored checks contributed to this scan. Other observations do not contribute to a score. It is not a whole-site SEO grade or a ranking prediction."
+    : METHOD_NOTE;
   const limitations = [LIMITATION(pages.length || input.pagesScanned), ...(input.partial ? [PARTIAL_LIMITATION] : [])];
   return {
     methodology: { version, label: current ? "Website checks" : "Historical score", notice: current ? null : METHOD_NOTE },
-    coverage: { pagesScanned: input.pagesScanned, partial: Boolean(input.partial), checkedAt: input.checkedAt ?? null },
+    coverage: {
+      pagesScanned: input.pagesScanned,
+      partial: input.coverage?.partial ?? Boolean(input.partial),
+      checkedAt: input.checkedAt ?? null,
+      requestedLimit: input.coverage?.requestedLimit ?? null,
+      attemptedPages: input.coverage?.attemptedPages ?? null,
+      successfulPages: input.coverage?.successfulPages ?? pages.length,
+      failedPages: input.coverage?.failedPages ?? null,
+      skippedPages: input.coverage?.skippedPages ?? null,
+      discoveredCandidateUrls: input.coverage?.discoveredCandidateUrls ?? null,
+      totalSitePages: input.coverage?.totalSitePages ?? null,
+      stopReason: input.coverage?.stopReason ?? null,
+      skippedReasons: input.coverage?.skippedReasons ?? {},
+      sitemapIncomplete: input.coverage?.sitemapIncomplete ?? false,
+      pageSetHash: input.coverage?.pageSetHash ?? null,
+      pageSetHashBasis: input.coverage?.pageSetHashBasis ?? null,
+    },
     headline: {
       domain: input.domain,
       interpretation: priorityActions[0]?.title ?? "No priority action was identified by these checks. This limited scan does not confirm that the whole website is free of problems.",
@@ -335,9 +457,18 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     priorityActions,
     strengths: strengths.slice(0, 3),
     aiObservations,
+    crawlerPolicies,
     limitations,
     findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: issue.detail, affectedUrls: issue.affectedUrls, status: issue.status })),
-    scoreExplanation: { assessed: current ? assessed : Number.isFinite(input.overallScore), score: Number.isFinite(input.overallScore) && (!current || assessed) ? input.overallScore! : null, label: current ? (assessed ? "Website checks" : "Not scored") : "Historical score", note },
+    scoreExplanation: {
+      assessed: current ? assessed : Number.isFinite(input.overallScore),
+      score: Number.isFinite(input.overallScore) && (!current || assessed) ? input.overallScore! : null,
+      label: current ? (assessed ? scopedLabel : "Not assessed") : "Historical score",
+      note,
+      scoredCheckTypeCount,
+      assessedCategoryCount,
+      totalCategoryCount,
+    },
     cta: { heading: "Discuss these findings", body: "We can help confirm which findings matter for the cases you want, separate intentional choices from genuine gaps, and decide what to address first.", linkLabel: "Book a conversation", href: CTA_HREF },
   };
 }

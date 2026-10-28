@@ -75,6 +75,12 @@ describe("buildSeoCheckRunRow", () => {
     expect(row?.ai_policy_score).toBeNull();
   });
 
+  it("persists an unassessed overall score as null", () => {
+    const row = buildSeoCheckRunRow({ domain: "x.ca", overallScore: null, grade: "Not assessed" }, null);
+    expect(row?.overall_score).toBeNull();
+    expect(row?.grade).toBe("Not assessed");
+  });
+
   it("passes through a null lawyer id (operator session with no linked firm_lawyers row)", () => {
     expect(buildSeoCheckRunRow({ domain: "x.ca" }, null)?.created_by_lawyer_id).toBeNull();
   });

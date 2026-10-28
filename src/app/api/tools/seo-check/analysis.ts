@@ -121,7 +121,8 @@ export interface SchemaSummary {
 export interface LawFirmSignals {
   phoneVisible: boolean;
   contactFormPresent: boolean;
-  addressVisible: boolean;
+  /** Address-pattern text found in the initial HTML outside explicit hidden/template markup. Not rendered-visibility evidence. */
+  addressTextPresent: boolean;
   consultationCta: boolean;
   policyPagePresent: boolean;
   practiceAreaIntent: boolean;
@@ -145,7 +146,7 @@ export interface PageResult {
   title: string | null;
   metaDescription?: string | null;
   pageType: PageType;
-  pageScore: number;
+  pageScore: number | null;
   pageGrade: string;
   aiVisibilityScore: number | null;
   categories: CategoryResult[];
@@ -219,7 +220,7 @@ export interface SeverityBreakdown {
 
 export interface InternalSummary {
   prospectFitScore: number;
-  websiteMaturity: "poor" | "basic" | "decent" | "strong";
+  websiteMaturity: "poor" | "basic" | "decent" | "strong" | "unassessed";
   urgencyLevel: "low" | "medium" | "high" | "urgent";
   likelyPainPoints: string[];
   strongestOutreachHooks: string[];
@@ -231,6 +232,22 @@ export interface InternalSummary {
   trustAndConversionGaps: string[];
 }
 
+export interface ScanCoverage {
+  requestedLimit: number;
+  attemptedPages: number;
+  successfulPages: number;
+  failedPages: number;
+  skippedPages: number;
+  discoveredCandidateUrls: number;
+  totalSitePages: number | null;
+  stopReason: "page-limit" | "time-budget" | "discovery-exhausted" | "fetch-failure" | "blocked" | "other";
+  skippedReasons: Record<string, number>;
+  sitemapIncomplete: boolean;
+  partial: boolean;
+  pageSetHash?: string;
+  pageSetHashBasis: "normalized-url-identities";
+}
+
 export interface SeoCheckResult {
   domain: string;
   methodologyVersion: number;
@@ -238,7 +255,7 @@ export interface SeoCheckResult {
   pagesScanned: number;
   pages: PageResult[];
   categories: CategoryResult[];
-  overallScore: number;
+  overallScore: number | null;
   grade: string;
   aiSearchScore: number | null;
   aiSearchGrade: string | null;
@@ -252,6 +269,8 @@ export interface SeoCheckResult {
   /** Operator-only. Omitted from public (unauthenticated) responses. */
   internalSummary?: InternalSummary;
   severityBreakdown: SeverityBreakdown;
+  /** Scanner-observed coverage only; this is not a whole-site inventory. */
+  coverage?: ScanCoverage;
   /** True when the wall-clock budget was hit before the page target was met. */
   partial?: boolean;
   /** How much to trust "no X found" findings, given crawl coverage. See computeDiscoveryConfidence. */
@@ -513,14 +532,17 @@ const AI_CONTENT_DEPENDENT_LABELS = new Set([
  * pages where it is non-pass (worst status wins), enriched with severity,
  * confidence, effort, affected page types, and a priority score.
  *
- * effectiveContentPages: count of pages with real, substantive content (see
- * route.ts). Defaults to Infinity (never placeholder-class) so existing
- * callers and tests are unaffected. When <= 1, the site is placeholder-class:
- * the four AI_CONTENT_DEPENDENT_LABELS findings collapse into one, and CSP /
- * X-Content-Type-Options severity is capped low (defense-in-depth headers on
- * a site with no forms or input surface, not a search-visibility signal).
+ * effectiveContentPages: count of pages with substantive content (see route.ts).
+ * Defaults to Infinity so existing callers retain prior behavior. Legacy callers
+ * may collapse AI-content findings on placeholder-class sites; current v4 sets
+ * includePlaceholderContentFinding=false because this count is not a validated
+ * search defect. Existing low-severity caps for defense-in-depth headers remain.
  */
-export function buildIssues(pages: PageResult[], effectiveContentPages: number = Infinity): Issue[] {
+export function buildIssues(
+  pages: PageResult[],
+  effectiveContentPages: number = Infinity,
+  options: { includePlaceholderContentFinding?: boolean } = {}
+): Issue[] {
   const totalPages = pages.length || 1;
   const isPlaceholderClass = effectiveContentPages <= 1;
   let anyAiContentFinding = false;
@@ -553,6 +575,7 @@ export function buildIssues(pages: PageResult[], effectiveContentPages: number =
       if (page.pageType === "policy" && !POLICY_RELEVANT_CATEGORIES.has(cat.name)) continue;
       for (const item of cat.items) {
         if (item.status === "pass") continue;
+        if (item.scored === false) continue;
         if (item.applicability === "not-applicable" || item.applicability === "unknown") continue;
         // Avoid double-counting schema absence: when no JSON-LD exists, the
         // "structured data" issue already carries the actionable finding.
@@ -717,7 +740,7 @@ export function buildIssues(pages: PageResult[], effectiveContentPages: number =
 
   // Trust-fix pass WI-7: the single collapsed replacement for the four
   // AI-content-dependent findings, only when at least one would have fired.
-  if (isPlaceholderClass && anyAiContentFinding) {
+  if (isPlaceholderClass && anyAiContentFinding && options.includePlaceholderContentFinding !== false) {
     const severity: Severity = "low";
     const confidence: Confidence = "high";
     const effort = EFFORT_BY_CATEGORY["AI Visibility"] ?? "medium";
@@ -807,10 +830,18 @@ export function severityBreakdown(issues: Issue[]): SeverityBreakdown {
   return b;
 }
 
+/** Current v4 report issues include only registered page-level checks.
+ * The legacy site-structure heuristic builder remains available for historical
+ * reports and calibration, but its bounded-crawl absence claims are excluded.
+ */
+export function buildV4Issues(pages: PageResult[], effectiveContentPages: number = Infinity): Issue[] {
+  return buildIssues(pages, effectiveContentPages, { includePlaceholderContentFinding: false }).sort(compareIssuesByPriority);
+}
+
 /**
- * Site-level structural issues that no single page check can see: whether the
- * firm has a contact path, practice-area pages, an attorney/team page, and a
- * sitemap. These complement the per-page issues from buildIssues.
+ * Legacy site-level structure heuristics retained for historical analyses.
+ * Current v4 reports do not call this builder because a bounded crawl cannot
+ * establish that unobserved site sections or pages are absent.
  */
 export function buildSiteStructureIssues(
   pages: PageResult[],
@@ -936,7 +967,7 @@ function uniq(arr: string[]): string[] {
 export function buildInternalSummary(
   pages: PageResult[],
   issues: Issue[],
-  overallScore: number
+  overallScore: number | null
 ): InternalSummary {
   const totalPages = pages.length || 1;
   const home = pages[0];
@@ -955,7 +986,8 @@ export function buildInternalSummary(
   // Website maturity from headline score, breadth, and structured data.
   const hasSchema = pages.some((p) => p.schema.blocks > 0 && p.schema.invalidBlocks === 0);
   let websiteMaturity: InternalSummary["websiteMaturity"];
-  if (overallScore < 35 || totalPages <= 1) websiteMaturity = "poor";
+  if (overallScore === null) websiteMaturity = "unassessed";
+  else if (overallScore < 35 || totalPages <= 1) websiteMaturity = "poor";
   else if (overallScore < 55 || !hasSchema) websiteMaturity = "basic";
   else if (overallScore < 75) websiteMaturity = "decent";
   else websiteMaturity = "strong";
@@ -972,7 +1004,7 @@ export function buildInternalSummary(
   // lower; basic and decent score highest, lifted by the volume of high-value
   // fixable gaps and dampened by sheer effort.
   let fit = 50;
-  fit += { poor: -18, basic: 18, decent: 12, strong: -14 }[websiteMaturity];
+  fit += { poor: -18, basic: 18, decent: 12, strong: -14, unassessed: 0 }[websiteMaturity];
   fit += Math.min(20, (crit.length * 7) + (high.length * 3));
   if (byCat("Legal Marketing").length > 0) fit += 6;
   if (byCat("Local SEO").length > 0) fit += 4;
@@ -1028,8 +1060,9 @@ export function buildInternalSummary(
   if (!home.lawFirm.consultationCta) trustGaps.push("No clear consultation call to action");
   if (!home.lawFirm.phoneVisible) trustGaps.push("No visible phone number");
   if (!home.lawFirm.contactFormPresent) trustGaps.push("No on-page contact form");
-  if (!pages.some((p) => p.lawFirm.trust.testimonials || p.lawFirm.trust.reviews)) trustGaps.push("No testimonials or reviews surfaced");
-  if (!pages.some((p) => p.lawFirm.trust.credentials)) trustGaps.push("No bar or credential signals surfaced");
+  // Keep this compatibility field limited to contact-path observations.
+  // Review, award, result, and credential counts are not credibility grades
+  // and must not become automated prospecting recommendations.
   const trustAndConversionGaps = uniq(trustGaps).slice(0, 5);
 
   return {

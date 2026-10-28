@@ -62,7 +62,7 @@ export interface SeoCheckIssue {
 
 export interface SeoInternalSummary {
   prospectFitScore: number;
-  websiteMaturity: "poor" | "basic" | "decent" | "strong";
+  websiteMaturity: "poor" | "basic" | "decent" | "strong" | "unassessed";
   urgencyLevel: "low" | "medium" | "high" | "urgent";
   likelyPainPoints: string[];
   strongestOutreachHooks: string[];
@@ -150,7 +150,9 @@ export interface SeoPageResult {
   };
   lawFirm: {
     practiceAreaIntent: boolean;
-    addressVisible: boolean;
+    addressTextPresent?: boolean;
+    /** Legacy mixed text/schema signal. Treat only as generic address evidence. */
+    addressVisible?: boolean;
   };
   wordCount?: number;
   rendering?: SeoRenderingSnapshot;
@@ -167,7 +169,7 @@ export interface SeoCheckResult {
   /** Present on the live API response; read by the enrichment research packet. */
   pages?: SeoPageResult[];
   categories: SeoCategoryResult[];
-  overallScore: number;
+  overallScore: number | null;
   grade: string;
   aiSearchScore: number | null;
   aiSearchGrade: string | null;

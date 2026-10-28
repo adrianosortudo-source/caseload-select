@@ -1,6 +1,5 @@
 /**
- * Trust-fix pass WI-1: an item with scored:false is displayed and still
- * generates issues-list findings, but contributes nothing to any grade.
+ * scored:false observations do not contribute to grades or issue/action lists.
  * See docs/SEO-TOOL-TRUST-FIX-PASS-v1.md.
  */
 
@@ -11,7 +10,7 @@ vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: {} }));
 vi.mock("@/lib/portal-auth", () => ({ getOperatorSession: async () => null }));
 
 import { scoreItems, computeWeightedScore, aiScoresFromItems, type CheckItem, type CategoryResult } from "../engine-core";
-import { aggregateCategories } from "../page-checks";
+import { aggregateCategories, computeTopFixes } from "../page-checks";
 import { buildIssues } from "../analysis";
 import type { PageResult, Indexability, SchemaSummary, LawFirmSignals } from "../analysis";
 import type { PageType } from "../engine-core";
@@ -147,7 +146,7 @@ describe("aggregateCategories: the scored flag and maxScore survive the per-page
     sameAsUrls: [],
   };
   const lawFirm: LawFirmSignals = {
-    phoneVisible: true, contactFormPresent: true, addressVisible: true, consultationCta: true,
+    phoneVisible: true, contactFormPresent: true, addressTextPresent: true, consultationCta: true,
     policyPagePresent: true, practiceAreaIntent: true, serviceAreaLikely: false,
     trust: { testimonials: true, reviews: false, caseResults: false, awards: false, credentials: true },
   };
@@ -263,6 +262,7 @@ describe("aggregateCategories: the scored flag and maxScore survive the per-page
       mkPage("https://x.com/practice", "practice", [category([
         { label: "Page-specific check", status: "fail", detail: "Observed failure." },
         { label: "Exempt check", status: "fail", detail: "Outside scope.", scored: false, applicability: "not-applicable" },
+        { label: "Unscored heuristic", status: "fail", detail: "Observed but not scored.", fix: "Do not create an automatic action.", scored: false },
       ])]),
       mkPage("https://x.com/about", "about", [category([
         { label: "Page-specific check", status: "warn", detail: "Not assessed.", scored: false, applicability: "unknown" },
@@ -271,5 +271,18 @@ describe("aggregateCategories: the scored flag and maxScore survive the per-page
     const issues = buildIssues(pages);
     expect(issues.map((issue) => issue.title)).toEqual(["Page-specific check"]);
     expect(issues[0]).toMatchObject({ failCount: 1, warnCount: 0, applicableCount: 1, notAssessedCount: 1 });
+    expect(computeTopFixes(pages, 5).map((fix) => fix.label)).toEqual(["Page-specific check"]);
+  });
+
+  it("preserves methodology explanation fields through site category aggregation", () => {
+    const page = mkPage("https://x.com/", "homepage", [{ name: "SEO methodology", score: 0, maxScore: 0, items: [
+      { label: "Known exclusion", status: "fail", detail: "Observed only.", scored: false, disposition: "unscored", basis: "Known v4 exclusion." },
+      { label: "Pending mapping", status: "warn", detail: "Unmapped.", scored: false, disposition: "pending-review", basis: "Source mapping pending." },
+    ] }]);
+    const [aggregate] = aggregateCategories([page]);
+    expect(aggregate.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ label: "Known exclusion", disposition: "unscored", basis: "Known v4 exclusion." }),
+      expect.objectContaining({ label: "Pending mapping", disposition: "pending-review", basis: "Source mapping pending." }),
+    ]));
   });
 });

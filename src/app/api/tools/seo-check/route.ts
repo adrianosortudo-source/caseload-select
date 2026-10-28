@@ -19,9 +19,6 @@ import { Agent } from "undici";
 import {
   type AiBotStatus,
   type ParsedRobots,
-  AI_SEARCH_BOTS,
-  AI_TRAINING_BOTS,
-  USER_INITIATED_BOTS,
   SCANNER_TOKEN,
   ipInBlockedRange,
   isSsrfBlocked,
@@ -39,16 +36,14 @@ import {
   CATEGORY_WEIGHTS,
 } from "./engine-core";
 import { type TtfbMeasurement } from "./content-signals";
+import { buildAiBotStatuses } from "./crawler-policy";
 import { buildPageResult, aggregateCategories, computeTopFixes } from "./page-checks";
 import {
   type PageResult,
   type SeoCheckResult,
-  buildIssues,
-  buildSiteStructureIssues,
+  buildV4Issues,
   buildInternalSummary,
   severityBreakdown,
-  computeDiscoveryConfidence,
-  compareIssuesByPriority,
 } from "./analysis";
 import { saveSeoCheckRunBestEffort } from "./save-run";
 import {
@@ -57,6 +52,7 @@ import {
   normalizeIntentInput,
 } from "./intent-analysis";
 import { aggregateRenderingSummary } from "./rendering-analysis";
+import { countSkippedPages, hashPageUrlIdentities } from "./coverage";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
@@ -523,18 +519,16 @@ export async function POST(req: NextRequest) {
 
     const pages: PageResult[] = [homePage];
     let partial = false;
+    let attemptedChildPages = 0;
+    let failedChildPages = 0;
+    let remainingFrontierCount = 0;
+    let hitTimeBudget = false;
+    const discoveredCandidateKeys = new Set<string>();
+    const skippedReasons: Record<string, number> = {};
+    const countSkipped = (reason: string) => { skippedReasons[reason] = (skippedReasons[reason] ?? 0) + 1; };
 
-    // Count of same-origin links the homepage's OWN server HTML links to.
-    // Feeds discoveryConfidence: a site with near-zero on-page links and no
-    // sitemap safety net cannot be reliably crawled, so absence findings
-    // ("no practice pages", "no team page") get downgraded rather than
-    // reported at full confidence.
-    let homeInternalLinkCount = 0;
-
-    // URLs discovered (homepage nav, sitemap, crawled pages) but left unscanned
-    // when the page budget ran out. Absence claims ("no team page") consult
-    // this: a page sitting unscanned in the frontier is not absent.
-    let uncrawledUrls: string[] = [];
+    // The bounded crawl observes candidate links, but does not claim that an
+    // unobserved site section or page is absent.
 
     if (maxPages > 1) {
       const maxDepth = DEPTH_BY_BUDGET(maxPages);
@@ -542,26 +536,27 @@ export async function POST(req: NextRequest) {
       // Frontier of candidate URLs with crawl depth.
       const frontier: Array<{ url: string; depth: number; score: number }> = [];
       const enqueue = (url: string, depth: number) => {
-        if (frontier.length >= FRONTIER_CAP) return;
         const key = crawlUrlKey(url);
+        if (discoveredCandidateKeys.has(key)) return;
+        discoveredCandidateKeys.add(key);
+        if (frontier.length >= FRONTIER_CAP) { countSkipped("frontier-cap"); return; }
         if (visited.has(key)) return;
-        if (!isSameOrigin(url, domain) || shouldSkipUrl(url)) return;
+        if (!isSameOrigin(url, domain) || shouldSkipUrl(url)) { countSkipped("out-of-scope-or-unsupported-url"); return; }
         // Respect robots for our own scanner on discovered pages.
         if (parsedRobots) {
-          try { if (checkBotBlockedParsed(parsedRobots, SCANNER_TOKEN, new URL(url).pathname)) return; } catch { return; }
+          try { if (checkBotBlockedParsed(parsedRobots, SCANNER_TOKEN, new URL(url).pathname)) { countSkipped("robots-disallowed"); return; } } catch { countSkipped("invalid-url"); return; }
         }
         if (frontier.some((f) => crawlUrlKey(f.url) === key)) return;
         frontier.push({ url, depth, score: scoreUrlPriority(url) });
       };
 
       const homeLinks = extractInternalLinks(homeHtml, homePage.url, domain);
-      homeInternalLinkCount = homeLinks.length;
       for (const u of homeLinks) enqueue(u, 1);
       for (const u of sitemapRawUrls) enqueue(u, 1);
 
       while (pages.length < maxPages && frontier.length > 0) {
         // Stop early (with partial results) if the wall-clock budget is spent.
-        if (Date.now() - startedAt > CRAWL_BUDGET_MS) { partial = true; break; }
+        if (Date.now() - startedAt > CRAWL_BUDGET_MS) { partial = true; hitTimeBudget = true; break; }
         // Pick the highest-priority candidate.
         let bestIdx = 0;
         for (let i = 1; i < frontier.length; i++) if (frontier[i].score > frontier[bestIdx].score) bestIdx = i;
@@ -570,8 +565,9 @@ export async function POST(req: NextRequest) {
         if (visited.has(key)) continue;
         visited.add(key);
 
+        attemptedChildPages++;
         const scanned = await scanPage(next.url, domain, parsedRobots, llmsTxt, sitemapSet, intent, sitemapComplete);
-        if (!scanned) continue;
+        if (!scanned) { failedChildPages++; continue; }
         visited.add(crawlUrlKey(scanned.page.url));
         pages.push(scanned.page);
 
@@ -580,24 +576,19 @@ export async function POST(req: NextRequest) {
           for (const u of extractInternalLinks(scanned.html, scanned.page.url, domain)) enqueue(u, next.depth + 1);
         }
       }
-      uncrawledUrls = frontier.map((f) => f.url);
+      remainingFrontierCount = frontier.length;
+      skippedReasons["page-limit"] = remainingFrontierCount > 0 && pages.length >= maxPages
+        ? remainingFrontierCount
+        : skippedReasons["page-limit"] ?? 0;
     }
 
-    // Untouched WordPress starter pages (Hello world! / Sample Page) are not the
-    // firm's content: excluded from quality scores + findings so their thin
-    // boilerplate does not mis-measure the site (field case chaabanelaw.com,
-    // where /sample-page/ dragged word-count, thin-content, and meta-description
-    // findings onto the firm). They stay in `pages` for pagesScanned, maturity,
-    // and discovery confidence, and their presence is surfaced as one finding.
-    const wpStarterUrls = pages.filter((p) => p.wpDefault).map((p) => p.url);
+    // Untouched WordPress starter pages are excluded from page-quality scoring
+    // so boilerplate does not mismeasure the firm's checked content.
     const scored = pages.some((p) => p.wpDefault) ? pages.filter((p) => !p.wpDefault) : pages;
     const forFindings = scored.length > 0 ? scored : pages;
 
-    // Trust-fix pass WI-7: placeholder-class signal (bare WordPress install,
-    // single-page firm site). Pages with no real content cannot carry
-    // answer-engine content signals (question headings, citations,
-    // authorship), so buildIssues collapses those four findings into one
-    // honest "publish content first" finding on this class of site.
+    // The content-page count is retained for calibrated technical-severity
+    // logic. V4 does not convert it into a site-wide content-absence finding.
     const effectiveContentPages = pages.filter((p) => !p.wpDefault && p.wordCount >= 150).length;
 
     // Backward-compatible aggregation.
@@ -605,25 +596,23 @@ export async function POST(req: NextRequest) {
     // Rendering evidence remains part of the report, while the v3 headline
     // score comes only from the weighted, applicable check categories below.
     const renderingSummary = aggregateRenderingSummary(forFindings);
-    const overallScore = computeWeightedScore(aggregatedCategories);
-    const grade = computeGrade(overallScore);
+    const scoreAssessed = aggregatedCategories.some((category) => category.maxScore > 0);
+    const overallScore = scoreAssessed ? computeWeightedScore(aggregatedCategories) : null;
+    const grade = overallScore === null ? "Not assessed" : computeGrade(overallScore);
     const aiSearchScore = null;
     const aiPolicyScore = null;
 
-    const aiBots: AiBotStatus[] = [
-      ...AI_SEARCH_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : null, category: "search" as const })),
-      ...AI_TRAINING_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : null, category: "training" as const })),
-      ...USER_INITIATED_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : null, category: "user-initiated" as const })),
-    ];
+    const aiBots: AiBotStatus[] = buildAiBotStatuses((token) => parsedRobots ? checkBotBlockedParsed(parsedRobots, token) : null);
+
     const intentAlignment = aggregateIntentAlignment(forFindings);
 
     const topFixes = computeTopFixes(forFindings, 5);
 
-    // Professional layer.
-    const discoveryConfidence = computeDiscoveryConfidence(pages.length, sitemapSet?.size ?? 0, homeInternalLinkCount, maxPages);
-    const pageIssues = buildIssues(forFindings, effectiveContentPages);
-    const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence, uncrawledUrls, wpStarterUrls);
-    const issues = [...pageIssues, ...structureIssues].sort(compareIssuesByPriority);
+    // V4 reports only source-mapped page checks. Bounded-crawl absence
+    // heuristics remain available to legacy analysis but are not exposed as
+    // public findings or operator summaries for the current method.
+    const issues = buildV4Issues(forFindings, effectiveContentPages);
+
     const internalSummary = buildInternalSummary(pages, issues, overallScore);
     const breakdown = severityBreakdown(issues);
 
@@ -635,9 +624,37 @@ export async function POST(req: NextRequest) {
       ? issues
       : issues.map(({ internalNote, prospectingAngle, ...rest }) => rest);
 
+    const coverageStopReason = hitTimeBudget
+      ? "time-budget" as const
+      : remainingFrontierCount > 0 && pages.length >= maxPages
+        ? "page-limit" as const
+        : failedChildPages > 0 && pages.length === 1
+          ? "fetch-failure" as const
+          : (skippedReasons["robots-disallowed"] ?? 0) > 0 && attemptedChildPages === 0
+            ? "blocked" as const
+            : (skippedReasons["frontier-cap"] ?? 0) > 0 || sitemapTruncated
+              ? "other" as const
+              : "discovery-exhausted" as const;
+    partial = partial || (remainingFrontierCount > 0 && pages.length >= maxPages) || (skippedReasons["robots-disallowed"] ?? 0) > 0 || sitemapTruncated;
+    const coverage = {
+      requestedLimit: maxPages,
+      attemptedPages: 1 + attemptedChildPages,
+      successfulPages: pages.length,
+      failedPages: failedChildPages,
+      skippedPages: countSkippedPages(skippedReasons),
+      discoveredCandidateUrls: discoveredCandidateKeys.size,
+      totalSitePages: null,
+      stopReason: coverageStopReason,
+      skippedReasons,
+      sitemapIncomplete: sitemapTruncated,
+      partial,
+      pageSetHash: hashPageUrlIdentities(pages.map((page) => page.url)),
+      pageSetHashBasis: "normalized-url-identities" as const,
+    };
+
     const result: SeoCheckResult = {
       domain,
-      methodologyVersion: 3,
+      methodologyVersion: 4,
       scanMode,
       pagesScanned: pages.length,
       pages,
@@ -655,15 +672,15 @@ export async function POST(req: NextRequest) {
       issues: responseIssues,
       ...(isOperator ? { internalSummary } : {}),
       severityBreakdown: breakdown,
+      coverage,
       partial,
-      discoveryConfidence,
       buildSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
       checkedAt: new Date().toISOString(),
       // Trust-fix pass WI-8 (acceptance criterion): expose exactly which
       // checks contribute to no grade, built from the actual scored:false
       // flags set this scan (not a hand-maintained list that can drift).
       scoring: {
-        methodologyVersion: 3,
+        methodologyVersion: 4,
         label: "Website checks",
         assessed: aggregatedCategories.some((category) => (CATEGORY_WEIGHTS[category.name] ?? 6) > 0 && category.maxScore > 0),
         categoryWeights: CATEGORY_WEIGHTS,
