@@ -96,7 +96,7 @@ export default function SeoReport({result,onReset,hideCta=false,showInternal=fal
 .cls-metric{padding:18px 16px 0 0;min-width:0}
 .cls-metric-value{display:block;font:600 clamp(1.5rem,3vw,2.2rem)/1 Oxanium,monospace;color:var(--white)}
 .cls-metric-label{display:block;color:var(--white);margin-top:9px;font-size:.7rem;overflow-wrap:anywhere}
-.cls-section{padding:56px 0;border-bottom:1px solid var(--ink)}
+.cls-section{padding:56px 0;border-bottom:1px solid var(--ink)}.cls-report .cls-section{padding-inline:0}
 .cls-section-head{margin-bottom:24px}
 .cls-section-head h2{margin-top:8px}
 .cls-finding{padding:24px 0 26px;border-top:1px solid var(--ink)}
