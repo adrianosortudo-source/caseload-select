@@ -5,11 +5,12 @@
  *   POST { prospect_id, title, ... }   create
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { getCrmAgentReadSession } from '@/lib/crm-agent-auth';
 import { getOperatorSession } from '@/lib/portal-auth';
 import { listDeals, createDeal, isDealStage, isUuid, type DealInput } from '@/lib/agency-crm';
 
 export async function GET(req: NextRequest) {
-  if (!(await getOperatorSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await getOperatorSession()) && !(await getCrmAgentReadSession(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const rawProspectId = new URL(req.url).searchParams.get('prospect_id');
   const prospectId = rawProspectId && rawProspectId.trim() !== '' ? rawProspectId : undefined;
   if (prospectId !== undefined && !isUuid(prospectId)) {

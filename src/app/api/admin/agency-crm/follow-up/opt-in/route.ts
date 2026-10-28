@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCrmAgentReadSession } from "@/lib/crm-agent-auth";
 import { getOperatorSession } from "@/lib/portal-auth";
 import {
   AgencyFollowupOptInError,
   listAgencyFollowupOptInHistory,
+  listAgencyFollowupOptInHistoryForAgent,
   recordAgencyFollowupOptInEvent,
 } from "@/lib/agency-followup-opt-in";
 
@@ -14,14 +16,17 @@ const text = (value: unknown, max: number): value is string => typeof value === 
 
 export async function GET(request: NextRequest) {
   const session = await getOperatorSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  if (!session.lawyer_id) return NextResponse.json({ error: "Operator identity is required for audited opt-in actions." }, { status: 403 });
+  const agent = !session && await getCrmAgentReadSession(request);
+  if (!session && !agent) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (session && !session.lawyer_id) return NextResponse.json({ error: "Operator identity is required for audited opt-in actions." }, { status: 403 });
   const prospectId = request.nextUrl.searchParams.get("prospectId");
   if (!prospectId || !UUID.test(prospectId)) {
     return NextResponse.json({ error: "Provide a valid prospectId." }, { status: 400 });
   }
   try {
-    const events = await listAgencyFollowupOptInHistory({ prospectId, actorOperatorId: session.lawyer_id });
+    const events = agent
+      ? await listAgencyFollowupOptInHistoryForAgent(request, prospectId)
+      : await listAgencyFollowupOptInHistory({ prospectId, actorOperatorId: session!.lawyer_id! });
     return NextResponse.json({ events }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     if (error instanceof AgencyFollowupOptInError) {

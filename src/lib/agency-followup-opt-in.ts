@@ -1,4 +1,5 @@
 import "server-only";
+import { getCrmAgentReadSession } from "./crm-agent-auth";
 import { agencyFollowupRecipientEmailHash } from "@/lib/agency-followup-domain";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 
@@ -61,13 +62,23 @@ export async function listAgencyFollowupOptInHistory(
   const actor = one(await supabaseAdmin.from("firm_lawyers").select("id,role,disabled").eq("id", input.actorOperatorId).maybeSingle(), "Unable to verify active operator");
   if (actor.role !== "operator" || actor.disabled !== false) fail("Only an active operator may view follow-up opt-in evidence.");
 
+  return readAgencyFollowupOptInHistory(input.prospectId);
+}
+
+/** Dedicated capability path; never substitutes a human operator identifier. */
+export async function listAgencyFollowupOptInHistoryForAgent(request: Request, prospectId: string): Promise<AgencyFollowupOptInHistoryEvent[]> {
+  if (!UUID.test(prospectId) || !await getCrmAgentReadSession(request)) fail("Authorized CRM agent read required.");
+  return readAgencyFollowupOptInHistory(prospectId);
+}
+
+async function readAgencyFollowupOptInHistory(prospectId: string): Promise<AgencyFollowupOptInHistoryEvent[]> {
   const pageSize = 1000;
   const maximumRows = 20000;
   const events: Row[] = [];
   for (let offset = 0; offset < maximumRows; offset += pageSize) {
     const page = many(await supabaseAdmin.from("agency_followup_opt_in_events")
       .select("id,event_type,captured_at,recorded_at,capture_source,consent_text_version,consent_text_sha256,evidence_reference,evidence_sha256,recipient_email_sha256,actor_operator_id")
-      .eq("agency_prospect_id", input.prospectId)
+      .eq("agency_prospect_id", prospectId)
       .order("recorded_at", { ascending: true })
       .order("id", { ascending: true })
       .range(offset, offset + pageSize - 1), "Unable to load Agency follow-up opt-in history");
