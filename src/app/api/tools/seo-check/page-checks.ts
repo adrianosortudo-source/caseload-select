@@ -16,11 +16,8 @@ import {
   type CheckItem,
   type CategoryResult,
   type ParsedRobots,
-  AI_SEARCH_BOTS,
-  AI_TRAINING_BOTS,
   SCANNER_TOKEN,
   GENERIC_ANCHORS,
-  checkBotBlockedParsed,
   isSameOrigin,
   isWpDefaultContent,
   crawlUrlKey,
@@ -486,18 +483,20 @@ function checkOnPageSeo(html: string, pageUrl: string): CategoryResult {
 }
 
 /* 2. Indexability */
-function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean | null; google: boolean | null; bing: boolean | null }): CategoryResult {
+function checkIndexability(idx: Indexability, robotsAllowed: { google: boolean | null }): CategoryResult {
   const items: CheckItem[] = [];
 
-  items.push({ label: "HTTP status", status: "pass", detail: `Returned HTTP ${idx.httpStatus}.` });
+  const successfulResponse = idx.httpStatus >= 200 && idx.httpStatus < 300;
+  items.push({ label: "HTTP status", status: successfulResponse ? "pass" : "fail", detail: `Returned HTTP ${idx.httpStatus}${successfulResponse ? "." : "; a 2xx response was not observed."}` });
 
-  if (idx.redirectHops === 0) {
-    items.push({ label: "Redirect chain", status: "pass", detail: "Served directly with no redirect." });
-  } else if (idx.redirectHops <= 2) {
-    items.push({ label: "Redirect chain", status: "warn", detail: `${idx.redirectHops} redirect hop${idx.redirectHops > 1 ? "s" : ""} before the final page.`, fix: "Point internal links at the final URL so visitors and crawlers skip the redirects." });
-  } else {
-    items.push({ label: "Redirect chain", status: "fail", detail: `${idx.redirectHops} redirect hops. Long chains waste crawl budget and slow the page.`, fix: "Collapse the redirect chain to a single hop and update internal links to the final URL." });
-  }
+  items.push({
+    label: "Redirect chain",
+    status: idx.redirectHops > 0 ? "warn" : "pass",
+    scored: false,
+    detail: idx.redirectHops > 0
+      ? `${idx.redirectHops} redirect hop${idx.redirectHops > 1 ? "s" : ""} were observed before this page. Redirects are normal URL behavior; this count alone does not establish a search defect.`
+      : "No redirect hop was observed before this page.",
+  });
 
   if (idx.metaNoindex || idx.headerNoindex) {
     items.push({ label: "Indexable", status: "fail", detail: `Page contains a noindex instruction (${idx.metaNoindex ? "meta robots" : "X-Robots-Tag"}) asking search engines to leave it out of results. This does not confirm its current indexing status.`, fix: "Confirm whether this page should appear in search before changing its noindex setting." });
@@ -505,53 +504,49 @@ function checkIndexability(idx: Indexability, robotsAllowed: { scanner: boolean 
     items.push({ label: "Indexable", status: "pass", detail: "No noindex instruction was observed. This does not confirm the page is indexed." });
   }
 
-  if (idx.metaNofollow || idx.headerNofollow) {
-    items.push({ label: "Followable links", status: "warn", detail: "Page carries a nofollow directive, so link equity does not pass from it.", fix: "Remove the nofollow directive unless you intentionally seal off this page." });
+  items.push({
+    label: "Followable links",
+    status: idx.metaNofollow || idx.headerNofollow ? "warn" : "pass",
+    scored: false,
+    detail: idx.metaNofollow || idx.headerNofollow
+      ? `A page-level nofollow directive was observed${idx.metaNofollow ? " in meta robots" : " in X-Robots-Tag"}. This records policy only; it does not establish how every link will be treated.`
+      : "No page-level nofollow directive was observed in the inspected response and HTML.",
+  });
+
+  items.push({
+    label: "Canonical tag",
+    status: !idx.canonical || idx.canonicalSelf === false || idx.canonicalSameOrigin === false ? "warn" : "pass",
+    scored: false,
+    detail: !idx.canonical
+      ? "No canonical annotation was observed. Canonicals are optional signals; their absence alone does not establish a search defect."
+      : `Canonical annotation observed: ${idx.canonical}. Google may select a different canonical; this scan does not verify that selection.`,
+  });
+
+  items.push({
+    label: "Mixed indexability signals",
+    status: idx.mixedSignals ? "warn" : "pass",
+    scored: false,
+    detail: idx.mixedSignals
+      ? "A noindex instruction and a different same-origin canonical annotation were observed. This records configuration only; the intended URL and actual indexing outcome were not assessed."
+      : "No noindex and different-canonical combination was observed in the inspected signals. This does not confirm indexing status.",
+  });
+
+  if (robotsAllowed.google === false) {
+    items.push({ label: "robots.txt crawl access", status: "fail", detail: "A matching robots.txt rule restricts Googlebot on this page path. This records crawl policy only; it does not establish whether the URL is indexed.", fix: "Confirm whether this Googlebot restriction is intentional before changing it." });
+  } else if (robotsAllowed.google === null) {
+    items.push({ label: "robots.txt crawl access", status: "warn", scored: false, applicability: "unknown", detail: "Could not assess Googlebot access for this page because no accessible robots.txt was observed." });
   } else {
-    items.push({ label: "Followable links", status: "pass", detail: "Links on this page are followable." });
+    items.push({ label: "robots.txt crawl access", status: "pass", detail: "No matching robots.txt rule for Googlebot was observed on this page path. This does not establish whether the URL is indexed." });
   }
 
-  if (!idx.canonical) {
-    items.push({ label: "Canonical tag", status: "warn", detail: "No canonical tag. Duplicate URL variations can split ranking signals.", fix: "Add <link rel=\"canonical\"> pointing to the preferred URL for this page." });
-  } else if (idx.canonicalSameOrigin === false) {
-    items.push({ label: "Canonical tag", status: "fail", detail: "The canonical points to a different domain. Confirm that this cross-domain canonical is intentional.", fix: "Ask your web provider to verify the intended canonical URL before changing it." });
-  } else if (idx.canonicalSelf === false) {
-    items.push({ label: "Canonical tag", status: "warn", detail: "Canonical points to a different page. Confirm that is intentional consolidation, not an error.", fix: "Set a self-referencing canonical unless this page is a deliberate duplicate of another." });
-  } else {
-    items.push({ label: "Canonical tag", status: "pass", detail: "Self-referencing canonical present." });
-  }
-
-  if (idx.mixedSignals) {
-    items.push({ label: "Mixed indexability signals", status: "fail", detail: "This page has a noindex instruction and a different same-origin canonical URL. Review whether this combination is intentional.", fix: "Confirm the intended page version before changing the canonical or noindex instruction." });
-  } else {
-    items.push({ label: "Mixed indexability signals", status: "pass", detail: "Indexability signals are consistent." });
-  }
-
-  const blockedSearchEngines = [robotsAllowed.google === false && "Googlebot", robotsAllowed.bing === false && "Bingbot"].filter(Boolean).join(", ");
-  if (blockedSearchEngines) {
-    items.push({ label: "robots.txt crawl access", status: "fail", detail: `Blocked for ${blockedSearchEngines} on this page path in robots.txt. This does not establish whether the URL is indexed.`, fix: "Confirm whether this restriction is intentional before changing it." });
-  } else if (robotsAllowed.google === null || robotsAllowed.bing === null) {
-    items.push({ label: "robots.txt crawl access", status: "warn", scored: false, applicability: "unknown", detail: "Could not assess Googlebot and Bingbot access for this page because no accessible robots.txt was observed." });
-  } else {
-    items.push({ label: "robots.txt crawl access", status: "pass", detail: "No blocking rule for Googlebot or Bingbot was observed on this page path in robots.txt. This does not establish whether the URL is indexed." });
-  }
-
-  // A noindex page is deliberately excluded from search, and Google's own
-  // guidance is to leave noindexed URLs out of the sitemap: recommending one
-  // be added contradicts the noindex directive the page already carries.
-  // Field case drglaw.ca: an intentional intake/conversion page absent from
-  // the sitemap read as a discoverability gap to fix rather than a page the
-  // firm may not want indexed in the first place.
-  if (idx.metaNoindex || idx.headerNoindex) {
-    items.push({ label: "Sitemap membership", status: "pass", detail: "Page is noindexed, so its absence from the XML sitemap is expected, not a gap." });
-  } else if (idx.inSitemap === null && !idx.sitemapComplete) {
-    items.push({ label: "Sitemap membership", status: "warn", scored: false, applicability: "unknown", detail: "Could not verify whether this page is listed because the sitemap data was incomplete." });
+  if (idx.inSitemap === null && !idx.sitemapComplete) {
+    items.push({ label: "Sitemap membership", status: "warn", scored: false, applicability: "unknown", detail: "Could not verify whether this page was listed in the sitemap locations inspected. A bounded check does not establish a site-wide sitemap inventory." });
   } else if (idx.inSitemap === null) {
-    items.push({ label: "Sitemap membership", status: "warn", detail: "No sitemap was found. Search engines may still discover pages through links.", fix: "Consider providing a sitemap to help search engines discover important pages." });
+    items.push({ label: "Sitemap membership", status: "warn", scored: false, detail: "No sitemap was observed at the checked locations. Some sites do not need a sitemap; search engines may discover pages through links." });
   } else if (idx.inSitemap) {
-    items.push({ label: "Sitemap membership", status: "pass", detail: "Page is listed in the XML sitemap." });
+    items.push({ label: "Sitemap membership", status: "pass", scored: false, detail: "This page URL was observed in the sitemap data inspected. Sitemap membership is an optional discovery signal." });
   } else {
-    items.push({ label: "Sitemap membership", status: "warn", detail: "This page was not found in the sitemap data inspected. Search engines may still discover it through links.", fix: "Confirm whether this page should be listed in the sitemap." });
+    items.push({ label: "Sitemap membership", status: "warn", scored: false, detail: "This page URL was not found in the sitemap data inspected. Sitemap membership is optional for some sites; this observation alone is not a search defect." });
   }
 
   const { score, maxScore } = scoreItems(items);
@@ -730,32 +725,18 @@ export function checkSchemaMarkup(schema: SchemaSummary): CategoryResult {
 }
 
 /* 4. AI Visibility */
-export function checkAiVisibility(html: string, parsedRobots: ParsedRobots | null, llmsTxt: string | null, schema: SchemaSummary): CategoryResult {
+export function checkAiVisibility(html: string, _parsedRobots: ParsedRobots | null, llmsTxt: string | null, schema: SchemaSummary): CategoryResult {
   const items: CheckItem[] = [];
   const bodyText = extractBodyText(html);
 
-  if (!parsedRobots) {
-    items.push({ label: "AI search bot access", status: "warn", scored: false, applicability: "unknown", detail: "No accessible robots.txt was observed. Rules for AI search crawlers could not be assessed." });
-  } else {
-    const blockedSearch = AI_SEARCH_BOTS.filter((b) => checkBotBlockedParsed(parsedRobots, b.token));
-    if (blockedSearch.length === 0) {
-      items.push({ label: "AI search bot access", status: "pass", detail: "No blocking rule for the listed autonomous AI search crawlers was observed in robots.txt. This does not establish whether a service reads or cites the page." });
-    } else if (blockedSearch.length <= 2) {
-      items.push({ label: "AI search bot access", status: "warn", detail: `robots.txt contains rules that restrict ${blockedSearch.length} listed autonomous AI search crawler${blockedSearch.length > 1 ? "s" : ""}: ${blockedSearch.map((b) => b.label).join(", ")}. This does not establish whether a service reads or cites the page.`, fix: "Confirm whether these crawler instructions reflect the firm's intended policy." });
-    } else {
-      items.push({ label: "AI search bot access", status: "fail", detail: `robots.txt contains rules that restrict ${blockedSearch.length} of ${AI_SEARCH_BOTS.length} listed autonomous AI search crawlers. This does not establish whether a service reads or cites the page.`, fix: "Confirm whether these crawler instructions reflect the firm's intended policy." });
-    }
-  }
-
-  if (!parsedRobots) {
-    items.push({ label: "AI training bot control", status: "warn", scored: false, applicability: "unknown", detail: "No accessible robots.txt was observed. Rules for AI training crawlers could not be assessed." });
-  } else {
-    const blockedTraining = AI_TRAINING_BOTS.filter((b) => checkBotBlockedParsed(parsedRobots, b.token));
-    const listed = blockedTraining.map((b) => b.label);
-    items.push({ label: "AI training bot control", status: "warn", scored: false, detail: blockedTraining.length > 0
-      ? `robots.txt contains restrictions for ${blockedTraining.length} listed training/content-use crawler${blockedTraining.length > 1 ? "s" : ""}: ${listed.join(", ")}. This records instructions, not crawler behavior.`
-      : "No restriction for the listed training/content-use crawlers was observed in robots.txt. This records instructions, not crawler behavior." });
-  }
+  items.push({
+    label: "AI search bot access", status: "pass", scored: false,
+    detail: "Provider-specific robots.txt policy observations are listed separately. This check does not establish crawler access, search visibility, or citations.",
+  });
+  items.push({
+    label: "AI training bot control", status: "pass", scored: false,
+    detail: "Provider crawler purposes differ and may include search, grounding, training, product indexing, or dataset collection. A robots.txt rule records policy only; actual fetching and downstream use were not verified.",
+  });
 
   const orgDesc = extractMetaContent(html, "description");
   if ((schema.hasOrganization || schema.hasLocalBusiness || schema.hasLegalService) && schema.fields.name) {
@@ -940,8 +921,8 @@ export function checkTechnicalSecurity(html: string, url: string, headers: Heade
   const items: CheckItem[] = [];
 
   items.push(url.startsWith("https://")
-    ? { label: "HTTPS", status: "pass", detail: "Site loads over HTTPS." }
-    : { label: "HTTPS", status: "fail", detail: "Site loads over HTTP. Google penalises non-HTTPS sites.", fix: "Install an SSL certificate and redirect all HTTP traffic to HTTPS." });
+    ? { label: "HTTPS", status: "pass", detail: "The inspected page response used HTTPS." }
+    : { label: "HTTPS", status: "fail", detail: "The inspected page response used HTTP, so transport was not encrypted.", fix: "Ask your provider to enable HTTPS for this page and verify the final URL." });
 
   const mixedCount = countMixedContentResources(html);
   items.push(mixedCount === 0
@@ -1332,6 +1313,8 @@ export function aggregateCategories(pages: PageResult[]): CategoryResult[] {
         ...(representative.sourceIds ? { sourceIds: representative.sourceIds } : {}),
         ...(representative.disposition ? { disposition: representative.disposition } : {}),
         ...(representative.basis ? { basis: representative.basis } : {}),
+        ...(representative.predicate ? { predicate: representative.predicate } : {}),
+        ...(representative.scoringRationale ? { scoringRationale: representative.scoringRationale } : {}),
         ...(representative.evidence ? { evidence: representative.evidence } : {}),
         ...(unscored ? { scored: false } : {}),
         ...(applicability ? { applicability } : {}),

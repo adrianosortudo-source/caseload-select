@@ -33,6 +33,8 @@ export interface CheckItem {
   /** Why a check is scored, unscored, or awaiting source/evidence review. */
   disposition?: "scored" | "unscored" | "pending-review";
   basis?: string;
+  predicate?: string;
+  scoringRationale?: string;
   /** Evidence origin and limits for this page-level observation. */
   evidence?: {
     kind: "initial-html-text" | "structured-data" | "response-header" | "robots-policy" | "measured-fetch" | "product-heuristic" | "account-review";
@@ -59,10 +61,22 @@ export interface CategoryResult {
 }
 
 export interface AiBotStatus {
+  token: string;
   name: string;
   blocked: boolean | null;
-  category: "search" | "training" | "user-initiated";
+  policyObservation: "blocking-rule-observed" | "no-blocking-rule-observed" | "not-assessed";
+  robotsSemantics: "respects" | "may-not-apply" | "generally-ignores" | "controls-specified-uses" | "unknown";
+  actualFetchAccess: "not-verified";
+  purposes: AiBotPurpose[];
+  isControlToken: boolean;
+  sourceUrl: string | null;
+  reviewedAt: string | null;
+  sourceVerification: "verified" | "unavailable";
+  /** Legacy projection retained for saved v3/unversioned adapters only. */
+  category?: "search" | "training" | "user-initiated";
 }
+
+export type AiBotPurpose = "search" | "grounding" | "training" | "product-indexing" | "open-dataset" | "user-initiated" | "unknown";
 
 export type PageType =
   | "homepage"
@@ -155,32 +169,6 @@ export function resolveEffectiveScan(
 /* ────────────────────────────────────────────────────────
    Bot registries
    ──────────────────────────────────────────────────────── */
-
-// Autonomous AI search crawlers. Robots.txt observations describe rules only;
-// they do not establish indexing, retrieval, or citation outcomes.
-export const AI_SEARCH_BOTS = [
-  { token: "OAI-SearchBot", label: "OpenAI SearchBot" },
-  { token: "PerplexityBot", label: "Perplexity" },
-  { token: "Claude-SearchBot", label: "Claude Search" },
-];
-
-// Training / content-use bots. Their rules describe content-use choices and
-// are not a search visibility or Website checks score signal.
-export const AI_TRAINING_BOTS = [
-  { token: "GPTBot", label: "GPTBot (training)" },
-  { token: "ClaudeBot", label: "ClaudeBot (training)" },
-  { token: "CCBot", label: "Common Crawl" },
-  { token: "Bytespider", label: "Bytespider" },
-  { token: "Meta-ExternalAgent", label: "Meta" },
-  { token: "Applebot-Extended", label: "Applebot" },
-  { token: "Google-Extended", label: "Google-Extended (AI use)" },
-];
-
-export const USER_INITIATED_BOTS = [
-  { token: "ChatGPT-User", label: "ChatGPT-User" },
-  { token: "Perplexity-User", label: "Perplexity-User" },
-  { token: "Claude-User", label: "Claude-User" },
-];
 
 export const SCANNER_TOKEN = "CaseLoadSelect-SEOCheck";
 

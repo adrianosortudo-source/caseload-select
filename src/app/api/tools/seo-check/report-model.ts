@@ -1,3 +1,6 @@
+import { normalizeLegacyPurposes } from "./crawler-policy";
+import type { AiBotPurpose } from "./engine-core";
+
 /**
  * Deterministic public report model for the in-tool SEO check.
  * Internal prospecting fields stay out of this boundary.
@@ -12,6 +15,8 @@ export interface ReportCheckItem {
   sourceIds?: string[];
   disposition?: "scored" | "unscored" | "pending-review";
   basis?: string;
+  predicate?: string;
+  scoringRationale?: string;
   evidence?: {
     kind: string; assessedUrl?: string;
     applicability: "applicable" | "not-applicable" | "unknown";
@@ -19,6 +24,14 @@ export interface ReportCheckItem {
     detail: string;
   };
   applicability?: "applicable" | "not-applicable" | "unknown";
+}
+
+export function checkObservationDisplayText(item: Pick<ReportCheckItem, "detail" | "scored" | "disposition">, methodologyVersion?: number): string {
+  if (methodologyVersion !== 4 || item.scored !== false) return item.detail;
+  const explanation = item.disposition === "pending-review"
+    ? "This check is excluded until its source and meaning are verified; it does not establish a search defect. No fix is recommended from this check."
+    : "This is an observation for context, not a validated search defect. No fix is recommended from this check.";
+  return `${item.detail} ${explanation}`;
 }
 
 export interface ReportCategory {
@@ -63,6 +76,21 @@ export interface ReportIssue {
 
 export type ReportCoverageStopReason = "page-limit" | "time-budget" | "discovery-exhausted" | "fetch-failure" | "blocked" | "other";
 
+export interface ReportAiBot {
+  token?: string;
+  name: string;
+  blocked: boolean | null;
+  category?: "search" | "training" | "user-initiated";
+  purposes?: AiBotPurpose[];
+  isControlToken?: boolean;
+  robotsSemantics?: "respects" | "may-not-apply" | "generally-ignores" | "controls-specified-uses" | "unknown";
+  policyObservation?: "blocking-rule-observed" | "no-blocking-rule-observed" | "not-assessed";
+  actualFetchAccess?: "not-verified";
+  sourceUrl?: string | null;
+  reviewedAt?: string | null;
+  sourceVerification?: "verified" | "unavailable";
+}
+
 export interface ReportInput {
   domain: string;
   methodologyVersion?: number | null;
@@ -71,7 +99,7 @@ export interface ReportInput {
   pages?: ReportPage[];
   categories?: ReportCategory[];
   issues?: ReportIssue[];
-  aiBots?: Array<{ name: string; blocked: boolean | null; category: "search" | "training" | "user-initiated" }>;
+  aiBots?: ReportAiBot[];
   partial?: boolean;
   checkedAt?: string;
   coverage?: {
@@ -130,6 +158,18 @@ export interface SeoReportModel {
   priorityActions: ReportAction[];
   strengths: string[];
   aiObservations: string[];
+  crawlerPolicies: Array<{
+    token: string;
+    name: string;
+    purposes: AiBotPurpose[];
+    isControlToken: boolean;
+    robotsSemantics: "respects" | "may-not-apply" | "generally-ignores" | "controls-specified-uses" | "unknown";
+    policyObservation: "blocking-rule-observed" | "no-blocking-rule-observed" | "not-assessed";
+    actualFetchAccess: "not-verified";
+    sourceUrl: string | null;
+    reviewedAt: string | null;
+    sourceVerification: "verified" | "unavailable";
+  }>;
   limitations: string[];
   findingGroups: Array<{ category: string; title: string; detail: string; affectedUrls: string[]; status: "pass" | "warn" | "fail" }>;
   scoreExplanation: { assessed: boolean; score: number | null; label: "Website checks" | "Historical score" | "Not assessed"; note: string };
@@ -339,15 +379,21 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   if (pages.some((p) => p.lawFirm?.practiceAreaIntent)) strengths.push("Service information was found in the inspected page content.");
   if (pages.length && pages.every((p) => p.indexability?.indexable)) strengths.push("No noindex instruction was observed on the checked pages.");
 
-  const aiObservations: string[] = [];
-  const searchBots = (input.aiBots ?? []).filter((bot) => bot.category === "search");
-  const knownBlocked = searchBots.filter((bot) => bot.blocked === true).map((bot) => bot.name);
-  const unknownSearch = searchBots.some((bot) => bot.blocked === null);
-  if (knownBlocked.length) aiObservations.push(`The scan recorded robots.txt restrictions for these listed autonomous AI search crawlers: ${unique(knownBlocked).join(", ")}. This describes crawl instructions, not whether a service reads or cites a page.`);
-  else if (searchBots.length && !unknownSearch) aiObservations.push("No blocking robots.txt rule was observed for the listed autonomous AI search crawlers. This does not establish whether a service reads or cites a page.");
-  else aiObservations.push("AI service access and citation outcomes were not assessed by this scan.");
-  const trainingBots = (input.aiBots ?? []).filter((bot) => bot.category === "training");
-  if (trainingBots.some((bot) => bot.blocked !== null)) aiObservations.push("Robots.txt records content-use instructions for listed training crawlers; it does not establish crawler behavior or search visibility.");
+  const crawlerPolicies = (input.aiBots ?? []).map((bot) => ({
+    token: bot.token ?? bot.name,
+    name: bot.name,
+    purposes: normalizeLegacyPurposes(bot.purposes, bot.category),
+    isControlToken: bot.isControlToken ?? false,
+    robotsSemantics: bot.robotsSemantics ?? "unknown",
+    policyObservation: bot.policyObservation ?? (bot.blocked === null ? "not-assessed" : bot.blocked ? "blocking-rule-observed" : "no-blocking-rule-observed"),
+    actualFetchAccess: "not-verified" as const,
+    sourceUrl: bot.sourceUrl ?? null,
+    reviewedAt: bot.reviewedAt ?? null,
+    sourceVerification: bot.sourceVerification ?? "unavailable",
+  }));
+  const aiObservations: string[] = crawlerPolicies.length
+    ? ["Provider-specific purposes, robots.txt rule observations, and documented robots behavior are listed per token below. An observed rule does not verify actual access or downstream use."]
+    : ["This scan did not assess provider-specific crawler policy or actual AI service access."];
 
   const assessed = (input.categories ?? []).some((category) => category.maxScore > 0);
   const note = current ? SCORE_NOTE : METHOD_NOTE;
@@ -387,6 +433,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     priorityActions,
     strengths: strengths.slice(0, 3),
     aiObservations,
+    crawlerPolicies,
     limitations,
     findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: issue.detail, affectedUrls: issue.affectedUrls, status: issue.status })),
     scoreExplanation: { assessed: current ? assessed : Number.isFinite(input.overallScore), score: Number.isFinite(input.overallScore) && (!current || assessed) ? input.overallScore! : null, label: current ? (assessed ? "Website checks" : "Not assessed") : "Historical score", note },

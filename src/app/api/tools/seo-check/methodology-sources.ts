@@ -25,6 +25,8 @@ export type MethodologyCheckDefinition = {
   scoreEligible: boolean;
   disposition: "scored" | "unscored" | "pending-review";
   basis: string;
+  predicate?: string;
+  scoringRationale?: string;
 };
 
 const REVIEWED = "2026-10-28";
@@ -44,6 +46,11 @@ export const METHODOLOGY_SOURCES: Record<string, MethodologySource> = {
   G12: { id: "G12", publisher: "Google Crawling", title: "Google common crawlers: Google-Extended", url: "https://developers.google.com/crawling/docs/crawlers-fetchers/google-common-crawlers#google-extended", publishedOrUpdatedDate: "2026-10-15", verifiedAt: REVIEWED, verification: "verified", role: "implemented", supports: ["Google-Extended controls Gemini training and grounding; it is not a Search crawler"], implementationRefs: ["src/app/api/tools/seo-check/engine-core.ts"], limitations: ["It has no separate HTTP crawler identity and does not control Google Search inclusion or rankings."] },
   G13: { id: "G13", publisher: "Google Search Central", title: "Influence your title links in search results", url: "https://developers.google.com/search/docs/appearance/title-link", verifiedAt: REVIEWED, verification: "verified", role: "implemented", supports: ["Every page should specify a concise, descriptive title; no fixed character-length limit"], implementationRefs: ["src/app/api/tools/seo-check/page-checks.ts"], limitations: ["Displayed title links can be generated or truncated according to query and device context."] },
   G14: { id: "G14", publisher: "Google Search Central", title: "Control your snippets in search results", url: "https://developers.google.com/search/docs/appearance/snippet", verifiedAt: REVIEWED, verification: "verified", role: "context", supports: ["Meta descriptions may be used for snippets; snippets are primarily generated from page content"], implementationRefs: ["src/app/api/tools/seo-check/page-checks.ts"], limitations: ["No fixed description-length limit; Google may use other page text."] },
+  G15: { id: "G15", publisher: "Google Search Central", title: "How to specify a canonical URL", url: "https://developers.google.com/search/docs/crawling-indexing/consolidate-duplicate-urls", verifiedAt: REVIEWED, verification: "verified", role: "context", supports: ["Canonical annotations help indicate a preferred URL but are optional"], implementationRefs: ["src/app/api/tools/seo-check/page-checks.ts"], limitations: ["Google may select a different canonical; absence or disagreement alone is not a search defect."] },
+  G16: { id: "G16", publisher: "Google Search Central", title: "Build and submit a sitemap", url: "https://developers.google.com/search/docs/crawling-indexing/sitemaps/overview", verifiedAt: REVIEWED, verification: "verified", role: "context", supports: ["Small or comprehensively linked sites may not need a sitemap"], implementationRefs: ["src/app/api/tools/seo-check/page-checks.ts"], limitations: ["Sitemap membership is an optional discovery observation, not a universal requirement."] },
+  G17: { id: "G17", publisher: "Google Search Central", title: "Robots meta tag and X-Robots-Tag", url: "https://developers.google.com/search/docs/crawling-indexing/robots-meta-tag", verifiedAt: REVIEWED, verification: "verified", role: "context", supports: ["Page-level nofollow directives are policy instructions whose interpretation is not a guaranteed outcome"], implementationRefs: ["src/app/api/tools/seo-check/page-checks.ts"], limitations: ["The presence of a nofollow directive does not establish how every link or page will be treated."] },
+  G18: { id: "G18", publisher: "Google Search Central", title: "301 redirects", url: "https://developers.google.com/search/docs/crawling-indexing/301-redirects", verifiedAt: REVIEWED, verification: "verified", role: "context", supports: ["Permanent redirects are a supported way to consolidate URLs"], implementationRefs: ["src/app/api/tools/seo-check/page-checks.ts"], limitations: ["A redirect is not itself a defect; destination and behavior require context."] },
+  G19: { id: "G19", publisher: "Google Search Central", title: "Site moves with URL changes", url: "https://developers.google.com/search/docs/crawling-indexing/site-move-with-url-changes", verifiedAt: REVIEWED, verification: "verified", role: "context", supports: ["Google recommends keeping redirect chains short, ideally three hops or fewer and fewer than five"], implementationRefs: ["src/app/api/tools/seo-check/page-checks.ts"], limitations: ["The recommendation is migration guidance; a small observed hop count is not a universal search defect."] },
   O01: { id: "O01", publisher: "OpenAI", title: "Overview of OpenAI crawlers", url: "https://developers.openai.com/api/docs/bots", verifiedAt: REVIEWED, verification: "verified", role: "implemented", supports: ["OpenAI bot purposes and robots behavior"], implementationRefs: ["src/app/api/tools/seo-check/engine-core.ts"], limitations: ["Robots observations do not prove reachability or citations."] },
   AP01: { id: "AP01", publisher: "Apple", title: "About Applebot", url: "https://support.apple.com/en-us/119829", publishedOrUpdatedDate: "2026-09-04", verifiedAt: REVIEWED, verification: "verified", role: "implemented", supports: ["Applebot and Applebot-Extended purposes"], implementationRefs: ["src/app/api/tools/seo-check/engine-core.ts"], limitations: ["Applebot-Extended is a control token, not the Applebot crawler."] },
   CC01: { id: "CC01", publisher: "Common Crawl", title: "CCBot", url: "https://www.commoncrawl.org/ccbot", verifiedAt: REVIEWED, verification: "verified", role: "implemented", supports: ["CCBot builds an open web dataset"], implementationRefs: ["src/app/api/tools/seo-check/engine-core.ts"], limitations: ["Downstream dataset use is not limited to model training."] },
@@ -75,13 +82,13 @@ const sourceIdsByCheck: Record<string, string[]> = {
   "On-Page SEO::Page title": ["G13"],
   "On-Page SEO::Meta description": ["G14"],
   "Indexability::HTTP status": ["G01"],
-  "Indexability::Redirect chain": ["G01"],
+  "Indexability::Redirect chain": ["G18", "G19"],
   "Indexability::Indexable": ["G01", "G04"],
-  "Indexability::Followable links": ["G01", "G04"],
-  "Indexability::Canonical tag": ["G01", "G04"],
-  "Indexability::Mixed indexability signals": ["G01", "G04"],
+  "Indexability::Followable links": ["G17"],
+  "Indexability::Canonical tag": ["G15"],
+  "Indexability::Mixed indexability signals": ["G04", "G15", "G17"],
   "Indexability::robots.txt crawl access": ["G01", "G04", "S02"],
-  "Indexability::Sitemap membership": ["G01", "S03"],
+  "Indexability::Sitemap membership": ["G16", "S03"],
   "Schema & Structured Data::JSON-LD structured data": ["G07"],
   "Schema & Structured Data::JSON-LD validity": ["G07"],
   "Schema & Structured Data::Business / LegalService schema": ["G07", "S01"],
@@ -101,17 +108,13 @@ const sourceIdsByCheck: Record<string, string[]> = {
 const scoreEligible = new Set([
   "On-Page SEO::Page title",
   "Indexability::HTTP status",
-  "Indexability::Redirect chain",
   "Indexability::Indexable",
-  "Indexability::Followable links",
-  "Indexability::Canonical tag",
-  "Indexability::Mixed indexability signals",
   "Indexability::robots.txt crawl access",
-  "Indexability::Sitemap membership",
   "Technical & Security::HTTPS",
 ]);
 
 const explicitlyUnscored = new Set([
+  "Indexability::Redirect chain", "Indexability::Followable links", "Indexability::Canonical tag", "Indexability::Mixed indexability signals", "Indexability::Sitemap membership",
   "On-Page SEO::Page title length", "On-Page SEO::Meta description", "On-Page SEO::H1 heading", "On-Page SEO::H2 subheadings", "On-Page SEO::Open Graph tags", "On-Page SEO::Image alt text", "On-Page SEO::HTML lang attribute",
   "Schema & Structured Data::JSON-LD structured data", "Schema & Structured Data::Business / LegalService schema", "Schema & Structured Data::Business schema fields", "Schema & Structured Data::FAQPage schema", "Schema & Structured Data::Review / Rating schema", "Schema & Structured Data::Breadcrumb schema",
   "AI Visibility::AI search bot access", "AI Visibility::AI training bot control", "AI Visibility::Attorney / person schema", "AI Visibility::Author / reviewer signals", "AI Visibility::Authoritative citations", "AI Visibility::Direct-answer sentences", "AI Visibility::Entity description", "AI Visibility::llms.txt file", "AI Visibility::Question-format headings", "AI Visibility::Semantic HTML structure",
@@ -131,6 +134,37 @@ const categoryId: Record<string, string> = {
   "Links & Content": "links-content", "Intent Alignment": "intent",
 };
 
+const exclusionBasisByCheck: Record<string, string> = {
+  "Indexability::Redirect chain": "Known v4 exclusion: redirects are normal URL behavior. This records the observed hops; the count alone does not establish a defect.",
+  "Indexability::Followable links": "Known v4 exclusion: a page-level nofollow instruction is recorded as policy, not a defect or guaranteed link outcome.",
+  "Indexability::Canonical tag": "Known v4 exclusion: canonical annotations are optional signals; absence or a different selected URL is not a universal defect.",
+  "Indexability::Mixed indexability signals": "Known v4 exclusion: the observed directives are retained for context, but this scan cannot determine the intended canonical or indexing outcome.",
+  "Indexability::Sitemap membership": "Known v4 exclusion: sitemap membership is optional for some sites and this bounded check cannot establish a whole-site discovery problem.",
+};
+
+const scoredCriteriaByCheck: Record<string, { predicate: string; scoringRationale: string }> = {
+  "On-Page SEO::Page title": {
+    predicate: "The initial HTML contains a non-empty title element.",
+    scoringRationale: "Google recommends a concise, descriptive title for each page. The score measures presence only; title length and displayed title-link selection are excluded.",
+  },
+  "Indexability::HTTP status": {
+    predicate: "The final response for the inspected page returned a 2xx HTTP status.",
+    scoringRationale: "A successful response is a directly observed retrieval condition for the page checks. This score records response status only; it does not establish indexing.",
+  },
+  "Indexability::Indexable": {
+    predicate: "No meta robots or X-Robots-Tag noindex directive was observed for this URL.",
+    scoringRationale: "A noindex instruction directly asks search systems to exclude the URL. The score records the instruction, not actual index status or whether exclusion is intended.",
+  },
+  "Indexability::robots.txt crawl access": {
+    predicate: "No applicable robots.txt Disallow rule for Googlebot was observed on this page path.",
+    scoringRationale: "Google documents robots.txt as its crawl-preference mechanism. The score records the Googlebot policy observation only; it does not verify access or indexing.",
+  },
+  "Technical & Security::HTTPS": {
+    predicate: "The inspected page response used an HTTPS URL.",
+    scoringRationale: "HTTPS is a directly measurable secure-transport baseline for visitors. This check does not claim that HTTPS predicts rankings.",
+  },
+};
+
 export const METHODOLOGY_CHECKS: Record<string, MethodologyCheckDefinition> = {};
 for (const [category, labels] of Object.entries(labelsByCategory)) {
   for (const label of labels) {
@@ -143,6 +177,8 @@ for (const [category, labels] of Object.entries(labelsByCategory)) {
           : category === "AI Visibility" && (label.includes("bot") || label.includes("crawler")) ? "robots-policy"
             : "initial-html-text";
     const disposition = scoreEligible.has(key) ? "scored" : explicitlyUnscored.has(key) ? "unscored" : "pending-review";
+    const scoredCriteria = scoredCriteriaByCheck[key];
+    if (scoreEligible.has(key) && !scoredCriteria) throw new Error(`Missing scored predicate or rationale for ${key}`);
     METHODOLOGY_CHECKS[key] = {
       id: `seo.${categoryId[category]}.${slug(label)}`,
       category,
@@ -151,11 +187,12 @@ for (const [category, labels] of Object.entries(labelsByCategory)) {
       evidenceKind: kind,
       scoreEligible: scoreEligible.has(key),
       disposition,
-      basis: scoreEligible.has(key)
-        ? "Scored v4 observation with the listed source boundary; CaseLoad retains its own relative weights."
-        : disposition === "unscored"
+      ...(scoredCriteria ? scoredCriteria : {}),
+      basis: scoredCriteria
+        ? `Predicate: ${scoredCriteria.predicate} Scoring rationale: ${scoredCriteria.scoringRationale}`
+        : exclusionBasisByCheck[key] ?? (disposition === "unscored"
           ? "Known v4 exclusion: shown as a contextual observation, excluded from the score denominator and automatic actions."
-          : "Source-to-predicate mapping is pending. Shown as an observation only; excluded from the score and automatic actions until reviewed.",
+          : "Source-to-predicate mapping is pending. Shown as an observation only; excluded from the score and automatic actions until reviewed."),
     };
   }
 }
@@ -188,6 +225,8 @@ export function attachMethodologyEvidence(categories: CategoryResult[], assessed
         sourceIds: definition.sourceIds,
         disposition: definition.disposition,
         basis: definition.basis,
+        ...(definition.predicate ? { predicate: definition.predicate } : {}),
+        ...(definition.scoringRationale ? { scoringRationale: definition.scoringRationale } : {}),
         evidence: {
           kind: definition.evidenceKind,
           assessedUrl,

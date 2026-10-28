@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildSeoReportModel, type ReportInput } from "../report-model";
+import { buildSeoReportModel, checkObservationDisplayText, type ReportInput } from "../report-model";
 
 const base: ReportInput = {
   domain: "example.com",
@@ -70,6 +70,15 @@ describe("buildSeoReportModel", () => {
     expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not assessed" });
   });
 
+  it("qualifies unscored v4 observations and preserves historical v3 detail", () => {
+    const detail = "3 redirect hops were observed.";
+    expect(checkObservationDisplayText({ detail, scored: false, disposition: "unscored" }, 4))
+      .toContain("3 redirect hops were observed. This is an observation for context, not a validated search defect.");
+    expect(checkObservationDisplayText({ detail, scored: false, disposition: "pending-review" }, 4))
+      .toContain("excluded until its source and meaning are verified");
+    expect(checkObservationDisplayText({ detail, scored: false, disposition: "unscored" }, 3)).toBe(detail);
+  });
+
   it("creates page-scoped noindex action copy and excludes utility pages from priority selection", () => {
     const pages = [
       { ...base.pages![0], indexability: { metaNoindex: true, headerNoindex: false, indexable: false } },
@@ -113,17 +122,43 @@ describe("buildSeoReportModel", () => {
     expect(both.priorityActions[0].nextStep).toContain("replace HTTP resource addresses on the other affected pages with HTTPS");
   });
 
-  it("keeps search-crawler restrictions separate from training-bot policy and does not infer blocked access when unknown", () => {
+  it("reports provider-specific purposes and keeps policy separate from actual access", () => {
     const model = buildSeoReportModel({
       ...base,
+      aiBots: [
+        { token: "ClaudeBot", name: "ClaudeBot", purposes: ["training"], isControlToken: false, blocked: true, policyObservation: "blocking-rule-observed", actualFetchAccess: "not-verified", sourceUrl: "https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler", reviewedAt: "2026-10-28", sourceVerification: "verified" },
+        { token: "Claude-SearchBot", name: "Claude Search", purposes: ["search"], isControlToken: false, blocked: null, policyObservation: "not-assessed", actualFetchAccess: "not-verified", sourceUrl: "https://support.claude.com/en/articles/8896518-does-anthropic-crawl-data-from-the-web-and-how-can-site-owners-block-the-crawler", reviewedAt: "2026-10-28", sourceVerification: "verified" },
+        { token: "ChatGPT-User", name: "ChatGPT-User", purposes: ["user-initiated"], isControlToken: false, robotsSemantics: "may-not-apply", blocked: true, policyObservation: "blocking-rule-observed", actualFetchAccess: "not-verified", sourceUrl: "https://developers.openai.com/api/docs/bots", reviewedAt: "2026-10-28", sourceVerification: "verified" },
+        { token: 'Perplexity-User', name: 'Perplexity-User', purposes: ['user-initiated'], isControlToken: false, robotsSemantics: 'generally-ignores', blocked: true, policyObservation: 'blocking-rule-observed', actualFetchAccess: 'not-verified', sourceUrl: 'https://docs.perplexity.ai/docs/resources/perplexity-crawlers', reviewedAt: '2026-10-28', sourceVerification: 'verified' },
+        { token: "CCBot", name: "CCBot", purposes: ["open-dataset"], isControlToken: false, blocked: false, policyObservation: "no-blocking-rule-observed", actualFetchAccess: "not-verified", sourceUrl: "https://www.commoncrawl.org/ccbot", reviewedAt: "2026-10-28", sourceVerification: "verified" },
+        { token: "Google-Extended", name: "Google-Extended", purposes: ["training", "grounding"], isControlToken: true, blocked: null, policyObservation: "not-assessed", actualFetchAccess: "not-verified", sourceUrl: "https://developers.google.com/crawling/docs/crawlers-fetchers/google-common-crawlers#google-extended", reviewedAt: "2026-10-28", sourceVerification: "verified" },
+      ],
+    });
+    expect(model.crawlerPolicies.find((bot) => bot.token === "ClaudeBot")?.purposes).toEqual(["training"]);
+    expect(model.crawlerPolicies.find((bot) => bot.token === "ChatGPT-User")).toMatchObject({ robotsSemantics: "may-not-apply", policyObservation: "blocking-rule-observed", actualFetchAccess: "not-verified" });
+    expect(model.crawlerPolicies.find((bot) => bot.token === 'Perplexity-User')).toMatchObject({ robotsSemantics: 'generally-ignores', policyObservation: 'blocking-rule-observed', actualFetchAccess: 'not-verified' });
+    expect(model.crawlerPolicies.find((bot) => bot.token === "CCBot")?.purposes).toEqual(["open-dataset"]);
+    expect(model.crawlerPolicies.find((bot) => bot.token === "Google-Extended")).toMatchObject({ isControlToken: true, actualFetchAccess: "not-verified" });
+    expect(model.aiObservations.join(" ")).toContain("robots.txt blocking rules were observed");
+    expect(model.aiObservations.join(" ")).toContain("does not verify actual fetching");
+    expect(model.aiObservations.join(" ")).not.toContain("listed training crawlers");
+    expect(model.priorityActions).toEqual([]);
+  });
+
+  it("normalizes legacy bot categories without inventing purposes or sources", () => {
+    const model = buildSeoReportModel({
+      ...base,
+      methodologyVersion: 3,
       aiBots: [
         { name: "ClaudeBot", category: "training", blocked: true },
         { name: "Claude-SearchBot", category: "search", blocked: null },
       ],
     });
-    expect(model.aiObservations[0]).toContain("not assessed");
-    expect(model.aiObservations.join(" ")).toContain("content-use instructions");
-    expect(model.priorityActions).toEqual([]);
+    expect(model.crawlerPolicies.find((bot) => bot.name === "ClaudeBot")).toMatchObject({
+      purposes: ["unknown"], sourceUrl: null, sourceVerification: "unavailable", actualFetchAccess: "not-verified",
+    });
+    expect(model.crawlerPolicies.find((bot) => bot.name === "Claude-SearchBot")?.purposes).toEqual(["search"]);
+    expect(model.aiObservations.join(" ")).not.toContain("listed training crawlers");
   });
 
   it("limits ranked actions to three and omits unsupported generic findings", () => {

@@ -125,18 +125,18 @@ describe("page-scoped search access evidence", () => {
   it("reports an internal noindex-plus-other-canonical combination, while external canonical stays separate", () => {
     const internal = page("https://example.com/services/", '<html><head><meta name="robots" content="noindex"><link rel="canonical" href="https://example.com/other/"></head><body>Services</body></html>');
     expect(internal.indexability.mixedSignals).toBe(true);
-    expect(item(internal, "Indexability", "Mixed indexability signals")?.detail).toContain("different same-origin canonical URL");
+    expect(item(internal, "Indexability", "Mixed indexability signals")?.detail).toContain("different same-origin canonical annotation");
 
     const external = page("https://example.com/services/", '<html><head><meta name="robots" content="noindex"><link rel="canonical" href="https://other.example/services/"></head><body>Services</body></html>');
     expect(external.indexability.mixedSignals).toBe(false);
-    expect(item(external, "Indexability", "Canonical tag")?.detail).toContain("different domain");
+    expect(item(external, "Indexability", "Canonical tag")?.detail).toContain("Google may select a different canonical");
   });
 
   it("leaves sitemap membership unknown when sitemap discovery was incomplete", () => {
     const result = page("https://example.com/services/", undefined, null, new Set(["https://example.com/contact/"]), false);
     expect(result.indexability.inSitemap).toBeNull();
     expect(item(result, "Indexability", "Sitemap membership")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
-    expect(item(result, "Indexability", "Sitemap membership")?.detail).toContain("sitemap data was incomplete");
+    expect(item(result, "Indexability", "Sitemap membership")?.detail).toContain("sitemap locations inspected");
   });
 
   it("evaluates Google and Bing access on each actual path and preserves unknown when robots is unavailable", () => {
@@ -155,7 +155,7 @@ describe("page-scoped search access evidence", () => {
   it("does not turn a training-bot team-path disallow into a Google/Bing block", () => {
     const result = page("https://example.com/team/", undefined, "User-agent: ClaudeBot\nDisallow: /team/");
     expect(item(result, "Indexability", "robots.txt crawl access")?.status).toBe("pass");
-    expect(item(result, "AI Visibility", "AI training bot control")?.detail).toContain("No restriction for the listed training/content-use crawlers was observed");
+    expect(item(result, "AI Visibility", "AI training bot control")?.detail).toContain("Provider crawler purposes differ");
     expect(item(result, "Indexability", "robots.txt crawl access")?.detail).not.toContain("Blocked");
   });
 });

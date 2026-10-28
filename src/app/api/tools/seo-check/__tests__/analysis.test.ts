@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import {
   buildIssues,
+  buildV4Issues,
   buildInternalSummary,
   buildSiteStructureIssues,
   severityBreakdown,
@@ -170,12 +171,10 @@ describe("buildIssues", () => {
     expect(issue?.evidence).toBe("1 page: https://x.com/");
   });
 
-  it("keeps a simple redirect chain low priority", () => {
-    const redirect = cat("Indexability", [{ label: "Redirect chain", status: "warn", detail: "1 redirect hop before the final page." }]);
-    const issue = buildIssues([mkPage({ url: "https://x.com/", pageType: "homepage", categories: [redirect] })])
-      .find((i) => i.title === "Redirect chain");
-    expect(["low", "info"]).toContain(issue?.severity);
-    expect(issue?.priority).toBeLessThan(30);
+  it("does not turn a redirect-hop observation into a v4 issue", () => {
+    const redirect = cat("Indexability", [{ label: "Redirect chain", status: "warn", detail: "1 redirect hop was observed.", scored: false }]);
+    expect(buildV4Issues([mkPage({ url: "https://x.com/", pageType: "homepage", categories: [redirect] })]).map((issue) => issue.title))
+      .not.toContain("Redirect chain");
   });
 
   it("caps a noindex / robots block to low when it lands only on policy pages", () => {
@@ -277,19 +276,10 @@ describe("buildIssues", () => {
     expect(buildIssues(pages).find((i) => i.title === "Indexable")?.severity).toBe("critical");
   });
 
-  it("keeps AI training bot control as a low-severity policy item, never bumped", () => {
-    // Optional content-use policy: warn on every page must stay low, not climb
-    // to high via the commercial+sitewide coverage bump.
-    const c = cat("AI Visibility", [{ label: "AI training bot control", status: "warn", detail: "" }]);
-    const pages = [
-      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c] }),
-      mkPage({ url: "https://x.com/contact", pageType: "contact", categories: [c] }),
-      mkPage({ url: "https://x.com/practice", pageType: "practice", categories: [c] }),
-    ];
-    const issue = buildIssues(pages).find((i) => i.title === "AI training bot control");
-    // A warn drops the "low" base to "info"; the point is it is never elevated.
-    expect(["low", "info"]).toContain(issue?.severity);
-    expect(issue?.severity).not.toBe("high");
+  it("does not turn AI policy observations into v4 issues", () => {
+    const c = cat("AI Visibility", [{ label: "AI training bot control", status: "warn", detail: "Policy only.", scored: false }]);
+    const pages = [mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c] })];
+    expect(buildV4Issues(pages).map((issue) => issue.title)).not.toContain("AI training bot control");
   });
 
   it("keeps optional llms.txt low, never bumped to high across commercial pages", () => {
@@ -304,24 +294,10 @@ describe("buildIssues", () => {
     expect(issue?.severity).not.toBe("high");
   });
 
-  it("keeps Sitemap membership low, never enters the Indexability blocker bucket", () => {
-    // A missing sitemap (inSitemap=null) fires a warn in the Indexability category.
-    // It must NOT reach medium+ severity: a missing sitemap is a discoverability
-    // gap, not an indexability suppression. Medium+ would trigger the
-    // "held back from search engines" pain-point, which is misleading.
-    const c = cat("Indexability", [{ label: "Sitemap membership", status: "warn", detail: "No sitemap found." }]);
-    const pages = [
-      mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c] }),
-      mkPage({ url: "https://x.com/about", pageType: "about", categories: [c] }),
-      mkPage({ url: "https://x.com/practice", pageType: "practice", categories: [c] }),
-    ];
-    const issue = buildIssues(pages).find((i) => i.title === "Sitemap membership");
-    expect(issue).toBeTruthy();
-    // warn drops the "low" base to "info"; the key check is never medium+.
-    expect(["low", "info"]).toContain(issue?.severity);
-    expect(issue?.severity).not.toBe("medium");
-    expect(issue?.severity).not.toBe("high");
-    expect(issue?.severity).not.toBe("critical");
+  it("does not turn optional sitemap membership into a v4 issue", () => {
+    const c = cat("Indexability", [{ label: "Sitemap membership", status: "warn", detail: "Optional discovery observation.", scored: false }]);
+    const pages = [mkPage({ url: "https://x.com/", pageType: "homepage", categories: [c] })];
+    expect(buildV4Issues(pages).map((issue) => issue.title)).not.toContain("Sitemap membership");
   });
 
   it("keeps a present-but-short HSTS max-age low, while a missing HSTS header stays high", () => {
@@ -567,6 +543,51 @@ describe("buildInternalSummary", () => {
     expect(withLegacyAi.recommendedOpeningAngle).not.toMatch(/AI visibility|AI search|cited/i);
     expect(withLegacyAi.topRevenueOpportunities.join(" ")).not.toMatch(/AI visibility|AI search|cited/i);
     expect(withLegacyAi.aiVisibilityBlockers).toEqual([]);
+  });
+});
+
+describe("buildV4Issues", () => {
+  it("does not restore a count-derived AI content absence finding in v4", () => {
+    const page = mkPage({
+      url: "https://x.com/", pageType: "homepage", wordCount: 20,
+      categories: [cat("AI Visibility", [
+        { label: "Question-format headings", status: "fail", detail: "No question headings were observed.", scored: false },
+        { label: "Direct-answer sentences", status: "fail", detail: "No answer pattern was observed.", scored: false },
+        { label: "Authoritative citations", status: "fail", detail: "No citation was observed.", scored: false },
+      ])],
+    });
+    expect(buildV4Issues([page], 0).map((issue) => issue.title)).not.toContain("No informational content published yet");
+    expect(buildIssues([page], 0).map((issue) => issue.title)).toContain("No informational content published yet");
+  });
+
+  it("does not expose bounded-crawl site-absence heuristics in the current report", () => {
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage", phone: false, practiceAreaIntent: false,
+      categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "A title exists." }])],
+    })];
+    const titles = buildV4Issues(pages).map((issue) => issue.title);
+    expect(titles).not.toContain("No practice-area pages found");
+    expect(titles).not.toContain("No attorney or team page found in checked pages");
+    expect(titles).not.toContain("No clear contact path");
+    expect(titles).not.toContain("No XML sitemap found");
+    expect(titles).not.toContain("WordPress starter content still published");
+    expect(buildSiteStructureIssues(pages, false).map((issue) => issue.title)).toContain("No practice-area pages found");
+  });
+});
+
+describe("buildV4Issues", () => {
+  it("does not expose bounded-crawl site-absence heuristics in the current report", () => {
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage", phone: false, practiceAreaIntent: false,
+      categories: [cat("On-Page SEO", [{ label: "Page title", status: "pass", detail: "A title exists." }])],
+    })];
+    const titles = buildV4Issues(pages).map((issue) => issue.title);
+    expect(titles).not.toContain("No practice-area pages found");
+    expect(titles).not.toContain("No attorney or team page found in checked pages");
+    expect(titles).not.toContain("No clear contact path");
+    expect(titles).not.toContain("No XML sitemap found");
+    expect(titles).not.toContain("WordPress starter content still published");
+    expect(buildSiteStructureIssues(pages, false).map((issue) => issue.title)).toContain("No practice-area pages found");
   });
 });
 

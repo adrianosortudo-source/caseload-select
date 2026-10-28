@@ -19,9 +19,6 @@ import { Agent } from "undici";
 import {
   type AiBotStatus,
   type ParsedRobots,
-  AI_SEARCH_BOTS,
-  AI_TRAINING_BOTS,
-  USER_INITIATED_BOTS,
   SCANNER_TOKEN,
   ipInBlockedRange,
   isSsrfBlocked,
@@ -39,16 +36,14 @@ import {
   CATEGORY_WEIGHTS,
 } from "./engine-core";
 import { type TtfbMeasurement } from "./content-signals";
+import { buildAiBotStatuses } from "./crawler-policy";
 import { buildPageResult, aggregateCategories, computeTopFixes } from "./page-checks";
 import {
   type PageResult,
   type SeoCheckResult,
-  buildIssues,
-  buildSiteStructureIssues,
+  buildV4Issues,
   buildInternalSummary,
   severityBreakdown,
-  computeDiscoveryConfidence,
-  compareIssuesByPriority,
 } from "./analysis";
 import { saveSeoCheckRunBestEffort } from "./save-run";
 import {
@@ -532,17 +527,8 @@ export async function POST(req: NextRequest) {
     const skippedReasons: Record<string, number> = {};
     const countSkipped = (reason: string) => { skippedReasons[reason] = (skippedReasons[reason] ?? 0) + 1; };
 
-    // Count of same-origin links the homepage's OWN server HTML links to.
-    // Feeds discoveryConfidence: a site with near-zero on-page links and no
-    // sitemap safety net cannot be reliably crawled, so absence findings
-    // ("no practice pages", "no team page") get downgraded rather than
-    // reported at full confidence.
-    let homeInternalLinkCount = 0;
-
-    // URLs discovered (homepage nav, sitemap, crawled pages) but left unscanned
-    // when the page budget ran out. Absence claims ("no team page") consult
-    // this: a page sitting unscanned in the frontier is not absent.
-    let uncrawledUrls: string[] = [];
+    // The bounded crawl observes candidate links, but does not claim that an
+    // unobserved site section or page is absent.
 
     if (maxPages > 1) {
       const maxDepth = DEPTH_BY_BUDGET(maxPages);
@@ -565,7 +551,6 @@ export async function POST(req: NextRequest) {
       };
 
       const homeLinks = extractInternalLinks(homeHtml, homePage.url, domain);
-      homeInternalLinkCount = homeLinks.length;
       for (const u of homeLinks) enqueue(u, 1);
       for (const u of sitemapRawUrls) enqueue(u, 1);
 
@@ -591,28 +576,19 @@ export async function POST(req: NextRequest) {
           for (const u of extractInternalLinks(scanned.html, scanned.page.url, domain)) enqueue(u, next.depth + 1);
         }
       }
-      uncrawledUrls = frontier.map((f) => f.url);
       remainingFrontierCount = frontier.length;
       skippedReasons["page-limit"] = remainingFrontierCount > 0 && pages.length >= maxPages
         ? remainingFrontierCount
         : skippedReasons["page-limit"] ?? 0;
     }
 
-    // Untouched WordPress starter pages (Hello world! / Sample Page) are not the
-    // firm's content: excluded from quality scores + findings so their thin
-    // boilerplate does not mis-measure the site (field case chaabanelaw.com,
-    // where /sample-page/ dragged word-count, thin-content, and meta-description
-    // findings onto the firm). They stay in `pages` for pagesScanned, maturity,
-    // and discovery confidence, and their presence is surfaced as one finding.
-    const wpStarterUrls = pages.filter((p) => p.wpDefault).map((p) => p.url);
+    // Untouched WordPress starter pages are excluded from page-quality scoring
+    // so boilerplate does not mismeasure the firm's checked content.
     const scored = pages.some((p) => p.wpDefault) ? pages.filter((p) => !p.wpDefault) : pages;
     const forFindings = scored.length > 0 ? scored : pages;
 
-    // Trust-fix pass WI-7: placeholder-class signal (bare WordPress install,
-    // single-page firm site). Pages with no real content cannot carry
-    // answer-engine content signals (question headings, citations,
-    // authorship), so buildIssues collapses those four findings into one
-    // honest "publish content first" finding on this class of site.
+    // The content-page count is retained for calibrated technical-severity
+    // logic. V4 does not convert it into a site-wide content-absence finding.
     const effectiveContentPages = pages.filter((p) => !p.wpDefault && p.wordCount >= 150).length;
 
     // Backward-compatible aggregation.
@@ -626,20 +602,17 @@ export async function POST(req: NextRequest) {
     const aiSearchScore = null;
     const aiPolicyScore = null;
 
-    const aiBots: AiBotStatus[] = [
-      ...AI_SEARCH_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : null, category: "search" as const })),
-      ...AI_TRAINING_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : null, category: "training" as const })),
-      ...USER_INITIATED_BOTS.map((b) => ({ name: b.label, blocked: parsedRobots ? checkBotBlockedParsed(parsedRobots, b.token) : null, category: "user-initiated" as const })),
-    ];
+    const aiBots: AiBotStatus[] = buildAiBotStatuses((token) => parsedRobots ? checkBotBlockedParsed(parsedRobots, token) : null);
+
     const intentAlignment = aggregateIntentAlignment(forFindings);
 
     const topFixes = computeTopFixes(forFindings, 5);
 
-    // Professional layer.
-    const discoveryConfidence = computeDiscoveryConfidence(pages.length, sitemapSet?.size ?? 0, homeInternalLinkCount, maxPages);
-    const pageIssues = buildIssues(forFindings, effectiveContentPages);
-    const structureIssues = buildSiteStructureIssues(pages, !!sitemapSet, parsedRobots, discoveryConfidence, uncrawledUrls, wpStarterUrls);
-    const issues = [...pageIssues, ...structureIssues].sort(compareIssuesByPriority);
+    // V4 reports only source-mapped page checks. Bounded-crawl absence
+    // heuristics remain available to legacy analysis but are not exposed as
+    // public findings or operator summaries for the current method.
+    const issues = buildV4Issues(forFindings, effectiveContentPages);
+
     const internalSummary = buildInternalSummary(pages, issues, overallScore);
     const breakdown = severityBreakdown(issues);
 
@@ -676,7 +649,7 @@ export async function POST(req: NextRequest) {
       sitemapIncomplete: sitemapTruncated,
       partial,
       pageSetHash: hashPageUrlIdentities(pages.map((page) => page.url)),
-      pageSetHashBasis: "normalized-url-identities",
+      pageSetHashBasis: "normalized-url-identities" as const,
     };
 
     const result: SeoCheckResult = {
@@ -701,7 +674,6 @@ export async function POST(req: NextRequest) {
       severityBreakdown: breakdown,
       coverage,
       partial,
-      discoveryConfidence,
       buildSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? null,
       checkedAt: new Date().toISOString(),
       // Trust-fix pass WI-8 (acceptance criterion): expose exactly which

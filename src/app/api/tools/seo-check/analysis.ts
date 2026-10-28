@@ -532,14 +532,17 @@ const AI_CONTENT_DEPENDENT_LABELS = new Set([
  * pages where it is non-pass (worst status wins), enriched with severity,
  * confidence, effort, affected page types, and a priority score.
  *
- * effectiveContentPages: count of pages with real, substantive content (see
- * route.ts). Defaults to Infinity (never placeholder-class) so existing
- * callers and tests are unaffected. When <= 1, the site is placeholder-class:
- * the four AI_CONTENT_DEPENDENT_LABELS findings collapse into one, and CSP /
- * X-Content-Type-Options severity is capped low (defense-in-depth headers on
- * a site with no forms or input surface, not a search-visibility signal).
+ * effectiveContentPages: count of pages with substantive content (see route.ts).
+ * Defaults to Infinity so existing callers retain prior behavior. Legacy callers
+ * may collapse AI-content findings on placeholder-class sites; current v4 sets
+ * includePlaceholderContentFinding=false because this count is not a validated
+ * search defect. Existing low-severity caps for defense-in-depth headers remain.
  */
-export function buildIssues(pages: PageResult[], effectiveContentPages: number = Infinity): Issue[] {
+export function buildIssues(
+  pages: PageResult[],
+  effectiveContentPages: number = Infinity,
+  options: { includePlaceholderContentFinding?: boolean } = {}
+): Issue[] {
   const totalPages = pages.length || 1;
   const isPlaceholderClass = effectiveContentPages <= 1;
   let anyAiContentFinding = false;
@@ -737,7 +740,7 @@ export function buildIssues(pages: PageResult[], effectiveContentPages: number =
 
   // Trust-fix pass WI-7: the single collapsed replacement for the four
   // AI-content-dependent findings, only when at least one would have fired.
-  if (isPlaceholderClass && anyAiContentFinding) {
+  if (isPlaceholderClass && anyAiContentFinding && options.includePlaceholderContentFinding !== false) {
     const severity: Severity = "low";
     const confidence: Confidence = "high";
     const effort = EFFORT_BY_CATEGORY["AI Visibility"] ?? "medium";
@@ -827,10 +830,18 @@ export function severityBreakdown(issues: Issue[]): SeverityBreakdown {
   return b;
 }
 
+/** Current v4 report issues include only registered page-level checks.
+ * The legacy site-structure heuristic builder remains available for historical
+ * reports and calibration, but its bounded-crawl absence claims are excluded.
+ */
+export function buildV4Issues(pages: PageResult[], effectiveContentPages: number = Infinity): Issue[] {
+  return buildIssues(pages, effectiveContentPages, { includePlaceholderContentFinding: false }).sort(compareIssuesByPriority);
+}
+
 /**
- * Site-level structural issues that no single page check can see: whether the
- * firm has a contact path, practice-area pages, an attorney/team page, and a
- * sitemap. These complement the per-page issues from buildIssues.
+ * Legacy site-level structure heuristics retained for historical analyses.
+ * Current v4 reports do not call this builder because a bounded crawl cannot
+ * establish that unobserved site sections or pages are absent.
  */
 export function buildSiteStructureIssues(
   pages: PageResult[],

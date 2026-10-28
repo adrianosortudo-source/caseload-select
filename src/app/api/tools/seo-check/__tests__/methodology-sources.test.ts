@@ -6,6 +6,14 @@ import { buildPageResult } from "../page-checks";
 describe("methodology check registry", () => {
   it("has unique stable ids and references only registered sources", () => {
     const definitions = Object.values(METHODOLOGY_CHECKS);
+    const scored = definitions.filter((definition) => definition.scoreEligible);
+    expect(scored).toHaveLength(5);
+    for (const definition of scored) {
+      expect(definition.predicate, definition.id).toBeTruthy();
+      expect(definition.scoringRationale, definition.id).toBeTruthy();
+      expect(definition.basis).toContain(definition.predicate);
+      expect(definition.basis).toContain(definition.scoringRationale);
+    }
     const ids = definitions.map((definition) => definition.id);
     expect(new Set(ids).size).toBe(ids.length);
     for (const definition of definitions) {
@@ -39,7 +47,9 @@ describe("methodology check registry", () => {
       checkId: "seo.on-page.page-title",
       sourceIds: ["G13"],
       disposition: "scored",
-      basis: expect.stringContaining("Direct observation"),
+      predicate: "The initial HTML contains a non-empty title element.",
+      scoringRationale: expect.stringContaining("Google recommends"),
+      basis: expect.stringContaining("The initial HTML contains a non-empty title element."),
     });
     expect(missingTitle?.scored).not.toBe(false);
     const knownExclusion = result.categories.find((category) => category.name === "Links & Content")?.items.find((item) => item.label === "Word count");
@@ -48,6 +58,25 @@ describe("methodology check registry", () => {
       disposition: "unscored",
       basis: expect.stringContaining("Known v4 exclusion"),
     });
+  });
+
+  it("keeps optional indexability observations out of the denominator and action path", () => {
+    const url = "https://example.com/";
+    const result = buildPageResult(
+      "<html><head><meta name=\"robots\" content=\"nofollow\"></head><body>Law firm</body></html>", url, url, new Headers(),
+      { ms: 100, sampleCount: 1 }, 2, "example.com", parseRobotsTxt(""), null,
+      new Set(), null, null
+    );
+    const checks = result.categories.find((category) => category.name === "Indexability")!.items;
+    for (const label of ["Redirect chain", "Followable links", "Canonical tag", "Mixed indexability signals", "Sitemap membership"]) {
+      expect(checks.find((item) => item.label === label)).toMatchObject({ scored: false, disposition: "unscored" });
+      expect(checks.find((item) => item.label === label)?.fix).toBeUndefined();
+    }
+    expect(checks.find((item) => item.label === "Canonical tag")?.sourceIds).toEqual(["G15"]);
+    expect(checks.find((item) => item.label === "Sitemap membership")?.sourceIds).toContain("G16");
+    expect(checks.find((item) => item.label === "Followable links")?.sourceIds).toEqual(["G17"]);
+    expect(checks.find((item) => item.label === "Redirect chain")?.sourceIds).toEqual(["G18", "G19"]);
+    expect(result.categories.find((category) => category.name === "On-Page SEO")?.items.find((item) => item.label === "Page title")?.scored).not.toBe(false);
   });
 
   it("forces unregistered checks to pending, unscored evidence", () => {
