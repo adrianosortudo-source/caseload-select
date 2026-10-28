@@ -4620,7 +4620,9 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
         await activityPanel.getByRole("button", { name: "Save activity", exact: true }).click();
         const failedSaveResponse = await failedSaveResponsePromise;
         if (failedSaveResponse.status() !== 503 || !syntheticFailureServed) throw new Error("The expected synthetic activity-save failure was not served.");
-        await expect(activityPanel.getByText("synthetic_activity_save_failure", { exact: true })).toBeVisible();
+        const visibleSaveErrorAlert = activityPanel.locator("p.border-red-200").filter({ hasText: "synthetic_activity_save_failure" });
+        await expect(visibleSaveErrorAlert).toHaveCount(1);
+        await expect(visibleSaveErrorAlert).toBeVisible();
         await expect(activitySubjectControl).toHaveValue(input.subject);
         await expect(activityBodyControl).toHaveValue(input.body);
         await expect(activityPanel.locator('[data-ui-component-content="prospect-activity-entry"]').filter({ hasText: input.subject })).toHaveCount(0);
