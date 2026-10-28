@@ -110,7 +110,8 @@ describe("CRM agent route enforcement", () => {
   });
   it("does not bypass the existing privacy recovery circuit", async () => {
     vi.stubEnv("PRIVACY_DELETION_REGISTRY_ENABLED", "true");
-    vi.stubEnv("UPSTASH_REDIS_REST_URL", ""); vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_KV_REST_API_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_KV_REST_API_TOKEN", "");
     expect((await middleware(request("/api/admin/agency-crm/follow-up"))).status).toBe(503);
   });
 });

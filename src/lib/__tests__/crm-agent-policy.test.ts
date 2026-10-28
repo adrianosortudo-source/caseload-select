@@ -35,6 +35,30 @@ describe("CRM dedicated capability boundary", () => {
     expect(await crmAgentRegistry({ op: "verify" }, "a".repeat(64), "none", { fetcher })).toBeNull();
     expect(fetcher).not.toHaveBeenCalled();
   });
+  it("uses only the dedicated Redis integration and never falls back to app-wide rate-limit Redis", async () => {
+    vi.stubEnv("CRM_AGENT_READ_ENABLED", "true"); vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("UPSTASH_REDIS_REST_KV_REST_API_URL", "https://agent-redis.synthetic.invalid");
+    vi.stubEnv("UPSTASH_REDIS_REST_KV_REST_API_TOKEN", "agent-only-synthetic-token");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://general-redis.synthetic.invalid");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "general-synthetic-token");
+    const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toBe("https://agent-redis.synthetic.invalid");
+      expect(new Headers(init?.headers).get("Authorization")).toBe("Bearer agent-only-synthetic-token");
+      return new Response(JSON.stringify({ result: JSON.stringify({ capability: "crm_console_read_qa" }) }));
+    });
+    expect(await crmAgentRegistry({ op: "verify" }, "a".repeat(64), "none", { fetcher })).not.toBeNull();
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+  it("fails closed when dedicated Redis settings are missing even if app-wide Redis is configured", async () => {
+    vi.stubEnv("CRM_AGENT_READ_ENABLED", "true"); vi.stubEnv("VERCEL_ENV", "production");
+    vi.stubEnv("UPSTASH_REDIS_REST_KV_REST_API_URL", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_KV_REST_API_TOKEN", "");
+    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://general-redis.synthetic.invalid");
+    vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "general-synthetic-token");
+    const fetcher = vi.fn();
+    expect(await crmAgentRegistry({ op: "verify" }, "a".repeat(64), "none", { fetcher })).toBeNull();
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("hashes credentials and rejects aliases, app host, and malformed cookies", async () => {
     expect(await crmAgentHash("synthetic-secret")).toMatch(/^[a-f0-9]{64}$/);
     expect(await verifyCrmAgentCookie("a".repeat(64), "https://app.caseloadselect.ca")).toBeNull();
@@ -42,7 +66,8 @@ describe("CRM dedicated capability boundary", () => {
   });
   it.each([new Response("", { status: 503 }), new Response('{"error":"down"}'), new Response('{"result":""}'), new Response('bad-json')])("fails closed on registry failure", async response => {
     vi.stubEnv("CRM_AGENT_READ_ENABLED", "true"); vi.stubEnv("VERCEL_ENV", "production");
-    vi.stubEnv("UPSTASH_REDIS_REST_URL", "https://synthetic.invalid"); vi.stubEnv("UPSTASH_REDIS_REST_TOKEN", "synthetic-only");
+    vi.stubEnv("UPSTASH_REDIS_REST_KV_REST_API_URL", "https://synthetic.invalid");
+    vi.stubEnv("UPSTASH_REDIS_REST_KV_REST_API_TOKEN", "synthetic-only");
     expect(await crmAgentRegistry({ op: "verify" }, "a".repeat(64), "none", { fetcher: async () => response })).toBeNull();
   });
 });
