@@ -4486,7 +4486,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
         { locator: contactControls, heading: contactControlsHeading, label: "contact-controls" },
       ];
       for (const target of mobileTargets) {
-        await target.locator.evaluate((element) => element.scrollIntoView({ block: "start", behavior: "instant" }));
+        await target.locator.evaluate((element) => {
+          element.scrollIntoView({ block: "start", behavior: "instant" });
+          // Keep the full 8px gap despite fractional CSS-pixel scroll alignment.
+          window.scrollBy(0, -1);
+        });
         await stableLayout();
         const geometry = await target.locator.evaluate((element) => {
           const topbarButton = document.querySelector('button[aria-label="Open menu"]');
