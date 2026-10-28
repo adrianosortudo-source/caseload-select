@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SeoReport, { type SeoCheckResult } from "../SeoReport";
 
@@ -43,7 +43,7 @@ describe("SeoReport score scope", () => {
     const scopeLabel = "Limited checks: 5 check types across 3 of 10 categories";
     const scoreNote = "This limited summary reflects 5 scored check types across 3 of 10 categories, applied to the inspected pages. Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.";
     expect(screen.getByText(scopeLabel)).toBeTruthy();
-    expect(screen.getByText(scoreNote)).toBeTruthy();
+    expect(within(screen.getByLabelText("Website checks score")).getByText(scoreNote)).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "Copy report summary" }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
