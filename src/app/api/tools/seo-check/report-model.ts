@@ -1,5 +1,5 @@
 import { normalizeLegacyPurposes } from "./crawler-policy";
-import type { AiBotPurpose } from "./engine-core";
+import { CATEGORY_WEIGHTS, type AiBotPurpose } from "./engine-core";
 
 /**
  * Deterministic public report model for the in-tool SEO check.
@@ -172,12 +172,20 @@ export interface SeoReportModel {
   }>;
   limitations: string[];
   findingGroups: Array<{ category: string; title: string; detail: string; affectedUrls: string[]; status: "pass" | "warn" | "fail" }>;
-  scoreExplanation: { assessed: boolean; score: number | null; label: "Website checks" | "Historical score" | "Not assessed"; note: string };
+  scoreExplanation: {
+    assessed: boolean;
+    score: number | null;
+    label: string;
+    note: string;
+    scoredCheckTypeCount: number;
+    assessedCategoryCount: number;
+    totalCategoryCount: number;
+  };
   cta: { heading: string; body: string; linkLabel: string; href: string };
 }
 
 const METHOD_NOTE = "This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.";
-const SCORE_NOTE = "A weighted summary of applicable checks on the pages inspected. It is not a measurement of rankings, enquiries, legal content quality, or AI citations.";
+const SCORE_NOTE = "Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.";
 const LIMITATION = (n: number) => `This scan inspected the initial HTML of ${n} pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm.`;
 const PARTIAL_LIMITATION = "The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.";
 const CTA_HREF = "https://cal.com/adriano-caseloadselect/conversation";
@@ -395,8 +403,24 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     ? ["Provider-specific purposes, robots.txt rule observations, and documented robots behavior are listed per token below. An observed rule does not verify actual access or downstream use."]
     : ["This scan did not assess provider-specific crawler policy or actual AI service access."];
 
-  const assessed = (input.categories ?? []).some((category) => category.maxScore > 0);
-  const note = current ? SCORE_NOTE : METHOD_NOTE;
+  const scoreCategories = input.categories ?? [];
+  const contributingCategories = scoreCategories.filter((category) =>
+    category.maxScore > 0 && (CATEGORY_WEIGHTS[category.name] ?? 6) > 0
+  );
+  const scoredCheckTypeCount = new Set(contributingCategories.flatMap((category) =>
+    category.items
+      .filter((item) => item.scored !== false && item.applicability !== "not-applicable" && item.applicability !== "unknown")
+      .map((item) => `${category.name}::${item.label}`)
+  )).size;
+  const assessedCategoryCount = contributingCategories.length;
+  const totalCategoryCount = scoreCategories.length;
+  const assessed = assessedCategoryCount > 0;
+  const scopedLabel = `Limited checks: ${scoredCheckTypeCount} ${scoredCheckTypeCount === 1 ? "check type" : "check types"} across ${assessedCategoryCount} of ${totalCategoryCount} ${totalCategoryCount === 1 ? "category" : "categories"}`;
+  const note = current
+    ? assessed
+      ? `This limited summary reflects ${scoredCheckTypeCount} scored ${scoredCheckTypeCount === 1 ? "check type" : "check types"} across ${assessedCategoryCount} of ${totalCategoryCount} ${totalCategoryCount === 1 ? "category" : "categories"}, applied to the inspected pages. ${SCORE_NOTE}`
+      : "No scored checks contributed to this scan. Other observations do not contribute to a score. It is not a whole-site SEO grade or a ranking prediction."
+    : METHOD_NOTE;
   const limitations = [LIMITATION(pages.length || input.pagesScanned), ...(input.partial ? [PARTIAL_LIMITATION] : [])];
   return {
     methodology: { version, label: current ? "Website checks" : "Historical score", notice: current ? null : METHOD_NOTE },
@@ -436,7 +460,15 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     crawlerPolicies,
     limitations,
     findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: issue.detail, affectedUrls: issue.affectedUrls, status: issue.status })),
-    scoreExplanation: { assessed: current ? assessed : Number.isFinite(input.overallScore), score: Number.isFinite(input.overallScore) && (!current || assessed) ? input.overallScore! : null, label: current ? (assessed ? "Website checks" : "Not assessed") : "Historical score", note },
+    scoreExplanation: {
+      assessed: current ? assessed : Number.isFinite(input.overallScore),
+      score: Number.isFinite(input.overallScore) && (!current || assessed) ? input.overallScore! : null,
+      label: current ? (assessed ? scopedLabel : "Not assessed") : "Historical score",
+      note,
+      scoredCheckTypeCount,
+      assessedCategoryCount,
+      totalCategoryCount,
+    },
     cta: { heading: "Discuss these findings", body: "We can help confirm which findings matter for the cases you want, separate intentional choices from genuine gaps, and decide what to address first.", linkLabel: "Book a conversation", href: CTA_HREF },
   };
 }

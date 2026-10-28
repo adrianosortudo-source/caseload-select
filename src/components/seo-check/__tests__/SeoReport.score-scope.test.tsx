@@ -1,0 +1,53 @@
+// @vitest-environment jsdom
+
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import SeoReport, { type SeoCheckResult } from "../SeoReport";
+
+afterEach(cleanup);
+
+const scoreCategories: SeoCheckResult["categories"] = [
+  { name: "On-Page SEO", score: 10, maxScore: 10, items: [{ label: "Page title", status: "pass", detail: "Title present.", scored: true }] },
+  { name: "Indexability", score: 25, maxScore: 30, items: [
+    { label: "HTTP status", status: "pass", detail: "Successful response.", scored: true },
+    { label: "Indexable", status: "pass", detail: "No noindex directive observed.", scored: true },
+    { label: "robots.txt crawl access", status: "pass", detail: "No blocking rule observed.", scored: true },
+  ] },
+  { name: "Technical & Security", score: 10, maxScore: 10, items: [{ label: "HTTPS", status: "pass", detail: "HTTPS response.", scored: true }] },
+  ...["Schema & Structured Data", "AI Visibility", "Legal Marketing", "Local SEO", "Rendering & Crawlability", "Performance", "Links & Content"].map((name) => ({
+    name, score: 0, maxScore: 0, items: [{ label: "Context observation", status: "warn" as const, detail: "Observed only.", scored: false }],
+  })),
+];
+
+const result: SeoCheckResult = {
+  domain: "example.com",
+  methodologyVersion: 4,
+  pagesScanned: 2,
+  pages: [],
+  categories: scoreCategories,
+  overallScore: 98,
+  grade: "A",
+  aiSearchScore: null,
+  aiSearchGrade: null,
+  aiBots: [],
+  checkedAt: "2026-10-28T12:00:00.000Z",
+};
+
+describe("SeoReport score scope", () => {
+  it("shows the scored coverage beside the score and includes it in the copied summary", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+
+    render(<SeoReport result={result} onReset={vi.fn()} hideCta />);
+
+    const scopeLabel = "Limited checks: 5 check types across 3 of 10 categories";
+    const scoreNote = "This limited summary reflects 5 scored check types across 3 of 10 categories, applied to the inspected pages. Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.";
+    expect(screen.getByText(scopeLabel)).toBeTruthy();
+    expect(screen.getByText(scoreNote)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy report summary" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0][0]).toContain(scopeLabel + ": 98/100.");
+    expect(writeText.mock.calls[0][0]).toContain(scoreNote);
+  });
+});

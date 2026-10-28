@@ -14,6 +14,7 @@ export default defineConfig({
       // Widen this per-directory as other component suites adopt RTL.
       "src/components/intake-v2/__tests__/**/*.test.tsx",
       "src/components/desired-client/__tests__/**/*.test.tsx",
+      "src/components/seo-check/__tests__/**/*.test.tsx",
       "src/components/portal/__tests__/**/*.test.tsx",
       "src/app/admin/prospects/__tests__/sobirovs-assessment-profile.test.tsx",
       "src/**/__evals__/**/*.test.ts",

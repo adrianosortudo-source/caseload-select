@@ -6,7 +6,7 @@ const base: ReportInput = {
   methodologyVersion: 4,
   pagesScanned: 2,
   overallScore: 74,
-  categories: [{ name: "On-Page SEO", score: 7, maxScore: 10, items: [] }],
+  categories: [{ name: "On-Page SEO", score: 7, maxScore: 10, items: [{ label: "Page title", status: "pass", detail: "A title is present." }] }],
   pages: [
     {
       url: "https://example.com/",
@@ -33,10 +33,32 @@ describe("buildSeoReportModel", () => {
   it("labels the current weighted score clearly and always includes bounded-scope limitations and one CTA", () => {
     const model = buildSeoReportModel(base);
     expect(model.methodology).toMatchObject({ version: 4, label: "Website checks", notice: null });
-    expect(model.scoreExplanation).toMatchObject({ assessed: true, score: 74, label: "Website checks" });
-    expect(model.scoreExplanation.note).toBe("A weighted summary of applicable checks on the pages inspected. It is not a measurement of rankings, enquiries, legal content quality, or AI citations.");
+    expect(model.scoreExplanation).toMatchObject({ assessed: true, score: 74, label: "Limited checks: 1 check type across 1 of 1 category", scoredCheckTypeCount: 1, assessedCategoryCount: 1, totalCategoryCount: 1 });
+    expect(model.scoreExplanation.note).toBe("This limited summary reflects 1 scored check type across 1 of 1 category, applied to the inspected pages. Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.");
     expect(model.limitations).toEqual(["This scan inspected the initial HTML of 2 pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm."]);
     expect(model.cta).toMatchObject({ heading: "Discuss these findings", linkLabel: "Book a conversation", href: "https://cal.com/adriano-caseloadselect/conversation" });
+  });
+
+  it("shows the dynamic scored-check and contributing-category denominator", () => {
+    const scored = (label: string) => ({ label, status: "pass" as const, detail: "Observed.", scored: true });
+    const categories: NonNullable<ReportInput["categories"]> = [
+      { name: "On-Page SEO", score: 10, maxScore: 10, items: [scored("Page title")] },
+      { name: "Indexability", score: 25, maxScore: 30, items: [scored("HTTP status"), scored("Indexable"), scored("robots.txt crawl access")] },
+      { name: "Technical & Security", score: 10, maxScore: 10, items: [scored("HTTPS")] },
+      ...["Schema & Structured Data", "AI Visibility", "Legal Marketing", "Local SEO", "Rendering & Crawlability", "Performance", "Links & Content"].map((name) => ({
+        name, score: 0, maxScore: 0, items: [{ label: "Context observation", status: "warn" as const, detail: "Observed only.", scored: false }],
+      })),
+    ];
+    const model = buildSeoReportModel({ ...base, overallScore: 98, categories });
+
+    expect(model.scoreExplanation).toMatchObject({
+      score: 98,
+      label: "Limited checks: 5 check types across 3 of 10 categories",
+      scoredCheckTypeCount: 5,
+      assessedCategoryCount: 3,
+      totalCategoryCount: 10,
+    });
+    expect(model.scoreExplanation.note).toBe("This limited summary reflects 5 scored check types across 3 of 10 categories, applied to the inspected pages. Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.");
   });
 
   it("marks saved pre-v3 scores as historical and supplies the no-cross-method notice", () => {
