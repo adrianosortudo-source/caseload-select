@@ -5,7 +5,7 @@ on:
     branches:
       - codex/crm-live-followup-final-gates-20261024
       - codex/crm-followup-activity-save-reload-20261028
-# Run acceptance at the exact head after every push to this release branch.
+# Run acceptance at the exact head after every push to an explicitly allowed CRM acceptance branch.
 
 permissions:
   contents: read
@@ -20,6 +20,7 @@ jobs:
     timeout-minutes: 60
     env:
       AGENCY_FOLLOWUP_DISPOSABLE_DATABASE_CONFIRMATION: YES-LOCAL-DISPOSABLE-ONLY
+      AGENCY_FOLLOWUP_EXPECTED_SOURCE_REF: ${{ github.ref }}
       AGENCY_FOLLOWUP_STACK_DIR: test-results/crm-local-stack
       AGENCY_FOLLOWUP_SUPABASE_API_PORT: '55431'
       AGENCY_FOLLOWUP_SUPABASE_DB_PORT: '55432'

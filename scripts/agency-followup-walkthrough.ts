@@ -281,8 +281,16 @@ async function verifyPushedMigration(pathname: string, expectedBlob: string): Pr
   }
 }
 
+const ACCEPTED_SOURCE_REFS = new Set([
+  "refs/heads/codex/crm-live-followup-final-gates-20261024",
+  "refs/heads/codex/crm-followup-activity-save-reload-20261028",
+]);
+
 function verifyPushedHead(sourceCommit: string): void {
-  const remoteRef = "refs/heads/codex/crm-live-followup-final-gates-20261024";
+  const remoteRef = process.env.AGENCY_FOLLOWUP_EXPECTED_SOURCE_REF ?? "refs/heads/codex/crm-live-followup-final-gates-20261024";
+  if (!ACCEPTED_SOURCE_REFS.has(remoteRef)) {
+    throw new Error("Refusing walkthrough because the source ref is not an explicitly allowed CRM acceptance branch.");
+  }
   const remoteCommit = execFileSync("git", ["ls-remote", "origin", remoteRef], { encoding: "utf8", timeout: 60_000 })
     .split(/\r?\n/).map((line) => line.trim()).find((line) => line.endsWith(`\t${remoteRef}`))?.split(/\s+/, 1)[0];
   if (remoteCommit !== sourceCommit) {
