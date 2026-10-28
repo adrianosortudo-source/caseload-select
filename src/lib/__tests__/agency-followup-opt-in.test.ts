@@ -26,10 +26,11 @@ const h = vi.hoisted(() => {
     });
     return q;
   }, rpc };
-  return { rows, calls, selects, orders, ranges, rpc, supabaseAdmin };
+  return { rows, calls, selects, orders, ranges, rpc, supabaseAdmin, agentRead: vi.fn() };
 });
 vi.mock("server-only", () => ({}));
 vi.mock("@/lib/supabase-admin", () => ({ supabaseAdmin: h.supabaseAdmin }));
+vi.mock("@/lib/crm-agent-auth", () => ({ getCrmAgentReadSession: h.agentRead }));
 import { AgencyFollowupOptInError, recordAgencyFollowupOptInEvent } from "@/lib/agency-followup-opt-in";
 
 const ACTOR = "11111111-1111-4111-8111-111111111111", PROSPECT = "22222222-2222-4222-8222-222222222222", EMAIL = "owner@example.test", SHA = "a".repeat(64);
@@ -52,6 +53,7 @@ beforeEach(() => {
   Object.keys(h.rows).forEach((key) => delete h.rows[key]);
   h.calls.length = 0; h.selects.length = 0; h.orders.length = 0; h.ranges.length = 0;
   h.rpc.mockReset(); setContext();
+  h.agentRead.mockReset();
   h.rpc.mockResolvedValue({ data: [{ event_id: "event", replayed: false }], error: null });
 });
 describe("recordAgencyFollowupOptInEvent", () => {
@@ -133,5 +135,21 @@ describe("recordAgencyFollowupOptInEvent", () => {
     const { listAgencyFollowupOptInHistory } = await import("@/lib/agency-followup-opt-in");
     await expect(listAgencyFollowupOptInHistory({ prospectId: PROSPECT, actorOperatorId: ACTOR })).rejects.toThrow("Only an active operator");
     expect(h.calls).not.toContain("agency_followup_opt_in_events");
+  });
+
+  it("admits the explicit agent history reader without querying a human identity", async () => {
+    h.agentRead.mockResolvedValue({ capability: "crm_console_read_qa" });
+    h.rows.agency_followup_opt_in_events = [];
+    const { listAgencyFollowupOptInHistoryForAgent } = await import("@/lib/agency-followup-opt-in");
+    await expect(listAgencyFollowupOptInHistoryForAgent(new Request("https://admin.caseloadselect.ca/api/admin/agency-crm/follow-up/opt-in"), PROSPECT)).resolves.toEqual([]);
+    expect(h.calls).toEqual(["agency_followup_opt_in_events"]);
+    expect(h.rpc).not.toHaveBeenCalled();
+  });
+
+  it("rejects the explicit agent reader before data access after revocation", async () => {
+    h.agentRead.mockResolvedValue(null);
+    const { listAgencyFollowupOptInHistoryForAgent } = await import("@/lib/agency-followup-opt-in");
+    await expect(listAgencyFollowupOptInHistoryForAgent(new Request("https://admin.caseloadselect.ca/api/admin/agency-crm/follow-up/opt-in"), PROSPECT)).rejects.toThrow("Authorized CRM agent read required");
+    expect(h.calls).toEqual([]);
   });
 });

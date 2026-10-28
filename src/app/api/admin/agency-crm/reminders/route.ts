@@ -5,11 +5,12 @@
  *   POST { due_at, note, prospect_id?, deal_id? }   create
  */
 import { NextRequest, NextResponse } from 'next/server';
+import { getCrmAgentReadSession } from '@/lib/crm-agent-auth';
 import { getOperatorSession } from '@/lib/portal-auth';
 import { listReminders, createReminder, isUuid, type ReminderInput } from '@/lib/agency-crm';
 
 export async function GET(req: NextRequest) {
-  if (!(await getOperatorSession())) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  if (!(await getOperatorSession()) && !(await getCrmAgentReadSession(req))) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   const url = new URL(req.url);
   const openOnly = url.searchParams.get('open') === 'true';
   const rawProspectId = url.searchParams.get('prospect_id');

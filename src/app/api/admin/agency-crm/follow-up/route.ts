@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCrmAgentReadSession } from "@/lib/crm-agent-auth";
 import { getOperatorSession } from "@/lib/portal-auth";
 import {
   activateAgencyFollowupJourney,
@@ -44,7 +45,7 @@ export async function GET(request: NextRequest) {
     operatorIdentityPresent: Boolean(session?.lawyer_id),
   });
   const auth = authorizedActor(session);
-  if ("response" in auth && auth.response) {
+  if ("response" in auth && auth.response && !await getCrmAgentReadSession(request)) {
     traceLocalFollowupProbe(host, "handler_exit", { elapsedMs: Date.now() - startedAt, responseStatus: auth.response.status });
     return auth.response;
   }

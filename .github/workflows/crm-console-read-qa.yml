@@ -1,0 +1,46 @@
+name: CRM console read QA
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: crm-console-read-qa
+  cancel-in-progress: false
+jobs:
+  read-qa:
+    if: >-
+      vars.CRM_AGENT_READ_WORKFLOW_ENABLED == 'true' &&
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+      github.repository == 'adrianosortudo-source/caseload-select' && github.repository_id == '1206232496'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment:
+      name: CRM console read QA
+    steps:
+      - name: Check out reviewed main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Set up Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+      - name: Install reviewed locked dependencies
+        shell: bash
+        run: |
+          if ! npm ci --ignore-scripts --no-audit --no-fund >/dev/null 2>&1; then
+            echo 'CRM_QA_SETUP_FAIL'; exit 1
+          fi
+          if ! npx --no-install playwright install --with-deps chromium >/dev/null 2>&1; then
+            echo 'CRM_QA_SETUP_FAIL'; exit 1
+          fi
+      - name: Read and render CRM with renewable dedicated session
+        shell: bash
+        run: |
+          if node scripts/crm-console-read-qa.mjs >/dev/null 2>&1; then
+            echo 'CRM_QA_PASS'
+          else
+            echo 'CRM_QA_FAIL'; exit 1
+          fi
