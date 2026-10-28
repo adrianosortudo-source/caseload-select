@@ -4749,7 +4749,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     recordedActivityScreenshots,
     manualActivityAcceptance: {
       humanReply: { prospectId: fixtures.prospects.manual_reply.id, messageId: replyMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "replied", dispatchBlocked: replyDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: replyStoppedMessage.rows[0]?.provider_message_id ?? null },
-      meeting: { prospectId: fixtures.prospects.manual_meeting.id, messageId: meetingMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "meeting_scheduled", dispatchBlocked: meetingDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: meetingStoppedMessage.rows[0]?.provider_message_id ?? null },
+      meeting: { prospectId: fixtures.prospects.manual_meeting.id, messageId: meetingMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "completed", dispatchBlocked: meetingDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: meetingStoppedMessage.rows[0]?.provider_message_id ?? null },
       provider: "network-free fake; no message accepted",
     },
     syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
