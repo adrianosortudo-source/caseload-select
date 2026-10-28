@@ -49,7 +49,7 @@ describe("Review / Rating schema recommendation", () => {
     expect(item?.status).toBe("pass");
     expect(item?.scored).toBe(false);
     expect(item?.detail).toMatch(/accuracy, eligibility, and search display were not assessed/i);
-    expect(item?.fix).not.toMatch(/add aggregaterating or review schema/i);
+    expect(item?.fix).toBeUndefined();
   });
 
   it("absence yields a neutral pass(unscored) item with no recommendation to add markup", () => {

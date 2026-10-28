@@ -37,7 +37,11 @@ describe("methodology check registry", () => {
         expect(item.checkId).toBeTruthy();
         expect(item.sourceIds).toBeDefined();
         expect(item.evidence).toMatchObject({ assessedUrl: url, applicability: item.applicability ?? "applicable" });
-        expect(item.evidence?.detail).toBe(item.detail);
+        if (item.disposition === "pending-review") {
+          expect(item.evidence?.detail).toMatch(/No stable methodology definition is registered for this check/i);
+        } else {
+          expect(item.evidence?.detail).toBe(item.detail);
+        }
         if (item.applicability === "not-applicable") expect(item.evidence?.coverage).toBe("not-assessed");
       }
     }

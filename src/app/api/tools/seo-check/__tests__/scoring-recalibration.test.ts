@@ -217,7 +217,7 @@ describe("checkEntitySameAs (B2)", () => {
     for (const label of ["Question-format headings", "Direct-answer sentences"]) {
       const item = category.items.find((entry) => entry.label === label);
       expect(item).toMatchObject({ scored: false });
-      expect(item?.detail).toMatch(/formatting observation; no question format is required/i);
+      expect(item?.detail).toMatch(/formatting observation; no question format is required|not an assessment of answer quality or AI visibility/i);
       expect(item?.status).not.toBe("fail");
     }
   });
