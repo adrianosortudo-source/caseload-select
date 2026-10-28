@@ -4570,7 +4570,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     body: string;
     replyDisposition?: "positive";
     meetingOutcome?: string;
-    expectedConversationStatus: "replied" | "meeting_scheduled";
+    expectedConversationStatus: "replied" | "meeting_scheduled" | "completed";
   }) => {
     await reopenHistoryAfterReload(input.prospect);
     const activityTypeControl = activityPanel.getByLabel("Activity type");
@@ -4688,7 +4688,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     subject: manualMeetingSubject,
     body: manualMeetingBody,
     meetingOutcome: manualMeetingOutcome,
-    expectedConversationStatus: "meeting_scheduled",
+    expectedConversationStatus: "completed",
   });
   const meetingMessageId = manualStopMessageIds.get(fixtures.prospects.manual_meeting.id);
   if (!meetingMessageId) throw new Error("The synthetic meeting has no scheduled stop-test message.");
