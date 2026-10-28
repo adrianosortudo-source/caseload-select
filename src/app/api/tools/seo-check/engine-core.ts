@@ -123,6 +123,24 @@ export function resolveScan(input: {
   return { scanMode, maxPages: SCAN_MODE_DEFAULTS[scanMode] };
 }
 
+/**
+ * Public scans use the standard 25-page budget regardless of a requested mode.
+ * A finite explicit page count still allows a smaller public scan, clamped to
+ * [1, 25]. Operator requests retain the existing quick/standard/deep behavior.
+ */
+export function resolveEffectiveScan(
+  input: { maxPages?: unknown; scanMode?: unknown },
+  isOperator: boolean
+): { scanMode: ScanMode; maxPages: number } {
+  if (isOperator) return resolveScan(input);
+
+  const publicScan = resolveScan({ ...input, scanMode: "standard" });
+  return {
+    scanMode: "standard",
+    maxPages: Math.min(publicScan.maxPages, SCAN_MODE_DEFAULTS.standard),
+  };
+}
+
 /* ────────────────────────────────────────────────────────
    Bot registries
    ──────────────────────────────────────────────────────── */
