@@ -1622,10 +1622,12 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["message_unsubscribe_source", "Synthetic Walkthrough Source Unsubscribe Source " + suffix, "Casey Example", "eligible"],
     ["message_unsubscribe_source_duplicate", "Synthetic Walkthrough Source Unsubscribe Duplicate " + suffix, "Taylor Example", "eligible"],
     ["message_unsubscribe_mismatch_duplicate", "Synthetic Walkthrough Mismatched Recipient Unsubscribe Duplicate " + suffix, "Jordan Example", "eligible"],
+    ["manual_reply", "Synthetic Walkthrough Manual Reply " + suffix, "Robin Example", "eligible"],
+    ["manual_meeting", "Synthetic Walkthrough Manual Meeting " + suffix, "Cameron Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and eighteen Agency prospects");
+    progress("seeding synthetic operator and twenty Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -1673,7 +1675,7 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
           [conversationId],
         );
       }
-      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b", "message_unsubscribe_duplicate", "message_unsubscribe_early_a", "message_unsubscribe_early_b", "message_unsubscribe_source", "message_unsubscribe_source_duplicate", "message_unsubscribe_mismatch_duplicate"].includes(key)) {
+      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b", "message_unsubscribe_duplicate", "message_unsubscribe_early_a", "message_unsubscribe_early_b", "message_unsubscribe_source", "message_unsubscribe_source_duplicate", "message_unsubscribe_mismatch_duplicate", "manual_reply", "manual_meeting"].includes(key)) {
         const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
         const databaseClock = await pool.query<{ captured_at: Date }>("select clock_timestamp() - interval '1 minute' as captured_at");
         const capturedAt = databaseClock.rows[0]?.captured_at.toISOString();
@@ -4184,6 +4186,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
   const consentPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string }> = [];
   const activityPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string; capture: "panel" | "viewport" }> = [];
+  const recordedActivityScreenshots: Array<{ path: string; sha256: string; activity: "human_reply" | "meeting" }> = [];
   const providerStatusScreenshots: Array<{ path: string; sha256: string; viewport: number; contentWidth: number; scrollWidth: number; text: string }> = [];
   const stableLayout = async () => page.evaluate(async () => {
     await document.fonts.ready;
@@ -4364,6 +4367,25 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     }
     renderedWidths.push(width);
   }
+  progress("preparing two isolated synthetic, opted-in messages for manual reply and meeting stop acceptance");
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  const manualStopMessageIds = new Map<string, string>();
+  for (const prospect of [fixtures.prospects.manual_reply, fixtures.prospects.manual_meeting]) {
+    await createDraft(pool, page, journeyName, prospect);
+    await markEligibleAndRelease(page, prospect);
+    const prospectQueueCard = queueCard(page, prospect.firmName);
+    await waitForAction(page, "approve", prospectQueueCard.getByRole("button", { name: "Approve this message" }).nth(0));
+    const scheduledMessage = await pool.query<{ id: string; state: string }>(
+      "select message.id,message.state from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.step_number=1",
+      [prospect.id],
+    );
+    if (scheduledMessage.rows.length !== 1 || scheduledMessage.rows[0]?.state !== "scheduled") {
+      throw new Error(`The synthetic ${prospect === fixtures.prospects.manual_reply ? "reply" : "meeting"} acceptance message was not uniquely scheduled after approval.`);
+    }
+    await pool.query("update public.agency_followup_messages set scheduled_at=$2 where id=$1", [scheduledMessage.rows[0]!.id, acceptedDueAt]);
+    manualStopMessageIds.set(prospect.id, scheduledMessage.rows[0]!.id);
+  }
+
   progress("opening synthetic Agency CRM contact history to verify the manual reconciliation controls");
   await page.goto(APP_ORIGIN + "/admin/agency-crm", { waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
   const normalProspectCard = page.getByRole("listitem")
@@ -4506,10 +4528,187 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       });
     }
   }
+  const reopenHistoryAfterReload = async (prospect: ProspectFixture) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.reload({ waitUntil: "networkidle", timeout: Math.min(180_000, remainingMs()) });
+    const prospectCard = page.getByRole("listitem")
+      .filter({ hasText: prospect.firmName })
+      .filter({ has: page.getByRole("button", { name: "Contact history", exact: true }) });
+    for (let reveal = 0; reveal < 30 && await prospectCard.count() === 0; reveal += 1) {
+      const showMore = page.getByRole("button", { name: /^Show \d+ more \(/ }).first();
+      if (await showMore.count() === 0) break;
+      await showMore.click();
+    }
+    await expect(prospectCard).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+    const historyButton = prospectCard.getByRole("button", { name: "Contact history", exact: true });
+    await expect(historyButton).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+    await page.waitForFunction((firmName) => {
+      const card = Array.from(document.querySelectorAll("li")).find((item) =>
+        item.textContent?.includes(firmName) &&
+        Array.from(item.querySelectorAll("button")).some((button) => button.textContent?.trim() === "Contact history")
+      );
+      const button = Array.from(card?.querySelectorAll("button") ?? []).find(
+        (candidate) => candidate.textContent?.trim() === "Contact history"
+      );
+      return Boolean(button && Object.keys(button).some((key) => key.startsWith("__reactProps$")));
+    }, prospect.firmName, { polling: "raf", timeout: Math.min(180_000, remainingMs()) });
+    await historyButton.click();
+    await expect(activityPanel).toBeVisible({ timeout: Math.min(30_000, remainingMs()) });
+  };
+  const saveAndVerifyManualActivity = async (input: {
+    prospect: ProspectFixture;
+    kind: "human_reply" | "meeting";
+    subject: string;
+    body: string;
+    replyDisposition?: "positive";
+    meetingOutcome?: string;
+    expectedConversationStatus: "replied" | "meeting_scheduled";
+  }) => {
+    await reopenHistoryAfterReload(input.prospect);
+    const activityTypeControl = activityPanel.getByLabel("Activity type");
+    await expect(activityTypeControl).toBeVisible();
+    await activityTypeControl.selectOption(input.kind);
+    if (input.kind === "human_reply") {
+      const replyDispositionControl = activityPanel.getByLabel("Reply disposition");
+      await expect(replyDispositionControl).toBeVisible();
+      await replyDispositionControl.selectOption(input.replyDisposition ?? "positive");
+    }
+    if (input.kind === "meeting") {
+      const meetingOutcomeControl = activityPanel.getByPlaceholder("What happened at the meeting", { exact: true });
+      await expect(meetingOutcomeControl).toBeVisible();
+      await meetingOutcomeControl.fill(input.meetingOutcome ?? "Synthetic meeting confirmed");
+    }
+    await activityPanel.getByLabel("Subject").fill(input.subject);
+    await activityPanel.getByLabel("Message or note").fill(input.body);
+    const activityResponsePromise = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === "/api/admin/prospect-operations/activities" && response.request().method() === "POST",
+      { timeout: Math.min(30_000, remainingMs()) },
+    );
+    await activityPanel.getByRole("button", { name: "Save activity", exact: true }).click();
+    const activityResponse = await activityResponsePromise;
+    if (!activityResponse.ok()) throw new Error(`The operator ${input.kind} save returned HTTP ${activityResponse.status()}.`);
+
+    const renderedEntry = activityPanel.locator('[data-ui-component-content="prospect-activity-entry"]').filter({ hasText: input.subject });
+    await expect(renderedEntry).toHaveCount(1);
+    await expect(renderedEntry).toContainText(input.kind === "human_reply" ? "Human reply via Email" : "Meeting via Video call");
+    await expect(renderedEntry).toContainText(input.body);
+    if (input.kind === "human_reply") await expect(renderedEntry).toContainText("Positive reply");
+    if (input.kind === "meeting") await expect(renderedEntry).toContainText(input.meetingOutcome ?? "Synthetic meeting confirmed");
+
+    const persisted = await pool.query<{
+      status: string;
+      kind: string;
+      channel: string;
+      reply_disposition: string;
+      meeting_outcome: string | null;
+      subject: string | null;
+      body: string | null;
+    }>(
+      `select conversation.status,activity.kind,activity.channel,activity.reply_disposition,activity.meeting_outcome,activity.subject,activity.body
+       from public.prospect_conversations conversation
+       join public.prospect_activities activity on activity.conversation_id=conversation.id
+       where conversation.id=$1 and activity.subject=$2 order by activity.occurred_at desc limit 1`,
+      [input.prospect.conversationId, input.subject],
+    );
+    const saved = persisted.rows[0];
+    if (persisted.rows.length !== 1 || !saved || saved.status !== input.expectedConversationStatus || saved.kind !== input.kind ||
+      saved.channel !== (input.kind === "human_reply" ? "email" : "video") || saved.subject !== input.subject || saved.body !== input.body ||
+      (input.kind === "human_reply" && saved.reply_disposition !== (input.replyDisposition ?? "positive")) ||
+      (input.kind === "meeting" && saved.meeting_outcome !== (input.meetingOutcome ?? "Synthetic meeting confirmed"))) {
+      throw new Error(`The operator ${input.kind} activity or stop status did not persist exactly: ${JSON.stringify(saved ?? null)}.`);
+    }
+
+    await reopenHistoryAfterReload(input.prospect);
+    const reloadedEntry = activityPanel.locator('[data-ui-component-content="prospect-activity-entry"]').filter({ hasText: input.subject });
+    await expect(reloadedEntry).toHaveCount(1);
+    await expect(reloadedEntry).toContainText(input.kind === "human_reply" ? "Human reply via Email" : "Meeting via Video call");
+    await expect(reloadedEntry).toContainText(input.body);
+    if (input.kind === "human_reply") await expect(reloadedEntry).toContainText("Positive reply");
+    if (input.kind === "meeting") await expect(reloadedEntry).toContainText(input.meetingOutcome ?? "Synthetic meeting confirmed");
+
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await activityPanel.scrollIntoViewIfNeeded();
+    await stableLayout();
+    const screenshotPath = path.join(screenshotDir, `${RUN_ID}-activity-${input.kind}-persisted-after-reload.png`);
+    await activityPanel.screenshot({ path: screenshotPath });
+    recordedActivityScreenshots.push({
+      path: path.relative(process.cwd(), screenshotPath).replaceAll("\\", "/"),
+      sha256: createHash("sha256").update(await readFile(screenshotPath)).digest("hex"),
+      activity: input.kind,
+    });
+  };
+
+  const manualReplySubject = `Synthetic operator reply ${RUN_ID}`;
+  const manualReplyBody = `Synthetic positive reply recorded in the CRM operator form ${RUN_ID}.`;
+  await saveAndVerifyManualActivity({
+    prospect: fixtures.prospects.manual_reply,
+    kind: "human_reply",
+    subject: manualReplySubject,
+    body: manualReplyBody,
+    replyDisposition: "positive",
+    expectedConversationStatus: "replied",
+  });
+  const replyMessageId = manualStopMessageIds.get(fixtures.prospects.manual_reply.id);
+  if (!replyMessageId) throw new Error("The synthetic manual reply has no scheduled stop-test message.");
+  const replyDispatch = await withFixtureClaim(pool, replyMessageId, () => dispatchFake(context, walkthroughToken, {
+    workerId: `synthetic-ui-reply-stop-${RUN_ID}`,
+    now: acceptedNow,
+    limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: `must-not-accept-replied-${RUN_ID}`, acceptedAt: acceptedNow }],
+  }));
+  const replyStoppedMessage = await pool.query<{ state: string; provider_message_id: string | null }>(
+    "select state,provider_message_id from public.agency_followup_messages where id=$1",
+    [replyMessageId],
+  );
+  const replyBlockedEvent = await pool.query<{ event_payload: { blockers?: unknown } }>(
+    "select event_payload from public.agency_followup_events where message_id=$1 and event_type='message_blocked' order by occurred_at desc limit 1",
+    [replyMessageId],
+  );
+  const replyBlockers = replyBlockedEvent.rows[0]?.event_payload.blockers;
+  if (replyDispatch.blocked !== 1 || replyDispatch.accepted !== 0 || replyStoppedMessage.rows[0]?.state !== "blocked" ||
+      replyStoppedMessage.rows[0]?.provider_message_id !== null || !Array.isArray(replyBlockers) ||
+      !replyBlockers.includes("conversation_stopped")) {
+    throw new Error(`The persisted human reply did not block the due fake-provider handoff: ${JSON.stringify({ replyDispatch, message: replyStoppedMessage.rows[0] ?? null, event: replyBlockedEvent.rows[0] ?? null })}.`);
+  }
+
+  const manualMeetingOutcome = `Synthetic meeting confirmed ${RUN_ID}`;
+  const manualMeetingSubject = `Synthetic operator meeting ${RUN_ID}`;
+  const manualMeetingBody = `Synthetic meeting history recorded in the CRM operator form ${RUN_ID}.`;
+  await saveAndVerifyManualActivity({
+    prospect: fixtures.prospects.manual_meeting,
+    kind: "meeting",
+    subject: manualMeetingSubject,
+    body: manualMeetingBody,
+    meetingOutcome: manualMeetingOutcome,
+    expectedConversationStatus: "meeting_scheduled",
+  });
+  const meetingMessageId = manualStopMessageIds.get(fixtures.prospects.manual_meeting.id);
+  if (!meetingMessageId) throw new Error("The synthetic meeting has no scheduled stop-test message.");
+  const meetingDispatch = await withFixtureClaim(pool, meetingMessageId, () => dispatchFake(context, walkthroughToken, {
+    workerId: `synthetic-ui-meeting-stop-${RUN_ID}`,
+    now: acceptedNow,
+    limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: `must-not-accept-meeting-${RUN_ID}`, acceptedAt: acceptedNow }],
+  }));
+  const meetingStoppedMessage = await pool.query<{ state: string; provider_message_id: string | null }>(
+    "select state,provider_message_id from public.agency_followup_messages where id=$1",
+    [meetingMessageId],
+  );
+  const meetingBlockedEvent = await pool.query<{ event_payload: { blockers?: unknown } }>(
+    "select event_payload from public.agency_followup_events where message_id=$1 and event_type='message_blocked' order by occurred_at desc limit 1",
+    [meetingMessageId],
+  );
+  const meetingBlockers = meetingBlockedEvent.rows[0]?.event_payload.blockers;
+  if (meetingDispatch.blocked !== 1 || meetingDispatch.accepted !== 0 || meetingStoppedMessage.rows[0]?.state !== "blocked" ||
+      meetingStoppedMessage.rows[0]?.provider_message_id !== null || !Array.isArray(meetingBlockers) ||
+      !meetingBlockers.includes("conversation_stopped")) {
+    throw new Error(`The persisted meeting did not block the due fake-provider handoff: ${JSON.stringify({ meetingDispatch, message: meetingStoppedMessage.rows[0] ?? null, event: meetingBlockedEvent.rows[0] ?? null })}.`);
+  }
+
   progress("synthetic Agency contact-history forms stayed clear of the fixed mobile bar with viewport evidence at four small widths; copy, keyboard focus, and point-hit checks passed across twelve viewport widths");
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
   if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
-  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || activityPanelScreenshots.length !== activityPanelWidths.length + activityPanelWidths.filter((width) => width < 768).length || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, activity-panel, authoring approval, or required-control evidence.");
+  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || activityPanelScreenshots.length !== activityPanelWidths.length + activityPanelWidths.filter((width) => width < 768).length || recordedActivityScreenshots.length !== 2 || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, activity-panel, saved/reloaded activity, authoring approval, or required-control evidence.");
   const summary = {
     runId: RUN_ID,
     ...sourceAtStart,
@@ -4539,6 +4738,12 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     consentPanelScreenshots,
     providerStatusScreenshots,
     activityPanelScreenshots,
+    recordedActivityScreenshots,
+    manualActivityAcceptance: {
+      humanReply: { prospectId: fixtures.prospects.manual_reply.id, messageId: replyMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "replied", dispatchBlocked: replyDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: replyStoppedMessage.rows[0]?.provider_message_id ?? null },
+      meeting: { prospectId: fixtures.prospects.manual_meeting.id, messageId: meetingMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "meeting_scheduled", dispatchBlocked: meetingDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: meetingStoppedMessage.rows[0]?.provider_message_id ?? null },
+      provider: "network-free fake; no message accepted",
+    },
     syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
     templateApprovalAuditAtomicityFailureRollback: templateApprovalRollbackEvidence,
     synthetic: true,
@@ -4567,7 +4772,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     screenshotViewports: renderedWidths,
     screenshotCount: screenshots.length,
     consentPanelScreenshotCount: consentPanelScreenshots.length,
-    activityPanelScreenshotCount: activityPanelScreenshots.length
+    activityPanelScreenshotCount: activityPanelScreenshots.length,
+    recordedActivityScreenshotCount: recordedActivityScreenshots.length
   };
   return summary;
   } finally {
