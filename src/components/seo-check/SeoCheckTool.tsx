@@ -361,7 +361,7 @@ export default function SeoCheckTool({
             <div className="seo-email-preview">
               <div className="seo-email-grade-peek">
                 <span
-                  className="seo-email-grade-letter"
+                  className="seo-email-grade-label"
                   style={{
                     color:
                       result.overallScore === null
@@ -373,7 +373,7 @@ export default function SeoCheckTool({
                           : "var(--danger)",
                   }}
                 >
-                  {result.grade}
+                  Limited checks
                 </span>
                 <span className="seo-email-grade-score">{result.overallScore === null ? "Not assessed" : `${result.overallScore}/100`}</span>
               </div>
@@ -384,8 +384,8 @@ export default function SeoCheckTool({
             <div className="seo-email-form">
               <h3 className="seo-email-title">Enter your email to view the report</h3>
               <p className="seo-email-sub">
-                Get the detailed breakdown across all nine categories, AI bot access status,
-                and recommended fixes ranked by priority.
+                See the pages checked, what the scan observed, why a finding may matter, and general next steps.
+                The score reflects only checks assessed in this scan; it is not a whole-site SEO grade. AI crawler observations cannot verify access or citations.
               </p>
               <div className="seo-email-row">
                 <input
@@ -755,9 +755,9 @@ export default function SeoCheckTool({
           gap: var(--sp-2);
           margin-bottom: var(--sp-3);
         }
-        .seo-email-grade-letter {
+        .seo-email-grade-label {
           font-family: var(--font-display);
-          font-size: 48px;
+          font-size: 14px;
           font-weight: 800;
           line-height: 1;
         }
