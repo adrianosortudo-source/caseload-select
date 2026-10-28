@@ -7,13 +7,13 @@ Status: local review artifact for PR #438. This note is intentionally aggregate-
 Replay command: `node --experimental-strip-types scripts/seo-methodology-local-replay.mjs`.
 
 - Baseline source: `7e8e072c18745a204608b62a2aa4c5068cbde8f2` (`origin/main` v3).
-- Capture and candidate v4 scoring source: `968e1b573ad773dee37e5fe7d0ffb9ded40eb46a`; the relevant scoring modules are unchanged through local worktree HEAD `5c5168a791b490a81be386e06810278c6bf6ce2e`.
+- Capture and candidate v4 scoring source: the relevant scoring modules are unchanged through the public harness commit `5c5168a791b490a81be386e06810278c6bf6ce2e`. The exact pre-capture source fingerprint is retained in local-only capture metadata.
 - Capture harness SHA-256: `7f68ec618aced4b62fa61069a4519fb84e32034b197108a4202434483ddf4e78`.
 - Local replay runner SHA-256: `753b69c213730880d4074a094cfc6c6ff1340e6f7f7ccb79dd51476e6e923b93`.
 - Sanitized replay artifact SHA-256: `2b1713c0ee1e2a6dbe869ac08d5cbe8818e29319e0dab8be119ccbdc1e7e2c91` (`.local-methodology-replay/replay-results.json`).
 - Internal finding-to-page URL map SHA-256: `60abac1ff5385fbca1934938032acdef81892399cf43b2abb56bb7cf92347f0a` (`.local-methodology-replay/finding-review-internal.json`; local only).
 
-The runner invokes the exact pure `buildPageResult`, `aggregateCategories`, weighted-score, `computeTopFixes`, and issue-builder modules from baseline and candidate source. Replay made no network requests and used identical captured HTML, status/headers, robots/llms text, sitemap membership, redirect count, and timing values for both versions. Candidate page checks run at the captured source SHA. All five manifests, page files, available resource files, recorded source/harness SHA values, page-set hashes, corpus hashes, and coverage counters validated with zero integrity errors.
+The runner invokes the exact pure `buildPageResult`, `aggregateCategories`, weighted-score, `computeTopFixes`, and issue-builder modules from baseline and candidate source. Replay made no network requests and used identical captured HTML, status/headers, robots/llms text, sitemap membership, redirect count, and timing values for both versions. Candidate page checks run against the immutable source snapshot used for the capture; its exact fingerprint remains in local-only capture metadata. All five manifests, page files, available resource files, recorded source/harness SHA values, page-set hashes, corpus hashes, and coverage counters validated with zero integrity errors.
 
 ## Nested replay results
 
