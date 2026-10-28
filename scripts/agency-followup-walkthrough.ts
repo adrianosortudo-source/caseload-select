@@ -1632,10 +1632,11 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["message_unsubscribe_mismatch_duplicate", "Synthetic Walkthrough Mismatched Recipient Unsubscribe Duplicate " + suffix, "Jordan Example", "eligible"],
     ["manual_reply", "Synthetic Walkthrough Manual Reply " + suffix, "Robin Example", "eligible"],
     ["manual_meeting", "Synthetic Walkthrough Manual Meeting " + suffix, "Cameron Example", "eligible"],
+    ["manual_booking", "Synthetic Walkthrough Manual Booking " + suffix, "Morgan Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and twenty Agency prospects");
+    progress("seeding synthetic operator and twenty-one Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -1683,7 +1684,7 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
           [conversationId],
         );
       }
-      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b", "message_unsubscribe_duplicate", "message_unsubscribe_early_a", "message_unsubscribe_early_b", "message_unsubscribe_source", "message_unsubscribe_source_duplicate", "message_unsubscribe_mismatch_duplicate", "manual_reply", "manual_meeting"].includes(key)) {
+      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b", "message_unsubscribe_duplicate", "message_unsubscribe_early_a", "message_unsubscribe_early_b", "message_unsubscribe_source", "message_unsubscribe_source_duplicate", "message_unsubscribe_mismatch_duplicate", "manual_reply", "manual_meeting", "manual_booking"].includes(key)) {
         const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
         const databaseClock = await pool.query<{ captured_at: Date }>("select clock_timestamp() - interval '1 minute' as captured_at");
         const capturedAt = databaseClock.rows[0]?.captured_at.toISOString();
@@ -2594,6 +2595,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   page.setDefaultTimeout(30000);
   page.setDefaultNavigationTimeout(180_000);
   const responseFailures: string[] = [];
+  let expectedSyntheticActivitySaveFailure = false;
   const recoveredBrowserRuntimeErrors: string[] = [];
   let templateApprovalAuditEvidence: Record<string, unknown> | undefined;
   let initialChunkRecoveryReloaded = false;
@@ -2601,9 +2603,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   page.on("pageerror", (error) => responseFailures.push("page error: " + error.message));
   page.on("console", (message) => {
     const text = message.text();
-    // Chromium reports the deliberately blocked suppressed-prospect release
-    // as a console resource error; that API response is asserted as HTTP 409.
-    if (message.type() === "error" && !/Failed to load resource: the server responded with a status of 409 \(Conflict\)/.test(text)) {
+    // Chromium reports the asserted suppressed-release 409 and synthetic save-failure 503
+    // as console resource errors; both are deliberate, narrowly scoped acceptance cases.
+    if (message.type() === "error" &&
+        !(expectedSyntheticActivitySaveFailure && /status of 503/.test(text)) &&
+        !/Failed to load resource: the server responded with a status of 409 \(Conflict\)/.test(text)) {
       responseFailures.push("browser console: " + text);
     }
   });
@@ -4375,10 +4379,10 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     }
     renderedWidths.push(width);
   }
-  progress("preparing two isolated synthetic, opted-in messages for manual reply and meeting stop acceptance");
+  progress("preparing three isolated synthetic, opted-in messages for reply, booked-meeting, and completed-meeting stop acceptance");
   await page.setViewportSize({ width: 1280, height: 1000 });
   const manualStopMessageIds = new Map<string, string>();
-  for (const prospect of [fixtures.prospects.manual_reply, fixtures.prospects.manual_meeting]) {
+  for (const prospect of [fixtures.prospects.manual_reply, fixtures.prospects.manual_booking, fixtures.prospects.manual_meeting]) {
     await createDraft(pool, page, journeyName, prospect);
     await markEligibleAndRelease(page, prospect);
     const prospectQueueCard = queueCard(page, prospect.firmName);
@@ -4563,15 +4567,19 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await historyButton.click();
     await expect(activityPanel).toBeVisible({ timeout: Math.min(30_000, remainingMs()) });
   };
+  let manualActivitySaveFailureEvidence: Record<string, unknown> | null = null;
+  const activitySaveFailureScreenshots: Array<{ path: string; sha256: string; viewport: number }> = [];
   const saveAndVerifyManualActivity = async (input: {
     prospect: ProspectFixture;
     kind: "human_reply" | "meeting";
     subject: string;
     body: string;
     replyDisposition?: "positive";
-    meetingOutcome?: string;
+    meetingOutcome?: string | null;
+    exerciseFailedSave?: boolean;
     expectedConversationStatus: "replied" | "meeting_scheduled" | "completed";
   }) => {
+    const expectedMeetingOutcome = input.meetingOutcome === undefined ? "Synthetic meeting confirmed" : input.meetingOutcome;
     await reopenHistoryAfterReload(input.prospect);
     const activityTypeControl = activityPanel.getByLabel("Activity type");
     await expect(activityTypeControl).toBeVisible();
@@ -4584,10 +4592,57 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     if (input.kind === "meeting") {
       const meetingOutcomeControl = activityPanel.getByPlaceholder("What happened at the meeting", { exact: true });
       await expect(meetingOutcomeControl).toBeVisible();
-      await meetingOutcomeControl.fill(input.meetingOutcome ?? "Synthetic meeting confirmed");
+      await meetingOutcomeControl.fill(expectedMeetingOutcome ?? "");
     }
-    await activityPanel.getByLabel("Subject").fill(input.subject);
-    await activityPanel.getByLabel("Message or note").fill(input.body);
+    const activitySubjectControl = activityPanel.getByLabel("Subject");
+    const activityBodyControl = activityPanel.getByLabel("Message or note");
+    await activitySubjectControl.fill(input.subject);
+    await activityBodyControl.fill(input.body);
+
+    if (input.exerciseFailedSave) {
+      const activityEndpointPattern = "**/api/admin/prospect-operations/activities";
+      let syntheticFailureServed = false;
+      await page.route(activityEndpointPattern, async (route) => {
+        if (route.request().method() !== "POST") return route.continue();
+        syntheticFailureServed = true;
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "synthetic_activity_save_failure" }) });
+      });
+      expectedSyntheticActivitySaveFailure = true;
+      try {
+        const failedSaveResponsePromise = page.waitForResponse((response) =>
+          new URL(response.url()).pathname === "/api/admin/prospect-operations/activities" && response.request().method() === "POST",
+          { timeout: Math.min(30_000, remainingMs()) },
+        );
+        await activityPanel.getByRole("button", { name: "Save activity", exact: true }).click();
+        const failedSaveResponse = await failedSaveResponsePromise;
+        if (failedSaveResponse.status() !== 503 || !syntheticFailureServed) throw new Error("The expected synthetic activity-save failure was not served.");
+        await expect(activityPanel.getByText("synthetic_activity_save_failure", { exact: true })).toBeVisible();
+        await expect(activitySubjectControl).toHaveValue(input.subject);
+        await expect(activityBodyControl).toHaveValue(input.body);
+        await expect(activityPanel.locator('[data-ui-component-content="prospect-activity-entry"]').filter({ hasText: input.subject })).toHaveCount(0);
+        const failedPersistence = await pool.query<{ count: string }>(
+          "select count(*) from public.prospect_activities where conversation_id=$1 and subject=$2",
+          [input.prospect.conversationId, input.subject],
+        );
+        if (failedPersistence.rows[0]?.count !== "0") throw new Error("Failed operator save created phantom activity history.");
+        await stableLayout();
+        const failureScreenshotPath = path.join(screenshotDir, RUN_ID + "-activity-save-error-retained-form.png");
+        await activityPanel.screenshot({ path: failureScreenshotPath });
+        activitySaveFailureScreenshots.push({
+          path: path.relative(process.cwd(), failureScreenshotPath).replaceAll("\\", "/"),
+          sha256: createHash("sha256").update(await readFile(failureScreenshotPath)).digest("hex"),
+          viewport: 1280,
+        });
+        manualActivitySaveFailureEvidence = {
+          responseStatus: 503, visibleError: true, formRetained: true,
+          phantomUiHistory: false, phantomDatabaseHistory: false, successfulRetry: false,
+        };
+      } finally {
+        await page.unroute(activityEndpointPattern);
+        expectedSyntheticActivitySaveFailure = false;
+      }
+    }
+
     const activityResponsePromise = page.waitForResponse((response) =>
       new URL(response.url()).pathname === "/api/admin/prospect-operations/activities" && response.request().method() === "POST",
       { timeout: Math.min(30_000, remainingMs()) },
@@ -4601,7 +4656,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await expect(renderedEntry).toContainText(input.kind === "human_reply" ? "Human reply via Email" : "Meeting via Video call");
     await expect(renderedEntry).toContainText(input.body);
     if (input.kind === "human_reply") await expect(renderedEntry).toContainText("Positive reply");
-    if (input.kind === "meeting") await expect(renderedEntry).toContainText(input.meetingOutcome ?? "Synthetic meeting confirmed");
+    if (input.kind === "meeting" && expectedMeetingOutcome) await expect(renderedEntry).toContainText(expectedMeetingOutcome);
 
     const persisted = await pool.query<{
       status: string;
@@ -4622,7 +4677,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     if (persisted.rows.length !== 1 || !saved || saved.status !== input.expectedConversationStatus || saved.kind !== input.kind ||
       saved.channel !== (input.kind === "human_reply" ? "email" : "video") || saved.subject !== input.subject || saved.body !== input.body ||
       (input.kind === "human_reply" && saved.reply_disposition !== (input.replyDisposition ?? "positive")) ||
-      (input.kind === "meeting" && saved.meeting_outcome !== (input.meetingOutcome ?? "Synthetic meeting confirmed"))) {
+      (input.kind === "meeting" && saved.meeting_outcome !== expectedMeetingOutcome)) {
       throw new Error(`The operator ${input.kind} activity or stop status did not persist exactly: ${JSON.stringify(saved ?? null)}.`);
     }
 
@@ -4632,18 +4687,22 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await expect(reloadedEntry).toContainText(input.kind === "human_reply" ? "Human reply via Email" : "Meeting via Video call");
     await expect(reloadedEntry).toContainText(input.body);
     if (input.kind === "human_reply") await expect(reloadedEntry).toContainText("Positive reply");
-    if (input.kind === "meeting") await expect(reloadedEntry).toContainText(input.meetingOutcome ?? "Synthetic meeting confirmed");
+    if (input.kind === "meeting" && expectedMeetingOutcome) await expect(reloadedEntry).toContainText(expectedMeetingOutcome);
 
     await page.setViewportSize({ width: 1280, height: 1000 });
     await activityPanel.scrollIntoViewIfNeeded();
     await stableLayout();
-    const screenshotPath = path.join(screenshotDir, `${RUN_ID}-activity-${input.kind}-persisted-after-reload.png`);
+    const screenshotLabel = input.kind === "meeting" ? input.expectedConversationStatus : input.kind;
+    const screenshotPath = path.join(screenshotDir, RUN_ID + "-activity-" + screenshotLabel + "-persisted-after-reload.png");
     await activityPanel.screenshot({ path: screenshotPath });
     recordedActivityScreenshots.push({
       path: path.relative(process.cwd(), screenshotPath).replaceAll("\\", "/"),
       sha256: createHash("sha256").update(await readFile(screenshotPath)).digest("hex"),
       activity: input.kind,
     });
+    if (input.exerciseFailedSave && manualActivitySaveFailureEvidence) {
+      manualActivitySaveFailureEvidence = { ...manualActivitySaveFailureEvidence, successfulRetry: true };
+    }
   };
 
   const manualReplySubject = `Synthetic operator reply ${RUN_ID}`;
@@ -4654,6 +4713,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     subject: manualReplySubject,
     body: manualReplyBody,
     replyDisposition: "positive",
+    exerciseFailedSave: true,
     expectedConversationStatus: "replied",
   });
   const replyMessageId = manualStopMessageIds.get(fixtures.prospects.manual_reply.id);
@@ -4679,7 +4739,31 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw new Error(`The persisted human reply did not block the due fake-provider handoff: ${JSON.stringify({ replyDispatch, message: replyStoppedMessage.rows[0] ?? null, event: replyBlockedEvent.rows[0] ?? null })}.`);
   }
 
-  const manualMeetingOutcome = `Synthetic meeting confirmed ${RUN_ID}`;
+  const manualBookedMeetingSubject = "Synthetic operator booked meeting " + RUN_ID;
+  const manualBookedMeetingBody = "Synthetic booked meeting saved without a completed outcome " + RUN_ID + ".";
+  await saveAndVerifyManualActivity({
+    prospect: fixtures.prospects.manual_booking, kind: "meeting",
+    subject: manualBookedMeetingSubject, body: manualBookedMeetingBody,
+    meetingOutcome: null, expectedConversationStatus: "meeting_scheduled",
+  });
+  const bookedMeetingMessageId = manualStopMessageIds.get(fixtures.prospects.manual_booking.id);
+  if (!bookedMeetingMessageId) throw new Error("Booked meeting has no scheduled stop-test message.");
+  const bookedMeetingDispatch = await withFixtureClaim(pool, bookedMeetingMessageId, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-ui-booked-meeting-stop-" + RUN_ID, now: acceptedNow, limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: "must-not-accept-booked-meeting-" + RUN_ID, acceptedAt: acceptedNow }],
+  }));
+  const bookedMeetingStoppedMessage = await pool.query<{ state: string; provider_message_id: string | null }>(
+    "select state,provider_message_id from public.agency_followup_messages where id=$1", [bookedMeetingMessageId],
+  );
+  const bookedMeetingBlockedEvent = await pool.query<{ event_payload: { blockers?: unknown } }>(
+    "select event_payload from public.agency_followup_events where message_id=$1 and event_type='message_blocked' order by occurred_at desc limit 1",
+    [bookedMeetingMessageId],
+  );
+  const bookedMeetingBlockers = bookedMeetingBlockedEvent.rows[0]?.event_payload.blockers;
+  if (bookedMeetingDispatch.blocked !== 1 || bookedMeetingDispatch.accepted !== 0 || bookedMeetingStoppedMessage.rows[0]?.state !== "blocked" ||
+      bookedMeetingStoppedMessage.rows[0]?.provider_message_id !== null || !Array.isArray(bookedMeetingBlockers) ||
+      !bookedMeetingBlockers.includes("conversation_stopped")) throw new Error("Booked meeting did not block the due fake-provider handoff.");
+  const manualMeetingOutcome = "Synthetic meeting confirmed " + RUN_ID;
   const manualMeetingSubject = `Synthetic operator meeting ${RUN_ID}`;
   const manualMeetingBody = `Synthetic meeting history recorded in the CRM operator form ${RUN_ID}.`;
   await saveAndVerifyManualActivity({
@@ -4716,7 +4800,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   progress("synthetic Agency contact-history forms stayed clear of the fixed mobile bar with viewport evidence at four small widths; copy, keyboard focus, and point-hit checks passed across twelve viewport widths");
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
   if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
-  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || activityPanelScreenshots.length !== activityPanelWidths.length + activityPanelWidths.filter((width) => width < 768).length || recordedActivityScreenshots.length !== 2 || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, activity-panel, saved/reloaded activity, authoring approval, or required-control evidence.");
+  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || activityPanelScreenshots.length !== activityPanelWidths.length + activityPanelWidths.filter((width) => width < 768).length || recordedActivityScreenshots.length !== 3 || activitySaveFailureScreenshots.length !== 1 || !manualActivitySaveFailureEvidence || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, activity-panel, saved/reloaded activity, authoring approval, or required-control evidence.");
   const summary = {
     runId: RUN_ID,
     ...sourceAtStart,
@@ -4747,9 +4831,12 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     providerStatusScreenshots,
     activityPanelScreenshots,
     recordedActivityScreenshots,
+    activitySaveFailureScreenshots,
     manualActivityAcceptance: {
-      humanReply: { prospectId: fixtures.prospects.manual_reply.id, messageId: replyMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "replied", dispatchBlocked: replyDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: replyStoppedMessage.rows[0]?.provider_message_id ?? null },
-      meeting: { prospectId: fixtures.prospects.manual_meeting.id, messageId: meetingMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "completed", dispatchBlocked: meetingDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: meetingStoppedMessage.rows[0]?.provider_message_id ?? null },
+      humanReply: { prospectId: fixtures.prospects.manual_reply.id, messageId: replyMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "replied", failedSave: manualActivitySaveFailureEvidence, dispatchBlocked: replyDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: replyStoppedMessage.rows[0]?.provider_message_id ?? null },
+      bookedMeeting: { prospectId: fixtures.prospects.manual_booking.id, messageId: bookedMeetingMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "meeting_scheduled", meetingOutcome: null, dispatchBlocked: bookedMeetingDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: bookedMeetingStoppedMessage.rows[0]?.provider_message_id ?? null },
+      completedMeeting: { prospectId: fixtures.prospects.manual_meeting.id, messageId: meetingMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "completed", meetingOutcome: manualMeetingOutcome, dispatchBlocked: meetingDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: meetingStoppedMessage.rows[0]?.provider_message_id ?? null },
+      operatorErrorHandling: manualActivitySaveFailureEvidence,
       provider: "network-free fake; no message accepted",
     },
     syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
@@ -4781,7 +4868,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     screenshotCount: screenshots.length,
     consentPanelScreenshotCount: consentPanelScreenshots.length,
     activityPanelScreenshotCount: activityPanelScreenshots.length,
-    recordedActivityScreenshotCount: recordedActivityScreenshots.length
+    recordedActivityScreenshotCount: recordedActivityScreenshots.length,
+    activitySaveFailureScreenshotCount: activitySaveFailureScreenshots.length
   };
   return summary;
   } finally {
