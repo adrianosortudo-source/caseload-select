@@ -4489,7 +4489,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
         await target.locator.evaluate((element) => {
           element.scrollIntoView({ block: "start", behavior: "instant" });
           // Keep the full 8px gap despite fractional CSS-pixel scroll alignment.
-          window.scrollBy(0, -1);
+          window.scrollBy({ top: -1, behavior: "instant" });
         });
         await stableLayout();
         const geometry = await target.locator.evaluate((element) => {
