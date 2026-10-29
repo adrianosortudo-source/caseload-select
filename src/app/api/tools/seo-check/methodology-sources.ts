@@ -60,7 +60,7 @@ export const METHODOLOGY_SOURCES: Record<string, MethodologySource> = {
   S02: { id: "S02", publisher: "IETF", title: "RFC 9309: Robots Exclusion Protocol", url: "https://www.rfc-editor.org/info/rfc9309/", publishedOrUpdatedDate: "2022", verifiedAt: REVIEWED, verification: "verified", role: "implemented", supports: ["Robots parser semantics"], implementationRefs: ["src/app/api/tools/seo-check/engine-core.ts", "src/app/api/tools/seo-check/page-checks.ts"], limitations: ["Robots rules are not access authorization and do not guarantee deindexing."] },
   S03: { id: "S03", publisher: "Sitemaps.org", title: "Sitemaps XML format", url: "https://www.sitemaps.org/protocol.html", verifiedAt: REVIEWED, verification: "verified", role: "implemented", supports: ["Sitemap URL discovery format"], implementationRefs: ["src/app/api/tools/seo-check/route.ts"], limitations: ["Discovered URLs are not a verified whole-site inventory or indexed-page count."] },
   S01: { id: "S01", publisher: "Schema.org", title: "LegalService", url: "https://schema.org/LegalService", verifiedAt: REVIEWED, verification: "verified", role: "context", supports: ["LegalService vocabulary term"], implementationRefs: ["src/app/api/tools/seo-check/page-checks.ts"], limitations: ["Vocabulary does not establish a Google requirement, AI requirement, or professional credential."] },
-  B01: { id: "B01", publisher: "Microsoft Bing", title: "Bing Webmaster Guidelines", url: "https://www.bing.com/webmasters/help/webmaster-guidelines-30fba23a", verifiedAt: REVIEWED, verification: "pending", role: "context", supports: [], implementationRefs: [], limitations: ["Full-source review pending; do not derive requirements from search snippets."] },
+  B01: { id: "B01", publisher: "Microsoft Bing", title: "Bing Webmaster Guidelines", url: "https://www.bing.com/webmasters/help/webmaster-guidelines-30fba23a", verifiedAt: REVIEWED, verification: "verified", role: "context", supports: ["Reviewed Bing guidance as contextual background; no Bing-specific score rule is implemented."], implementationRefs: [], limitations: ["Context only; this scan does not infer actual Bing indexing or apply Bing-specific score rules."] },
   L01: { id: "L01", publisher: "Law Society of Ontario", title: "Rules of Professional Conduct, Chapter 4", url: "https://lso.ca/about-lso/legislation-rules/rules-of-professional-conduct/chapter-4", verifiedAt: REVIEWED, verification: "pending", role: "context", supports: [], implementationRefs: [], limitations: ["Full-source review pending; do not implement detailed legal-compliance rules."] },
 };
 
@@ -83,7 +83,7 @@ const sourceIdsByCheck: Record<string, string[]> = {
   "On-Page SEO::Meta description": ["G14"],
   "Indexability::HTTP status": ["G01"],
   "Indexability::Redirect chain": ["G18", "G19"],
-  "Indexability::Indexable": ["G01", "G04"],
+  "Indexability::Indexable": ["G01", "G04", "G17"],
   "Indexability::Followable links": ["G17"],
   "Indexability::Canonical tag": ["G15"],
   "Indexability::Mixed indexability signals": ["G04", "G15", "G17"],
@@ -152,8 +152,8 @@ const scoredCriteriaByCheck: Record<string, { predicate: string; scoringRational
     scoringRationale: "A successful response is a directly observed retrieval condition for the page checks. This score records response status only; it does not establish indexing.",
   },
   "Indexability::Indexable": {
-    predicate: "No meta robots or X-Robots-Tag noindex directive was observed for this URL.",
-    scoringRationale: "A noindex instruction directly asks search systems to exclude the URL. The score records the instruction, not actual index status or whether exclusion is intended.",
+    predicate: "No generic or Googlebot-specific noindex directive was observed in the inspected initial HTML or response headers; unknown scope is excluded from the score.",
+    scoringRationale: "Google documents generic and Googlebot-specific robots instructions. The score records an applicable instruction only, not actual index status or whether exclusion is intended.",
   },
   "Indexability::robots.txt crawl access": {
     predicate: "No applicable robots.txt Disallow rule for Googlebot was observed on this page path.",

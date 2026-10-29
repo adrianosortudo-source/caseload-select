@@ -38,6 +38,7 @@ import {
 import { type TtfbMeasurement } from "./content-signals";
 import { buildAiBotStatuses } from "./crawler-policy";
 import { buildPageResult, aggregateCategories, computeTopFixes } from "./page-checks";
+import { CURRENT_METHODOLOGY_VERSION } from "./methodology-version";
 import {
   type PageResult,
   type SeoCheckResult,
@@ -611,9 +612,9 @@ export async function POST(req: NextRequest) {
     // V4 reports only source-mapped page checks. Bounded-crawl absence
     // heuristics remain available to legacy analysis but are not exposed as
     // public findings or operator summaries for the current method.
-    const issues = buildV4Issues(forFindings, effectiveContentPages);
+    const issues = buildV4Issues(forFindings, effectiveContentPages, CURRENT_METHODOLOGY_VERSION);
 
-    const internalSummary = buildInternalSummary(pages, issues, overallScore);
+    const internalSummary = buildInternalSummary(pages, issues, overallScore, CURRENT_METHODOLOGY_VERSION);
     const breakdown = severityBreakdown(issues);
 
     // The internal prospecting layer (summary + per-issue internal notes and
@@ -654,7 +655,7 @@ export async function POST(req: NextRequest) {
 
     const result: SeoCheckResult = {
       domain,
-      methodologyVersion: 4,
+      methodologyVersion: CURRENT_METHODOLOGY_VERSION,
       scanMode,
       pagesScanned: pages.length,
       pages,
@@ -680,7 +681,7 @@ export async function POST(req: NextRequest) {
       // checks contribute to no grade, built from the actual scored:false
       // flags set this scan (not a hand-maintained list that can drift).
       scoring: {
-        methodologyVersion: 4,
+        methodologyVersion: CURRENT_METHODOLOGY_VERSION,
         label: "Website checks",
         assessed: aggregatedCategories.some((category) => (CATEGORY_WEIGHTS[category.name] ?? 6) > 0 && category.maxScore > 0),
         categoryWeights: CATEGORY_WEIGHTS,

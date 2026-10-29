@@ -5,12 +5,12 @@ import { buildPageResult } from "../page-checks";
 const emptyHeaders = new Headers();
 const emptySitemap = new Set<string>();
 
-function page(url: string, html = "<html><head><title>Firm</title></head><body>Legal services</body></html>", robots: string | null = null, sitemap: Set<string> | null = emptySitemap, sitemapComplete = true) {
+function page(url: string, html = "<html><head><title>Firm</title></head><body>Legal services</body></html>", robots: string | null = null, sitemap: Set<string> | null = emptySitemap, sitemapComplete = true, headers: Headers = emptyHeaders) {
   return buildPageResult(
     html,
     url,
     url,
-    emptyHeaders,
+    headers,
     { ms: 100, sampleCount: 1 },
     0,
     "example.com",
@@ -27,6 +27,34 @@ function item(result: ReturnType<typeof page>, category: string, label: string) 
 }
 
 describe("page-scoped search access evidence", () => {
+  it("assesses every generic meta directive and applies Googlebot scope without globalizing other crawlers", () => {
+    const url = "https://example.com/";
+    const generic = page(url, '<html><head><meta name="robots" content="index"><meta content="none" name=robots></head><body>Firm</body></html>');
+    expect(generic.indexability.googleDirectives?.noindex).toBe("observed");
+    expect(item(generic, "Indexability", "Indexable")).toMatchObject({ status: "fail" });
+
+    const googlebot = page(url, '<html><head><meta name="googlebot" content="noindex"></head><body>Firm</body></html>');
+    expect(googlebot.indexability.googleDirectives?.noindex).toBe("observed");
+
+    const bingOnly = page(url, '<html><head><meta name="bingbot" content="noindex"></head><body>Firm</body></html>');
+    expect(bingOnly.indexability.googleDirectives?.noindex).toBe("not-observed");
+    expect(item(bingOnly, "Indexability", "Indexable")).toMatchObject({ status: "pass" });
+  });
+
+  it("scopes X-Robots-Tag headers and leaves flattened ambiguity unscored", () => {
+    const url = "https://example.com/";
+    const bing = page(url, undefined, null, emptySitemap, true, new Headers({ "x-robots-tag": "Bingbot: noindex" }));
+    expect(bing.indexability.googleDirectives?.noindex).toBe("not-observed");
+    expect(item(bing, "Indexability", "Indexable")).toMatchObject({ status: "pass" });
+
+    const google = page(url, undefined, null, emptySitemap, true, new Headers({ "x-robots-tag": "Googlebot: noindex" }));
+    expect(item(google, "Indexability", "Indexable")).toMatchObject({ status: "fail" });
+
+    const ambiguous = page(url, undefined, null, emptySitemap, true, new Headers({ "x-robots-tag": "Bingbot: noindex, noindex" }));
+    expect(ambiguous.indexability.googleDirectives?.noindex).toBe("unknown");
+    expect(item(ambiguous, "Indexability", "Indexable")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
+  });
+
   it("keeps a schema-only address separate from visible address evidence", () => {
     const html = `<html><head><title>Firm</title><script type="application/ld+json">${JSON.stringify({
       "@context": "https://schema.org",
@@ -118,7 +146,7 @@ describe("page-scoped search access evidence", () => {
     const result = page(url, `<html><head><title>Services</title><meta name="robots" content="noindex,follow"><link rel="canonical" href="${url}"></head><body>Services</body></html>`);
     expect(result.indexability.mixedSignals).toBe(false);
     expect(item(result, "Indexability", "Mixed indexability signals")?.status).toBe("pass");
-    expect(item(result, "Indexability", "Indexable")?.detail).toContain("does not confirm its current indexing status");
+    expect(item(result, "Indexability", "Indexable")?.detail).toContain("does not confirm current indexing status");
     expect(item(result, "Indexability", "Indexable")?.detail).not.toContain("will drop");
   });
 

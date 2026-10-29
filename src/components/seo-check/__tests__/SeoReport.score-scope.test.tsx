@@ -21,7 +21,7 @@ const scoreCategories: SeoCheckResult["categories"] = [
 
 const result: SeoCheckResult = {
   domain: "example.com",
-  methodologyVersion: 4,
+  methodologyVersion: 5,
   pagesScanned: 2,
   pages: [],
   categories: scoreCategories,
@@ -49,5 +49,27 @@ describe("SeoReport score scope", () => {
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     expect(writeText.mock.calls[0][0]).toContain(scopeLabel + ": 98/100.");
     expect(writeText.mock.calls[0][0]).toContain(scoreNote);
+  });
+
+  it("does not turn missing historical robot fields into a definite absence", () => {
+    const historical: SeoCheckResult = {
+      ...result,
+      methodologyVersion: 4,
+      pages: [{
+        url: "https://example.com/", title: "Home", pageType: "homepage", pageScore: null,
+        pageGrade: "Not assessed", aiVisibilityScore: null, categories: [], failCount: 0,
+        warnCount: 0, httpStatus: 200, indexable: null,
+        indexability: { metaNoindex: null, headerNoindex: null, indexable: null },
+      }, {
+        url: "https://example.com/contact", title: "Contact", pageType: "contact", pageScore: null,
+        pageGrade: "Not assessed", aiVisibilityScore: null, categories: [], failCount: 0,
+        warnCount: 0, httpStatus: 200, indexable: true,
+        indexability: { metaNoindex: false, headerNoindex: false, indexable: true },
+      }],
+    };
+    render(<SeoReport result={historical} onReset={vi.fn()} hideCta />);
+    fireEvent.click(screen.getByText("Pages inspected (2)"));
+    expect(screen.getByText("Historical noindex status not assessed")).toBeTruthy();
+    expect(screen.getByText("No noindex instruction observed")).toBeTruthy();
   });
 });

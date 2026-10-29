@@ -31,6 +31,7 @@ interface SavedAuditRow {
   scan_mode: string | null;
   pages_scanned: number | null;
   issue_count: number | null;
+  methodologyVersion: number | null;
   created_at: string;
 }
 
@@ -40,11 +41,14 @@ async function loadSavedAudits(): Promise<SavedAuditRow[]> {
   try {
     const { data, error } = await supabaseAdmin
       .from("seo_check_runs")
-      .select("id, domain, grade, overall_score, ai_search_score, scan_mode, pages_scanned, issue_count, created_at")
+      .select("id, domain, grade, overall_score, ai_search_score, scan_mode, pages_scanned, issue_count, created_at, result")
       .order("created_at", { ascending: false })
       .limit(25);
     if (error) return [];
-    return (data ?? []) as SavedAuditRow[];
+    return (data ?? []).map((row) => {
+      const result = row.result && typeof row.result === "object" && !Array.isArray(row.result) ? row.result as Record<string, unknown> : null;
+      return { ...row, methodologyVersion: typeof result?.methodologyVersion === "number" ? result.methodologyVersion : null } as SavedAuditRow;
+    });
   } catch {
     return [];
   }
@@ -91,6 +95,7 @@ export default async function AdminSeoCheckPage() {
                 <tr className="text-left text-[10px] uppercase tracking-wider font-display text-black/40 border-b border-black/10">
                   <th className="px-4 py-2.5">Domain</th>
                   <th className="px-4 py-2.5">SEO</th>
+                  <th className="px-4 py-2.5">Method</th>
                   <th className="px-4 py-2.5">AI</th>
                   <th className="px-4 py-2.5">Scan</th>
                   <th className="px-4 py-2.5">Issues</th>
@@ -102,7 +107,8 @@ export default async function AdminSeoCheckPage() {
                 {audits.map((a) => (
                   <tr key={a.id} className="border-b border-black/5 last:border-0">
                     <td className="px-4 py-2.5 font-medium text-navy">{a.domain ?? "unknown"}</td>
-                    <td className="px-4 py-2.5 text-black/70">{a.grade ?? "?"} {a.overall_score ?? "?"}</td>
+                    <td className="px-4 py-2.5 text-black/70">{a.overall_score == null ? "Not assessed" : `${a.grade ?? "?"} ${a.overall_score}`}</td>
+                    <td className="px-4 py-2.5 text-black/60">{a.methodologyVersion === 5 ? "Website checks v5" : a.methodologyVersion === 4 ? "Historical v4" : a.methodologyVersion == null ? "Method not recorded" : a.methodologyVersion > 5 ? "Unsupported method" : "Historical score"}</td>
                     <td className="px-4 py-2.5 text-black/70">{a.ai_search_score ?? "?"}</td>
                     <td className="px-4 py-2.5 text-black/60">{a.scan_mode ?? "?"} · {a.pages_scanned ?? 0}p</td>
                     <td className="px-4 py-2.5 text-black/60">{a.issue_count ?? 0}</td>

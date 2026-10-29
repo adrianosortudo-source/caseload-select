@@ -88,6 +88,35 @@ function mkPage(opts: {
 }
 
 describe("buildIssues", () => {
+  it("keeps v5 operator indexability copy scoped to an observed Google-addressed instruction", () => {
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage",
+      categories: [cat("Indexability", [{ label: "Indexable", status: "fail", detail: "A noindex instruction addressed to Google was observed." }])],
+    })];
+    const issues = buildIssues(pages, Infinity, { methodologyVersion: 5 });
+    const indexIssue = issues.find((issue) => issue.title === "Indexable");
+    expect(indexIssue?.internalNote).toContain("does not confirm that Google retrieved the response");
+    expect(indexIssue?.prospectingAngle).toContain("addressed to Google");
+    expect(indexIssue?.prospectingAngle).not.toContain("invisible to search");
+    const summary = buildInternalSummary(pages, issues, 60, 5);
+    expect(summary.likelyPainPoints).toContain("Google-addressed page instructions need review");
+    expect(summary.likelyPainPoints).not.toContain("Pages held back from search engines by technical settings");
+  });
+
+  it("describes a v5 robots.txt restriction without inventing a noindex instruction", () => {
+    const pages = [mkPage({
+      url: "https://x.com/", pageType: "homepage",
+      categories: [cat("Indexability", [{ label: "robots.txt crawl access", status: "fail", detail: "A matching robots.txt rule restricts Googlebot on this page path." }])],
+    })];
+    const issues = buildIssues(pages, Infinity, { methodologyVersion: 5 });
+    const issue = issues.find((item) => item.title === "robots.txt crawl access");
+    expect(issue?.internalNote).toContain("robots.txt rules appear to restrict Googlebot");
+    expect(issue?.prospectingAngle).not.toContain("noindex instruction");
+    const summary = buildInternalSummary(pages, issues, 60, 5);
+    expect(summary.likelyPainPoints).toContain("Googlebot crawl access policy needs review");
+    expect(summary.likelyPainPoints).not.toContain("Google-addressed page instructions need review");
+  });
+
   it("maps an Indexability failure to critical severity", () => {
     const pages = [mkPage({
       url: "https://x.com/", pageType: "homepage",

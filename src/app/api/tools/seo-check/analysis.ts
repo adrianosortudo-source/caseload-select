@@ -68,6 +68,7 @@ import {
   type PageRenderingSnapshot,
   type SiteRenderingSummary,
 } from "./rendering-analysis";
+import type { IndexDirectiveAssessment } from "./index-directives";
 
 /* ────────────────────────────────────────────────────────
    Per-page enriched signals
@@ -80,14 +81,15 @@ export interface Indexability {
   canonical: string | null;
   canonicalSelf: boolean | null;
   canonicalSameOrigin: boolean | null;
-  metaNoindex: boolean;
-  metaNofollow: boolean;
-  headerNoindex: boolean;
-  headerNofollow: boolean;
-  indexable: boolean;
+  metaNoindex: boolean | null;
+  metaNofollow: boolean | null;
+  headerNoindex: boolean | null;
+  headerNofollow: boolean | null;
+  indexable: boolean | null;
+  googleDirectives?: IndexDirectiveAssessment;
   inSitemap: boolean | null;
   sitemapComplete?: boolean;
-  mixedSignals: boolean;
+  mixedSignals: boolean | null;
 }
 
 export interface SchemaSummary {
@@ -153,8 +155,9 @@ export interface PageResult {
   failCount: number;
   warnCount: number;
   httpStatus: number;
-  indexable: boolean;
+  indexable: boolean | null;
   indexability: Indexability;
+  robotsAccess?: { scanner: boolean | null; google: boolean | null; bing: boolean | null };
   schema: SchemaSummary;
   lawFirm: LawFirmSignals;
   wordCount: number;
@@ -430,9 +433,29 @@ function severityFor(category: string, label: string, status: "warn" | "fail", d
 }
 
 /** Internal note + outreach angle, derived from category and severity. */
-function internalAngle(category: string, _severity: Severity): { note: string; angle: string } {
+function internalAngle(category: string, _severity: Severity, methodologyVersion = 4, label = ""): { note: string; angle: string } {
   const c = category;
   if (c === "Indexability") {
+    if (methodologyVersion === 5) {
+      if (label === "Indexable") {
+      return {
+        note: "The inspected HTML or response contains a page-level noindex instruction addressed to Google. This does not confirm that Google retrieved the response or whether the setting is intended.",
+        angle: "The inspected page response contains a noindex instruction addressed to Google. Google can act on it only if it retrieves that response, so confirm the intended search visibility before discussing a change.",
+      };
+      }
+      if (/robots\.txt/i.test(label)) return {
+        note: "The inspected robots.txt rules appear to restrict Googlebot access. This does not establish whether Google retrieved or indexed the page.",
+        angle: "The inspected robots.txt rules appear to restrict Googlebot access. Confirm the intended crawl policy before discussing a change.",
+      };
+      if (/HTTP status/i.test(label)) return {
+        note: "The page returned an HTTP response status that needs review. This observation alone does not establish a Google noindex instruction.",
+        angle: "The inspected page returned an HTTP status that needs review; confirm the expected response before discussing an indexing change.",
+      };
+      return {
+        note: "An indexability-related condition needs review. The available evidence does not establish a Google-addressed noindex instruction.",
+        angle: "Review the recorded indexability evidence before making claims about Google crawl or indexing behavior.",
+      };
+    }
     return {
       note: "Indexability blocker. If real, pages are invisible to search regardless of content quality. Strong, concrete opener.",
       angle: "Some of the firm's pages appear to be held back from search engines by a technical setting, not by content. That is usually a quick fix with an outsized payoff.",
@@ -541,7 +564,7 @@ const AI_CONTENT_DEPENDENT_LABELS = new Set([
 export function buildIssues(
   pages: PageResult[],
   effectiveContentPages: number = Infinity,
-  options: { includePlaceholderContentFinding?: boolean } = {}
+  options: { includePlaceholderContentFinding?: boolean; methodologyVersion?: number } = {}
 ): Issue[] {
   const totalPages = pages.length || 1;
   const isPlaceholderClass = effectiveContentPages <= 1;
@@ -702,7 +725,7 @@ export function buildIssues(
         EFFORT_DIVISOR[effort]
     );
 
-    const { note, angle } = internalAngle(acc.category, severity);
+    const { note, angle } = internalAngle(acc.category, severity, options.methodologyVersion ?? 4, acc.label);
     const evidence = affectedCount === 1
       ? `1 page: ${[...reportedUrls][0]}`
       : `${affectedCount} of ${totalPages} pages, including ${distinctEvidencePaths([...reportedUrls]).slice(0, 3).join(", ")}`;
@@ -834,8 +857,8 @@ export function severityBreakdown(issues: Issue[]): SeverityBreakdown {
  * The legacy site-structure heuristic builder remains available for historical
  * reports and calibration, but its bounded-crawl absence claims are excluded.
  */
-export function buildV4Issues(pages: PageResult[], effectiveContentPages: number = Infinity): Issue[] {
-  return buildIssues(pages, effectiveContentPages, { includePlaceholderContentFinding: false }).sort(compareIssuesByPriority);
+export function buildV4Issues(pages: PageResult[], effectiveContentPages: number = Infinity, methodologyVersion = 4): Issue[] {
+  return buildIssues(pages, effectiveContentPages, { includePlaceholderContentFinding: false, methodologyVersion }).sort(compareIssuesByPriority);
 }
 
 /**
@@ -967,7 +990,8 @@ function uniq(arr: string[]): string[] {
 export function buildInternalSummary(
   pages: PageResult[],
   issues: Issue[],
-  overallScore: number | null
+  overallScore: number | null,
+  methodologyVersion = 4
 ): InternalSummary {
   const totalPages = pages.length || 1;
   const home = pages[0];
@@ -1011,8 +1035,17 @@ export function buildInternalSummary(
   const prospectFitScore = Math.max(0, Math.min(100, Math.round(fit)));
 
   // Pain points: categories with the most weighted findings, human phrasing.
+  const indexabilityPain = methodologyVersion === 5
+    ? byCat("Indexability").some((i) => i.title === "Indexable")
+      ? "Google-addressed page instructions need review"
+      : byCat("Indexability").some((i) => /robots\.txt/i.test(i.title))
+        ? "Googlebot crawl access policy needs review"
+        : byCat("Indexability").some((i) => /HTTP status/i.test(i.title))
+          ? "Page response status needs review"
+          : null
+    : "Pages held back from search engines by technical settings";
   const painByCat: Array<[string, string]> = [
-    ["Indexability", "Pages held back from search engines by technical settings"],
+    ...(indexabilityPain ? [["Indexability", indexabilityPain] as [string, string]] : []),
     ["Legal Marketing", "Intake and trust cues are thin for a firm site"],
     ["On-Page SEO", "Core on-page signals missing across multiple pages"],
     ["Local SEO", "Weak local signals for the firm's catchment"],

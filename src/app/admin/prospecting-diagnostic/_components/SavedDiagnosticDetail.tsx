@@ -97,7 +97,7 @@ export default function SavedDiagnosticDetail({ run, priorRunId }: { run: SavedD
       <div className="lg:col-span-2 space-y-6">
         <section className="bg-white border border-black/8 p-5 sm:p-6">
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            <ScoreBox label={methodologyVersion >= 3 ? "Website checks" : "Historical score"} value={run.overall_score} suffix="/100" />
+            <ScoreBox label={methodologyVersion === 5 ? "Website checks v5" : methodologyVersion === 4 ? "Historical v4" : primaryResult?.methodologyVersion == null ? "Method not recorded" : methodologyVersion > 5 ? "Unsupported method" : "Historical score"} value={run.overall_score} emptyLabel="Not assessed" suffix="/100" />
             <ScoreBox label="AI Search" value={run.ai_search_score} emptyLabel="Not scored" suffix="/100" />
             <ScoreBox label="Intent" value={run.intent_score} suffix="/100" />
             <ScoreBox label="Fit" value={run.prospect_fit_score} suffix="/100" />

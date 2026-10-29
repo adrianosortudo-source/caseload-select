@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from("seo_check_runs")
-    .select("id, domain, scan_mode, pages_scanned, overall_score, ai_search_score, ai_policy_score, grade, rendering_risk, issue_count, created_at")
+    .select("id, domain, scan_mode, pages_scanned, overall_score, ai_search_score, ai_policy_score, grade, rendering_risk, issue_count, created_at, result")
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -61,7 +61,11 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: data ?? [] });
+  const items = (data ?? []).map(({ result, ...row }) => {
+    const savedResult = asRecord(result);
+    return { ...row, methodologyVersion: typeof savedResult?.methodologyVersion === "number" ? savedResult.methodologyVersion : null };
+  });
+  return NextResponse.json({ items });
 }
 
 export async function DELETE(req: NextRequest) {

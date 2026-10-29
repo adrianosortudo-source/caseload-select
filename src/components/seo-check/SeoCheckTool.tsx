@@ -17,6 +17,7 @@ interface SavedRunSummary {
   grade: string | null;
   rendering_risk: string | null;
   issue_count: number;
+  methodologyVersion: number | null;
   created_at: string;
 }
 
@@ -319,7 +320,7 @@ export default function SeoCheckTool({
                       >
                         <span className="seo-history-domain">{run.domain}</span>
                         <span className="seo-history-meta">
-                          {run.grade ?? "?"} {run.overall_score ?? "?"}/100 · {run.scan_mode} · {run.pages_scanned}p
+                          {run.methodologyVersion === 5 ? "Website checks v5" : run.methodologyVersion === 4 ? "Historical v4" : run.methodologyVersion == null ? "Method not recorded" : "Historical method"} · {run.overall_score == null ? "Not assessed" : `${run.grade ?? "?"} ${run.overall_score}/100`} · {run.scan_mode} · {run.pages_scanned}p
                           {run.issue_count > 0 ? ` · ${run.issue_count} issues` : ""}
                         </span>
                         <span className="seo-history-date">

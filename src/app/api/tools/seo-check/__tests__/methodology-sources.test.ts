@@ -16,6 +16,9 @@ describe("methodology check registry", () => {
     }
     const ids = definitions.map((definition) => definition.id);
     expect(new Set(ids).size).toBe(ids.length);
+    expect(Object.values(METHODOLOGY_CHECKS).find((definition) => definition.category === "Indexability" && definition.label === "Indexable")?.sourceIds).toContain("G17");
+    expect(METHODOLOGY_SOURCES.B01).toMatchObject({ verification: "verified", role: "context" });
+    expect(Object.values(METHODOLOGY_CHECKS).filter((definition) => definition.scoreEligible).some((definition) => definition.sourceIds.includes("B01"))).toBe(false);
     for (const definition of definitions) {
       for (const sourceId of definition.sourceIds) expect(METHODOLOGY_SOURCES[sourceId]).toBeDefined();
       if (definition.scoreEligible) {
