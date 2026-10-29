@@ -15,6 +15,9 @@ export default defineConfig({
       "src/components/intake-v2/__tests__/**/*.test.tsx",
       "src/components/desired-client/__tests__/**/*.test.tsx",
       "src/components/seo-check/__tests__/**/*.test.tsx",
+      // Keep this rendered-copy gate scoped to the SEO landing page rather
+      // than widening all App Router marketing page tests.
+      "src/app/(marketing)/tools/seo-check/__tests__/page-copy.test.tsx",
       "src/components/portal/__tests__/**/*.test.tsx",
       "src/app/admin/prospects/__tests__/sobirovs-assessment-profile.test.tsx",
       "src/**/__evals__/**/*.test.ts",

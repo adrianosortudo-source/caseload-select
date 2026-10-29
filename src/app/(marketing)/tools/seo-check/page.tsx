@@ -81,7 +81,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
               Areas for review<span className="ts" />
             </h2>
             <p className="seo-categories-intro">
-              The v5 score uses five directly observed check types across three of the report’s ten categories: page title, HTTP status, indexability, robots.txt crawl access and HTTPS. Other observations are shown for context and do not add points. If an instruction’s meaning is unclear, the scan leaves that check unscored.
+              The v5 score uses five directly observed check types across three of the report’s ten categories: page title, HTTP status, indexability, robots.txt crawl access and HTTPS. Other observations are shown for context and do not add points. If we cannot tell whether a page tells Google not to index it, that check is not scored.
             </p>
           </div>
           <div className="seo-categories-grid">

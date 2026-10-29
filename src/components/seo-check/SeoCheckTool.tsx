@@ -291,8 +291,8 @@ export default function SeoCheckTool({
           )}
           <p className="seo-input-hint">
             {isOperator
-              ? "Internal diagnostic. Runs a bounded crawl and checks nine categories per page (on-page, indexability, schema, AI visibility, legal marketing, local SEO, technical, performance, links). The score reflects five limited check types, not a whole-site SEO grade. If an instruction’s meaning is unclear, the scan leaves that check unscored. The report includes a prospecting summary and outreach angles for internal use."
-              : "Enter any law firm website. This scan checks public SEO, AI crawler settings, structured data, local details, and technical delivery. Its score covers five limited check types, not the whole site. If an instruction’s meaning is unclear, the scan leaves that check unscored. Use the findings as a starting point; the scan does not verify rankings or AI citations."}
+              ? "Internal diagnostic. Runs a bounded crawl and reviews the available website categories per page. The score reflects five limited check types, not a whole-site SEO grade. If we cannot tell whether a page tells Google not to index it, that check is not scored. The report includes a prospecting summary and outreach angles for internal use."
+              : "Enter any law firm website. This scan checks public SEO, AI crawler settings, structured data, local details, and technical delivery. Its score covers five limited check types, not the whole site. If we cannot tell whether a page tells Google not to index it, that check is not scored. Use the findings as a starting point; the scan does not verify rankings or AI citations."}
           </p>
         </div>
       )}

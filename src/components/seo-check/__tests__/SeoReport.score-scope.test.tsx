@@ -35,10 +35,16 @@ const result: SeoCheckResult = {
 };
 
 describe("SeoReport score scope", () => {
-  it("states the v5 limited score and Google scope uncertainty on the start screen", () => {
+  it("states the v5 limited score and when an indexability check is unscored", () => {
     render(<SeoCheckTool />);
     expect(screen.getByText(/score covers five limited check types, not the whole site/i)).toBeTruthy();
-    expect(screen.getByText(/If an instruction’s meaning is unclear, the scan leaves that check unscored/i)).toBeTruthy();
+    expect(screen.getByText(/If we cannot tell whether a page tells Google not to index it, that check is not scored/i)).toBeTruthy();
+  });
+
+  it("uses the same plain-language Google indexability limit in operator mode", () => {
+    render(<SeoCheckTool variant="operator" />);
+    expect(screen.getByText(/reviews the available website categories per page/i)).toBeTruthy();
+    expect(screen.getByText(/If we cannot tell whether a page tells Google not to index it, that check is not scored/i)).toBeTruthy();
   });
 
   it("shows the scored coverage beside the score and includes it in the copied summary", async () => {
