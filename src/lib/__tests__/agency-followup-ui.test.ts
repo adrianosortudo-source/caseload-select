@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agencyFollowupDeliveryStatusLabel, canApproveAgencyFollowupMessage } from "@/lib/agency-followup-ui";
+import { agencyFollowupDeliveryStatusLabel, canApproveAgencyFollowupMessage, formatAgencyFollowupScheduledAt } from "@/lib/agency-followup-ui";
 
 describe("agency follow-up message approval action", () => {
   it("allows review when only approval and send timing are outstanding", () => {
@@ -53,5 +53,17 @@ describe("agency follow-up delivery status label", () => {
       .toBe("Delivered per provider");
     expect(agencyFollowupDeliveryStatusLabel({ messageState: "accepted", providerDeliveryStatus: "suppressed" }))
       .toBe("Blocked by provider");
+  });
+});
+
+describe("agency follow-up schedule display", () => {
+  it("shows the exact scheduled instant in the journey timezone", () => {
+    expect(formatAgencyFollowupScheduledAt("2026-10-29T02:00:00.000Z", "America/Toronto"))
+      .toBe("2026-10-28 22:00");
+  });
+
+  it("fails visibly and safely for an invalid timestamp or timezone", () => {
+    expect(formatAgencyFollowupScheduledAt("not-a-time", "America/Toronto")).toBe("scheduled time unavailable");
+    expect(formatAgencyFollowupScheduledAt("2026-10-29T02:00:00.000Z", "Invalid/Timezone")).toBe("scheduled time unavailable");
   });
 });

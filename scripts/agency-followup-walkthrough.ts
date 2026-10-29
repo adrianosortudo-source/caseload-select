@@ -284,6 +284,7 @@ async function verifyPushedMigration(pathname: string, expectedBlob: string): Pr
 const ACCEPTED_SOURCE_REFS = new Set([
   "refs/heads/codex/crm-live-followup-final-gates-20261024",
   "refs/heads/codex/crm-followup-activity-save-reload-20261028",
+  "refs/heads/codex/crm-followup-acceptance-20261029",
 ]);
 
 function verifyPushedHead(sourceCommit: string): void {
@@ -2849,8 +2850,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   // both updated message states are rendered before changing the DB fixture
   // and doing a full reload, so the refresh and navigation cannot overlap.
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
-  const normalMessages = await pool.query<{ id: string; enrollment_id: string; recipient_email_snapshot: string; step_number: number; state: string }>(
-    "select id,enrollment_id,recipient_email_snapshot,step_number,state from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) order by step_number",
+  const normalMessages = await pool.query<{ id: string; enrollment_id: string; recipient_email_snapshot: string; step_number: number; state: string; content_snapshot: { subject?: unknown; body?: unknown }; schedule_timezone: string }>(
+    "select message.id,message.enrollment_id,message.recipient_email_snapshot,message.step_number,message.state,message.content_snapshot,journey.timezone as schedule_timezone from agency_followup_messages message join agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id join agency_followup_journeys journey on journey.id=enrollment.journey_id where enrollment.prospect_id=$1 order by message.step_number",
     [normal.id],
   );
   if (normalMessages.rows.length !== 2 || normalMessages.rows.some((row) => row.state !== "scheduled")) {
@@ -2885,7 +2886,43 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw new Error("Content change did not invalidate the reviewed message.");
   }
   await page.reload({ waitUntil: "networkidle" });
-  await expect(queueCard(page, normal.firmName).getByText("awaiting review", { exact: true })).toBeVisible();
+  const reloadedNormalCard = queueCard(page, normal.firmName);
+  await expect(reloadedNormalCard.getByText("awaiting review", { exact: true })).toBeVisible();
+  const reloadedMessagePanels = reloadedNormalCard.locator('[data-ui-component-content="agency-follow-up-message"]');
+  await expect(reloadedMessagePanels).toHaveCount(2);
+  const reloadedFirstMessage = reloadedMessagePanels.nth(0);
+  await expect(reloadedFirstMessage.getByText("Scheduled for:", { exact: true })).toBeVisible();
+  const expectedNormalSubject = String(firstNormalMessage.content_snapshot.subject ?? "");
+  const expectedNormalBody = String(firstNormalMessage.content_snapshot.body ?? "");
+  if (!expectedNormalSubject || !expectedNormalBody || !firstNormalMessage.schedule_timezone) {
+    throw new Error("The saved approved message has incomplete content or journey timezone.");
+  }
+  await expect(reloadedFirstMessage.locator("h4")).toHaveText(expectedNormalSubject);
+  await expect(reloadedFirstMessage.locator('p[data-ui-copy="body"]')).toHaveText(expectedNormalBody);
+  const reloadedSchedule = reloadedFirstMessage.locator("time[data-time-zone]");
+  await expect(reloadedSchedule).toHaveCount(1);
+  const renderedScheduledAt = await reloadedSchedule.getAttribute("datetime");
+  if (!renderedScheduledAt || Date.parse(renderedScheduledAt) !== Date.parse(acceptedDueAt)) {
+    throw new Error("The rendered schedule datetime does not match the exact approved instant.");
+  }
+  await expect(reloadedSchedule).toHaveAttribute("data-time-zone", firstNormalMessage.schedule_timezone);
+  const expectedScheduleParts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: firstNormalMessage.schedule_timezone,
+  }).formatToParts(new Date(acceptedDueAt));
+  const expectedSchedulePart = (type: Intl.DateTimeFormatPartTypes) => expectedScheduleParts.find((part) => part.type === type)?.value;
+  const expectedLocalSchedule = ["year", "month", "day"].map((part) => expectedSchedulePart(part as Intl.DateTimeFormatPartTypes)).join("-") +
+    " " + expectedSchedulePart("hour") + ":" + expectedSchedulePart("minute");
+  if (expectedLocalSchedule.includes("undefined")) {
+    throw new Error("Could not format the expected local schedule for the saved journey timezone.");
+  }
+  await expect(reloadedSchedule).toHaveText(`${expectedLocalSchedule} (${firstNormalMessage.schedule_timezone})`);
+  progress("approved message content and exact scheduled instant remained visible with its journey timezone after reloading");
 
   const acceptedProviderMessageId = `fake-provider-normal-${RUN_ID}`;
   const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, {
@@ -4320,15 +4357,17 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
     if (width === 320) {
       const providerStatus = queueCard(page, retryProspect.firmName).locator('[data-ui-component-content="agency-follow-up-message"] dl').first();
-      const providerStatusLabel = providerStatus.locator('dt[data-ui-copy="supporting"]');
-      const providerStatusValue = providerStatus.locator('dd[data-ui-copy="supporting"]');
+      const providerStatusLabel = providerStatus.getByText("Provider delivery:", { exact: true });
+      const providerStatusValue = providerStatus.getByText("Blocked by provider", { exact: true });
       if ((await providerStatusLabel.count()) !== 1 || (await providerStatusValue.count()) !== 1) throw new Error("The synthetic review queue did not render one provider delivery label/value pair.");
       if ((await providerStatusLabel.innerText()).trim() !== "Provider delivery:" || (await providerStatusValue.innerText()).trim() !== "Blocked by provider") throw new Error("The synthetic suppression event was not rendered as a provider-blocked delivery status.");
       await providerStatus.scrollIntoViewIfNeeded();
       await stableLayout();
       const statusGeometry = await providerStatus.evaluate((element) => {
-        const value = element.querySelector<HTMLElement>('dd[data-ui-copy="supporting"]');
-        if (!value) throw new Error("Provider delivery status value is missing.");
+        const label = Array.from(element.querySelectorAll<HTMLElement>('dt[data-ui-copy="supporting"]'))
+          .find((node) => node.textContent?.trim() === "Provider delivery:");
+        const value = label?.nextElementSibling;
+        if (!(value instanceof HTMLElement) || value.tagName !== "DD") throw new Error("Provider delivery status value is missing.");
         return {
           clientWidth: value.clientWidth,
           scrollWidth: value.scrollWidth,

@@ -5,6 +5,7 @@ on:
     branches:
       - codex/crm-live-followup-final-gates-20261024
       - codex/crm-followup-activity-save-reload-20261028
+      - codex/crm-followup-acceptance-20261029
 # Run acceptance at the exact head after every push to an explicitly allowed CRM acceptance branch.
 
 permissions:

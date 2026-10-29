@@ -19,7 +19,7 @@ const fixture = {
       optInState: "granted" as const,
       eligibility: "eligible", contactability: "allowed", conversationStatus: "awaiting_reply", recipientEmail: "review@example.test",
       subject: "A synthetic follow-up review", body: "This message uses synthetic fixture content for responsive layout checks. It does not contact a real firm or person.",
-      scheduledAt: "2099-04-06T13:00:00.000Z", blockers: ["message_not_approved", "approval_missing", "not_due"], sequenceReleased: true,
+      scheduledAt: "2099-04-06T13:00:00.000Z", scheduleTimezone: "America/Toronto", blockers: ["message_not_approved", "approval_missing", "not_due"], sequenceReleased: true,
     },
     {
       id: "message-2", enrollmentId: "enrollment-2", prospectId: "prospect-2", firmName: "Synthetic Central Practice",
@@ -28,7 +28,7 @@ const fixture = {
       optInState: "missing" as const,
       eligibility: "pending", contactability: "unknown", conversationStatus: "not_contacted", recipientEmail: "example@example.test",
       subject: "A second synthetic message", body: "Synthetic content appears in this message card. Review the hard stop before any future approval.",
-      scheduledAt: "2099-04-06T13:00:00.000Z", blockers: ["eligibility_pending", "contactability_unknown", "sequence_not_released", "approval_missing"], sequenceReleased: false,
+      scheduledAt: "2099-04-06T13:00:00.000Z", scheduleTimezone: "America/Toronto", blockers: ["eligibility_pending", "contactability_unknown", "sequence_not_released", "approval_missing"], sequenceReleased: false,
     },
   ],
 };
