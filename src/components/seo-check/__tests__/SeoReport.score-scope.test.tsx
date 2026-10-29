@@ -38,7 +38,7 @@ describe("SeoReport score scope", () => {
   it("states the v5 limited score and Google scope uncertainty on the start screen", () => {
     render(<SeoCheckTool />);
     expect(screen.getByText(/score covers five limited check types, not the whole site/i)).toBeTruthy();
-    expect(screen.getByText(/Google-addressed only when their scope is established; uncertain scope remains unassessed/i)).toBeTruthy();
+    expect(screen.getByText(/If an instruction’s meaning is unclear, the scan leaves that check unscored/i)).toBeTruthy();
   });
 
   it("shows the scored coverage beside the score and includes it in the copied summary", async () => {
