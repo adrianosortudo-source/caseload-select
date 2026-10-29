@@ -2849,8 +2849,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   // both updated message states are rendered before changing the DB fixture
   // and doing a full reload, so the refresh and navigation cannot overlap.
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
-  const normalMessages = await pool.query<{ id: string; enrollment_id: string; recipient_email_snapshot: string; step_number: number; state: string }>(
-    "select id,enrollment_id,recipient_email_snapshot,step_number,state from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) order by step_number",
+  const normalMessages = await pool.query<{ id: string; enrollment_id: string; recipient_email_snapshot: string; step_number: number; state: string; content_snapshot: { subject?: unknown; body?: unknown }; schedule_timezone: string }>(
+    "select message.id,message.enrollment_id,message.recipient_email_snapshot,message.step_number,message.state,message.content_snapshot,journey.timezone as schedule_timezone from agency_followup_messages message join agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id join agency_followup_journeys journey on journey.id=enrollment.journey_id where enrollment.prospect_id=$1 order by message.step_number",
     [normal.id],
   );
   if (normalMessages.rows.length !== 2 || normalMessages.rows.some((row) => row.state !== "scheduled")) {
@@ -2885,7 +2885,25 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw new Error("Content change did not invalidate the reviewed message.");
   }
   await page.reload({ waitUntil: "networkidle" });
-  await expect(queueCard(page, normal.firmName).getByText("awaiting review", { exact: true })).toBeVisible();
+  const reloadedNormalCard = queueCard(page, normal.firmName);
+  await expect(reloadedNormalCard.getByText("awaiting review", { exact: true })).toBeVisible();
+  const reloadedMessagePanels = reloadedNormalCard.locator('[data-ui-component-content="agency-follow-up-message"]');
+  await expect(reloadedMessagePanels).toHaveCount(2);
+  const reloadedFirstMessage = reloadedMessagePanels.nth(0);
+  const expectedNormalSubject = String(firstNormalMessage.content_snapshot.subject ?? "");
+  const expectedNormalBody = String(firstNormalMessage.content_snapshot.body ?? "");
+  if (!expectedNormalSubject || !expectedNormalBody || !firstNormalMessage.schedule_timezone) {
+    throw new Error("The saved approved message has incomplete content or journey timezone.");
+  }
+  await expect(reloadedFirstMessage.locator("h4")).toHaveText(expectedNormalSubject);
+  await expect(reloadedFirstMessage.locator('p[data-ui-copy="body"]')).toHaveText(expectedNormalBody);
+  const reloadedSchedule = reloadedFirstMessage.locator("time[data-time-zone]");
+  await expect(reloadedSchedule).toHaveCount(1);
+  await expect(reloadedSchedule).toHaveAttribute("dateTime", acceptedDueAt);
+  await expect(reloadedSchedule).toHaveAttribute("data-time-zone", firstNormalMessage.schedule_timezone);
+  await expect(reloadedSchedule).toContainText(firstNormalMessage.schedule_timezone);
+  await expect(reloadedSchedule).toContainText(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
+  progress("approved message content and exact scheduled instant remained visible with its journey timezone after reloading");
 
   const acceptedProviderMessageId = `fake-provider-normal-${RUN_ID}`;
   const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, {

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { agencyFollowupDeliveryStatusLabel, canApproveAgencyFollowupMessage } from '@/lib/agency-followup-ui';
+import { agencyFollowupDeliveryStatusLabel, canApproveAgencyFollowupMessage, formatAgencyFollowupScheduledAt } from '@/lib/agency-followup-ui';
 
 type Journey = {
   id: string; name: string; journeyKey: string; version: number; state: string;
@@ -18,7 +18,7 @@ type QueueItem = {
   optInState: 'granted' | 'withdrawn' | 'missing';
   eligibility: string;
   contactability: string; conversationStatus: string; recipientEmail: string; subject: string;
-  body: string; scheduledAt: string | null; blockers: string[]; sequenceReleased: boolean;
+  body: string; scheduledAt: string | null; scheduleTimezone: string; blockers: string[]; sequenceReleased: boolean;
 };
 type ConsoleData = { send: { mode: 'off' | 'test' | 'live'; ready: boolean }; journeys: Journey[]; templates: TemplateVersion[]; items: QueueItem[] };
 type ProspectMatch = { id: string; firm_name: string; contact_name?: string | null; contact_email?: string | null; stage?: string };
@@ -454,6 +454,7 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                   <span data-ui-copy="supporting" className="block w-full text-xs font-semibold uppercase tracking-wide text-black/60">Message {item.stepNumber}</span>
                   <h4 data-ui-copy="heading" className="w-full break-words text-balance text-sm font-semibold text-navy sm:text-base max-[360px]:text-[13px] max-[360px]:[text-wrap:normal]">{item.subject || 'No subject'}</h4>
                   <span className="block w-full text-xs uppercase tracking-wide text-black/60">{prettyState(item.state)}</span>
+                  {item.scheduledAt && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Scheduled for: <time dateTime={item.scheduledAt} data-time-zone={item.scheduleTimezone}>{formatAgencyFollowupScheduledAt(item.scheduledAt, item.scheduleTimezone)} ({item.scheduleTimezone})</time></p>}
                   <dl className="w-full">
                     <dt data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Provider delivery:</dt>
                     <dd data-ui-copy="supporting" className="m-0 w-full break-words text-xs leading-5 text-black/65 max-[360px]:text-[13px]">{agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })}</dd>

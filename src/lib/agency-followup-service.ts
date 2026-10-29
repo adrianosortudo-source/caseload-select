@@ -63,6 +63,7 @@ export interface AgencyFollowupQueueItem {
   subject: string;
   body: string;
   scheduledAt: string | null;
+  scheduleTimezone: string;
   blockers: string[];
   sequenceReleased: boolean;
 }
@@ -545,6 +546,7 @@ export async function listAgencyFollowupConsole(): Promise<AgencyFollowupConsole
       subject: context.content.subject,
       body: context.content.body,
       scheduledAt: typeof message.scheduled_at === "string" ? message.scheduled_at : null,
+      scheduleTimezone: String(journey.timezone || "UTC"),
       blockers: [...new Set(blockers)],
       sequenceReleased: Boolean(enrollment.released_at),
     };
