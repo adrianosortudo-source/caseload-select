@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeWeightedScore, parseRobotsTxt } from "../engine-core";
+import { computeWeightedScore, crawlUrlKey, parseRobotsTxt } from "../engine-core";
 import { aggregateCategories, buildPageResult } from "../page-checks";
 import { buildV4Issues } from "../analysis";
 import { buildSeoReportModel } from "../report-model";
@@ -280,14 +280,14 @@ describe("page-scoped search access evidence", () => {
   });
 
   it("reports homepage sitemap membership only when the root URL was observed", () => {
-    const completeListed = page("https://example.com/", undefined, null, new Set(["https://example.com/", "https://example.com/contact/"]));
+    const completeListed = page("https://example.com/", undefined, null, new Set(["https://example.com/", "https://example.com/contact/"].map(crawlUrlKey)));
     expect(completeListed.indexability.inSitemap).toBe(true);
 
-    const completeAbsent = page("https://example.com/", undefined, null, new Set(["https://example.com/contact/"]));
+    const completeAbsent = page("https://example.com/", undefined, null, new Set(["https://example.com/contact/"].map(crawlUrlKey)));
     expect(completeAbsent.indexability.inSitemap).toBe(false);
     expect(item(completeAbsent, "Indexability", "Sitemap membership")).toMatchObject({ status: "warn", scored: false });
 
-    const incompleteAbsent = page("https://example.com/", undefined, null, new Set(["https://example.com/contact/"]), false);
+    const incompleteAbsent = page("https://example.com/", undefined, null, new Set(["https://example.com/contact/"].map(crawlUrlKey)), false);
     expect(incompleteAbsent.indexability.inSitemap).toBeNull();
     expect(item(incompleteAbsent, "Indexability", "Sitemap membership")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
   });
