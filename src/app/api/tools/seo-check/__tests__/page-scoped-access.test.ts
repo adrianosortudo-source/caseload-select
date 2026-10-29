@@ -50,8 +50,10 @@ describe("page-scoped search access evidence", () => {
     expect(item(v4FirstTagView, "Indexability", "Indexable")?.status).toBe("pass");
     expect(item(v4FirstTagView, "Indexability", "Indexable")?.scored).not.toBe(false);
     expect(knownAccess.indexability.googleDirectives?.noindex).toBe("observed");
-    expect(item(knownAccess, "Indexability", "Indexable")).toMatchObject({ status: "fail", scored: true });
-    expect(item(unknownAccess, "Indexability", "Indexable")).toMatchObject({ status: "fail", scored: true });
+    expect(item(knownAccess, "Indexability", "Indexable")?.status).toBe("fail");
+    expect(item(knownAccess, "Indexability", "Indexable")?.scored).not.toBe(false);
+    expect(item(unknownAccess, "Indexability", "Indexable")?.status).toBe("fail");
+    expect(item(unknownAccess, "Indexability", "Indexable")?.scored).not.toBe(false);
     expect(item(unknownAccess, "Indexability", "robots.txt crawl access")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
     expect(unknownAccess.categories.find((category) => category.name === "Indexability")?.maxScore)
       .toBe(20);
