@@ -123,4 +123,18 @@ describe("compareDiagnostics", () => {
     ]);
     expect(comparison.recommendedNextAction).toContain("Method changed");
   });
+
+  it("suppresses score deltas when a saved comparison moves from v4 to v5", () => {
+    const before = run("old-v4", 100, []);
+    before.scans[0].result = result({ methodologyVersion: 4, overallScore: 100 });
+    const after = run("new-v5", 92, []);
+    after.scans[0].result = result({ methodologyVersion: 5, overallScore: 92 });
+
+    const comparison = compareDiagnostics(before, after);
+    expect(comparison.methodChanged).toBe(true);
+    expect(comparison.scoreDeltas.find((score) => score.label === "SEO Health")).toEqual({
+      label: "SEO Health", before: null, after: null, delta: null, methodChanged: true,
+    });
+    expect(comparison.recommendedNextAction).toContain("numeric score changes are suppressed");
+  });
 });

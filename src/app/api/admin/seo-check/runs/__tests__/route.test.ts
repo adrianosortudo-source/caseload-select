@@ -16,6 +16,7 @@ interface MockState {
   listRows: Array<Record<string, unknown>>;
   listError: { message: string } | null;
   selectedColumns: string | null;
+  savedRun: Record<string, unknown> | null;
 }
 
 const state: MockState = {
@@ -24,6 +25,7 @@ const state: MockState = {
   listRows: [],
   listError: null,
   selectedColumns: null,
+  savedRun: null,
 };
 
 vi.mock("@/lib/portal-auth", () => ({
@@ -39,7 +41,7 @@ vi.mock("@/lib/supabase-admin", () => ({
           order: () => query,
           limit: () => query,
           eq: () => query,
-          single: () => Promise.resolve({ data: null, error: null }),
+          single: () => Promise.resolve({ data: state.savedRun, error: null }),
           then: (resolve: (value: unknown) => unknown) => Promise.resolve(resolve({ data: state.listRows, error: state.listError })),
         };
         return query;
@@ -71,6 +73,7 @@ beforeEach(() => {
   state.listRows = [];
   state.listError = null;
   state.selectedColumns = null;
+  state.savedRun = null;
 });
 
 describe("GET /api/admin/seo-check/runs history", () => {
@@ -87,6 +90,21 @@ describe("GET /api/admin/seo-check/runs history", () => {
     expect(state.selectedColumns).toContain("methodologyVersion:result->>methodologyVersion");
     expect(state.selectedColumns).not.toContain(", result");
     expect(body.items.map((item: { methodologyVersion: number | null }) => item.methodologyVersion)).toEqual([5, null]);
+  });
+
+  it("returns a saved v4 result unchanged for historical replay", async () => {
+    state.operatorSession = { firm_id: RUN_ID, role: "operator", lawyer_id: null };
+    const savedResult = {
+      methodologyVersion: 4,
+      overallScore: 74,
+      pages: [{ indexability: { metaNoindex: false, headerNoindex: false, indexable: true } }],
+    };
+    state.savedRun = { id: RUN_ID, domain: "example.com", result: savedResult };
+
+    const res = await GET(makeReq(`?id=${RUN_ID}`, "GET") as never);
+    const body = await res.json();
+    expect(res.status).toBe(200);
+    expect(body.run.result).toEqual(savedResult);
   });
 });
 
