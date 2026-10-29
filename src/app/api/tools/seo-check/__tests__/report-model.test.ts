@@ -145,7 +145,7 @@ describe("buildSeoReportModel", () => {
       pages: [observedPage(base.pages![1], "https://example.com/employment/")],
     });
     expect(single.priorityActions[0].observed).toBe(
-      "1 of 1 checked page tells Google not to include it in search. Google must retrieve the instruction first.",
+      "1 of 1 checked page tells Google not to include it in search. Google must load the page first.",
     );
     expect(single.priorityActions[0].whyItMatters).toBe("This instruction may keep useful pages out of Google.");
 
@@ -159,7 +159,7 @@ describe("buildSeoReportModel", () => {
       ),
     });
     expect(oneOfTwentyFive.priorityActions[0].observed).toBe(
-      "1 of 25 checked pages tells Google not to include it in search. Google must retrieve the instruction first.",
+      "1 of 25 checked pages tells Google not to include it in search. Google must load the page first.",
     );
     const plural = buildSeoReportModel({
       ...base,
@@ -170,7 +170,7 @@ describe("buildSeoReportModel", () => {
       ],
     });
     expect(plural.priorityActions[0].observed).toBe(
-      "2 of 2 checked pages tell Google not to include them in search. Google must retrieve the instruction first.",
+      "2 of 2 checked pages tell Google not to include them in search. Google must load the page first.",
     );
   });
   it("creates page-scoped noindex action copy and excludes utility pages from priority selection", () => {
@@ -250,8 +250,7 @@ describe("buildSeoReportModel", () => {
     expect(model.crawlerPolicies.find((bot) => bot.token === 'Perplexity-User')).toMatchObject({ robotsSemantics: 'generally-ignores', policyObservation: 'blocking-rule-observed', actualFetchAccess: 'not-verified' });
     expect(model.crawlerPolicies.find((bot) => bot.token === "CCBot")?.purposes).toEqual(["open-dataset"]);
     expect(model.crawlerPolicies.find((bot) => bot.token === "Google-Extended")).toMatchObject({ isControlToken: true, actualFetchAccess: "not-verified" });
-    expect(model.aiObservations.join(" ")).toContain("documented robots behavior are listed per token below");
-    expect(model.aiObservations.join(" ")).toContain("does not verify actual access or downstream use");
+    expect(model.aiObservations).toEqual(["The list below describes crawler purposes, robots.txt rules and documented behavior. A rule does not prove access or use."]);
     expect(model.aiObservations.join(" ")).not.toContain("listed training crawlers");
     expect(model.priorityActions).toEqual([]);
   });

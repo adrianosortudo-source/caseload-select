@@ -300,7 +300,7 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
   if (family.id === "search-exclusion") {
     const count = urls.length;
     observed = methodologyVersion === 5
-      ? `${count} of ${pages.length} checked ${pages.length === 1 ? "page" : "pages"} ${count === 1 ? "tells" : "tell"} Google not to include ${count === 1 ? "it" : "them"} in search. Google must retrieve the instruction first.`
+      ? `${count} of ${pages.length} checked ${pages.length === 1 ? "page" : "pages"} ${count === 1 ? "tells" : "tell"} Google not to include ${count === 1 ? "it" : "them"} in search. Google must load the page first.`
       : `${count} of ${pages.length} checked pages contain an instruction asking search engines to leave them out of results.`;
   } else if (family.id === "robots-access") {
     const crawlerNames = unique(evidence.flatMap((line) => ["Googlebot", "Bingbot"].filter((name) => line.includes(name))));
@@ -451,7 +451,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     sourceVerification: bot.sourceVerification ?? "unavailable",
   }));
   const aiObservations: string[] = crawlerPolicies.length
-    ? ["Provider-specific purposes, robots.txt rule observations, and documented robots behavior are listed per token below. An observed rule does not verify actual access or downstream use."]
+    ? ["The list below describes crawler purposes, robots.txt rules and documented behavior. A rule does not prove access or use."]
     : ["This scan did not assess provider-specific crawler policy or actual AI service access."];
 
   const scoreCategories = input.categories ?? [];

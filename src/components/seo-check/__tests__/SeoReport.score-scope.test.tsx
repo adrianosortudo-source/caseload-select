@@ -92,11 +92,34 @@ describe("SeoReport score scope", () => {
     expect(screen.getByRole("heading", { name: "Supporting evidence" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Next steps" })).toBeTruthy();
 
-    expect(within(screen.getByRole("region", { name: "Priority search finding" })).getByText("1 of 1 checked page tells Google not to include it in search. Google must retrieve the instruction first.")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Priority search finding" })).getByText("1 of 1 checked page tells Google not to include it in search. Google must load the page first.")).toBeTruthy();
     const priority = container.querySelector('[data-ui-component-content="priority-context"]');
     const score = container.querySelector('[data-ui-component-content="score-disclosure"]');
     if (!priority || !score) throw new Error("Priority or score section is missing.");
     expect(Boolean(priority.compareDocumentPosition(score) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+
+  it("shows and copies the concise AI observation in the visible AI section", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const aiResult: SeoCheckResult = {
+      ...result,
+      aiBots: [{
+        token: "Googlebot", name: "Googlebot", blocked: false,
+        policyObservation: "no-blocking-rule-observed", robotsSemantics: "respects",
+        actualFetchAccess: "not-verified", purposes: ["search"], isControlToken: false,
+        sourceUrl: null, reviewedAt: null, sourceVerification: "unavailable",
+      }],
+    };
+    render(<SeoReport result={aiResult} onReset={vi.fn()} hideCta />);
+
+    const aiSection = within(screen.getByRole("region", { name: "AI and page content" }));
+    const intro = "The list below describes crawler purposes, robots.txt rules and documented behavior. A rule does not prove access or use.";
+    expect(aiSection.getByText(intro)).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy report summary" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0][0]).toContain(intro);
   });
 
   it("qualifies exhausted discovery by the scan's crawl limits", () => {
