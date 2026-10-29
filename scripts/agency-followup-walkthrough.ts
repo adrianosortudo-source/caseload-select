@@ -2891,6 +2891,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const reloadedMessagePanels = reloadedNormalCard.locator('[data-ui-component-content="agency-follow-up-message"]');
   await expect(reloadedMessagePanels).toHaveCount(2);
   const reloadedFirstMessage = reloadedMessagePanels.nth(0);
+  await expect(reloadedFirstMessage.getByText("Scheduled for:", { exact: true })).toBeVisible();
   const expectedNormalSubject = String(firstNormalMessage.content_snapshot.subject ?? "");
   const expectedNormalBody = String(firstNormalMessage.content_snapshot.body ?? "");
   if (!expectedNormalSubject || !expectedNormalBody || !firstNormalMessage.schedule_timezone) {
