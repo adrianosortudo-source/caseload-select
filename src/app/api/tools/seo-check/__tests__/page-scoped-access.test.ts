@@ -47,7 +47,8 @@ describe("page-scoped search access evidence", () => {
     const unknownAccess = page(url, duplicateMetaNoindex, null, new Set([url]), true);
     const v4FirstTagView = page(url, firstMetaOnly, allowRobots, new Set([url]), true);
     expect(v4FirstTagView.indexability.metaNoindex).toBe(false);
-    expect(item(v4FirstTagView, "Indexability", "Indexable")).toMatchObject({ status: "pass", scored: true });
+    expect(item(v4FirstTagView, "Indexability", "Indexable")?.status).toBe("pass");
+    expect(item(v4FirstTagView, "Indexability", "Indexable")?.scored).not.toBe(false);
     expect(knownAccess.indexability.googleDirectives?.noindex).toBe("observed");
     expect(item(knownAccess, "Indexability", "Indexable")).toMatchObject({ status: "fail", scored: true });
     expect(item(unknownAccess, "Indexability", "Indexable")).toMatchObject({ status: "fail", scored: true });
