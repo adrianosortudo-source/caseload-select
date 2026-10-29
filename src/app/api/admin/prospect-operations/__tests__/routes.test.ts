@@ -89,7 +89,7 @@ describe('prospect operations operator guard', () => {
         channel: 'email',
       })),
       conversationGET(request(`/conversations/agency/${AGENCY_PROSPECT_ID}`), params(AGENCY_PROSPECT_ID)),
-      reportGET(),
+      reportGET(request('/report')),
     ]);
 
     for (const response of responses) expect(response.status).toBe(401);
@@ -178,7 +178,7 @@ describe('prospect conversation and report routes', () => {
       automated_replies: 3,
       bounces: 1,
     };
-    const response = await reportGET();
+    const response = await reportGET(request('/report'));
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ report: h.state.report });
   });
