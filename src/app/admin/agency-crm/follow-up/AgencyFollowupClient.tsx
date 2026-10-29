@@ -454,8 +454,11 @@ export default function AgencyFollowupClient({ initialData }: { initialData: Con
                   <span data-ui-copy="supporting" className="block w-full text-xs font-semibold uppercase tracking-wide text-black/60">Message {item.stepNumber}</span>
                   <h4 data-ui-copy="heading" className="w-full break-words text-balance text-sm font-semibold text-navy sm:text-base max-[360px]:text-[13px] max-[360px]:[text-wrap:normal]">{item.subject || 'No subject'}</h4>
                   <span className="block w-full text-xs uppercase tracking-wide text-black/60">{prettyState(item.state)}</span>
-                  {item.scheduledAt && <p data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Scheduled for: <time dateTime={item.scheduledAt} data-time-zone={item.scheduleTimezone}>{formatAgencyFollowupScheduledAt(item.scheduledAt, item.scheduleTimezone)} ({item.scheduleTimezone})</time></p>}
-                  <dl className="w-full">
+                  <dl className="w-full space-y-1">
+                    {item.scheduledAt && <>
+                      <dt data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Scheduled for:</dt>
+                      <dd data-ui-copy="supporting" className="m-0 w-full break-words text-xs leading-5 text-black/65"><time dateTime={item.scheduledAt} data-time-zone={item.scheduleTimezone}>{formatAgencyFollowupScheduledAt(item.scheduledAt, item.scheduleTimezone)} ({item.scheduleTimezone})</time></dd>
+                    </>}
                     <dt data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Provider delivery:</dt>
                     <dd data-ui-copy="supporting" className="m-0 w-full break-words text-xs leading-5 text-black/65 max-[360px]:text-[13px]">{agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })}</dd>
                   </dl>
