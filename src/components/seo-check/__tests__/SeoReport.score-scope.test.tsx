@@ -86,7 +86,7 @@ describe("SeoReport score scope", () => {
     const priorityResult: SeoCheckResult = { ...result, pagesScanned: 1, pages: [priorityPage] };
     const { container } = render(<SeoReport result={priorityResult} onReset={vi.fn()} hideCta />);
 
-    expect(within(screen.getByRole("region", { name: "Priority search finding" })).getByText("A noindex instruction addressed to Google was observed in the inspected response for 1 of 1 checked page. Google can act on it only if it retrieves the response for a page.")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Priority search finding" })).getByText("The inspected page responses tell Google not to include 1 of 1 checked page in search results. Google must retrieve that response first; this scan does not confirm whether the page is indexed.")).toBeTruthy();
     const priority = container.querySelector('[data-ui-component-content="priority-context"]');
     const score = container.querySelector('[data-ui-component-content="score-disclosure"]');
     if (!priority || !score) throw new Error("Priority or score section is missing.");
@@ -125,7 +125,7 @@ describe("SeoReport score scope", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy report summary" }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     expect(writeText.mock.calls[0][0]).toContain("Scan incomplete.");
-    expect(writeText.mock.calls[0][0]).toContain("The scan stopped before its available page checks were complete.");
+    expect(writeText.mock.calls[0][0]).toContain("Not all available page checks were completed.");
   });
 
   it("describes v5 score scope and performance accurately on the public landing page", async () => {
@@ -146,7 +146,7 @@ describe("SeoReport score scope", () => {
     render(<SeoReport result={result} onReset={vi.fn()} hideCta />);
 
     const scopeLabel = "Limited checks: 5 check types across 3 of 10 categories";
-    const scoreNote = "This limited summary reflects 5 scored check types across 3 of 10 categories, applied to the inspected pages. Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.";
+    const scoreNote = "This limited summary reflects 5 scored check types across 3 of 10 categories, applied to the inspected pages. This score covers only the listed checks. It does not grade the whole site or predict rankings.";
     expect(screen.getByText(scopeLabel)).toBeTruthy();
     expect(within(screen.getByLabelText("Website checks score")).getByText(scoreNote)).toBeTruthy();
 

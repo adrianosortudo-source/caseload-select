@@ -36,7 +36,7 @@ describe("buildSeoReportModel", () => {
     const model = buildSeoReportModel(base);
     expect(model.methodology).toMatchObject({ version: 5, label: "Website checks", notice: null });
     expect(model.scoreExplanation).toMatchObject({ assessed: true, score: 74, label: "Limited checks: 1 check type across 1 of 1 category", scoredCheckTypeCount: 1, assessedCategoryCount: 1, totalCategoryCount: 1 });
-    expect(model.scoreExplanation.note).toBe("This limited summary reflects 1 scored check type across 1 of 1 category, applied to the inspected pages. Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.");
+    expect(model.scoreExplanation.note).toBe("This limited summary reflects 1 scored check type across 1 of 1 category, applied to the inspected pages. This score covers only the listed checks. It does not grade the whole site or predict rankings.");
     expect(model.limitations).toEqual(["This scan inspected the initial HTML of 2 pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm."]);
     expect(model.cta).toMatchObject({ heading: "Discuss these findings", linkLabel: "Book a conversation", href: "https://cal.com/adriano-caseloadselect/conversation" });
   });
@@ -60,7 +60,7 @@ describe("buildSeoReportModel", () => {
       assessedCategoryCount: 3,
       totalCategoryCount: 10,
     });
-    expect(model.scoreExplanation.note).toBe("This limited summary reflects 5 scored check types across 3 of 10 categories, applied to the inspected pages. Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.");
+    expect(model.scoreExplanation.note).toBe("This limited summary reflects 5 scored check types across 3 of 10 categories, applied to the inspected pages. This score covers only the listed checks. It does not grade the whole site or predict rankings.");
   });
 
   it("marks saved pre-v3 scores as historical and supplies the no-cross-method notice", () => {
@@ -127,6 +127,39 @@ describe("buildSeoReportModel", () => {
     expect(checkObservationDisplayText({ detail, scored: false, disposition: "unscored" }, 3)).toBe(detail);
   });
 
+  it("uses singular and plural wording for observed Google instructions", () => {
+    const observedPage = (page: NonNullable<ReportInput["pages"]>[number], url: string) => ({
+      ...page,
+      url,
+      pageType: "practice",
+      indexability: {
+        metaNoindex: true,
+        headerNoindex: false,
+        indexable: false,
+        googleDirectives: { noindex: "observed" as const, nofollow: "not-observed" as const, observations: [] },
+      },
+    });
+    const single = buildSeoReportModel({
+      ...base,
+      pagesScanned: 1,
+      pages: [observedPage(base.pages![1], "https://example.com/employment/")],
+    });
+    expect(single.priorityActions[0].observed).toBe(
+      "The inspected page responses tell Google not to include 1 of 1 checked page in search results. Google must retrieve that response first; this scan does not confirm whether the page is indexed.",
+    );
+
+    const plural = buildSeoReportModel({
+      ...base,
+      pagesScanned: 2,
+      pages: [
+        observedPage(base.pages![1], "https://example.com/employment/"),
+        observedPage(base.pages![1], "https://example.com/family-law/"),
+      ],
+    });
+    expect(plural.priorityActions[0].observed).toBe(
+      "The inspected page responses tell Google not to include 2 of 2 checked pages in search results. Google must retrieve those responses first; this scan does not confirm whether the pages are indexed.",
+    );
+  });
   it("creates page-scoped noindex action copy and excludes utility pages from priority selection", () => {
     const pages = [
       { ...base.pages![0], indexability: { metaNoindex: true, headerNoindex: false, indexable: false } },
@@ -290,7 +323,7 @@ describe("buildSeoReportModel", () => {
   it("uses the exact partial-scan limitation and reports Not assessed when no category applies", () => {
     const model = buildSeoReportModel({ ...base, partial: true, categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [] }] });
     expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not assessed" });
-    expect(model.limitations[1]).toBe("The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.");
+    expect(model.limitations[1]).toBe("Not all available page checks were completed. Findings cover only pages successfully inspected.");
   });
 
   it("uses coverage-only partial state consistently for the badge model and limitation copy", () => {
@@ -304,7 +337,7 @@ describe("buildSeoReportModel", () => {
       },
     });
     expect(model.coverage.partial).toBe(true);
-    expect(model.limitations).toContain("The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.");
+    expect(model.limitations).toContain("Not all available page checks were completed. Findings cover only pages successfully inspected.");
   });
 });
 

@@ -192,15 +192,15 @@ export interface SeoReportModel {
 
 const METHOD_NOTE = "This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.";
 const UNSUPPORTED_METHOD_NOTE = "This saved scan records a scoring method this report does not interpret. Run a new scan for the current report.";
-const SCORE_NOTE = "Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.";
+const SCORE_NOTE = "This score covers only the listed checks. It does not grade the whole site or predict rankings.";
 const LIMITATION = (n: number) => `This scan inspected the initial HTML of ${n} pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm.`;
-const PARTIAL_LIMITATION = "The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.";
+const PARTIAL_LIMITATION = "Not all available page checks were completed. Findings cover only pages successfully inspected.";
 const CTA_HREF = "https://cal.com/adriano-caseloadselect/conversation";
 
 type Family = { id: string; rank: number; title: string; why: string; next: string; priority: string };
 
 const FAMILIES: Family[] = [
-  { id: "search-exclusion", rank: 1, priority: "Review first", title: "Review which pages should appear in search", why: "If these pages are intended to attract clients, that instruction deserves review. Some exclusions are intentional.", next: "Confirm which affected pages should appear in search, then ask your web provider to review their settings." },
+  { id: "search-exclusion", rank: 1, priority: "Review first", title: "Review which pages should appear in search", why: "If these pages should attract clients, confirm whether that instruction is intentional.", next: "Confirm which affected pages should appear in search, then ask your web provider to review their settings." },
   { id: "robots-access", rank: 1, priority: "Review first", title: "Review crawler access to these pages", why: "This can limit crawling. It does not prove that a URL is absent from search results.", next: "Confirm whether the restriction is intentional before changing it." },
   { id: "connection", rank: 2, priority: "Review", title: "Review page connection security", why: "Visitors should have a secure connection when using the site, especially before sharing information.", next: "Ask your web provider to confirm HTTPS is available and consistently used." },
   { id: "contact-route", rank: 3, priority: "Review", title: "Make the next contact step easy to find", why: "A clear contact route can help prospective clients understand how to reach the firm.", next: "Review affected pages on desktop and mobile and confirm how a prospective client should contact the firm." },
@@ -300,7 +300,7 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
   if (family.id === "search-exclusion") {
     const count = urls.length;
     observed = methodologyVersion === 5
-      ? `A noindex instruction addressed to Google was observed in the inspected response for ${count} of ${pages.length} checked ${pages.length === 1 ? "page" : "pages"}. Google can act on it only if it retrieves the response for a page.`
+      ? `The inspected page responses tell Google not to include ${count} of ${pages.length} checked ${pages.length === 1 ? "page" : "pages"} in search results. Google must retrieve ${pages.length === 1 ? "that response first; this scan does not confirm whether the page is indexed." : "those responses first; this scan does not confirm whether the pages are indexed."}`
       : `${count} of ${pages.length} checked pages contain an instruction asking search engines to leave them out of results.`;
   } else if (family.id === "robots-access") {
     const crawlerNames = unique(evidence.flatMap((line) => ["Googlebot", "Bingbot"].filter((name) => line.includes(name))));
@@ -468,7 +468,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const note = current
     ? assessed
       ? `This limited summary reflects ${scoredCheckTypeCount} scored ${scoredCheckTypeCount === 1 ? "check type" : "check types"} across ${assessedCategoryCount} of ${totalCategoryCount} ${totalCategoryCount === 1 ? "category" : "categories"}, applied to the inspected pages. ${SCORE_NOTE}`
-      : "No scored checks contributed to this scan. Other observations do not contribute to a score. It is not a whole-site SEO grade or a ranking prediction."
+      : "No scored checks contributed to this scan. This scan does not grade the whole site or predict rankings."
     : METHOD_NOTE;
   const limitations = [LIMITATION(pages.length || input.pagesScanned), ...(resolvedPartial ? [PARTIAL_LIMITATION] : [])];
   return {
