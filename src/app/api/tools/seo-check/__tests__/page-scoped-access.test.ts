@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { parseRobotsTxt } from "../engine-core";
-import { buildPageResult } from "../page-checks";
+import { computeWeightedScore, parseRobotsTxt } from "../engine-core";
+import { aggregateCategories, buildPageResult } from "../page-checks";
 
 const emptyHeaders = new Headers();
 const emptySitemap = new Set<string>();
@@ -27,6 +27,36 @@ function item(result: ReturnType<typeof page>, category: string, label: string) 
 }
 
 describe("page-scoped search access evidence", () => {
+  it("reproduces the documented v4 false-pass to v5 score change through production aggregation", () => {
+    const url = "https://example.com/";
+    const firstMetaOnly = '<html lang="en"><head><title>Example Law</title><meta name="robots" content="index"></head><body>Legal services</body></html>';
+    const duplicateMetaNoindex = '<html lang="en"><head><title>Example Law</title><meta name="robots" content="index"><meta name="robots" content="noindex"></head><body>Legal services</body></html>';
+    const allowRobots = "User-agent: *\nAllow: /";
+    const scored = (html: string, robots: string | null) => computeWeightedScore(aggregateCategories([
+      page(url, html, robots, new Set([url]), true),
+    ]));
+
+    // The v4 first-generic-tag behavior saw the leading `index` and missed
+    // the later generic noindex. These values are fixture arithmetic only.
+    expect(scored(firstMetaOnly, allowRobots)).toBe(100);
+    expect(scored(duplicateMetaNoindex, allowRobots)).toBe(92);
+    expect(scored(firstMetaOnly, null)).toBe(100);
+    expect(scored(duplicateMetaNoindex, null)).toBe(88);
+
+    const knownAccess = page(url, duplicateMetaNoindex, allowRobots, new Set([url]), true);
+    const unknownAccess = page(url, duplicateMetaNoindex, null, new Set([url]), true);
+    const v4FirstTagView = page(url, firstMetaOnly, allowRobots, new Set([url]), true);
+    expect(v4FirstTagView.indexability.metaNoindex).toBe(false);
+    expect(item(v4FirstTagView, "Indexability", "Indexable")).toMatchObject({ status: "pass", scored: true });
+    expect(knownAccess.indexability.googleDirectives?.noindex).toBe("observed");
+    expect(item(knownAccess, "Indexability", "Indexable")).toMatchObject({ status: "fail", scored: true });
+    expect(item(unknownAccess, "Indexability", "Indexable")).toMatchObject({ status: "fail", scored: true });
+    expect(item(unknownAccess, "Indexability", "robots.txt crawl access")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
+    expect(unknownAccess.categories.find((category) => category.name === "Indexability")?.maxScore)
+      .toBe(20);
+    expect(knownAccess.categories.find((category) => category.name === "Indexability")?.maxScore).toBe(30);
+  });
+
   it("assesses every generic meta directive and applies Googlebot scope without globalizing other crawlers", () => {
     const url = "https://example.com/";
     const generic = page(url, '<html><head><meta name="robots" content="index"><meta content="none" name=robots></head><body>Firm</body></html>');
