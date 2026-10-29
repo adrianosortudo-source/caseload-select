@@ -359,6 +359,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const pages = input.pages ?? [];
   const issues = input.issues ?? [];
   const reportIssues = issues.filter((issue) => !isLegacyAiOnlyIssue(issue));
+  const resolvedPartial = input.coverage?.partial ?? Boolean(input.partial);
   const version = typeof input.methodologyVersion === "number" ? input.methodologyVersion : 2;
   // v3 and earlier keep their stored score meaning and are never silently
   // reinterpreted through the v4 report copy or denominator.
@@ -469,12 +470,12 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
       ? `This limited summary reflects ${scoredCheckTypeCount} scored ${scoredCheckTypeCount === 1 ? "check type" : "check types"} across ${assessedCategoryCount} of ${totalCategoryCount} ${totalCategoryCount === 1 ? "category" : "categories"}, applied to the inspected pages. ${SCORE_NOTE}`
       : "No scored checks contributed to this scan. Other observations do not contribute to a score. It is not a whole-site SEO grade or a ranking prediction."
     : METHOD_NOTE;
-  const limitations = [LIMITATION(pages.length || input.pagesScanned), ...(input.partial ? [PARTIAL_LIMITATION] : [])];
+  const limitations = [LIMITATION(pages.length || input.pagesScanned), ...(resolvedPartial ? [PARTIAL_LIMITATION] : [])];
   return {
     methodology: { version, label: current ? "Website checks" : typeof input.methodologyVersion !== "number" ? "Method not recorded" : supported || version <= 3 ? "Historical score" : "Unsupported method", notice: current ? null : version > CURRENT_METHODOLOGY_VERSION ? UNSUPPORTED_METHOD_NOTE : METHOD_NOTE },
     coverage: {
       pagesScanned: input.pagesScanned,
-      partial: input.coverage?.partial ?? Boolean(input.partial),
+      partial: resolvedPartial,
       checkedAt: input.checkedAt ?? null,
       requestedLimit: input.coverage?.requestedLimit ?? null,
       attemptedPages: input.coverage?.attemptedPages ?? null,

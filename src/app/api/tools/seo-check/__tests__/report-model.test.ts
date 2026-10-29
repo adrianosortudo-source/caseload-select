@@ -292,6 +292,20 @@ describe("buildSeoReportModel", () => {
     expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not assessed" });
     expect(model.limitations[1]).toBe("The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.");
   });
+
+  it("uses coverage-only partial state consistently for the badge model and limitation copy", () => {
+    const model = buildSeoReportModel({
+      ...base,
+      coverage: {
+        requestedLimit: 25, attemptedPages: 10, successfulPages: 9, failedPages: 1,
+        skippedPages: 0, discoveredCandidateUrls: 9, totalSitePages: null,
+        stopReason: "fetch-failure", skippedReasons: {}, sitemapIncomplete: false,
+        partial: true, pageSetHashBasis: "normalized-url-identities",
+      },
+    });
+    expect(model.coverage.partial).toBe(true);
+    expect(model.limitations).toContain("The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.");
+  });
 });
 
 describe("getDisplayedCategoryWeights", () => {

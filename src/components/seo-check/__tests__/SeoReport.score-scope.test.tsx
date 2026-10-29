@@ -56,9 +56,44 @@ describe("SeoReport score scope", () => {
     fireEvent.change(screen.getByLabelText("Public website URL"), { target: { value: "example.test" } });
     fireEvent.click(screen.getByRole("button", { name: "Check my site" }));
 
-    expect(await screen.findByRole("status")).toHaveTextContent("Checking the website. This may take a few minutes.");
+    expect((await screen.findByRole("status")).textContent).toContain("Checking the website. This may take a few minutes.");
     expect(screen.queryByText(/Connecting to site|Fetching robots\.txt|Discovering internal links|Building the diagnostic/i)).toBeNull();
     expect(pendingFetch).toHaveBeenCalledWith("/api/tools/seo-check", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("qualifies exhausted discovery by the scan's crawl limits", () => {
+    const coveredResult: SeoCheckResult = {
+      ...result,
+      coverage: {
+        requestedLimit: 25, attemptedPages: 2, successfulPages: 2, failedPages: 0,
+        skippedPages: 0, discoveredCandidateUrls: 1, totalSitePages: null,
+        stopReason: "discovery-exhausted", skippedReasons: {}, sitemapIncomplete: false,
+        partial: false, pageSetHashBasis: "normalized-url-identities",
+      },
+    };
+    render(<SeoReport result={coveredResult} onReset={vi.fn()} hideCta />);
+    expect(screen.getByText(/Stop reason: discovery exhausted within the scan's crawl limits\./)).toBeTruthy();
+  });
+
+  it("renders and copies the same partial warning when coverage is the only recorded source", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const coverageOnlyPartial: SeoCheckResult = {
+      ...result,
+      coverage: {
+        requestedLimit: 25, attemptedPages: 10, successfulPages: 9, failedPages: 1,
+        skippedPages: 0, discoveredCandidateUrls: 9, totalSitePages: null,
+        stopReason: "fetch-failure", skippedReasons: {}, sitemapIncomplete: false,
+        partial: true, pageSetHashBasis: "normalized-url-identities",
+      },
+    };
+    render(<SeoReport result={coverageOnlyPartial} onReset={vi.fn()} hideCta />);
+
+    expect(screen.getByText("Partial scan")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Copy report summary" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0][0]).toContain("Scan incomplete.");
+    expect(writeText.mock.calls[0][0]).toContain("The scan stopped before its available page checks were complete.");
   });
 
   it("describes v5 score scope and performance accurately on the public landing page", async () => {
