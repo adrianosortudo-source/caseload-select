@@ -250,6 +250,20 @@ function isLegacyAiOnlyIssue(issue: ReportIssue): boolean {
 
 function unique(values: string[]): string[] { return [...new Set(values.filter(Boolean))]; }
 
+export function getDisplayedCategoryWeights(
+  categories: ReportCategory[],
+  categoryWeights: Record<string, number>,
+  methodologyVersion: number,
+): Array<[string, number]> {
+  const entries = Object.entries(categoryWeights);
+  if (methodologyVersion !== 4) return entries;
+
+  const contributingCategories = new Set(categories
+    .filter((category) => category.maxScore > 0 && (CATEGORY_WEIGHTS[category.name] ?? 6) > 0)
+    .map((category) => category.name));
+  return entries.filter(([name, weight]) => weight > 0 && contributingCategories.has(name));
+}
+
 function checkItems(pages: ReportPage[], label: string): Array<{ page: ReportPage; item: ReportCheckItem }> {
   return pages.flatMap((page) => page.categories.flatMap((category) => category.items
     .filter((item) => item.label === label && item.applicability !== "not-applicable" && item.applicability !== "unknown")
