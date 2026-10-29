@@ -81,7 +81,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
               Areas for review<span className="ts" />
             </h2>
             <p className="seo-categories-intro">
-              The v4 score uses five directly observed check types across three of the report’s ten categories: page title, HTTP status, indexability, robots.txt crawl access and HTTPS. Other observations are shown for context and do not add points.
+              The v5 score uses five directly observed check types across three of the report’s ten categories: page title, HTTP status, indexability, robots.txt crawl access and HTTPS. Other observations are shown for context and do not add points. If we cannot tell whether a page tells Google not to index it, that check is not scored.
             </p>
           </div>
           <div className="seo-categories-grid">
@@ -124,7 +124,7 @@ export default async function SeoCheckPage({ searchParams }: PageProps) {
               <div className="seo-cat-icon">6</div>
               <h3 className="seo-cat-preview-name">Performance</h3>
               <p className="seo-cat-preview-desc">
-                Performance observations, when available, come from this scan’s own retrieval. They are not real-user Core Web Vitals and do not affect the v4 score.
+                Performance observations, when available, come from this scan’s own retrieval. They are not real-user Core Web Vitals and do not contribute to the v5 score.
               </p>
             </div>
             <div className="seo-cat-preview">

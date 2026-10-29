@@ -56,6 +56,7 @@ import {
   buildRenderingCategory,
 } from "./rendering-analysis";
 import { attachMethodologyEvidence } from "./methodology-sources";
+import { parseIndexDirectives } from "./index-directives";
 
 /* ────────────────────────────────────────────────────────
    HTML utilities
@@ -499,19 +500,26 @@ function checkIndexability(idx: Indexability, robotsAllowed: { google: boolean |
       : "No redirect hop was observed before this page.",
   });
 
-  if (idx.metaNoindex || idx.headerNoindex) {
-    items.push({ label: "Indexable", status: "fail", detail: `Page contains a noindex instruction (${idx.metaNoindex ? "meta robots" : "X-Robots-Tag"}) asking search engines to leave it out of results. This does not confirm its current indexing status.`, fix: "Confirm whether this page should appear in search before changing its noindex setting." });
+  const googleNoindex = idx.googleDirectives?.noindex ?? (idx.metaNoindex || idx.headerNoindex ? "observed" : "not-observed");
+  if (googleNoindex === "observed") {
+    items.push({ label: "Indexable", status: "fail", detail: "The inspected HTML or response headers contain a noindex instruction addressed to Google. Google can act on it only if it retrieves this response; this does not confirm current indexing status.", fix: "Confirm whether this page should appear in search before changing its noindex setting." });
+  } else if (googleNoindex === "unknown") {
+    items.push({ label: "Indexable", status: "warn", scored: false, applicability: "unknown", detail: "Google applicability of a page-level robots directive could not be determined from the inspected HTML or response headers. Noindex status is unknown; no fix is recommended from this observation." });
   } else {
-    items.push({ label: "Indexable", status: "pass", detail: "No noindex instruction was observed. This does not confirm the page is indexed." });
+    items.push({ label: "Indexable", status: "pass", detail: "No generic or Googlebot-specific noindex instruction was observed in the inspected HTML or response headers. This does not confirm the page is indexed." });
   }
 
+  const googleNofollow = idx.googleDirectives?.nofollow;
   items.push({
     label: "Followable links",
-    status: idx.metaNofollow || idx.headerNofollow ? "warn" : "pass",
+    status: googleNofollow === "unknown" ? "warn" : idx.metaNofollow || idx.headerNofollow ? "warn" : "pass",
+    ...(googleNofollow === "unknown" ? { scored: false, applicability: "unknown" as const } : {}),
     scored: false,
     detail: idx.metaNofollow || idx.headerNofollow
       ? `A page-level nofollow directive was observed${idx.metaNofollow ? " in meta robots" : " in X-Robots-Tag"}. This records policy only; it does not establish how every link will be treated.`
-      : "No page-level nofollow directive was observed in the inspected response and HTML.",
+      : googleNofollow === "unknown"
+        ? "Google scope for a page-level nofollow directive could not be determined from the inspected response and HTML."
+        : "No page-level nofollow directive was observed in the inspected response and HTML.",
   });
 
   items.push({
@@ -525,9 +533,12 @@ function checkIndexability(idx: Indexability, robotsAllowed: { google: boolean |
 
   items.push({
     label: "Mixed indexability signals",
-    status: idx.mixedSignals ? "warn" : "pass",
+    status: idx.mixedSignals == null ? "warn" : idx.mixedSignals ? "warn" : "pass",
+    ...(idx.mixedSignals == null ? { applicability: "unknown" as const } : {}),
     scored: false,
-    detail: idx.mixedSignals
+    detail: idx.mixedSignals == null
+      ? "Google applicability of the noindex instruction could not be determined, so the mixed-signal combination was not assessed."
+      : idx.mixedSignals
       ? "A noindex instruction and a different same-origin canonical annotation were observed. This records configuration only; the intended URL and actual indexing outcome were not assessed."
       : "No noindex and different-canonical combination was observed in the inspected signals. This does not confirm indexing status.",
   });
@@ -1090,12 +1101,11 @@ function buildIndexability(
   sitemapSet: Set<string> | null,
   sitemapComplete = true
 ): Indexability {
-  const metaRobots = (extractMetaContent(html, "robots") || "").toLowerCase();
-  const xRobots = (headers.get("x-robots-tag") || "").toLowerCase();
-  const metaNoindex = metaRobots.includes("noindex");
-  const metaNofollow = metaRobots.includes("nofollow");
-  const headerNoindex = xRobots.includes("noindex");
-  const headerNofollow = xRobots.includes("nofollow");
+  const googleDirectives = parseIndexDirectives(html, headers.get("x-robots-tag") ? [headers.get("x-robots-tag")!] : []);
+  const metaNoindex = googleDirectives.observations.some((o) => o.source === "meta" && o.googleApplicability === "applicable" && o.effectiveDirectives.some((d) => d === "noindex" || d === "none"));
+  const metaNofollow = googleDirectives.observations.some((o) => o.source === "meta" && o.googleApplicability === "applicable" && o.effectiveDirectives.some((d) => d === "nofollow" || d === "none"));
+  const headerNoindex = googleDirectives.observations.some((o) => o.source === "x-robots-tag" && o.googleApplicability === "applicable" && o.effectiveDirectives.some((d) => d === "noindex" || d === "none"));
+  const headerNofollow = googleDirectives.observations.some((o) => o.source === "x-robots-tag" && o.googleApplicability === "applicable" && o.effectiveDirectives.some((d) => d === "nofollow" || d === "none"));
 
   const canonicalRaw = extractCanonical(html);
   let canonical: string | null = null;
@@ -1112,22 +1122,17 @@ function buildIndexability(
     } catch { canonicalSelf = null; canonicalSameOrigin = null; }
   }
 
-  const noindex = metaNoindex || headerNoindex;
-  const mixedSignals = noindex && canonicalSelf === false && canonicalSameOrigin !== false;
+  const noindex = googleDirectives.noindex === "observed";
+  const mixedSignals = googleDirectives.noindex === "unknown" ? null : noindex && canonicalSelf === false && canonicalSameOrigin !== false;
 
   let inSitemap: boolean | null = null;
   if (sitemapSet && sitemapSet.size > 0) {
     // sitemapSet is keyed with the same canonical crawl key used for dedupe.
     inSitemap = sitemapSet.has(crawlUrlKey(finalUrl));
-    // The homepage never depends on a sitemap listing for discovery, and some
-    // platforms list it under an alias slug rather than the root (Squarespace
-    // lists /home while serving the site at /, field case marathonlaw.ca).
-    // Reporting "homepage not listed in the sitemap" is noise, so the root
-    // path always counts as covered.
-    if (!inSitemap) {
-      try { if ((new URL(finalUrl).pathname || "/") === "/") inSitemap = true; } catch { /* keep computed value */ }
-    }
-    // If the sitemap was too large to read fully, membership stays unknown.
+    // Homepage discovery does not depend on sitemap membership, but membership
+    // is still reported only when the URL itself was observed.
+    // If the sitemap was too large or incomplete to read fully, a missing URL
+    // stays unknown rather than being reported as absent.
     if (!inSitemap && !sitemapComplete) inSitemap = null;
   }
 
@@ -1142,7 +1147,8 @@ function buildIndexability(
     metaNofollow,
     headerNoindex,
     headerNofollow,
-    indexable: !noindex,
+    indexable: googleDirectives.noindex === "unknown" ? null : !noindex,
+    googleDirectives,
     inSitemap,
     sitemapComplete,
     mixedSignals,
@@ -1242,6 +1248,7 @@ export function buildPageResult(
     httpStatus: idx.httpStatus,
     indexable: idx.indexable,
     indexability: idx,
+    robotsAccess: robotsAllowed,
     schema,
     lawFirm,
     wordCount,

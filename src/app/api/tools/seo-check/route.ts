@@ -38,6 +38,7 @@ import {
 import { type TtfbMeasurement } from "./content-signals";
 import { buildAiBotStatuses } from "./crawler-policy";
 import { buildPageResult, aggregateCategories, computeTopFixes } from "./page-checks";
+import { CURRENT_METHODOLOGY_VERSION } from "./methodology-version";
 import {
   type PageResult,
   type SeoCheckResult,
@@ -52,7 +53,7 @@ import {
   normalizeIntentInput,
 } from "./intent-analysis";
 import { aggregateRenderingSummary } from "./rendering-analysis";
-import { countSkippedPages, hashPageUrlIdentities } from "./coverage";
+import { countSkippedPages, hashPageUrlIdentities, resolveCoverageState } from "./coverage";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { checkRateLimit, ipFromRequest, rateLimitHeaders } from "@/lib/rate-limit";
 
@@ -209,21 +210,23 @@ async function safeResource(url: string, timeoutMs: number): Promise<string | nu
 const SITEMAP_URL_BUDGET = 10000;
 const SITEMAP_CHILD_LIMIT = 50;
 
-async function fetchSitemapUrls(sitemapUrl: string, domain: string, depth = 0): Promise<{ urls: string[]; truncated: boolean }> {
+async function fetchSitemapUrls(sitemapUrl: string, domain: string, depth = 0, required = false): Promise<{ urls: string[]; truncated: boolean; incomplete: boolean }> {
   try {
     const parsed = new URL(sitemapUrl);
-    if (isSsrfBlocked(parsed.hostname)) return { urls: [], truncated: false };
+    if (isSsrfBlocked(parsed.hostname)) return { urls: [], truncated: false, incomplete: required };
     const raw = await safeResource(sitemapUrl, 6000);
-    if (!raw) return { urls: [], truncated: false };
+    if (!raw) return { urls: [], truncated: false, incomplete: required };
     const urls: string[] = [];
     const childSitemaps: string[] = [];
     let truncated = false;
+    let incomplete = false;
     const locPattern = /<loc>\s*(https?:\/\/[^\s<]+)\s*<\/loc>/gi;
     for (const [, url] of raw.matchAll(locPattern)) {
       const trimmed = url.trim();
       if (/\.(xml|gz)(\?.*)?$/.test(trimmed)) {
         // Sitemap index entry: collect for recursive fetch (one level only).
         if (depth === 0 && isSameOrigin(trimmed, domain)) childSitemaps.push(trimmed);
+        else if (depth > 0 && isSameOrigin(trimmed, domain)) incomplete = true;
         continue;
       }
       if (isSameOrigin(trimmed, domain)) {
@@ -236,13 +239,14 @@ async function fetchSitemapUrls(sitemapUrl: string, domain: string, depth = 0): 
       if (childSitemaps.length > reachable.length) truncated = true;
       for (const child of reachable) {
         if (urls.length >= SITEMAP_URL_BUDGET) { truncated = true; break; }
-        const childResult = await fetchSitemapUrls(child, domain, 1);
+        const childResult = await fetchSitemapUrls(child, domain, 1, true);
         for (const u of childResult.urls) urls.push(u);
         if (childResult.truncated) truncated = true;
+        if (childResult.incomplete) incomplete = true;
       }
     }
-    return { urls, truncated };
-  } catch { return { urls: [], truncated: false }; }
+    return { urls, truncated, incomplete };
+  } catch { return { urls: [], truncated: false, incomplete: required }; }
 }
 
 function extractInternalLinks(html: string, baseUrl: string, domain: string): string[] {
@@ -486,23 +490,27 @@ export async function POST(req: NextRequest) {
       }
     };
     let sitemapTruncated = false;
+    let sitemapFetchIncomplete = false;
     const rootSm = await fetchSitemapUrls(`https://${originHost}/sitemap.xml`, domain);
     for (const u of rootSm.urls) collectSitemapUrl(u);
     if (rootSm.truncated) sitemapTruncated = true;
+    if (rootSm.incomplete) sitemapFetchIncomplete = true;
     if (parsedRobots) {
       const sameOriginSitemaps = parsedRobots.sitemaps.filter((s) => isSameOrigin(s, domain));
       if (sameOriginSitemaps.length > 5) sitemapTruncated = true;
       for (const sm of sameOriginSitemaps.slice(0, 5)) {
-        const smResult = await fetchSitemapUrls(sm, domain);
+        const smResult = await fetchSitemapUrls(sm, domain, 0, true);
         for (const u of smResult.urls) collectSitemapUrl(u);
         if (smResult.truncated) sitemapTruncated = true;
+        if (smResult.incomplete) sitemapFetchIncomplete = true;
       }
     }
     const sitemapSet = sitemapUrls.size > 0 ? sitemapUrls : null;
     // When the sitemap was too large to read in full, a page missing from the
     // partial set is unproven, so we must not assert "not listed" (see the
     // budget note on fetchSitemapUrls).
-    const sitemapComplete = !sitemapTruncated;
+    const sitemapIncomplete = sitemapTruncated || sitemapFetchIncomplete;
+    const sitemapComplete = !sitemapIncomplete;
 
     // The homepage's performance finding is reported as a standalone,
     // single-page claim, so it is the one page worth two extra round trips
@@ -611,9 +619,9 @@ export async function POST(req: NextRequest) {
     // V4 reports only source-mapped page checks. Bounded-crawl absence
     // heuristics remain available to legacy analysis but are not exposed as
     // public findings or operator summaries for the current method.
-    const issues = buildV4Issues(forFindings, effectiveContentPages);
+    const issues = buildV4Issues(forFindings, effectiveContentPages, CURRENT_METHODOLOGY_VERSION);
 
-    const internalSummary = buildInternalSummary(pages, issues, overallScore);
+    const internalSummary = buildInternalSummary(pages, issues, overallScore, CURRENT_METHODOLOGY_VERSION);
     const breakdown = severityBreakdown(issues);
 
     // The internal prospecting layer (summary + per-issue internal notes and
@@ -624,18 +632,20 @@ export async function POST(req: NextRequest) {
       ? issues
       : issues.map(({ internalNote, prospectingAngle, ...rest }) => rest);
 
-    const coverageStopReason = hitTimeBudget
-      ? "time-budget" as const
-      : remainingFrontierCount > 0 && pages.length >= maxPages
-        ? "page-limit" as const
-        : failedChildPages > 0 && pages.length === 1
-          ? "fetch-failure" as const
-          : (skippedReasons["robots-disallowed"] ?? 0) > 0 && attemptedChildPages === 0
-            ? "blocked" as const
-            : (skippedReasons["frontier-cap"] ?? 0) > 0 || sitemapTruncated
-              ? "other" as const
-              : "discovery-exhausted" as const;
-    partial = partial || (remainingFrontierCount > 0 && pages.length >= maxPages) || (skippedReasons["robots-disallowed"] ?? 0) > 0 || sitemapTruncated;
+    const hitPageLimit = remainingFrontierCount > 0 && pages.length >= maxPages;
+    const hitFrontierCap = (skippedReasons["frontier-cap"] ?? 0) > 0;
+    const robotsBlockedCandidates = (skippedReasons["robots-disallowed"] ?? 0) > 0;
+    const coverageState = resolveCoverageState({
+      hitTimeBudget,
+      hitPageLimit,
+      failedPages: failedChildPages,
+      blockedCandidates: robotsBlockedCandidates,
+      attemptedChildPages,
+      frontierCapSkipped: hitFrontierCap,
+      sitemapIncomplete,
+    });
+    const coverageStopReason = coverageState.stopReason;
+    partial = partial || coverageState.partial;
     const coverage = {
       requestedLimit: maxPages,
       attemptedPages: 1 + attemptedChildPages,
@@ -646,7 +656,7 @@ export async function POST(req: NextRequest) {
       totalSitePages: null,
       stopReason: coverageStopReason,
       skippedReasons,
-      sitemapIncomplete: sitemapTruncated,
+      sitemapIncomplete,
       partial,
       pageSetHash: hashPageUrlIdentities(pages.map((page) => page.url)),
       pageSetHashBasis: "normalized-url-identities" as const,
@@ -654,7 +664,7 @@ export async function POST(req: NextRequest) {
 
     const result: SeoCheckResult = {
       domain,
-      methodologyVersion: 4,
+      methodologyVersion: CURRENT_METHODOLOGY_VERSION,
       scanMode,
       pagesScanned: pages.length,
       pages,
@@ -680,7 +690,7 @@ export async function POST(req: NextRequest) {
       // checks contribute to no grade, built from the actual scored:false
       // flags set this scan (not a hand-maintained list that can drift).
       scoring: {
-        methodologyVersion: 4,
+        methodologyVersion: CURRENT_METHODOLOGY_VERSION,
         label: "Website checks",
         assessed: aggregatedCategories.some((category) => (CATEGORY_WEIGHTS[category.name] ?? 6) > 0 && category.maxScore > 0),
         categoryWeights: CATEGORY_WEIGHTS,

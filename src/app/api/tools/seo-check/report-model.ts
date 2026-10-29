@@ -1,5 +1,7 @@
 import { normalizeLegacyPurposes } from "./crawler-policy";
-import { CATEGORY_WEIGHTS, type AiBotPurpose } from "./engine-core";
+import { CATEGORY_WEIGHTS } from "./category-weights";
+import type { AiBotPurpose } from "./engine-core";
+import { CURRENT_METHODOLOGY_VERSION, isLimitedScoreMethodology, isCurrentMethodology } from "./methodology-version";
 
 /**
  * Deterministic public report model for the in-tool SEO check.
@@ -27,7 +29,7 @@ export interface ReportCheckItem {
 }
 
 export function checkObservationDisplayText(item: Pick<ReportCheckItem, "detail" | "scored" | "disposition">, methodologyVersion?: number): string {
-  if (methodologyVersion !== 4 || item.scored !== false) return item.detail;
+  if (methodologyVersion !== 4 && methodologyVersion !== 5 || item.scored !== false) return item.detail;
   const explanation = item.disposition === "pending-review"
     ? "This check is excluded until its source and meaning are verified; it does not establish a search defect. No fix is recommended from this check."
     : "This is an observation for context, not a validated search defect. No fix is recommended from this check.";
@@ -49,7 +51,9 @@ export interface ReportPage {
     metaNoindex?: boolean | null;
     headerNoindex?: boolean | null;
     indexable?: boolean | null;
+    googleDirectives?: { noindex: "observed" | "not-observed" | "unknown"; nofollow: "observed" | "not-observed" | "unknown"; observations: Array<{ source: "meta" | "x-robots-tag"; scope: string; crawlerToken: string | null; rawValue: string; googleApplicability: "applicable" | "not-applicable" | "unknown"; limitation?: string }> };
   };
+  robotsAccess?: { google: boolean | null; bing: boolean | null };
   lawFirm?: {
     phoneVisible: boolean;
     contactFormPresent: boolean;
@@ -136,7 +140,7 @@ export interface ReportAction {
 }
 
 export interface SeoReportModel {
-  methodology: { version: number; label: "Website checks" | "Historical score"; notice: string | null };
+  methodology: { version: number; label: "Website checks" | "Historical score" | "Unsupported method" | "Method not recorded"; notice: string | null };
   coverage: {
     pagesScanned: number; partial: boolean; checkedAt: string | null;
     requestedLimit: number | null; attemptedPages: number | null; successfulPages: number;
@@ -149,12 +153,14 @@ export interface SeoReportModel {
   accessSummary: {
     checkedPageCount: number;
     noindexCount: number;
+    indexabilityNotAssessedCount: number;
     googleBlockedCount: number;
     bingBlockedCount: number;
     googleNotAssessedCount: number;
     bingNotAssessedCount: number;
     homepageIndexDirective: "observed" | "not-observed" | "not-assessed" | "not-checked";
   };
+  directiveObservations: Array<{ url: string; source: "meta" | "x-robots-tag"; scope: string; crawlerToken: string | null; rawValue: string; googleApplicability: "applicable" | "not-applicable" | "unknown"; limitation?: string }>;
   priorityActions: ReportAction[];
   strengths: string[];
   aiObservations: string[];
@@ -185,15 +191,16 @@ export interface SeoReportModel {
 }
 
 const METHOD_NOTE = "This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.";
-const SCORE_NOTE = "Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.";
-const LIMITATION = (n: number) => `This scan inspected the initial HTML of ${n} pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm.`;
-const PARTIAL_LIMITATION = "The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.";
+const UNSUPPORTED_METHOD_NOTE = "This saved scan records a scoring method this report does not interpret. Run a new scan for the current report.";
+const SCORE_NOTE = "Not a whole-site grade or ranking prediction.";
+const LIMITATION = (n: number) => `Only the initial HTML of ${n} ${n === 1 ? "page" : "pages"} was checked. This is not a full site audit and does not verify indexing, rankings, enquiries, legal accuracy, or AI citations of the firm.`;
+const PARTIAL_LIMITATION = "The scan is incomplete. Findings apply only to inspected pages.";
 const CTA_HREF = "https://cal.com/adriano-caseloadselect/conversation";
 
 type Family = { id: string; rank: number; title: string; why: string; next: string; priority: string };
 
 const FAMILIES: Family[] = [
-  { id: "search-exclusion", rank: 1, priority: "Review first", title: "Review which pages should appear in search", why: "If these pages are intended to attract clients, that instruction deserves review. Some exclusions are intentional.", next: "Confirm which affected pages should appear in search, then ask your web provider to review their settings." },
+  { id: "search-exclusion", rank: 1, priority: "Review first", title: "Review which pages should appear in search", why: "This instruction can affect whether search engines include a page in results.", next: "Ask your provider to review which pages should appear in search." },
   { id: "robots-access", rank: 1, priority: "Review first", title: "Review crawler access to these pages", why: "This can limit crawling. It does not prove that a URL is absent from search results.", next: "Confirm whether the restriction is intentional before changing it." },
   { id: "connection", rank: 2, priority: "Review", title: "Review page connection security", why: "Visitors should have a secure connection when using the site, especially before sharing information.", next: "Ask your web provider to confirm HTTPS is available and consistently used." },
   { id: "contact-route", rank: 3, priority: "Review", title: "Make the next contact step easy to find", why: "A clear contact route can help prospective clients understand how to reach the firm.", next: "Review affected pages on desktop and mobile and confirm how a prospective client should contact the firm." },
@@ -256,7 +263,7 @@ export function getDisplayedCategoryWeights(
   methodologyVersion: number,
 ): Array<[string, number]> {
   const entries = Object.entries(categoryWeights);
-  if (methodologyVersion !== 4) return entries;
+  if (!isLimitedScoreMethodology(methodologyVersion)) return entries;
 
   const contributingCategories = new Set(categories
     .filter((category) => category.maxScore > 0 && (CATEGORY_WEIGHTS[category.name] ?? 6) > 0)
@@ -278,7 +285,7 @@ function allCheckItems(pages: ReportPage[], label: string): Array<{ page: Report
 
 function utilityPage(page: ReportPage): boolean { return ["policy", "intake", "tool"].includes(page.pageType); }
 
-function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], selectedUrls?: string[]): ReportAction {
+function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], selectedUrls?: string[], methodologyVersion = 2): ReportAction {
   const urls = unique(selectedUrls ?? issues.flatMap((i) => i.affectedUrls));
   const isPlainHttpIssue = (issue: ReportIssue) => issue.title.toLowerCase() === "https" || /loaded over http|served over http/i.test(`${issue.title} ${issue.detail}`);
   const plainHttpUrls = unique(issues.filter(isPlainHttpIssue).flatMap((issue) => issue.affectedUrls));
@@ -292,7 +299,9 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
   let observed = `The scan recorded a ${family.id.replaceAll("-", " ")} check finding on ${urls.length || 1} checked page${(urls.length || 1) === 1 ? "" : "s"}.`;
   if (family.id === "search-exclusion") {
     const count = urls.length;
-    observed = `${count} of ${pages.length} checked pages contain an instruction asking search engines to leave them out of results.`;
+    observed = methodologyVersion === 5
+      ? `${count} of ${pages.length} checked ${pages.length === 1 ? "page" : "pages"} ${count === 1 ? "tells" : "tell"} Google not to include ${count === 1 ? "it" : "them"} in search. Google must load the page first.`
+      : `${count} of ${pages.length} checked pages contain an instruction asking search engines to leave them out of results.`;
   } else if (family.id === "robots-access") {
     const crawlerNames = unique(evidence.flatMap((line) => ["Googlebot", "Bingbot"].filter((name) => line.includes(name))));
     observed = `The inspected robots.txt rules restrict ${crawlerNames.join(" and ") || "a listed search crawler"} on ${urls.length} checked page${urls.length === 1 ? "" : "s"}.`;
@@ -328,7 +337,9 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
       : "Needs confirmation",
     title: family.title,
     observed,
-    whyItMatters: family.id === "connection" && hasMixedContent && hasPlainHttp
+    whyItMatters: family.id === "search-exclusion" && methodologyVersion === 5
+      ? "This instruction may keep useful pages out of Google."
+      : family.id === "connection" && hasMixedContent && hasPlainHttp
       ? "Some checked pages loaded without HTTPS, and browsers may block or limit resources served over HTTP on other HTTPS pages."
       : family.id === "connection" && hasMixedContent
       ? "A browser may block or limit resources served over HTTP on an HTTPS page, which can affect how the page appears or works."
@@ -350,21 +361,42 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const pages = input.pages ?? [];
   const issues = input.issues ?? [];
   const reportIssues = issues.filter((issue) => !isLegacyAiOnlyIssue(issue));
+  const resolvedPartial = input.coverage?.partial ?? Boolean(input.partial);
   const version = typeof input.methodologyVersion === "number" ? input.methodologyVersion : 2;
   // v3 and earlier keep their stored score meaning and are never silently
   // reinterpreted through the v4 report copy or denominator.
-  const current = version === 4;
-  const noindexPages = pages.filter((p) => p.indexability?.metaNoindex || p.indexability?.headerNoindex);
-  const googleBlocked = checkItems(pages, "robots.txt crawl access").filter(({ item }) => item.status === "fail" && /Googlebot/.test(item.detail));
-  const bingBlocked = checkItems(pages, "robots.txt crawl access").filter(({ item }) => item.status === "fail" && /Bingbot/.test(item.detail));
+  const current = isCurrentMethodology(version);
+  const supported = isLimitedScoreMethodology(version);
+  const scoreMethodSupported = supported || version <= 3;
+  const noindexPages = version === 5
+    ? pages.filter((p) => p.indexability?.googleDirectives?.noindex === "observed")
+    : version <= 4
+      ? pages.filter((p) => p.indexability?.metaNoindex || p.indexability?.headerNoindex)
+      : [];
+  const googleBlocked = version === 5
+    ? pages.filter((page) => page.robotsAccess?.google === false)
+    : version <= 4 ? checkItems(pages, "robots.txt crawl access").filter(({ item }) => item.status === "fail" && /Googlebot/.test(item.detail)) : [];
+  const bingBlocked = version === 5
+    ? pages.filter((page) => page.robotsAccess?.bing === false)
+    : version <= 4 ? checkItems(pages, "robots.txt crawl access").filter(({ item }) => item.status === "fail" && /Bingbot/.test(item.detail)) : [];
   const unknownRobotsPages = unique(allCheckItems(pages, "robots.txt crawl access")
     .filter(({ item }) => item.scored === false || item.applicability === "unknown")
     .map(({ page }) => page.url));
   const homepage = pages.find((page) => page.pageType === "homepage");
   const homepageIndexDirective = !homepage
     ? "not-checked"
-    : homepage.indexability.metaNoindex === true || homepage.indexability.headerNoindex === true
+    : version > CURRENT_METHODOLOGY_VERSION
+      ? "not-assessed"
+    : version === 5 && homepage.indexability.googleDirectives?.noindex === "unknown"
+      ? "not-assessed"
+    : version === 5 && homepage.indexability.googleDirectives?.noindex === "observed"
       ? "observed"
+      : version === 5 && homepage.indexability.googleDirectives?.noindex === "not-observed"
+        ? "not-observed"
+      : version === 5
+        ? "not-assessed"
+      : homepage.indexability.metaNoindex === true || homepage.indexability.headerNoindex === true
+        ? "observed"
       : homepage.indexability.metaNoindex === false && homepage.indexability.headerNoindex === false
         ? "not-observed"
         : "not-assessed";
@@ -382,16 +414,19 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     const family = FAMILIES.find((x) => x.id === id)!;
     const urls = unique(group.flatMap((i) => i.affectedUrls)).filter((url) => {
       const page = pages.find((p) => p.url === url);
+      const indexabilityItem = page?.categories.find((category) => category.name === "Indexability")?.items.find((item) => item.label === "Indexable");
+      if (version === 5 && id === "search-exclusion" && indexabilityItem?.applicability === "unknown") return false;
+      if (version > CURRENT_METHODOLOGY_VERSION && id === "search-exclusion") return false;
       return !page || !utilityPage(page);
     });
     return { family, group, urls };
   }).filter(({ urls }) => urls.length > 0).sort((a, b) =>
     a.family.rank - b.family.rank || b.urls.length - a.urls.length || a.family.id.localeCompare(b.family.id));
 
-  const priorityActions = candidates.slice(0, 3).map(({ family, group, urls }) => makeAction(family, group, pages, urls));
+  const priorityActions = candidates.slice(0, 3).map(({ family, group, urls }) => makeAction(family, group, pages, urls, version));
   if (noindexPages.length && !priorityActions.some((a) => a.family === "search-exclusion")) {
     const relevant = noindexPages.filter((p) => !utilityPage(p));
-    if (relevant.length) priorityActions.unshift(makeAction(FAMILIES[0], [], pages, relevant.map((p) => p.url)));
+    if (relevant.length) priorityActions.unshift(makeAction(FAMILIES[0], [], pages, relevant.map((p) => p.url), version));
     priorityActions.splice(3);
   }
 
@@ -399,7 +434,9 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   if (pages.length && pages.every((p) => p.url.startsWith("https://"))) strengths.push(`All ${pages.length} checked pages loaded over HTTPS.`);
   if (pages.some((p) => p.lawFirm?.contactFormPresent || p.lawFirm?.phoneVisible || p.lawFirm?.consultationCta)) strengths.push("A contact route was found in the inspected page content.");
   if (pages.some((p) => p.lawFirm?.practiceAreaIntent)) strengths.push("Service information was found in the inspected page content.");
-  if (pages.length && pages.every((p) => p.indexability?.indexable)) strengths.push("No noindex instruction was observed on the checked pages.");
+  if (pages.length && version <= CURRENT_METHODOLOGY_VERSION && (version === 5
+    ? pages.every((p) => p.indexability?.googleDirectives?.noindex === "not-observed")
+    : pages.every((p) => p.indexability?.indexable === true))) strengths.push(version === 5 ? "No noindex instruction addressed to Google was observed in the checked page responses." : "No noindex instruction was observed on the checked pages.");
 
   const crawlerPolicies = (input.aiBots ?? []).map((bot) => ({
     token: bot.token ?? bot.name,
@@ -414,7 +451,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     sourceVerification: bot.sourceVerification ?? "unavailable",
   }));
   const aiObservations: string[] = crawlerPolicies.length
-    ? ["Provider-specific purposes, robots.txt rule observations, and documented robots behavior are listed per token below. An observed rule does not verify actual access or downstream use."]
+    ? ["The list below describes crawler purposes, robots.txt rules and documented behavior. A rule does not prove access or use."]
     : ["This scan did not assess provider-specific crawler policy or actual AI service access."];
 
   const scoreCategories = input.categories ?? [];
@@ -432,15 +469,15 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const scopedLabel = `Limited checks: ${scoredCheckTypeCount} ${scoredCheckTypeCount === 1 ? "check type" : "check types"} across ${assessedCategoryCount} of ${totalCategoryCount} ${totalCategoryCount === 1 ? "category" : "categories"}`;
   const note = current
     ? assessed
-      ? `This limited summary reflects ${scoredCheckTypeCount} scored ${scoredCheckTypeCount === 1 ? "check type" : "check types"} across ${assessedCategoryCount} of ${totalCategoryCount} ${totalCategoryCount === 1 ? "category" : "categories"}, applied to the inspected pages. ${SCORE_NOTE}`
-      : "No scored checks contributed to this scan. Other observations do not contribute to a score. It is not a whole-site SEO grade or a ranking prediction."
+      ? SCORE_NOTE
+      : "No scored checks contributed to this scan. This scan does not grade the whole site or predict rankings."
     : METHOD_NOTE;
-  const limitations = [LIMITATION(pages.length || input.pagesScanned), ...(input.partial ? [PARTIAL_LIMITATION] : [])];
+  const limitations = [LIMITATION(pages.length || input.pagesScanned), ...(resolvedPartial ? [PARTIAL_LIMITATION] : [])];
   return {
-    methodology: { version, label: current ? "Website checks" : "Historical score", notice: current ? null : METHOD_NOTE },
+    methodology: { version, label: current ? "Website checks" : typeof input.methodologyVersion !== "number" ? "Method not recorded" : supported || version <= 3 ? "Historical score" : "Unsupported method", notice: current ? null : version > CURRENT_METHODOLOGY_VERSION ? UNSUPPORTED_METHOD_NOTE : METHOD_NOTE },
     coverage: {
       pagesScanned: input.pagesScanned,
-      partial: input.coverage?.partial ?? Boolean(input.partial),
+      partial: resolvedPartial,
       checkedAt: input.checkedAt ?? null,
       requestedLimit: input.coverage?.requestedLimit ?? null,
       attemptedPages: input.coverage?.attemptedPages ?? null,
@@ -462,12 +499,14 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     accessSummary: {
       checkedPageCount: pages.length,
       noindexCount: noindexPages.length,
+      indexabilityNotAssessedCount: version === 5 ? pages.filter((page) => !page.indexability?.googleDirectives || page.indexability.googleDirectives.noindex === "unknown").length : version > CURRENT_METHODOLOGY_VERSION ? pages.length : 0,
       googleBlockedCount: googleBlocked.length,
       bingBlockedCount: bingBlocked.length,
-      googleNotAssessedCount: unknownRobotsPages.length,
-      bingNotAssessedCount: unknownRobotsPages.length,
+      googleNotAssessedCount: version === 5 ? pages.filter((page) => page.robotsAccess?.google == null).length : version <= 4 ? unknownRobotsPages.length : pages.length,
+      bingNotAssessedCount: version === 5 ? pages.filter((page) => page.robotsAccess?.bing == null).length : version <= 4 ? unknownRobotsPages.length : pages.length,
       homepageIndexDirective,
     },
+    directiveObservations: version === 5 ? pages.flatMap((page) => (page.indexability?.googleDirectives?.observations ?? []).map((observation) => ({ url: page.url, ...observation }))) : [],
     priorityActions,
     strengths: strengths.slice(0, 3),
     aiObservations,
@@ -475,14 +514,14 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
     limitations,
     findingGroups: reportIssues.map((issue) => ({ category: issue.category, title: issue.title, detail: issue.detail, affectedUrls: issue.affectedUrls, status: issue.status })),
     scoreExplanation: {
-      assessed: current ? assessed : Number.isFinite(input.overallScore),
-      score: Number.isFinite(input.overallScore) && (!current || assessed) ? input.overallScore! : null,
-      label: current ? (assessed ? scopedLabel : "Not assessed") : "Historical score",
-      note,
+      assessed: current ? assessed : scoreMethodSupported && Number.isFinite(input.overallScore),
+      score: scoreMethodSupported && Number.isFinite(input.overallScore) && (!current || assessed) ? input.overallScore! : null,
+      label: current ? (assessed ? scopedLabel : "Not assessed") : version > CURRENT_METHODOLOGY_VERSION ? "Unsupported method" : "Historical score",
+      note: version > CURRENT_METHODOLOGY_VERSION ? UNSUPPORTED_METHOD_NOTE : note,
       scoredCheckTypeCount,
       assessedCategoryCount,
       totalCategoryCount,
     },
-    cta: { heading: "Discuss these findings", body: "We can help confirm which findings matter for the cases you want, separate intentional choices from genuine gaps, and decide what to address first.", linkLabel: "Book a conversation", href: CTA_HREF },
+    cta: { heading: "Next steps", body: "We can help interpret these findings, identify what matters for your cases, and decide what to fix first.", linkLabel: "Book a conversation", href: CTA_HREF },
   };
 }

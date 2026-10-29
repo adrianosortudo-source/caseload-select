@@ -19,6 +19,7 @@ import SeoCheckTool from "@/components/seo-check/SeoCheckTool";
 import PageHeader from "@/components/PageHeader";
 import DeleteSeoAuditButton from "@/components/admin/DeleteSeoAuditButton";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { SAVED_AUDIT_LIST_COLUMNS, parseSavedMethodologyVersion } from "./saved-audit-model";
 
 export const dynamic = "force-dynamic";
 
@@ -31,6 +32,7 @@ interface SavedAuditRow {
   scan_mode: string | null;
   pages_scanned: number | null;
   issue_count: number | null;
+  methodologyVersion: number | null;
   created_at: string;
 }
 
@@ -40,11 +42,14 @@ async function loadSavedAudits(): Promise<SavedAuditRow[]> {
   try {
     const { data, error } = await supabaseAdmin
       .from("seo_check_runs")
-      .select("id, domain, grade, overall_score, ai_search_score, scan_mode, pages_scanned, issue_count, created_at")
+      .select(SAVED_AUDIT_LIST_COLUMNS)
       .order("created_at", { ascending: false })
       .limit(25);
     if (error) return [];
-    return (data ?? []) as SavedAuditRow[];
+    return (data ?? []).map((row) => ({
+      ...row,
+      methodologyVersion: parseSavedMethodologyVersion(row.methodologyVersion),
+    } as SavedAuditRow));
   } catch {
     return [];
   }
@@ -57,7 +62,7 @@ export default async function AdminSeoCheckPage() {
     <div>
       <PageHeader
         title="SEO and AI visibility check"
-        subtitle="Canonical SEO audit for prospects and clients. Run a quick scan to triage a new site fast, or standard/deep for a full technical, content, and AI-visibility diagnostic. Save results here and revisit them for follow-up."
+        subtitle="Canonical SEO audit for prospects and clients. Quick scans inspect a smaller page sample; standard and deep inspect more pages. The weighted score covers five check types; other technical, content, and AI-visibility findings are observations, not scored checks. Save results here and revisit them for follow-up."
         right={
           <p className="text-xs text-black/40 max-w-[260px] text-right leading-snug">
             Canonical SEO audit. Prospecting Diagnostic consumes SEO results separately.
@@ -91,6 +96,7 @@ export default async function AdminSeoCheckPage() {
                 <tr className="text-left text-[10px] uppercase tracking-wider font-display text-black/40 border-b border-black/10">
                   <th className="px-4 py-2.5">Domain</th>
                   <th className="px-4 py-2.5">SEO</th>
+                  <th className="px-4 py-2.5">Method</th>
                   <th className="px-4 py-2.5">AI</th>
                   <th className="px-4 py-2.5">Scan</th>
                   <th className="px-4 py-2.5">Issues</th>
@@ -102,7 +108,8 @@ export default async function AdminSeoCheckPage() {
                 {audits.map((a) => (
                   <tr key={a.id} className="border-b border-black/5 last:border-0">
                     <td className="px-4 py-2.5 font-medium text-navy">{a.domain ?? "unknown"}</td>
-                    <td className="px-4 py-2.5 text-black/70">{a.grade ?? "?"} {a.overall_score ?? "?"}</td>
+                    <td className="px-4 py-2.5 text-black/70">{a.overall_score == null ? "Not assessed" : `${a.grade ?? "?"} ${a.overall_score}`}</td>
+                    <td className="px-4 py-2.5 text-black/60">{a.methodologyVersion === 5 ? "Website checks v5" : a.methodologyVersion === 4 ? "Historical v4" : a.methodologyVersion == null ? "Method not recorded" : a.methodologyVersion > 5 ? "Unsupported method" : "Historical score"}</td>
                     <td className="px-4 py-2.5 text-black/70">{a.ai_search_score ?? "?"}</td>
                     <td className="px-4 py-2.5 text-black/60">{a.scan_mode ?? "?"} · {a.pages_scanned ?? 0}p</td>
                     <td className="px-4 py-2.5 text-black/60">{a.issue_count ?? 0}</td>

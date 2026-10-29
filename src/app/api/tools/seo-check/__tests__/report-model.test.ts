@@ -3,7 +3,7 @@ import { buildSeoReportModel, checkObservationDisplayText, getDisplayedCategoryW
 
 const base: ReportInput = {
   domain: "example.com",
-  methodologyVersion: 4,
+  methodologyVersion: 5,
   pagesScanned: 2,
   overallScore: 74,
   categories: [{ name: "On-Page SEO", score: 7, maxScore: 10, items: [{ label: "Page title", status: "pass", detail: "A title is present." }] }],
@@ -12,7 +12,8 @@ const base: ReportInput = {
       url: "https://example.com/",
       pageType: "homepage",
       httpStatus: 200,
-      indexability: { metaNoindex: false, headerNoindex: false, indexable: true },
+      indexability: { metaNoindex: false, headerNoindex: false, indexable: true, googleDirectives: { noindex: "not-observed", nofollow: "not-observed", observations: [] } },
+      robotsAccess: { google: true, bing: true },
       lawFirm: { phoneVisible: true, contactFormPresent: false, consultationCta: false, practiceAreaIntent: true },
       categories: [],
     },
@@ -20,7 +21,8 @@ const base: ReportInput = {
       url: "https://example.com/services/",
       pageType: "practice",
       httpStatus: 200,
-      indexability: { metaNoindex: false, headerNoindex: false, indexable: true },
+      indexability: { metaNoindex: false, headerNoindex: false, indexable: true, googleDirectives: { noindex: "not-observed", nofollow: "not-observed", observations: [] } },
+      robotsAccess: { google: true, bing: true },
       lawFirm: { phoneVisible: false, contactFormPresent: false, consultationCta: false, practiceAreaIntent: true },
       categories: [],
     },
@@ -32,11 +34,11 @@ const base: ReportInput = {
 describe("buildSeoReportModel", () => {
   it("labels the current weighted score clearly and always includes bounded-scope limitations and one CTA", () => {
     const model = buildSeoReportModel(base);
-    expect(model.methodology).toMatchObject({ version: 4, label: "Website checks", notice: null });
+    expect(model.methodology).toMatchObject({ version: 5, label: "Website checks", notice: null });
     expect(model.scoreExplanation).toMatchObject({ assessed: true, score: 74, label: "Limited checks: 1 check type across 1 of 1 category", scoredCheckTypeCount: 1, assessedCategoryCount: 1, totalCategoryCount: 1 });
-    expect(model.scoreExplanation.note).toBe("This limited summary reflects 1 scored check type across 1 of 1 category, applied to the inspected pages. Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.");
-    expect(model.limitations).toEqual(["This scan inspected the initial HTML of 2 pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm."]);
-    expect(model.cta).toMatchObject({ heading: "Discuss these findings", linkLabel: "Book a conversation", href: "https://cal.com/adriano-caseloadselect/conversation" });
+    expect(model.scoreExplanation.note).toBe("Not a whole-site grade or ranking prediction.");
+    expect(model.limitations).toEqual(["Only the initial HTML of 2 pages was checked. This is not a full site audit and does not verify indexing, rankings, enquiries, legal accuracy, or AI citations of the firm."]);
+    expect(model.cta).toMatchObject({ heading: "Next steps", linkLabel: "Book a conversation", href: "https://cal.com/adriano-caseloadselect/conversation" });
   });
 
   it("shows the dynamic scored-check and contributing-category denominator", () => {
@@ -58,7 +60,7 @@ describe("buildSeoReportModel", () => {
       assessedCategoryCount: 3,
       totalCategoryCount: 10,
     });
-    expect(model.scoreExplanation.note).toBe("This limited summary reflects 5 scored check types across 3 of 10 categories, applied to the inspected pages. Other observations do not contribute to this score. It is not a whole-site SEO grade or a ranking prediction.");
+    expect(model.scoreExplanation.note).toBe("Not a whole-site grade or ranking prediction.");
   });
 
   it("marks saved pre-v3 scores as historical and supplies the no-cross-method notice", () => {
@@ -68,28 +70,52 @@ describe("buildSeoReportModel", () => {
     expect(model.scoreExplanation).toMatchObject({ score: 88, label: "Historical score" });
   });
 
-  it("preserves saved v3 scores as historical under the v4 report method", () => {
+  it("preserves saved v3 scores as historical under the v5 report method", () => {
     const model = buildSeoReportModel({ ...base, methodologyVersion: 3, overallScore: 88 });
     expect(model.methodology).toMatchObject({ version: 3, label: "Historical score" });
     expect(model.scoreExplanation).toMatchObject({ score: 88, label: "Historical score" });
     expect(model.methodology.notice).toContain("Scores from different methods should not be compared");
   });
 
-  it("treats unversioned saved scores as historical and preserves their stored value", () => {
+  it("treats unversioned saved scores as historical with method not recorded", () => {
     const unversioned: ReportInput = { ...base };
     delete unversioned.methodologyVersion;
     const model = buildSeoReportModel({ ...unversioned, overallScore: 81 });
-    expect(model.methodology).toMatchObject({ version: 2, label: "Historical score" });
+    expect(model.methodology).toMatchObject({ version: 2, label: "Method not recorded" });
     expect(model.scoreExplanation).toMatchObject({ score: 81, label: "Historical score" });
   });
 
-  it("renders a v4 report as Not scored when no eligible denominator exists", () => {
+  it("renders a v5 report as Not scored when no eligible denominator exists", () => {
     const model = buildSeoReportModel({
       ...base,
       overallScore: null,
       categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [] }],
     });
     expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not assessed" });
+  });
+
+  it("keeps v4 as a historical score and does not reinterpret its saved noindex booleans", () => {
+    const model = buildSeoReportModel({ ...base, methodologyVersion: 4, pages: [{ ...base.pages![0], indexability: { metaNoindex: false, headerNoindex: false, indexable: true } }] });
+    expect(model.methodology).toMatchObject({ version: 4, label: "Historical score" });
+    expect(model.scoreExplanation).toMatchObject({ score: 74, label: "Historical score" });
+    expect(model.accessSummary.indexabilityNotAssessedCount).toBe(0);
+  });
+
+  it("keeps a v5 unknown directive out of noindex actions and all-clear strengths", () => {
+    const page = { ...base.pages![0], indexability: { metaNoindex: false, headerNoindex: false, indexable: null, googleDirectives: { noindex: "unknown" as const, nofollow: "not-observed" as const, observations: [] } }, categories: [{ name: "Indexability", score: 0, maxScore: 10, items: [{ label: "Indexable", status: "warn" as const, detail: "Scope unknown.", scored: false, applicability: "unknown" as const }] }] };
+    const model = buildSeoReportModel({ ...base, pages: [page], issues: [{ id: "unknown", category: "Indexability", status: "warn", title: "Indexable", detail: "Scope unknown.", affectedUrls: [page.url], affectedCount: 1, totalPages: 1 }] });
+    expect(model.accessSummary.indexabilityNotAssessedCount).toBe(1);
+    expect(model.accessSummary.homepageIndexDirective).toBe("not-assessed");
+    expect(model.accessSummary.noindexCount).toBe(0);
+    expect(model.priorityActions).toEqual([]);
+    expect(model.strengths.some((strength) => /noindex/i.test(strength))).toBe(false);
+  });
+
+  it("does not interpret scores or legacy indexability fields from an unknown future method", () => {
+    const future = buildSeoReportModel({ ...base, methodologyVersion: 6, overallScore: 91, pages: [{ ...base.pages![0], indexability: { metaNoindex: true, headerNoindex: false, indexable: false } }] });
+    expect(future.methodology).toMatchObject({ version: 6, label: "Unsupported method" });
+    expect(future.scoreExplanation).toMatchObject({ score: null, label: "Unsupported method", assessed: false });
+    expect(future.accessSummary.noindexCount).toBe(0);
   });
 
   it("qualifies unscored v4 observations and preserves historical v3 detail", () => {
@@ -101,13 +127,59 @@ describe("buildSeoReportModel", () => {
     expect(checkObservationDisplayText({ detail, scored: false, disposition: "unscored" }, 3)).toBe(detail);
   });
 
+  it("uses singular and plural wording for observed Google instructions", () => {
+    const observedPage = (page: NonNullable<ReportInput["pages"]>[number], url: string) => ({
+      ...page,
+      url,
+      pageType: "practice",
+      indexability: {
+        metaNoindex: true,
+        headerNoindex: false,
+        indexable: false,
+        googleDirectives: { noindex: "observed" as const, nofollow: "not-observed" as const, observations: [] },
+      },
+    });
+    const single = buildSeoReportModel({
+      ...base,
+      pagesScanned: 1,
+      pages: [observedPage(base.pages![1], "https://example.com/employment/")],
+    });
+    expect(single.priorityActions[0].observed).toBe(
+      "1 of 1 checked page tells Google not to include it in search. Google must load the page first.",
+    );
+    expect(single.priorityActions[0].whyItMatters).toBe("This instruction may keep useful pages out of Google.");
+
+    const oneOfTwentyFive = buildSeoReportModel({
+      ...base,
+      pagesScanned: 25,
+      pages: Array.from({ length: 25 }, (_, index) =>
+        index === 0
+          ? observedPage(base.pages![1], "https://example.com/employment/")
+          : { ...base.pages![1], url: `https://example.com/page-${index}/` },
+      ),
+    });
+    expect(oneOfTwentyFive.priorityActions[0].observed).toBe(
+      "1 of 25 checked pages tells Google not to include it in search. Google must load the page first.",
+    );
+    const plural = buildSeoReportModel({
+      ...base,
+      pagesScanned: 2,
+      pages: [
+        observedPage(base.pages![1], "https://example.com/employment/"),
+        observedPage(base.pages![1], "https://example.com/family-law/"),
+      ],
+    });
+    expect(plural.priorityActions[0].observed).toBe(
+      "2 of 2 checked pages tell Google not to include them in search. Google must load the page first.",
+    );
+  });
   it("creates page-scoped noindex action copy and excludes utility pages from priority selection", () => {
     const pages = [
       { ...base.pages![0], indexability: { metaNoindex: true, headerNoindex: false, indexable: false } },
       { ...base.pages![1], indexability: { metaNoindex: false, headerNoindex: false, indexable: true } },
       { ...base.pages![1], url: "https://example.com/privacy/", pageType: "policy", indexability: { metaNoindex: true, headerNoindex: false, indexable: false } },
     ];
-    const model = buildSeoReportModel({ ...base, pages, pagesScanned: 3 });
+    const model = buildSeoReportModel({ ...base, methodologyVersion: 4, pages, pagesScanned: 3 });
     expect(model.accessSummary.noindexCount).toBe(2);
     expect(model.accessSummary.homepageIndexDirective).toBe("observed");
     expect(model.priorityActions[0]).toMatchObject({
@@ -117,6 +189,23 @@ describe("buildSeoReportModel", () => {
     });
   });
 
+  it("keeps v4 header-only search guidance neutral and preserves the recorded score", () => {
+    const model = buildSeoReportModel({
+      ...base,
+      methodologyVersion: 4,
+      overallScore: 81,
+      pagesScanned: 1,
+      pages: [{
+        ...base.pages![1],
+        url: "https://example.com/employment/",
+        indexability: { metaNoindex: false, headerNoindex: true, indexable: false },
+      }],
+    });
+
+    expect(model.scoreExplanation.score).toBe(81);
+    expect(model.priorityActions[0]).toMatchObject({ family: "search-exclusion" });
+    expect(model.priorityActions[0].whyItMatters).not.toMatch(/Google/i);
+  });
   it("explains mixed content separately from pages that loaded without HTTPS", () => {
     const mixedOnly = buildSeoReportModel({
       ...base,
@@ -161,8 +250,7 @@ describe("buildSeoReportModel", () => {
     expect(model.crawlerPolicies.find((bot) => bot.token === 'Perplexity-User')).toMatchObject({ robotsSemantics: 'generally-ignores', policyObservation: 'blocking-rule-observed', actualFetchAccess: 'not-verified' });
     expect(model.crawlerPolicies.find((bot) => bot.token === "CCBot")?.purposes).toEqual(["open-dataset"]);
     expect(model.crawlerPolicies.find((bot) => bot.token === "Google-Extended")).toMatchObject({ isControlToken: true, actualFetchAccess: "not-verified" });
-    expect(model.aiObservations.join(" ")).toContain("documented robots behavior are listed per token below");
-    expect(model.aiObservations.join(" ")).toContain("does not verify actual access or downstream use");
+    expect(model.aiObservations).toEqual(["The list below describes crawler purposes, robots.txt rules and documented behavior. A rule does not prove access or use."]);
     expect(model.aiObservations.join(" ")).not.toContain("listed training crawlers");
     expect(model.priorityActions).toEqual([]);
   });
@@ -238,12 +326,12 @@ describe("buildSeoReportModel", () => {
     const model = buildSeoReportModel({
       ...base,
       pages: [
-        { ...base.pages![0], indexability: { metaNoindex: null, headerNoindex: null, indexable: null }, categories: [{ name: "Indexability", score: 0, maxScore: 0, items: [unknown] }] },
+        { ...base.pages![0], robotsAccess: { google: null, bing: null }, indexability: { metaNoindex: null, headerNoindex: null, indexable: null, googleDirectives: { noindex: "unknown", nofollow: "unknown", observations: [] } }, categories: [{ name: "Indexability", score: 0, maxScore: 0, items: [unknown] }] },
         base.pages![1],
       ],
     });
     expect(model.accessSummary).toMatchObject({ googleBlockedCount: 0, bingBlockedCount: 0, googleNotAssessedCount: 1, bingNotAssessedCount: 1, homepageIndexDirective: "not-assessed" });
-    const observedClear = buildSeoReportModel({ ...base, pages: [{ ...base.pages![0], indexability: { metaNoindex: false, headerNoindex: false, indexable: true } }, base.pages![1]] });
+    const observedClear = buildSeoReportModel({ ...base, pages: [{ ...base.pages![0], indexability: { metaNoindex: false, headerNoindex: false, indexable: true, googleDirectives: { noindex: "not-observed", nofollow: "not-observed", observations: [] } } }, base.pages![1]] });
     expect(observedClear.accessSummary.homepageIndexDirective).toBe("not-observed");
     const noHomepage = buildSeoReportModel({ ...base, pages: [base.pages![1]] });
     expect(noHomepage.accessSummary.homepageIndexDirective).toBe("not-checked");
@@ -264,7 +352,21 @@ describe("buildSeoReportModel", () => {
   it("uses the exact partial-scan limitation and reports Not assessed when no category applies", () => {
     const model = buildSeoReportModel({ ...base, partial: true, categories: [{ name: "AI Visibility", score: 0, maxScore: 0, items: [] }] });
     expect(model.scoreExplanation).toMatchObject({ assessed: false, score: null, label: "Not assessed" });
-    expect(model.limitations[1]).toBe("The scan stopped before its available page checks were complete. Findings describe the pages successfully inspected.");
+    expect(model.limitations[1]).toBe("The scan is incomplete. Findings apply only to inspected pages.");
+  });
+
+  it("uses coverage-only partial state consistently for the badge model and limitation copy", () => {
+    const model = buildSeoReportModel({
+      ...base,
+      coverage: {
+        requestedLimit: 25, attemptedPages: 10, successfulPages: 9, failedPages: 1,
+        skippedPages: 0, discoveredCandidateUrls: 9, totalSitePages: null,
+        stopReason: "fetch-failure", skippedReasons: {}, sitemapIncomplete: false,
+        partial: true, pageSetHashBasis: "normalized-url-identities",
+      },
+    });
+    expect(model.coverage.partial).toBe(true);
+    expect(model.limitations).toContain("The scan is incomplete. Findings apply only to inspected pages.");
   });
 });
 

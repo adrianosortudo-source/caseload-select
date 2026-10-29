@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect } from "react";
 import SeoReport, { type SeoCheckResult } from "./SeoReport";
 
 type Step = "input" | "scanning" | "email" | "report";
@@ -17,22 +17,11 @@ interface SavedRunSummary {
   grade: string | null;
   rendering_risk: string | null;
   issue_count: number;
+  methodologyVersion: number | null;
   created_at: string;
 }
 
 const SCAN_MODE_PAGES: Record<ScanMode, number> = { quick: 10, standard: 25, deep: 50 };
-
-const SCAN_PHASES = [
-  "Connecting to site",
-  "Fetching robots.txt and llms.txt",
-  "Scanning homepage",
-  "Discovering internal links and sitemaps",
-  "Crawling commercial pages",
-  "Running indexability and schema engines",
-  "Analyzing AI visibility signals",
-  "Scoring and ranking issues",
-  "Building the diagnostic",
-];
 
 export default function SeoCheckTool({
   variant = "public",
@@ -48,10 +37,8 @@ export default function SeoCheckTool({
   const [targetLocation, setTargetLocation] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState<SeoCheckResult | null>(null);
-  const [scanPhase, setScanPhase] = useState(0);
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState("");
-  const phaseInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Saved scan history (operator only). Loaded on mount and refreshed after a save.
   const [history, setHistory] = useState<SavedRunSummary[]>([]);
@@ -61,12 +48,6 @@ export default function SeoCheckTool({
   const [historyOpen, setHistoryOpen] = useState(true);
   const [loadingRunId, setLoadingRunId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
-
-  useEffect(() => {
-    return () => {
-      if (phaseInterval.current) clearInterval(phaseInterval.current);
-    };
-  }, []);
 
   async function loadHistory() {
     if (!isOperator) return;
@@ -144,14 +125,6 @@ export default function SeoCheckTool({
 
     setError("");
     setStep("scanning");
-    setScanPhase(0);
-
-    // Deeper scans take longer, so let the phase indicator advance more slowly.
-    const phaseMs = isOperator ? (scanMode === "deep" ? 2600 : scanMode === "standard" ? 1700 : 1100) : 1000;
-    phaseInterval.current = setInterval(() => {
-      setScanPhase((prev) => (prev < SCAN_PHASES.length - 1 ? prev + 1 : prev));
-    }, phaseMs);
-
     try {
       const intentPayload = {
         ...(targetKeyword.trim() ? { targetKeyword: targetKeyword.trim() } : {}),
@@ -164,9 +137,6 @@ export default function SeoCheckTool({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(isOperator ? { domain: trimmed, scanMode, ...intentPayload } : { domain: trimmed, scanMode: "standard" }),
       });
-
-      if (phaseInterval.current) clearInterval(phaseInterval.current);
-      setScanPhase(SCAN_PHASES.length - 1);
 
       const data = await res.json();
 
@@ -183,7 +153,6 @@ export default function SeoCheckTool({
       // to the report.
       setStep(isOperator ? "report" : "email");
     } catch {
-      if (phaseInterval.current) clearInterval(phaseInterval.current);
       setError("Network error. Check your connection and try again.");
       setStep("input");
     }
@@ -210,7 +179,6 @@ export default function SeoCheckTool({
     setEmail("");
     setError("");
     setEmailError("");
-    setScanPhase(0);
     setTargetKeyword("");
     setTargetMatter("");
     setTargetLocation("");
@@ -290,8 +258,8 @@ export default function SeoCheckTool({
           )}
           <p className="seo-input-hint">
             {isOperator
-              ? "Internal diagnostic. Runs a bounded crawl and checks nine categories per page (on-page, indexability, schema, AI visibility, legal marketing, local SEO, technical, performance, links). The report includes a prospecting summary and outreach angles for internal use."
-              : "Enter any law firm website. This scan checks public SEO, AI crawler settings, structured data, local details, and technical delivery. Use the findings as a starting point; the scan does not verify rankings or AI citations."}
+              ? "Internal diagnostic. Runs a bounded crawl and reviews the available website categories per page. The score reflects five limited check types, not a whole-site SEO grade. If we cannot tell whether a page tells Google not to index it, that check is not scored. The report includes a prospecting summary and outreach angles for internal use."
+              : "Enter any law firm website. This scan checks public SEO, AI crawler settings, structured data, local details, and technical delivery. Its score covers five limited check types, not the whole site. If we cannot tell whether a page tells Google not to index it, that check is not scored. Use the findings as a starting point; the scan does not verify rankings or AI citations."}
           </p>
         </div>
       )}
@@ -319,7 +287,7 @@ export default function SeoCheckTool({
                       >
                         <span className="seo-history-domain">{run.domain}</span>
                         <span className="seo-history-meta">
-                          {run.grade ?? "?"} {run.overall_score ?? "?"}/100 · {run.scan_mode} · {run.pages_scanned}p
+                          {run.methodologyVersion === 5 ? "Website checks v5" : run.methodologyVersion === 4 ? "Historical v4" : run.methodologyVersion == null ? "Method not recorded" : run.methodologyVersion > 5 ? "Unsupported method" : "Historical method"} · {run.overall_score == null ? "Not assessed" : `${run.grade ?? "?"} ${run.overall_score}/100`} · {run.scan_mode} · {run.pages_scanned}p
                           {run.issue_count > 0 ? ` · ${run.issue_count} issues` : ""}
                         </span>
                         <span className="seo-history-date">
@@ -340,17 +308,9 @@ export default function SeoCheckTool({
           <div className="seo-scanning-card">
             <div className="seo-spinner" />
             <h3 className="seo-scanning-domain">{domain}</h3>
-            <div className="seo-phases">
-              {SCAN_PHASES.map((phase, i) => (
-                <div
-                  key={i}
-                  className={`seo-phase ${i < scanPhase ? "seo-phase-done" : i === scanPhase ? "seo-phase-active" : "seo-phase-pending"}`}
-                >
-                  <span className="seo-phase-dot" />
-                  <span className="seo-phase-label">{phase}</span>
-                </div>
-              ))}
-            </div>
+            <p className="seo-scan-status" role="status" aria-live="polite">
+              Checking the website. This may take a few minutes.
+            </p>
           </div>
         </div>
       )}
@@ -694,42 +654,12 @@ export default function SeoCheckTool({
           color: var(--navy);
           margin: 0 0 var(--sp-5);
         }
-        .seo-phases {
-          text-align: left;
-          display: flex;
-          flex-direction: column;
-          gap: var(--sp-2);
-        }
-        .seo-phase {
-          display: flex;
-          align-items: center;
-          gap: var(--sp-2);
-          transition: opacity 0.3s;
-        }
-        .seo-phase-pending { opacity: 0.3; }
-        .seo-phase-active { opacity: 1; }
-        .seo-phase-done { opacity: 0.6; }
-        .seo-phase-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
-          flex-shrink: 0;
-        }
-        .seo-phase-active .seo-phase-dot {
-          background: var(--navy);
-          animation: seo-pulse 1s ease-in-out infinite;
-        }
-        .seo-phase-done .seo-phase-dot { background: var(--stone); }
-        .seo-phase-pending .seo-phase-dot { background: var(--border); }
-        @keyframes seo-pulse {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.4); }
-        }
-        .seo-phase-label {
-          font-size: 13px;
+        .seo-scan-status {
+          margin: 0;
           color: var(--text);
+          font-size: 14px;
+          text-align: center;
         }
-        .seo-phase-active .seo-phase-label { font-weight: 600; }
 
         /* ── Email gate ──────────────────────────────── */
         .seo-email-gate {

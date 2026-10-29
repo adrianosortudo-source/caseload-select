@@ -28,6 +28,11 @@ function str(v: unknown, max = 240): string | null {
   return typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null;
 }
 
+function storedMethodologyVersion(value: unknown): number | null {
+  const parsed = typeof value === "number" ? value : typeof value === "string" && value.trim() ? Number(value) : NaN;
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
 export async function GET(req: NextRequest) {
   const session = await getOperatorSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -53,7 +58,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from("seo_check_runs")
-    .select("id, domain, scan_mode, pages_scanned, overall_score, ai_search_score, ai_policy_score, grade, rendering_risk, issue_count, created_at")
+    .select("id, domain, scan_mode, pages_scanned, overall_score, ai_search_score, ai_policy_score, grade, rendering_risk, issue_count, created_at, methodologyVersion:result->>methodologyVersion")
     .order("created_at", { ascending: false })
     .limit(limit);
 
@@ -61,7 +66,8 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ items: data ?? [] });
+  const items = (data ?? []).map((row) => ({ ...row, methodologyVersion: storedMethodologyVersion(row.methodologyVersion) }));
+  return NextResponse.json({ items });
 }
 
 export async function DELETE(req: NextRequest) {
