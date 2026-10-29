@@ -300,7 +300,7 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
   if (family.id === "search-exclusion") {
     const count = urls.length;
     observed = methodologyVersion === 5
-      ? `${count} of ${pages.length} checked pages contain a noindex instruction addressed to Google. Google can act on it only if it retrieves that response.`
+      ? `A noindex instruction addressed to Google was observed in the inspected response for ${count} of ${pages.length} checked ${pages.length === 1 ? "page" : "pages"}. Google can act on it only if it retrieves the response for a page.`
       : `${count} of ${pages.length} checked pages contain an instruction asking search engines to leave them out of results.`;
   } else if (family.id === "robots-access") {
     const crawlerNames = unique(evidence.flatMap((line) => ["Googlebot", "Bingbot"].filter((name) => line.includes(name))));

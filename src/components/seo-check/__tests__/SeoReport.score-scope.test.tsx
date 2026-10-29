@@ -61,6 +61,38 @@ describe("SeoReport score scope", () => {
     expect(pendingFetch).toHaveBeenCalledWith("/api/tools/seo-check", expect.objectContaining({ method: "POST" }));
   });
 
+  it("places a quantified Google noindex finding before the limited numeric score", () => {
+    const priorityPage: NonNullable<SeoCheckResult["pages"]>[number] = {
+      url: "https://example.com/employment/",
+      title: "Employment law",
+      pageType: "practice-area",
+      pageScore: 92,
+      pageGrade: "A",
+      aiVisibilityScore: null,
+      categories: scoreCategories,
+      failCount: 1,
+      warnCount: 0,
+      httpStatus: 200,
+      indexable: false,
+      indexability: {
+        metaNoindex: true,
+        headerNoindex: false,
+        indexable: false,
+        googleDirectives: { noindex: "observed", nofollow: "not-observed", observations: [] },
+        inSitemap: null,
+        sitemapComplete: true,
+      },
+    };
+    const priorityResult: SeoCheckResult = { ...result, pagesScanned: 1, pages: [priorityPage] };
+    const { container } = render(<SeoReport result={priorityResult} onReset={vi.fn()} hideCta />);
+
+    expect(screen.getByText("A noindex instruction addressed to Google was observed in the inspected response for 1 of 1 checked page. Google can act on it only if it retrieves the response for a page.")).toBeTruthy();
+    const priority = container.querySelector('[data-ui-component-content="priority-context"]');
+    const score = container.querySelector('[data-ui-component-content="score-disclosure"]');
+    if (!priority || !score) throw new Error("Priority or score section is missing.");
+    expect(Boolean(priority.compareDocumentPosition(score) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+  });
+
   it("qualifies exhausted discovery by the scan's crawl limits", () => {
     const coveredResult: SeoCheckResult = {
       ...result,
