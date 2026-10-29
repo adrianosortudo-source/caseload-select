@@ -2900,10 +2900,27 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await expect(reloadedFirstMessage.locator('p[data-ui-copy="body"]')).toHaveText(expectedNormalBody);
   const reloadedSchedule = reloadedFirstMessage.locator("time[data-time-zone]");
   await expect(reloadedSchedule).toHaveCount(1);
-  await expect(reloadedSchedule).toHaveAttribute("dateTime", acceptedDueAt);
+  const renderedScheduledAt = await reloadedSchedule.getAttribute("datetime");
+  if (!renderedScheduledAt || Date.parse(renderedScheduledAt) !== Date.parse(acceptedDueAt)) {
+    throw new Error("The rendered schedule datetime does not match the exact approved instant.");
+  }
   await expect(reloadedSchedule).toHaveAttribute("data-time-zone", firstNormalMessage.schedule_timezone);
-  await expect(reloadedSchedule).toContainText(firstNormalMessage.schedule_timezone);
-  await expect(reloadedSchedule).toContainText(/\d{4}-\d{2}-\d{2} \d{2}:\d{2}/);
+  const expectedScheduleParts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: firstNormalMessage.schedule_timezone,
+  }).formatToParts(new Date(acceptedDueAt));
+  const expectedSchedulePart = (type: Intl.DateTimeFormatPartTypes) => expectedScheduleParts.find((part) => part.type === type)?.value;
+  const expectedLocalSchedule = ["year", "month", "day"].map((part) => expectedSchedulePart(part as Intl.DateTimeFormatPartTypes)).join("-") +
+    " " + expectedSchedulePart("hour") + ":" + expectedSchedulePart("minute");
+  if (expectedLocalSchedule.includes("undefined")) {
+    throw new Error("Could not format the expected local schedule for the saved journey timezone.");
+  }
+  await expect(reloadedSchedule).toHaveText(`${expectedLocalSchedule} (${firstNormalMessage.schedule_timezone})`);
   progress("approved message content and exact scheduled instant remained visible with its journey timezone after reloading");
 
   const acceptedProviderMessageId = `fake-provider-normal-${RUN_ID}`;
