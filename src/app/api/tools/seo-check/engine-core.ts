@@ -14,6 +14,8 @@
  */
 
 export { BLOCKED_HOSTNAMES, ipInBlockedRange, isSsrfBlocked } from "@/lib/ssrf";
+import { CATEGORY_WEIGHTS } from "./category-weights";
+export { CATEGORY_WEIGHTS } from "./category-weights";
 
 /* ────────────────────────────────────────────────────────
    Base result types (backward-compatible with the prior shape)
@@ -176,23 +178,6 @@ export const GENERIC_ANCHORS = new Set([
   "click here", "here", "read more", "learn more", "more", "link",
   "this", "go", "see more", "continue", "details", "info",
 ]);
-
-// Product checklist priorities for the Website checks summary. These weights
-// are not a measurement of rankings, enquiries, legal content quality, or AI
-// citations. AI observations are kept visible but excluded from the score.
-export const CATEGORY_WEIGHTS: Record<string, number> = {
-  "On-Page SEO": 20,
-  "Indexability": 8,
-  "Schema & Structured Data": 16,
-  "AI Visibility": 0,
-  "Legal Marketing": 16,
-  "Local SEO": 12,
-  "Technical & Security": 4,
-  "Rendering & Crawlability": 2,
-  "Performance": 6,
-  "Links & Content": 6,
-  "Intent Alignment": 8,
-};
 
 /* ────────────────────────────────────────────────────────
    robots.txt parser (Google-style group semantics)

@@ -1,5 +1,6 @@
 import { normalizeLegacyPurposes } from "./crawler-policy";
-import { CATEGORY_WEIGHTS, type AiBotPurpose } from "./engine-core";
+import { CATEGORY_WEIGHTS } from "./category-weights";
+import type { AiBotPurpose } from "./engine-core";
 import { CURRENT_METHODOLOGY_VERSION, isLimitedScoreMethodology, isCurrentMethodology } from "./methodology-version";
 
 /**
