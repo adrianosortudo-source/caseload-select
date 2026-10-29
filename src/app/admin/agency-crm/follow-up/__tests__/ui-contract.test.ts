@@ -24,7 +24,8 @@ describe("Agency CRM follow-up operator UI contract", () => {
     expect(source).toContain("agencyFollowupDeliveryStatusLabel({ messageState: item.state, providerDeliveryStatus: item.providerDeliveryStatus })");
     expect(source).toContain("Inbox receipt not confirmed");
     expect(source).toContain("Updated: <time dateTime={item.providerDeliveryStatusAt}>");
-    expect(source).toContain("Scheduled for: <time dateTime={item.scheduledAt} data-time-zone={item.scheduleTimezone}>");
+    expect(source).toContain('<dt data-ui-copy="supporting" className="w-full break-words text-xs leading-5 text-black/65">Scheduled for:</dt>');
+    expect(source).toContain('<dd data-ui-copy="supporting" className="m-0 w-full break-words text-xs leading-5 text-black/65"><time dateTime={item.scheduledAt} data-time-zone={item.scheduleTimezone}>');
     expect(source).toContain("formatAgencyFollowupScheduledAt(item.scheduledAt, item.scheduleTimezone)");
     expect(source).toContain("Create draft review");
     expect(source).toContain("Approve this message");
