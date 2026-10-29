@@ -4357,15 +4357,17 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
     if (width === 320) {
       const providerStatus = queueCard(page, retryProspect.firmName).locator('[data-ui-component-content="agency-follow-up-message"] dl').first();
-      const providerStatusLabel = providerStatus.locator('dt[data-ui-copy="supporting"]');
-      const providerStatusValue = providerStatus.locator('dd[data-ui-copy="supporting"]');
+      const providerStatusLabel = providerStatus.getByText("Provider delivery:", { exact: true });
+      const providerStatusValue = providerStatus.getByText("Blocked by provider", { exact: true });
       if ((await providerStatusLabel.count()) !== 1 || (await providerStatusValue.count()) !== 1) throw new Error("The synthetic review queue did not render one provider delivery label/value pair.");
       if ((await providerStatusLabel.innerText()).trim() !== "Provider delivery:" || (await providerStatusValue.innerText()).trim() !== "Blocked by provider") throw new Error("The synthetic suppression event was not rendered as a provider-blocked delivery status.");
       await providerStatus.scrollIntoViewIfNeeded();
       await stableLayout();
       const statusGeometry = await providerStatus.evaluate((element) => {
-        const value = element.querySelector<HTMLElement>('dd[data-ui-copy="supporting"]');
-        if (!value) throw new Error("Provider delivery status value is missing.");
+        const label = Array.from(element.querySelectorAll<HTMLElement>('dt[data-ui-copy="supporting"]'))
+          .find((node) => node.textContent?.trim() === "Provider delivery:");
+        const value = label?.nextElementSibling;
+        if (!(value instanceof HTMLElement) || value.tagName !== "DD") throw new Error("Provider delivery status value is missing.");
         return {
           clientWidth: value.clientWidth,
           scrollWidth: value.scrollWidth,
