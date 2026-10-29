@@ -36,7 +36,7 @@ describe("buildSeoReportModel", () => {
     const model = buildSeoReportModel(base);
     expect(model.methodology).toMatchObject({ version: 5, label: "Website checks", notice: null });
     expect(model.scoreExplanation).toMatchObject({ assessed: true, score: 74, label: "Limited checks: 1 check type across 1 of 1 category", scoredCheckTypeCount: 1, assessedCategoryCount: 1, totalCategoryCount: 1 });
-    expect(model.scoreExplanation.note).toBe("This score covers only these checks. It does not grade the whole site or predict rankings.");
+    expect(model.scoreExplanation.note).toBe("This limited score is not a whole-site grade or ranking prediction.");
     expect(model.limitations).toEqual(["This scan inspected the initial HTML of 2 pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm."]);
     expect(model.cta).toMatchObject({ heading: "Discuss next steps", linkLabel: "Book a conversation", href: "https://cal.com/adriano-caseloadselect/conversation" });
   });
@@ -60,7 +60,7 @@ describe("buildSeoReportModel", () => {
       assessedCategoryCount: 3,
       totalCategoryCount: 10,
     });
-    expect(model.scoreExplanation.note).toBe("This score covers only these checks. It does not grade the whole site or predict rankings.");
+    expect(model.scoreExplanation.note).toBe("This limited score is not a whole-site grade or ranking prediction.");
   });
 
   it("marks saved pre-v3 scores as historical and supplies the no-cross-method notice", () => {

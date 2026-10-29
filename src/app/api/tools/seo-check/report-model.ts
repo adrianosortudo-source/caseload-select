@@ -192,7 +192,7 @@ export interface SeoReportModel {
 
 const METHOD_NOTE = "This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.";
 const UNSUPPORTED_METHOD_NOTE = "This saved scan records a scoring method this report does not interpret. Run a new scan for the current report.";
-const SCORE_NOTE = "This score covers only these checks. It does not grade the whole site or predict rankings.";
+const SCORE_NOTE = "This limited score is not a whole-site grade or ranking prediction.";
 const LIMITATION = (n: number) => `This scan inspected the initial HTML of ${n} pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm.`;
 const PARTIAL_LIMITATION = "Some page checks remain incomplete. Findings cover only inspected pages.";
 const CTA_HREF = "https://cal.com/adriano-caseloadselect/conversation";

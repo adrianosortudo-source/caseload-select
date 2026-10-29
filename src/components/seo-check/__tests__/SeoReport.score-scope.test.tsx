@@ -148,7 +148,7 @@ describe("SeoReport score scope", () => {
     render(<SeoReport result={result} onReset={vi.fn()} hideCta />);
 
     const scopeLabel = "Limited checks: 5 check types across 3 of 10 categories";
-    const scoreNote = "This score covers only these checks. It does not grade the whole site or predict rankings.";
+    const scoreNote = "This limited score is not a whole-site grade or ranking prediction.";
     expect(screen.getByText(scopeLabel)).toBeTruthy();
     expect(within(screen.getByLabelText("Website checks score")).getByText(scoreNote)).toBeTruthy();
 
