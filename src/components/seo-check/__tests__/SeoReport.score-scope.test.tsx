@@ -84,7 +84,9 @@ describe("SeoReport score scope", () => {
       },
     };
     const priorityResult: SeoCheckResult = { ...result, pagesScanned: 1, pages: [priorityPage] };
-    const { container } = render(<SeoReport result={priorityResult} onReset={vi.fn()} hideCta />);
+    const { container } = render(<SeoReport result={priorityResult} onReset={vi.fn()} />);
+    expect(screen.getByRole("heading", { name: "AI access and content" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Discuss next steps" })).toBeTruthy();
 
     expect(within(screen.getByRole("region", { name: "Priority search finding" })).getByText("The inspected page responses tell Google not to include 1 of 1 checked page in search results. Google must retrieve that response first; this scan does not confirm whether the page is indexed.")).toBeTruthy();
     const priority = container.querySelector('[data-ui-component-content="priority-context"]');
@@ -125,7 +127,7 @@ describe("SeoReport score scope", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy report summary" }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     expect(writeText.mock.calls[0][0]).toContain("Scan incomplete.");
-    expect(writeText.mock.calls[0][0]).toContain("Not all available page checks were completed.");
+    expect(writeText.mock.calls[0][0]).toContain("Some page checks remain incomplete.");
   });
 
   it("describes v5 score scope and performance accurately on the public landing page", async () => {
@@ -146,7 +148,7 @@ describe("SeoReport score scope", () => {
     render(<SeoReport result={result} onReset={vi.fn()} hideCta />);
 
     const scopeLabel = "Limited checks: 5 check types across 3 of 10 categories";
-    const scoreNote = "This limited summary reflects 5 scored check types across 3 of 10 categories, applied to the inspected pages. This score covers only the listed checks. It does not grade the whole site or predict rankings.";
+    const scoreNote = "This score covers only these checks. It does not grade the whole site or predict rankings.";
     expect(screen.getByText(scopeLabel)).toBeTruthy();
     expect(within(screen.getByLabelText("Website checks score")).getByText(scoreNote)).toBeTruthy();
 

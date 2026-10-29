@@ -192,15 +192,15 @@ export interface SeoReportModel {
 
 const METHOD_NOTE = "This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.";
 const UNSUPPORTED_METHOD_NOTE = "This saved scan records a scoring method this report does not interpret. Run a new scan for the current report.";
-const SCORE_NOTE = "This score covers only the listed checks. It does not grade the whole site or predict rankings.";
+const SCORE_NOTE = "This score covers only these checks. It does not grade the whole site or predict rankings.";
 const LIMITATION = (n: number) => `This scan inspected the initial HTML of ${n} pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm.`;
-const PARTIAL_LIMITATION = "Not all available page checks were completed. Findings cover only pages successfully inspected.";
+const PARTIAL_LIMITATION = "Some page checks remain incomplete. Findings cover only inspected pages.";
 const CTA_HREF = "https://cal.com/adriano-caseloadselect/conversation";
 
 type Family = { id: string; rank: number; title: string; why: string; next: string; priority: string };
 
 const FAMILIES: Family[] = [
-  { id: "search-exclusion", rank: 1, priority: "Review first", title: "Review which pages should appear in search", why: "If these pages should attract clients, confirm whether that instruction is intentional.", next: "Confirm which affected pages should appear in search, then ask your web provider to review their settings." },
+  { id: "search-exclusion", rank: 1, priority: "Review first", title: "Review which pages should appear in search", why: "This instruction can keep a useful page out of Google search.", next: "Confirm which affected pages should appear in search, then ask your web provider to review their settings." },
   { id: "robots-access", rank: 1, priority: "Review first", title: "Review crawler access to these pages", why: "This can limit crawling. It does not prove that a URL is absent from search results.", next: "Confirm whether the restriction is intentional before changing it." },
   { id: "connection", rank: 2, priority: "Review", title: "Review page connection security", why: "Visitors should have a secure connection when using the site, especially before sharing information.", next: "Ask your web provider to confirm HTTPS is available and consistently used." },
   { id: "contact-route", rank: 3, priority: "Review", title: "Make the next contact step easy to find", why: "A clear contact route can help prospective clients understand how to reach the firm.", next: "Review affected pages on desktop and mobile and confirm how a prospective client should contact the firm." },
@@ -467,7 +467,7 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
   const scopedLabel = `Limited checks: ${scoredCheckTypeCount} ${scoredCheckTypeCount === 1 ? "check type" : "check types"} across ${assessedCategoryCount} of ${totalCategoryCount} ${totalCategoryCount === 1 ? "category" : "categories"}`;
   const note = current
     ? assessed
-      ? `This limited summary reflects ${scoredCheckTypeCount} scored ${scoredCheckTypeCount === 1 ? "check type" : "check types"} across ${assessedCategoryCount} of ${totalCategoryCount} ${totalCategoryCount === 1 ? "category" : "categories"}, applied to the inspected pages. ${SCORE_NOTE}`
+      ? SCORE_NOTE
       : "No scored checks contributed to this scan. This scan does not grade the whole site or predict rankings."
     : METHOD_NOTE;
   const limitations = [LIMITATION(pages.length || input.pagesScanned), ...(resolvedPartial ? [PARTIAL_LIMITATION] : [])];
@@ -520,6 +520,6 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
       assessedCategoryCount,
       totalCategoryCount,
     },
-    cta: { heading: "Discuss these findings", body: "We can help confirm which findings matter for the cases you want, separate intentional choices from genuine gaps, and decide what to address first.", linkLabel: "Book a conversation", href: CTA_HREF },
+    cta: { heading: "Discuss next steps", body: "We can help confirm which findings matter for the cases you want, separate intentional choices from genuine gaps, and decide what to address first.", linkLabel: "Book a conversation", href: CTA_HREF },
   };
 }
