@@ -120,11 +120,19 @@ describe("page-scoped search access evidence", () => {
     const unrelatedBotControl = page(unknownUrl, undefined, robots, emptySitemap, true, new Headers({ "x-robots-tag": "Bingbot: noindex" }));
     const pages = [noindex, clean, unknown];
     const categories = aggregateCategories(pages);
+    const aggregateScore = computeWeightedScore(categories);
+    const indexabilityCategory = categories.find((category) => category.name === "Indexability");
     const controlScore = computeWeightedScore(aggregateCategories([noindex, clean, unrelatedBotControl]));
 
-    expect(computeWeightedScore(categories)).toBe(controlScore);
+'    expect(aggregateScore).toBe(97);
+    expect(controlScore).toBe(97);
+    expect(aggregateScore).toBe(controlScore);
+    expect(indexabilityCategory).toMatchObject({
+      maxScore: 30,
+      counts: { fail: 1, applicable: 8, notAssessed: 1 },
+    });'
     expect(item(unknown, "Indexability", "Indexable")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
-    const aggregateIndexable = categories.find((category) => category.name === "Indexability")?.items.find((check) => check.label === "Indexable");
+    const aggregateIndexable = indexabilityCategory?.items.find((check) => check.label === "Indexable");
     expect(aggregateIndexable).toMatchObject({ applicability: "applicable", failCount: 1, applicableCount: 2, notAssessedCount: 1 });
     expect(aggregateIndexable?.scored).not.toBe(false);
 
@@ -133,7 +141,7 @@ describe("page-scoped search access evidence", () => {
       domain: "example.com",
       methodologyVersion: 5,
       pagesScanned: pages.length,
-      overallScore: computeWeightedScore(categories),
+      overallScore: aggregateScore,
       categories,
       pages: pages.map(({ url, pageType, httpStatus, indexability, robotsAccess, categories: pageCategories }) => ({
         url, pageType, httpStatus, indexability, robotsAccess, categories: pageCategories,
@@ -144,12 +152,15 @@ describe("page-scoped search access evidence", () => {
       aiBots: [],
     });
 
+    expect(model.scoreExplanation.score).toBe(97);
     expect(model.accessSummary.noindexCount).toBe(1);
     expect(model.accessSummary.indexabilityNotAssessedCount).toBe(1);
+    expect(issues).toHaveLength(1);
     const exclusionActions = model.priorityActions.filter((action) => action.family === "search-exclusion");
     expect(exclusionActions).toHaveLength(1);
     expect(exclusionActions[0]).toMatchObject({ affectedCount: 1, affectedUrls: [noindexUrl] });
     expect(model.priorityActions.some((action) => action.affectedUrls.includes(unknownUrl))).toBe(false);
+    expect(model.strengths.some((strength) => /no noindex instruction/i.test(strength))).toBe(false);
   });
   it("keeps a schema-only address separate from visible address evidence", () => {
     const html = `<html><head><title>Firm</title><script type="application/ld+json">${JSON.stringify({
