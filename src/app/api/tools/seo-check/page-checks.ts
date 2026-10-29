@@ -1129,15 +1129,10 @@ function buildIndexability(
   if (sitemapSet && sitemapSet.size > 0) {
     // sitemapSet is keyed with the same canonical crawl key used for dedupe.
     inSitemap = sitemapSet.has(crawlUrlKey(finalUrl));
-    // The homepage never depends on a sitemap listing for discovery, and some
-    // platforms list it under an alias slug rather than the root (Squarespace
-    // lists /home while serving the site at /, field case marathonlaw.ca).
-    // Reporting "homepage not listed in the sitemap" is noise, so the root
-    // path always counts as covered.
-    if (!inSitemap) {
-      try { if ((new URL(finalUrl).pathname || "/") === "/") inSitemap = true; } catch { /* keep computed value */ }
-    }
-    // If the sitemap was too large to read fully, membership stays unknown.
+    // Homepage discovery does not depend on sitemap membership, but membership
+    // is still reported only when the URL itself was observed.
+    // If the sitemap was too large or incomplete to read fully, a missing URL
+    // stays unknown rather than being reported as absent.
     if (!inSitemap && !sitemapComplete) inSitemap = null;
   }
 

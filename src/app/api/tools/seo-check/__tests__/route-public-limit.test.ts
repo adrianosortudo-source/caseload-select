@@ -114,7 +114,8 @@ describe("public SEO scan page limit", () => {
     installSitemapSite({ robotsSitemap: "https://example.com/declared.xml", childResponses: { "/declared.xml": { body: "", status: 503 } } });
     const { response, result } = await runPublicScan({ maxPages: 1 });
     const coverage = result.coverage as Record<string, unknown>;
-    const homepage = (result.pages as Array<Record<string, unknown>>)[0];
+    const homepage = (result.pages as Array<Record<string, unknown>>).find((page) => page.url === "https://example.com/");
+    if (!homepage) throw new Error("The homepage result was not returned.");
     const indexability = homepage.indexability as Record<string, unknown>;
 
     expect(response.status).toBe(200);
@@ -136,7 +137,8 @@ describe("public SEO scan page limit", () => {
     });
     const { response, result } = await runPublicScan({ maxPages: 2 });
     const coverage = result.coverage as Record<string, unknown>;
-    const homepage = (result.pages as Array<Record<string, unknown>>)[0];
+    const homepage = (result.pages as Array<Record<string, unknown>>).find((page) => page.url === "https://example.com/");
+    if (!homepage) throw new Error("The homepage result was not returned.");
     const indexability = homepage.indexability as Record<string, unknown>;
 
     expect(response.status).toBe(200);

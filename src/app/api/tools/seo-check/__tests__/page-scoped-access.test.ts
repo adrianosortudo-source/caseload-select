@@ -279,6 +279,19 @@ describe("page-scoped search access evidence", () => {
     expect(item(result, "Indexability", "Sitemap membership")?.detail).toContain("sitemap locations inspected");
   });
 
+  it("reports homepage sitemap membership only when the root URL was observed", () => {
+    const completeListed = page("https://example.com/", undefined, null, new Set(["https://example.com/", "https://example.com/contact/"]));
+    expect(completeListed.indexability.inSitemap).toBe(true);
+
+    const completeAbsent = page("https://example.com/", undefined, null, new Set(["https://example.com/contact/"]));
+    expect(completeAbsent.indexability.inSitemap).toBe(false);
+    expect(item(completeAbsent, "Indexability", "Sitemap membership")).toMatchObject({ status: "warn", scored: false });
+
+    const incompleteAbsent = page("https://example.com/", undefined, null, new Set(["https://example.com/contact/"]), false);
+    expect(incompleteAbsent.indexability.inSitemap).toBeNull();
+    expect(item(incompleteAbsent, "Indexability", "Sitemap membership")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
+  });
+
   it("evaluates Google and Bing access on each actual path and preserves unknown when robots is unavailable", () => {
     const rules = "User-agent: Googlebot\nDisallow: /services/";
     const blocked = page("https://example.com/services/", undefined, rules);
