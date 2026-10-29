@@ -122,14 +122,19 @@ describe("page-scoped search access evidence", () => {
     const categories = aggregateCategories(pages);
     const aggregateScore = computeWeightedScore(categories);
     const indexabilityCategory = categories.find((category) => category.name === "Indexability");
-    const controlScore = computeWeightedScore(aggregateCategories([noindex, clean, unrelatedBotControl]));
+    const controlCategories = aggregateCategories([noindex, clean, unrelatedBotControl]);
+    const controlScore = computeWeightedScore(controlCategories);
+    const controlIndexabilityCategory = controlCategories.find((category) => category.name === "Indexability");
 
     expect(aggregateScore).toBe(97);
     expect(controlScore).toBe(97);
     expect(aggregateScore).toBe(controlScore);
+    // Category-wide totals include 15 contextual unscored observations plus the unknown Indexable observation.
+    expect(indexabilityCategory?.counts?.notAssessed).toBe(16);
+    expect(controlIndexabilityCategory?.counts?.notAssessed).toBe(15);
     expect(indexabilityCategory).toMatchObject({
       maxScore: 30,
-      counts: { fail: 1, applicable: 8, notAssessed: 1 },
+      counts: { fail: 1, applicable: 8, notAssessed: 16 },
     });
     expect(item(unknown, "Indexability", "Indexable")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
     const aggregateIndexable = indexabilityCategory?.items.find((check) => check.label === "Indexable");

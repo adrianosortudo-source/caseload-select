@@ -58,6 +58,18 @@ describe("SeoReport score scope", () => {
     expect(writeText.mock.calls[0][0]).toContain(scoreNote);
   });
 
+  it("labels category totals as unscored or not assessed", () => {
+    const categorySummaryResult: SeoCheckResult = {
+      ...result,
+      categories: scoreCategories.map((category) => category.name === "Indexability"
+        ? { ...category, counts: { fail: 1, warn: 0, applicable: 8, notAssessed: 16, notApplicable: 0 } }
+        : category),
+    };
+    render(<SeoReport result={categorySummaryResult} onReset={vi.fn()} hideCta />);
+    fireEvent.click(screen.getByText("Check categories"));
+    expect(screen.getByText(/16 unscored or not assessed/)).toBeTruthy();
+    expect(screen.queryByText(/16 not assessed/)).toBeNull();
+  });
   it("does not invent a method version in copied text for an unversioned result", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
