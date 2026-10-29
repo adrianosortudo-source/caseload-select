@@ -93,7 +93,12 @@ function makeObservation(
     explicitDirectives,
     effectiveDirectives: effectiveTokens(explicitDirectives),
     googleApplicability,
-    ...(limitation || directiveLimitReached ? { limitation: limitation ?? "The directive-count bound was reached; later directives may be missing." } : {}),
+    ...(limitation || directiveLimitReached ? {
+      limitation: [
+        limitation,
+        directiveLimitReached ? "The directive-count bound was reached; later directives may be missing." : null,
+      ].filter(Boolean).join(" "),
+    } : {}),
   };
 }
 
@@ -221,7 +226,7 @@ export function parseIndexDirectives(html: string, xRobotsTagValues: readonly st
         const scopeInfo = scopeForToken(crawlerToken);
         if (noscriptDepth > 0) {
           const effective = effectiveTokens(parseTokens(content));
-          if (effective.some((token) => token === "noindex" || token === "nofollow")) {
+          if (effective.some((token) => token === "noindex" || token === "nofollow") || hasTooManyDirectives(content)) {
             const applicability = scopeInfo.googleApplicability === "not-applicable" ? "not-applicable" : "unknown";
             observations.push(makeObservation("meta", scopeInfo, content, applicability, "This robots meta element is inside noscript; the parser cannot establish whether a Google-addressed directive is an applicable document directive."));
           }

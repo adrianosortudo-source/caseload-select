@@ -59,6 +59,13 @@ describe("parseIndexDirectives", () => {
     expect(result.observations[0]).toMatchObject({ googleApplicability: "unknown", explicitDirectives: ["noindex"] });
   });
 
+  it("keeps an overlong generic directive inside noscript unknown", () => {
+    const manyTokens = Array.from({ length: 128 }, () => "index").join(" ");
+    const result = parseIndexDirectives(`<noscript><meta name="robots" content="${manyTokens} noindex"></noscript>`);
+    expect(result.noindex).toBe("unknown");
+    expect(result.observations[0].limitation).toContain("directive-count bound");
+  });
+
   it("keeps an unrelated crawler inside noscript out of Google's unknown scope", () => {
     const result = parseIndexDirectives('<noscript><meta name="otherbot" content="noindex"></noscript>');
     expect(result.noindex).toBe("not-observed");
@@ -167,6 +174,13 @@ describe("parseIndexDirectives", () => {
     const manyTokens = Array.from({ length: 128 }, () => "index").join(" ");
     expect(parseIndexDirectives(`<meta name="robots" content="${manyTokens} noindex">`).noindex).toBe("unknown");
     expect(parseIndexDirectives(`<meta name="robots" content="noindex ${manyTokens}">`).noindex).toBe("observed");
+  });
+
+  it("preserves directive-bound uncertainty after an X-Robots-Tag ambiguity explanation", () => {
+    const manyTokens = Array.from({ length: 128 }, () => "index").join(" ");
+    const result = parseIndexDirectives("", [`bingbot: index, ${manyTokens} noindex`]);
+    expect(result.noindex).toBe("unknown");
+    expect(result.observations.some((item) => item.limitation?.includes("directive-count bound"))).toBe(true);
   });
 
   it("does not let an unrelated crawler's token bound make Google's scope unknown", () => {
