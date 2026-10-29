@@ -124,7 +124,9 @@ describe("page-scoped search access evidence", () => {
 
     expect(computeWeightedScore(categories)).toBe(controlScore);
     expect(item(unknown, "Indexability", "Indexable")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
-    expect(categories.find((category) => category.name === "Indexability")?.items.find((check) => check.label === "Indexable")?.scored).toBe(false);
+    const aggregateIndexable = categories.find((category) => category.name === "Indexability")?.items.find((check) => check.label === "Indexable");
+    expect(aggregateIndexable).toMatchObject({ applicability: "applicable", failCount: 1, applicableCount: 2, notAssessedCount: 1 });
+    expect(aggregateIndexable?.scored).not.toBe(false);
 
     const issues = buildV4Issues(pages, Infinity, 5);
     const model = buildSeoReportModel({
