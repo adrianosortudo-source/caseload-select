@@ -48,6 +48,19 @@ describe("SeoReport score scope", () => {
     expect(screen.getByText(/If we cannot tell whether a page tells Google not to index it, that check is not scored/i)).toBeTruthy();
   });
 
+  it("shows a truthful indeterminate status while a scan request is pending", async () => {
+    const pendingFetch = vi.fn(() => new Promise<Response>(() => {}));
+    vi.stubGlobal("fetch", pendingFetch);
+    render(<SeoCheckTool />);
+
+    fireEvent.change(screen.getByLabelText("Public website URL"), { target: { value: "example.test" } });
+    fireEvent.click(screen.getByRole("button", { name: "Check my site" }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("Checking the website. This may take a few minutes.");
+    expect(screen.queryByText(/Connecting to site|Fetching robots\.txt|Discovering internal links|Building the diagnostic/i)).toBeNull();
+    expect(pendingFetch).toHaveBeenCalledWith("/api/tools/seo-check", expect.objectContaining({ method: "POST" }));
+  });
+
   it("describes v5 score scope and performance accurately on the public landing page", async () => {
     const page = await SeoCheckPage({ searchParams: Promise.resolve({ embed: "1" }) });
     const { container } = render(page);
