@@ -75,6 +75,32 @@ describe("buildSeoCheckRunRow", () => {
     expect(row?.ai_policy_score).toBeNull();
   });
 
+  it("persists an unassessed overall score as null", () => {
+    const row = buildSeoCheckRunRow({ domain: "x.ca", overallScore: null, grade: "Not assessed" }, null);
+    expect(row?.overall_score).toBeNull();
+    expect(row?.grade).toBe("Not assessed");
+  });
+
+  it("preserves the v5 method and structured Google directive evidence in saved JSON", () => {
+    const result = {
+      ...FULL_RESULT,
+      methodologyVersion: 5,
+      pages: [{
+        url: "https://example.ca/",
+        indexability: {
+          metaNoindex: null,
+          headerNoindex: null,
+          googleDirectives: {
+            noindex: "unknown",
+            nofollow: "not-observed",
+            observations: [{ source: "x-robots-tag", scope: "unknown", googleApplicability: "unknown", rawValue: "Bingbot: noindex, noindex" }],
+          },
+        },
+      }],
+    };
+    expect(buildSeoCheckRunRow(result, "lawyer-123")?.result).toEqual(result);
+  });
+
   it("passes through a null lawyer id (operator session with no linked firm_lawyers row)", () => {
     expect(buildSeoCheckRunRow({ domain: "x.ca" }, null)?.created_by_lawyer_id).toBeNull();
   });

@@ -48,3 +48,30 @@ export function canApproveAgencyFollowupMessage(input: {
   return input.messageState === "awaiting_review" && input.sequenceReleased &&
     input.blockers.every((blocker) => PRE_APPROVAL_SEND_BLOCKERS.has(blocker));
 }
+
+export function formatAgencyFollowupScheduledAt(value: string, timeZone: string): string {
+  const scheduledAt = new Date(value);
+  if (Number.isNaN(scheduledAt.getTime())) return "scheduled time unavailable";
+
+  try {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZone,
+    }).formatToParts(scheduledAt);
+    const getPart = (type: Intl.DateTimeFormatPartTypes) => parts.find((part) => part.type === type)?.value;
+    const year = getPart("year");
+    const month = getPart("month");
+    const day = getPart("day");
+    const hour = getPart("hour");
+    const minute = getPart("minute");
+    if (!year || !month || !day || !hour || !minute) return "scheduled time unavailable";
+    return year + "-" + month + "-" + day + " " + hour + ":" + minute;
+  } catch {
+    return "scheduled time unavailable";
+  }
+}

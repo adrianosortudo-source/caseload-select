@@ -68,6 +68,7 @@ import {
   type PageRenderingSnapshot,
   type SiteRenderingSummary,
 } from "./rendering-analysis";
+import type { IndexDirectiveAssessment } from "./index-directives";
 
 /* ────────────────────────────────────────────────────────
    Per-page enriched signals
@@ -80,14 +81,15 @@ export interface Indexability {
   canonical: string | null;
   canonicalSelf: boolean | null;
   canonicalSameOrigin: boolean | null;
-  metaNoindex: boolean;
-  metaNofollow: boolean;
-  headerNoindex: boolean;
-  headerNofollow: boolean;
-  indexable: boolean;
+  metaNoindex: boolean | null;
+  metaNofollow: boolean | null;
+  headerNoindex: boolean | null;
+  headerNofollow: boolean | null;
+  indexable: boolean | null;
+  googleDirectives?: IndexDirectiveAssessment;
   inSitemap: boolean | null;
   sitemapComplete?: boolean;
-  mixedSignals: boolean;
+  mixedSignals: boolean | null;
 }
 
 export interface SchemaSummary {
@@ -121,7 +123,8 @@ export interface SchemaSummary {
 export interface LawFirmSignals {
   phoneVisible: boolean;
   contactFormPresent: boolean;
-  addressVisible: boolean;
+  /** Address-pattern text found in the initial HTML outside explicit hidden/template markup. Not rendered-visibility evidence. */
+  addressTextPresent: boolean;
   consultationCta: boolean;
   policyPagePresent: boolean;
   practiceAreaIntent: boolean;
@@ -145,15 +148,16 @@ export interface PageResult {
   title: string | null;
   metaDescription?: string | null;
   pageType: PageType;
-  pageScore: number;
+  pageScore: number | null;
   pageGrade: string;
   aiVisibilityScore: number | null;
   categories: CategoryResult[];
   failCount: number;
   warnCount: number;
   httpStatus: number;
-  indexable: boolean;
+  indexable: boolean | null;
   indexability: Indexability;
+  robotsAccess?: { scanner: boolean | null; google: boolean | null; bing: boolean | null };
   schema: SchemaSummary;
   lawFirm: LawFirmSignals;
   wordCount: number;
@@ -219,7 +223,7 @@ export interface SeverityBreakdown {
 
 export interface InternalSummary {
   prospectFitScore: number;
-  websiteMaturity: "poor" | "basic" | "decent" | "strong";
+  websiteMaturity: "poor" | "basic" | "decent" | "strong" | "unassessed";
   urgencyLevel: "low" | "medium" | "high" | "urgent";
   likelyPainPoints: string[];
   strongestOutreachHooks: string[];
@@ -231,6 +235,22 @@ export interface InternalSummary {
   trustAndConversionGaps: string[];
 }
 
+export interface ScanCoverage {
+  requestedLimit: number;
+  attemptedPages: number;
+  successfulPages: number;
+  failedPages: number;
+  skippedPages: number;
+  discoveredCandidateUrls: number;
+  totalSitePages: number | null;
+  stopReason: "page-limit" | "time-budget" | "discovery-exhausted" | "fetch-failure" | "blocked" | "other";
+  skippedReasons: Record<string, number>;
+  sitemapIncomplete: boolean;
+  partial: boolean;
+  pageSetHash?: string;
+  pageSetHashBasis: "normalized-url-identities";
+}
+
 export interface SeoCheckResult {
   domain: string;
   methodologyVersion: number;
@@ -238,7 +258,7 @@ export interface SeoCheckResult {
   pagesScanned: number;
   pages: PageResult[];
   categories: CategoryResult[];
-  overallScore: number;
+  overallScore: number | null;
   grade: string;
   aiSearchScore: number | null;
   aiSearchGrade: string | null;
@@ -252,6 +272,8 @@ export interface SeoCheckResult {
   /** Operator-only. Omitted from public (unauthenticated) responses. */
   internalSummary?: InternalSummary;
   severityBreakdown: SeverityBreakdown;
+  /** Scanner-observed coverage only; this is not a whole-site inventory. */
+  coverage?: ScanCoverage;
   /** True when the wall-clock budget was hit before the page target was met. */
   partial?: boolean;
   /** How much to trust "no X found" findings, given crawl coverage. See computeDiscoveryConfidence. */
@@ -411,9 +433,29 @@ function severityFor(category: string, label: string, status: "warn" | "fail", d
 }
 
 /** Internal note + outreach angle, derived from category and severity. */
-function internalAngle(category: string, _severity: Severity): { note: string; angle: string } {
+function internalAngle(category: string, _severity: Severity, methodologyVersion = 4, label = ""): { note: string; angle: string } {
   const c = category;
   if (c === "Indexability") {
+    if (methodologyVersion === 5) {
+      if (label === "Indexable") {
+      return {
+        note: "The inspected HTML or response contains a page-level noindex instruction addressed to Google. This does not confirm that Google retrieved the response or whether the setting is intended.",
+        angle: "The inspected page response contains a noindex instruction addressed to Google. Google can act on it only if it retrieves that response, so confirm the intended search visibility before discussing a change.",
+      };
+      }
+      if (/robots\.txt/i.test(label)) return {
+        note: "The inspected robots.txt rules appear to restrict Googlebot access. This does not establish whether Google retrieved or indexed the page.",
+        angle: "The inspected robots.txt rules appear to restrict Googlebot access. Confirm the intended crawl policy before discussing a change.",
+      };
+      if (/HTTP status/i.test(label)) return {
+        note: "The page returned an HTTP response status that needs review. This observation alone does not establish a Google noindex instruction.",
+        angle: "The inspected page returned an HTTP status that needs review; confirm the expected response before discussing an indexing change.",
+      };
+      return {
+        note: "An indexability-related condition needs review. The available evidence does not establish a Google-addressed noindex instruction.",
+        angle: "Review the recorded indexability evidence before making claims about Google crawl or indexing behavior.",
+      };
+    }
     return {
       note: "Indexability blocker. If real, pages are invisible to search regardless of content quality. Strong, concrete opener.",
       angle: "Some of the firm's pages appear to be held back from search engines by a technical setting, not by content. That is usually a quick fix with an outsized payoff.",
@@ -513,14 +555,17 @@ const AI_CONTENT_DEPENDENT_LABELS = new Set([
  * pages where it is non-pass (worst status wins), enriched with severity,
  * confidence, effort, affected page types, and a priority score.
  *
- * effectiveContentPages: count of pages with real, substantive content (see
- * route.ts). Defaults to Infinity (never placeholder-class) so existing
- * callers and tests are unaffected. When <= 1, the site is placeholder-class:
- * the four AI_CONTENT_DEPENDENT_LABELS findings collapse into one, and CSP /
- * X-Content-Type-Options severity is capped low (defense-in-depth headers on
- * a site with no forms or input surface, not a search-visibility signal).
+ * effectiveContentPages: count of pages with substantive content (see route.ts).
+ * Defaults to Infinity so existing callers retain prior behavior. Legacy callers
+ * may collapse AI-content findings on placeholder-class sites; current v4 sets
+ * includePlaceholderContentFinding=false because this count is not a validated
+ * search defect. Existing low-severity caps for defense-in-depth headers remain.
  */
-export function buildIssues(pages: PageResult[], effectiveContentPages: number = Infinity): Issue[] {
+export function buildIssues(
+  pages: PageResult[],
+  effectiveContentPages: number = Infinity,
+  options: { includePlaceholderContentFinding?: boolean; methodologyVersion?: number } = {}
+): Issue[] {
   const totalPages = pages.length || 1;
   const isPlaceholderClass = effectiveContentPages <= 1;
   let anyAiContentFinding = false;
@@ -553,6 +598,7 @@ export function buildIssues(pages: PageResult[], effectiveContentPages: number =
       if (page.pageType === "policy" && !POLICY_RELEVANT_CATEGORIES.has(cat.name)) continue;
       for (const item of cat.items) {
         if (item.status === "pass") continue;
+        if (item.scored === false) continue;
         if (item.applicability === "not-applicable" || item.applicability === "unknown") continue;
         // Avoid double-counting schema absence: when no JSON-LD exists, the
         // "structured data" issue already carries the actionable finding.
@@ -679,7 +725,7 @@ export function buildIssues(pages: PageResult[], effectiveContentPages: number =
         EFFORT_DIVISOR[effort]
     );
 
-    const { note, angle } = internalAngle(acc.category, severity);
+    const { note, angle } = internalAngle(acc.category, severity, options.methodologyVersion ?? 4, acc.label);
     const evidence = affectedCount === 1
       ? `1 page: ${[...reportedUrls][0]}`
       : `${affectedCount} of ${totalPages} pages, including ${distinctEvidencePaths([...reportedUrls]).slice(0, 3).join(", ")}`;
@@ -717,7 +763,7 @@ export function buildIssues(pages: PageResult[], effectiveContentPages: number =
 
   // Trust-fix pass WI-7: the single collapsed replacement for the four
   // AI-content-dependent findings, only when at least one would have fired.
-  if (isPlaceholderClass && anyAiContentFinding) {
+  if (isPlaceholderClass && anyAiContentFinding && options.includePlaceholderContentFinding !== false) {
     const severity: Severity = "low";
     const confidence: Confidence = "high";
     const effort = EFFORT_BY_CATEGORY["AI Visibility"] ?? "medium";
@@ -807,10 +853,18 @@ export function severityBreakdown(issues: Issue[]): SeverityBreakdown {
   return b;
 }
 
+/** Current v4 report issues include only registered page-level checks.
+ * The legacy site-structure heuristic builder remains available for historical
+ * reports and calibration, but its bounded-crawl absence claims are excluded.
+ */
+export function buildV4Issues(pages: PageResult[], effectiveContentPages: number = Infinity, methodologyVersion = 4): Issue[] {
+  return buildIssues(pages, effectiveContentPages, { includePlaceholderContentFinding: false, methodologyVersion }).sort(compareIssuesByPriority);
+}
+
 /**
- * Site-level structural issues that no single page check can see: whether the
- * firm has a contact path, practice-area pages, an attorney/team page, and a
- * sitemap. These complement the per-page issues from buildIssues.
+ * Legacy site-level structure heuristics retained for historical analyses.
+ * Current v4 reports do not call this builder because a bounded crawl cannot
+ * establish that unobserved site sections or pages are absent.
  */
 export function buildSiteStructureIssues(
   pages: PageResult[],
@@ -936,7 +990,8 @@ function uniq(arr: string[]): string[] {
 export function buildInternalSummary(
   pages: PageResult[],
   issues: Issue[],
-  overallScore: number
+  overallScore: number | null,
+  methodologyVersion = 4
 ): InternalSummary {
   const totalPages = pages.length || 1;
   const home = pages[0];
@@ -955,7 +1010,8 @@ export function buildInternalSummary(
   // Website maturity from headline score, breadth, and structured data.
   const hasSchema = pages.some((p) => p.schema.blocks > 0 && p.schema.invalidBlocks === 0);
   let websiteMaturity: InternalSummary["websiteMaturity"];
-  if (overallScore < 35 || totalPages <= 1) websiteMaturity = "poor";
+  if (overallScore === null) websiteMaturity = "unassessed";
+  else if (overallScore < 35 || totalPages <= 1) websiteMaturity = "poor";
   else if (overallScore < 55 || !hasSchema) websiteMaturity = "basic";
   else if (overallScore < 75) websiteMaturity = "decent";
   else websiteMaturity = "strong";
@@ -972,15 +1028,24 @@ export function buildInternalSummary(
   // lower; basic and decent score highest, lifted by the volume of high-value
   // fixable gaps and dampened by sheer effort.
   let fit = 50;
-  fit += { poor: -18, basic: 18, decent: 12, strong: -14 }[websiteMaturity];
+  fit += { poor: -18, basic: 18, decent: 12, strong: -14, unassessed: 0 }[websiteMaturity];
   fit += Math.min(20, (crit.length * 7) + (high.length * 3));
   if (byCat("Legal Marketing").length > 0) fit += 6;
   if (byCat("Local SEO").length > 0) fit += 4;
   const prospectFitScore = Math.max(0, Math.min(100, Math.round(fit)));
 
   // Pain points: categories with the most weighted findings, human phrasing.
+  const indexabilityPain = methodologyVersion === 5
+    ? byCat("Indexability").some((i) => i.title === "Indexable")
+      ? "Google-addressed page instructions need review"
+      : byCat("Indexability").some((i) => /robots\.txt/i.test(i.title))
+        ? "Googlebot crawl access policy needs review"
+        : byCat("Indexability").some((i) => /HTTP status/i.test(i.title))
+          ? "Page response status needs review"
+          : null
+    : "Pages held back from search engines by technical settings";
   const painByCat: Array<[string, string]> = [
-    ["Indexability", "Pages held back from search engines by technical settings"],
+    ...(indexabilityPain ? [["Indexability", indexabilityPain] as [string, string]] : []),
     ["Legal Marketing", "Intake and trust cues are thin for a firm site"],
     ["On-Page SEO", "Core on-page signals missing across multiple pages"],
     ["Local SEO", "Weak local signals for the firm's catchment"],
@@ -1028,8 +1093,9 @@ export function buildInternalSummary(
   if (!home.lawFirm.consultationCta) trustGaps.push("No clear consultation call to action");
   if (!home.lawFirm.phoneVisible) trustGaps.push("No visible phone number");
   if (!home.lawFirm.contactFormPresent) trustGaps.push("No on-page contact form");
-  if (!pages.some((p) => p.lawFirm.trust.testimonials || p.lawFirm.trust.reviews)) trustGaps.push("No testimonials or reviews surfaced");
-  if (!pages.some((p) => p.lawFirm.trust.credentials)) trustGaps.push("No bar or credential signals surfaced");
+  // Keep this compatibility field limited to contact-path observations.
+  // Review, award, result, and credential counts are not credibility grades
+  // and must not become automated prospecting recommendations.
   const trustAndConversionGaps = uniq(trustGaps).slice(0, 5);
 
   return {

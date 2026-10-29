@@ -281,8 +281,17 @@ async function verifyPushedMigration(pathname: string, expectedBlob: string): Pr
   }
 }
 
+const ACCEPTED_SOURCE_REFS = new Set([
+  "refs/heads/codex/crm-live-followup-final-gates-20261024",
+  "refs/heads/codex/crm-followup-activity-save-reload-20261028",
+  "refs/heads/codex/crm-followup-acceptance-20261029",
+]);
+
 function verifyPushedHead(sourceCommit: string): void {
-  const remoteRef = "refs/heads/codex/crm-live-followup-final-gates-20261024";
+  const remoteRef = process.env.AGENCY_FOLLOWUP_EXPECTED_SOURCE_REF ?? "refs/heads/codex/crm-live-followup-final-gates-20261024";
+  if (!ACCEPTED_SOURCE_REFS.has(remoteRef)) {
+    throw new Error("Refusing walkthrough because the source ref is not an explicitly allowed CRM acceptance branch.");
+  }
   const remoteCommit = execFileSync("git", ["ls-remote", "origin", remoteRef], { encoding: "utf8", timeout: 60_000 })
     .split(/\r?\n/).map((line) => line.trim()).find((line) => line.endsWith(`\t${remoteRef}`))?.split(/\s+/, 1)[0];
   if (remoteCommit !== sourceCommit) {
@@ -1622,10 +1631,13 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
     ["message_unsubscribe_source", "Synthetic Walkthrough Source Unsubscribe Source " + suffix, "Casey Example", "eligible"],
     ["message_unsubscribe_source_duplicate", "Synthetic Walkthrough Source Unsubscribe Duplicate " + suffix, "Taylor Example", "eligible"],
     ["message_unsubscribe_mismatch_duplicate", "Synthetic Walkthrough Mismatched Recipient Unsubscribe Duplicate " + suffix, "Jordan Example", "eligible"],
+    ["manual_reply", "Synthetic Walkthrough Manual Reply " + suffix, "Robin Example", "eligible"],
+    ["manual_meeting", "Synthetic Walkthrough Manual Meeting " + suffix, "Cameron Example", "eligible"],
+    ["manual_booking", "Synthetic Walkthrough Manual Booking " + suffix, "Morgan Example", "eligible"],
   ];
   await pool.query("begin");
   try {
-    progress("seeding synthetic operator and eighteen Agency prospects");
+    progress("seeding synthetic operator and twenty-one Agency prospects");
     await pool.query("insert into public.intake_firms (id,name) values ($1,$2)", [firmId, "Synthetic Agency Follow-up " + suffix]);
     await pool.query(
       "insert into public.firm_lawyers (id,firm_id,email,name,role,disabled) values ($1,$2,$3,$4,'operator',false)",
@@ -1673,7 +1685,7 @@ async function seedFixtures(pool: PoolClient): Promise<Fixtures> {
           [conversationId],
         );
       }
-      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b", "message_unsubscribe_duplicate", "message_unsubscribe_early_a", "message_unsubscribe_early_b", "message_unsubscribe_source", "message_unsubscribe_source_duplicate", "message_unsubscribe_mismatch_duplicate"].includes(key)) {
+      if (["normal", "pause", "unknown", "window", "lease", "retry", "tagged_unknown", "contact_unsubscribe_ambiguous_a", "contact_unsubscribe_ambiguous_b", "message_unsubscribe_duplicate", "message_unsubscribe_early_a", "message_unsubscribe_early_b", "message_unsubscribe_source", "message_unsubscribe_source_duplicate", "message_unsubscribe_mismatch_duplicate", "manual_reply", "manual_meeting", "manual_booking"].includes(key)) {
         const syntheticConsent = "Synthetic opt-in fixture for local acceptance only; this is not real prospect consent.";
         const databaseClock = await pool.query<{ captured_at: Date }>("select clock_timestamp() - interval '1 minute' as captured_at");
         const capturedAt = databaseClock.rows[0]?.captured_at.toISOString();
@@ -2584,6 +2596,7 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   page.setDefaultTimeout(30000);
   page.setDefaultNavigationTimeout(180_000);
   const responseFailures: string[] = [];
+  let expectedSyntheticActivitySaveFailure = false;
   const recoveredBrowserRuntimeErrors: string[] = [];
   let templateApprovalAuditEvidence: Record<string, unknown> | undefined;
   let initialChunkRecoveryReloaded = false;
@@ -2591,9 +2604,11 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   page.on("pageerror", (error) => responseFailures.push("page error: " + error.message));
   page.on("console", (message) => {
     const text = message.text();
-    // Chromium reports the deliberately blocked suppressed-prospect release
-    // as a console resource error; that API response is asserted as HTTP 409.
-    if (message.type() === "error" && !/Failed to load resource: the server responded with a status of 409 \(Conflict\)/.test(text)) {
+    // Chromium reports the asserted suppressed-release 409 and synthetic save-failure 503
+    // as console resource errors; both are deliberate, narrowly scoped acceptance cases.
+    if (message.type() === "error" &&
+        !(expectedSyntheticActivitySaveFailure && /status of 503/.test(text)) &&
+        !/Failed to load resource: the server responded with a status of 409 \(Conflict\)/.test(text)) {
       responseFailures.push("browser console: " + text);
     }
   });
@@ -2835,8 +2850,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   // both updated message states are rendered before changing the DB fixture
   // and doing a full reload, so the refresh and navigation cannot overlap.
   await page.waitForLoadState("networkidle", { timeout: 30000 }).catch(() => undefined);
-  const normalMessages = await pool.query<{ id: string; enrollment_id: string; recipient_email_snapshot: string; step_number: number; state: string }>(
-    "select id,enrollment_id,recipient_email_snapshot,step_number,state from agency_followup_messages where enrollment_id=(select id from agency_followup_enrollments where prospect_id=$1) order by step_number",
+  const normalMessages = await pool.query<{ id: string; enrollment_id: string; recipient_email_snapshot: string; step_number: number; state: string; content_snapshot: { subject?: unknown; body?: unknown }; schedule_timezone: string }>(
+    "select message.id,message.enrollment_id,message.recipient_email_snapshot,message.step_number,message.state,message.content_snapshot,journey.timezone as schedule_timezone from agency_followup_messages message join agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id join agency_followup_journeys journey on journey.id=enrollment.journey_id where enrollment.prospect_id=$1 order by message.step_number",
     [normal.id],
   );
   if (normalMessages.rows.length !== 2 || normalMessages.rows.some((row) => row.state !== "scheduled")) {
@@ -2871,7 +2886,43 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     throw new Error("Content change did not invalidate the reviewed message.");
   }
   await page.reload({ waitUntil: "networkidle" });
-  await expect(queueCard(page, normal.firmName).getByText("awaiting review", { exact: true })).toBeVisible();
+  const reloadedNormalCard = queueCard(page, normal.firmName);
+  await expect(reloadedNormalCard.getByText("awaiting review", { exact: true })).toBeVisible();
+  const reloadedMessagePanels = reloadedNormalCard.locator('[data-ui-component-content="agency-follow-up-message"]');
+  await expect(reloadedMessagePanels).toHaveCount(2);
+  const reloadedFirstMessage = reloadedMessagePanels.nth(0);
+  await expect(reloadedFirstMessage.getByText("Scheduled for:", { exact: true })).toBeVisible();
+  const expectedNormalSubject = String(firstNormalMessage.content_snapshot.subject ?? "");
+  const expectedNormalBody = String(firstNormalMessage.content_snapshot.body ?? "");
+  if (!expectedNormalSubject || !expectedNormalBody || !firstNormalMessage.schedule_timezone) {
+    throw new Error("The saved approved message has incomplete content or journey timezone.");
+  }
+  await expect(reloadedFirstMessage.locator("h4")).toHaveText(expectedNormalSubject);
+  await expect(reloadedFirstMessage.locator('p[data-ui-copy="body"]')).toHaveText(expectedNormalBody);
+  const reloadedSchedule = reloadedFirstMessage.locator("time[data-time-zone]");
+  await expect(reloadedSchedule).toHaveCount(1);
+  const renderedScheduledAt = await reloadedSchedule.getAttribute("datetime");
+  if (!renderedScheduledAt || Date.parse(renderedScheduledAt) !== Date.parse(acceptedDueAt)) {
+    throw new Error("The rendered schedule datetime does not match the exact approved instant.");
+  }
+  await expect(reloadedSchedule).toHaveAttribute("data-time-zone", firstNormalMessage.schedule_timezone);
+  const expectedScheduleParts = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+    timeZone: firstNormalMessage.schedule_timezone,
+  }).formatToParts(new Date(acceptedDueAt));
+  const expectedSchedulePart = (type: Intl.DateTimeFormatPartTypes) => expectedScheduleParts.find((part) => part.type === type)?.value;
+  const expectedLocalSchedule = ["year", "month", "day"].map((part) => expectedSchedulePart(part as Intl.DateTimeFormatPartTypes)).join("-") +
+    " " + expectedSchedulePart("hour") + ":" + expectedSchedulePart("minute");
+  if (expectedLocalSchedule.includes("undefined")) {
+    throw new Error("Could not format the expected local schedule for the saved journey timezone.");
+  }
+  await expect(reloadedSchedule).toHaveText(`${expectedLocalSchedule} (${firstNormalMessage.schedule_timezone})`);
+  progress("approved message content and exact scheduled instant remained visible with its journey timezone after reloading");
 
   const acceptedProviderMessageId = `fake-provider-normal-${RUN_ID}`;
   const acceptedResult = await withFixtureClaim(pool, firstNormalMessage.id, () => dispatchFake(context, walkthroughToken, {
@@ -4183,7 +4234,8 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   const renderedWidths: number[] = [];
   const screenshots: Array<{ path: string; sha256: string; viewport: number; navigationState: string }> = [];
   const consentPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string }> = [];
-  const activityPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string }> = [];
+  const activityPanelScreenshots: Array<{ path: string; sha256: string; viewport: number; panel: string; capture: "panel" | "viewport" }> = [];
+  const recordedActivityScreenshots: Array<{ path: string; sha256: string; activity: "human_reply" | "meeting" }> = [];
   const providerStatusScreenshots: Array<{ path: string; sha256: string; viewport: number; contentWidth: number; scrollWidth: number; text: string }> = [];
   const stableLayout = async () => page.evaluate(async () => {
     await document.fonts.ready;
@@ -4305,15 +4357,17 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     await screenshot(`${RUN_ID}-queue-${width}-nav-closed.png`, width, "closed");
     if (width === 320) {
       const providerStatus = queueCard(page, retryProspect.firmName).locator('[data-ui-component-content="agency-follow-up-message"] dl').first();
-      const providerStatusLabel = providerStatus.locator('dt[data-ui-copy="supporting"]');
-      const providerStatusValue = providerStatus.locator('dd[data-ui-copy="supporting"]');
+      const providerStatusLabel = providerStatus.getByText("Provider delivery:", { exact: true });
+      const providerStatusValue = providerStatus.getByText("Blocked by provider", { exact: true });
       if ((await providerStatusLabel.count()) !== 1 || (await providerStatusValue.count()) !== 1) throw new Error("The synthetic review queue did not render one provider delivery label/value pair.");
       if ((await providerStatusLabel.innerText()).trim() !== "Provider delivery:" || (await providerStatusValue.innerText()).trim() !== "Blocked by provider") throw new Error("The synthetic suppression event was not rendered as a provider-blocked delivery status.");
       await providerStatus.scrollIntoViewIfNeeded();
       await stableLayout();
       const statusGeometry = await providerStatus.evaluate((element) => {
-        const value = element.querySelector<HTMLElement>('dd[data-ui-copy="supporting"]');
-        if (!value) throw new Error("Provider delivery status value is missing.");
+        const label = Array.from(element.querySelectorAll<HTMLElement>('dt[data-ui-copy="supporting"]'))
+          .find((node) => node.textContent?.trim() === "Provider delivery:");
+        const value = label?.nextElementSibling;
+        if (!(value instanceof HTMLElement) || value.tagName !== "DD") throw new Error("Provider delivery status value is missing.");
         return {
           clientWidth: value.clientWidth,
           scrollWidth: value.scrollWidth,
@@ -4364,6 +4418,25 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     }
     renderedWidths.push(width);
   }
+  progress("preparing three isolated synthetic, opted-in messages for reply, booked-meeting, and completed-meeting stop acceptance");
+  await page.setViewportSize({ width: 1280, height: 1000 });
+  const manualStopMessageIds = new Map<string, string>();
+  for (const prospect of [fixtures.prospects.manual_reply, fixtures.prospects.manual_booking, fixtures.prospects.manual_meeting]) {
+    await createDraft(pool, page, journeyName, prospect);
+    await markEligibleAndRelease(page, prospect);
+    const prospectQueueCard = queueCard(page, prospect.firmName);
+    await waitForAction(page, "approve", prospectQueueCard.getByRole("button", { name: "Approve this message" }).nth(0));
+    const scheduledMessage = await pool.query<{ id: string; state: string }>(
+      "select message.id,message.state from public.agency_followup_messages message join public.agency_followup_enrollments enrollment on enrollment.id=message.enrollment_id where enrollment.prospect_id=$1 and message.step_number=1",
+      [prospect.id],
+    );
+    if (scheduledMessage.rows.length !== 1 || scheduledMessage.rows[0]?.state !== "scheduled") {
+      throw new Error(`The synthetic ${prospect === fixtures.prospects.manual_reply ? "reply" : "meeting"} acceptance message was not uniquely scheduled after approval.`);
+    }
+    await pool.query("update public.agency_followup_messages set scheduled_at=$2 where id=$1", [scheduledMessage.rows[0]!.id, acceptedDueAt]);
+    manualStopMessageIds.set(prospect.id, scheduledMessage.rows[0]!.id);
+  }
+
   progress("opening synthetic Agency CRM contact history to verify the manual reconciliation controls");
   await page.goto(APP_ORIGIN + "/admin/agency-crm", { waitUntil: "domcontentloaded", timeout: Math.min(180_000, remainingMs()) });
   const normalProspectCard = page.getByRole("listitem")
@@ -4398,8 +4471,12 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
   await expect(meetingOutcome).toBeVisible();
   await expect(meetingOutcome).toHaveAttribute("placeholder", "What happened at the meeting");
   await expect(page.getByLabel("Next action")).toBeVisible();
-  const activityPanelWidths = [1440, 1024, 768, 640, 375, 320] as const;
+  const activityPanelWidths = [1536, 1535, 1440, 1280, 1279, 1024, 769, 768, 767, 640, 375, 320] as const;
   const activityCopySelector = '[data-ui-component-content="prospect-activity-form"],[data-ui-component-content="prospect-contact-controls"]';
+  const activityForm = page.locator('[data-ui-component-content="prospect-activity-form"]');
+  const contactControls = page.locator('[data-ui-component-content="prospect-contact-controls"]');
+  const activityHeading = activityForm.getByRole("heading", { name: "Log confirmed activity", exact: true });
+  const contactControlsHeading = contactControls.getByRole("heading", { name: "Contact controls", exact: true });
   for (const width of activityPanelWidths) {
     await page.setViewportSize({ width, height: 1000 });
     await activityPanel.scrollIntoViewIfNeeded();
@@ -4410,23 +4487,365 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
       await activityPanel.screenshot({ path: failureFile });
       throw new Error("Rendered prospect activity UI gate failed at " + width + "px: " + activityCopyFailures.join("; "));
     }
+    const contactControlGeometry = await contactControls.evaluate((element) => {
+      const formRect = element.getBoundingClientRect();
+      const style = getComputedStyle(element);
+      const contentLeft = formRect.left + Number.parseFloat(style.borderLeftWidth) + Number.parseFloat(style.paddingLeft);
+      const contentRight = formRect.right - Number.parseFloat(style.borderRightWidth) - Number.parseFloat(style.paddingRight);
+      const overflowingControls = Array.from(element.querySelectorAll<HTMLElement>("input, select, textarea, button"))
+        .map((control) => {
+          const rect = control.getBoundingClientRect();
+          return {
+            label: control.closest("label")?.textContent?.trim().replace(/\s+/g, " ").slice(0, 48) ?? control.tagName.toLowerCase(),
+            left: rect.left,
+            right: rect.right,
+          };
+        })
+        .filter((control) => control.left < contentLeft - 1 || control.right > contentRight + 1);
+      return { contentLeft, contentRight, overflowingControls };
+    });
+    if (contactControlGeometry.overflowingControls.length) {
+      const failureFile = path.join(screenshotDir, RUN_ID + "-failure-prospect-contact-controls-width-" + width + ".png");
+      await activityPanel.screenshot({ path: failureFile });
+      throw new Error("Contact controls exceed the usable card width at " + width + "px: " + JSON.stringify(contactControlGeometry));
+    }
+    if (width < 768) {
+      await activityForm.evaluate((element) => element.scrollIntoView({ block: "start", behavior: "instant" }));
+      await stableLayout();
+    }
     await assertUnoccluded(activityType, "Activity type control", true);
     await assertUnoccluded(meetingOutcome, "Meeting outcome control", true);
+    await assertUnoccluded(page.getByLabel("Next action"), "Next action control", true);
+    await assertUnoccluded(page.getByRole("button", { name: "Save activity", exact: true }), "Save activity control", true);
+    const openMenu = page.getByRole("button", { name: "Open menu" });
+    if (width < 768) {
+      await expect(openMenu).toBeVisible();
+      const mobileTargets = [
+        { locator: activityForm, heading: activityHeading, label: "activity-form" },
+        { locator: contactControls, heading: contactControlsHeading, label: "contact-controls" },
+      ];
+      for (const target of mobileTargets) {
+        await target.locator.evaluate((element) => {
+          element.scrollIntoView({ block: "start", behavior: "instant" });
+          // Keep the full 8px gap despite fractional CSS-pixel scroll alignment.
+          window.scrollBy({ top: -1, behavior: "instant" });
+        });
+        await stableLayout();
+        const geometry = await target.locator.evaluate((element) => {
+          const topbarButton = document.querySelector('button[aria-label="Open menu"]');
+          const topbar = topbarButton?.parentElement;
+          const heading = element.querySelector("h3");
+          if (!topbar || !heading) return null;
+          const barRect = topbar.getBoundingClientRect();
+          const formRect = element.getBoundingClientRect();
+          const headingRect = heading.getBoundingClientRect();
+          const x = headingRect.left + headingRect.width / 2;
+          const y = headingRect.top + headingRect.height / 2;
+          const hit = document.elementFromPoint(x, y);
+          return {
+            barTop: barRect.top,
+            barBottom: barRect.bottom,
+            formTop: formRect.top,
+            headingTop: headingRect.top,
+            headingBottom: headingRect.bottom,
+            viewportHeight: innerHeight,
+            headingHit: Boolean(hit && (hit === heading || heading.contains(hit))),
+          };
+        });
+        if (!geometry || geometry.barTop > 1 || geometry.barBottom <= geometry.barTop ||
+          geometry.formTop < geometry.barBottom + 8 || geometry.headingTop < geometry.barBottom + 8 ||
+          geometry.headingBottom > geometry.viewportHeight || !geometry.headingHit) {
+          throw new Error("Mobile " + target.label + " is missing or obscured by the operator top bar at " + width + "px: " + JSON.stringify(geometry));
+        }
+        await expect(target.heading).toBeVisible();
+        const file = path.join(screenshotDir, RUN_ID + "-prospect-activity-" + target.label + "-" + width + "-viewport.png");
+        await page.screenshot({ path: file, fullPage: false });
+        activityPanelScreenshots.push({
+          path: path.relative(process.cwd(), file).replaceAll("\\", "/"),
+          sha256: createHash("sha256").update(await readFile(file)).digest("hex"),
+          viewport: width,
+          panel: target.label + " below the fixed mobile navigation bar",
+          capture: "viewport",
+        });
+      }
+    } else {
+      await expect(openMenu).toBeHidden();
+      await activityPanel.scrollIntoViewIfNeeded();
+      await stableLayout();
+      const file = path.join(screenshotDir, RUN_ID + "-prospect-activity-" + width + "-panel.png");
+      await activityPanel.screenshot({ path: file });
+      activityPanelScreenshots.push({
+        path: path.relative(process.cwd(), file).replaceAll("\\", "/"),
+        sha256: createHash("sha256").update(await readFile(file)).digest("hex"),
+        viewport: width,
+        panel: "synthetic operator contact history and meeting reconciliation form",
+        capture: "panel",
+      });
+    }
+  }
+  const reopenHistoryAfterReload = async (prospect: ProspectFixture) => {
+    await page.setViewportSize({ width: 1280, height: 1000 });
+    await page.reload({ waitUntil: "networkidle", timeout: Math.min(180_000, remainingMs()) });
+    const prospectCard = page.getByRole("listitem")
+      .filter({ hasText: prospect.firmName })
+      .filter({ has: page.getByRole("button", { name: "Contact history", exact: true }) });
+    for (let reveal = 0; reveal < 30 && await prospectCard.count() === 0; reveal += 1) {
+      const showMore = page.getByRole("button", { name: /^Show \d+ more \(/ }).first();
+      if (await showMore.count() === 0) break;
+      await showMore.click();
+    }
+    await expect(prospectCard).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+    const historyButton = prospectCard.getByRole("button", { name: "Contact history", exact: true });
+    await expect(historyButton).toHaveCount(1, { timeout: Math.min(30_000, remainingMs()) });
+    await page.waitForFunction((firmName) => {
+      const card = Array.from(document.querySelectorAll("li")).find((item) =>
+        item.textContent?.includes(firmName) &&
+        Array.from(item.querySelectorAll("button")).some((button) => button.textContent?.trim() === "Contact history")
+      );
+      const button = Array.from(card?.querySelectorAll("button") ?? []).find(
+        (candidate) => candidate.textContent?.trim() === "Contact history"
+      );
+      return Boolean(button && Object.keys(button).some((key) => key.startsWith("__reactProps$")));
+    }, prospect.firmName, { polling: "raf", timeout: Math.min(180_000, remainingMs()) });
+    await historyButton.click();
+    await expect(activityPanel).toBeVisible({ timeout: Math.min(30_000, remainingMs()) });
+  };
+  let manualActivitySaveFailureEvidence: Record<string, unknown> | null = null;
+  const activitySaveFailureScreenshots: Array<{ path: string; sha256: string; viewport: number }> = [];
+  const saveAndVerifyManualActivity = async (input: {
+    prospect: ProspectFixture;
+    kind: "human_reply" | "meeting";
+    subject: string;
+    body: string;
+    replyDisposition?: "positive";
+    meetingOutcome?: string | null;
+    exerciseFailedSave?: boolean;
+    expectedConversationStatus: "replied" | "meeting_scheduled" | "completed";
+  }) => {
+    const expectedMeetingOutcome = input.meetingOutcome === undefined ? "Synthetic meeting confirmed" : input.meetingOutcome;
+    await reopenHistoryAfterReload(input.prospect);
+    const activityTypeControl = activityPanel.getByLabel("Activity type");
+    await expect(activityTypeControl).toBeVisible();
+    await activityTypeControl.selectOption(input.kind);
+    if (input.kind === "human_reply") {
+      const replyDispositionControl = activityPanel.getByLabel("Reply disposition");
+      await expect(replyDispositionControl).toBeVisible();
+      await replyDispositionControl.selectOption(input.replyDisposition ?? "positive");
+    }
+    if (input.kind === "meeting") {
+      const meetingOutcomeControl = activityPanel.getByPlaceholder("What happened at the meeting", { exact: true });
+      await expect(meetingOutcomeControl).toBeVisible();
+      await meetingOutcomeControl.fill(expectedMeetingOutcome ?? "");
+    }
+    const activitySubjectControl = activityPanel.getByLabel("Subject");
+    const activityBodyControl = activityPanel.getByLabel("Message or note");
+    await activitySubjectControl.fill(input.subject);
+    await activityBodyControl.fill(input.body);
+
+    if (input.exerciseFailedSave) {
+      const activityEndpointPattern = "**/api/admin/prospect-operations/activities";
+      let syntheticFailureServed = false;
+      await page.route(activityEndpointPattern, async (route) => {
+        if (route.request().method() !== "POST") return route.continue();
+        syntheticFailureServed = true;
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "synthetic_activity_save_failure" }) });
+      });
+      expectedSyntheticActivitySaveFailure = true;
+      try {
+        const failedSaveResponsePromise = page.waitForResponse((response) =>
+          new URL(response.url()).pathname === "/api/admin/prospect-operations/activities" && response.request().method() === "POST",
+          { timeout: Math.min(30_000, remainingMs()) },
+        );
+        await activityPanel.getByRole("button", { name: "Save activity", exact: true }).click();
+        const failedSaveResponse = await failedSaveResponsePromise;
+        if (failedSaveResponse.status() !== 503 || !syntheticFailureServed) throw new Error("The expected synthetic activity-save failure was not served.");
+        const visibleSaveErrorAlert = activityPanel.locator("p.border-red-200").filter({ hasText: "synthetic_activity_save_failure" });
+        await expect(visibleSaveErrorAlert).toHaveCount(1);
+        await expect(visibleSaveErrorAlert).toBeVisible();
+        await expect(activitySubjectControl).toHaveValue(input.subject);
+        await expect(activityBodyControl).toHaveValue(input.body);
+        await expect(activityPanel.locator('[data-ui-component-content="prospect-activity-entry"]').filter({ hasText: input.subject })).toHaveCount(0);
+        const failedPersistence = await pool.query<{ count: string }>(
+          "select count(*) from public.prospect_activities where conversation_id=$1 and subject=$2",
+          [input.prospect.conversationId, input.subject],
+        );
+        if (failedPersistence.rows[0]?.count !== "0") throw new Error("Failed operator save created phantom activity history.");
+        await stableLayout();
+        const failureScreenshotPath = path.join(screenshotDir, RUN_ID + "-activity-save-error-retained-form.png");
+        await activityPanel.screenshot({ path: failureScreenshotPath });
+        activitySaveFailureScreenshots.push({
+          path: path.relative(process.cwd(), failureScreenshotPath).replaceAll("\\", "/"),
+          sha256: createHash("sha256").update(await readFile(failureScreenshotPath)).digest("hex"),
+          viewport: 1280,
+        });
+        manualActivitySaveFailureEvidence = {
+          responseStatus: 503, visibleError: true, formRetained: true,
+          phantomUiHistory: false, phantomDatabaseHistory: false, successfulRetry: false,
+        };
+      } finally {
+        await page.unroute(activityEndpointPattern);
+        expectedSyntheticActivitySaveFailure = false;
+      }
+    }
+
+    const activityResponsePromise = page.waitForResponse((response) =>
+      new URL(response.url()).pathname === "/api/admin/prospect-operations/activities" && response.request().method() === "POST",
+      { timeout: Math.min(30_000, remainingMs()) },
+    );
+    await activityPanel.getByRole("button", { name: "Save activity", exact: true }).click();
+    const activityResponse = await activityResponsePromise;
+    if (!activityResponse.ok()) throw new Error(`The operator ${input.kind} save returned HTTP ${activityResponse.status()}.`);
+
+    const renderedEntry = activityPanel.locator('[data-ui-component-content="prospect-activity-entry"]').filter({ hasText: input.subject });
+    await expect(renderedEntry).toHaveCount(1);
+    await expect(renderedEntry).toContainText(input.kind === "human_reply" ? "Human reply via Email" : "Meeting via Video call");
+    await expect(renderedEntry).toContainText(input.body);
+    if (input.kind === "human_reply") await expect(renderedEntry).toContainText("Positive reply");
+    if (input.kind === "meeting" && expectedMeetingOutcome) await expect(renderedEntry).toContainText(expectedMeetingOutcome);
+
+    const persisted = await pool.query<{
+      status: string;
+      kind: string;
+      channel: string;
+      reply_disposition: string;
+      meeting_outcome: string | null;
+      subject: string | null;
+      body: string | null;
+    }>(
+      `select conversation.status,activity.kind,activity.channel,activity.reply_disposition,activity.meeting_outcome,activity.subject,activity.body
+       from public.prospect_conversations conversation
+       join public.prospect_activities activity on activity.conversation_id=conversation.id
+       where conversation.id=$1 and activity.subject=$2 order by activity.occurred_at desc limit 1`,
+      [input.prospect.conversationId, input.subject],
+    );
+    const saved = persisted.rows[0];
+    if (persisted.rows.length !== 1 || !saved || saved.status !== input.expectedConversationStatus || saved.kind !== input.kind ||
+      saved.channel !== (input.kind === "human_reply" ? "email" : "video") || saved.subject !== input.subject || saved.body !== input.body ||
+      (input.kind === "human_reply" && saved.reply_disposition !== (input.replyDisposition ?? "positive")) ||
+      (input.kind === "meeting" && saved.meeting_outcome !== expectedMeetingOutcome)) {
+      throw new Error(`The operator ${input.kind} activity or stop status did not persist exactly: ${JSON.stringify(saved ?? null)}.`);
+    }
+
+    await reopenHistoryAfterReload(input.prospect);
+    const reloadedEntry = activityPanel.locator('[data-ui-component-content="prospect-activity-entry"]').filter({ hasText: input.subject });
+    await expect(reloadedEntry).toHaveCount(1);
+    await expect(reloadedEntry).toContainText(input.kind === "human_reply" ? "Human reply via Email" : "Meeting via Video call");
+    await expect(reloadedEntry).toContainText(input.body);
+    if (input.kind === "human_reply") await expect(reloadedEntry).toContainText("Positive reply");
+    if (input.kind === "meeting" && expectedMeetingOutcome) await expect(reloadedEntry).toContainText(expectedMeetingOutcome);
+
+    await page.setViewportSize({ width: 1280, height: 1000 });
     await activityPanel.scrollIntoViewIfNeeded();
     await stableLayout();
-    const file = path.join(screenshotDir, RUN_ID + "-prospect-activity-" + width + ".png");
-    await activityPanel.screenshot({ path: file });
-    activityPanelScreenshots.push({
-      path: path.relative(process.cwd(), file).replaceAll("\\", "/"),
-      sha256: createHash("sha256").update(await readFile(file)).digest("hex"),
-      viewport: width,
-      panel: "synthetic operator contact history and meeting reconciliation form",
+    const screenshotLabel = input.kind === "meeting" ? input.expectedConversationStatus : input.kind;
+    const screenshotPath = path.join(screenshotDir, RUN_ID + "-activity-" + screenshotLabel + "-persisted-after-reload.png");
+    await activityPanel.screenshot({ path: screenshotPath });
+    recordedActivityScreenshots.push({
+      path: path.relative(process.cwd(), screenshotPath).replaceAll("\\", "/"),
+      sha256: createHash("sha256").update(await readFile(screenshotPath)).digest("hex"),
+      activity: input.kind,
     });
+    if (input.exerciseFailedSave && manualActivitySaveFailureEvidence) {
+      manualActivitySaveFailureEvidence = { ...manualActivitySaveFailureEvidence, successfulRetry: true };
+    }
+  };
+
+  const manualReplySubject = `Synthetic operator reply ${RUN_ID}`;
+  const manualReplyBody = `Synthetic positive reply recorded in the CRM operator form ${RUN_ID}.`;
+  await saveAndVerifyManualActivity({
+    prospect: fixtures.prospects.manual_reply,
+    kind: "human_reply",
+    subject: manualReplySubject,
+    body: manualReplyBody,
+    replyDisposition: "positive",
+    exerciseFailedSave: true,
+    expectedConversationStatus: "replied",
+  });
+  const replyMessageId = manualStopMessageIds.get(fixtures.prospects.manual_reply.id);
+  if (!replyMessageId) throw new Error("The synthetic manual reply has no scheduled stop-test message.");
+  const replyDispatch = await withFixtureClaim(pool, replyMessageId, () => dispatchFake(context, walkthroughToken, {
+    workerId: `synthetic-ui-reply-stop-${RUN_ID}`,
+    now: acceptedNow,
+    limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: `must-not-accept-replied-${RUN_ID}`, acceptedAt: acceptedNow }],
+  }));
+  const replyStoppedMessage = await pool.query<{ state: string; provider_message_id: string | null }>(
+    "select state,provider_message_id from public.agency_followup_messages where id=$1",
+    [replyMessageId],
+  );
+  const replyBlockedEvent = await pool.query<{ event_payload: { blockers?: unknown } }>(
+    "select event_payload from public.agency_followup_events where message_id=$1 and event_type='message_blocked' order by occurred_at desc limit 1",
+    [replyMessageId],
+  );
+  const replyBlockers = replyBlockedEvent.rows[0]?.event_payload.blockers;
+  if (replyDispatch.blocked !== 1 || replyDispatch.accepted !== 0 || replyStoppedMessage.rows[0]?.state !== "blocked" ||
+      replyStoppedMessage.rows[0]?.provider_message_id !== null || !Array.isArray(replyBlockers) ||
+      !replyBlockers.includes("conversation_stopped")) {
+    throw new Error(`The persisted human reply did not block the due fake-provider handoff: ${JSON.stringify({ replyDispatch, message: replyStoppedMessage.rows[0] ?? null, event: replyBlockedEvent.rows[0] ?? null })}.`);
   }
-  progress("synthetic Agency prospect history showed the meeting outcome and next action as separate controls; tagged copy, keyboard focus, point-hit behavior and screenshots passed at six supported widths");
+
+  const manualBookedMeetingSubject = "Synthetic operator booked meeting " + RUN_ID;
+  const manualBookedMeetingBody = "Synthetic booked meeting saved without a completed outcome " + RUN_ID + ".";
+  await saveAndVerifyManualActivity({
+    prospect: fixtures.prospects.manual_booking, kind: "meeting",
+    subject: manualBookedMeetingSubject, body: manualBookedMeetingBody,
+    meetingOutcome: null, expectedConversationStatus: "meeting_scheduled",
+  });
+  const bookedMeetingMessageId = manualStopMessageIds.get(fixtures.prospects.manual_booking.id);
+  if (!bookedMeetingMessageId) throw new Error("Booked meeting has no scheduled stop-test message.");
+  const bookedMeetingDispatch = await withFixtureClaim(pool, bookedMeetingMessageId, () => dispatchFake(context, walkthroughToken, {
+    workerId: "synthetic-ui-booked-meeting-stop-" + RUN_ID, now: acceptedNow, limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: "must-not-accept-booked-meeting-" + RUN_ID, acceptedAt: acceptedNow }],
+  }));
+  const bookedMeetingStoppedMessage = await pool.query<{ state: string; provider_message_id: string | null }>(
+    "select state,provider_message_id from public.agency_followup_messages where id=$1", [bookedMeetingMessageId],
+  );
+  const bookedMeetingBlockedEvent = await pool.query<{ event_payload: { blockers?: unknown } }>(
+    "select event_payload from public.agency_followup_events where message_id=$1 and event_type='message_blocked' order by occurred_at desc limit 1",
+    [bookedMeetingMessageId],
+  );
+  const bookedMeetingBlockers = bookedMeetingBlockedEvent.rows[0]?.event_payload.blockers;
+  if (bookedMeetingDispatch.blocked !== 1 || bookedMeetingDispatch.accepted !== 0 || bookedMeetingStoppedMessage.rows[0]?.state !== "blocked" ||
+      bookedMeetingStoppedMessage.rows[0]?.provider_message_id !== null || !Array.isArray(bookedMeetingBlockers) ||
+      !bookedMeetingBlockers.includes("conversation_stopped")) throw new Error("Booked meeting did not block the due fake-provider handoff.");
+  const manualMeetingOutcome = "Synthetic meeting confirmed " + RUN_ID;
+  const manualMeetingSubject = `Synthetic operator meeting ${RUN_ID}`;
+  const manualMeetingBody = `Synthetic meeting history recorded in the CRM operator form ${RUN_ID}.`;
+  await saveAndVerifyManualActivity({
+    prospect: fixtures.prospects.manual_meeting,
+    kind: "meeting",
+    subject: manualMeetingSubject,
+    body: manualMeetingBody,
+    meetingOutcome: manualMeetingOutcome,
+    expectedConversationStatus: "completed",
+  });
+  const meetingMessageId = manualStopMessageIds.get(fixtures.prospects.manual_meeting.id);
+  if (!meetingMessageId) throw new Error("The synthetic meeting has no scheduled stop-test message.");
+  const meetingDispatch = await withFixtureClaim(pool, meetingMessageId, () => dispatchFake(context, walkthroughToken, {
+    workerId: `synthetic-ui-meeting-stop-${RUN_ID}`,
+    now: acceptedNow,
+    limit: 1,
+    outcomePlan: [{ kind: "accepted", providerMessageId: `must-not-accept-meeting-${RUN_ID}`, acceptedAt: acceptedNow }],
+  }));
+  const meetingStoppedMessage = await pool.query<{ state: string; provider_message_id: string | null }>(
+    "select state,provider_message_id from public.agency_followup_messages where id=$1",
+    [meetingMessageId],
+  );
+  const meetingBlockedEvent = await pool.query<{ event_payload: { blockers?: unknown } }>(
+    "select event_payload from public.agency_followup_events where message_id=$1 and event_type='message_blocked' order by occurred_at desc limit 1",
+    [meetingMessageId],
+  );
+  const meetingBlockers = meetingBlockedEvent.rows[0]?.event_payload.blockers;
+  if (meetingDispatch.blocked !== 1 || meetingDispatch.accepted !== 0 || meetingStoppedMessage.rows[0]?.state !== "blocked" ||
+      meetingStoppedMessage.rows[0]?.provider_message_id !== null || !Array.isArray(meetingBlockers) ||
+      !meetingBlockers.includes("conversation_stopped")) {
+    throw new Error(`The persisted meeting did not block the due fake-provider handoff: ${JSON.stringify({ meetingDispatch, message: meetingStoppedMessage.rows[0] ?? null, event: meetingBlockedEvent.rows[0] ?? null })}.`);
+  }
+
+  progress("synthetic Agency contact-history forms stayed clear of the fixed mobile bar with viewport evidence at four small widths; copy, keyboard focus, and point-hit checks passed across twelve viewport widths");
   if (responseFailures.length) throw new Error(responseFailures.join("; "));
   if (!sourceAtStart) throw new Error("Source provenance was not captured before the walkthrough.");
-  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || activityPanelScreenshots.length !== 6 || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, activity-panel, authoring approval, or required-control evidence.");
+  if (screenshots.length !== 12 || consentPanelScreenshots.length !== CONSENT_PANEL_WIDTHS.length || providerStatusScreenshots.length !== 1 || activityPanelScreenshots.length !== activityPanelWidths.length + activityPanelWidths.filter((width) => width < 768).length || recordedActivityScreenshots.length !== 3 || activitySaveFailureScreenshots.length !== 1 || !manualActivitySaveFailureEvidence || !missingAuthoringControlRejected || !templateApprovalAuditEvidence) throw new Error("Incomplete queue, consent-panel, provider-status, activity-panel, saved/reloaded activity, authoring approval, or required-control evidence.");
   const summary = {
     runId: RUN_ID,
     ...sourceAtStart,
@@ -4456,6 +4875,15 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     consentPanelScreenshots,
     providerStatusScreenshots,
     activityPanelScreenshots,
+    recordedActivityScreenshots,
+    activitySaveFailureScreenshots,
+    manualActivityAcceptance: {
+      humanReply: { prospectId: fixtures.prospects.manual_reply.id, messageId: replyMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "replied", failedSave: manualActivitySaveFailureEvidence, dispatchBlocked: replyDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: replyStoppedMessage.rows[0]?.provider_message_id ?? null },
+      bookedMeeting: { prospectId: fixtures.prospects.manual_booking.id, messageId: bookedMeetingMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "meeting_scheduled", meetingOutcome: null, dispatchBlocked: bookedMeetingDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: bookedMeetingStoppedMessage.rows[0]?.provider_message_id ?? null },
+      completedMeeting: { prospectId: fixtures.prospects.manual_meeting.id, messageId: meetingMessageId, savedThroughOperatorForm: true, persistedAfterReload: true, conversationStatus: "completed", meetingOutcome: manualMeetingOutcome, dispatchBlocked: meetingDispatch.blocked === 1, blocker: "conversation_stopped", providerMessageId: meetingStoppedMessage.rows[0]?.provider_message_id ?? null },
+      operatorErrorHandling: manualActivitySaveFailureEvidence,
+      provider: "network-free fake; no message accepted",
+    },
     syntheticConsentCapture: { grantAndWithdrawal: "passed through signed operator UI", chronologicalHistoryEvents: finalHistoryPayload.events.length, authenticatedOperatorId: fixtures.lawyerId, consentIsSynthetic: true },
     templateApprovalAuditAtomicityFailureRollback: templateApprovalRollbackEvidence,
     synthetic: true,
@@ -4484,7 +4912,9 @@ async function runBrowserWalkthrough(pool: Pool, fixtures: Fixtures, portalSecre
     screenshotViewports: renderedWidths,
     screenshotCount: screenshots.length,
     consentPanelScreenshotCount: consentPanelScreenshots.length,
-    activityPanelScreenshotCount: activityPanelScreenshots.length
+    activityPanelScreenshotCount: activityPanelScreenshots.length,
+    recordedActivityScreenshotCount: recordedActivityScreenshots.length,
+    activitySaveFailureScreenshotCount: activitySaveFailureScreenshots.length
   };
   return summary;
   } finally {

@@ -10,6 +10,8 @@ import {
   HISTORICAL_LEDGER_NAME_ALIASES,
   PREVIEW_MIGRATION_PATHS,
   PROJECT_REF,
+  TEMPORARY_DATABASE_HOST,
+  verifyDatabaseEnvironment,
   findProjectEnvFiles,
   fullLedgerQuery,
   sha256,
@@ -23,6 +25,7 @@ import { DATABASE_CA_SHA256 } from "./prospect-enrichment/database-ca.mjs";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const APPLY_CONFIRMATION = "APPLY-AGENCY-FOLLOWUP-MIGRATIONS-V1";
+export const TEMPORARY_CREDENTIAL_CONFIRMATION = "CREATE-TEMPORARY-AGENCY-DATABASE-ACCESS";
 export const AGENCY_MIGRATIONS = Object.freeze([
   Object.freeze({ path: "supabase/migrations/20261013230354_agency_crm_service_role_grants.sql", filename: "20261013230354_agency_crm_service_role_grants.sql", version: "20261013230354", name: "agency_crm_service_role_grants", sha256: "0dce15f75e20ea8d170b862a7a5075e675570e23f1dca53c4ed76bc531d41568" }),
   Object.freeze({ path: "supabase/migrations/20261020025251_agency_followup_resend_events_and_shared_suppression.sql", filename: "20261020025251_agency_followup_resend_events_and_shared_suppression.sql", version: "20261020025251", name: "agency_followup_resend_events_and_shared_suppression", sha256: "e0a7a24d5750b20c32e1fdec20abd8ce84237f3dc7eced8a2182e22b61681a3e" }),
@@ -171,6 +174,51 @@ export function verifyAgencyWorkflowBinding({
   if (!/^[1-9][0-9]*$/.test(runId ?? "") || runAttempt !== "1") FAIL("agency_followup_workflow_replay_prohibited");
   if (typeof worktreeStatus !== "string" || worktreeStatus !== "") FAIL("agency_followup_checkout_not_clean");
   return { schemaVersion: "agency-followup-source-check/v1", projectRef: PROJECT_REF, sourceSha: reviewedSourceSha, runId, runAttempt };
+}
+
+
+function credentialModeFromEnvironment(env) {
+  if (env.USE_TEMPORARY_DATABASE_CREDENTIAL !== undefined &&
+      !["true", "false"].includes(env.USE_TEMPORARY_DATABASE_CREDENTIAL)) FAIL("agency_followup_credential_mode_invalid");
+  return env.USE_TEMPORARY_DATABASE_CREDENTIAL === "true" ? "temporary-write-capable" : "saved-password";
+}
+
+export function verifyAgencyTemporaryCredentialAuthorization(env, context) {
+  if (credentialModeFromEnvironment(env) !== "temporary-write-capable" ||
+      env.CREDENTIAL_GATE !== "agency-followup" ||
+      env.TEMPORARY_CREDENTIAL_CONFIRMATION !== TEMPORARY_CREDENTIAL_CONFIRMATION ||
+      !["preflight", "apply"].includes(env.GITHUB_JOB)) FAIL("agency_followup_temporary_access_confirmation_required");
+  const binding = verifyAgencyWorkflowBinding({
+    event: env.GITHUB_EVENT_NAME, ref: env.GITHUB_REF, repository: env.GITHUB_REPOSITORY,
+    reviewedSourceSha: env.REVIEWED_SOURCE_SHA, githubSha: env.GITHUB_SHA,
+    runId: env.GITHUB_RUN_ID, runAttempt: env.GITHUB_RUN_ATTEMPT,
+    checkoutSha: context.checkoutSha, originMainSha: context.originMainSha, worktreeStatus: context.worktreeStatus,
+  });
+  verifyDatabaseEnvironment(env, context.projectEnvFiles ?? []);
+  if (env.GITHUB_JOB === "apply" && env.APPLY_CONFIRMATION !== APPLY_CONFIRMATION) {
+    FAIL("agency_followup_exact_apply_confirmation_required");
+  }
+  return { ...binding, job: env.GITHUB_JOB, credentialMode: "temporary-write-capable", temporaryAccessConfirmed: true };
+}
+
+export function verifyAgencyConnectionEvidence(connection, credentialMode = "saved-password") {
+  const temporary = credentialMode === "temporary-write-capable";
+  const keys = ["host", "port", "database", "user", "sslmode", "connectionMode", "certificateTrust"];
+  if (temporary) keys.push("credentialMode");
+  if (!["saved-password", "temporary-write-capable"].includes(credentialMode) || !EXACT_KEYS(connection, keys) ||
+      connection.host !== (temporary ? TEMPORARY_DATABASE_HOST : "db." + PROJECT_REF + ".supabase.co") ||
+      connection.port !== 5432 || connection.database !== "postgres" || connection.sslmode !== "verify-full" ||
+      connection.connectionMode !== "explicit-db-url" || connection.certificateTrust !== "pinned-supabase-root-2021") {
+    FAIL("agency_followup_database_connection_evidence_invalid");
+  }
+  if (temporary) {
+    const suffix = "." + PROJECT_REF;
+    if (connection.credentialMode !== credentialMode || typeof connection.user !== "string" ||
+        !connection.user.endsWith(suffix) || !/^cli_login_[a-z0-9_]{1,53}$/.test(connection.user.slice(0, -suffix.length))) {
+      FAIL("agency_followup_database_connection_evidence_invalid");
+    }
+  } else if (connection.user !== "postgres") FAIL("agency_followup_database_connection_evidence_invalid");
+  return connection;
 }
 
 function sourceCheckFromEnvironment() {
@@ -351,6 +399,7 @@ function workflowBindingFromEnvironment(env = process.env) {
     runAttempt: env.GITHUB_RUN_ATTEMPT,
     sourceSha: env.REVIEWED_SOURCE_SHA,
     projectRef: PROJECT_REF,
+    credentialMode: credentialModeFromEnvironment(env),
   };
   if (!/^[1-9][0-9]*$/.test(binding.runId ?? "") || binding.runAttempt !== "1" ||
       !/^[a-f0-9]{40}$/.test(binding.sourceSha ?? "")) FAIL("agency_followup_workflow_binding_invalid");
@@ -381,20 +430,14 @@ function validatePreflightContent(binding, files, sourceRoot) {
   const stage = JSON.parse(files["staged-inventory.json"].toString("utf8"));
   verifyAgencyStageEvidence(stage, sourceRoot, binding.sourceSha);
   const tls = JSON.parse(files["database-tls-check.json"].toString("utf8"));
-  if (!EXACT_KEYS(tls, ["certificateSha256", "validTo", "host", "port", "database", "user", "sslmode", "connectionMode", "certificateTrust"]) ||
-      tls.certificateSha256 !== DATABASE_CA_SHA256 || !Number.isFinite(Date.parse(tls.validTo)) || Date.parse(tls.validTo) <= Date.now() ||
-      tls.host !== "db." + PROJECT_REF + ".supabase.co" || tls.port !== 5432 || tls.database !== "postgres" ||
-      tls.user !== "postgres" || tls.sslmode !== "verify-full" || tls.connectionMode !== "explicit-db-url" ||
-      tls.certificateTrust !== "pinned-supabase-root-2021") {
+  const { certificateSha256, validTo, ...tlsConnection } = tls;
+  if (certificateSha256 !== DATABASE_CA_SHA256 || !Number.isFinite(Date.parse(validTo)) || Date.parse(validTo) <= Date.now()) {
     FAIL("agency_followup_tls_evidence_invalid");
   }
+  verifyAgencyConnectionEvidence(tlsConnection, binding.credentialMode);
   const connection = JSON.parse(files["connection-check.json"].toString("utf8"));
-  if (!EXACT_KEYS(connection, ["host", "port", "database", "user", "sslmode", "connectionMode", "certificateTrust"]) ||
-      connection.host !== "db." + PROJECT_REF + ".supabase.co" || connection.port !== 5432 || connection.database !== "postgres" ||
-      connection.user !== "postgres" || connection.sslmode !== "verify-full" ||
-      connection.connectionMode !== "explicit-db-url" || connection.certificateTrust !== "pinned-supabase-root-2021") {
-    FAIL("agency_followup_database_connection_evidence_invalid");
-  }
+  verifyAgencyConnectionEvidence(connection, binding.credentialMode);
+  if (!SAME(tlsConnection, connection)) FAIL("agency_followup_tls_evidence_invalid");
   const ledgerRows = parseRows(files["full-ledger-before.json"].toString("utf8"));
   const ledgerCheck = verifyAgencyFullLedger(ledgerRows, sourceRoot, "preflight");
   if (!SAME(JSON.parse(files["ledger-before-check.json"].toString("utf8")), ledgerCheck)) FAIL("agency_followup_preflight_ledger_evidence_invalid");
@@ -413,7 +456,7 @@ export function createPreflightManifest(evidenceDirectory, { sourceRoot = ROOT, 
   const binding = workflowBindingFromEnvironment(env);
   const validation = validatePreflightContent(binding, files, sourceRoot);
   const manifest = {
-    schemaVersion: "agency-followup-production-preflight/v1",
+    schemaVersion: "agency-followup-production-preflight/v2",
     binding,
     createdAt: new Date(now).toISOString(),
     expiresAt: new Date(now + 86400000).toISOString(),
@@ -432,11 +475,13 @@ export function createPreflightManifest(evidenceDirectory, { sourceRoot = ROOT, 
 }
 
 function verifyArtifactMetadata(metadata, expected, workflowRunId, sourceSha) {
+  const expectedDigest = String(expected.digest ?? "").replace(/^sha256:/, "");
+  const metadataDigest = String(metadata?.digest ?? "");
   if (!IS_RECORD(metadata) || Number(metadata.id) !== Number(expected.artifactId) || metadata.name !== expected.name ||
-      metadata.digest !== expected.digest || metadata.expired !== false ||
+      metadataDigest !== `sha256:${expectedDigest}` || metadata.expired !== false ||
       !IS_RECORD(metadata.workflow_run) || String(metadata.workflow_run.id) !== workflowRunId ||
       metadata.workflow_run.head_sha !== sourceSha || metadata.workflow_run.head_branch !== "main" ||
-      !/^sha256:[a-f0-9]{64}$/.test(expected.digest ?? "")) FAIL("agency_followup_preflight_artifact_metadata_mismatch");
+      !/^[a-f0-9]{64}$/.test(expectedDigest)) FAIL("agency_followup_preflight_artifact_metadata_mismatch");
 }
 
 export function verifyPreflightArtifact(artifactDirectory, metadataInput, {
@@ -457,7 +502,7 @@ export function verifyPreflightArtifact(artifactDirectory, metadataInput, {
   if (getFileSha(path.join(artifactDirectory, "preflight-manifest.json")) !== env.EXPECTED_MANIFEST_SHA256 ||
       !/^[a-f0-9]{64}$/.test(env.EXPECTED_MANIFEST_SHA256 ?? "")) FAIL("agency_followup_preflight_manifest_digest_mismatch");
   if (!EXACT_KEYS(manifest, ["schemaVersion", "binding", "createdAt", "expiresAt", "migrations", "excludedPreviewMigrations", "stageInventorySha256", "files"]) ||
-      manifest.schemaVersion !== "agency-followup-production-preflight/v1" || !SAME(manifest.binding, binding) ||
+      manifest.schemaVersion !== "agency-followup-production-preflight/v2" || !SAME(manifest.binding, binding) ||
       manifest.stageInventorySha256 !== JSON.parse(files["staged-inventory.json"].toString("utf8")).stage.inventorySha256 ||
       !SAME(manifest.migrations, verifyAgencyMigrationSources(sourceRoot)) ||
       !SAME(manifest.excludedPreviewMigrations, [...PREVIEW_MIGRATION_PATHS]) ||
@@ -531,6 +576,16 @@ function main(args) {
   const [command, ...rest] = args;
   if (command === "source-check" && rest.length === 0) {
     process.stdout.write(JSON.stringify(sourceCheckFromEnvironment()) + "\n");
+  } else if (command === "credential-authorization" && rest.length === 0) {
+    const context = {
+      checkoutSha: runGit(ROOT, ["rev-parse", "HEAD"]),
+      originMainSha: runGit(ROOT, ["rev-parse", "origin/main"]),
+      worktreeStatus: runGit(ROOT, ["status", "--porcelain"]),
+      projectEnvFiles: findProjectEnvFiles(),
+    };
+    const authorization = verifyAgencyTemporaryCredentialAuthorization(process.env, context);
+    verifyAgencyMigrationSources(ROOT);
+    process.stdout.write(JSON.stringify(authorization) + "\n");
   } else if (command === "stage" && rest.length === 3) {
     const { proof, evidence } = stageAgencyProductionWorkdir(rest[0], rest[1], process.env.REVIEWED_SOURCE_SHA);
     verifyProductionWorkdir(rest[0], rest[1], proof);

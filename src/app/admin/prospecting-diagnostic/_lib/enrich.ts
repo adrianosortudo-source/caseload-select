@@ -87,7 +87,7 @@ export function buildResearchPacket(
     .slice(0, 30);
 
   const addressSignal = pages.some(
-    (p) => p.lawFirm?.addressVisible || p.schema?.fields?.address || p.schema?.fields?.areaServed
+    (p) => p.lawFirm?.addressTextPresent || p.lawFirm?.addressVisible || p.schema?.fields?.address || p.schema?.fields?.areaServed
   );
 
   const practiceSlugs = [

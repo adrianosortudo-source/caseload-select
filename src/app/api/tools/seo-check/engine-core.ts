@@ -14,6 +14,8 @@
  */
 
 export { BLOCKED_HOSTNAMES, ipInBlockedRange, isSsrfBlocked } from "@/lib/ssrf";
+import { CATEGORY_WEIGHTS } from "./category-weights";
+export { CATEGORY_WEIGHTS } from "./category-weights";
 
 /* ────────────────────────────────────────────────────────
    Base result types (backward-compatible with the prior shape)
@@ -24,12 +26,25 @@ export interface CheckItem {
   status: "pass" | "warn" | "fail";
   detail: string;
   fix?: string;
-  // false means the item is displayed and still generates an issues-list
-  // finding, but contributes nothing to any score (scoreItems / aiScoresFromItems
-  // skip it entirely). Used for signals with no established search benefit
-  // (llms.txt, FAQPage/Review schema) and for security-hygiene headers that
-  // should never imply a search-visibility gain. Absent/undefined means scored.
+  /** false means the observation contributes neither to scores nor automatic issue/action lists. */
   scored?: boolean;
+  /** Stable methodology identifier, assigned from the v4 check registry. */
+  checkId?: string;
+  /** Exact source-register identifiers reviewed for this check. */
+  sourceIds?: string[];
+  /** Why a check is scored, unscored, or awaiting source/evidence review. */
+  disposition?: "scored" | "unscored" | "pending-review";
+  basis?: string;
+  predicate?: string;
+  scoringRationale?: string;
+  /** Evidence origin and limits for this page-level observation. */
+  evidence?: {
+    kind: "initial-html-text" | "structured-data" | "response-header" | "robots-policy" | "measured-fetch" | "product-heuristic" | "account-review";
+    assessedUrl?: string;
+    applicability: "applicable" | "not-applicable" | "unknown";
+    coverage: "observed" | "not-observed" | "not-assessed";
+    detail: string;
+  };
   /** Whether the check applies to this page, or whether its status is unknown. */
   applicability?: "applicable" | "not-applicable" | "unknown";
   failCount?: number;
@@ -48,10 +63,22 @@ export interface CategoryResult {
 }
 
 export interface AiBotStatus {
+  token: string;
   name: string;
   blocked: boolean | null;
-  category: "search" | "training" | "user-initiated";
+  policyObservation: "blocking-rule-observed" | "no-blocking-rule-observed" | "not-assessed";
+  robotsSemantics: "respects" | "may-not-apply" | "generally-ignores" | "controls-specified-uses" | "unknown";
+  actualFetchAccess: "not-verified";
+  purposes: AiBotPurpose[];
+  isControlToken: boolean;
+  sourceUrl: string | null;
+  reviewedAt: string | null;
+  sourceVerification: "verified" | "unavailable";
+  /** Legacy projection retained for saved v3/unversioned adapters only. */
+  category?: "search" | "training" | "user-initiated";
 }
+
+export type AiBotPurpose = "search" | "grounding" | "training" | "product-indexing" | "open-dataset" | "user-initiated" | "unknown";
 
 export type PageType =
   | "homepage"
@@ -123,35 +150,27 @@ export function resolveScan(input: {
   return { scanMode, maxPages: SCAN_MODE_DEFAULTS[scanMode] };
 }
 
+/**
+ * Public scans use the standard 25-page budget regardless of a requested mode.
+ * A finite explicit page count still allows a smaller public scan, clamped to
+ * [1, 25]. Operator requests retain the existing quick/standard/deep behavior.
+ */
+export function resolveEffectiveScan(
+  input: { maxPages?: unknown; scanMode?: unknown },
+  isOperator: boolean
+): { scanMode: ScanMode; maxPages: number } {
+  if (isOperator) return resolveScan(input);
+
+  const publicScan = resolveScan({ ...input, scanMode: "standard" });
+  return {
+    scanMode: "standard",
+    maxPages: Math.min(publicScan.maxPages, SCAN_MODE_DEFAULTS.standard),
+  };
+}
+
 /* ────────────────────────────────────────────────────────
    Bot registries
    ──────────────────────────────────────────────────────── */
-
-// Autonomous AI search crawlers. Robots.txt observations describe rules only;
-// they do not establish indexing, retrieval, or citation outcomes.
-export const AI_SEARCH_BOTS = [
-  { token: "OAI-SearchBot", label: "OpenAI SearchBot" },
-  { token: "PerplexityBot", label: "Perplexity" },
-  { token: "Claude-SearchBot", label: "Claude Search" },
-];
-
-// Training / content-use bots. Their rules describe content-use choices and
-// are not a search visibility or Website checks score signal.
-export const AI_TRAINING_BOTS = [
-  { token: "GPTBot", label: "GPTBot (training)" },
-  { token: "ClaudeBot", label: "ClaudeBot (training)" },
-  { token: "CCBot", label: "Common Crawl" },
-  { token: "Bytespider", label: "Bytespider" },
-  { token: "Meta-ExternalAgent", label: "Meta" },
-  { token: "Applebot-Extended", label: "Applebot" },
-  { token: "Google-Extended", label: "Google-Extended (AI use)" },
-];
-
-export const USER_INITIATED_BOTS = [
-  { token: "ChatGPT-User", label: "ChatGPT-User" },
-  { token: "Perplexity-User", label: "Perplexity-User" },
-  { token: "Claude-User", label: "Claude-User" },
-];
 
 export const SCANNER_TOKEN = "CaseLoadSelect-SEOCheck";
 
@@ -159,23 +178,6 @@ export const GENERIC_ANCHORS = new Set([
   "click here", "here", "read more", "learn more", "more", "link",
   "this", "go", "see more", "continue", "details", "info",
 ]);
-
-// Product checklist priorities for the Website checks summary. These weights
-// are not a measurement of rankings, enquiries, legal content quality, or AI
-// citations. AI observations are kept visible but excluded from the score.
-export const CATEGORY_WEIGHTS: Record<string, number> = {
-  "On-Page SEO": 20,
-  "Indexability": 8,
-  "Schema & Structured Data": 16,
-  "AI Visibility": 0,
-  "Legal Marketing": 16,
-  "Local SEO": 12,
-  "Technical & Security": 4,
-  "Rendering & Crawlability": 2,
-  "Performance": 6,
-  "Links & Content": 6,
-  "Intent Alignment": 8,
-};
 
 /* ────────────────────────────────────────────────────────
    robots.txt parser (Google-style group semantics)

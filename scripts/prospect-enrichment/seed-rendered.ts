@@ -360,6 +360,7 @@ async function seed() {
       synthetic: true,
       operator: { firmId: portal.rows[0].id, lawyerId: operator.rows[0].id },
       firmId,
+      sourceRecordKey,
       runId: run.rows[0].id,
       sourceRunKey: runKey,
       stageEnvelopePath,

@@ -37,6 +37,8 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { CRM_AGENT_COOKIE, isCrmAgentRead, isCrmAgentExchange } from "@/lib/crm-agent-policy";
+import { verifyCrmAgentCookie } from "@/lib/crm-agent-registry";
 import {
   appOrigin,
   isAppHost,
@@ -67,6 +69,7 @@ function nextWithTrustedRequestContext(req: NextRequest): NextResponse {
   // values before a server component evaluates the read-only policy.
   requestHeaders.set("x-caseload-request-path", req.nextUrl.pathname);
   requestHeaders.set("x-caseload-request-method", req.method);
+  requestHeaders.set("x-caseload-request-origin", req.nextUrl.origin);
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 /** Edge-compatible mirror of the server recovery gate. Once the feature is
@@ -182,6 +185,11 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
   const { pathname, search } = req.nextUrl;
   const isLocalAgencyFollowupProbe = pathname === "/api/admin/agency-crm/follow-up"
     && hostname === "127.0.0.1" && req.nextUrl.port === "55435";
+  if (req.cookies.has(CRM_AGENT_COOKIE) && !isCrmAgentExchange(pathname, req.method)) {
+    if (!isCrmAgentRead(pathname, req.method) || !await verifyCrmAgentCookie(req.cookies.get(CRM_AGENT_COOKIE)!.value, req.nextUrl.origin)) {
+      return new NextResponse("Forbidden", { status: 403, headers: { "Cache-Control": "private, no-store" } });
+    }
+  }
   const requestStartedAt = Date.now();
   if (isLocalAgencyFollowupProbe) {
     console.info("[agency-followup-local-probe] " + JSON.stringify({
@@ -217,6 +225,16 @@ export async function middleware(req: NextRequest): Promise<NextResponse> {
       status: 403,
       headers: { "Cache-Control": "no-store" },
     });
+  }
+
+  // Preserve the existing recovery and preview-principal gates above before
+  // passing an independently verified CRM agent to its narrow read surface.
+  if (req.cookies.has(CRM_AGENT_COOKIE) && !isCrmAgentExchange(pathname, req.method)) {
+    const response = nextWithTrustedRequestContext(req);
+    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow, noarchive");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
   }
 
   // The server component independently verifies the preview-only environment.

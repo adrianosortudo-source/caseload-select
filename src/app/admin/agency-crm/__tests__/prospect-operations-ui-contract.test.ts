@@ -18,6 +18,11 @@ describe('prospect operations UI contract', () => {
     expect(source).toContain('limit=${HISTORY_PAGE_SIZE}&offset=0');
   });
 
+  it('keeps contact-history scroll targets below the fixed mobile top bar', () => {
+    const source = read('ProspectActivityPanel.tsx');
+    expect(source).toContain('className="scroll-mt-16 md:scroll-mt-0 border border-black/10 bg-parchment p-4 grid gap-3" data-ui-component-content="prospect-activity-form"');
+    expect(source).toContain('className="scroll-mt-16 md:scroll-mt-0 border-t border-black/10 bg-white px-4 py-4 sm:px-5 grid gap-3" data-ui-component-content="prospect-contact-controls"');
+  });
   it('logs confirmed activity through the append-only operator endpoint', () => {
     const source = read('ProspectActivityPanel.tsx');
     expect(source).toContain("fetch('/api/admin/prospect-operations/activities'");
@@ -32,6 +37,19 @@ describe('prospect operations UI contract', () => {
     expect(source).toContain('placeholder="What happened at the meeting"');
     expect(source).not.toContain('What happened or what comes next');
     expect(source).toContain('Next action');
+  });
+  it('keeps contact controls stacked until the form has room for three columns', () => {
+    const source = read('ProspectActivityPanel.tsx');
+    expect(source).toContain('className="grid gap-3 2xl:grid-cols-3"');
+    expect(source).not.toContain('className="grid gap-3 xl:grid-cols-3"');
+    expect(source).not.toContain('className="grid gap-3 sm:grid-cols-3"');
+  });
+
+  it('covers both sides of the contact-control layout breakpoints', () => {
+    const walkthrough = readFileSync(resolve(process.cwd(), 'scripts/agency-followup-walkthrough.ts'), 'utf8');
+    expect(walkthrough).toContain('const activityPanelWidths = [1536, 1535, 1440, 1280, 1279, 1024, 769, 768, 767, 640, 375, 320] as const;');
+    expect(walkthrough).toContain('control.left < contentLeft - 1 || control.right > contentRight + 1');
+    expect(walkthrough).toContain('activityPanelScreenshots.length !== activityPanelWidths.length + activityPanelWidths.filter((width) => width < 768).length');
   });
   it('provides operator controls for contactability and next action tracking', () => {
     const source = read('ProspectActivityPanel.tsx');

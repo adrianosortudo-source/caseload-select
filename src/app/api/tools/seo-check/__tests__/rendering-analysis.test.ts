@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import { aggregateRenderingSummary, analyzeRenderingSnapshot, buildRenderingCategory } from "../rendering-analysis";
 
 describe("rendering-analysis", () => {
-  it("flags thin JavaScript app shells as high risk", () => {
+  it("records app-shell markers without scoring rendered-content claims", () => {
     const html = `<!doctype html><html><body><div id="__next"></div>${"<script src=\"/app.js\"></script>".repeat(7)}</body></html>`;
     const snapshot = analyzeRenderingSnapshot(html);
     expect(snapshot.risk).toBe("high");
     expect(snapshot.emptyAppRoot).toBe(true);
-    expect(buildRenderingCategory(snapshot).items[0].status).toBe("fail");
+    const category = buildRenderingCategory(snapshot);
+    expect(category.items.every((item) => item.scored === false)).toBe(true);
+    expect(category.maxScore).toBe(0);
+    expect(category.items.every((item) => !item.fix)).toBe(true);
+    expect(category.items[0].detail).toContain("did not run a browser");
   });
 
   it("keeps rich server-rendered HTML low risk", () => {
@@ -17,12 +21,13 @@ describe("rendering-analysis", () => {
     expect(buildRenderingCategory(snapshot).items[0].status).toBe("pass");
   });
 
-  it("does not warn on app-shell markers when server HTML is substantive", () => {
+  it("keeps app-shell markers unscored even when initial HTML is substantive", () => {
     const words = Array.from({ length: 320 }, (_, i) => `service${i}`).join(" ");
     const snapshot = analyzeRenderingSnapshot(`<html><body><div id="__next"><main>${words}</main></div>${"<script src=\"/x.js\"></script>".repeat(8)}</body></html>`);
     const category = buildRenderingCategory(snapshot);
     expect(snapshot.risk).toBe("low");
     expect(category.items.find((i) => i.label === "JavaScript app-shell dependency")?.status).toBe("pass");
+    expect(category.items.find((i) => i.label === "JavaScript app-shell dependency")?.scored).toBe(false);
   });
 
   it("aggregates the worst rendering risk across pages", () => {

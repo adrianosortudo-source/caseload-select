@@ -175,3 +175,24 @@ test("preflight workflows preserve the selected connection without logging it", 
     for (const step of steps) assert.equal(step.env?.MIGRATION_DATABASE_URL, undefined);
   }
 });
+
+
+test("Agency temporary acquisition authorizes before network and retains credential masking", async () => {
+  const events = [];
+  const result = await acquireTemporaryCredential({
+    environment: { ...environment, CREDENTIAL_GATE: "agency-followup" },
+    authorize: () => events.push("authorized-agency-source"),
+    fetchImpl: async () => { assert.deepEqual(events, ["authorized-agency-source"]); return { status: 201, json: async () => payload }; },
+    mask: value => events.push(value),
+    persist: credential => { assert.ok(events.includes(payload.password)); assert.ok(events.includes(credential.url)); events.push("persisted"); },
+  });
+  assert.equal(events.at(-1), "persisted");
+  assert.equal(result.credentialMode, "temporary-write-capable");
+  assert.doesNotMatch(JSON.stringify(result), /synthetic|postgresql|password/);
+  let called = false;
+  await assert.rejects(acquireTemporaryCredential({ environment: { ...environment, CREDENTIAL_GATE: "agency-followup" },
+    authorize: () => { throw Error("agency-authority-missing"); }, fetchImpl: () => { called = true; },
+    mask: () => {}, persist: () => {},
+  }), /temporary_credential_source_authorization_failed/);
+  assert.equal(called, false);
+});

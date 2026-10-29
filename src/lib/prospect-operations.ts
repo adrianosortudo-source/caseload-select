@@ -429,7 +429,7 @@ export async function provisionProspectSourceRecord(
 export async function getProspectSourceConversation(
   sourceSystem: string,
   sourceRecordKey: string,
-  options: { limit?: number; offset?: number } = {},
+  options: { limit?: number; offset?: number; sourceOnly?: boolean } = {},
 ): Promise<ProspectConversationSummary | null> {
   const normalizedSystem = sourceSystem.trim();
   const normalizedKey = sourceRecordKey.trim();
@@ -462,6 +462,9 @@ export async function getProspectSourceConversation(
     .eq('conversation_id', association.conversation_id)
     .order('occurred_at', { ascending: false })
     .order('id', { ascending: false });
+  // A CRM agent must not inherit history from another source linked to the
+  // same conversation. Human operator behavior remains unchanged.
+  if (options.sourceOnly) activitiesQuery.eq('source_link_id', typedSource.id);
   const [{ data: conversation, error: conversationError }, { data: organization, error: organizationError }, { data: person, error: personError }, { data: contactability, error: contactabilityError }, { data: activities, error: activitiesError }] = await Promise.all([
     supabase.from('prospect_conversations').select('*').eq('id', association.conversation_id).single(),
     typedSource.organization_id ? supabase.from('prospect_organizations').select('display_name').eq('id', typedSource.organization_id).maybeSingle() : Promise.resolve({ data: null, error: null }),
@@ -487,9 +490,9 @@ export async function getProspectSourceConversation(
   };
 }
 
-export async function getAgencyProspectConversation(agencyProspectId: string): Promise<ProspectConversationSummary | null> {
+export async function getAgencyProspectConversation(agencyProspectId: string, options: { sourceOnly?: boolean } = {}): Promise<ProspectConversationSummary | null> {
   if (!isProspectOperationsUuid(agencyProspectId)) throw new Error('Invalid agency prospect id');
-  return getProspectSourceConversation('agency_crm', agencyProspectId);
+  return getProspectSourceConversation('agency_crm', agencyProspectId, options);
 }
 
 export async function listProspectSourceContactStates(

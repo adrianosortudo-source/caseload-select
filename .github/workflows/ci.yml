@@ -638,6 +638,9 @@ jobs:
       - name: Seed synthetic prospect enrichment browser fixtures
         run: npx tsx scripts/prospect-enrichment/seed-rendered.ts
 
+      - name: Seed synthetic existing-firm Admin acceptance fixture
+        run: npx tsx scripts/prospect-enrichment/seed-admin-supplemental.ts
+
       - name: Run prospect enrichment rendered and intake review acceptance
         run: npm run test:prospect-enrichment-rendered
 

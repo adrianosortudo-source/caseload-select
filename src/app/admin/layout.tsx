@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getOperatorSession } from "@/lib/portal-auth";
 import { getPreviewQaReadSession } from "@/lib/preview-qa-auth";
+import { getCrmAgentReadSession } from "@/lib/crm-agent-auth";
 import AdminSidebar from "@/components/admin/AdminSidebar";
 
 export default async function AdminLayout({
@@ -8,7 +9,7 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getOperatorSession() ?? await getPreviewQaReadSession();
+  const session = await getOperatorSession() ?? await getPreviewQaReadSession() ?? await getCrmAgentReadSession();
   if (!session) {
     redirect("/operator/login?error=missing");
   }
