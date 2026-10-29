@@ -186,8 +186,8 @@ export function parseIndexDirectives(html: string, xRobotsTagValues: readonly st
   let templateDepth = 0;
   let ignoredContentDepth = 0;
   let parserFailed = false;
-  let htmlTruncated = html.length > MAX_HTML_CHARS;
-  let headersTruncated = xRobotsTagValues.length > MAX_HEADER_FIELDS;
+  const htmlTruncated = html.length > MAX_HTML_CHARS;
+  const headersTruncated = xRobotsTagValues.length > MAX_HEADER_FIELDS;
   const safeHtml = htmlTruncated ? html.slice(0, MAX_HTML_CHARS) : html;
   const safeHeaders = xRobotsTagValues.slice(0, MAX_HEADER_FIELDS);
   if (htmlTruncated) limitations.push("The HTML exceeded the directive-parser bound; a missing directive cannot be ruled out.");

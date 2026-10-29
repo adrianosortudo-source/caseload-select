@@ -3,6 +3,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SeoReport, { type SeoCheckResult } from "../SeoReport";
+import SeoCheckTool from "../SeoCheckTool";
 
 afterEach(cleanup);
 
@@ -34,6 +35,12 @@ const result: SeoCheckResult = {
 };
 
 describe("SeoReport score scope", () => {
+  it("states the v5 limited score and Google scope uncertainty on the start screen", () => {
+    render(<SeoCheckTool />);
+    expect(screen.getByText(/score covers five limited check types, not the whole site/i)).toBeTruthy();
+    expect(screen.getByText(/Google-addressed only when their scope is established; uncertain scope remains unassessed/i)).toBeTruthy();
+  });
+
   it("shows the scored coverage beside the score and includes it in the copied summary", async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
