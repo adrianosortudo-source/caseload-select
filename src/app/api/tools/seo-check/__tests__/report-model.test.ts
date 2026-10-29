@@ -177,6 +177,23 @@ describe("buildSeoReportModel", () => {
     });
   });
 
+  it("keeps v4 header-only search guidance neutral and preserves the recorded score", () => {
+    const model = buildSeoReportModel({
+      ...base,
+      methodologyVersion: 4,
+      overallScore: 81,
+      pagesScanned: 1,
+      pages: [{
+        ...base.pages![1],
+        url: "https://example.com/employment/",
+        indexability: { metaNoindex: false, headerNoindex: true, indexable: false },
+      }],
+    });
+
+    expect(model.scoreExplanation.score).toBe(81);
+    expect(model.priorityActions[0]).toMatchObject({ family: "search-exclusion" });
+    expect(model.priorityActions[0].whyItMatters).not.toMatch(/Google/i);
+  });
   it("explains mixed content separately from pages that loaded without HTTPS", () => {
     const mixedOnly = buildSeoReportModel({
       ...base,

@@ -200,7 +200,7 @@ const CTA_HREF = "https://cal.com/adriano-caseloadselect/conversation";
 type Family = { id: string; rank: number; title: string; why: string; next: string; priority: string };
 
 const FAMILIES: Family[] = [
-  { id: "search-exclusion", rank: 1, priority: "Review first", title: "Review which pages should appear in search", why: "This instruction can keep a useful page out of Google search.", next: "Confirm which affected pages should appear in search, then ask your web provider to review their settings." },
+  { id: "search-exclusion", rank: 1, priority: "Review first", title: "Review which pages should appear in search", why: "This instruction can affect whether search engines include a page in results.", next: "Confirm which affected pages should appear in search, then ask your web provider to review their settings." },
   { id: "robots-access", rank: 1, priority: "Review first", title: "Review crawler access to these pages", why: "This can limit crawling. It does not prove that a URL is absent from search results.", next: "Confirm whether the restriction is intentional before changing it." },
   { id: "connection", rank: 2, priority: "Review", title: "Review page connection security", why: "Visitors should have a secure connection when using the site, especially before sharing information.", next: "Ask your web provider to confirm HTTPS is available and consistently used." },
   { id: "contact-route", rank: 3, priority: "Review", title: "Make the next contact step easy to find", why: "A clear contact route can help prospective clients understand how to reach the firm.", next: "Review affected pages on desktop and mobile and confirm how a prospective client should contact the firm." },
@@ -337,7 +337,9 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
       : "Needs confirmation",
     title: family.title,
     observed,
-    whyItMatters: family.id === "connection" && hasMixedContent && hasPlainHttp
+    whyItMatters: family.id === "search-exclusion" && methodologyVersion === 5
+      ? "This instruction can keep a useful page out of Google search."
+      : family.id === "connection" && hasMixedContent && hasPlainHttp
       ? "Some checked pages loaded without HTTPS, and browsers may block or limit resources served over HTTP on other HTTPS pages."
       : family.id === "connection" && hasMixedContent
       ? "A browser may block or limit resources served over HTTP on an HTTPS page, which can affect how the page appears or works."
