@@ -78,7 +78,7 @@ function setRows() {
     id: `message-${index + 1}`, enrollment_id: `enrollment-${index + 1}`, step_number: 1, state: "draft",
     provider_delivery_status: ["delivered", "accepted", "unknown"][index],
     provider_delivery_status_at: index === 0 ? "2026-10-20T12:00:00.000Z" : null,
-    content_snapshot: { subject: "Subject", body: "Body" }, scheduled_at: null,
+    content_snapshot: { subject: "Subject", body: "Body" }, scheduled_at: index === 0 ? "2026-10-20T14:15:00.000Z" : null,
   }));
   h.rows.agency_prospects = [P1, P2, P3].map((id) => ({ id, firm_name: id, contact_email: `${id}@example.test`, stage: "new" }));
   h.rows.prospect_source_links = [
@@ -259,6 +259,10 @@ describe("listAgencyFollowupConsole operations-state batching", () => {
   it("keeps prospect state isolated and reads each shared operations table once per queue", async () => {
     const result = await listAgencyFollowupConsole();
 
+    expect(result.items.find((item) => item.prospectId === P1)).toMatchObject({
+      scheduledAt: "2026-10-20T14:15:00.000Z",
+      scheduleTimezone: "America/Toronto",
+    });
     expect(result.items.map(({ prospectId, contactability, conversationStatus }) => ({ prospectId, contactability, conversationStatus })))
       .toEqual([
         { prospectId: P1, contactability: "allowed", conversationStatus: "awaiting_reply" },
