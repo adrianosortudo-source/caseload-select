@@ -71,8 +71,8 @@ function applicableStatus(observations: IndexDirectiveObservation[], directive: 
   if (observations.some((observation) => observation.googleApplicability === "unknown" && observation.effectiveDirectives.includes(directive))) {
     return "unknown";
   }
-  if (limitations.some((limitation) => /bound|limit|could not complete|incomplete|truncated|unclosed|exceeded/i.test(limitation))) return "unknown";
-  if (observations.some((observation) => observation.limitation?.includes("directive-count bound"))) return "unknown";
+  if (observations.some((observation) => observation.googleApplicability !== "not-applicable" && observation.limitation?.includes("directive-count bound"))) return "unknown";
+  if (limitations.some((limitation) => !limitation.includes("directive-count bound") && /bound|limit|could not complete|incomplete|truncated|unclosed|exceeded/i.test(limitation))) return "unknown";
   return "not-observed";
 }
 
@@ -124,7 +124,7 @@ function parseXRobotsField(
       }
     }
     const observation = makeObservation("x-robots-tag", scopeInfo, rawValue, applicability, limitation);
-    if (observation.limitation) limitations.push(observation.limitation);
+    if (observation.limitation && !observation.limitation.includes("directive-count bound")) limitations.push(observation.limitation);
     if (observations.length < MAX_OBSERVATIONS) observations.push(observation);
     else limitations.push("The directive observation limit was reached; a missing directive cannot be ruled out.");
     currentRaw = [];

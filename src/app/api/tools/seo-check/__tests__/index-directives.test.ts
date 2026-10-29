@@ -169,6 +169,13 @@ describe("parseIndexDirectives", () => {
     expect(parseIndexDirectives(`<meta name="robots" content="noindex ${manyTokens}">`).noindex).toBe("observed");
   });
 
+  it("does not let an unrelated crawler's token bound make Google's scope unknown", () => {
+    const manyTokens = Array.from({ length: 128 }, () => "index").join(" ");
+    const result = parseIndexDirectives(`<meta name="bingbot" content="${manyTokens} noindex">`);
+    expect(result.noindex).toBe("not-observed");
+    expect(result.observations[0]).toMatchObject({ googleApplicability: "not-applicable" });
+  });
+
   it("marks an absent directive unknown when the observation bound hides later tags", () => {
     const unrelated = '<meta name="otherbot" content="follow">'.repeat(513);
     const result = parseIndexDirectives(`${unrelated}<meta name="robots" content="noindex">`);
