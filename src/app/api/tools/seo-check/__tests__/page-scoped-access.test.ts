@@ -57,6 +57,25 @@ describe("page-scoped search access evidence", () => {
     expect(knownAccess.categories.find((category) => category.name === "Indexability")?.maxScore).toBe(30);
   });
 
+  it("excludes unknown Google directive scope from the denominator without a score penalty", () => {
+    const url = "https://example.com/";
+    const robots = "User-agent: *\nAllow: /";
+    const unknownDirective = page(
+      url,
+      '<html lang="en"><head><title>Example Law</title></head><body>Legal services</body></html>',
+      robots,
+      new Set([url]),
+      true,
+      new Headers({ "x-robots-tag": "Bingbot: noindex, noindex" }),
+    );
+    const indexability = unknownDirective.categories.find((category) => category.name === "Indexability");
+
+    expect(unknownDirective.indexability.googleDirectives?.noindex).toBe("unknown");
+    expect(item(unknownDirective, "Indexability", "Indexable")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
+    expect(indexability?.maxScore).toBe(20);
+    expect(computeWeightedScore(aggregateCategories([unknownDirective]))).toBe(100);
+  });
+
   it("assesses every generic meta directive and applies Googlebot scope without globalizing other crawlers", () => {
     const url = "https://example.com/";
     const generic = page(url, '<html><head><meta name="robots" content="index"><meta content="none" name=robots></head><body>Firm</body></html>');
