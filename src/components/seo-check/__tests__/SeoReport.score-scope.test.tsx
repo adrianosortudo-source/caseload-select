@@ -85,10 +85,14 @@ describe("SeoReport score scope", () => {
     };
     const priorityResult: SeoCheckResult = { ...result, pagesScanned: 1, pages: [priorityPage] };
     const { container } = render(<SeoReport result={priorityResult} onReset={vi.fn()} />);
-    expect(screen.getByRole("heading", { name: "AI access and content" })).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Discuss next steps" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Search settings on checked pages" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Priority findings" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "AI and page content" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Scan limits" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Supporting evidence" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Next steps" })).toBeTruthy();
 
-    expect(within(screen.getByRole("region", { name: "Priority search finding" })).getByText("The inspected page responses tell Google not to include 1 of 1 checked page in search results. Google must retrieve that response first; this scan does not confirm whether the page is indexed.")).toBeTruthy();
+    expect(within(screen.getByRole("region", { name: "Priority search finding" })).getByText("1 of 1 checked page tells Google not to include it in search. Google must retrieve the instruction first.")).toBeTruthy();
     const priority = container.querySelector('[data-ui-component-content="priority-context"]');
     const score = container.querySelector('[data-ui-component-content="score-disclosure"]');
     if (!priority || !score) throw new Error("Priority or score section is missing.");
@@ -127,7 +131,7 @@ describe("SeoReport score scope", () => {
     fireEvent.click(screen.getByRole("button", { name: "Copy report summary" }));
     await waitFor(() => expect(writeText).toHaveBeenCalled());
     expect(writeText.mock.calls[0][0]).toContain("Scan incomplete.");
-    expect(writeText.mock.calls[0][0]).toContain("Some page checks remain incomplete.");
+    expect(writeText.mock.calls[0][0]).toContain("The scan is incomplete.");
   });
 
   it("describes v5 score scope and performance accurately on the public landing page", async () => {
@@ -148,7 +152,7 @@ describe("SeoReport score scope", () => {
     render(<SeoReport result={result} onReset={vi.fn()} hideCta />);
 
     const scopeLabel = "Limited checks: 5 check types across 3 of 10 categories";
-    const scoreNote = "This limited score is not a whole-site grade or ranking prediction.";
+    const scoreNote = "Not a whole-site grade or ranking prediction.";
     expect(screen.getByText(scopeLabel)).toBeTruthy();
     expect(within(screen.getByLabelText("Website checks score")).getByText(scoreNote)).toBeTruthy();
 

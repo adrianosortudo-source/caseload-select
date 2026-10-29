@@ -192,15 +192,15 @@ export interface SeoReportModel {
 
 const METHOD_NOTE = "This saved scan used an earlier scoring method. Run a new scan for the current report. Scores from different methods should not be compared.";
 const UNSUPPORTED_METHOD_NOTE = "This saved scan records a scoring method this report does not interpret. Run a new scan for the current report.";
-const SCORE_NOTE = "This limited score is not a whole-site grade or ranking prediction.";
-const LIMITATION = (n: number) => `This scan inspected the initial HTML of ${n} pages. It did not check the whole website, confirm Google indexing or rankings, measure enquiries, assess legal accuracy, or test whether AI services cite the firm.`;
-const PARTIAL_LIMITATION = "Some page checks remain incomplete. Findings cover only inspected pages.";
+const SCORE_NOTE = "Not a whole-site grade or ranking prediction.";
+const LIMITATION = (n: number) => `Only the initial HTML of ${n} ${n === 1 ? "page" : "pages"} was checked. This is not a full site audit and does not verify indexing, rankings, enquiries, legal accuracy, or AI citations of the firm.`;
+const PARTIAL_LIMITATION = "The scan is incomplete. Findings apply only to inspected pages.";
 const CTA_HREF = "https://cal.com/adriano-caseloadselect/conversation";
 
 type Family = { id: string; rank: number; title: string; why: string; next: string; priority: string };
 
 const FAMILIES: Family[] = [
-  { id: "search-exclusion", rank: 1, priority: "Review first", title: "Review which pages should appear in search", why: "This instruction can affect whether search engines include a page in results.", next: "Confirm which affected pages should appear in search, then ask your web provider to review their settings." },
+  { id: "search-exclusion", rank: 1, priority: "Review first", title: "Review which pages should appear in search", why: "This instruction can affect whether search engines include a page in results.", next: "Ask your provider to review which pages should appear in search." },
   { id: "robots-access", rank: 1, priority: "Review first", title: "Review crawler access to these pages", why: "This can limit crawling. It does not prove that a URL is absent from search results.", next: "Confirm whether the restriction is intentional before changing it." },
   { id: "connection", rank: 2, priority: "Review", title: "Review page connection security", why: "Visitors should have a secure connection when using the site, especially before sharing information.", next: "Ask your web provider to confirm HTTPS is available and consistently used." },
   { id: "contact-route", rank: 3, priority: "Review", title: "Make the next contact step easy to find", why: "A clear contact route can help prospective clients understand how to reach the firm.", next: "Review affected pages on desktop and mobile and confirm how a prospective client should contact the firm." },
@@ -300,7 +300,7 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
   if (family.id === "search-exclusion") {
     const count = urls.length;
     observed = methodologyVersion === 5
-      ? `The inspected page responses tell Google not to include ${count} of ${pages.length} checked ${pages.length === 1 ? "page" : "pages"} in search results. Google must retrieve ${pages.length === 1 ? "that response first; this scan does not confirm whether the page is indexed." : "those responses first; this scan does not confirm whether the pages are indexed."}`
+      ? `${count} of ${pages.length} checked ${pages.length === 1 ? "page" : "pages"} ${count === 1 ? "tells" : "tell"} Google not to include ${count === 1 ? "it" : "them"} in search. Google must retrieve the instruction first.`
       : `${count} of ${pages.length} checked pages contain an instruction asking search engines to leave them out of results.`;
   } else if (family.id === "robots-access") {
     const crawlerNames = unique(evidence.flatMap((line) => ["Googlebot", "Bingbot"].filter((name) => line.includes(name))));
@@ -338,7 +338,7 @@ function makeAction(family: Family, issues: ReportIssue[], pages: ReportPage[], 
     title: family.title,
     observed,
     whyItMatters: family.id === "search-exclusion" && methodologyVersion === 5
-      ? "This instruction can keep a useful page out of Google search."
+      ? "This instruction may keep useful pages out of Google."
       : family.id === "connection" && hasMixedContent && hasPlainHttp
       ? "Some checked pages loaded without HTTPS, and browsers may block or limit resources served over HTTP on other HTTPS pages."
       : family.id === "connection" && hasMixedContent
@@ -522,6 +522,6 @@ export function buildSeoReportModel(input: ReportInput): SeoReportModel {
       assessedCategoryCount,
       totalCategoryCount,
     },
-    cta: { heading: "Discuss next steps", body: "We can help confirm which findings matter for the cases you want, separate intentional choices from genuine gaps, and decide what to address first.", linkLabel: "Book a conversation", href: CTA_HREF },
+    cta: { heading: "Next steps", body: "We can help interpret these findings, identify what matters for your cases, and decide what to fix first.", linkLabel: "Book a conversation", href: CTA_HREF },
   };
 }
