@@ -284,6 +284,7 @@ async function verifyPushedMigration(pathname: string, expectedBlob: string): Pr
 const ACCEPTED_SOURCE_REFS = new Set([
   "refs/heads/codex/crm-live-followup-final-gates-20261024",
   "refs/heads/codex/crm-followup-activity-save-reload-20261028",
+  "refs/heads/codex/crm-followup-acceptance-20261029",
 ]);
 
 function verifyPushedHead(sourceCommit: string): void {
