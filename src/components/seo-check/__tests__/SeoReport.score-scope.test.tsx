@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, describe, expect, it, vi } from "vitest";
 import SeoReport, { type SeoCheckResult } from "../SeoReport";
 import SeoCheckTool from "../SeoCheckTool";
+import SeoCheckPage from "../../../app/(marketing)/tools/seo-check/page";
 
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
@@ -45,6 +46,17 @@ describe("SeoReport score scope", () => {
     render(<SeoCheckTool variant="operator" />);
     expect(screen.getByText(/reviews the available website categories per page/i)).toBeTruthy();
     expect(screen.getByText(/If we cannot tell whether a page tells Google not to index it, that check is not scored/i)).toBeTruthy();
+  });
+
+  it("describes v5 score scope and performance accurately on the public landing page", async () => {
+    const page = await SeoCheckPage({ searchParams: Promise.resolve({ embed: "1" }) });
+    const { container } = render(page);
+    const categoriesIntro = container.querySelector(".seo-categories-intro");
+
+    expect(categoriesIntro?.textContent).toContain("The v5 score uses five directly observed check types");
+    expect(categoriesIntro?.textContent).toContain("If we cannot tell whether a page tells Google not to index it, that check is not scored.");
+    expect(screen.getByText(/Performance observations, when available.*do not contribute to the v5 score/i)).toBeTruthy();
+    expect(container.textContent).not.toMatch(/v4 score/i);
   });
 
   it("shows the scored coverage beside the score and includes it in the copied summary", async () => {
