@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { computeWeightedScore, parseRobotsTxt } from "../engine-core";
 import { aggregateCategories, buildPageResult } from "../page-checks";
+import { buildV4Issues } from "../analysis";
+import { buildSeoReportModel } from "../report-model";
 
 const emptyHeaders = new Headers();
 const emptySitemap = new Set<string>();
@@ -107,6 +109,46 @@ describe("page-scoped search access evidence", () => {
     expect(item(ambiguous, "Indexability", "Indexable")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
   });
 
+  it("aggregates known, passing, and unknown directive scope without inventing a noindex action", () => {
+    const noindexUrl = "https://example.com/practice/employment/";
+    const cleanUrl = "https://example.com/";
+    const unknownUrl = "https://example.com/contact/";
+    const robots = "User-agent: *\nAllow: /";
+    const noindex = page(noindexUrl, '<html><head><title>Firm</title><meta name="robots" content="noindex"></head><body>Practice</body></html>', robots);
+    const clean = page(cleanUrl, undefined, robots);
+    const unknown = page(unknownUrl, undefined, robots, emptySitemap, true, new Headers({ "x-robots-tag": "Bingbot: noindex, noindex" }));
+    const unrelatedBotControl = page(unknownUrl, undefined, robots, emptySitemap, true, new Headers({ "x-robots-tag": "Bingbot: noindex" }));
+    const pages = [noindex, clean, unknown];
+    const categories = aggregateCategories(pages);
+    const controlScore = computeWeightedScore(aggregateCategories([noindex, clean, unrelatedBotControl]));
+
+    expect(computeWeightedScore(categories)).toBe(controlScore);
+    expect(item(unknown, "Indexability", "Indexable")).toMatchObject({ status: "warn", scored: false, applicability: "unknown" });
+    expect(categories.find((category) => category.name === "Indexability")?.items.find((check) => check.label === "Indexable")?.scored).toBe(false);
+
+    const issues = buildV4Issues(pages, Infinity, 5);
+    const model = buildSeoReportModel({
+      domain: "example.com",
+      methodologyVersion: 5,
+      pagesScanned: pages.length,
+      overallScore: computeWeightedScore(categories),
+      categories,
+      pages: pages.map(({ url, pageType, httpStatus, indexability, robotsAccess, categories: pageCategories }) => ({
+        url, pageType, httpStatus, indexability, robotsAccess, categories: pageCategories,
+      })),
+      issues: issues.map(({ id, category, status, title, detail, fix, evidence, affectedUrls, affectedCount, totalPages, confidence }) => ({
+        id, category, status, title, detail, fix, evidence, affectedUrls, affectedCount, totalPages, confidence,
+      })),
+      aiBots: [],
+    });
+
+    expect(model.accessSummary.noindexCount).toBe(1);
+    expect(model.accessSummary.indexabilityNotAssessedCount).toBe(1);
+    const exclusionActions = model.priorityActions.filter((action) => action.family === "search-exclusion");
+    expect(exclusionActions).toHaveLength(1);
+    expect(exclusionActions[0]).toMatchObject({ affectedCount: 1, affectedUrls: [noindexUrl] });
+    expect(model.priorityActions.some((action) => action.affectedUrls.includes(unknownUrl))).toBe(false);
+  });
   it("keeps a schema-only address separate from visible address evidence", () => {
     const html = `<html><head><title>Firm</title><script type="application/ld+json">${JSON.stringify({
       "@context": "https://schema.org",

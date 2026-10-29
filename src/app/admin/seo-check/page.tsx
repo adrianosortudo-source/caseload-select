@@ -19,6 +19,7 @@ import SeoCheckTool from "@/components/seo-check/SeoCheckTool";
 import PageHeader from "@/components/PageHeader";
 import DeleteSeoAuditButton from "@/components/admin/DeleteSeoAuditButton";
 import { supabaseAdmin } from "@/lib/supabase-admin";
+import { SAVED_AUDIT_LIST_COLUMNS, parseSavedMethodologyVersion } from "./saved-audit-model";
 
 export const dynamic = "force-dynamic";
 
@@ -41,14 +42,14 @@ async function loadSavedAudits(): Promise<SavedAuditRow[]> {
   try {
     const { data, error } = await supabaseAdmin
       .from("seo_check_runs")
-      .select("id, domain, grade, overall_score, ai_search_score, scan_mode, pages_scanned, issue_count, created_at, result")
+      .select(SAVED_AUDIT_LIST_COLUMNS)
       .order("created_at", { ascending: false })
       .limit(25);
     if (error) return [];
-    return (data ?? []).map((row) => {
-      const result = row.result && typeof row.result === "object" && !Array.isArray(row.result) ? row.result as Record<string, unknown> : null;
-      return { ...row, methodologyVersion: typeof result?.methodologyVersion === "number" ? result.methodologyVersion : null } as SavedAuditRow;
-    });
+    return (data ?? []).map((row) => ({
+      ...row,
+      methodologyVersion: parseSavedMethodologyVersion(row.methodologyVersion),
+    } as SavedAuditRow));
   } catch {
     return [];
   }
@@ -61,7 +62,7 @@ export default async function AdminSeoCheckPage() {
     <div>
       <PageHeader
         title="SEO and AI visibility check"
-        subtitle="Canonical SEO audit for prospects and clients. Run a quick scan to triage a new site fast, or standard/deep for a full technical, content, and AI-visibility diagnostic. Save results here and revisit them for follow-up."
+        subtitle="Canonical SEO audit for prospects and clients. Quick scans inspect a smaller page sample; standard and deep inspect more pages. The weighted score covers five check types; other technical, content, and AI-visibility findings are observations, not scored checks. Save results here and revisit them for follow-up."
         right={
           <p className="text-xs text-black/40 max-w-[260px] text-right leading-snug">
             Canonical SEO audit. Prospecting Diagnostic consumes SEO results separately.

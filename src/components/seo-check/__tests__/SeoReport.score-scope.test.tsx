@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import SeoReport, { type SeoCheckResult } from "../SeoReport";
 import SeoCheckTool from "../SeoCheckTool";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 const scoreCategories: SeoCheckResult["categories"] = [
   { name: "On-Page SEO", score: 10, maxScore: 10, items: [{ label: "Page title", status: "pass", detail: "Title present.", scored: true }] },
@@ -58,6 +58,40 @@ describe("SeoReport score scope", () => {
     expect(writeText.mock.calls[0][0]).toContain(scoreNote);
   });
 
+  it("does not invent a method version in copied text for an unversioned result", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    const unversioned: SeoCheckResult = { ...result };
+    delete unversioned.methodologyVersion;
+
+    render(<SeoReport result={unversioned} onReset={vi.fn()} hideCta />);
+    expect(screen.getAllByText("Method not recorded").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Copy report summary" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalled());
+    expect(writeText.mock.calls[0][0]).toContain("Method not recorded: example.com");
+    expect(writeText.mock.calls[0][0]).not.toMatch(/v2|version 2/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy findings" }));
+    await waitFor(() => expect(writeText).toHaveBeenCalledTimes(2));
+    expect(writeText.mock.calls[1][0]).toContain("Method not recorded");
+    expect(writeText.mock.calls[1][0]).not.toMatch(/v2|version 2/i);
+  });
+
+  it("labels unknown future saved methods as unsupported in operator history", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        items: [{
+          id: "future-run", domain: "future.example", scan_mode: "quick", pages_scanned: 1,
+          overall_score: 82, ai_search_score: null, ai_policy_score: null, grade: "A-",
+          rendering_risk: null, issue_count: 0, methodologyVersion: 6,
+          created_at: "2026-10-29T12:00:00.000Z",
+        }],
+      }),
+    }));
+    render(<SeoCheckTool variant="operator" />);
+    expect(await screen.findByText(/Unsupported method · A- 82\/100/)).toBeTruthy();
+  });
   it("does not turn missing historical robot fields into a definite absence", () => {
     const historical: SeoCheckResult = {
       ...result,
